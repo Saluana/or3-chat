@@ -1,9 +1,20 @@
 <template>
     <div class="p-6 space-y-4">
         <div class="flex flex-row space-x-2">
-            <UButton size="sm" color="primary">Nuxt UI Button</UButton>
+            <UButton @click="showToast" size="sm" color="primary"
+                >Nuxt UI Button</UButton
+            >
             <UButton color="success">Nuxt UI Button</UButton>
             <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+        </div>
+        <div class="flex flex-row space-x-2">
+            <UButtonGroup size="lg">
+                <UButton @click="showToast" color="primary"
+                    >Nuxt UI Button</UButton
+                >
+                <UButton color="success">Nuxt UI Button</UButton>
+                <UButton color="warning">Nuxt UI Button</UButton>
+            </UButtonGroup>
         </div>
 
         <div class="flex space-x-2">
@@ -86,4 +97,13 @@
 const nuxtApp = useNuxtApp();
 const theme = computed(() => (nuxtApp.$theme as any).get());
 const toggle = () => (nuxtApp.$theme as any).toggle();
+const toast = useToast();
+
+function showToast() {
+    toast.add({
+        title: 'Success',
+        description: 'Your action was completed successfully.',
+        color: 'success',
+    });
+}
 </script>
