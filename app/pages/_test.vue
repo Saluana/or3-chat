@@ -6,7 +6,15 @@
             <UButton size="lg" color="warning">Nuxt UI Button</UButton>
         </div>
 
-        <UInput></UInput>
+        <div class="flex space-x-2">
+            <UInput size="sm" placeholder="Enter email" :ui="{ base: 'peer' }">
+            </UInput>
+            <UInput size="md" placeholder="Enter email" :ui="{ base: 'peer' }">
+            </UInput>
+            <UInput size="lg" placeholder="Enter email" :ui="{ base: 'peer' }">
+            </UInput>
+        </div>
+
         <div class="flex items-center gap-3">
             <button
                 class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"

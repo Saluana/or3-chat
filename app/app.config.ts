@@ -25,5 +25,17 @@ export default defineAppConfig({
                 },
             },
         },
+        input: {
+            slots: {
+                base: 'rounded-md border border-[var(--md-outline)] focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
     },
 });
