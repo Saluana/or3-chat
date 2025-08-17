@@ -7,12 +7,42 @@
         </div>
 
         <div class="flex space-x-2">
-            <UInput size="sm" placeholder="Enter email" :ui="{ base: 'peer' }">
-            </UInput>
-            <UInput size="md" placeholder="Enter email" :ui="{ base: 'peer' }">
-            </UInput>
-            <UInput size="lg" placeholder="Enter email" :ui="{ base: 'peer' }">
-            </UInput>
+            <UFormField
+                label="Email"
+                help="We won't share your email."
+                required
+            >
+                <UInput
+                    size="sm"
+                    placeholder="Enter email"
+                    :ui="{ base: 'peer' }"
+                >
+                </UInput>
+            </UFormField>
+            <UFormField
+                label="Email"
+                help="We won't share your email."
+                required
+            >
+                <UInput
+                    size="md"
+                    placeholder="Enter email"
+                    :ui="{ base: 'peer' }"
+                >
+                </UInput>
+            </UFormField>
+            <UFormField
+                label="Email"
+                help="We won't share your email."
+                required
+            >
+                <UInput
+                    size="lg"
+                    placeholder="Enter email"
+                    :ui="{ base: 'peer' }"
+                >
+                </UInput>
+            </UFormField>
         </div>
 
         <div class="flex items-center gap-3">

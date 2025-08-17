@@ -1,14 +1,9 @@
-// Allow using the Nuxt macro without relying on generated types at dev-time in this editor.
-// Nuxt will inject the proper macro type from .nuxt during build/dev.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const defineAppConfig: (config: any) => any;
-
 export default defineAppConfig({
     ui: {
         button: {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
-                base: ['transition-colors', 'retro-btn '],
+                base: ['transition-colors', 'retro-btn dark:retro-btn'],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate uppercase tracking-wider',
                 leadingIcon: 'shrink-0',
@@ -27,7 +22,7 @@ export default defineAppConfig({
         },
         input: {
             slots: {
-                base: 'rounded-md border border-[var(--md-outline)] focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
             variants: {
                 size: {
@@ -35,6 +30,13 @@ export default defineAppConfig({
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },
                     lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
                 },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
             },
         },
     },

@@ -34,7 +34,6 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 
 .retro-btn { 
   border-radius: 3px;             /* default */
-  border: 2px solid #1f2937;      /* dark 1px outline */
-  box-shadow: 2px 2px 0 #0b1220;  /* hard, pixel shadow (no blur) */
+  border: 2px solid  var(--md-inverse-surface);     /* dark 1px outline */
+  box-shadow: 2px 2px 0  var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
 }
-
