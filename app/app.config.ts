@@ -12,6 +12,9 @@ export default defineAppConfig({
                 trailingIcon: 'shrink-0',
             },
             variants: {
+                square: {
+                    true: 'px-0! aspect-square',
+                },
                 // Override size variant so padding wins over defaults
                 size: {
                     sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
