@@ -15,6 +15,13 @@
                 <UButton color="success">Nuxt UI Button</UButton>
                 <UButton color="warning">Nuxt UI Button</UButton>
             </UButtonGroup>
+            <UButtonGroup orientation="vertical" size="lg">
+                <UButton @click="showToast" color="primary"
+                    >Nuxt UI Button</UButton
+                >
+                <UButton color="success">Nuxt UI Button</UButton>
+                <UButton color="warning">Nuxt UI Button</UButton>
+            </UButtonGroup>
         </div>
 
         <div class="flex space-x-2">
