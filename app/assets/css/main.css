@@ -1,0 +1,5 @@
+/* Tailwind v4: single import includes preflight + utilities */
+@import "tailwindcss";
+
+/* Import all theme variable files */
+@import "./theme.css";

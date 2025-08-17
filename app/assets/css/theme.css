@@ -1,0 +1,7 @@
+/* Global theme imports: each file defines CSS variables scoped by a class (.light, .dark, etc.) */
+@import "./light.css";
+@import "./light-hc.css";
+@import "./light-mc.css";
+@import "./dark.css";
+@import "./dark-hc.css";
+@import "./dark-mc.css";
