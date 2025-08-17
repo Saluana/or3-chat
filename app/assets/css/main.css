@@ -1,6 +1,11 @@
 /* Tailwind v4: single import includes preflight + utilities */
 @import "tailwindcss";
 
-/* Import all theme variable files */
-@import "./theme.css";
+/* Nuxt UI base styles (load first so we can override its tokens below) */
 @import "@nuxt/ui";
+
+/* Your Material theme variable files (scoped: .light, .dark, etc.) */
+@import "./theme.css";
+
+/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
+@import "~/assets/css/nuxt-ui-map.css";

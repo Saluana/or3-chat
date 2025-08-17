@@ -1,6 +1,10 @@
 <template>
     <div class="p-6 space-y-4">
         <UButton color="primary">Nuxt UI Button</UButton>
+        <UButton color="success">Nuxt UI Button</UButton>
+        <UButton color="warning">Nuxt UI Button</UButton>
+
+        <UInput></UInput>
         <div class="flex items-center gap-3">
             <button
                 class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
