@@ -2,15 +2,13 @@
     <resizable-sidebar-layout>
         <template #sidebar>
             <div class="p-4">
-                <h2 class="text-lg font-semibold">Sidebar</h2>
+                <h2 class="text-lg font-semibold">Chat sidebar</h2>
                 <p class="text-sm text-gray-600">
                     This is a sidebar content area.
                 </p>
             </div>
         </template>
-        <template #header>
-            <div class="text-sm opacity-80 px-4 py-2">Content Area</div>
-        </template>
+
         <!-- Default slot = main content (right side) -->
         <div class="p-6 space-y-4">
             <div class="flex flex-row space-x-2">

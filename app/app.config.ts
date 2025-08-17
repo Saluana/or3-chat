@@ -12,14 +12,15 @@ export default defineAppConfig({
                 trailingIcon: 'shrink-0',
             },
             variants: {
-                square: {
-                    true: 'px-0! aspect-square',
-                },
                 // Override size variant so padding wins over defaults
                 size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
                     sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },
                     lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
                 },
                 buttonGroup: {
                     horizontal:

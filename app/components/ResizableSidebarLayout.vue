@@ -19,10 +19,10 @@
         <!-- Sidebar -->
         <aside
             :class="[
-                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-[var(--md-outline-variant)]',
+                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-black',
                 // width transition on desktop
                 'md:transition-[width] md:duration-200 md:ease-out',
-                'md:relative md:h-full md:flex-shrink-0 md:border-r',
+                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
                 // mobile overlay behavior
                 !isDesktop
@@ -37,7 +37,17 @@
                       ]
                     : '',
             ]"
-            :style="isDesktop ? { width: computedWidth + 'px' } : undefined"
+            :style="
+                Object.assign(
+                    isDesktop ? { width: computedWidth + 'px' } : {},
+                    {
+                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
+                        '--sidebar-rep-opacity': String(
+                            props.sidebarPatternOpacity
+                        ),
+                    }
+                )
+            "
             @keydown.esc.stop.prevent="close()"
         >
             <div class="h-full flex flex-col">
@@ -47,15 +57,15 @@
                         'px-0 justify-center': collapsed,
                         'px-3 justify-between': !collapsed,
                     }"
-                    class="flex items-center py-2 border-b border-[var(--md-outline-variant)]"
+                    class="flex items-center header-pattern py-2 border-b-2 border-black"
                 >
                     <div v-show="!collapsed">
                         <slot name="sidebar-header">
-                            <div
-                                class="text-sm font-medium uppercase tracking-wide"
+                            <h1
+                                class="text-[14px] font-medium uppercase tracking-wide"
                             >
-                                Sidebar
-                            </div>
+                                Chat app
+                            </h1>
                         </slot>
                     </div>
                     <slot
@@ -64,7 +74,7 @@
                         :toggle="toggleCollapse"
                     >
                         <UButton
-                            size="sm"
+                            size="xs"
                             :square="true"
                             color="neutral"
                             variant="ghost"
@@ -122,27 +132,15 @@
 
         <!-- Main content -->
         <div class="relative z-10 flex-1 h-full flex flex-col">
-            <!-- Top bar with mobile toggle -->
             <div
-                class="flex items-center gap-2 p-2 border-b border-[var(--md-outline-variant)] bg-[var(--md-surface)]"
+                class="flex-1 overflow-auto content-bg"
+                :style="{
+                    '--content-bg-size': props.patternSize + 'px',
+                    '--content-bg-opacity': String(props.patternOpacity),
+                    '--content-overlay-size': props.overlaySize + 'px',
+                    '--content-overlay-opacity': String(props.overlayOpacity),
+                }"
             >
-                <slot name="mobile-toggle" :open="open" :toggle="toggle">
-                    <UButton
-                        class="retro-btn md:hidden"
-                        size="sm"
-                        color="primary"
-                        :ui="{ base: 'retro-btn' }"
-                        @click="toggle()"
-                    >
-                        {{ open ? 'Close' : 'Menu' }}
-                    </UButton>
-                </slot>
-                <slot name="header">
-                    <div class="text-sm opacity-80">Content</div>
-                </slot>
-            </div>
-
-            <div class="flex-1 overflow-auto">
                 <slot>
                     <div class="p-4 space-y-2 text-sm opacity-80">
                         <p>Put your main content here…</p>
@@ -172,6 +170,15 @@ const props = defineProps({
     defaultWidth: { type: Number, default: 280 },
     collapsedWidth: { type: Number, default: 56 },
     storageKey: { type: String, default: 'sidebar:width' },
+    // Visual tuning for content pattern
+    patternOpacity: { type: Number, default: 0.2 }, // 0..1
+    patternSize: { type: Number, default: 150 }, // px
+    // Overlay pattern (renders above the base pattern)
+    overlayOpacity: { type: Number, default: 0.12 },
+    overlaySize: { type: Number, default: 120 },
+    // Sidebar repeating background
+    sidebarPatternOpacity: { type: Number, default: 0.15 },
+    sidebarPatternSize: { type: Number, default: 240 },
 });
 const emit = defineEmits<{
     (e: 'update:modelValue', v: boolean): void;
@@ -322,4 +329,76 @@ const toggleAria = computed(() =>
 
 <style scoped>
 /* Optional: could add extra visual flair for the resize handle here */
+.content-bg {
+    position: relative;
+    /* Base matches sidebar/header */
+    background-color: var(--md-surface);
+}
+
+.content-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    /* Default variables; can be overridden via inline style */
+    --content-bg-size: 150px;
+    --content-bg-opacity: 0.08;
+    background-size: var(--content-bg-size) var(--content-bg-size);
+    opacity: var(--content-bg-opacity);
+    z-index: 0;
+}
+
+/* Ensure the real content sits above the pattern */
+.content-bg > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Overlay layer above base pattern but below content */
+.content-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat-2.png');
+    background-repeat: repeat;
+    background-position: top left;
+    --content-overlay-size: 380px;
+    --content-overlay-opacity: 0.2;
+    background-size: var(--content-overlay-size) var(--content-overlay-size);
+    opacity: var(--content-overlay-opacity);
+    z-index: 0.5;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Sidebar repeating background layer */
+aside::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/sidebar-repeater.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
+    opacity: var(--sidebar-rep-opacity);
+    z-index: 0;
+}
+
+/* Ensure sidebar children render above the pattern */
+aside > * {
+    position: relative;
+    z-index: 1;
+}
 </style>
