@@ -10,6 +10,10 @@
         </template>
 
         <!-- Default slot = main content (right side) -->
+        <div
+            class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
+        ></div>
+
         <div class="p-6 space-y-4">
             <div class="flex flex-row space-x-2">
                 <UButton @click="showToast" size="sm" color="primary"
@@ -108,6 +112,8 @@
                     Error Container
                 </div>
             </div>
+
+            <chat-input-dropper />
         </div>
     </resizable-sidebar-layout>
 </template>

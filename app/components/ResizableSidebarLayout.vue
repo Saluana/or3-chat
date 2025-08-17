@@ -93,8 +93,8 @@
                 :min-width="props.minWidth"
                 :max-width="props.maxWidth"
                 :computed-width="computedWidth"
-                @pointerdown="onPointerDown"
-                @keydown="onHandleKeydown"
+                @resize-start="onPointerDown"
+                @resize-keydown="onHandleKeydown"
             />
         </aside>
 
@@ -126,8 +126,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import SidebarHeader from './SidebarHeader.vue';
-import ResizeHandle from './ResizeHandle.vue';
+import SidebarHeader from './sidebar/SidebarHeader.vue';
+import ResizeHandle from './sidebar/ResizeHandle.vue';
 
 type Side = 'left' | 'right';
 
@@ -366,8 +366,8 @@ aside::before {
     z-index: 0;
 }
 
-/* Ensure sidebar children render above the pattern */
-aside > * {
+/* Ensure sidebar children render above the pattern, but keep handle on top */
+aside > *:not(.resize-handle-layer) {
     position: relative;
     z-index: 1;
 }

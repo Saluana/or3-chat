@@ -37,3 +37,7 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   border: 2px solid  var(--md-inverse-surface);     /* dark 1px outline */
   box-shadow: 2px 2px 0  var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
 }
+
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}

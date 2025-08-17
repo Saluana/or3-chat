@@ -1,7 +1,7 @@
 <template>
     <div
         v-if="isDesktop && !collapsed"
-        class="hidden md:block absolute top-0 bottom-0 w-3 cursor-col-resize select-none group"
+        class="resize-handle-layer hidden md:block absolute top-0 bottom-0 w-3 cursor-col-resize select-none group z-20"
         :class="side === 'right' ? 'left-0' : 'right-0'"
         @pointerdown="onPointerDown"
         role="separator"
@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps } from 'vue';
+import { defineProps, defineEmits } from 'vue';
 
 const props = defineProps({
     isDesktop: { type: Boolean, required: true },
@@ -32,17 +32,18 @@ const props = defineProps({
     computedWidth: { type: Number, required: true },
 });
 
-// events: pointerdown and keydown are native; parent binds handlers via v-on
+const emit = defineEmits<{
+    (e: 'resize-start', ev: PointerEvent): void;
+    (e: 'resize-keydown', ev: KeyboardEvent): void;
+}>();
 
 function onPointerDown(e: PointerEvent) {
-    // re-emit native event so parent can handle logic
-    const ev = new CustomEvent('pointerdown', { detail: e, bubbles: true });
-    (e.target as Element).dispatchEvent(ev);
+    // emit a clear custom event name so parent receives original event payload
+    emit('resize-start', e);
 }
 
 function onHandleKeydown(e: KeyboardEvent) {
-    const ev = new CustomEvent('keydown', { detail: e, bubbles: true });
-    (e.target as Element).dispatchEvent(ev);
+    emit('resize-keydown', e);
 }
 </script>
 

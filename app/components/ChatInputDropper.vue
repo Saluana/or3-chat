@@ -1,0 +1,368 @@
+<template>
+    <div
+        @dragover.prevent="onDragOver"
+        @dragleave.prevent="onDragLeave"
+        @drop.prevent="handleDrop"
+        :class="[
+            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            isDragging
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+        ]"
+    >
+        <div class="flex flex-col gap-3.5 m-3.5">
+            <!-- Main Input Area -->
+            <div class="relative">
+                <div
+                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
+                >
+                    <textarea
+                        v-model="promptText"
+                        placeholder="How can I help you today?"
+                        class="w-full h-12 break-words max-w-full resize-none bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 text-sm leading-relaxed"
+                        rows="1"
+                        @input="handlePromptInput"
+                        @paste="handlePaste"
+                        ref="textareaRef"
+                    ></textarea>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="flex gap-2.5 w-full items-center">
+                <div
+                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
+                >
+                    <!-- Attachment Button -->
+                    <div class="relative shrink-0">
+                        <button
+                            @click="triggerFileInput"
+                            class="retro-btn inline-flex items-center justify-center relative shrink-0 select-none disabled:pointer-events-none disabled:opacity-50 border border-gray-300 dark:border-gray-600 transition-all h-8! w-8! rounded-lg px-2 group text-gray-600 dark:text-gray-400 active:scale-95 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            type="button"
+                            aria-label="Add attachments"
+                        >
+                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <!-- Settings Button (stub) -->
+                    <div class="relative shrink-0">
+                        <button
+                            @click="
+                                showSettingsDropdown = !showSettingsDropdown
+                            "
+                            class="retro-btn inline-flex items-center justify-center relative shrink-0 select-none disabled:pointer-events-none disabled:opacity-50 border border-gray-300 dark:border-gray-600 transition-all h-8 w-8 rounded-lg px-2 group text-gray-600 dark:text-gray-400 active:scale-95 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            type="button"
+                            aria-label="Settings"
+                        >
+                            <UIcon
+                                name="i-lucide:sliders-horizontal"
+                                class="w-4 h-4"
+                            />
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Model Selector (simple) -->
+                <div class="shrink-0">
+                    <select
+                        v-model="selectedModel"
+                        @change="onModelChange"
+                        class="retro-btn h-7 w-auto min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800"
+                    >
+                        <option value="gpt-image-1">GPT-image-1</option>
+                        <option value="flux-kontext">Flux Kontext</option>
+                    </select>
+                </div>
+
+                <!-- Send Button -->
+                <div>
+                    <button
+                        @click="handleSend"
+                        :disabled="
+                            !promptText.trim() && uploadedImages.length === 0
+                        "
+                        class="retro-btn fun-button inline-flex items-center justify-center relative shrink-0 select-none disabled:pointer-events-none disabled:opacity-50 bg-orange-500 text-white font-medium transition-colors hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 h-8 w-8 rounded-lg active:scale-95 disabled:bg-gray-300 dark:disabled:bg-gray-600"
+                        type="button"
+                        aria-label="Send message"
+                    >
+                        <UIcon name="i-lucide:arrow-up" class="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Thumbnails -->
+        <div
+            v-if="uploadedImages.length > 0"
+            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+        >
+            <div
+                v-for="(image, index) in uploadedImages"
+                :key="index"
+                class="relative group aspect-square"
+            >
+                <img
+                    :src="image.url"
+                    :alt="'Uploaded Image ' + (index + 1)"
+                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                />
+                <button
+                    @click="removeImage(index)"
+                    class="absolute top-1 right-1 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove image"
+                >
+                    <UIcon name="i-lucide:x" class="w-3 h-3" />
+                </button>
+                <div
+                    class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                >
+                    {{ image.name }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Drag and Drop Overlay -->
+        <div
+            v-if="isDragging"
+            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+        >
+            <div class="text-center">
+                <UIcon
+                    name="i-lucide:upload-cloud"
+                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
+                />
+                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                    Drop images here to upload
+                </p>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, nextTick, defineEmits } from 'vue';
+
+interface UploadedImage {
+    file: File;
+    url: string;
+    name: string;
+}
+
+interface ImageSettings {
+    quality: 'low' | 'medium' | 'high';
+    numResults: number;
+    size: '1024x1024' | '1024x1536' | '1536x1024';
+}
+
+const emit = defineEmits<{
+    (
+        e: 'send',
+        payload: {
+            text: string;
+            images: UploadedImage[];
+            model: string;
+            settings: ImageSettings;
+        }
+    ): void;
+    (e: 'prompt-change', value: string): void;
+    (e: 'image-add', image: UploadedImage): void;
+    (e: 'image-remove', index: number): void;
+    (e: 'model-change', model: string): void;
+    (e: 'settings-change', settings: ImageSettings): void;
+    (e: 'trigger-file-input'): void;
+}>();
+
+const promptText = ref('');
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const uploadedImages = ref<UploadedImage[]>([]);
+const isDragging = ref(false);
+const selectedModel = ref('flux-kontext');
+const hiddenFileInput = ref<HTMLInputElement | null>(null);
+const imageSettings = ref<ImageSettings>({
+    quality: 'medium',
+    numResults: 2,
+    size: '1024x1024',
+});
+const showSettingsDropdown = ref(false);
+
+const autoResize = async () => {
+    await nextTick();
+    if (textareaRef.value) {
+        textareaRef.value.style.height = 'auto';
+        textareaRef.value.style.height =
+            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
+    }
+};
+
+const handlePromptInput = () => {
+    emit('prompt-change', promptText.value);
+    autoResize();
+};
+
+const handlePaste = async (event: ClipboardEvent) => {
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+    const items = clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (!file) continue;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const result = e.target?.result;
+                const url = typeof result === 'string' ? result : '';
+                const image: UploadedImage = {
+                    file: file,
+                    url,
+                    name: file.name || `pasted-image-${Date.now()}.png`,
+                };
+                uploadedImages.value.push(image);
+                emit('image-add', image);
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+};
+
+const triggerFileInput = () => {
+    emit('trigger-file-input');
+    if (!hiddenFileInput.value) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        input.addEventListener('change', (e) => {
+            handleFileChange(e);
+        });
+        document.body.appendChild(input);
+        hiddenFileInput.value = input;
+    }
+    hiddenFileInput.value?.click();
+};
+
+const processFiles = (files: FileList | null) => {
+    if (!files) return;
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file) continue;
+        const mime = file.type || '';
+        if (!mime.startsWith('image/')) continue;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const result = e.target?.result;
+            const url = typeof result === 'string' ? result : '';
+            const image: UploadedImage = {
+                file: file,
+                url,
+                name: file.name,
+            };
+            uploadedImages.value.push(image);
+            emit('image-add', image);
+        };
+        reader.readAsDataURL(file);
+    }
+};
+
+const handleFileChange = (event: Event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || !target.files) return;
+    processFiles(target.files);
+};
+
+const handleDrop = (event: DragEvent) => {
+    isDragging.value = false;
+    processFiles(event.dataTransfer?.files || null);
+};
+
+const onDragOver = (event: DragEvent) => {
+    const items = event.dataTransfer?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/')) {
+            isDragging.value = true;
+            return;
+        }
+    }
+};
+
+const onDragLeave = (event: DragEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = event.clientX;
+    const y = event.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        isDragging.value = false;
+    }
+};
+
+const removeImage = (index: number) => {
+    uploadedImages.value.splice(index, 1);
+    emit('image-remove', index);
+};
+
+const handleSend = () => {
+    if (promptText.value.trim() || uploadedImages.value.length > 0) {
+        emit('send', {
+            text: promptText.value,
+            images: uploadedImages.value,
+            model: selectedModel.value,
+            settings: imageSettings.value,
+        });
+        promptText.value = '';
+        uploadedImages.value = [];
+        autoResize();
+    }
+};
+
+const onModelChange = (e: Event) => {
+    const val = (e.target as HTMLSelectElement).value;
+    selectedModel.value = val;
+    emit('model-change', val);
+    // enforce size compatibility for flux-kontext as an example
+    if (val === 'flux-kontext' && imageSettings.value.size !== '1024x1024') {
+        imageSettings.value.size = '1024x1024';
+        emit('settings-change', imageSettings.value);
+    }
+};
+</script>
+
+<style scoped>
+/* Custom scrollbar for textarea */
+textarea::-webkit-scrollbar {
+    width: 4px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 2px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.8);
+}
+
+/* Focus states */
+.group:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Smooth transitions */
+* {
+    transition-property: color, background-color, border-color, opacity,
+        transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+</style>
