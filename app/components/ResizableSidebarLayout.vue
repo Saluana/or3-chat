@@ -52,42 +52,19 @@
         >
             <div class="h-full flex flex-col">
                 <!-- Sidebar header -->
-                <div
-                    :class="{
-                        'px-0 justify-center': collapsed,
-                        'px-3 justify-between': !collapsed,
-                    }"
-                    class="flex items-center header-pattern py-2 border-b-2 border-black"
+                <SidebarHeader
+                    :collapsed="collapsed"
+                    :toggle-icon="toggleIcon"
+                    :toggle-aria="toggleAria"
+                    @toggle="toggleCollapse"
                 >
-                    <div v-show="!collapsed">
-                        <slot name="sidebar-header">
-                            <h1
-                                class="text-[14px] font-medium uppercase tracking-wide"
-                            >
-                                Chat app
-                            </h1>
-                        </slot>
-                    </div>
-                    <slot
-                        name="sidebar-toggle"
-                        :collapsed="collapsed"
-                        :toggle="toggleCollapse"
-                    >
-                        <UButton
-                            size="xs"
-                            :square="true"
-                            color="neutral"
-                            variant="ghost"
-                            :class="'retro-btn'"
-                            @click="toggleCollapse()"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="toggleAria"
-                            :title="toggleAria"
-                        >
-                            <UIcon :name="toggleIcon" class="w-5 h-5" />
-                        </UButton>
-                    </slot>
-                </div>
+                    <template #sidebar-header>
+                        <slot name="sidebar-header" />
+                    </template>
+                    <template #sidebar-toggle="slotProps">
+                        <slot name="sidebar-toggle" v-bind="slotProps" />
+                    </template>
+                </SidebarHeader>
 
                 <!-- Sidebar content -->
                 <div v-show="!collapsed" class="flex-1 overflow-auto">
@@ -109,25 +86,16 @@
             </div>
 
             <!-- Resize handle (desktop only) -->
-            <div
-                v-if="isDesktop && !collapsed"
-                class="hidden md:block absolute top-0 bottom-0 w-3 cursor-col-resize select-none group"
-                :class="side === 'right' ? 'left-0' : 'right-0'"
+            <ResizeHandle
+                :is-desktop="isDesktop"
+                :collapsed="collapsed"
+                :side="side"
+                :min-width="props.minWidth"
+                :max-width="props.maxWidth"
+                :computed-width="computedWidth"
                 @pointerdown="onPointerDown"
-                role="separator"
-                aria-orientation="vertical"
-                :aria-valuemin="props.minWidth"
-                :aria-valuemax="props.maxWidth"
-                :aria-valuenow="computedWidth"
-                aria-label="Resize sidebar"
-                tabindex="0"
                 @keydown="onHandleKeydown"
-            >
-                <div
-                    class="absolute inset-y-0 my-auto h-24 w-1.5 rounded-full bg-[var(--md-outline-variant)]/70 group-hover:bg-[var(--md-primary)]/70 transition-colors"
-                    :class="side === 'right' ? 'left-0' : 'right-0'"
-                ></div>
-            </div>
+            />
         </aside>
 
         <!-- Main content -->
@@ -158,6 +126,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import SidebarHeader from './SidebarHeader.vue';
+import ResizeHandle from './ResizeHandle.vue';
 
 type Side = 'left' | 'right';
 
