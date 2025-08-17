@@ -4,6 +4,11 @@
 /* Nuxt UI base styles (load first so we can override its tokens below) */
 @import "@nuxt/ui";
 
+/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
+	so classes used in Nuxt UI theme overrides are generated. */
+@source "../../../app.config.ts";
+
+
 /* Your Material theme variable files (scoped: .light, .dark, etc.) */
 @import "./theme.css";
 
@@ -26,3 +31,10 @@ html, body {
 h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--font-heading) !important;
 }
+
+.retro-btn { 
+  border-radius: 3px;             /* default */
+  border: 2px solid #1f2937;      /* dark 1px outline */
+  box-shadow: 2px 2px 0 #0b1220;  /* hard, pixel shadow (no blur) */
+}
+

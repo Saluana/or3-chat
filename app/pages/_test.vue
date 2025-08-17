@@ -1,8 +1,10 @@
 <template>
     <div class="p-6 space-y-4">
-        <UButton color="primary">Nuxt UI Button</UButton>
-        <UButton color="success">Nuxt UI Button</UButton>
-        <UButton color="warning">Nuxt UI Button</UButton>
+        <div class="flex flex-row space-x-2">
+            <UButton size="sm" color="primary">Nuxt UI Button</UButton>
+            <UButton color="success">Nuxt UI Button</UButton>
+            <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+        </div>
 
         <UInput></UInput>
         <div class="flex items-center gap-3">
