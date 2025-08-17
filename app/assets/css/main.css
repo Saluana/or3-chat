@@ -9,3 +9,20 @@
 
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
+
+/* Font setup: body uses VT323, headings use Press Start 2P */
+:root {
+	/* Tailwind v4 token vars (optional for font utilities) */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+    --ui-radius: 3px;
+}
+
+html, body {
+	font-family: var(--font-sans) !important;
+    font-size: 20px; 
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+	font-family: var(--font-heading) !important;
+}
