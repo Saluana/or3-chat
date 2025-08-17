@@ -3,3 +3,4 @@
 
 /* Import all theme variable files */
 @import "./theme.css";
+@import "@nuxt/ui";
