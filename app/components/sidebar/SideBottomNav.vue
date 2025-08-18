@@ -1,6 +1,6 @@
 <template>
     <div
-        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)"
+        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)]"
     >
         <!-- Removed previously added extra div; using pseudo-element for top pattern -->
         <div
@@ -8,7 +8,7 @@
         >
             <div class="h-[10px] top-10 header-pattern-flipped"></div>
             <div
-                class="flex items-center justify-between p-2 rounded-md bg-[var(--md-surface)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
+                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
             >
                 <!-- MY INFO -->
                 <button
@@ -20,7 +20,7 @@
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
                         <svg
-                            class="w-5 h-5 fill-current"
+                            class="w-5 h-5 fill-current pointer-events-none"
                             viewBox="0 0 64 64"
                             aria-hidden="true"
                         >
@@ -55,7 +55,7 @@
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
                         <svg
-                            class="w-5 h-5 fill-current [stroke:currentColor] [stroke-width:6]"
+                            class="w-5 h-5 fill-current [stroke:currentColor] [stroke-width:6] pointer-events-none"
                             viewBox="0 0 64 64"
                             aria-hidden="true"
                         >
@@ -97,7 +97,7 @@
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
                         <svg
-                            class="w-5 h-5 fill-current"
+                            class="w-5 h-5 fill-current pointer-events-none"
                             viewBox="0 0 64 64"
                             aria-hidden="true"
                         >
@@ -132,6 +132,53 @@
 <script lang="ts" setup></script>
 
 <style scoped>
+/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
+.retro-bar {
+    position: relative;
+    isolation: isolate; /* contain blend */
+}
+.retro-bar::before {
+    /* Chrome gloss + bevel hint */
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.18),
+        rgba(255, 255, 255, 0.06) 28%,
+        rgba(0, 0, 0, 0) 40%,
+        rgba(0, 0, 0, 0.1) 100%
+    );
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+.retro-bar::after {
+    /* Scanlines + speckle noise, extremely subtle */
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.045) 0px,
+            rgba(255, 255, 255, 0.045) 1px,
+            rgba(0, 0, 0, 0) 1px,
+            rgba(0, 0, 0, 0) 3px
+        ),
+        radial-gradient(
+            1px 1px at 12% 18%,
+            rgba(255, 255, 255, 0.04),
+            transparent 100%
+        ),
+        radial-gradient(
+            1px 1px at 64% 62%,
+            rgba(0, 0, 0, 0.04),
+            transparent 100%
+        );
+    opacity: 0.25;
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern-flipped {
     background-color: var(--md-surface-variant);

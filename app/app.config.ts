@@ -35,6 +35,9 @@ export default defineAppConfig({
                 base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
             variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
                 size: {
                     sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },
