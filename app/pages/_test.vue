@@ -1,11 +1,14 @@
 <template>
     <resizable-sidebar-layout>
         <template #sidebar>
-            <div class="p-4">
-                <h2 class="text-lg font-semibold">Chat sidebar</h2>
-                <p class="text-sm text-gray-600">
-                    This is a sidebar content area.
-                </p>
+            <div class="flex flex-col h-full relative">
+                <div class="p-4">
+                    <h2 class="text-lg font-semibold">Chat sidebar</h2>
+                    <p class="text-sm text-gray-600">
+                        This is a sidebar content area.
+                    </p>
+                </div>
+                <sidebar-side-bottom-nav />
             </div>
         </template>
 
