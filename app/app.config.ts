@@ -61,5 +61,13 @@ export default defineAppConfig({
                 },
             },
         },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
     },
 });
