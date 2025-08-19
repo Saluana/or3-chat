@@ -29,6 +29,17 @@ export function searchThreadsByTitle(term: string) {
         .toArray();
 }
 
+export function getThread(id: string) {
+    return db.threads.get(id);
+}
+
+export function childThreads(parentThreadId: string) {
+    return db.threads
+        .where('parent_thread_id')
+        .equals(parentThreadId)
+        .toArray();
+}
+
 export async function softDeleteThread(id: string): Promise<void> {
     await db.transaction('rw', db.threads, async () => {
         const t = await db.threads.get(id);

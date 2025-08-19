@@ -35,3 +35,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
 export async function hardDeleteAttachment(id: string): Promise<void> {
     await db.attachments.delete(id);
 }
+
+export function getAttachment(id: string) {
+    return db.attachments.get(id);
+}

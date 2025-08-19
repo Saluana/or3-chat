@@ -28,3 +28,7 @@ export async function softDeleteProject(id: string): Promise<void> {
 export async function hardDeleteProject(id: string): Promise<void> {
     await db.projects.delete(id);
 }
+
+export function getProject(id: string) {
+    return db.projects.get(id);
+}

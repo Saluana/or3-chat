@@ -24,22 +24,26 @@ import {
     messagesByThread,
     moveMessage,
     copyMessage,
+    getMessage,
+    messageByStream,
     softDeleteMessage,
     upsertMessage,
     hardDeleteMessage,
 } from './messages';
-import { createKv, upsertKv, hardDeleteKv } from './kv';
+import { createKv, upsertKv, hardDeleteKv, getKv, getKvByName } from './kv';
 import {
     createAttachment,
     upsertAttachment,
     softDeleteAttachment,
     hardDeleteAttachment,
+    getAttachment,
 } from './attachments';
 import {
     createProject,
     upsertProject,
     softDeleteProject,
     hardDeleteProject,
+    getProject,
 } from './projects';
 
 // Barrel API (backward compatible shape)
@@ -65,6 +69,12 @@ export const queries = {
     threadsByProject,
     messagesByThread,
     searchThreadsByTitle,
+    getMessage,
+    messageByStream,
+    getKv,
+    getKvByName,
+    getAttachment,
+    getProject,
 };
 
 export const del = {

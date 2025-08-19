@@ -23,6 +23,14 @@ export function messagesByThread(threadId: string) {
     return db.messages.where('thread_id').equals(threadId).sortBy('index');
 }
 
+export function getMessage(id: string) {
+    return db.messages.get(id);
+}
+
+export function messageByStream(streamId: string) {
+    return db.messages.where('stream_id').equals(streamId).first();
+}
+
 export async function softDeleteMessage(id: string): Promise<void> {
     await db.transaction('rw', db.messages, async () => {
         const m = await db.messages.get(id);

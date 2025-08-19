@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@nuxt/ui": "^3.3.2",
+    "@openrouter/ai-sdk-provider": "^1.1.2",
+    "ai": "^5.0.17",
     "dexie": "^4.0.11",
     "nuxt": "^4.0.3",
     "orama": "^2.0.6",

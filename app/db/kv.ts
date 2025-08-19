@@ -16,3 +16,11 @@ export async function upsertKv(value: Kv): Promise<void> {
 export async function hardDeleteKv(id: string): Promise<void> {
     await db.kv.delete(id);
 }
+
+export function getKv(id: string) {
+    return db.kv.get(id);
+}
+
+export function getKvByName(name: string) {
+    return db.kv.where('name').equals(name).first();
+}
