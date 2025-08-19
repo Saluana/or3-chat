@@ -3,13 +3,13 @@ import { parseOrThrow } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
 
 export async function createKv(input: KvCreate): Promise<Kv> {
-    const value = parseOrThrow<Kv>(KvCreateSchema, input);
+    const value = parseOrThrow(KvCreateSchema, input);
     await db.kv.put(value);
     return value;
 }
 
 export async function upsertKv(value: Kv): Promise<void> {
-    parseOrThrow<Kv>(KvSchema, value);
+    parseOrThrow(KvSchema, value);
     await db.kv.put(value);
 }
 

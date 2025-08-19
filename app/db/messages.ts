@@ -9,13 +9,13 @@ import {
 } from './schema';
 
 export async function createMessage(input: MessageCreate): Promise<Message> {
-    const value = parseOrThrow<Message>(MessageCreateSchema, input);
+    const value = parseOrThrow(MessageCreateSchema, input);
     await db.messages.put(value);
     return value;
 }
 
 export async function upsertMessage(value: Message): Promise<void> {
-    parseOrThrow<Message>(MessageSchema, value);
+    parseOrThrow(MessageSchema, value);
     await db.messages.put(value);
 }
 
@@ -38,7 +38,7 @@ export async function hardDeleteMessage(id: string): Promise<void> {
 // Append a message to a thread and update thread timestamps atomically
 export async function appendMessage(input: MessageCreate): Promise<Message> {
     return db.transaction('rw', db.messages, db.threads, async () => {
-        const value = parseOrThrow<Message>(MessageCreateSchema, input);
+        const value = parseOrThrow(MessageCreateSchema, input);
         // If index not set, compute next sparse index in thread
         if (value.index === undefined || value.index === null) {
             const last = await db.messages
@@ -151,7 +151,7 @@ export async function insertMessageAfter(
             await normalizeThreadIndexes(after.thread_id);
             newIndex = after.index + 1000;
         }
-        const value = parseOrThrow<Message>(MessageCreateSchema, {
+        const value = parseOrThrow(MessageCreateSchema, {
             ...input,
             index: newIndex,
             thread_id: after.thread_id,

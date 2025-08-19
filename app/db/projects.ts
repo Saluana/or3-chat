@@ -3,13 +3,13 @@ import { parseOrThrow } from './util';
 import { ProjectSchema, type Project } from './schema';
 
 export async function createProject(input: Project): Promise<Project> {
-    const value = parseOrThrow<Project>(ProjectSchema, input);
+    const value = parseOrThrow(ProjectSchema, input);
     await db.projects.put(value);
     return value;
 }
 
 export async function upsertProject(value: Project): Promise<void> {
-    parseOrThrow<Project>(ProjectSchema, value);
+    parseOrThrow(ProjectSchema, value);
     await db.projects.put(value);
 }
 

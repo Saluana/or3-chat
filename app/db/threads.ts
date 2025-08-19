@@ -8,13 +8,13 @@ import {
 } from './schema';
 
 export async function createThread(input: ThreadCreate): Promise<Thread> {
-    const value = parseOrThrow<Thread>(ThreadCreateSchema, input);
+    const value = parseOrThrow(ThreadCreateSchema, input);
     await db.threads.put(value);
     return value;
 }
 
 export async function upsertThread(value: Thread): Promise<void> {
-    parseOrThrow<Thread>(ThreadSchema, value);
+    parseOrThrow(ThreadSchema, value);
     await db.threads.put(value);
 }
 
@@ -59,7 +59,7 @@ export async function forkThread(
         if (!src) throw new Error('Source thread not found');
         const now = nowSec();
         const forkId = newId();
-        const fork: Thread = parseOrThrow<Thread>(ThreadSchema, {
+        const fork = parseOrThrow(ThreadSchema, {
             ...src,
             id: forkId,
             forked: true,

@@ -1,9 +1,12 @@
-import type { ZodSchema } from 'zod';
+import type { ZodTypeAny, infer as ZodInfer } from 'zod';
 
-export function parseOrThrow<T>(schema: ZodSchema, data: unknown): T {
-    const res = (schema as any).safeParse(data);
+export function parseOrThrow<TSchema extends ZodTypeAny>(
+    schema: TSchema,
+    data: unknown
+): ZodInfer<TSchema> {
+    const res = schema.safeParse(data as any);
     if (!res.success) throw new Error(res.error.message);
-    return res.data as T;
+    return res.data as ZodInfer<TSchema>;
 }
 
 export const nowSec = () => Math.floor(Date.now() / 1000);

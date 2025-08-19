@@ -10,13 +10,13 @@ import {
 export async function createAttachment(
     input: AttachmentCreate
 ): Promise<Attachment> {
-    const value = parseOrThrow<Attachment>(AttachmentCreateSchema, input);
+    const value = parseOrThrow(AttachmentCreateSchema, input);
     await db.attachments.put(value);
     return value;
 }
 
 export async function upsertAttachment(value: Attachment): Promise<void> {
-    parseOrThrow<Attachment>(AttachmentSchema, value);
+    parseOrThrow(AttachmentSchema, value);
     await db.attachments.put(value);
 }
 
