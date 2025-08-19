@@ -1,5 +1,6 @@
 import Dexie from 'dexie';
 import { db } from './client';
+import { useHooks } from '../composables/useHooks';
 import { newId, nowSec, parseOrThrow } from './util';
 import {
     MessageCreateSchema,
@@ -9,44 +10,89 @@ import {
 } from './schema';
 
 export async function createMessage(input: MessageCreate): Promise<Message> {
-    const value = parseOrThrow(MessageCreateSchema, input);
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.messages.create:action:before', filtered);
+    const value = parseOrThrow(MessageCreateSchema, filtered);
     await db.messages.put(value);
+    await hooks.doAction('db.messages.create:action:after', value);
     return value;
 }
 
 export async function upsertMessage(value: Message): Promise<void> {
-    parseOrThrow(MessageSchema, value);
-    await db.messages.put(value);
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.messages.upsert:action:before', filtered);
+    parseOrThrow(MessageSchema, filtered);
+    await db.messages.put(filtered);
+    await hooks.doAction('db.messages.upsert:action:after', filtered);
 }
 
 export function messagesByThread(threadId: string) {
-    return db.messages.where('thread_id').equals(threadId).sortBy('index');
+    const hooks = useHooks();
+    return db.messages
+        .where('thread_id')
+        .equals(threadId)
+        .sortBy('index')
+        .then((res) =>
+            hooks.applyFilters('db.messages.byThread:filter:output', res)
+        );
 }
 
 export function getMessage(id: string) {
-    return db.messages.get(id);
+    const hooks = useHooks();
+    return db.messages
+        .get(id)
+        .then((res) =>
+            hooks.applyFilters('db.messages.get:filter:output', res)
+        );
 }
 
 export function messageByStream(streamId: string) {
-    return db.messages.where('stream_id').equals(streamId).first();
+    const hooks = useHooks();
+    return db.messages
+        .where('stream_id')
+        .equals(streamId)
+        .first()
+        .then((res) =>
+            hooks.applyFilters('db.messages.byStream:filter:output', res)
+        );
 }
 
 export async function softDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
     await db.transaction('rw', db.messages, async () => {
         const m = await db.messages.get(id);
         if (!m) return;
+        await hooks.doAction('db.messages.delete:action:soft:before', m);
         await db.messages.put({ ...m, deleted: true, updated_at: nowSec() });
+        await hooks.doAction('db.messages.delete:action:soft:after', m);
     });
 }
 
 export async function hardDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.messages.get(id);
+    await hooks.doAction(
+        'db.messages.delete:action:hard:before',
+        existing ?? id
+    );
     await db.messages.delete(id);
+    await hooks.doAction('db.messages.delete:action:hard:after', id);
 }
 
 // Append a message to a thread and update thread timestamps atomically
 export async function appendMessage(input: MessageCreate): Promise<Message> {
+    const hooks = useHooks();
     return db.transaction('rw', db.messages, db.threads, async () => {
         const value = parseOrThrow(MessageCreateSchema, input);
+        await hooks.doAction('db.messages.append:action:before', value);
         // If index not set, compute next sparse index in thread
         if (value.index === undefined || value.index === null) {
             const last = await db.messages
@@ -69,6 +115,7 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
                 updated_at: now,
             });
         }
+        await hooks.doAction('db.messages.append:action:after', value);
         return value;
     });
 }
@@ -78,9 +125,14 @@ export async function moveMessage(
     messageId: string,
     toThreadId: string
 ): Promise<void> {
+    const hooks = useHooks();
     await db.transaction('rw', db.messages, db.threads, async () => {
         const m = await db.messages.get(messageId);
         if (!m) return;
+        await hooks.doAction('db.messages.move:action:before', {
+            message: m,
+            toThreadId,
+        });
         const last = await db.messages
             .where('[thread_id+index]')
             .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
@@ -101,6 +153,10 @@ export async function moveMessage(
                 last_message_at: now,
                 updated_at: now,
             });
+        await hooks.doAction('db.messages.move:action:after', {
+            messageId,
+            toThreadId,
+        });
     });
 }
 
@@ -109,9 +165,14 @@ export async function copyMessage(
     messageId: string,
     toThreadId: string
 ): Promise<void> {
+    const hooks = useHooks();
     await db.transaction('rw', db.messages, db.threads, async () => {
         const m = await db.messages.get(messageId);
         if (!m) return;
+        await hooks.doAction('db.messages.copy:action:before', {
+            message: m,
+            toThreadId,
+        });
         const last = await db.messages
             .where('[thread_id+index]')
             .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
@@ -134,6 +195,10 @@ export async function copyMessage(
                 last_message_at: now,
                 updated_at: now,
             });
+        await hooks.doAction('db.messages.copy:action:after', {
+            from: messageId,
+            toThreadId,
+        });
     });
 }
 
@@ -142,6 +207,7 @@ export async function insertMessageAfter(
     afterMessageId: string,
     input: Omit<MessageCreate, 'index'>
 ): Promise<Message> {
+    const hooks = useHooks();
     return db.transaction('rw', db.messages, db.threads, async () => {
         const after = await db.messages.get(afterMessageId);
         if (!after) throw new Error('after message not found');
@@ -164,6 +230,10 @@ export async function insertMessageAfter(
             index: newIndex,
             thread_id: after.thread_id,
         });
+        await hooks.doAction('db.messages.insertAfter:action:before', {
+            after,
+            value,
+        });
         await db.messages.put(value);
         const t = await db.threads.get(after.thread_id);
         if (t) {
@@ -174,6 +244,7 @@ export async function insertMessageAfter(
                 updated_at: now,
             });
         }
+        await hooks.doAction('db.messages.insertAfter:action:after', value);
         return value;
     });
 }
@@ -184,7 +255,13 @@ export async function normalizeThreadIndexes(
     start = 1000,
     step = 1000
 ): Promise<void> {
+    const hooks = useHooks();
     await db.transaction('rw', db.messages, async () => {
+        await hooks.doAction('db.messages.normalize:action:before', {
+            threadId,
+            start,
+            step,
+        });
         const msgs = await db.messages
             .where('[thread_id+index]')
             .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
@@ -201,5 +278,8 @@ export async function normalizeThreadIndexes(
             }
             idx += step;
         }
+        await hooks.doAction('db.messages.normalize:action:after', {
+            threadId,
+        });
     });
 }

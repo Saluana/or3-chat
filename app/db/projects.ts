@@ -1,34 +1,61 @@
 import { db } from './client';
+import { useHooks } from '../composables/useHooks';
 import { parseOrThrow } from './util';
 import { ProjectSchema, type Project } from './schema';
 
 export async function createProject(input: Project): Promise<Project> {
-    const value = parseOrThrow(ProjectSchema, input);
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.projects.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.projects.create:action:before', filtered);
+    const value = parseOrThrow(ProjectSchema, filtered);
     await db.projects.put(value);
+    await hooks.doAction('db.projects.create:action:after', value);
     return value;
 }
 
 export async function upsertProject(value: Project): Promise<void> {
-    parseOrThrow(ProjectSchema, value);
-    await db.projects.put(value);
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.projects.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.projects.upsert:action:before', filtered);
+    parseOrThrow(ProjectSchema, filtered);
+    await db.projects.put(filtered);
+    await hooks.doAction('db.projects.upsert:action:after', filtered);
 }
 
 export async function softDeleteProject(id: string): Promise<void> {
+    const hooks = useHooks();
     await db.transaction('rw', db.projects, async () => {
         const p = await db.projects.get(id);
         if (!p) return;
+        await hooks.doAction('db.projects.delete:action:soft:before', p);
         await db.projects.put({
             ...p,
             deleted: true,
             updated_at: Math.floor(Date.now() / 1000),
         });
+        await hooks.doAction('db.projects.delete:action:soft:after', p);
     });
 }
 
 export async function hardDeleteProject(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.projects.get(id);
+    await hooks.doAction(
+        'db.projects.delete:action:hard:before',
+        existing ?? id
+    );
     await db.projects.delete(id);
+    await hooks.doAction('db.projects.delete:action:hard:after', id);
 }
 
-export function getProject(id: string) {
-    return db.projects.get(id);
+export async function getProject(id: string) {
+    const hooks = useHooks();
+    const res = await db.projects.get(id);
+    return hooks.applyFilters('db.projects.get:filter:output', res);
 }

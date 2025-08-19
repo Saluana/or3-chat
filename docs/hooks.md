@@ -180,3 +180,86 @@ Future ideas:
 -   Inspector UI listing current callbacks
 -   Debounced/throttled variants
 -   Unit tests and benchmarks
+
+## DB integration hooks
+
+The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
+
+Entities covered: attachments, kv, projects, threads, messages.
+
+Common patterns:
+
+-   Create
+    -   `db.{entity}.create:filter:input` — transform input prior to validation
+    -   `db.{entity}.create:action:before` — before persisting
+    -   `db.{entity}.create:action:after` — after persisting
+-   Upsert
+    -   `db.{entity}.upsert:filter:input`
+    -   `db.{entity}.upsert:action:before`
+    -   `db.{entity}.upsert:action:after`
+-   Delete
+    -   Soft: `db.{entity}.delete:action:soft:before|after`
+    -   Hard: `db.{entity}.delete:action:hard:before|after`
+-   Get/Queries (output filters)
+    -   `db.{entity}.get:filter:output`
+    -   kv: `db.kv.getByName:filter:output`
+    -   threads: `db.threads.byProject:filter:output`, `db.threads.searchByTitle:filter:output`, `db.threads.children:filter:output`
+    -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
+-   Advanced operations
+    -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
+    -   threads: `db.threads.fork:action:before|after`
+
+### Examples
+
+Redact fields from project reads:
+
+```ts
+useHookEffect(
+    'db.projects.get:filter:output',
+    (project) =>
+        project ? (({ secret, ...rest }) => rest)(project as any) : project,
+    { kind: 'filter' }
+);
+```
+
+Stamp updated_at on all message upserts:
+
+```ts
+useHookEffect(
+    'db.messages.upsert:filter:input',
+    (value) => ({ ...value, updated_at: Math.floor(Date.now() / 1000) }),
+    { kind: 'filter', priority: 5 }
+);
+```
+
+Track thread forks and clones:
+
+```ts
+useHookEffect('db.threads.fork:action:before', ({ source, fork }) => {
+    console.log('Forking thread', source.id, '→', fork.id);
+});
+useHookEffect('db.threads.fork:action:after', (fork) => {
+    console.log('Fork created', fork.id);
+});
+```
+
+Audit deletes (soft and hard):
+
+```ts
+useHookEffect('db.*.delete:action:soft:after', (entity) => {
+    console.log('Soft-deleted', entity?.id ?? entity);
+});
+useHookEffect('db.*.delete:action:hard:after', (id) => {
+    console.log('Hard-deleted id', id);
+});
+```
+
+Normalize and observe message index compaction:
+
+```ts
+useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
+    console.log('Normalizing indexes for thread', threadId);
+});
+```
+
+Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.
