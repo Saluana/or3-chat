@@ -2,6 +2,8 @@
 
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
+Additionally, see the project’s Hook/Action system guide: [docs/hooks.md](./docs/hooks.md).
+
 ## Setup
 
 Make sure to install dependencies:

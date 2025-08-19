@@ -7,6 +7,7 @@ declare module '#app' {
             get: () => string; // Already exists
             system: () => 'light' | 'dark';
         };
+        $hooks: import('../app/utils/hooks').HookEngine;
     }
 }
 
