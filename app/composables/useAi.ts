@@ -5,16 +5,19 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
 
-export function useChat(
-    msgs: { role: 'user' | 'assistant'; content: string }[] = []
-) {
+export interface ChatMessage {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
+export function useChat(msgs: ChatMessage[] = []) {
     const messages = ref(msgs);
     const loading = ref(false);
     const { apiKey } = useUserApiKey();
     const hooks = useHooks();
 
     if (!apiKey.value) {
-        throw new Error('No API key set');
+        return console.log('No API key set');
     }
 
     const openrouter = createOpenRouter({
@@ -23,7 +26,7 @@ export function useChat(
 
     async function sendMessage(content: string) {
         if (!apiKey.value) {
-            throw new Error('No API key set');
+            return console.log('No API key set');
         }
 
         // Allow transforms on outgoing user content

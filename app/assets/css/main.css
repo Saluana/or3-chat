@@ -1,5 +1,6 @@
 /* Tailwind v4: single import includes preflight + utilities */
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Nuxt UI base styles (load first so we can override its tokens below) */
 @import "@nuxt/ui";
