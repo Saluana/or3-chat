@@ -14,8 +14,11 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
         'db.threads.create:filter:input',
         input
     );
-    await hooks.doAction('db.threads.create:action:before', filtered);
-    const value = parseOrThrow(ThreadCreateSchema, filtered);
+    // Apply create-time defaults (id/clock/timestamps, etc.)
+    const prepared = parseOrThrow(ThreadCreateSchema, filtered);
+    // Validate against full schema so required defaults (status/pinned/etc.) are present
+    const value = parseOrThrow(ThreadSchema, prepared);
+    await hooks.doAction('db.threads.create:action:before', value);
     await db.threads.put(value);
     await hooks.doAction('db.threads.create:action:after', value);
     return value;

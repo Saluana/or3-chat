@@ -8,25 +8,11 @@
             <div
                 class="mx-auto flex w-full max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
             >
-                <div
+                <ChatMessage
                     v-for="(message, index) in messages"
                     :key="index + message.role"
-                    :class="{
-                        'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
-                            message.role === 'user',
-                        'bg-white/5 border-2 w-full! retro-shadow backdrop-blur-sm':
-                            message.role === 'assistant',
-                    }"
-                    class="p-2 rounded-md my-2"
-                >
-                    <div
-                        :class="{
-                            'prose prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] max-w-full p-4':
-                                message.role === 'assistant',
-                        }"
-                        v-html="marked.parse(message.content)"
-                    ></div>
-                </div>
+                    :message="message"
+                />
             </div>
         </div>
         <div class="pointer-events-none absolute bottom-0 top-0 w-full">
@@ -43,20 +29,41 @@
 </template>
 
 <script setup lang="ts">
-import { marked } from 'marked';
+import ChatMessage from './ChatMessage.vue';
 type ChatMessage = {
     role: 'user' | 'assistant';
     content: string;
 };
 
 let message;
+const thread = ref<any>(null);
 // Seed the conversation and use the composable's messages (which stream updates)
 const initialMessages: ChatMessage[] = [
     { role: 'user', content: 'Hello!' },
     { role: 'assistant', content: 'How are you?' },
 ];
 
-const { messages, sendMessage, loading } = useChat(initialMessages);
+import { useHookEffect } from '~/composables/useHookEffect';
+
+useHookEffect(
+    'ai.chat.send:action:after',
+    (payload) => {
+        // payload: the final message or a response object (adapt to your app's shape)
+        console.log('Full message received', payload);
+
+        if (!thread.value) {
+            thread.value = payload.threadId;
+        }
+
+        // e.g. scroll chat, play sound, analytics
+    },
+    { kind: 'action' } // optional, documents intent and ensures correct handling
+);
+
+const { messages, sendMessage, loading } = useChat(
+    initialMessages,
+    thread.value ? thread.value : undefined
+);
 
 function onSend(payload: any) {
     sendMessage(payload.text);

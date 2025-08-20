@@ -1,16 +1,18 @@
 import { ref, computed } from 'vue';
 import { streamText } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { nowSec } from '~/db/util';
 
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
+import { create } from '~/db';
 
 export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
 }
 
-export function useChat(msgs: ChatMessage[] = []) {
+export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
     const messages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
     const { apiKey } = useUserApiKey();
@@ -24,6 +26,16 @@ export function useChat(msgs: ChatMessage[] = []) {
     async function sendMessage(content: string) {
         if (!apiKey.value || !openrouter.value) {
             return console.log('No API key set');
+        }
+
+        if (!threadId) {
+            // Pass minimal fields; DB layer (ThreadCreateSchema) fills defaults
+            const newThread = await create.thread({
+                title: 'New Thread',
+                last_message_at: nowSec(),
+                parent_thread_id: null,
+            });
+            threadId = newThread.id;
         }
 
         // Allow transforms on outgoing user content
@@ -49,6 +61,7 @@ export function useChat(msgs: ChatMessage[] = []) {
                 content: outgoing,
                 messages: effectiveMessages,
                 modelId,
+                threadId,
             });
 
             const result = streamText({
@@ -61,28 +74,34 @@ export function useChat(msgs: ChatMessage[] = []) {
                 messages.value.push({ role: 'assistant', content: '' }) - 1;
             const current = messages.value[idx]!;
             for await (const delta of result.textStream) {
-                await hooks.doAction('ai.chat.stream:action:delta', delta);
+                await hooks.doAction(
+                    'ai.chat.stream:action:delta',
+                    delta,
+                    threadId
+                );
                 current.content = (current.content ?? '') + String(delta ?? '');
             }
 
             // Final post-processing of the full assistant text
             const incoming = await hooks.applyFilters(
                 'ui.chat.message:filter:incoming',
-                current.content
+                current.content,
+                threadId
             );
             current.content = incoming;
 
             await hooks.doAction('ai.chat.send:action:after', {
-                request: { content: outgoing, modelId },
+                request: { content: outgoing, modelId, threadId },
                 response: current.content,
+                threadId,
             });
         } catch (err) {
-            await hooks.doAction('ai.chat.error:action', err);
+            await hooks.doAction('ai.chat.error:action', err, threadId);
             throw err;
         } finally {
             loading.value = false;
         }
     }
 
-    return { messages, sendMessage, loading };
+    return { messages, sendMessage, loading, threadId };
 }

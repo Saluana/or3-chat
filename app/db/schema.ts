@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { newId } from './util';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -32,16 +33,35 @@ export type Thread = z.infer<typeof ThreadSchema>;
 
 // For incoming create payloads (apply defaults like the DB)
 export const ThreadCreateSchema = ThreadSchema.partial({
+    // Make a wide set of fields optional for input; we'll supply defaults below
+    id: true,
     title: true,
     last_message_at: true,
     parent_thread_id: true,
+    status: true,
+    deleted: true,
+    pinned: true,
+    forked: true,
+    project_id: true,
 })
-    .omit({ created_at: true, updated_at: true }) // DB sets these
+    // We'll re-add with defaults/derived values
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
     .extend({
+        // Dynamic defaults while keeping inputs optional
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
         created_at: z.number().int().default(nowSec()),
         updated_at: z.number().int().default(nowSec()),
     });
-export type ThreadCreate = z.infer<typeof ThreadCreateSchema>;
+// Use z.input so defaulted fields are optional for callers
+export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
 
 // messages
 export const MessageSchema = z.object({
