@@ -101,7 +101,7 @@
         <!-- Main content -->
         <div class="relative z-10 flex-1 h-full flex flex-col">
             <div
-                class="flex-1 overflow-auto content-bg"
+                class="flex-1 overflow-hidden content-bg"
                 :style="{
                     '--content-bg-size': props.patternSize + 'px',
                     '--content-bg-opacity': String(props.patternOpacity),

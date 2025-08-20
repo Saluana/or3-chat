@@ -336,8 +336,16 @@ const onModelChange = (e: Event) => {
 
 <style scoped>
 /* Custom scrollbar for textarea */
+/* Firefox */
+textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit */
 textarea::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
+    height: 6px;
 }
 
 textarea::-webkit-scrollbar-track {
@@ -345,12 +353,12 @@ textarea::-webkit-scrollbar-track {
 }
 
 textarea::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.5);
-    border-radius: 2px;
+    background: var(--md-primary);
+    border-radius: 9999px;
 }
 
 textarea::-webkit-scrollbar-thumb:hover {
-    background: rgba(156, 163, 175, 0.8);
+    background: color-mix(in oklab, var(--md-primary) 85%, black);
 }
 
 /* Focus states */

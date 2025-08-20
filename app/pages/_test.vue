@@ -15,10 +15,7 @@
                     ></UInput>
                 </div>
                 <div class="flex flex-col p-2 space-y-1.5">
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about tacos</UButton
-                    >
+                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
                     <UButton
                         class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
                         >Chat about aids</UButton
@@ -37,7 +34,7 @@
             class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
         ></div>
 
-        <div class="p-6 space-y-4">
+        <div class="p-6 space-y-4 h-screen overflow-y-auto">
             <div class="flex flex-row space-x-2">
                 <UButton @click="showToast" size="sm" color="primary"
                     >Nuxt UI Button</UButton
@@ -142,6 +139,8 @@
 </template>
 
 <script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+
 const nuxtApp = useNuxtApp();
 const theme = computed(() => (nuxtApp.$theme as any).get());
 const toggle = () => (nuxtApp.$theme as any).toggle();
