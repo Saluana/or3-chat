@@ -1,11 +1,24 @@
-import { ref, computed } from 'vue';
-import { kv } from '~/db';
+import { computed } from 'vue';
+import { db } from '~/db';
 import { state } from '~/state/global';
 
-export async function useUserApiKey() {
-    const key = await kv.get('openrouter_api_key');
-    if (key) {
-        state.value.openrouterKey = key.value as string;
+export function useUserApiKey() {
+    // Read from Dexie on client without awaiting the composable
+    if (import.meta.client) {
+        db.kv
+            .where('name')
+            .equals('openrouter_api_key')
+            .first()
+            .then((rec) => {
+                if (rec && typeof rec.value === 'string') {
+                    state.value.openrouterKey = rec.value;
+                } else if (rec && rec.value == null) {
+                    state.value.openrouterKey = null;
+                }
+            })
+            .catch(() => {
+                /* noop */
+            });
     }
 
     function setKey(key: string) {

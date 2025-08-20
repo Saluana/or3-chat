@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { streamText } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
@@ -10,22 +10,19 @@ export interface ChatMessage {
     content: string;
 }
 
-export async function useChat(msgs: ChatMessage[] = []) {
-    const messages = ref(msgs);
+export function useChat(msgs: ChatMessage[] = []) {
+    const messages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
-    const { apiKey } = await useUserApiKey();
+    const { apiKey } = useUserApiKey();
     const hooks = useHooks();
 
-    if (!apiKey.value) {
-        return console.log('No API key set');
-    }
-
-    const openrouter = createOpenRouter({
-        apiKey: apiKey.value,
-    });
+    // Make provider reactive so it initializes when apiKey arrives later
+    const openrouter = computed(() =>
+        apiKey.value ? createOpenRouter({ apiKey: apiKey.value }) : null
+    );
 
     async function sendMessage(content: string) {
-        if (!apiKey.value) {
+        if (!apiKey.value || !openrouter.value) {
             return console.log('No API key set');
         }
 
@@ -41,7 +38,7 @@ export async function useChat(msgs: ChatMessage[] = []) {
             // Let callers change the model or the messages before sending
             const modelId = await hooks.applyFilters(
                 'ai.chat.model:filter:select',
-                'openai/gpt-4'
+                'openai/gpt-oss-120b'
             );
             const effectiveMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:input',
@@ -55,26 +52,29 @@ export async function useChat(msgs: ChatMessage[] = []) {
             });
 
             const result = streamText({
-                model: openrouter.chat(modelId),
+                model: openrouter.value!.chat(modelId),
                 messages: effectiveMessages,
             });
 
-            // stream result as it arrives
-            let fullResponse = '';
+            // Stream result live into a placeholder assistant message
+            const idx =
+                messages.value.push({ role: 'assistant', content: '' }) - 1;
+            const current = messages.value[idx]!;
             for await (const delta of result.textStream) {
                 await hooks.doAction('ai.chat.stream:action:delta', delta);
-                fullResponse += delta;
+                current.content = (current.content ?? '') + String(delta ?? '');
             }
 
+            // Final post-processing of the full assistant text
             const incoming = await hooks.applyFilters(
                 'ui.chat.message:filter:incoming',
-                fullResponse
+                current.content
             );
-            messages.value.push({ role: 'assistant', content: incoming });
+            current.content = incoming;
 
             await hooks.doAction('ai.chat.send:action:after', {
                 request: { content: outgoing, modelId },
-                response: incoming,
+                response: current.content,
             });
         } catch (err) {
             await hooks.doAction('ai.chat.error:action', err);

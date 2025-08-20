@@ -2,13 +2,15 @@
     <main
         class="flex w-full flex-1 flex-col overflow-hidden transition-[width,height]"
     >
-        <div class="absolute inset-0 overflow-y-auto sm:pt-3.5 pb-[165px]">
+        <div
+            class="absolute w-full h-screen overflow-y-scroll sm:pt-3.5 pb-[165px]"
+        >
             <div
-                class="mx-auto flex w-full max-w-[768px] flex-col space-y-12 px-4 pb-10 pt-safe-offset-10"
+                class="mx-auto flex w-full max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
             >
                 <div
-                    v-for="message in messages"
-                    :key="message.content"
+                    v-for="(message, index) in messages"
+                    :key="index + message.role"
                     :class="{
                         'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
                             message.role === 'user',
@@ -17,19 +19,23 @@
                     }"
                     class="p-2 rounded-md my-2"
                 >
-                    <div :class="{ prose: message.role === 'assistant' }">
-                        {{ message.content }}
-                    </div>
+                    <div
+                        :class="{
+                            'prose prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] max-w-full p-4':
+                                message.role === 'assistant',
+                        }"
+                        v-html="marked.parse(message.content)"
+                    ></div>
                 </div>
             </div>
         </div>
-        <div class="absolute bottom-0 top-0 w-full">
+        <div class="pointer-events-none absolute bottom-0 top-0 w-full">
             <div
-                class="pointer-events-none absolute bottom-0 z-30 w-full px-2 sm:px-3.5 flex justify-center"
+                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center pr-[11px]"
             >
                 <chat-input-dropper
                     @send="onSend"
-                    class="pointer-events-auto w-full max-w-[768px] mx-auto mb-2"
+                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-2"
                 />
             </div>
         </div>
@@ -37,17 +43,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { marked } from 'marked';
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+};
 
-const messages = ref<ChatMessage[]>([
+let message;
+// Seed the conversation and use the composable's messages (which stream updates)
+const initialMessages: ChatMessage[] = [
     { role: 'user', content: 'Hello!' },
     { role: 'assistant', content: 'How are you?' },
-]);
+];
 
-const chat = useChat(messages.value);
+const { messages, sendMessage, loading } = useChat(initialMessages);
 
 function onSend(payload: any) {
-    console.log(payload);
+    sendMessage(payload.text);
 }
 </script>
 

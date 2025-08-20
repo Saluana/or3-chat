@@ -35,8 +35,6 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 
 .retro-btn { 
 	display: inline-flex;
-
-
 	line-height: 1; /* avoid extra vertical space from font metrics */
 	position: relative;
 	border-radius: 3px;                               /* default */

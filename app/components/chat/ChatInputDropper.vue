@@ -35,23 +35,29 @@
                 >
                     <!-- Attachment Button -->
                     <div class="relative shrink-0">
-                        <button
+                        <UButton
                             @click="triggerFileInput"
-                            class="retro-btn inline-flex items-center justify-center relative shrink-0 select-none disabled:pointer-events-none disabled:opacity-50 border border-gray-300 dark:border-gray-600 transition-all h-8! w-8! rounded-lg px-2 group text-gray-600 dark:text-gray-400 active:scale-95 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
                             type="button"
                             aria-label="Add attachments"
                         >
                             <UIcon name="i-lucide:plus" class="w-4 h-4" />
-                        </button>
+                        </UButton>
                     </div>
 
                     <!-- Settings Button (stub) -->
                     <div class="relative shrink-0">
-                        <button
+                        <UButton
                             @click="
                                 showSettingsDropdown = !showSettingsDropdown
                             "
-                            class="retro-btn inline-flex items-center justify-center relative shrink-0 select-none disabled:pointer-events-none disabled:opacity-50 border border-gray-300 dark:border-gray-600 transition-all h-8 w-8 rounded-lg px-2 group text-gray-600 dark:text-gray-400 active:scale-95 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
                             type="button"
                             aria-label="Settings"
                         >
@@ -59,7 +65,7 @@
                                 name="i-lucide:sliders-horizontal"
                                 class="w-4 h-4"
                             />
-                        </button>
+                        </UButton>
                     </div>
                 </div>
 
@@ -68,7 +74,7 @@
                     <select
                         v-model="selectedModel"
                         @change="onModelChange"
-                        class="retro-btn h-7 w-auto min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800"
+                        class="retro-btn h-[32px] w-auto min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800"
                     >
                         <option value="gpt-image-1">GPT-image-1</option>
                         <option value="flux-kontext">Flux Kontext</option>
@@ -77,17 +83,20 @@
 
                 <!-- Send Button -->
                 <div>
-                    <button
+                    <UButton
                         @click="handleSend"
                         :disabled="
                             !promptText.trim() && uploadedImages.length === 0
                         "
-                        class="retro-btn fun-button inline-flex items-center justify-center relative shrink-0 select-none disabled:pointer-events-none disabled:opacity-50 bg-orange-500 text-white font-medium transition-colors hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 h-8 w-8 rounded-lg active:scale-95 disabled:bg-gray-300 dark:disabled:bg-gray-600"
+                        :square="true"
+                        size="sm"
+                        color="primary"
+                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
                         type="button"
                         aria-label="Send message"
                     >
                         <UIcon name="i-lucide:arrow-up" class="w-4 h-4" />
-                    </button>
+                    </UButton>
                 </div>
             </div>
         </div>
