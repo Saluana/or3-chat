@@ -30,7 +30,15 @@ import {
     upsertMessage,
     hardDeleteMessage,
 } from './messages';
-import { createKv, upsertKv, hardDeleteKv, getKv, getKvByName } from './kv';
+import {
+    createKv,
+    upsertKv,
+    hardDeleteKv,
+    getKv,
+    getKvByName,
+    setKvByName,
+    hardDeleteKvByName,
+} from './kv';
 import {
     createAttachment,
     upsertAttachment,
@@ -93,6 +101,7 @@ export const del = {
         message: hardDeleteMessage,
         attachment: hardDeleteAttachment,
         kv: hardDeleteKv,
+        kvByName: hardDeleteKvByName,
     },
 };
 
@@ -100,6 +109,13 @@ export const tx = {
     appendMessage,
     moveMessage,
     copyMessage,
+};
+
+// Shorthand helpers for common KV flows
+export const kv = {
+    get: getKvByName,
+    set: setKvByName,
+    delete: hardDeleteKvByName,
 };
 
 export type {

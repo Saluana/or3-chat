@@ -45,29 +45,39 @@
                     </div>
                 </button>
 
-                <!-- FIND -->
+                <!-- Connect -->
                 <button
+                    @click="onConnectButtonClick"
                     type="button"
-                    aria-label="Find"
+                    aria-label="Connect"
                     class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
                 >
                     <div
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
                         <svg
-                            class="w-5 h-5 fill-current [stroke:currentColor] [stroke-width:6] pointer-events-none"
-                            viewBox="0 0 64 64"
-                            aria-hidden="true"
+                            class="w-4 h-4"
+                            viewBox="0 0 512 512"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="currentColor"
+                            stroke="currentColor"
                         >
-                            <circle cx="28" cy="28" r="14" fill="none" />
-                            <rect
-                                x="39"
-                                y="39"
-                                width="18"
-                                height="6"
-                                rx="3"
-                                transform="rotate(45 48 42)"
-                            />
+                            <g clip-path="url(#clip0_205_3)">
+                                <path
+                                    d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
+                                />
+                                <path
+                                    d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
+                                />
+                            </g>
                         </svg>
                     </div>
                     <div
@@ -76,13 +86,25 @@
                         <div
                             class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
                         >
-                            FIND
+                            {{ orIsConnected ? 'Disconnect' : 'Connect' }}
                         </div>
                         <div
                             class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
                         >
-                            <div class="h-[2px] bg-current"></div>
-                            <div class="h-[2px] bg-current"></div>
+                            <div
+                                :class="{
+                                    'bg-green-600': orIsConnected,
+                                    'bg-error': !orIsConnected,
+                                }"
+                                class="h-[2px]"
+                            ></div>
+                            <div
+                                :class="{
+                                    'bg-success': orIsConnected,
+                                    'bg-error': !orIsConnected,
+                                }"
+                                class="h-[2px]"
+                            ></div>
                         </div>
                     </div>
                 </button>
@@ -129,7 +151,24 @@
     </div>
 </template>
 
-<script lang="ts" setup></script>
+<script lang="ts" setup>
+import { state } from '~/state/global';
+
+const openrouter = useOpenRouterAuth();
+const orIsConnected = computed(() => state.value.openrouterKey);
+
+function onConnectButtonClick() {
+    if (orIsConnected.value) {
+        console.log(orIsConnected);
+        // Logic to disconnect
+        state.value.openrouterKey = null;
+        openrouter.logoutOpenRouter();
+    } else {
+        // Logic to connect
+        openrouter.startLogin();
+    }
+}
+</script>
 
 <style scoped>
 /* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */

@@ -10,10 +10,10 @@ export interface ChatMessage {
     content: string;
 }
 
-export function useChat(msgs: ChatMessage[] = []) {
+export async function useChat(msgs: ChatMessage[] = []) {
     const messages = ref(msgs);
     const loading = ref(false);
-    const { apiKey } = useUserApiKey();
+    const { apiKey } = await useUserApiKey();
     const hooks = useHooks();
 
     if (!apiKey.value) {
