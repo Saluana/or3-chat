@@ -263,3 +263,69 @@ useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
 ```
 
 Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.
+
+## AI chat hooks
+
+The `useChat` composable is instrumented so you can shape the chat flow without forking the code.
+
+Hook names:
+
+-   Outgoing user text
+    -   `ui.chat.message:filter:outgoing` — sanitize/augment the user input
+-   Model & input overrides
+    -   `ai.chat.model:filter:select` — select/override model id (default `openai/gpt-4`)
+    -   `ai.chat.messages:filter:input` — modify message array sent to the model
+-   Send lifecycle
+    -   `ai.chat.send:action:before` — before streaming starts
+    -   `ai.chat.stream:action:delta` — for each streamed text delta
+    -   `ui.chat.message:filter:incoming` — transform the final assistant text
+    -   `ai.chat.send:action:after` — after full response is appended
+-   Errors
+    -   `ai.chat.error:action` — on exceptions during send/stream
+
+Examples:
+
+Override the model:
+
+```ts
+useHookEffect('ai.chat.model:filter:select', () => 'openai/gpt-4o-mini', {
+    kind: 'filter',
+});
+```
+
+Trim outgoing user text and collapse whitespace:
+
+```ts
+useHookEffect(
+    'ui.chat.message:filter:outgoing',
+    (text) => text.trim().replace(/\s+/g, ' '),
+    { kind: 'filter' }
+);
+```
+
+Inspect streaming deltas for live UI effects:
+
+```ts
+useHookEffect('ai.chat.stream:action:delta', (delta) => {
+    // e.g., update a typing indicator or progress UI
+    console.debug('delta:', delta);
+});
+```
+
+Post-process the assistant response:
+
+```ts
+useHookEffect(
+    'ui.chat.message:filter:incoming',
+    (text) => text.replaceAll('\n\n', '\n'),
+    { kind: 'filter' }
+);
+```
+
+Capture errors for telemetry:
+
+```ts
+useHookEffect('ai.chat.error:action', (err) => {
+    console.error('Chat error', err);
+});
+```
