@@ -94,6 +94,8 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 messages.value.push({ role: 'assistant', content: '' }) - 1;
             const current = messages.value[idx]!;
             let chunkIndex = 0;
+            const WRITE_INTERVAL_MS = 100; // throttle window
+            let lastPersistAt = 0;
             for await (const delta of result.textStream) {
                 await hooks.doAction('ai.chat.stream:action:delta', delta, {
                     threadId: threadIdRef.value,
@@ -106,16 +108,20 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                     chunkIndex: chunkIndex++,
                 });
                 current.content = (current.content ?? '') + String(delta ?? '');
-                // Persist incremental content (optional: throttle in future)
-                const updated = {
-                    ...assistantDbMsg,
-                    data: {
-                        ...((assistantDbMsg as any).data || {}),
-                        content: current.content,
-                    },
-                    updated_at: nowSec(),
-                } as any;
-                await upsert.message(updated);
+                // Persist incremental content (throttled)
+                const now = Date.now();
+                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                    const updated = {
+                        ...assistantDbMsg,
+                        data: {
+                            ...((assistantDbMsg as any).data || {}),
+                            content: current.content,
+                        },
+                        updated_at: nowSec(),
+                    } as any;
+                    await upsert.message(updated);
+                    lastPersistAt = now;
+                }
             }
 
             // Final post-processing of the full assistant text
@@ -125,7 +131,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 threadIdRef.value
             );
             current.content = incoming;
-            // Finalize assistant message in DB
+            // Finalize assistant message in DB (final upsert ensures last chunk is saved)
             const finalized = {
                 ...assistantDbMsg,
                 data: {

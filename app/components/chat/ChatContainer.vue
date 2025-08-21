@@ -70,6 +70,8 @@ watch(
     () => props.messageHistory,
     (mh) => {
         if (!chat.value) return;
+        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
+        if (chat.value.loading.value) return;
         // Prefer to update the internal messages array directly to avoid remount flicker
         chat.value.messages.value = [...(mh || [])];
     }

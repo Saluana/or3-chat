@@ -151,12 +151,12 @@ Goal: Reduce write amplification during assistant streaming while remaining corr
 
 Tasks:
 
--   [ ] Throttle `upsert.message` during streaming (e.g., 50–150ms) and ensure a final upsert at end.
--   [ ] Keep hooks (`ai.chat.stream:action:delta`) intact.
+-   [x] Throttle `upsert.message` during streaming (e.g., 50–150ms) and ensure a final upsert at end.
+-   [x] Keep hooks (`ai.chat.stream:action:delta`) intact.
 
 Acceptance:
 
--   [ ] Noticeably fewer writes during long responses without losing final content.
+-   [x] Noticeably fewer writes during long responses without losing final content.
 
 ---
 

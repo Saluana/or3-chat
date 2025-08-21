@@ -82,6 +82,9 @@ function onNewChat() {
 function onChatSelected(chatId: string) {
     threadId.value = chatId;
 }
+
+// Optional enhancement: if needed, we can also watch for outgoing user messages from ChatContainer via a custom event
+// and append to messageHistory immediately to avoid any initial blank state. Current fix defers parent overwrite during loading instead.
 </script>
 
 <style>
