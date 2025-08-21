@@ -129,9 +129,13 @@ const items = ref<any[]>([]);
 let sub: { unsubscribe: () => void } | null = null;
 
 onMounted(() => {
-    // Only show non-deleted threads (use filter to avoid Dexie boolean index typing issues)
+    // Sort by last opened using updated_at index; filter out deleted
     sub = liveQuery(() =>
-        db.threads.filter((t) => !t.deleted).toArray()
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
     ).subscribe({
         next: (results) => (items.value = results),
         error: (err) => console.error('liveQuery error', err),

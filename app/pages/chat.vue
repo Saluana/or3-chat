@@ -18,7 +18,7 @@
 
 <script lang="ts" setup>
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { db } from '~/db';
+import { db, upsert } from '~/db';
 import { ref, onMounted, watch } from 'vue';
 import Dexie from 'dexie';
 
@@ -62,6 +62,12 @@ watch(
     () => threadId.value,
     async (newThreadId) => {
         if (newThreadId) {
+            // Bump updated_at to reflect "last opened" ordering in sidebar
+            const t = await db.threads.get(newThreadId);
+            if (t) {
+                const now = Math.floor(Date.now() / 1000);
+                await upsert.thread({ ...t, updated_at: now });
+            }
             await getMessagesForThread(newThreadId);
         }
     }
