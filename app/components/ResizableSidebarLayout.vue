@@ -141,13 +141,13 @@ const props = defineProps({
     collapsedWidth: { type: Number, default: 56 },
     storageKey: { type: String, default: 'sidebar:width' },
     // Visual tuning for content pattern
-    patternOpacity: { type: Number, default: 0.2 }, // 0..1
+    patternOpacity: { type: Number, default: 0.05 }, // 0..1
     patternSize: { type: Number, default: 150 }, // px
     // Overlay pattern (renders above the base pattern)
-    overlayOpacity: { type: Number, default: 0.12 },
+    overlayOpacity: { type: Number, default: 0.05 },
     overlaySize: { type: Number, default: 120 },
     // Sidebar repeating background
-    sidebarPatternOpacity: { type: Number, default: 0.15 },
+    sidebarPatternOpacity: { type: Number, default: 0.09 },
     sidebarPatternSize: { type: Number, default: 240 },
 });
 const emit = defineEmits<{
@@ -337,7 +337,7 @@ const toggleAria = computed(() =>
     background-repeat: repeat;
     background-position: top left;
     --content-overlay-size: 380px;
-    --content-overlay-opacity: 0.2;
+    --content-overlay-opacity: 0.125;
     background-size: var(--content-overlay-size) var(--content-overlay-size);
     opacity: var(--content-overlay-opacity);
     z-index: 0.5;

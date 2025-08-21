@@ -32,7 +32,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         if (!threadIdRef.value) {
             // Pass minimal fields; DB layer (ThreadCreateSchema) fills defaults
             const newThread = await create.thread({
-                title: 'New Thread',
+                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
                 last_message_at: nowSec(),
                 parent_thread_id: null,
             });
