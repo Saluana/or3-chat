@@ -17,6 +17,7 @@
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import { db } from '~/db';
 import { ref, onMounted, watch } from 'vue';
+import Dexie from 'dexie';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -26,17 +27,12 @@ const threadId = ref(''); // Replace with actual thread ID logic
 async function getMessagesForThread(id: string) {
     if (!id) return;
 
-    // Use thread_id index and ensure stable ordering by index (then created_at) and skip deleted
-    let msgs = await db.messages
-        .where('thread_id')
-        .equals(id)
-        .and((m: any) => !m.deleted)
-        .sortBy('index');
-
-    // Extra stability: tie-break on created_at if indexes are equal
-    msgs = msgs.sort(
-        (a: any, b: any) => a.index - b.index || a.created_at - b.created_at
-    );
+    // Query ordered messages via compound index and filter deleted
+    const msgs = await db.messages
+        .where('[thread_id+index]')
+        .between([id, Dexie.minKey], [id, Dexie.maxKey])
+        .filter((m: any) => !m.deleted)
+        .toArray();
 
     if (msgs) {
         messageHistory.value = msgs.map((msg: any) => {

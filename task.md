@@ -110,15 +110,15 @@ Goal: Efficiently fetch ordered messages per thread without client-side resort.
 
 Tasks:
 
--   [ ] Add a compound index to messages: `[thread_id+index]`.
--   [ ] Query ordered messages via the compound index:
+-   [x] Add a compound index to messages: `[thread_id+index]`.
+-   [x] Query ordered messages via the compound index:
     -   Replace `.where('thread_id').equals(id).sortBy('index')` with
         `.where('[thread_id+index]').between([id, Dexie.minKey], [id, Dexie.maxKey]).toArray()`.
--   [ ] Remove extra JS sorting when possible.
+-   [x] Remove extra JS sorting when possible.
 
 Acceptance:
 
--   [ ] Message fetch is ordered and fast on large datasets.
+-   [x] Message fetch is ordered and fast on large datasets.
 
 ---
 
