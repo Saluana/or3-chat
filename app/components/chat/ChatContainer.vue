@@ -43,23 +43,6 @@ const initialMessages: ChatMessage[] = [
     { role: 'assistant', content: 'How are you?' },
 ];
 
-import { useHookEffect } from '~/composables/useHookEffect';
-
-useHookEffect(
-    'ai.chat.send:action:after',
-    (payload) => {
-        // payload: the final message or a response object (adapt to your app's shape)
-        console.log('Full message received', payload);
-
-        if (!thread.value) {
-            thread.value = payload.threadId;
-        }
-
-        // e.g. scroll chat, play sound, analytics
-    },
-    { kind: 'action' } // optional, documents intent and ensures correct handling
-);
-
 const { messages, sendMessage, loading } = useChat(
     initialMessages,
     thread.value ? thread.value : undefined

@@ -15,8 +15,10 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
         'db.messages.create:filter:input',
         input
     );
-    await hooks.doAction('db.messages.create:action:before', filtered);
-    const value = parseOrThrow(MessageCreateSchema, filtered);
+    // Apply defaults (id/clock/timestamps) then validate fully
+    const prepared = parseOrThrow(MessageCreateSchema, filtered);
+    const value = parseOrThrow(MessageSchema, prepared);
+    await hooks.doAction('db.messages.create:action:before', value);
     await db.messages.put(value);
     await hooks.doAction('db.messages.create:action:after', value);
     return value;
@@ -105,7 +107,8 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
             const lastIdx = last?.index ?? 0;
             value.index = last ? lastIdx + 1000 : 1000;
         }
-        await db.messages.put(value);
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
         const t = await db.threads.get(value.thread_id);
         if (t) {
             const now = nowSec();
@@ -115,8 +118,8 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
                 updated_at: now,
             });
         }
-        await hooks.doAction('db.messages.append:action:after', value);
-        return value;
+        await hooks.doAction('db.messages.append:action:after', finalized);
+        return finalized;
     });
 }
 
@@ -234,7 +237,8 @@ export async function insertMessageAfter(
             after,
             value,
         });
-        await db.messages.put(value);
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
         const t = await db.threads.get(after.thread_id);
         if (t) {
             const now = nowSec();
@@ -244,8 +248,8 @@ export async function insertMessageAfter(
                 updated_at: now,
             });
         }
-        await hooks.doAction('db.messages.insertAfter:action:after', value);
-        return value;
+        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
+        return finalized;
     });
 }
 

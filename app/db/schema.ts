@@ -62,7 +62,6 @@ export const ThreadCreateSchema = ThreadSchema.partial({
     });
 // Use z.input so defaulted fields are optional for callers
 export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
-
 // messages
 export const MessageSchema = z.object({
     id: z.string(),
@@ -79,14 +78,24 @@ export const MessageSchema = z.object({
 });
 export type Message = z.infer<typeof MessageSchema>;
 
-export const MessageCreateSchema = MessageSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type MessageCreate = z.infer<typeof MessageCreateSchema>;
+export const MessageCreateSchema = MessageSchema.partial({ index: true })
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Keep inputs minimal; generate missing id/clock
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use input type so callers can omit defaulted fields
+export type MessageCreate = z.input<typeof MessageCreateSchema>;
 
 // kv
 export const KvSchema = z.object({

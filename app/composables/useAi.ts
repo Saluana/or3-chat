@@ -1,11 +1,11 @@
 import { ref, computed } from 'vue';
 import { streamText } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { nowSec } from '~/db/util';
+import { nowSec, newId } from '~/db/util';
 
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
-import { create } from '~/db';
+import { create, tx, upsert } from '~/db';
 
 export interface ChatMessage {
     role: 'user' | 'assistant';
@@ -43,10 +43,17 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
             'ui.chat.message:filter:outgoing',
             content
         );
+        // Persist user message first (DB fills defaults and index)
+        const userDbMsg = await tx.appendMessage({
+            thread_id: threadId!,
+            role: 'user',
+            data: { content: outgoing },
+        });
         messages.value.push({ role: 'user', content: outgoing });
         loading.value = true;
 
         try {
+            const startedAt = Date.now();
             // Let callers change the model or the messages before sending
             const modelId = await hooks.applyFilters(
                 'ai.chat.model:filter:select',
@@ -57,11 +64,23 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
                 messages.value
             );
 
+            // Prepare assistant placeholder in DB and include a stream id
+            const streamId = newId();
+            const assistantDbMsg = await tx.appendMessage({
+                thread_id: threadId!,
+                role: 'assistant',
+                stream_id: streamId,
+                data: { content: '' },
+            });
+
             await hooks.doAction('ai.chat.send:action:before', {
-                content: outgoing,
-                messages: effectiveMessages,
-                modelId,
                 threadId,
+                modelId,
+                user: { id: userDbMsg.id, length: outgoing.length },
+                assistant: { id: assistantDbMsg.id, streamId },
+                messagesCount: Array.isArray(effectiveMessages)
+                    ? (effectiveMessages as any[]).length
+                    : undefined,
             });
 
             const result = streamText({
@@ -69,17 +88,33 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
                 messages: effectiveMessages,
             });
 
-            // Stream result live into a placeholder assistant message
+            // Create assistant placeholder in UI
             const idx =
                 messages.value.push({ role: 'assistant', content: '' }) - 1;
             const current = messages.value[idx]!;
+            let chunkIndex = 0;
             for await (const delta of result.textStream) {
-                await hooks.doAction(
-                    'ai.chat.stream:action:delta',
-                    delta,
-                    threadId
-                );
+                await hooks.doAction('ai.chat.stream:action:delta', delta, {
+                    threadId,
+                    assistantId: assistantDbMsg.id,
+                    streamId,
+                    deltaLength: String(delta ?? '').length,
+                    totalLength:
+                        (current.content?.length ?? 0) +
+                        String(delta ?? '').length,
+                    chunkIndex: chunkIndex++,
+                });
                 current.content = (current.content ?? '') + String(delta ?? '');
+                // Persist incremental content (optional: throttle in future)
+                const updated = {
+                    ...assistantDbMsg,
+                    data: {
+                        ...((assistantDbMsg as any).data || {}),
+                        content: current.content,
+                    },
+                    updated_at: nowSec(),
+                } as any;
+                await upsert.message(updated);
             }
 
             // Final post-processing of the full assistant text
@@ -89,14 +124,37 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
                 threadId
             );
             current.content = incoming;
+            // Finalize assistant message in DB
+            const finalized = {
+                ...assistantDbMsg,
+                data: {
+                    ...((assistantDbMsg as any).data || {}),
+                    content: incoming,
+                },
+                updated_at: nowSec(),
+            } as any;
+            await upsert.message(finalized);
 
+            const endedAt = Date.now();
             await hooks.doAction('ai.chat.send:action:after', {
-                request: { content: outgoing, modelId, threadId },
-                response: current.content,
                 threadId,
+                request: { modelId, userId: userDbMsg.id },
+                response: {
+                    assistantId: assistantDbMsg.id,
+                    length: incoming.length,
+                },
+                timings: {
+                    startedAt,
+                    endedAt,
+                    durationMs: endedAt - startedAt,
+                },
             });
         } catch (err) {
-            await hooks.doAction('ai.chat.error:action', err, threadId);
+            await hooks.doAction('ai.chat.error:action', {
+                threadId,
+                stage: 'stream',
+                error: err,
+            });
             throw err;
         } finally {
             loading.value = false;
