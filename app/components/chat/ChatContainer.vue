@@ -48,13 +48,20 @@ const props = defineProps<{
     messageHistory?: ChatMessage[];
 }>();
 
+const emit = defineEmits<{
+    (e: 'thread-selected', id: string): void;
+}>();
+
 // Initialize chat composable and make it refresh when threadId changes
 const chat = shallowRef(useChat(props.messageHistory, props.threadId));
 
 watch(
     () => props.threadId,
-    () => {
-        chat.value = useChat(props.messageHistory, props.threadId);
+    (newId) => {
+        const currentId = chat.value?.threadId?.value;
+        // Avoid re-initializing if the composable already set the same id (first-send case)
+        if (newId && currentId && newId === currentId) return;
+        chat.value = useChat(props.messageHistory, newId);
     }
 );
 
@@ -65,6 +72,14 @@ watch(
         if (!chat.value) return;
         // Prefer to update the internal messages array directly to avoid remount flicker
         chat.value.messages.value = [...(mh || [])];
+    }
+);
+
+// When a new thread id is created internally (first send), propagate upward once
+watch(
+    () => chat.value?.threadId?.value,
+    (id, prev) => {
+        if (!prev && id) emit('thread-selected', id);
     }
 );
 

@@ -12,11 +12,12 @@ export interface ChatMessage {
     content: string;
 }
 
-export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
+export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
     const messages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
     const { apiKey } = useUserApiKey();
     const hooks = useHooks();
+    const threadIdRef = ref<string | undefined>(initialThreadId);
 
     // Make provider reactive so it initializes when apiKey arrives later
     const openrouter = computed(() =>
@@ -28,14 +29,14 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
             return console.log('No API key set');
         }
 
-        if (!threadId) {
+        if (!threadIdRef.value) {
             // Pass minimal fields; DB layer (ThreadCreateSchema) fills defaults
             const newThread = await create.thread({
                 title: 'New Thread',
                 last_message_at: nowSec(),
                 parent_thread_id: null,
             });
-            threadId = newThread.id;
+            threadIdRef.value = newThread.id;
         }
 
         // Allow transforms on outgoing user content
@@ -45,7 +46,7 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
         );
         // Persist user message first (DB fills defaults and index)
         const userDbMsg = await tx.appendMessage({
-            thread_id: threadId!,
+            thread_id: threadIdRef.value!,
             role: 'user',
             data: { content: outgoing },
         });
@@ -67,14 +68,14 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
             // Prepare assistant placeholder in DB and include a stream id
             const streamId = newId();
             const assistantDbMsg = await tx.appendMessage({
-                thread_id: threadId!,
+                thread_id: threadIdRef.value!,
                 role: 'assistant',
                 stream_id: streamId,
                 data: { content: '' },
             });
 
             await hooks.doAction('ai.chat.send:action:before', {
-                threadId,
+                threadId: threadIdRef.value,
                 modelId,
                 user: { id: userDbMsg.id, length: outgoing.length },
                 assistant: { id: assistantDbMsg.id, streamId },
@@ -95,7 +96,7 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
             let chunkIndex = 0;
             for await (const delta of result.textStream) {
                 await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                    threadId,
+                    threadId: threadIdRef.value,
                     assistantId: assistantDbMsg.id,
                     streamId,
                     deltaLength: String(delta ?? '').length,
@@ -121,7 +122,7 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
             const incoming = await hooks.applyFilters(
                 'ui.chat.message:filter:incoming',
                 current.content,
-                threadId
+                threadIdRef.value
             );
             current.content = incoming;
             // Finalize assistant message in DB
@@ -137,7 +138,7 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
 
             const endedAt = Date.now();
             await hooks.doAction('ai.chat.send:action:after', {
-                threadId,
+                threadId: threadIdRef.value,
                 request: { modelId, userId: userDbMsg.id },
                 response: {
                     assistantId: assistantDbMsg.id,
@@ -151,7 +152,7 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
             });
         } catch (err) {
             await hooks.doAction('ai.chat.error:action', {
-                threadId,
+                threadId: threadIdRef.value,
                 stage: 'stream',
                 error: err,
             });
@@ -161,5 +162,5 @@ export function useChat(msgs: ChatMessage[] = [], threadId?: string) {
         }
     }
 
-    return { messages, sendMessage, loading, threadId };
+    return { messages, sendMessage, loading, threadId: threadIdRef };
 }

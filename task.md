@@ -43,17 +43,16 @@ Goal: No stale/empty messages after switching threads or after async history loa
 
 Tasks:
 
--   [ ] Also react to `props.messageHistory` changes:
-    -   Either re-init the composable when history changes:
-        -   `watch(() => props.messageHistory, (mh) => { chat.value = useChat(mh, props.threadId) })`
-    -   Or set the internal messages directly:
+-   [x] Also react to `props.messageHistory` changes (implemented):
+    -   Used the direct-assignment approach in `ChatContainer.vue`:
         -   `chat.value.messages.value = [...(props.messageHistory || [])]`
+    -   (Alternative re-init approach is still valid if you prefer.)
 -   [ ] Remove reliance on parent `:key` remount (optional) once the above sync is in place.
 
 Acceptance:
 
--   [ ] Switching threads updates the list immediately.
--   [ ] Messages do not flicker or show stale content.
+-   [x] Switching threads updates the list immediately.
+-   [x] Messages do not flicker or show stale content.
 
 ---
 
@@ -68,17 +67,17 @@ Goal: When sending a first message without a selected thread, a new thread is cr
 
 Tasks:
 
--   [ ] In `useAi.ts`, make `threadId` reactive:
+-   [x] In `useAi.ts`, make `threadId` reactive:
     -   Use `const threadIdRef = ref(threadId)`; update `threadIdRef.value` when creating a thread.
     -   Return `threadId: threadIdRef` from `useChat`.
--   [ ] In `ChatContainer.vue`:
+-   [x] In `ChatContainer.vue`:
     -   Watch the returned `chat.value.threadId` and emit upward when it transitions from falsy to a real id, e.g., `emit('thread-selected', id)`.
--   [ ] In `chat.vue`:
+-   [x] In `chat.vue`:
     -   Listen for `@thread-selected` from `ChatContainer` and set page-level `threadId`.
 
 Acceptance:
 
--   [ ] Sending the first message when no thread is selected creates a thread and binds the UI to it.
+-   [x] Sending the first message when no thread is selected creates a thread and binds the UI to it.
 
 ---
 

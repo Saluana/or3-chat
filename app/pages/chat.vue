@@ -5,9 +5,9 @@
         </template>
         <div class="flex-1 h-screen w-full">
             <ChatContainer
-                :key="threadId || 'no-thread'"
                 :message-history="messageHistory"
                 :thread-id="threadId"
+                @thread-selected="onChatSelected"
             />
         </div>
     </resizable-sidebar-layout>
