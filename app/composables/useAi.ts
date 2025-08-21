@@ -5,7 +5,7 @@ import { nowSec, newId } from '~/db/util';
 
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
-import { create, tx, upsert } from '~/db';
+import { create, db, tx, upsert } from '~/db';
 
 export interface ChatMessage {
     role: 'user' | 'assistant';

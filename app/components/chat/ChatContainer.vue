@@ -30,21 +30,22 @@
 
 <script setup lang="ts">
 import ChatMessage from './ChatMessage.vue';
+
 type ChatMessage = {
     role: 'user' | 'assistant';
     content: string;
 };
 
+const props = defineProps<{
+    threadId?: string;
+    messageHistory?: ChatMessage[];
+}>();
+
 let message;
 const thread = ref<any>(null);
-// Seed the conversation and use the composable's messages (which stream updates)
-const initialMessages: ChatMessage[] = [
-    { role: 'user', content: 'Hello!' },
-    { role: 'assistant', content: 'How are you?' },
-];
 
 const { messages, sendMessage, loading } = useChat(
-    initialMessages,
+    props.messageHistory,
     thread.value ? thread.value : undefined
 );
 
