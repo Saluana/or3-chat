@@ -18,12 +18,12 @@ const props = defineProps<{ message: ChatMessage }>();
 const outerClass = computed(() => ({
     'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
         props.message.role === 'user',
-    'bg-white/5 border-2 w-full! retro-shadow backdrop-blur-sm':
+    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
         props.message.role === 'assistant',
 }));
 
 const innerClass = computed(() => ({
-    'prose prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] max-w-full p-4':
+    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-5':
         props.message.role === 'assistant',
 }));
 
