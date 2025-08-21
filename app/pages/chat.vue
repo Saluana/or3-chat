@@ -1,7 +1,10 @@
 <template>
     <resizable-sidebar-layout>
         <template #sidebar>
-            <sidebar-side-nav-content @chatSelected="onChatSelected" />
+            <sidebar-side-nav-content
+                @new-chat="onNewChat"
+                @chatSelected="onChatSelected"
+            />
         </template>
         <div class="flex-1 h-screen w-full">
             <ChatContainer
@@ -63,6 +66,12 @@ watch(
         }
     }
 );
+
+function onNewChat() {
+    messageHistory.value = [];
+    threadId.value = '';
+    console.log('New chat started, cleared message history and thread ID');
+}
 
 function onChatSelected(chatId: string) {
     threadId.value = chatId;

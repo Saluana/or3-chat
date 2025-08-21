@@ -2,6 +2,7 @@
     <div class="flex flex-col h-full relative">
         <div class="p-2 flex flex-col space-y-2">
             <UButton
+                @click="onNewChat"
                 class="w-full flex items-center justify-center backdrop-blur-2xl"
                 >New Chat</UButton
             >
@@ -185,5 +186,10 @@ async function deleteThread() {
     await dbDel.hard.thread(deleteId.value);
     showDeleteModal.value = false;
     deleteId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+    console.log('New chat requested');
 }
 </script>
