@@ -10,7 +10,11 @@
             >
                 <ChatMessage
                     v-for="(message, index) in messages || []"
-                    :key="index + message.role"
+                    :key="
+                        message.id ||
+                        message.stream_id ||
+                        `${index}-${message.role}`
+                    "
                     :message="message"
                 />
             </div>
@@ -35,6 +39,8 @@ import { shallowRef, computed, watch } from 'vue';
 type ChatMessage = {
     role: 'user' | 'assistant';
     content: string;
+    id?: string;
+    stream_id?: string;
 };
 
 const props = defineProps<{
@@ -52,8 +58,18 @@ watch(
     }
 );
 
+// Keep composable messages in sync when parent provides an updated messageHistory
+watch(
+    () => props.messageHistory,
+    (mh) => {
+        if (!chat.value) return;
+        // Prefer to update the internal messages array directly to avoid remount flicker
+        chat.value.messages.value = [...(mh || [])];
+    }
+);
+
 // Stable bindings for template consumption
-const messages = computed(() => chat.value.messages.value);
+const messages = computed<ChatMessage[]>(() => chat.value.messages.value);
 const loading = computed(() => chat.value.loading.value);
 
 function onSend(payload: any) {

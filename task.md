@@ -26,11 +26,12 @@ Tasks:
 -   [ ] Standardize the event name between child and parent.
     -   Minimal fix: In `chat.vue`, listen to the existing camelCase event.
         -   Change: `<sidebar-side-nav-content @chatSelected="onChatSelected" />`
+    -   [x] Minimal fix applied: `chat.vue` now listens for `@chatSelected`.
     -   [~] Alternative: Switch to kebab-case consistently (child emits `'chat-selected'`, parent listens `@chat-selected`). Choose one and apply to both files.
 
 Acceptance:
 
--   [ ] Clicking a sidebar item calls `onChatSelected` and sets `threadId`.
+-   [x] Clicking a sidebar item calls `onChatSelected` and sets `threadId`.
 
 ---
 

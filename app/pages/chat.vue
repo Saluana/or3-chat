@@ -1,7 +1,7 @@
 <template>
     <resizable-sidebar-layout>
         <template #sidebar>
-            <sidebar-side-nav-content @chat-selected="onChatSelected" />
+            <sidebar-side-nav-content @chatSelected="onChatSelected" />
         </template>
         <div class="flex-1 h-screen w-full">
             <ChatContainer
