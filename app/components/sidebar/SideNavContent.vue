@@ -1,7 +1,8 @@
 <template>
     <div class="flex flex-col h-full relative">
         <div class="p-2 flex flex-col space-y-2">
-            <UButton class="w-full flex items-center justify-center"
+            <UButton
+                class="w-full flex items-center justify-center backdrop-blur-2xl"
                 >New Chat</UButton
             >
             <UInput
