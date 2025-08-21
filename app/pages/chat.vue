@@ -1,7 +1,7 @@
 <template>
     <resizable-sidebar-layout>
         <template #sidebar>
-            <sidebar-side-nav-content @chatSelected="onChatSelected" />
+            <sidebar-side-nav-content @chat-selected="onChatSelected" />
         </template>
         <div class="flex-1 h-screen w-full">
             <ChatContainer
@@ -16,7 +16,7 @@
 <script lang="ts" setup>
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import { db } from '~/db';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -26,8 +26,17 @@ const threadId = ref(''); // Replace with actual thread ID logic
 async function getMessagesForThread(id: string) {
     if (!id) return;
 
-    // FIX: use snake_case key that is actually indexed in Dexie
-    const msgs = await db.messages.where('thread_id').equals(id).toArray();
+    // Use thread_id index and ensure stable ordering by index (then created_at) and skip deleted
+    let msgs = await db.messages
+        .where('thread_id')
+        .equals(id)
+        .and((m: any) => !m.deleted)
+        .sortBy('index');
+
+    // Extra stability: tie-break on created_at if indexes are equal
+    msgs = msgs.sort(
+        (a: any, b: any) => a.index - b.index || a.created_at - b.created_at
+    );
 
     if (msgs) {
         messageHistory.value = msgs.map((msg: any) => {

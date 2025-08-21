@@ -69,5 +69,11 @@ export default defineAppConfig({
                 close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
             },
         },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
     },
 });

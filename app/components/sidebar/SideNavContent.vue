@@ -33,7 +33,7 @@
                     >
                         <!-- Trigger -->
                         <span
-                            class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-black/10 active:bg-black/20"
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop
                         >
                             <UIcon
@@ -76,6 +76,7 @@
             v-model:open="showRenameModal"
             title="Rename thread"
             :ui="{ footer: 'justify-end' }"
+            class="border-2"
         >
             <template #header> <h3>Rename thread?</h3> </template>
             <template #body>

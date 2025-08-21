@@ -9,7 +9,7 @@
                 class="mx-auto flex w-full max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
             >
                 <ChatMessage
-                    v-for="(message, index) in messages"
+                    v-for="(message, index) in messages || []"
                     :key="index + message.role"
                     :message="message"
                 />
@@ -30,6 +30,7 @@
 
 <script setup lang="ts">
 import ChatMessage from './ChatMessage.vue';
+import { shallowRef, computed, watch } from 'vue';
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -41,16 +42,22 @@ const props = defineProps<{
     messageHistory?: ChatMessage[];
 }>();
 
-let message;
-const thread = ref<any>(null);
+// Initialize chat composable and make it refresh when threadId changes
+const chat = shallowRef(useChat(props.messageHistory, props.threadId));
 
-const { messages, sendMessage, loading } = useChat(
-    props.messageHistory,
-    thread.value ? thread.value : undefined
+watch(
+    () => props.threadId,
+    () => {
+        chat.value = useChat(props.messageHistory, props.threadId);
+    }
 );
 
+// Stable bindings for template consumption
+const messages = computed(() => chat.value.messages.value);
+const loading = computed(() => chat.value.loading.value);
+
 function onSend(payload: any) {
-    sendMessage(payload.text);
+    chat.value.sendMessage(payload.text);
 }
 </script>
 
