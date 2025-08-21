@@ -168,12 +168,12 @@ Goal: Visual feedback and prevent duplicate sends while streaming.
 
 Tasks:
 
--   [ ] Bind `loading` to disable send UI or show a subtle spinner/typing indicator.
--   [ ] Guard `onSend` to no-op while `loading` is true.
+-   [x] Bind `loading` to disable send UI or show a subtle spinner/typing indicator.
+-   [x] Guard `onSend` to no-op while `loading` is true.
 
 Acceptance:
 
--   [ ] Input disabled/indicates streaming; no duplicate sends mid-stream.
+-   [x] Input disabled/indicates streaming; no duplicate sends mid-stream.
 
 ---
 

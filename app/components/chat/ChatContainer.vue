@@ -24,6 +24,7 @@
                 class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center pr-[11px]"
             >
                 <chat-input-dropper
+                    :loading="loading"
                     @send="onSend"
                     class="pointer-events-auto w-full max-w-[780px] mx-auto mb-2"
                 />
@@ -90,6 +91,7 @@ const messages = computed<ChatMessage[]>(() => chat.value.messages.value);
 const loading = computed(() => chat.value.loading.value);
 
 function onSend(payload: any) {
+    if (loading.value) return; // prevent duplicate sends while streaming
     chat.value.sendMessage(payload.text);
 }
 </script>

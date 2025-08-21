@@ -8,6 +8,7 @@
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+            loading ? 'opacity-90 pointer-events-auto' : '',
         ]"
     >
         <div class="flex flex-col gap-3.5 m-3.5">
@@ -24,7 +25,17 @@
                         @input="handlePromptInput"
                         @paste="handlePaste"
                         ref="textareaRef"
+                        :disabled="loading"
                     ></textarea>
+                    <div
+                        v-if="loading"
+                        class="absolute top-1 right-1 flex items-center gap-2"
+                    >
+                        <UIcon
+                            name="i-lucide:loader-2"
+                            class="w-4 h-4 animate-spin opacity-70"
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -43,6 +54,7 @@
                             class="retro-btn text-black dark:text-white flex items-center justify-center"
                             type="button"
                             aria-label="Add attachments"
+                            :disabled="loading"
                         >
                             <UIcon name="i-lucide:plus" class="w-4 h-4" />
                         </UButton>
@@ -60,6 +72,7 @@
                             class="retro-btn text-black dark:text-white flex items-center justify-center"
                             type="button"
                             aria-label="Settings"
+                            :disabled="loading"
                         >
                             <UIcon
                                 name="i-lucide:sliders-horizontal"
@@ -75,6 +88,7 @@
                         v-model="selectedModel"
                         @change="onModelChange"
                         class="retro-btn h-[32px] w-auto min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800"
+                        :disabled="loading"
                     >
                         <option value="gpt-image-1">GPT-image-1</option>
                         <option value="flux-kontext">Flux Kontext</option>
@@ -86,7 +100,8 @@
                     <UButton
                         @click="handleSend"
                         :disabled="
-                            !promptText.trim() && uploadedImages.length === 0
+                            loading ||
+                            (!promptText.trim() && uploadedImages.length === 0)
                         "
                         :square="true"
                         size="sm"
@@ -120,6 +135,7 @@
                     @click="removeImage(index)"
                     class="absolute top-1 right-1 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
+                    :disabled="loading"
                 >
                     <UIcon name="i-lucide:x" class="w-3 h-3" />
                 </button>
@@ -151,6 +167,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, defineEmits } from 'vue';
+const props = defineProps<{ loading?: boolean }>();
 
 interface UploadedImage {
     file: File;
@@ -318,6 +335,7 @@ const removeImage = (index: number) => {
 };
 
 const handleSend = () => {
+    if (props.loading) return;
     if (promptText.value.trim() || uploadedImages.value.length > 0) {
         emit('send', {
             text: promptText.value,
