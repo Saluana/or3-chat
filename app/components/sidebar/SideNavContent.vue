@@ -17,6 +17,10 @@
         <div class="flex flex-col p-2 space-y-1.5">
             <div v-for="item in items" :key="item.id">
                 <RetroGlassBtn
+                    :class="{
+                        'active-element bg-primary/25':
+                            item.id === props.activeThread,
+                    }"
                     class="w-full flex items-center justify-between text-left"
                     @click="() => emit('chatSelected', item.id)"
                 >
@@ -124,6 +128,10 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
 
 const items = ref<any[]>([]);
 let sub: { unsubscribe: () => void } | null = null;

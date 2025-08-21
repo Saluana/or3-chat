@@ -4,6 +4,7 @@
             <sidebar-side-nav-content
                 @new-chat="onNewChat"
                 @chatSelected="onChatSelected"
+                :active-thread="threadId"
             />
         </template>
         <div class="flex-1 h-screen w-full">
