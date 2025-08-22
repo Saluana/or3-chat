@@ -130,6 +130,7 @@
                         </svg>
                     </div>
                     <div
+                        @click="showSettingsModal = true"
                         class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
                     >
                         <div
@@ -149,6 +150,7 @@
             <div class="h-[10px] top-10"></div>
         </div>
     </div>
+    <modal-settings-modal v-model:showModal="showSettingsModal" />
 </template>
 
 <script lang="ts" setup>
@@ -156,6 +158,7 @@ import { state } from '~/state/global';
 
 const openrouter = useOpenRouterAuth();
 const orIsConnected = computed(() => state.value.openrouterKey);
+const showSettingsModal = ref(false);
 
 function onConnectButtonClick() {
     if (orIsConnected.value) {
