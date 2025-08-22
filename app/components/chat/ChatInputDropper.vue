@@ -84,15 +84,19 @@
 
                 <!-- Model Selector (simple) -->
                 <div class="shrink-0">
-                    <select
+                    <USelect
+                        v-if="favoriteModels && favoriteModels.length > 0"
                         v-model="selectedModel"
-                        @change="onModelChange"
                         class="retro-btn h-[32px] w-auto min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800"
                         :disabled="loading"
+                        :items="
+                            favoriteModels.map((m) => ({
+                                label: m.canonical_slug,
+                                value: m.canonical_slug,
+                            }))
+                        "
                     >
-                        <option value="gpt-image-1">GPT-image-1</option>
-                        <option value="flux-kontext">Flux Kontext</option>
-                    </select>
+                    </USelect>
                 </div>
 
                 <!-- Send Button -->
@@ -167,7 +171,15 @@
 
 <script setup lang="ts">
 import { ref, nextTick, defineEmits } from 'vue';
+
 const props = defineProps<{ loading?: boolean }>();
+
+const { favoriteModels, getFavoriteModels } = useModelStore();
+
+onMounted(async () => {
+    const fave = await getFavoriteModels();
+    console.log('Favorite models:', fave);
+});
 
 interface UploadedImage {
     file: File;
@@ -203,7 +215,7 @@ const promptText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const uploadedImages = ref<UploadedImage[]>([]);
 const isDragging = ref(false);
-const selectedModel = ref('flux-kontext');
+const selectedModel = ref('openai/gpt-oss-120b');
 const hiddenFileInput = ref<HTMLInputElement | null>(null);
 const imageSettings = ref<ImageSettings>({
     quality: 'medium',
@@ -346,17 +358,6 @@ const handleSend = () => {
         promptText.value = '';
         uploadedImages.value = [];
         autoResize();
-    }
-};
-
-const onModelChange = (e: Event) => {
-    const val = (e.target as HTMLSelectElement).value;
-    selectedModel.value = val;
-    emit('model-change', val);
-    // enforce size compatibility for flux-kontext as an example
-    if (val === 'flux-kontext' && imageSettings.value.size !== '1024x1024') {
-        imageSettings.value.size = '1024x1024';
-        emit('settings-change', imageSettings.value);
     }
 };
 </script>

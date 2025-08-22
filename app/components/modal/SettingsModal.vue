@@ -23,94 +23,138 @@
             </div>
         </template>
         <template #body>
-            <div v-if="modelCatalog">
-                <!-- Virtualized rows; each row is a chunk of models rendered as a CSS grid -->
-                <VList
-                    :data="chunkedModels as OpenRouterModel[][]"
-                    style="height: 75vh"
-                    class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] py-4 w-full px-0!"
-                    :overscan="4"
-                    #default="{ item: row, index }"
+            <div class="flex flex-col h-full">
+                <div
+                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
                 >
-                    <div
-                        class="grid grid-cols-2 gap-5 px-6 w-full"
-                        :class="gridColsClass"
+                    <div class="relative w-full max-w-md">
+                        <UInput
+                            v-model="searchQuery"
+                            icon="i-heroicons-magnifying-glass-20-solid"
+                            placeholder="Search models (id, name, description, modality)"
+                            size="sm"
+                            class="w-full pr-8"
+                            :ui="{ base: 'w-full' }"
+                            autofocus
+                        />
+                        <button
+                            v-if="searchQuery"
+                            type="button"
+                            aria-label="Clear search"
+                            class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                            @click="searchQuery = ''"
+                        >
+                            <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
+                    Indexing models…
+                </div>
+                <div v-else class="flex-1 min-h-0">
+                    <VList
+                        :data="chunkedModels as OpenRouterModel[][]"
+                        style="height: 75vh"
+                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] py-4 w-full px-0!"
+                        :overscan="4"
+                        #default="{ item: row }"
                     >
                         <div
-                            v-for="m in row"
-                            :key="m.id"
-                            class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                            class="grid grid-cols-2 gap-5 px-6 w-full"
+                            :class="gridColsClass"
                         >
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="flex flex-col min-w-0">
-                                    <div
-                                        class="font-medium text-sm truncate"
-                                        :title="m.canonical_slug"
-                                    >
-                                        {{ m.canonical_slug }}
-                                    </div>
-                                    <div
-                                        class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
-                                    >
-                                        CTX {{ m.context_length }}
-                                    </div>
-                                </div>
-                                <button
-                                    class="text-yellow-500/60 hover:text-yellow-500 transition text-sm"
-                                    :aria-pressed="isFavorite(m)"
-                                    @click.stop="toggleFavorite(m)"
-                                    :title="
-                                        isFavorite(m)
-                                            ? 'Unfavorite'
-                                            : 'Favorite'
-                                    "
+                            <div
+                                v-for="m in row"
+                                :key="m.id"
+                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                            >
+                                <div
+                                    class="flex items-start justify-between gap-2"
                                 >
-                                    <span v-if="isFavorite(m)">★</span>
-                                    <span v-else>☆</span>
-                                </button>
-                            </div>
-                            <div
-                                class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
-                            >
-                                <div class="flex flex-col">
-                                    <span
-                                        class="text-neutral-500 dark:text-neutral-400"
-                                        >Input</span
+                                    <div class="flex flex-col min-w-0">
+                                        <div
+                                            class="font-medium text-sm truncate"
+                                            :title="m.canonical_slug"
+                                        >
+                                            {{ m.canonical_slug }}
+                                        </div>
+                                        <div
+                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+                                        >
+                                            CTX {{ m.context_length }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px]"
+                                        :aria-pressed="isFavorite(m)"
+                                        @click.stop="toggleFavorite(m)"
+                                        :title="
+                                            isFavorite(m)
+                                                ? 'Unfavorite'
+                                                : 'Favorite'
+                                        "
                                     >
-                                    <span class="font-semibold tabular-nums">{{
-                                        formatPerMillion(
-                                            m.pricing.prompt,
-                                            m.pricing?.currency
-                                        )
-                                    }}</span>
+                                        <span v-if="isFavorite(m)">★</span>
+                                        <span v-else>☆</span>
+                                    </button>
                                 </div>
-                                <div class="flex flex-col items-end text-right">
-                                    <span
-                                        class="text-neutral-500 dark:text-neutral-400"
-                                        >Output</span
+                                <div
+                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
+                                >
+                                    <div class="flex flex-col">
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Input</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.prompt,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-col items-end text-right"
                                     >
-                                    <span class="font-semibold tabular-nums">{{
-                                        formatPerMillion(
-                                            m.pricing.completion,
-                                            m.pricing?.currency
-                                        )
-                                    }}</span>
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Output</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.completion,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
                                 </div>
+                                <div
+                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    <span>{{
+                                        m.architecture?.modality || 'text'
+                                    }}</span>
+                                    <span class="opacity-60">/1M tokens</span>
+                                </div>
+                                <div
+                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
+                                />
                             </div>
-                            <div
-                                class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
-                            >
-                                <span>{{
-                                    m.architecture?.modality || 'text'
-                                }}</span>
-                                <span class="opacity-60">/1M tokens</span>
-                            </div>
-                            <div
-                                class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
-                            />
                         </div>
+                    </VList>
+                    <div
+                        v-if="!chunkedModels.length && searchQuery"
+                        class="px-6 pb-6 text-xs text-neutral-500"
+                    >
+                        No models match "{{ searchQuery }}".
                     </div>
-                </VList>
+                </div>
             </div>
         </template>
         <template #footer> </template>
@@ -119,6 +163,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { VList } from 'virtua/vue';
+import { useModelSearch } from '~/composables/useModelSearch';
+import type { OpenRouterModel } from '~/utils/models-service';
+import { useModelStore } from '~/composables/useModelStore';
 
 const props = defineProps<{
     showModal: boolean;
@@ -132,16 +179,25 @@ const open = computed({
 });
 
 const modelCatalog = ref<OpenRouterModel[]>([]);
+// Search state (Orama index built client-side)
+const {
+    query: searchQuery,
+    results: searchResults,
+    ready: searchReady,
+} = useModelSearch(modelCatalog);
 
 // Fixed 3-column layout for consistent rows
 const COLS = 2;
 const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
 
 const chunkedModels = computed(() => {
+    const source = searchQuery.value.trim()
+        ? searchResults.value
+        : modelCatalog.value;
     const cols = COLS;
     const rows: OpenRouterModel[][] = [];
-    for (let i = 0; i < modelCatalog.value.length; i += cols) {
-        rows.push(modelCatalog.value.slice(i, i + cols));
+    for (let i = 0; i < source.length; i += cols) {
+        rows.push(source.slice(i, i + cols));
     }
     return rows;
 });

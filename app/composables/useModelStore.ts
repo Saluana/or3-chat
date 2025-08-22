@@ -24,31 +24,51 @@ export function useModelStore() {
         return list;
     }
 
+    const KV_KEY = 'favorite_models';
+
+    async function persist() {
+        try {
+            await kv.set(KV_KEY, JSON.stringify(favoriteModels.value));
+        } catch (e) {
+            console.warn('[useModelStore] persist favorites failed', e);
+        }
+    }
+
     async function addFavoriteModel(model: OpenRouterModel) {
+        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
         favoriteModels.value.push(model);
-        kv.set('models', JSON.stringify(favoriteModels.value));
+        await persist();
     }
 
     async function removeFavoriteModel(model: OpenRouterModel) {
         favoriteModels.value = favoriteModels.value.filter(
             (m) => m.id !== model.id
         );
-        kv.set('models', JSON.stringify(favoriteModels.value));
+        await persist();
     }
 
     async function clearFavoriteModels() {
         favoriteModels.value = [];
-        kv.set('models', JSON.stringify(favoriteModels.value));
+        await persist();
     }
 
     async function getFavoriteModels() {
-        const modelsJson = await kv.get('models');
-        if (modelsJson && typeof modelsJson === 'string') {
-            favoriteModels.value = JSON.parse(modelsJson);
-        } else {
+        try {
+            const record: any = await kv.get(KV_KEY);
+            const raw = record?.value;
+            if (raw && typeof raw === 'string') {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    favoriteModels.value = parsed;
+                } else {
+                    favoriteModels.value = [];
+                }
+            } else {
+                favoriteModels.value = [];
+            }
+        } catch {
             favoriteModels.value = [];
         }
-
         return favoriteModels.value;
     }
 
