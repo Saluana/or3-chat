@@ -7,6 +7,8 @@ import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
 import { create, db, tx, upsert } from '~/db';
 
+const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
 export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
@@ -24,7 +26,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         apiKey.value ? createOpenRouter({ apiKey: apiKey.value }) : null
     );
 
-    async function sendMessage(content: string) {
+    async function sendMessage(content: string, model = DEFAULT_AI_MODEL) {
         if (!apiKey.value || !openrouter.value) {
             return console.log('No API key set');
         }
@@ -58,8 +60,11 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             // Let callers change the model or the messages before sending
             const modelId = await hooks.applyFilters(
                 'ai.chat.model:filter:select',
-                'openai/gpt-oss-120b'
+                model
             );
+
+            console.log('Message sending with model:', modelId);
+
             const effectiveMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:input',
                 messages.value

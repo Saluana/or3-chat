@@ -85,6 +85,9 @@
                 <!-- Model Selector (simple) -->
                 <div class="shrink-0">
                     <USelect
+                        :ui="{
+                            content: 'border-[2px] border-black rounded-[3px]',
+                        }"
                         v-if="favoriteModels && favoriteModels.length > 0"
                         v-model="selectedModel"
                         class="retro-btn h-[32px] w-auto min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800"
@@ -223,6 +226,10 @@ const imageSettings = ref<ImageSettings>({
     size: '1024x1024',
 });
 const showSettingsDropdown = ref(false);
+
+watch(selectedModel, (newModel) => {
+    emit('model-change', newModel);
+});
 
 const autoResize = async () => {
     await nextTick();

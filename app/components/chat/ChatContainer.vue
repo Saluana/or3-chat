@@ -26,6 +26,7 @@
                 <chat-input-dropper
                     :loading="loading"
                     @send="onSend"
+                    @model-change="onModelChange"
                     class="pointer-events-auto w-full max-w-[780px] mx-auto mb-2"
                 />
             </div>
@@ -43,6 +44,13 @@ type ChatMessage = {
     id?: string;
     stream_id?: string;
 };
+
+const model = ref('openai/gpt-oss-120b');
+
+function onModelChange(newModel: string) {
+    model.value = newModel;
+    console.log('Model changed to:', newModel);
+}
 
 const props = defineProps<{
     threadId?: string;
@@ -92,7 +100,7 @@ const loading = computed(() => chat.value.loading.value);
 
 function onSend(payload: any) {
     if (loading.value) return; // prevent duplicate sends while streaming
-    chat.value.sendMessage(payload.text);
+    chat.value.sendMessage(payload.text, model.value || undefined);
 }
 </script>
 
