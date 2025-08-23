@@ -5,7 +5,7 @@
             paddingRight:
                 props.message.role === 'user' && hashList.length && !expanded
                     ? '80px'
-                    : '0',
+                    : '16px',
         }"
         class="p-2 rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
     >
@@ -160,7 +160,7 @@ const emit = defineEmits<{
 }>();
 
 const outerClass = computed(() => ({
-    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end pb-5':
+    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
         props.message.role === 'user',
     'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
         props.message.role === 'assistant',

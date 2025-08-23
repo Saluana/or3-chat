@@ -2,24 +2,50 @@
     <main
         class="flex w-full flex-1 flex-col overflow-hidden transition-[width,height]"
     >
+        <!-- Scroll container / viewport for virtualization -->
         <div
-            class="absolute w-full h-screen overflow-y-scroll sm:pt-3.5 pb-[165px]"
+            ref="scrollParent"
+            class="absolute w-full h-screen overflow-y-auto overscroll-contain sm:pt-3.5 pb-[165px] scrollbars"
         >
+            <!-- Virtualized message list -->
             <div
-                class="mx-auto flex w-full px-1.5 sm:px-0 sm:max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
+                class="mx-auto w-full px-1.5 sm:px-0 sm:max-w-[768px] pb-10 pt-safe-offset-10"
             >
-                <ChatMessage
-                    v-for="(message, index) in messages || []"
-                    :key="
-                        message.id ||
-                        message.stream_id ||
-                        `${index}-${message.role}`
+                <Virtualizer
+                    ref="virtualizerRef"
+                    :data="messages"
+                    :itemSize="virtualItemSize"
+                    :overscan="8"
+                    :scrollRef="scrollParent || undefined"
+                    class="flex flex-col"
+                >
+                    <template #default="{ item, index }">
+                        <div
+                            :key="item.id || item.stream_id || index"
+                            class="first:mt-0 mt-10"
+                            :data-index="index"
+                        >
+                            <ChatMessage
+                                :message="item"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                            />
+                        </div>
+                    </template>
+                </Virtualizer>
+                <!-- Streaming placeholder (assistant message mid-flight) -->
+                <div
+                    v-if="
+                        loading &&
+                        lastMessage &&
+                        lastMessage.role === 'assistant' &&
+                        !lastMessage.content
                     "
-                    :message="message"
-                    :thread-id="props.threadId"
-                    @retry="onRetry"
-                    @branch="onBranch"
-                />
+                    class="mt-10 animate-pulse text-sm opacity-70"
+                >
+                    Thinking…
+                </div>
             </div>
         </div>
         <div class="pointer-events-none absolute bottom-0 top-0 w-full">
@@ -39,12 +65,21 @@
 
 <script setup lang="ts">
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref } from 'vue';
+import {
+    shallowRef,
+    computed,
+    watch,
+    ref,
+    nextTick,
+    onMounted,
+    onBeforeUnmount,
+} from 'vue';
 import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
     ContentPart,
 } from '~/composables/useAi';
+import { Virtualizer } from 'virtua/vue';
 
 const model = ref('openai/gpt-oss-120b');
 
@@ -111,10 +146,7 @@ const messages = computed<RenderMessage[]>(() =>
             contentStr = (m.content as ContentPart[])
                 .map((p) => {
                     if (p.type === 'text') return p.text;
-                    if (p.type === 'image') {
-                        // Don't inline full-size images as markdown; thumbnails handled separately via file_hashes in ChatMessage
-                        return '';
-                    }
+                    if (p.type === 'image') return '';
                     if (p.type === 'file')
                         return `**[file:${
                             (p as any).name ?? (p as any).mediaType ?? 'file'
@@ -134,6 +166,60 @@ const messages = computed<RenderMessage[]>(() =>
     })
 );
 const loading = computed(() => chat.value.loading.value);
+
+// Virtualization helpers
+const scrollParent = ref<HTMLElement | null>(null);
+const virtualizerRef = ref<any>(null);
+const userIsAtBottom = ref(true);
+
+// Provide a numeric size (dynamic measurement handled internally by virtua if content resizes)
+const virtualItemSize = 320;
+
+const lastMessage = computed(() => messages.value[messages.value.length - 1]);
+
+function handleScrollEvent() {
+    if (!scrollParent.value) return;
+    const el = scrollParent.value;
+    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    userIsAtBottom.value = distance < 16; // 1rem threshold
+}
+
+function scrollToBottom(smooth = true) {
+    if (!scrollParent.value) return;
+    if (virtualizerRef.value && messages.value.length) {
+        try {
+            virtualizerRef.value.scrollToIndex(messages.value.length - 1, {
+                align: 'end',
+                smooth,
+            });
+            return; // success
+        } catch (_) {}
+    }
+    scrollParent.value.scrollTo({
+        top: scrollParent.value.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+    });
+}
+
+// Auto-scroll on new messages if user at bottom
+watch(
+    () => messages.value.length,
+    async () => {
+        await nextTick();
+        if (userIsAtBottom.value) scrollToBottom(false);
+    }
+);
+
+onMounted(() => {
+    scrollParent.value?.addEventListener('scroll', handleScrollEvent, {
+        passive: true,
+    });
+    // Initial scroll after mount for existing history
+    nextTick(() => scrollToBottom(false));
+});
+onBeforeUnmount(() => {
+    scrollParent.value?.removeEventListener('scroll', handleScrollEvent);
+});
 
 function onSend(payload: any) {
     console.log('[ChatContainer.onSend] raw payload', payload);
@@ -214,4 +300,6 @@ function onBranch(newThreadId: string) {
 }
 </script>
 
-<style></style>
+<style>
+/* Optional custom styles placeholder */
+</style>

@@ -29,6 +29,12 @@ html, body {
     font-size: 20px; 
 }
 
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
+
 h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--font-heading) !important;
 }
