@@ -32,6 +32,9 @@ export type ContentPart = TextPart | ImagePart | FilePart;
 export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string | ContentPart[];
+    id?: string; // DB id when persisted
+    stream_id?: string; // streaming correlation id for assistant
+    file_hashes?: string | null; // serialized JSON string (UI convenience)
 }
 
 interface SendMessageParams {
@@ -168,6 +171,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         messages.value.push({
             role: 'user',
             content: parts,
+            id: (userDbMsg as any).id,
             // Attach file_hashes so UI can render thumbnails lazily
             file_hashes: userDbMsg.file_hashes,
         } as any);
@@ -215,7 +219,12 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
 
             // 6) Create assistant placeholder in UI
             const idx =
-                messages.value.push({ role: 'assistant', content: '' }) - 1;
+                messages.value.push({
+                    role: 'assistant',
+                    content: '',
+                    id: (assistantDbMsg as any).id,
+                    stream_id: streamId,
+                }) - 1;
             const current = messages.value[idx]!;
             let chunkIndex = 0;
             const WRITE_INTERVAL_MS = 100;
@@ -303,5 +312,95 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         }
     }
 
-    return { messages, sendMessage, loading, threadId: threadIdRef };
+    // Retry logic: remove prior user (and its assistant) OR assistant (resolve to preceding user) then resend user prompt at end
+    async function retryMessage(messageId: string, modelOverride?: string) {
+        if (loading.value) return;
+        if (!threadIdRef.value) return;
+        try {
+            let target: any = await db.messages.get(messageId);
+            if (!target) return;
+            if (target.thread_id !== threadIdRef.value) return;
+
+            // If assistant clicked, locate preceding user message
+            let userMsg: any = target.role === 'user' ? target : null;
+            if (!userMsg && target.role === 'assistant') {
+                const DexieMod = (await import('dexie')).default;
+                userMsg = await db.messages
+                    .where('[thread_id+index]')
+                    .between(
+                        [target.thread_id, DexieMod.minKey],
+                        [target.thread_id, target.index]
+                    )
+                    .filter(
+                        (m: any) =>
+                            m.role === 'user' &&
+                            !m.deleted &&
+                            m.index < target.index
+                    )
+                    .last();
+            }
+            if (!userMsg) return;
+
+            // Find assistant reply after the user (could be original target)
+            const DexieMod2 = (await import('dexie')).default;
+            const assistant = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [userMsg.thread_id, userMsg.index + 1],
+                    [userMsg.thread_id, DexieMod2.maxKey]
+                )
+                .filter((m: any) => m.role === 'assistant' && !m.deleted)
+                .first();
+
+            await hooks.doAction('ai.chat.retry:action:before', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                triggeredBy: target.role,
+            });
+
+            await db.transaction('rw', db.messages, async () => {
+                await db.messages.delete(userMsg.id);
+                if (assistant) await db.messages.delete(assistant.id);
+            });
+
+            (messages as any).value = (messages as any).value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+
+            const originalText = (userMsg.data as any)?.content || '';
+            let hashes: string[] = [];
+            if (userMsg.file_hashes) {
+                const { parseFileHashes } = await import('~/db/files-util');
+                hashes = parseFileHashes(userMsg.file_hashes);
+            }
+
+            await sendMessage(originalText, {
+                model: modelOverride || DEFAULT_AI_MODEL,
+                file_hashes: hashes,
+                files: [],
+            });
+
+            const tail = (messages as any).value.slice(-2);
+            const newUser = tail.find((m: any) => m.role === 'user');
+            const newAssistant = tail.find((m: any) => m.role === 'assistant');
+            await hooks.doAction('ai.chat.retry:action:after', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                newUserId: newUser?.id,
+                newAssistantId: newAssistant?.id,
+            });
+        } catch (e) {
+            console.error('[useChat.retryMessage] failed', e);
+        }
+    }
+
+    return {
+        messages,
+        sendMessage,
+        retryMessage,
+        loading,
+        threadId: threadIdRef,
+    };
 }

@@ -53,6 +53,8 @@ async function getMessagesForThread(id: string) {
                 role: msg.role as 'user' | 'assistant',
                 content,
                 file_hashes: msg.file_hashes,
+                id: msg.id,
+                stream_id: msg.stream_id,
             } as ChatMessage;
         });
 

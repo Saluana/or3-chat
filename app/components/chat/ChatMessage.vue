@@ -105,6 +105,7 @@
                         color="info"
                         size="sm"
                         class="text-black flex items-center justify-center"
+                        @click="onRetry"
                     ></UButton>
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Branch">
@@ -146,6 +147,7 @@ import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
 type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
 
 const props = defineProps<{ message: UIMessage }>();
+const emit = defineEmits<{ (e: 'retry', id: string): void }>();
 
 const outerClass = computed(() => ({
     'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end pb-5':
@@ -207,6 +209,12 @@ function copyMessage() {
         description: 'The message content has been copied to your clipboard.',
         duration: 2000,
     });
+}
+
+function onRetry() {
+    const id = (props.message as any).id;
+    if (!id) return;
+    emit('retry', id);
 }
 </script>
 

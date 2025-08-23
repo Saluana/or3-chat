@@ -123,12 +123,12 @@ async function retryMessage(messageId: string) {
 
 ## Implementation Checklist
 
--   [ ] Extend `RenderMessage` in `ChatContainer.vue` to keep `id` & pass to `<ChatMessage />`.
--   [ ] Update `ChatMessage.vue` props + emit `retry` event.
--   [ ] Wire `@retry` handler in `ChatContainer.vue` → `chat.retryMessage`.
--   [ ] Implement `retryMessage` in `useChat` with DB + local state logic.
--   [ ] Add optional hooks (guarded minimal overhead).
--   [ ] Disable / conditionally show Retry for non-user messages in UI.
+-   [x] Extend `RenderMessage` in `ChatContainer.vue` to keep `id` & pass to `<ChatMessage />`.
+-   [x] Update `ChatMessage.vue` props + emit `retry` event.
+-   [x] Wire `@retry` handler in `ChatContainer.vue` → `chat.retryMessage`.
+-   [x] Implement `retryMessage` in `useChat` with DB + local state logic.
+-   [x] Add optional hooks (before/after) for retry lifecycle.
+-   [ ] Disable / conditionally show Retry for non-user messages in UI (expanded to allow assistant retry, intentional).
 -   [ ] Smoke test edge cases listed above.
 
 ## Decision Points (Confirmed Defaults)

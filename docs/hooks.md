@@ -319,6 +319,9 @@ Hook names:
     -   `ai.chat.send:action:after` — after full response is appended
 -   Errors
     -   `ai.chat.error:action` — on exceptions during send/stream
+    -   Retry
+        -   `ai.chat.retry:action:before` — before a retry removes original messages (payload: `{ threadId, originalUserId, originalAssistantId?, triggeredBy: 'user'|'assistant' }`)
+        -   `ai.chat.retry:action:after` — after new user + assistant messages are appended (payload: `{ threadId, originalUserId, originalAssistantId?, newUserId?, newAssistantId? }`)
 
 Examples:
 
@@ -364,5 +367,13 @@ Capture errors for telemetry:
 ```ts
 useHookEffect('ai.chat.error:action', (err) => {
     console.error('Chat error', err);
+});
+
+// Observe retry lifecycle
+useHookEffect('ai.chat.retry:action:before', ({ threadId, triggeredBy }) => {
+    console.debug('[retry before]', threadId, 'triggeredBy', triggeredBy);
+});
+useHookEffect('ai.chat.retry:action:after', (info) => {
+    console.debug('[retry after]', info);
 });
 ```

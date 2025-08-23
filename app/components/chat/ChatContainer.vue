@@ -16,6 +16,7 @@
                         `${index}-${message.role}`
                     "
                     :message="message"
+                    @retry="onRetry"
                 />
             </div>
         </div>
@@ -198,6 +199,12 @@ function onSend(payload: any) {
         .catch((e: any) => {
             console.error('[ChatContainer.onSend] sendMessage error', e);
         });
+}
+
+function onRetry(messageId: string) {
+    if (!chat.value || chat.value.loading.value) return;
+    // Provide current model so retry uses same selection
+    (chat.value as any).retryMessage(messageId, model.value);
 }
 </script>
 
