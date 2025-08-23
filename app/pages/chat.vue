@@ -23,7 +23,11 @@ import { db, upsert } from '~/db';
 import { ref, onMounted, watch } from 'vue';
 import Dexie from 'dexie';
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+};
 
 const messageHistory = ref<ChatMessage[]>([]);
 const threadId = ref(''); // Replace with actual thread ID logic
@@ -48,10 +52,22 @@ async function getMessagesForThread(id: string) {
             return {
                 role: msg.role as 'user' | 'assistant',
                 content,
-            };
+                file_hashes: msg.file_hashes,
+            } as ChatMessage;
         });
 
-        console.log('Messages for thread:', id, messageHistory.value);
+        if ((import.meta as any).dev) {
+            console.debug('[chat] loaded messages', {
+                thread: id,
+                count: messageHistory.value.length,
+                withHashes: messageHistory.value.filter((m) => m.file_hashes)
+                    .length,
+                hashesPreview: messageHistory.value
+                    .filter((m) => m.file_hashes)
+                    .slice(0, 3)
+                    .map((m) => (m.file_hashes || '').slice(0, 60)),
+            });
+        }
     }
 }
 

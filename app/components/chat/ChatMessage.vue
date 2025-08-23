@@ -1,8 +1,45 @@
 <template>
-    <div :class="outerClass" class="p-2 rounded-md my-2">
+    <div :class="outerClass" class="p-2 rounded-md my-2 relative">
+        <!-- Compact thumb (collapsed state) -->
+        <button
+            v-if="hashList.length && !expanded"
+            class="absolute -top-2 -right-2 border-2 border-black retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            @click="toggleExpanded"
+            type="button"
+            aria-label="Show attachments"
+        >
+            <template
+                v-if="firstThumb && thumbnails[firstThumb]?.status === 'ready'"
+            >
+                <img
+                    :src="thumbnails[firstThumb!]?.url"
+                    :alt="'attachment ' + firstThumb.slice(0, 6)"
+                    class="object-cover w-full h-full"
+                    draggable="false"
+                />
+            </template>
+            <template
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'error'
+                "
+            >
+                <span class="text-[10px] text-error">err</span>
+            </template>
+            <template v-else>
+                <span class="text-[10px] animate-pulse opacity-70">…</span>
+            </template>
+            <span
+                v-if="hashList.length > 1"
+                class="absolute bottom-0 right-0 text-[10px] font-semibold bg-black/70 text-white px-1"
+                >+{{ hashList.length - 1 }}</span
+            >
+        </button>
+
         <div :class="innerClass" v-html="rendered"></div>
+
+        <!-- Expanded grid -->
         <div
-            v-if="hashList.length"
+            v-if="hashList.length && expanded"
             class="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"
         >
             <div
@@ -29,12 +66,20 @@
                     </div>
                 </template>
             </div>
+            <button
+                class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
+                type="button"
+                @click="toggleExpanded"
+                aria-label="Hide attachments"
+            >
+                Hide attachments
+            </button>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watchEffect } from 'vue';
+import { computed, reactive, watchEffect, ref } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
 import { getFileBlob } from '~/db/files';
 import { marked } from 'marked';
@@ -81,6 +126,13 @@ interface ThumbState {
 }
 
 const thumbnails = reactive<Record<string, ThumbState>>({});
+
+const expanded = ref(false);
+const firstThumb = computed(() => hashList.value[0]);
+function toggleExpanded() {
+    if (!hashList.value.length) return;
+    expanded.value = !expanded.value;
+}
 
 watchEffect(async () => {
     for (const h of hashList.value) {

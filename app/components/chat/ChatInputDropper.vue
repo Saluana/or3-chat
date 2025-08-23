@@ -111,7 +111,7 @@
                         class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48 min-w-[100px]"
                         :disabled="loading"
                         :items="
-                            favoriteModels.map((m) => ({
+                            favoriteModels.map((m: any) => ({
                                 label: m.canonical_slug,
                                 value: m.canonical_slug,
                             }))
@@ -195,6 +195,7 @@ import { ref, nextTick, defineEmits } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
 import type { FileMeta } from '~/db/schema';
+import { useModelStore } from '~/composables/useModelStore';
 
 const props = defineProps<{ loading?: boolean }>();
 

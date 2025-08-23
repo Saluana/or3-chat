@@ -50,6 +50,14 @@ export async function createOrRefFile(
     const existing = await db.file_meta.get(hash);
     if (existing) {
         await changeRefCount(hash, 1);
+        if ((import.meta as any).dev) {
+            // eslint-disable-next-line no-console
+            console.debug('[files] ref existing', {
+                hash: hash.slice(0, 8),
+                size: existing.size_bytes,
+                ref_count: existing.ref_count + 1,
+            });
+        }
         if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
         return existing;
     }
@@ -86,6 +94,14 @@ export async function createOrRefFile(
         await db.file_blobs.put({ hash, blob: file });
         await hooks.doAction('db.files.create:action:after', meta);
     });
+    if ((import.meta as any).dev) {
+        // eslint-disable-next-line no-console
+        console.debug('[files] created', {
+            hash: hash.slice(0, 8),
+            size: file.size,
+            mime,
+        });
+    }
     if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
     return meta;
 }
