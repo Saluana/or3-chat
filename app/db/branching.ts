@@ -2,6 +2,7 @@ import Dexie from 'dexie';
 import { db } from './client';
 import { newId, nowSec } from './util';
 import type { Thread, Message } from './schema';
+import { useHooks } from '../composables/useHooks';
 
 export type ForkMode = 'reference' | 'copy';
 
@@ -23,6 +24,18 @@ export async function forkThread({
     mode = 'reference',
     titleOverride,
 }: ForkThreadParams): Promise<{ thread: Thread; anchor: Message }> {
+    const hooks = useHooks();
+    // Allow filters to mutate basic fork options (mode, title)
+    const filtered = await hooks.applyFilters('branch.fork:filter:options', {
+        sourceThreadId,
+        anchorMessageId,
+        mode,
+        titleOverride,
+    } as ForkThreadParams);
+    sourceThreadId = filtered.sourceThreadId;
+    anchorMessageId = filtered.anchorMessageId;
+    mode = filtered.mode ?? mode;
+    titleOverride = filtered.titleOverride;
     return db.transaction('rw', db.threads, db.messages, async () => {
         const src = await db.threads.get(sourceThreadId);
         if (!src) throw new Error('Source thread not found');
@@ -49,6 +62,13 @@ export async function forkThread({
             // Preserve some flags; ensure forked boolean set
             forked: true,
         } as Thread;
+
+        await hooks.doAction('branch.fork:action:before', {
+            source: src,
+            anchor,
+            mode,
+            options: { titleOverride },
+        });
 
         await db.threads.put(fork);
 
@@ -80,6 +100,12 @@ export async function forkThread({
             });
         }
 
+        await hooks.doAction('branch.fork:action:after', {
+            thread: fork,
+            anchor,
+            mode,
+            copied: mode === 'copy',
+        });
         return { thread: fork, anchor };
     });
 }
@@ -98,6 +124,15 @@ export async function retryBranch({
     mode = 'reference',
     titleOverride,
 }: RetryBranchParams) {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters('branch.retry:filter:options', {
+        assistantMessageId,
+        mode,
+        titleOverride,
+    } as RetryBranchParams);
+    assistantMessageId = filtered.assistantMessageId;
+    mode = filtered.mode ?? mode;
+    titleOverride = filtered.titleOverride;
     const assistant = await db.messages.get(assistantMessageId);
     if (!assistant || assistant.role !== 'assistant')
         throw new Error('Assistant message not found');
@@ -113,12 +148,24 @@ export async function retryBranch({
         .filter((m) => m.role === 'user' && m.index < assistant.index)
         .last();
     if (!prevUser) throw new Error('No preceding user message found');
-    return forkThread({
+    await hooks.doAction('branch.retry:action:before', {
+        assistantMessageId,
+        precedingUserId: prevUser.id,
+        mode,
+    });
+    const res = await forkThread({
         sourceThreadId: assistant.thread_id,
         anchorMessageId: prevUser.id,
         mode,
         titleOverride,
     });
+    await hooks.doAction('branch.retry:action:after', {
+        assistantMessageId,
+        precedingUserId: prevUser.id,
+        newThreadId: res.thread.id,
+        mode,
+    });
+    return res;
 }
 
 interface BuildContextParams {
@@ -131,6 +178,7 @@ interface BuildContextParams {
  * - Reference branches: ancestor slice (<= anchor_index) from parent + local messages.
  */
 export async function buildContext({ threadId }: BuildContextParams) {
+    const hooks = useHooks();
     const t = await db.threads.get(threadId);
     if (!t) return [] as Message[];
 
@@ -152,5 +200,19 @@ export async function buildContext({ threadId }: BuildContextParams) {
         db.messages.where('thread_id').equals(threadId).sortBy('index'),
     ]);
 
-    return [...ancestors, ...locals];
+    let combined = [...ancestors, ...locals];
+    combined = await hooks.applyFilters(
+        'branch.context:filter:messages',
+        combined,
+        threadId,
+        t.branch_mode
+    );
+    await hooks.doAction('branch.context:action:after', {
+        threadId,
+        mode: t.branch_mode,
+        ancestorCount: ancestors.length,
+        localCount: locals.length,
+        finalCount: combined.length,
+    });
+    return combined;
 }

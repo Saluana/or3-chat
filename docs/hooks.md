@@ -214,106 +214,55 @@ Common patterns:
     -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
         -   branching cache: (internal) cache invalidated on `db.threads.create:action:after`, `db.threads.upsert:action:after`, `db.threads.fork:action:after`, and thread delete actions.
 
-### Branching Hooks
+### Branching (Minimal) Hooks
 
-Branching adds a light-weight fork mechanism with two additional capabilities:
+The simplified branching system exposes a small set of hooks so you can still observe or tweak behavior without the previous complexity.
 
--   `db.threads.fork:filter:options` — Filter incoming branch creation options (payload BranchOptions). You can change mode (light/full), override title, or veto by throwing.
--   Existing `db.threads.fork:action:before|after` — Now receive an extended payload (before) `{ source, fork, anchorId, mode }` when branching module supplies it.
+Hook names:
 
-Example: force all forks to be light unless user explicitly sets flag.
+-   `branch.fork:filter:options` (filter) — Adjust `{ sourceThreadId, anchorMessageId, mode, titleOverride }` before a fork is created.
+-   `branch.fork:action:before` / `branch.fork:action:after` — Observe fork lifecycle. `before` payload: `{ source, anchor, mode, options }`, `after` payload: `{ thread, anchor, mode, copied }`.
+-   `branch.retry:filter:options` (filter) — Adjust `{ assistantMessageId, mode, titleOverride }` before a retry-based branch.
+-   `branch.retry:action:before` / `branch.retry:action:after` — Retry lifecycle. `after` payload: `{ assistantMessageId, precedingUserId, newThreadId, mode }`.
+-   `branch.context:filter:messages` (filter) — Transform the assembled message array for a branched thread (reference mode) before it is returned.
+-   `branch.context:action:after` (action) — Inspect context assembly metrics `{ threadId, mode, ancestorCount, localCount, finalCount }`.
+
+Example: Force all branches to reference mode and tag titles.
 
 ```ts
 useHookEffect(
-    'db.threads.fork:filter:options',
+    'branch.fork:filter:options',
     (opts) => ({
         ...opts,
-        mode: opts.mode === 'full' && !opts.allowFull ? 'light' : opts.mode,
+        mode: 'reference',
+        titleOverride: (opts.titleOverride || 'Alt Path') + ' • ref',
     }),
-    { kind: 'filter', priority: 8 }
+    { kind: 'filter' }
 );
 ```
 
-Cache invalidation for light fork anchor metadata is automatic via registered listeners—no action needed. If you manually mutate thread titles bypassing provided helpers, emit a soft upsert so hooks fire.
-
-#### Context Assembly Hooks (Light Forks)
-
-Light fork threads use additional context assembly logic:
-
--   `ai.context.branch:filter:messages` — (filter) Provide a fully assembled messages array for model input. Registered via `registerBranchContextFilter()`; returns a replacement array when the active thread is a light fork. You can chain on this to inject or prune system messages.
--   `branch.context.assembled:action:after` — (action) Fired after context assembly completes with payload `{ threadId, light, ancestorCount, localCount, finalCount, tokens, maxTokens }` for performance/analytics.
-
-Register the default filter (done once, e.g. in a client plugin):
-
-```ts
-// plugins/branch-context.client.ts
-import { registerBranchContextFilter } from '~/app/db/branching';
-export default defineNuxtPlugin(() => {
-    registerBranchContextFilter();
-});
-```
-
-Example: prepend a system primer when branching context is used:
+Example: Inject a system primer into branched context.
 
 ```ts
 useHookEffect(
-    'ai.context.branch:filter:messages',
-    async (msgs, threadId) => {
-        if (!Array.isArray(msgs) || !threadId) return msgs;
+    'branch.context:filter:messages',
+    (msgs, threadId, mode) => {
+        if (!Array.isArray(msgs) || mode !== 'reference') return msgs;
         return [
             {
                 id: 'sys_' + threadId,
                 role: 'system',
-                index: 0,
-                data: {
-                    content:
-                        'You are evaluating an alternate conversation path.',
-                },
+                index: -1,
+                data: { content: 'Alternate branch context.' },
             },
             ...msgs,
         ];
     },
-    { kind: 'filter', priority: 20 }
+    { kind: 'filter', priority: 15 }
 );
 ```
 
-#### Retry-As-Branch UI Hook
-
-When a user triggers a "Retry as Branch" action (Task 5), the branching module emits a UI-level action so the interface can react (navigate, toast, analytics) without tightly coupling DB logic to presentation:
-
--   `ui.thread.retryAsBranch:action:after` — Fired after a branch is created (or an existing duplicate light fork is reused) via `retryAsBranch(assistantMessageId, mode)`. Payload shape:
-
-```ts
-{
-    sourceThreadId: string; // original thread where retry occurred
-    assistantMessageId: string; // the assistant message being retried
-    newThreadId: string; // id of the created or reused fork
-    mode: 'full' | 'light'; // branch mode requested
-    duplicate: boolean; // true if an existing light fork was reused
-}
-```
-
-Typical usage in a client plugin or component to perform navigation + toast (pseudo implementation; adapt to your router + UI libs):
-
-```ts
-import { useHookEffect } from '~/app/composables/useHookEffect';
-
-useHookEffect(
-    'ui.thread.retryAsBranch:action:after',
-    async (_ctx, { newThreadId, duplicate, mode }) => {
-        // Navigate to the new branch thread view
-        await navigateTo({ name: 'chat', query: { thread: newThreadId } });
-        // Show a retro-styled toast (replace with actual toast util)
-        showToast(
-            duplicate
-                ? 'Reused existing branch'
-                : mode === 'light'
-                ? 'Created light branch'
-                : 'Created full branch'
-        );
-    }
-);
-```
+These replace all prior advanced branching / context hooks from the earlier design.
 
 You can also attach analytics or telemetry here without touching the branching logic.
 
