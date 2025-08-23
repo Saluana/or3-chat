@@ -141,14 +141,15 @@
             </div>
         </div>
 
-        <!-- Image Thumbnails -->
+        <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
         <div
-            v-if="uploadedImages.length > 0"
+            v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
             class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
         >
+            <!-- Images -->
             <div
                 v-for="(image, index) in uploadedImages"
-                :key="index"
+                :key="'img-' + index"
                 class="relative group aspect-square"
             >
                 <img
@@ -158,17 +159,49 @@
                 />
                 <button
                     @click="removeImage(index)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[20px] w-[20px] retro-shadow bg-error border-black border bg-opacity-50 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
                 >
                     <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
                 </button>
                 <div
-                    class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
                 >
                     {{ image.name }}
                 </div>
+            </div>
+            <!-- Large Text Blocks -->
+            <div
+                v-for="(block, tIndex) in largeTextBlocks"
+                :key="'txt-' + block.id"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >TXT</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="block.previewFull"
+                    >
+                        {{ block.preview }}
+                    </span>
+                    <span class="mt-1 text-[10px] opacity-70"
+                        >{{ block.wordCount }}w</span
+                    >
+                </div>
+                <button
+                    @click="removeTextBlock(tIndex)"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove text block"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
             </div>
         </div>
 
@@ -191,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, defineEmits } from 'vue';
+import { ref, nextTick, defineEmits, onMounted, watch } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
 import type { FileMeta } from '~/db/schema';
@@ -228,6 +261,7 @@ const emit = defineEmits<{
         payload: {
             text: string;
             images: UploadedImage[]; // may include pending or error statuses
+            largeTexts: LargeTextBlock[];
             model: string;
             settings: ImageSettings;
         }
@@ -243,6 +277,19 @@ const emit = defineEmits<{
 const promptText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const uploadedImages = ref<UploadedImage[]>([]);
+// Large pasted text blocks (> threshold)
+interface LargeTextBlock {
+    id: string;
+    text: string;
+    wordCount: number;
+    preview: string;
+    previewFull: string;
+}
+const largeTextBlocks = ref<LargeTextBlock[]>([]);
+const LARGE_TEXT_WORD_THRESHOLD = 600;
+function makeId() {
+    return Math.random().toString(36).slice(2, 9);
+}
 const isDragging = ref(false);
 const selectedModel = ref<string>('openai/gpt-oss-120b');
 const hiddenFileInput = ref<HTMLInputElement | null>(null);
@@ -272,22 +319,46 @@ const handlePromptInput = () => {
 };
 
 const handlePaste = async (event: ClipboardEvent) => {
-    const clipboardData = event.clipboardData;
-    if (!clipboardData) return;
-    const items = clipboardData.items;
+    const cd = event.clipboardData;
+    if (!cd) return;
+    // 1. Handle images first (current behavior)
+    const items = cd.items;
+    let handled = false;
     for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
+        const it = items[i];
+        if (!it) continue;
+        const mime = it.type || '';
         if (mime.startsWith('image/')) {
             event.preventDefault();
-            const file = item.getAsFile();
+            handled = true;
+            const file = it.getAsFile();
             if (!file) continue;
             await processFile(
                 file,
                 file.name || `pasted-image-${Date.now()}.png`
             );
         }
+    }
+    if (handled) return; // skip text path if image already captured
+
+    // 2. Large text detection
+    const text = cd.getData('text/plain');
+    if (!text) return; // allow normal behavior
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
+        event.preventDefault();
+        // Create a block instead of inserting raw text
+        const previewFull = text.slice(0, 800).trim();
+        const preview =
+            previewFull.split(/\s+/).slice(0, 12).join(' ') +
+            (wordCount > 12 ? '…' : '');
+        largeTextBlocks.value.push({
+            id: makeId(),
+            text,
+            wordCount,
+            preview,
+            previewFull,
+        });
     }
 };
 
@@ -395,17 +466,27 @@ const removeImage = (index: number) => {
     emit('image-remove', index);
 };
 
+const removeTextBlock = (index: number) => {
+    largeTextBlocks.value.splice(index, 1);
+};
+
 const handleSend = () => {
     if (props.loading) return;
-    if (promptText.value.trim() || uploadedImages.value.length > 0) {
+    if (
+        promptText.value.trim() ||
+        uploadedImages.value.length > 0 ||
+        largeTextBlocks.value.length > 0
+    ) {
         emit('send', {
             text: promptText.value,
             images: uploadedImages.value,
+            largeTexts: largeTextBlocks.value,
             model: selectedModel.value,
             settings: imageSettings.value,
         });
         promptText.value = '';
         uploadedImages.value = [];
+        largeTextBlocks.value = [];
         autoResize();
     }
 };

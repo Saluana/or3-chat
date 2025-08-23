@@ -96,7 +96,7 @@
                 }"
                 class="rounded-[3px]"
             >
-                <UTooltip :delay-duration="0" text="Copy">
+                <UTooltip :delay-duration="0" text="Copy" :teleport="true">
                     <UButton
                         @click="copyMessage"
                         icon="pixelarticons:copy"
@@ -105,7 +105,12 @@
                         class="text-black flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
-                <UTooltip :delay-duration="0" text="Retry">
+                <UTooltip
+                    :delay-duration="0"
+                    text="Retry"
+                    :popper="{ strategy: 'fixed' }"
+                    :teleport="true"
+                >
                     <UButton
                         icon="pixelarticons:reload"
                         color="info"
@@ -114,7 +119,7 @@
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
-                <UTooltip :delay-duration="0" text="Branch">
+                <UTooltip :delay-duration="0" text="Branch" :teleport="true">
                     <UButton
                         @click="onBranch"
                         icon="pixelarticons:git-branch"
@@ -123,7 +128,7 @@
                         class="text-black flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
-                <UTooltip :delay-duration="0" text="Edit">
+                <UTooltip :delay-duration="0" text="Edit" :teleport="true">
                     <UButton
                         icon="pixelarticons:edit-box"
                         color="info"

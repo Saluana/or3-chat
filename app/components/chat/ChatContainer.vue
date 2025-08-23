@@ -269,6 +269,11 @@ function onSend(payload: any) {
         });
     }
 
+    // Large pasted text blocks -> send as extraTextParts so they become additional text parts (not files)
+    if (payload.largeTexts && payload.largeTexts.length) {
+        reqParams.extraTextParts = payload.largeTexts.map((b: any) => b.text);
+    }
+
     console.log('[ChatContainer.onSend] transformed reqParams', reqParams);
 
     (reqParams as any).file_hashes = fileHashes;

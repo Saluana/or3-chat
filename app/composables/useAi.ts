@@ -44,6 +44,7 @@ interface SendMessageParams {
     }[];
     model?: string;
     file_hashes?: string[]; // pre-computed content hashes for persistence
+    extraTextParts?: string[]; // additional large pasted text blocks
 }
 
 export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
@@ -84,7 +85,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             threadIdRef.value = newThread.id;
         }
 
-        let { files, model, file_hashes } = sendMessagesParams;
+        let { files, model, file_hashes, extraTextParts } = sendMessagesParams;
         const rawParams: any = sendMessagesParams as any;
         if ((!files || files.length === 0) && rawParams?.images?.length) {
             console.warn(
@@ -151,13 +152,14 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         // 3) Build the parts array: text part first, then image/file parts
         const parts: ContentPart[] = [
             { type: 'text', text: outgoing },
+            ...(extraTextParts || []).map<ContentPart>((t) => ({
+                type: 'text',
+                text: t,
+            })),
             ...(files ?? []).map<ContentPart>((f) => {
-                // If you're only sending images, you can treat all as ImagePart.
-                // Use data URLs like `data:image/png;base64,...` in f.url for best compatibility.
                 if ((f.type ?? '').startsWith('image/')) {
                     return { type: 'image', image: f.url, mediaType: f.type };
                 }
-                // Fallback for non-image files:
                 return { type: 'file', data: f.url, mediaType: f.type };
             }),
         ];
