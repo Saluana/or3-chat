@@ -92,6 +92,7 @@
             >
                 <UTooltip :delay-duration="0" text="Copy">
                     <UButton
+                        @click="copyMessage"
                         icon="pixelarticons:copy"
                         color="info"
                         size="sm"
@@ -197,6 +198,16 @@ watchEffect(async () => {
         }
     }
 });
+import { useToast } from '#imports';
+function copyMessage() {
+    navigator.clipboard.writeText(props.message.content);
+
+    useToast().add({
+        title: 'Message copied',
+        description: 'The message content has been copied to your clipboard.',
+        duration: 2000,
+    });
+}
 </script>
 
 <style scoped></style>
