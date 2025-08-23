@@ -6,7 +6,7 @@
             class="absolute w-full h-screen overflow-y-scroll sm:pt-3.5 pb-[165px]"
         >
             <div
-                class="mx-auto flex w-full max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
+                class="mx-auto flex w-full px-1.5 sm:px-0 sm:max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
             >
                 <ChatMessage
                     v-for="(message, index) in messages || []"
@@ -21,13 +21,13 @@
         </div>
         <div class="pointer-events-none absolute bottom-0 top-0 w-full">
             <div
-                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center pr-[11px]"
+                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center pr-0.5 sm:pr-[11px]"
             >
                 <chat-input-dropper
                     :loading="loading"
                     @send="onSend"
                     @model-change="onModelChange"
-                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-2"
+                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
                 />
             </div>
         </div>

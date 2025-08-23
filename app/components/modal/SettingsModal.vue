@@ -7,11 +7,11 @@
             header: 'border-b-2  border-black bg-primary p-0 min-h-[50px] text-white',
             body: 'p-0!',
         }"
-        class="border-2 min-w-[720px]! overflow-hidden"
+        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
     >
         <template #header>
             <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm">Settings</h3>
+                <h3 class="font-semibold text-sm pl-2">Settings</h3>
                 <UButton
                     class="bg-white/90 hover:bg-white/95 active:bg-white/95 flex items-center justify-center"
                     :square="true"
@@ -55,12 +55,12 @@
                     <VList
                         :data="chunkedModels as OpenRouterModel[][]"
                         style="height: 70vh"
-                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] py-4 w-full px-0!"
+                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
                         :overscan="4"
                         #default="{ item: row }"
                     >
                         <div
-                            class="grid grid-cols-2 gap-5 px-6 w-full"
+                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
                             :class="gridColsClass"
                         >
                             <div

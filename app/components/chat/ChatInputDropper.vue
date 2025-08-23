@@ -84,13 +84,20 @@
 
                 <!-- Model Selector (simple) -->
                 <div class="shrink-0">
-                    <USelect
+                    <USelectMenu
                         :ui="{
                             content: 'border-[2px] border-black rounded-[3px]',
+                            input: 'border-2 border-black rounded-none!',
                         }"
-                        v-if="favoriteModels && favoriteModels.length > 0"
-                        v-model="selectedModel"
-                        class="retro-btn h-[32px] w-auto min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800"
+                        arrow
+                        v-if="
+                            selectedModel &&
+                            favoriteModels &&
+                            favoriteModels.length > 0
+                        "
+                        v-model="selectedModel as string"
+                        :value-key="'value'"
+                        class="retro-btn h-[32px] min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48"
                         :disabled="loading"
                         :items="
                             favoriteModels.map((m) => ({
@@ -99,7 +106,7 @@
                             }))
                         "
                     >
-                    </USelect>
+                    </USelectMenu>
                 </div>
 
                 <!-- Send Button -->
@@ -218,7 +225,7 @@ const promptText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const uploadedImages = ref<UploadedImage[]>([]);
 const isDragging = ref(false);
-const selectedModel = ref('openai/gpt-oss-120b');
+const selectedModel = ref<string>('openai/gpt-oss-120b');
 const hiddenFileInput = ref<HTMLInputElement | null>(null);
 const imageSettings = ref<ImageSettings>({
     quality: 'medium',
