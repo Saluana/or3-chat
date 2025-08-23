@@ -86,7 +86,8 @@
                 <div class="shrink-0">
                     <USelectMenu
                         :ui="{
-                            content: 'border-[2px] border-black rounded-[3px]',
+                            content:
+                                'border-[2px] border-black rounded-[3px] w-[320px]',
                             input: 'border-0 rounded-none!',
                             arrow: 'h-[18px] w-[18px]',
                             itemTrailingIcon:
@@ -107,7 +108,7 @@
                         "
                         v-model="selectedModel as string"
                         :value-key="'value'"
-                        class="retro-btn h-[32px] min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48"
+                        class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48 min-w-[100px]"
                         :disabled="loading"
                         :items="
                             favoriteModels.map((m) => ({
