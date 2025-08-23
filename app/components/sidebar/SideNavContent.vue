@@ -6,16 +6,28 @@
                 class="w-full flex items-center justify-center backdrop-blur-2xl"
                 >New Chat</UButton
             >
-            <UInput
-                icon="i-lucide-search"
-                size="md"
-                variant="outline"
-                placeholder="Search..."
-                class="w-full ml-[1px]"
-            ></UInput>
+            <div class="relative w-full ml-[1px]">
+                <UInput
+                    v-model="threadSearchQuery"
+                    icon="i-lucide-search"
+                    size="md"
+                    variant="outline"
+                    placeholder="Search threads..."
+                    class="w-full"
+                />
+                <button
+                    v-if="threadSearchQuery"
+                    type="button"
+                    aria-label="Clear thread search"
+                    class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                    @click="threadSearchQuery = ''"
+                >
+                    <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
+                </button>
+            </div>
         </div>
         <div class="flex flex-col p-2 space-y-1.5">
-            <div v-for="item in items" :key="item.id">
+            <div v-for="item in displayThreads" :key="item.id">
                 <RetroGlassBtn
                     :class="{
                         'active-element bg-primary/25':
@@ -125,7 +137,7 @@
     </div>
 </template>
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
 
@@ -134,6 +146,12 @@ const props = defineProps<{
 }>();
 
 const items = ref<any[]>([]);
+import { useThreadSearch } from '~/composables/useThreadSearch';
+const { query: threadSearchQuery, results: threadSearchResults } =
+    useThreadSearch(items as any);
+const displayThreads = computed(() =>
+    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+);
 let sub: { unsubscribe: () => void } | null = null;
 
 onMounted(() => {
