@@ -75,7 +75,7 @@
                             :disabled="loading"
                         >
                             <UIcon
-                                name="i-lucide:sliders-horizontal"
+                                name="pixelarticons:sliders"
                                 class="w-4 h-4"
                             />
                         </UButton>
@@ -135,7 +135,7 @@
                         type="button"
                         aria-label="Send message"
                     >
-                        <UIcon name="i-lucide:arrow-up" class="w-4 h-4" />
+                        <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
                     </UButton>
                 </div>
             </div>
