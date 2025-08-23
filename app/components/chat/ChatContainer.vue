@@ -108,8 +108,10 @@ const messages = computed<RenderMessage[]>(() =>
             contentStr = (m.content as ContentPart[])
                 .map((p) => {
                     if (p.type === 'text') return p.text;
-                    if (p.type === 'image')
-                        return `![image](${(p as any).image ?? ''})`;
+                    if (p.type === 'image') {
+                        // Don't inline full-size images as markdown; thumbnails handled separately via file_hashes in ChatMessage
+                        return '';
+                    }
                     if (p.type === 'file')
                         return `**[file:${
                             (p as any).name ?? (p as any).mediaType ?? 'file'
