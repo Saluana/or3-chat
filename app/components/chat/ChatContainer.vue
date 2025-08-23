@@ -13,7 +13,7 @@
             >
                 <Virtualizer
                     ref="virtualizerRef"
-                    :data="messages"
+                    :data="virtualMessages"
                     :itemSize="virtualItemSize"
                     :overscan="8"
                     :scrollRef="scrollParent || undefined"
@@ -34,17 +34,29 @@
                         </div>
                     </template>
                 </Virtualizer>
-                <!-- Streaming placeholder (assistant message mid-flight) -->
+                <!-- Live streaming tail (excluded from virtualizer for smoother incremental updates) -->
                 <div
-                    v-if="
-                        loading &&
-                        lastMessage &&
-                        lastMessage.role === 'assistant' &&
-                        !lastMessage.content
-                    "
-                    class="mt-10 animate-pulse text-sm opacity-70"
+                    v-if="tailActive"
+                    class="mt-10 first:mt-0"
+                    :key="tailStreamId || 'streaming-tail'"
                 >
-                    Thinking…
+                    <div
+                        class="bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm p-1 sm:p-5 rounded-md relative animate-in fade-in"
+                        style="animation-duration: 120ms"
+                    >
+                        <div
+                            class="prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                            v-html="tailRendered || tailPlaceholder"
+                        />
+                        <div
+                            class="absolute -bottom-5 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+                        >
+                            <span
+                                class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
+                                >Streaming…</span
+                            >
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -80,6 +92,8 @@ import type {
     ContentPart,
 } from '~/composables/useAi';
 import { Virtualizer } from 'virtua/vue';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { marked } from 'marked';
 
 const model = ref('openai/gpt-oss-120b');
 
@@ -167,6 +181,75 @@ const messages = computed<RenderMessage[]>(() =>
 );
 const loading = computed(() => chat.value.loading.value);
 
+// --- Hybrid tail streaming state ---
+const tailActive = ref(false);
+const tailStreamId = ref<string | null>(null);
+const tailBuffer = ref(''); // accumulated but not yet flushed
+const tailDisplay = ref(''); // flushed text (rendered markdown)
+const tailStartedAt = ref<number | null>(null);
+const tailLastFlush = ref(0);
+const tailInitialDelayMs = 1000; // per spec
+const tailMinFlushInterval = 90; // ms between flush rAF batches
+let tailRaf: number | null = null;
+
+function resetTail() {
+    tailActive.value = false;
+    tailStreamId.value = null;
+    tailBuffer.value = '';
+    tailDisplay.value = '';
+    tailStartedAt.value = null;
+    tailLastFlush.value = 0;
+    if (tailRaf) {
+        cancelAnimationFrame(tailRaf);
+        tailRaf = null;
+    }
+}
+
+function ensureTailFlushLoop() {
+    if (tailRaf != null) return;
+    const loop = () => {
+        tailRaf = null;
+        if (!tailActive.value) return; // stopped
+        const now = performance.now();
+        const elapsed = tailStartedAt.value ? now - tailStartedAt.value : 0;
+        const ready =
+            elapsed >= tailInitialDelayMs &&
+            tailBuffer.value.length > 0 &&
+            now - tailLastFlush.value >= tailMinFlushInterval;
+        if (ready) {
+            tailDisplay.value += tailBuffer.value;
+            tailBuffer.value = '';
+            tailLastFlush.value = now;
+        }
+        if (tailActive.value) tailRaf = requestAnimationFrame(loop);
+    };
+    tailRaf = requestAnimationFrame(loop);
+}
+
+// Rendered HTML for tail (markdown parse only on flush increments to keep cost lower)
+const tailRendered = computed(() =>
+    tailDisplay.value ? marked.parse(tailDisplay.value) : ''
+);
+const tailPlaceholder = computed(() =>
+    !tailDisplay.value && !tailBuffer.value ? 'Thinking…' : ''
+);
+
+// Identify the current streaming assistant message (last assistant with empty OR growing content while loading)
+const streamingAssistant = computed(() => {
+    if (!loading.value) return null;
+    const arr = messages.value;
+    if (!arr.length) return null;
+    const last = arr[arr.length - 1];
+    if (last && last.role === 'assistant') return last;
+    return null;
+});
+
+// Virtualizer data excludes the active streaming assistant when tailActive
+const virtualMessages = computed(() => {
+    if (!tailActive.value || !tailStreamId.value) return messages.value;
+    return messages.value.filter((m) => m.stream_id !== tailStreamId.value);
+});
+
 // Virtualization helpers
 const scrollParent = ref<HTMLElement | null>(null);
 const virtualizerRef = ref<any>(null);
@@ -186,6 +269,14 @@ function handleScrollEvent() {
 
 function scrollToBottom(smooth = true) {
     if (!scrollParent.value) return;
+    // While streaming tail is active we exclude the assistant message from virtualizer; scrolling to index would jump upward.
+    if (tailActive.value) {
+        scrollParent.value.scrollTo({
+            top: scrollParent.value.scrollHeight,
+            behavior: smooth ? 'smooth' : 'auto',
+        });
+        return;
+    }
     if (virtualizerRef.value && messages.value.length) {
         try {
             virtualizerRef.value.scrollToIndex(messages.value.length - 1, {
@@ -193,7 +284,9 @@ function scrollToBottom(smooth = true) {
                 smooth,
             });
             return; // success
-        } catch (_) {}
+        } catch (_) {
+            /* fallback below */
+        }
     }
     scrollParent.value.scrollTo({
         top: scrollParent.value.scrollHeight,
@@ -220,6 +313,76 @@ onMounted(() => {
 onBeforeUnmount(() => {
     scrollParent.value?.removeEventListener('scroll', handleScrollEvent);
 });
+
+// Hook: streaming delta buffering
+useHookEffect(
+    'ai.chat.stream:action:delta',
+    (delta: string, meta: any) => {
+        // Activate tail if first delta for a new stream
+        if (!tailActive.value) {
+            tailActive.value = true;
+            tailStreamId.value =
+                meta?.streamId || meta?.assistantId || 'stream';
+            tailStartedAt.value = performance.now();
+            tailBuffer.value = '';
+            tailDisplay.value = '';
+            ensureTailFlushLoop();
+        }
+        // Different stream? finalize previous and start new.
+        if (
+            tailActive.value &&
+            tailStreamId.value &&
+            meta?.streamId &&
+            meta.streamId !== tailStreamId.value
+        ) {
+            // finalize old silently (will be brought in when loading toggles false)
+            resetTail();
+            tailActive.value = true;
+            tailStreamId.value = meta.streamId;
+            tailStartedAt.value = performance.now();
+            ensureTailFlushLoop();
+        }
+        tailBuffer.value += String(delta || '');
+    },
+    { kind: 'action', priority: 20 }
+);
+
+// Hook: after send (finalize)
+useHookEffect(
+    'ai.chat.send:action:after',
+    () => {
+        // Force final flush
+        if (tailBuffer.value.length) {
+            tailDisplay.value += tailBuffer.value;
+            tailBuffer.value = '';
+        }
+        // Delay re-including the message until next tick so virtualizer sees stable array
+        nextTick(() => {
+            resetTail();
+            nextTick(() => {
+                if (userIsAtBottom.value) scrollToBottom(false);
+            });
+        });
+    },
+    { kind: 'action', priority: 50 }
+);
+
+// Hook: error path
+useHookEffect(
+    'ai.chat.error:action',
+    () => {
+        resetTail();
+    },
+    { kind: 'action', priority: 50 }
+);
+
+// Auto-scroll as tailDisplay grows
+watch(
+    () => tailDisplay.value,
+    () => {
+        if (tailActive.value && userIsAtBottom.value) scrollToBottom(false);
+    }
+);
 
 function onSend(payload: any) {
     console.log('[ChatContainer.onSend] raw payload', payload);
