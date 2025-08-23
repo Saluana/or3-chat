@@ -38,7 +38,7 @@ export async function forkThread({
         const fork: Thread = {
             ...src,
             id: forkId,
-            title: titleOverride || `${src.title || 'Branch'} • alt`,
+            title: titleOverride || `${src.title || 'Branch'} - fork`,
             parent_thread_id: sourceThreadId,
             anchor_message_id: anchorMessageId,
             anchor_index: anchor.index,

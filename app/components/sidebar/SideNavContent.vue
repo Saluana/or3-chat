@@ -36,9 +36,15 @@
                     class="w-full flex items-center justify-between text-left"
                     @click="() => emit('chatSelected', item.id)"
                 >
-                    <span class="truncate">{{
-                        item.title || 'New Thread'
-                    }}</span>
+                    <div class="flex items-center space-x-1.5">
+                        <UIcon
+                            v-if="item.forked"
+                            name="pixelarticons:git-branch"
+                        ></UIcon>
+                        <span class="truncate">{{
+                            item.title || 'New Thread'
+                        }}</span>
+                    </div>
 
                     <!-- Three-dot popover INSIDE the retro button -->
                     <UPopover

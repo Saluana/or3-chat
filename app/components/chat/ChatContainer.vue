@@ -18,6 +18,7 @@
                     :message="message"
                     :thread-id="props.threadId"
                     @retry="onRetry"
+                    @branch="onBranch"
                 />
             </div>
         </div>
@@ -206,6 +207,10 @@ function onRetry(messageId: string) {
     if (!chat.value || chat.value.loading.value) return;
     // Provide current model so retry uses same selection
     (chat.value as any).retryMessage(messageId, model.value);
+}
+
+function onBranch(newThreadId: string) {
+    if (newThreadId) emit('thread-selected', newThreadId);
 }
 </script>
 
