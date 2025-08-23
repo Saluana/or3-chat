@@ -94,7 +94,7 @@
                                 'shrink-0 w-[18px] h-[18px] text-dimmed',
                         }"
                         :search-input="{
-                            icon: 'i-lucide-search',
+                            icon: 'pixelarticons:search',
                             ui: {
                                 base: 'border-0 border-b-1 rounded-none!',
                                 leadingIcon:
