@@ -158,11 +158,11 @@
                 />
                 <button
                     @click="removeImage(index)"
-                    class="absolute top-1 right-1 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[20px] w-[20px] retro-shadow bg-error border-black border bg-opacity-50 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
                 >
-                    <UIcon name="i-lucide:x" class="w-3 h-3" />
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
                 </button>
                 <div
                     class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"

@@ -13,7 +13,12 @@ type ChatMessage = {
     content: string;
 };
 
-const props = defineProps<{ message: ChatMessage }>();
+import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
+
+// Local UI message expects content to be a string (rendered markdown/html)
+type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
+
+const props = defineProps<{ message: UIMessage }>();
 
 const outerClass = computed(() => ({
     'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
