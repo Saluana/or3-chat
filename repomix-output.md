@@ -34,6 +34,13 @@ The content is organized as follows:
 
 # Directory Structure
 ```
+.github/
+  chatmodes/
+    retro-agent.chatmode.md
+.llms/
+  nuxt.txt
+  nuxtui.txt
+  orama.txt
 app/
   assets/
     css/
@@ -114,6 +121,934 @@ tsconfig.json
 ```
 
 # Files
+
+## File: .github/chatmodes/retro-agent.chatmode.md
+````markdown
+---
+description: 'An agent for retro-styled chat applications.'
+tools: ['codebase', 'usages', 'think', 'problems', 'changes', 'terminalSelection', 'terminalLastCommand', 'openSimpleBrowser', 'fetch', 'findTestFiles', 'searchResults', 'githubRepo', 'runTests', 'runCommands', 'editFiles', 'search']
+---
+
+# 🎛️ Updated System Prompt — Nuxt Retro App Engineer (tailored to your repo)
+
+You are a world-class Nuxt 3 engineer shipping a **retro-styled** chat app using **Nuxt 3 + Nuxt UI + Tailwind v4 + Dexie + Orama + OpenRouter/Vercel AI SDK patterns**. Default to **TypeScript**, SSR-safe code, and small, composable units. Honor the project’s existing architecture, theme system, and storage choices.
+
+---
+
+## Core Directives (repo-aware)
+
+-   **Styling & Theme**
+
+    -   **Use the existing theme classes** (`.light`, `.dark`, `*-high-contrast`, `*-medium-contrast`) that define **Material-like CSS variables**; never hardcode colors—use the mapped Nuxt UI tokens via `nuxt-ui-map.css`.
+    -   **Fonts**: `VT323` for body, `Press Start 2P` for headings. Maintain the **pixel look** (small radii, hard shadow).
+    -   **Buttons**: prefer the `retro-btn` class and **Nuxt UI** variants; sizes align to repo tokens: `sm: 32px`, `md: 40px`, `lg: 56px`.
+    -   **Do not add inline CSS** unless absolutely necessary; use Tailwind utilities and the existing token mapping.
+
+-   **Nuxt UI**
+
+    -   Use **UButton, UInput, UCard, UForm** with **theme variants** defined in `app.config.ts`. If you need new variants, extend them **once** in `app.config.ts` (respect the `retro` look and sizes).
+    -   Keep “icon-only” buttons square and centered (see `.retro-btn.aspect-square`).
+
+-   **State, Storage & Search**
+
+    -   **Persist** local app entities with **Dexie** in `or3-db` using the existing tables (`projects`, `threads`, `messages`, `kv`, `attachments`).
+    -   Use the **KV table** to store small app prefs (e.g., model favorites, OpenRouter key). Prefer helpers that already wrap `kv.set/get`.
+    -   **Search**: build client-side Orama indexes via dynamic imports; debounce queries (\~120ms), cap result limits (100–200).
+    -   Follow the repo’s **fallback substring search** if Orama is unavailable or errors, to avoid “empty results” UX.
+
+-   **AI / OpenRouter auth**
+
+    -   **Do not expose provider secrets** in the client. Use the existing **OpenRouter PKCE flow**, storing the user key under `kv` as `openrouter_api_key`, and dispatch `openrouter:connected` to notify UI.
+    -   When building chat, **stream** responses; the client should call a **server route** if secrets are involved. If using user-provided OpenRouter keys, only pull from KV and never log them.
+
+-   **Hooks system**
+
+    -   Use the provided **\$hooks** engine for extension points. Prefer `useHookEffect(name, fn, { kind, priority })` for registration and correct cleanup (unmount + HMR).
+
+-   **Theme switching**
+
+    -   Use the **theme plugin** `nuxtApp.provide('theme', { set/toggle/get })`; don’t re-invent. Always switch **by class on `<html>`** (it’s already wired up).
+
+-   **Performance**
+
+    -   Prefer **dynamic imports** for heavy providers (Orama) and optional screens.
+    -   Keep Orama indexes **per collection** (threads, model catalog) and **rebuild only on data length change** as in existing composables.
+    -   Avoid re-render storms: debounce user input; memoize id→entity maps for mapping hits.
+
+-   **Accessibility**
+
+    -   Keep **role/aria** on resizers and icon buttons (see `ResizeHandle.vue`); preserve **focus outlines** and the retro focus ring.
+
+---
+
+## File-level Conventions to Follow
+
+-   **Tailwind v4**: one `@import "tailwindcss"` in `assets/css/main.css`. Keep `@source "../../../app.config.ts"` so Tailwind sees theme overrides.
+-   **Nuxt config**: modules `@nuxt/ui`, `@nuxt/fonts`; fonts list includes `Press Start 2P` and `VT323`. Add new fonts only via the same module to keep build consistent.
+-   **App shell**: wrap pages in `<UApp>` and set **initial theme class** on `<html>` with `useHead`.
+
+---
+
+## Required Components/Composables (repo-aligned)
+
+-   **Search**
+
+    -   `useThreadSearch(threads)`: debounce 120ms, `limit: 200`, map hits via id→thread dictionary, fallback substring by `title`.
+    -   `useModelSearch(models)`: debounce 120ms, `limit: 100`, index `id/slug/name/description/modalities`, fallback substring.
+
+-   **OpenRouter**
+
+    -   `useOpenRouterAuth.startLogin()` uses **PKCE** S256 when possible; stores verifier/method/state in `sessionStorage`; redirect to `openrouter-callback` page; **never** log tokens.
+    -   On callback, store key to `kv('openrouter_api_key')`, dispatch `openrouter:connected`, and clear session markers.
+
+-   **Dexie**
+
+    -   Use `Or3DB` with the **existing store and index definitions**. Don’t add new DBs; version bump this one if schema changes.
+
+---
+
+## Retro UX Requirements
+
+-   **Buttons/cards** use **2px hard borders** and **2px offset shadows** (no blur).
+-   **Focus**: `outline: 2px solid var(--md-primary)` with offset.
+-   Respect the **scanline/CRT** vibe only if opt-in (no excessive motion).
+-   Keep text sizes consistent with current base font (\~20px body).
+
+---
+
+## Do/Don’t
+
+-   ✅ **Use** Nuxt UI variants and tokens; extend in `app.config.ts`.
+-   ✅ **Use** Orama dynamic imports and repo’s fallback search strategy.
+-   ✅ **Use** KV for prefs and user-provided keys; fire the existing custom events.
+-   ❌ **Don’t** introduce new styling systems, random CSS vars, or duplicate theme classes.
+-   ❌ **Don’t** store secrets in `localStorage`; use `kv` and short-lived memory for session only.
+-   ❌ **Don’t** bypass composables that already implement debouncing/indexing.
+
+---
+
+## Acceptance Checklist (repo-specific)
+
+-   [ ] New UI respects **`retro-btn`** and Nuxt UI token mapping.
+-   [ ] Search features follow the **existing debounced + fallback** pattern.
+-   [ ] Any AI call path complies with **OpenRouter PKCE flow** and KV storage.
+-   [ ] No hard-coded colors—only the **mapped tokens**.
+-   [ ] Dexie usage sticks to **`or3-db`** with versioned changes if needed.
+-   [ ] No theme breakage when toggling `.light/.dark` or contrast modes.
+
+---
+
+## Docs
+
+You will be provided with an .llms folder in the root directory of the project. This will contain llms.txt files from various sources such as Orama, and NuxtUI. It will help guide you to the right document page when you need to look up something from a library that you do not have enough information on.
+
+### You should never just wing it. If you are unsure of something look it up in the docs
+
+/.llms/nuxt.txt - This contains a guide for you on how to navigate the nuxt official documentation
+/.llms/orama.txt - This contains a guide for you on how to navigate the orama official documentation
+/.llms/nuxtui.txt - This contains a guide for you on how to navigate the nuxtui official documentation
+````
+
+## File: .llms/nuxt.txt
+````
+# Nuxt Docs
+
+> Nuxt is an open source framework that makes web development intuitive and powerful. Create performant and production-grade full-stack web apps and websites with confidence.
+
+## Documentation Sets
+
+- [Nuxt Docs](https://nuxt.com/llms-full.txt): The complete Nuxt documentation and blog posts written in Markdown (MDC syntax).
+
+## Docsv4
+
+- [Introduction](https://nuxt.com/docs/4.x/getting-started/introduction): Nuxt's goal is to make web development intuitive and performant with a great Developer Experience in mind.
+- [Installation](https://nuxt.com/docs/4.x/getting-started/installation): Get started with Nuxt quickly with our online starters or start locally with your terminal.
+- [Configuration](https://nuxt.com/docs/4.x/getting-started/configuration): Nuxt is configured with sensible defaults to make you productive.
+- [Views](https://nuxt.com/docs/4.x/getting-started/views): Nuxt provides several component layers to implement the user interface of your application.
+- [Assets](https://nuxt.com/docs/4.x/getting-started/assets): Nuxt offers two options for your assets.
+- [Styling](https://nuxt.com/docs/4.x/getting-started/styling): Learn how to style your Nuxt application.
+- [Routing](https://nuxt.com/docs/4.x/getting-started/routing): Nuxt file-system routing creates a route for every file in the pages/ directory.
+- [SEO and Meta](https://nuxt.com/docs/4.x/getting-started/seo-meta): Improve your Nuxt app's SEO with powerful head config, composables and components.
+- [Transitions](https://nuxt.com/docs/4.x/getting-started/transitions): Apply transitions between pages and layouts with Vue or native browser View Transitions.
+- [Data Fetching](https://nuxt.com/docs/4.x/getting-started/data-fetching): Nuxt provides composables to handle data fetching within your application.
+- [State Management](https://nuxt.com/docs/4.x/getting-started/state-management): Nuxt provides powerful state management libraries and the useState composable to create a reactive and SSR-friendly shared state.
+- [Error Handling](https://nuxt.com/docs/4.x/getting-started/error-handling): Learn how to catch and handle errors in Nuxt.
+- [Server](https://nuxt.com/docs/4.x/getting-started/server): Build full-stack applications with Nuxt's server framework. You can fetch data from your database or another server, create APIs, or even generate static server-side content like a sitemap or a RSS feed - all from a single codebase.
+- [Layers](https://nuxt.com/docs/4.x/getting-started/layers): Nuxt provides a powerful system that allows you to extend the default files, configs, and much more.
+- [Prerendering](https://nuxt.com/docs/4.x/getting-started/prerendering): Nuxt allows pages to be statically rendered at build time to improve certain performance or SEO metrics
+- [Deployment](https://nuxt.com/docs/4.x/getting-started/deployment): Learn how to deploy your Nuxt application to any hosting provider.
+- [Testing](https://nuxt.com/docs/4.x/getting-started/testing): How to test your Nuxt application.
+- [Upgrade Guide](https://nuxt.com/docs/4.x/getting-started/upgrade): Learn how to upgrade to the latest Nuxt version.
+- [Nuxt Guide](https://nuxt.com/docs/4.x/guide): Learn how Nuxt works with in-depth guides.
+- [Auto-imports](https://nuxt.com/docs/4.x/guide/concepts/auto-imports): Nuxt auto-imports components, composables, helper functions and Vue APIs.
+- [Nuxt Lifecycle](https://nuxt.com/docs/4.x/guide/concepts/nuxt-lifecycle): Understanding the lifecycle of Nuxt applications can help you gain deeper insights into how the framework operates, especially for both server-side and client-side rendering.
+- [Vue.js Development](https://nuxt.com/docs/4.x/guide/concepts/vuejs-development): Nuxt uses Vue.js and adds features such as component auto-imports, file-based routing and composables for an SSR-friendly usage.
+- [Rendering Modes](https://nuxt.com/docs/4.x/guide/concepts/rendering): Learn about the different rendering modes available in Nuxt.
+- [Server Engine](https://nuxt.com/docs/4.x/guide/concepts/server-engine): Nuxt is powered by a new server engine: Nitro.
+- [Modules](https://nuxt.com/docs/4.x/guide/concepts/modules): Nuxt provides a module system to extend the framework core and simplify integrations.
+- [ES Modules](https://nuxt.com/docs/4.x/guide/concepts/esm): Nuxt uses native ES modules.
+- [TypeScript](https://nuxt.com/docs/4.x/guide/concepts/typescript): Nuxt is fully typed and provides helpful shortcuts to ensure you have access to accurate type information when you are coding.
+- [Code Style](https://nuxt.com/docs/4.x/guide/concepts/code-style): Nuxt supports ESLint out of the box
+- [.nuxt](https://nuxt.com/docs/4.x/guide/directory-structure/nuxt): Nuxt uses the .nuxt/ directory in development to generate your Vue application.
+- [.output](https://nuxt.com/docs/4.x/guide/directory-structure/output): Nuxt creates the .output/ directory when building your application for production.
+- [assets](https://nuxt.com/docs/4.x/guide/directory-structure/app/assets): The assets/ directory is used to add all the website's assets that the build tool will process.
+- [components](https://nuxt.com/docs/4.x/guide/directory-structure/app/components): The components/ directory is where you put all your Vue components.
+- [composables](https://nuxt.com/docs/4.x/guide/directory-structure/app/composables): Use the composables/ directory to auto-import your Vue composables into your application.
+- [layouts](https://nuxt.com/docs/4.x/guide/directory-structure/app/layouts): Nuxt provides a layouts framework to extract common UI patterns into reusable layouts.
+- [middleware](https://nuxt.com/docs/4.x/guide/directory-structure/app/middleware): Nuxt provides middleware to run code before navigating to a particular route.
+- [pages](https://nuxt.com/docs/4.x/guide/directory-structure/app/pages): Nuxt provides file-based routing to create routes within your web application.
+- [plugins](https://nuxt.com/docs/4.x/guide/directory-structure/app/plugins): Nuxt has a plugins system to use Vue plugins and more at the creation of your Vue application.
+- [utils](https://nuxt.com/docs/4.x/guide/directory-structure/app/utils): Use the utils/ directory to auto-import your utility functions throughout your application.
+- [app.vue](https://nuxt.com/docs/4.x/guide/directory-structure/app/app): The app.vue file is the main component of your Nuxt application.
+- [app.config.ts](https://nuxt.com/docs/4.x/guide/directory-structure/app/app-config): Expose reactive configuration within your application with the App Config file.
+- [error.vue](https://nuxt.com/docs/4.x/guide/directory-structure/app/error): The error.vue file is the error page in your Nuxt application.
+- [content](https://nuxt.com/docs/4.x/guide/directory-structure/content): Use the content/ directory to create a file-based CMS for your application.
+- [modules](https://nuxt.com/docs/4.x/guide/directory-structure/modules): Use the modules/ directory to automatically register local modules within your application.
+- [node_modules](https://nuxt.com/docs/4.x/guide/directory-structure/node_modules): The package manager stores the dependencies of your project in the node_modules/ directory.
+- [public](https://nuxt.com/docs/4.x/guide/directory-structure/public): The public/ directory is used to serve your website's static assets.
+- [server](https://nuxt.com/docs/4.x/guide/directory-structure/server): The server/ directory is used to register API and server handlers to your application.
+- [shared](https://nuxt.com/docs/4.x/guide/directory-structure/shared): Use the shared/ directory to share functionality between the Vue app and the Nitro server.
+- [.env](https://nuxt.com/docs/4.x/guide/directory-structure/env): A .env file specifies your build/dev-time environment variables.
+- [.gitignore](https://nuxt.com/docs/4.x/guide/directory-structure/gitignore): A .gitignore file specifies intentionally untracked files that git should ignore.
+- [.nuxtignore](https://nuxt.com/docs/4.x/guide/directory-structure/nuxtignore): The .nuxtignore file lets Nuxt ignore files in your project’s root directory during the build phase.
+- [.nuxtrc](https://nuxt.com/docs/4.x/guide/directory-structure/nuxtrc): The .nuxtrc file allows you to define nuxt configurations in a flat syntax.
+- [nuxt.config.ts](https://nuxt.com/docs/4.x/guide/directory-structure/nuxt-config): Nuxt can be easily configured with a single nuxt.config file.
+- [package.json](https://nuxt.com/docs/4.x/guide/directory-structure/package): The package.json file contains all the dependencies and scripts for your application.
+- [tsconfig.json](https://nuxt.com/docs/4.x/guide/directory-structure/tsconfig): Nuxt generates multiple TypeScript configuration files with sensible defaults and your aliases.
+- [Events](https://nuxt.com/docs/4.x/guide/going-further/events): Nuxt provides a powerful event system powered by hookable.
+- [Experimental Features](https://nuxt.com/docs/4.x/guide/going-further/experimental-features): Enable Nuxt experimental features to unlock new possibilities.
+- [Features](https://nuxt.com/docs/4.x/guide/going-further/features): Enable or disable optional Nuxt features to unlock new possibilities.
+- [How Nuxt Works?](https://nuxt.com/docs/4.x/guide/going-further/internals): Nuxt is a minimal but highly customizable framework to build web applications.
+- [Runtime Config](https://nuxt.com/docs/4.x/guide/going-further/runtime-config): Nuxt provides a runtime config API to expose configuration and secrets within your application.
+- [Nightly Release Channel](https://nuxt.com/docs/4.x/guide/going-further/nightly-release-channel): The nightly release channel allows using Nuxt built directly from the latest commits to the repository.
+- [Lifecycle Hooks](https://nuxt.com/docs/4.x/guide/going-further/hooks): Nuxt provides a powerful hooking system to expand almost every aspect using hooks.
+- [Module Author Guide](https://nuxt.com/docs/4.x/guide/going-further/modules): Learn how to create a Nuxt Module to integrate, enhance or extend any Nuxt applications.
+- [Nuxt Kit](https://nuxt.com/docs/4.x/guide/going-further/kit): @nuxt/kit provides features for module authors.
+- [NuxtApp](https://nuxt.com/docs/4.x/guide/going-further/nuxt-app): In Nuxt, you can access runtime app context within composables, components and plugins.
+- [Authoring Nuxt Layers](https://nuxt.com/docs/4.x/guide/going-further/layers): Nuxt provides a powerful system that allows you to extend the default files, configs, and much more.
+- [Debugging](https://nuxt.com/docs/4.x/guide/going-further/debugging): In Nuxt, you can get started with debugging your application directly in the browser as well as in your IDE.
+- [](https://nuxt.com/docs/4.x/guide/going-further)
+- [Custom Routing](https://nuxt.com/docs/4.x/guide/recipes/custom-routing): In Nuxt, your routing is defined by the structure of your files inside the pages directory. However, since it uses vue-router under the hood, Nuxt offers you several ways to add custom routes in your project.
+- [Using Vite Plugins in Nuxt](https://nuxt.com/docs/4.x/guide/recipes/vite-plugin): Learn how to integrate Vite plugins into your Nuxt project.
+- [Custom useFetch in Nuxt](https://nuxt.com/docs/4.x/guide/recipes/custom-usefetch): How to create a custom fetcher for calling your external API in Nuxt.
+- [Sessions and Authentication](https://nuxt.com/docs/4.x/guide/recipes/sessions-and-authentication): Authentication is an extremely common requirement in web apps. This recipe will show you how to implement basic user registration and authentication in your Nuxt app.
+- [Nuxt and hydration](https://nuxt.com/docs/4.x/guide/best-practices/hydration): Why fixing hydration issues is important
+- [Nuxt performance](https://nuxt.com/docs/4.x/guide/best-practices/performance): Best practices for improving performance of Nuxt apps.
+- [Nuxt Plugins](https://nuxt.com/docs/4.x/guide/best-practices/plugins): Best practices when using Nuxt plugins.
+- [<ClientOnly>](https://nuxt.com/docs/4.x/api/components/client-only): Render components only in client-side with the <ClientOnly> component.
+- [<DevOnly>](https://nuxt.com/docs/4.x/api/components/dev-only): Render components only during development with the <DevOnly> component.
+- [<NuxtClientFallback>](https://nuxt.com/docs/4.x/api/components/nuxt-client-fallback): Nuxt provides the <NuxtClientFallback> component to render its content on the client if any of its children trigger an error in SSR
+- [<NuxtPicture>](https://nuxt.com/docs/4.x/api/components/nuxt-picture): Nuxt provides a <NuxtPicture> component to handle automatic image optimization.
+- [<Teleport>](https://nuxt.com/docs/4.x/api/components/teleports): The <Teleport> component teleports a component to a different location in the DOM.
+- [<NuxtRouteAnnouncer>](https://nuxt.com/docs/4.x/api/components/nuxt-route-announcer): The <NuxtRouteAnnouncer> component adds a hidden element with the page title to announce route changes to assistive technologies.
+- [<NuxtTime>](https://nuxt.com/docs/4.x/api/components/nuxt-time): The <NuxtTime> component displays time in a locale-friendly format with server-client consistency.
+- [<NuxtPage>](https://nuxt.com/docs/4.x/api/components/nuxt-page): The <NuxtPage> component is required to display pages located in the pages/ directory.
+- [<NuxtLayout>](https://nuxt.com/docs/4.x/api/components/nuxt-layout): Nuxt provides the <NuxtLayout> component to show layouts on pages and error pages.
+- [<NuxtLink>](https://nuxt.com/docs/4.x/api/components/nuxt-link): Nuxt provides <NuxtLink> component to handle any kind of links within your application.
+- [<NuxtLoadingIndicator>](https://nuxt.com/docs/4.x/api/components/nuxt-loading-indicator): Display a progress bar between page navigations.
+- [<NuxtErrorBoundary>](https://nuxt.com/docs/4.x/api/components/nuxt-error-boundary): The <NuxtErrorBoundary> component handles client-side errors happening in its default slot.
+- [<NuxtWelcome>](https://nuxt.com/docs/4.x/api/components/nuxt-welcome): The <NuxtWelcome> component greets users in new projects made from the starter template.
+- [<NuxtIsland>](https://nuxt.com/docs/4.x/api/components/nuxt-island): Nuxt provides the <NuxtIsland> component to render a non-interactive component without any client JS.
+- [<NuxtImg>](https://nuxt.com/docs/4.x/api/components/nuxt-img): Nuxt provides a <NuxtImg> component to handle automatic image optimization.
+- [onPrehydrate](https://nuxt.com/docs/4.x/api/composables/on-prehydrate): Use onPrehydrate to run a callback on the client immediately before Nuxt hydrates the page.
+- [useAppConfig](https://nuxt.com/docs/4.x/api/composables/use-app-config): Access the reactive app config defined in the project.
+- [useAsyncData](https://nuxt.com/docs/4.x/api/composables/use-async-data): useAsyncData provides access to data that resolves asynchronously in an SSR-friendly composable.
+- [useCookie](https://nuxt.com/docs/4.x/api/composables/use-cookie): useCookie is an SSR-friendly composable to read and write cookies.
+- [useError](https://nuxt.com/docs/4.x/api/composables/use-error): useError composable returns the global Nuxt error that is being handled.
+- [useFetch](https://nuxt.com/docs/4.x/api/composables/use-fetch): Fetch data from an API endpoint with an SSR-friendly composable.
+- [useHead](https://nuxt.com/docs/4.x/api/composables/use-head): useHead customizes the head properties of individual pages of your Nuxt app.
+- [useHeadSafe](https://nuxt.com/docs/4.x/api/composables/use-head-safe): The recommended way to provide head data with user input.
+- [useHydration](https://nuxt.com/docs/4.x/api/composables/use-hydration): Allows full control of the hydration cycle to set and receive data from the server.
+- [useLazyAsyncData](https://nuxt.com/docs/4.x/api/composables/use-lazy-async-data): This wrapper around useAsyncData triggers navigation immediately.
+- [useLazyFetch](https://nuxt.com/docs/4.x/api/composables/use-lazy-fetch): This wrapper around useFetch triggers navigation immediately.
+- [useLoadingIndicator](https://nuxt.com/docs/4.x/api/composables/use-loading-indicator): This composable gives you access to the loading state of the app page.
+- [useNuxtApp](https://nuxt.com/docs/4.x/api/composables/use-nuxt-app): Access the shared runtime context of the Nuxt Application.
+- [useNuxtData](https://nuxt.com/docs/4.x/api/composables/use-nuxt-data): Access the current cached value of data fetching composables.
+- [usePreviewMode](https://nuxt.com/docs/4.x/api/composables/use-preview-mode): Use usePreviewMode to check and control preview mode in Nuxt
+- [useRequestEvent](https://nuxt.com/docs/4.x/api/composables/use-request-event): Access the incoming request event with the useRequestEvent composable.
+- [useRequestFetch](https://nuxt.com/docs/4.x/api/composables/use-request-fetch): Forward the request context and headers for server-side fetch requests with the useRequestFetch composable.
+- [useRequestHeader](https://nuxt.com/docs/4.x/api/composables/use-request-header): Use useRequestHeader to access a certain incoming request header.
+- [useRequestHeaders](https://nuxt.com/docs/4.x/api/composables/use-request-headers): Use useRequestHeaders to access the incoming request headers.
+- [useRequestURL](https://nuxt.com/docs/4.x/api/composables/use-request-url): Access the incoming request URL with the useRequestURL composable.
+- [useResponseHeader](https://nuxt.com/docs/4.x/api/composables/use-response-header): Use useResponseHeader to set a server response header.
+- [useRoute](https://nuxt.com/docs/4.x/api/composables/use-route): The useRoute composable returns the current route.
+- [useRouteAnnouncer](https://nuxt.com/docs/4.x/api/composables/use-route-announcer): This composable observes the page title changes and updates the announcer message accordingly.
+- [useRouter](https://nuxt.com/docs/4.x/api/composables/use-router): The useRouter composable returns the router instance.
+- [useRuntimeConfig](https://nuxt.com/docs/4.x/api/composables/use-runtime-config): Access runtime config variables with the useRuntimeConfig composable.
+- [useRuntimeHook](https://nuxt.com/docs/4.x/api/composables/use-runtime-hook): Registers a runtime hook in a Nuxt application and ensures it is properly disposed of when the scope is destroyed.
+- [useSeoMeta](https://nuxt.com/docs/4.x/api/composables/use-seo-meta): The useSeoMeta composable lets you define your site's SEO meta tags as a flat object with full TypeScript support.
+- [useServerSeoMeta](https://nuxt.com/docs/4.x/api/composables/use-server-seo-meta): The useServerSeoMeta composable lets you define your site's SEO meta tags as a flat object with full TypeScript support.
+- [useState](https://nuxt.com/docs/4.x/api/composables/use-state): The useState composable creates a reactive and SSR-friendly shared state.
+- [$fetch](https://nuxt.com/docs/4.x/api/utils/dollarfetch): Nuxt uses ofetch to expose globally the $fetch helper for making HTTP requests.
+- [abortNavigation](https://nuxt.com/docs/4.x/api/utils/abort-navigation): abortNavigation is a helper function that prevents navigation from taking place and throws an error if one is set as a parameter.
+- [addRouteMiddleware](https://nuxt.com/docs/4.x/api/utils/add-route-middleware): addRouteMiddleware() is a helper function to dynamically add middleware in your application.
+- [callOnce](https://nuxt.com/docs/4.x/api/utils/call-once): Run a given function or block of code once during SSR or CSR.
+- [clearError](https://nuxt.com/docs/4.x/api/utils/clear-error): The clearError composable clears all handled errors.
+- [clearNuxtData](https://nuxt.com/docs/4.x/api/utils/clear-nuxt-data): Delete cached data, error status and pending promises of useAsyncData and useFetch.
+- [clearNuxtState](https://nuxt.com/docs/4.x/api/utils/clear-nuxt-state): Delete the cached state of useState.
+- [createError](https://nuxt.com/docs/4.x/api/utils/create-error): Create an error object with additional metadata.
+- [defineLazyHydrationComponent](https://nuxt.com/docs/4.x/api/utils/define-lazy-hydration-component): Define a lazy hydration component with a specific strategy.
+- [defineNuxtComponent](https://nuxt.com/docs/4.x/api/utils/define-nuxt-component): defineNuxtComponent() is a helper function for defining type safe components with Options API.
+- [defineNuxtPlugin](https://nuxt.com/docs/4.x/api/utils/define-nuxt-plugin): defineNuxtPlugin() is a helper function for creating Nuxt plugins.
+- [defineNuxtRouteMiddleware](https://nuxt.com/docs/4.x/api/utils/define-nuxt-route-middleware): Create named route middleware using defineNuxtRouteMiddleware helper function.
+- [definePageMeta](https://nuxt.com/docs/4.x/api/utils/define-page-meta): Define metadata for your page components.
+- [defineRouteRules](https://nuxt.com/docs/4.x/api/utils/define-route-rules): Define route rules for hybrid rendering at the page level.
+- [navigateTo](https://nuxt.com/docs/4.x/api/utils/navigate-to): navigateTo is a helper function that programmatically navigates users.
+- [onBeforeRouteLeave](https://nuxt.com/docs/4.x/api/utils/on-before-route-leave): The onBeforeRouteLeave composable allows registering a route guard within a component.
+- [onBeforeRouteUpdate](https://nuxt.com/docs/4.x/api/utils/on-before-route-update): The onBeforeRouteUpdate composable allows registering a route guard within a component.
+- [onNuxtReady](https://nuxt.com/docs/4.x/api/utils/on-nuxt-ready): The onNuxtReady composable allows running a callback after your app has finished initializing.
+- [prefetchComponents](https://nuxt.com/docs/4.x/api/utils/prefetch-components): Nuxt provides utilities to give you control over prefetching components.
+- [preloadComponents](https://nuxt.com/docs/4.x/api/utils/preload-components): Nuxt provides utilities to give you control over preloading components.
+- [preloadRouteComponents](https://nuxt.com/docs/4.x/api/utils/preload-route-components): preloadRouteComponents allows you to manually preload individual pages in your Nuxt app.
+- [prerenderRoutes](https://nuxt.com/docs/4.x/api/utils/prerender-routes): prerenderRoutes hints to Nitro to prerender an additional route.
+- [refreshCookie](https://nuxt.com/docs/4.x/api/utils/refresh-cookie): Refresh useCookie values manually when a cookie has changed
+- [refreshNuxtData](https://nuxt.com/docs/4.x/api/utils/refresh-nuxt-data): Refresh all or specific asyncData instances in Nuxt
+- [reloadNuxtApp](https://nuxt.com/docs/4.x/api/utils/reload-nuxt-app): reloadNuxtApp will perform a hard reload of the page.
+- [setPageLayout](https://nuxt.com/docs/4.x/api/utils/set-page-layout): setPageLayout allows you to dynamically change the layout of a page.
+- [setResponseStatus](https://nuxt.com/docs/4.x/api/utils/set-response-status): setResponseStatus sets the statusCode (and optionally the statusMessage) of the response.
+- [showError](https://nuxt.com/docs/4.x/api/utils/show-error): Nuxt provides a quick and simple way to show a full screen error page if needed.
+- [updateAppConfig](https://nuxt.com/docs/4.x/api/utils/update-app-config): Update the App Config at runtime.
+- [nuxt add](https://nuxt.com/docs/4.x/api/commands/add): Scaffold an entity into your Nuxt application.
+- [nuxt analyze](https://nuxt.com/docs/4.x/api/commands/analyze): Analyze the production bundle or your Nuxt application.
+- [nuxt build](https://nuxt.com/docs/4.x/api/commands/build): Build your Nuxt application.
+- [nuxt build-module](https://nuxt.com/docs/4.x/api/commands/build-module): Nuxt command to build your Nuxt module before publishing.
+- [nuxt cleanup](https://nuxt.com/docs/4.x/api/commands/cleanup): Remove common generated Nuxt files and caches.
+- [nuxt dev](https://nuxt.com/docs/4.x/api/commands/dev): The dev command starts a development server with hot module replacement at http://localhost:3000
+- [nuxt devtools](https://nuxt.com/docs/4.x/api/commands/devtools): The devtools command allows you to enable or disable Nuxt DevTools on a per-project basis.
+- [nuxt generate](https://nuxt.com/docs/4.x/api/commands/generate): Pre-renders every route of the application and stores the result in plain HTML files.
+- [nuxt info](https://nuxt.com/docs/4.x/api/commands/info): The info command logs information about the current or specified Nuxt project.
+- [create nuxt](https://nuxt.com/docs/4.x/api/commands/init): The init command initializes a fresh Nuxt project.
+- [nuxt module](https://nuxt.com/docs/4.x/api/commands/module): Search and add modules to your Nuxt application with the command line.
+- [nuxt prepare](https://nuxt.com/docs/4.x/api/commands/prepare): The prepare command creates a .nuxt directory in your application and generates types.
+- [nuxt preview](https://nuxt.com/docs/4.x/api/commands/preview): The preview command starts a server to preview your application after the build command.
+- [nuxt typecheck](https://nuxt.com/docs/4.x/api/commands/typecheck): The typecheck command runs vue-tsc to check types throughout your app.
+- [nuxt upgrade](https://nuxt.com/docs/4.x/api/commands/upgrade): The upgrade command upgrades Nuxt to the latest version.
+- [Modules](https://nuxt.com/docs/4.x/api/kit/modules): Nuxt Kit provides a set of utilities to help you create and use modules. You can use these utilities to create your own modules or to reuse existing modules.
+- [Runtime Config](https://nuxt.com/docs/4.x/api/kit/runtime-config): Nuxt Kit provides a set of utilities to help you access and modify Nuxt runtime configuration.
+- [Templates](https://nuxt.com/docs/4.x/api/kit/templates): Nuxt Kit provides a set of utilities to help you work with templates. These functions allow you to generate extra files during development and build time.
+- [Nitro](https://nuxt.com/docs/4.x/api/kit/nitro): Nuxt Kit provides a set of utilities to help you work with Nitro. These functions allow you to add server handlers, plugins, and prerender routes.
+- [Resolving](https://nuxt.com/docs/4.x/api/kit/resolving): Nuxt Kit provides a set of utilities to help you resolve paths. These functions allow you to resolve paths relative to the current module, with unknown name or extension.
+- [Logging](https://nuxt.com/docs/4.x/api/kit/logging): Nuxt Kit provides a set of utilities to help you work with logging. These functions allow you to log messages with extra features.
+- [Builder](https://nuxt.com/docs/4.x/api/kit/builder): Nuxt Kit provides a set of utilities to help you work with the builder. These functions allow you to extend the Vite and webpack configurations.
+- [Examples](https://nuxt.com/docs/4.x/api/kit/examples): Examples of Nuxt Kit utilities in use.
+- [Programmatic Usage](https://nuxt.com/docs/4.x/api/kit/programmatic): Nuxt Kit provides a set of utilities to help you work with Nuxt programmatically. These functions allow you to load Nuxt, build Nuxt, and load Nuxt configuration.
+- [Compatibility](https://nuxt.com/docs/4.x/api/kit/compatibility): Nuxt Kit provides a set of utilities to help you check the compatibility of your modules with different Nuxt versions.
+- [Auto-imports](https://nuxt.com/docs/4.x/api/kit/autoimports): Nuxt Kit provides a set of utilities to help you work with auto-imports. These functions allow you to register your own utils, composables and Vue APIs.
+- [Components](https://nuxt.com/docs/4.x/api/kit/components): Nuxt Kit provides a set of utilities to help you work with components. You can register components globally or locally, and also add directories to be scanned for components.
+- [Context](https://nuxt.com/docs/4.x/api/kit/context): Nuxt Kit provides a set of utilities to help you work with context.
+- [Pages](https://nuxt.com/docs/4.x/api/kit/pages): Nuxt Kit provides a set of utilities to help you create and use pages. You can use these utilities to manipulate the pages configuration or to define route rules.
+- [Layout](https://nuxt.com/docs/4.x/api/kit/layout): Nuxt Kit provides a set of utilities to help you work with layouts.
+- [Plugins](https://nuxt.com/docs/4.x/api/kit/plugins): Nuxt Kit provides a set of utilities to help you create and use plugins. You can add plugins or plugin templates to your module using these functions.
+- [Lifecycle Hooks](https://nuxt.com/docs/4.x/api/advanced/hooks): Nuxt provides a powerful hooking system to expand almost every aspect using hooks.
+- [Import meta](https://nuxt.com/docs/4.x/api/advanced/import-meta): Understand where your code is running using `import.meta`.
+- [Nuxt Configuration](https://nuxt.com/docs/4.x/api/nuxt-config): Discover all the options you can use in your nuxt.config.ts file.
+- [Nuxt API Reference](https://nuxt.com/docs/4.x/api): Explore all Nuxt Internals: Components, Composables, Utils, Commands and more.
+- [Hello World](https://nuxt.com/docs/4.x/examples/hello-world): A minimal Nuxt application only requires the `app.vue` and `nuxt.config.js` files.
+- [Auto Imports](https://nuxt.com/docs/4.x/examples/features/auto-imports): This example demonstrates the auto-imports feature in Nuxt.
+- [Data Fetching](https://nuxt.com/docs/4.x/examples/features/data-fetching): This example demonstrates data fetching with Nuxt using built-in composables and API routes.
+- [State Management](https://nuxt.com/docs/4.x/examples/features/state-management): This example shows how to use the `useState` composable to create a reactive and SSR-friendly shared state across components.
+- [Meta Tags](https://nuxt.com/docs/4.x/examples/features/meta-tags): This example shows how to use the Nuxt helpers and composables for SEO and meta management.
+- [Layouts](https://nuxt.com/docs/4.x/examples/features/layouts): This example shows how to define default and custom layouts.
+- [Middleware](https://nuxt.com/docs/4.x/examples/routing/middleware): This example shows how to add route middleware with the middleware/ directory or with a plugin, and how to use them globally or per page.
+- [Pages](https://nuxt.com/docs/4.x/examples/routing/pages): This example shows how to use the pages/ directory to create application routes.
+- [Universal Router](https://nuxt.com/docs/4.x/examples/routing/universal-router): This example demonstrates Nuxt universal routing utilities without depending on `pages/` and `vue-router`.
+- [Layers](https://nuxt.com/docs/4.x/examples/advanced/config-extends): This example shows how to use the extends key in `nuxt.config.ts`.
+- [Error Handling](https://nuxt.com/docs/4.x/examples/advanced/error-handling): This example shows how to handle errors in different contexts: pages, plugins, components and middleware.
+- [JSX / TSX](https://nuxt.com/docs/4.x/examples/advanced/jsx): This example shows how to use JSX syntax with typescript in Nuxt pages and components.
+- [Locale](https://nuxt.com/docs/4.x/examples/advanced/locale): This example shows how to define a locale composable to handle the application's locale, both server and client side.
+- [Module Extend Pages](https://nuxt.com/docs/4.x/examples/advanced/module-extend-pages): This example defines a new `test` page using `extendPages` within a module.
+- [Teleport](https://nuxt.com/docs/4.x/examples/advanced/teleport): This example shows how to use the <Teleport> with client-side and server-side rendering.
+- [Testing](https://nuxt.com/docs/4.x/examples/advanced/testing): This example shows how to test your Nuxt application.
+- [useCookie](https://nuxt.com/docs/4.x/examples/advanced/use-cookie): This example shows how to use the useCookie API to persist small amounts of data that both client and server can use.
+- [Use Custom Fetch Composable](https://nuxt.com/docs/4.x/examples/advanced/use-custom-fetch-composable): This example shows a convenient wrapper for the useFetch composable from nuxt. It allows you to customize the fetch request with default values and user authentication token.
+- [WASM](https://nuxt.com/docs/4.x/examples/experimental/wasm): This example demonstrates the server-side support of WebAssembly in Nuxt.
+- [Getting Help](https://nuxt.com/docs/4.x/community/getting-help): We're a friendly community of developers and we'd love to help.
+- [Reporting Bugs](https://nuxt.com/docs/4.x/community/reporting-bugs): One of the most valuable roles in open source is taking the time to report bugs helpfully.
+- [Contribution](https://nuxt.com/docs/4.x/community/contribution): Nuxt is a community project - and so we love contributions of all kinds! ❤️
+- [Framework](https://nuxt.com/docs/4.x/community/framework-contribution): Some specific points about contributions to the framework repository.
+- [Roadmap](https://nuxt.com/docs/4.x/community/roadmap): Nuxt is constantly evolving, with new features and modules being added all the time.
+- [Releases](https://nuxt.com/docs/4.x/community/changelog): Discover the latest releases of Nuxt & Nuxt official modules.
+- [Overview](https://nuxt.com/docs/4.x/bridge/overview): Reduce the differences with Nuxt 3 and reduce the burden of migration to Nuxt 3.
+- [Configuration](https://nuxt.com/docs/4.x/bridge/configuration): Learn how to configure Nuxt Bridge to your own needs.
+- [TypeScript](https://nuxt.com/docs/4.x/bridge/typescript): Learn how to use TypeScript with Nuxt Bridge.
+- [Legacy Composition API](https://nuxt.com/docs/4.x/bridge/bridge-composition-api): Learn how to migrate to Composition API with Nuxt Bridge.
+- [Plugins and Middleware](https://nuxt.com/docs/4.x/bridge/plugins-and-middleware): Learn how to migrate from Nuxt 2 to Nuxt Bridge new plugins and middleware.
+- [New Composition API](https://nuxt.com/docs/4.x/bridge/nuxt3-compatible-api): Nuxt Bridge implements composables compatible with Nuxt 3.
+- [Meta Tags](https://nuxt.com/docs/4.x/bridge/meta): Learn how to migrate from Nuxt 2 to Nuxt Bridge new meta tags.
+- [Runtime Config](https://nuxt.com/docs/4.x/bridge/runtime-config): Nuxt provides a runtime config API to expose configuration and secrets within your application.
+- [Nitro](https://nuxt.com/docs/4.x/bridge/nitro): Activate Nitro to your Nuxt 2 application with Nuxt Bridge.
+- [Vite](https://nuxt.com/docs/4.x/bridge/vite): Activate Vite to your Nuxt 2 application with Nuxt Bridge.
+- [Overview](https://nuxt.com/docs/4.x/migration/overview): Nuxt 3 is a complete rewrite of Nuxt 2, and also based on a new set of underlying technologies.
+- [Build Tooling](https://nuxt.com/docs/4.x/migration/bundling): Learn how to migrate from Nuxt 2 to Nuxt 3 build tooling.
+- [Server](https://nuxt.com/docs/4.x/migration/server): Learn how to migrate from Nuxt 2 to Nuxt 3 server.
+- [Configuration](https://nuxt.com/docs/4.x/migration/configuration): Learn how to migrate from Nuxt 2 to Nuxt 3 new configuration.
+- [Modules](https://nuxt.com/docs/4.x/migration/module-authors): Learn how to migrate from Nuxt 2 to Nuxt 3 modules.
+- [Auto Imports](https://nuxt.com/docs/4.x/migration/auto-imports): Nuxt 3 adopts a minimal friction approach, meaning wherever possible components and composables are auto-imported.
+- [Meta Tags](https://nuxt.com/docs/4.x/migration/meta): Manage your meta tags, from Nuxt 2 to Nuxt 3.
+- [Plugins and Middleware](https://nuxt.com/docs/4.x/migration/plugins-and-middleware): Learn how to migrate from Nuxt 2 to Nuxt 3 plugins and middleware.
+- [Pages and Layouts](https://nuxt.com/docs/4.x/migration/pages-and-layouts): Learn how to migrate from Nuxt 2 to Nuxt 3 pages and layouts.
+- [Component Options](https://nuxt.com/docs/4.x/migration/component-options): Learn how to migrate from Nuxt 2 components options to Nuxt 3 composables.
+- [Runtime Config](https://nuxt.com/docs/4.x/migration/runtime-config): Learn how to migrate from Nuxt 2 to Nuxt 3 runtime config.
+- [Nuxt Docs](https://nuxt.com/docs/4.x/readme): This repository contains the documentation of Nuxt hosted on https://nuxt.com/docs
+
+## Docsv3
+
+- [Introduction](https://nuxt.com/docs/3.x/getting-started/introduction): Nuxt's goal is to make web development intuitive and performant with a great Developer Experience in mind.
+- [Installation](https://nuxt.com/docs/3.x/getting-started/installation): Get started with Nuxt quickly with our online starters or start locally with your terminal.
+- [Configuration](https://nuxt.com/docs/3.x/getting-started/configuration): Nuxt is configured with sensible defaults to make you productive.
+- [Views](https://nuxt.com/docs/3.x/getting-started/views): Nuxt provides several component layers to implement the user interface of your application.
+- [Assets](https://nuxt.com/docs/3.x/getting-started/assets): Nuxt offers two options for your assets.
+- [Styling](https://nuxt.com/docs/3.x/getting-started/styling): Learn how to style your Nuxt application.
+- [Routing](https://nuxt.com/docs/3.x/getting-started/routing): Nuxt file-system routing creates a route for every file in the pages/ directory.
+- [SEO and Meta](https://nuxt.com/docs/3.x/getting-started/seo-meta): Improve your Nuxt app's SEO with powerful head config, composables and components.
+- [Transitions](https://nuxt.com/docs/3.x/getting-started/transitions): Apply transitions between pages and layouts with Vue or native browser View Transitions.
+- [Data Fetching](https://nuxt.com/docs/3.x/getting-started/data-fetching): Nuxt provides composables to handle data fetching within your application.
+- [State Management](https://nuxt.com/docs/3.x/getting-started/state-management): Nuxt provides powerful state management libraries and the useState composable to create a reactive and SSR-friendly shared state.
+- [Error Handling](https://nuxt.com/docs/3.x/getting-started/error-handling): Learn how to catch and handle errors in Nuxt.
+- [Server](https://nuxt.com/docs/3.x/getting-started/server): Build full-stack applications with Nuxt's server framework. You can fetch data from your database or another server, create APIs, or even generate static server-side content like a sitemap or a RSS feed - all from a single codebase.
+- [Layers](https://nuxt.com/docs/3.x/getting-started/layers): Nuxt provides a powerful system that allows you to extend the default files, configs, and much more.
+- [Prerendering](https://nuxt.com/docs/3.x/getting-started/prerendering): Nuxt allows pages to be statically rendered at build time to improve certain performance or SEO metrics
+- [Deployment](https://nuxt.com/docs/3.x/getting-started/deployment): Learn how to deploy your Nuxt application to any hosting provider.
+- [Testing](https://nuxt.com/docs/3.x/getting-started/testing): How to test your Nuxt application.
+- [Upgrade Guide](https://nuxt.com/docs/3.x/getting-started/upgrade): Learn how to upgrade to the latest Nuxt version.
+- [Nuxt Guide](https://nuxt.com/docs/3.x/guide): Learn how Nuxt works with in-depth guides.
+- [Auto-imports](https://nuxt.com/docs/3.x/guide/concepts/auto-imports): Nuxt auto-imports components, composables, helper functions and Vue APIs.
+- [Nuxt Lifecycle](https://nuxt.com/docs/3.x/guide/concepts/nuxt-lifecycle): Understanding the lifecycle of Nuxt applications can help you gain deeper insights into how the framework operates, especially for both server-side and client-side rendering.
+- [Vue.js Development](https://nuxt.com/docs/3.x/guide/concepts/vuejs-development): Nuxt uses Vue.js and adds features such as component auto-imports, file-based routing and composables for an SSR-friendly usage.
+- [Rendering Modes](https://nuxt.com/docs/3.x/guide/concepts/rendering): Learn about the different rendering modes available in Nuxt.
+- [Server Engine](https://nuxt.com/docs/3.x/guide/concepts/server-engine): Nuxt is powered by a new server engine: Nitro.
+- [Modules](https://nuxt.com/docs/3.x/guide/concepts/modules): Nuxt provides a module system to extend the framework core and simplify integrations.
+- [ES Modules](https://nuxt.com/docs/3.x/guide/concepts/esm): Nuxt uses native ES modules.
+- [TypeScript](https://nuxt.com/docs/3.x/guide/concepts/typescript): Nuxt is fully typed and provides helpful shortcuts to ensure you have access to accurate type information when you are coding.
+- [Code Style](https://nuxt.com/docs/3.x/guide/concepts/code-style): Nuxt supports ESLint out of the box
+- [.nuxt](https://nuxt.com/docs/3.x/guide/directory-structure/nuxt): Nuxt uses the .nuxt/ directory in development to generate your Vue application.
+- [.output](https://nuxt.com/docs/3.x/guide/directory-structure/output): Nuxt creates the .output/ directory when building your application for production.
+- [assets](https://nuxt.com/docs/3.x/guide/directory-structure/assets): The assets/ directory is used to add all the website's assets that the build tool will process.
+- [components](https://nuxt.com/docs/3.x/guide/directory-structure/components): The components/ directory is where you put all your Vue components.
+- [composables](https://nuxt.com/docs/3.x/guide/directory-structure/composables): Use the composables/ directory to auto-import your Vue composables into your application.
+- [content](https://nuxt.com/docs/3.x/guide/directory-structure/content): Use the content/ directory to create a file-based CMS for your application.
+- [layouts](https://nuxt.com/docs/3.x/guide/directory-structure/layouts): Nuxt provides a layouts framework to extract common UI patterns into reusable layouts.
+- [middleware](https://nuxt.com/docs/3.x/guide/directory-structure/middleware): Nuxt provides middleware to run code before navigating to a particular route.
+- [modules](https://nuxt.com/docs/3.x/guide/directory-structure/modules): Use the modules/ directory to automatically register local modules within your application.
+- [node_modules](https://nuxt.com/docs/3.x/guide/directory-structure/node_modules): The package manager stores the dependencies of your project in the node_modules/ directory.
+- [pages](https://nuxt.com/docs/3.x/guide/directory-structure/pages): Nuxt provides file-based routing to create routes within your web application.
+- [plugins](https://nuxt.com/docs/3.x/guide/directory-structure/plugins): Nuxt has a plugins system to use Vue plugins and more at the creation of your Vue application.
+- [public](https://nuxt.com/docs/3.x/guide/directory-structure/public): The public/ directory is used to serve your website's static assets.
+- [server](https://nuxt.com/docs/3.x/guide/directory-structure/server): The server/ directory is used to register API and server handlers to your application.
+- [shared](https://nuxt.com/docs/3.x/guide/directory-structure/shared): Use the shared/ directory to share functionality between the Vue app and the Nitro server.
+- [utils](https://nuxt.com/docs/3.x/guide/directory-structure/utils): Use the utils/ directory to auto-import your utility functions throughout your application.
+- [.env](https://nuxt.com/docs/3.x/guide/directory-structure/env): A .env file specifies your build/dev-time environment variables.
+- [.gitignore](https://nuxt.com/docs/3.x/guide/directory-structure/gitignore): A .gitignore file specifies intentionally untracked files that git should ignore.
+- [.nuxtignore](https://nuxt.com/docs/3.x/guide/directory-structure/nuxtignore): The .nuxtignore file lets Nuxt ignore files in your project’s root directory during the build phase.
+- [.nuxtrc](https://nuxt.com/docs/3.x/guide/directory-structure/nuxtrc): The .nuxtrc file allows you to define nuxt configurations in a flat syntax.
+- [app.vue](https://nuxt.com/docs/3.x/guide/directory-structure/app): The app.vue file is the main component of your Nuxt application.
+- [app.config.ts](https://nuxt.com/docs/3.x/guide/directory-structure/app-config): Expose reactive configuration within your application with the App Config file.
+- [error.vue](https://nuxt.com/docs/3.x/guide/directory-structure/error): The error.vue file is the error page in your Nuxt application.
+- [nuxt.config.ts](https://nuxt.com/docs/3.x/guide/directory-structure/nuxt-config): Nuxt can be easily configured with a single nuxt.config file.
+- [package.json](https://nuxt.com/docs/3.x/guide/directory-structure/package): The package.json file contains all the dependencies and scripts for your application.
+- [tsconfig.json](https://nuxt.com/docs/3.x/guide/directory-structure/tsconfig): Nuxt generates a .nuxt/tsconfig.json file with sensible defaults and your aliases.
+- [Events](https://nuxt.com/docs/3.x/guide/going-further/events): Nuxt provides a powerful event system powered by hookable.
+- [Experimental Features](https://nuxt.com/docs/3.x/guide/going-further/experimental-features): Enable Nuxt experimental features to unlock new possibilities.
+- [Features](https://nuxt.com/docs/3.x/guide/going-further/features): Enable or disable optional Nuxt features to unlock new possibilities.
+- [How Nuxt Works?](https://nuxt.com/docs/3.x/guide/going-further/internals): Nuxt is a minimal but highly customizable framework to build web applications.
+- [Runtime Config](https://nuxt.com/docs/3.x/guide/going-further/runtime-config): Nuxt provides a runtime config API to expose configuration and secrets within your application.
+- [Nightly Release Channel](https://nuxt.com/docs/3.x/guide/going-further/nightly-release-channel): The nightly release channel allows using Nuxt built directly from the latest commits to the repository.
+- [Lifecycle Hooks](https://nuxt.com/docs/3.x/guide/going-further/hooks): Nuxt provides a powerful hooking system to expand almost every aspect using hooks.
+- [Module Author Guide](https://nuxt.com/docs/3.x/guide/going-further/modules): Learn how to create a Nuxt Module to integrate, enhance or extend any Nuxt applications.
+- [Nuxt Kit](https://nuxt.com/docs/3.x/guide/going-further/kit): @nuxt/kit provides features for module authors.
+- [NuxtApp](https://nuxt.com/docs/3.x/guide/going-further/nuxt-app): In Nuxt, you can access runtime app context within composables, components and plugins.
+- [Authoring Nuxt Layers](https://nuxt.com/docs/3.x/guide/going-further/layers): Nuxt provides a powerful system that allows you to extend the default files, configs, and much more.
+- [Debugging](https://nuxt.com/docs/3.x/guide/going-further/debugging): In Nuxt, you can get started with debugging your application directly in the browser as well as in your IDE.
+- [](https://nuxt.com/docs/3.x/guide/going-further)
+- [Custom Routing](https://nuxt.com/docs/3.x/guide/recipes/custom-routing): In Nuxt, your routing is defined by the structure of your files inside the pages directory. However, since it uses vue-router under the hood, Nuxt offers you several ways to add custom routes in your project.
+- [Using Vite Plugins in Nuxt](https://nuxt.com/docs/3.x/guide/recipes/vite-plugin): Learn how to integrate Vite plugins into your Nuxt project.
+- [Custom useFetch in Nuxt](https://nuxt.com/docs/3.x/guide/recipes/custom-usefetch): How to create a custom fetcher for calling your external API in Nuxt.
+- [Sessions and Authentication](https://nuxt.com/docs/3.x/guide/recipes/sessions-and-authentication): Authentication is an extremely common requirement in web apps. This recipe will show you how to implement basic user registration and authentication in your Nuxt app.
+- [Nuxt and hydration](https://nuxt.com/docs/3.x/guide/best-practices/hydration): Why fixing hydration issues is important
+- [Nuxt performance](https://nuxt.com/docs/3.x/guide/best-practices/performance): Best practices for improving performance of Nuxt apps.
+- [Nuxt Plugins](https://nuxt.com/docs/3.x/guide/best-practices/plugins): Best practices when using Nuxt plugins.
+- [<ClientOnly>](https://nuxt.com/docs/3.x/api/components/client-only): Render components only in client-side with the <ClientOnly> component.
+- [<DevOnly>](https://nuxt.com/docs/3.x/api/components/dev-only): Render components only during development with the <DevOnly> component.
+- [<NuxtClientFallback>](https://nuxt.com/docs/3.x/api/components/nuxt-client-fallback): Nuxt provides the <NuxtClientFallback> component to render its content on the client if any of its children trigger an error in SSR
+- [<NuxtPicture>](https://nuxt.com/docs/3.x/api/components/nuxt-picture): Nuxt provides a <NuxtPicture> component to handle automatic image optimization.
+- [<Teleport>](https://nuxt.com/docs/3.x/api/components/teleports): The <Teleport> component teleports a component to a different location in the DOM.
+- [<NuxtRouteAnnouncer>](https://nuxt.com/docs/3.x/api/components/nuxt-route-announcer): The <NuxtRouteAnnouncer> component adds a hidden element with the page title to announce route changes to assistive technologies.
+- [<NuxtTime>](https://nuxt.com/docs/3.x/api/components/nuxt-time): The <NuxtTime> component displays time in a locale-friendly format with server-client consistency.
+- [<NuxtPage>](https://nuxt.com/docs/3.x/api/components/nuxt-page): The <NuxtPage> component is required to display pages located in the pages/ directory.
+- [<NuxtLayout>](https://nuxt.com/docs/3.x/api/components/nuxt-layout): Nuxt provides the <NuxtLayout> component to show layouts on pages and error pages.
+- [<NuxtLink>](https://nuxt.com/docs/3.x/api/components/nuxt-link): Nuxt provides <NuxtLink> component to handle any kind of links within your application.
+- [<NuxtLoadingIndicator>](https://nuxt.com/docs/3.x/api/components/nuxt-loading-indicator): Display a progress bar between page navigations.
+- [<NuxtErrorBoundary>](https://nuxt.com/docs/3.x/api/components/nuxt-error-boundary): The <NuxtErrorBoundary> component handles client-side errors happening in its default slot.
+- [<NuxtWelcome>](https://nuxt.com/docs/3.x/api/components/nuxt-welcome): The <NuxtWelcome> component greets users in new projects made from the starter template.
+- [<NuxtIsland>](https://nuxt.com/docs/3.x/api/components/nuxt-island): Nuxt provides the <NuxtIsland> component to render a non-interactive component without any client JS.
+- [<NuxtImg>](https://nuxt.com/docs/3.x/api/components/nuxt-img): Nuxt provides a <NuxtImg> component to handle automatic image optimization.
+- [onPrehydrate](https://nuxt.com/docs/3.x/api/composables/on-prehydrate): Use onPrehydrate to run a callback on the client immediately before Nuxt hydrates the page.
+- [useAppConfig](https://nuxt.com/docs/3.x/api/composables/use-app-config): Access the reactive app config defined in the project.
+- [useAsyncData](https://nuxt.com/docs/3.x/api/composables/use-async-data): useAsyncData provides access to data that resolves asynchronously in an SSR-friendly composable.
+- [useCookie](https://nuxt.com/docs/3.x/api/composables/use-cookie): useCookie is an SSR-friendly composable to read and write cookies.
+- [useError](https://nuxt.com/docs/3.x/api/composables/use-error): useError composable returns the global Nuxt error that is being handled.
+- [useFetch](https://nuxt.com/docs/3.x/api/composables/use-fetch): Fetch data from an API endpoint with an SSR-friendly composable.
+- [useHead](https://nuxt.com/docs/3.x/api/composables/use-head): useHead customizes the head properties of individual pages of your Nuxt app.
+- [useHeadSafe](https://nuxt.com/docs/3.x/api/composables/use-head-safe): The recommended way to provide head data with user input.
+- [useHydration](https://nuxt.com/docs/3.x/api/composables/use-hydration): Allows full control of the hydration cycle to set and receive data from the server.
+- [useLazyAsyncData](https://nuxt.com/docs/3.x/api/composables/use-lazy-async-data): This wrapper around useAsyncData triggers navigation immediately.
+- [useLazyFetch](https://nuxt.com/docs/3.x/api/composables/use-lazy-fetch): This wrapper around useFetch triggers navigation immediately.
+- [useLoadingIndicator](https://nuxt.com/docs/3.x/api/composables/use-loading-indicator): This composable gives you access to the loading state of the app page.
+- [useNuxtApp](https://nuxt.com/docs/3.x/api/composables/use-nuxt-app): Access the shared runtime context of the Nuxt Application.
+- [useNuxtData](https://nuxt.com/docs/3.x/api/composables/use-nuxt-data): Access the current cached value of data fetching composables.
+- [usePreviewMode](https://nuxt.com/docs/3.x/api/composables/use-preview-mode): Use usePreviewMode to check and control preview mode in Nuxt
+- [useRequestEvent](https://nuxt.com/docs/3.x/api/composables/use-request-event): Access the incoming request event with the useRequestEvent composable.
+- [useRequestFetch](https://nuxt.com/docs/3.x/api/composables/use-request-fetch): Forward the request context and headers for server-side fetch requests with the useRequestFetch composable.
+- [useRequestHeader](https://nuxt.com/docs/3.x/api/composables/use-request-header): Use useRequestHeader to access a certain incoming request header.
+- [useRequestHeaders](https://nuxt.com/docs/3.x/api/composables/use-request-headers): Use useRequestHeaders to access the incoming request headers.
+- [useRequestURL](https://nuxt.com/docs/3.x/api/composables/use-request-url): Access the incoming request URL with the useRequestURL composable.
+- [useResponseHeader](https://nuxt.com/docs/3.x/api/composables/use-response-header): Use useResponseHeader to set a server response header.
+- [useRoute](https://nuxt.com/docs/3.x/api/composables/use-route): The useRoute composable returns the current route.
+- [useRouteAnnouncer](https://nuxt.com/docs/3.x/api/composables/use-route-announcer): This composable observes the page title changes and updates the announcer message accordingly.
+- [useRouter](https://nuxt.com/docs/3.x/api/composables/use-router): The useRouter composable returns the router instance.
+- [useRuntimeConfig](https://nuxt.com/docs/3.x/api/composables/use-runtime-config): Access runtime config variables with the useRuntimeConfig composable.
+- [useRuntimeHook](https://nuxt.com/docs/3.x/api/composables/use-runtime-hook): Registers a runtime hook in a Nuxt application and ensures it is properly disposed of when the scope is destroyed.
+- [useSeoMeta](https://nuxt.com/docs/3.x/api/composables/use-seo-meta): The useSeoMeta composable lets you define your site's SEO meta tags as a flat object with full TypeScript support.
+- [useServerSeoMeta](https://nuxt.com/docs/3.x/api/composables/use-server-seo-meta): The useServerSeoMeta composable lets you define your site's SEO meta tags as a flat object with full TypeScript support.
+- [useState](https://nuxt.com/docs/3.x/api/composables/use-state): The useState composable creates a reactive and SSR-friendly shared state.
+- [$fetch](https://nuxt.com/docs/3.x/api/utils/dollarfetch): Nuxt uses ofetch to expose globally the $fetch helper for making HTTP requests.
+- [abortNavigation](https://nuxt.com/docs/3.x/api/utils/abort-navigation): abortNavigation is a helper function that prevents navigation from taking place and throws an error if one is set as a parameter.
+- [addRouteMiddleware](https://nuxt.com/docs/3.x/api/utils/add-route-middleware): addRouteMiddleware() is a helper function to dynamically add middleware in your application.
+- [callOnce](https://nuxt.com/docs/3.x/api/utils/call-once): Run a given function or block of code once during SSR or CSR.
+- [clearError](https://nuxt.com/docs/3.x/api/utils/clear-error): The clearError composable clears all handled errors.
+- [clearNuxtData](https://nuxt.com/docs/3.x/api/utils/clear-nuxt-data): Delete cached data, error status and pending promises of useAsyncData and useFetch.
+- [clearNuxtState](https://nuxt.com/docs/3.x/api/utils/clear-nuxt-state): Delete the cached state of useState.
+- [createError](https://nuxt.com/docs/3.x/api/utils/create-error): Create an error object with additional metadata.
+- [defineLazyHydrationComponent](https://nuxt.com/docs/3.x/api/utils/define-lazy-hydration-component): Define a lazy hydration component with a specific strategy.
+- [defineNuxtComponent](https://nuxt.com/docs/3.x/api/utils/define-nuxt-component): defineNuxtComponent() is a helper function for defining type safe components with Options API.
+- [defineNuxtPlugin](https://nuxt.com/docs/3.x/api/utils/define-nuxt-plugin): defineNuxtPlugin() is a helper function for creating Nuxt plugins.
+- [defineNuxtRouteMiddleware](https://nuxt.com/docs/3.x/api/utils/define-nuxt-route-middleware): Create named route middleware using defineNuxtRouteMiddleware helper function.
+- [definePageMeta](https://nuxt.com/docs/3.x/api/utils/define-page-meta): Define metadata for your page components.
+- [defineRouteRules](https://nuxt.com/docs/3.x/api/utils/define-route-rules): Define route rules for hybrid rendering at the page level.
+- [navigateTo](https://nuxt.com/docs/3.x/api/utils/navigate-to): navigateTo is a helper function that programmatically navigates users.
+- [onBeforeRouteLeave](https://nuxt.com/docs/3.x/api/utils/on-before-route-leave): The onBeforeRouteLeave composable allows registering a route guard within a component.
+- [onBeforeRouteUpdate](https://nuxt.com/docs/3.x/api/utils/on-before-route-update): The onBeforeRouteUpdate composable allows registering a route guard within a component.
+- [onNuxtReady](https://nuxt.com/docs/3.x/api/utils/on-nuxt-ready): The onNuxtReady composable allows running a callback after your app has finished initializing.
+- [prefetchComponents](https://nuxt.com/docs/3.x/api/utils/prefetch-components): Nuxt provides utilities to give you control over prefetching components.
+- [preloadComponents](https://nuxt.com/docs/3.x/api/utils/preload-components): Nuxt provides utilities to give you control over preloading components.
+- [preloadRouteComponents](https://nuxt.com/docs/3.x/api/utils/preload-route-components): preloadRouteComponents allows you to manually preload individual pages in your Nuxt app.
+- [prerenderRoutes](https://nuxt.com/docs/3.x/api/utils/prerender-routes): prerenderRoutes hints to Nitro to prerender an additional route.
+- [refreshCookie](https://nuxt.com/docs/3.x/api/utils/refresh-cookie): Refresh useCookie values manually when a cookie has changed
+- [refreshNuxtData](https://nuxt.com/docs/3.x/api/utils/refresh-nuxt-data): Refresh all or specific asyncData instances in Nuxt
+- [reloadNuxtApp](https://nuxt.com/docs/3.x/api/utils/reload-nuxt-app): reloadNuxtApp will perform a hard reload of the page.
+- [setPageLayout](https://nuxt.com/docs/3.x/api/utils/set-page-layout): setPageLayout allows you to dynamically change the layout of a page.
+- [setResponseStatus](https://nuxt.com/docs/3.x/api/utils/set-response-status): setResponseStatus sets the statusCode (and optionally the statusMessage) of the response.
+- [showError](https://nuxt.com/docs/3.x/api/utils/show-error): Nuxt provides a quick and simple way to show a full screen error page if needed.
+- [updateAppConfig](https://nuxt.com/docs/3.x/api/utils/update-app-config): Update the App Config at runtime.
+- [nuxt add](https://nuxt.com/docs/3.x/api/commands/add): Scaffold an entity into your Nuxt application.
+- [nuxt analyze](https://nuxt.com/docs/3.x/api/commands/analyze): Analyze the production bundle or your Nuxt application.
+- [nuxt build](https://nuxt.com/docs/3.x/api/commands/build): Build your Nuxt application.
+- [nuxt build-module](https://nuxt.com/docs/3.x/api/commands/build-module): Nuxt command to build your Nuxt module before publishing.
+- [nuxt cleanup](https://nuxt.com/docs/3.x/api/commands/cleanup): Remove common generated Nuxt files and caches.
+- [nuxt dev](https://nuxt.com/docs/3.x/api/commands/dev): The dev command starts a development server with hot module replacement at http://localhost:3000
+- [nuxt devtools](https://nuxt.com/docs/3.x/api/commands/devtools): The devtools command allows you to enable or disable Nuxt DevTools on a per-project basis.
+- [nuxt generate](https://nuxt.com/docs/3.x/api/commands/generate): Pre-renders every route of the application and stores the result in plain HTML files.
+- [nuxt info](https://nuxt.com/docs/3.x/api/commands/info): The info command logs information about the current or specified Nuxt project.
+- [create nuxt](https://nuxt.com/docs/3.x/api/commands/init): The init command initializes a fresh Nuxt project.
+- [nuxt module](https://nuxt.com/docs/3.x/api/commands/module): Search and add modules to your Nuxt application with the command line.
+- [nuxt prepare](https://nuxt.com/docs/3.x/api/commands/prepare): The prepare command creates a .nuxt directory in your application and generates types.
+- [nuxt preview](https://nuxt.com/docs/3.x/api/commands/preview): The preview command starts a server to preview your application after the build command.
+- [nuxt typecheck](https://nuxt.com/docs/3.x/api/commands/typecheck): The typecheck command runs vue-tsc to check types throughout your app.
+- [nuxt upgrade](https://nuxt.com/docs/3.x/api/commands/upgrade): The upgrade command upgrades Nuxt to the latest version.
+- [Modules](https://nuxt.com/docs/3.x/api/kit/modules): Nuxt Kit provides a set of utilities to help you create and use modules. You can use these utilities to create your own modules or to reuse existing modules.
+- [Runtime Config](https://nuxt.com/docs/3.x/api/kit/runtime-config): Nuxt Kit provides a set of utilities to help you access and modify Nuxt runtime configuration.
+- [Templates](https://nuxt.com/docs/3.x/api/kit/templates): Nuxt Kit provides a set of utilities to help you work with templates. These functions allow you to generate extra files during development and build time.
+- [Nitro](https://nuxt.com/docs/3.x/api/kit/nitro): Nuxt Kit provides a set of utilities to help you work with Nitro. These functions allow you to add server handlers, plugins, and prerender routes.
+- [Resolving](https://nuxt.com/docs/3.x/api/kit/resolving): Nuxt Kit provides a set of utilities to help you resolve paths. These functions allow you to resolve paths relative to the current module, with unknown name or extension.
+- [Logging](https://nuxt.com/docs/3.x/api/kit/logging): Nuxt Kit provides a set of utilities to help you work with logging. These functions allow you to log messages with extra features.
+- [Builder](https://nuxt.com/docs/3.x/api/kit/builder): Nuxt Kit provides a set of utilities to help you work with the builder. These functions allow you to extend the Vite and webpack configurations.
+- [Examples](https://nuxt.com/docs/3.x/api/kit/examples): Examples of Nuxt Kit utilities in use.
+- [Programmatic Usage](https://nuxt.com/docs/3.x/api/kit/programmatic): Nuxt Kit provides a set of utilities to help you work with Nuxt programmatically. These functions allow you to load Nuxt, build Nuxt, and load Nuxt configuration.
+- [Compatibility](https://nuxt.com/docs/3.x/api/kit/compatibility): Nuxt Kit provides a set of utilities to help you check the compatibility of your modules with different Nuxt versions.
+- [Auto-imports](https://nuxt.com/docs/3.x/api/kit/autoimports): Nuxt Kit provides a set of utilities to help you work with auto-imports. These functions allow you to register your own utils, composables and Vue APIs.
+- [Components](https://nuxt.com/docs/3.x/api/kit/components): Nuxt Kit provides a set of utilities to help you work with components. You can register components globally or locally, and also add directories to be scanned for components.
+- [Context](https://nuxt.com/docs/3.x/api/kit/context): Nuxt Kit provides a set of utilities to help you work with context.
+- [Pages](https://nuxt.com/docs/3.x/api/kit/pages): Nuxt Kit provides a set of utilities to help you create and use pages. You can use these utilities to manipulate the pages configuration or to define route rules.
+- [Layout](https://nuxt.com/docs/3.x/api/kit/layout): Nuxt Kit provides a set of utilities to help you work with layouts.
+- [Plugins](https://nuxt.com/docs/3.x/api/kit/plugins): Nuxt Kit provides a set of utilities to help you create and use plugins. You can add plugins or plugin templates to your module using these functions.
+- [Lifecycle Hooks](https://nuxt.com/docs/3.x/api/advanced/hooks): Nuxt provides a powerful hooking system to expand almost every aspect using hooks.
+- [Import meta](https://nuxt.com/docs/3.x/api/advanced/import-meta): Understand where your code is running using `import.meta`.
+- [Nuxt Configuration](https://nuxt.com/docs/3.x/api/nuxt-config): Discover all the options you can use in your nuxt.config.ts file.
+- [Nuxt API Reference](https://nuxt.com/docs/3.x/api): Explore all Nuxt Internals: Components, Composables, Utils, Commands and more.
+- [Hello World](https://nuxt.com/docs/3.x/examples/hello-world): A minimal Nuxt application only requires the `app.vue` and `nuxt.config.js` files.
+- [Auto Imports](https://nuxt.com/docs/3.x/examples/features/auto-imports): This example demonstrates the auto-imports feature in Nuxt.
+- [Data Fetching](https://nuxt.com/docs/3.x/examples/features/data-fetching): This example demonstrates data fetching with Nuxt using built-in composables and API routes.
+- [State Management](https://nuxt.com/docs/3.x/examples/features/state-management): This example shows how to use the `useState` composable to create a reactive and SSR-friendly shared state across components.
+- [Meta Tags](https://nuxt.com/docs/3.x/examples/features/meta-tags): This example shows how to use the Nuxt helpers and composables for SEO and meta management.
+- [Layouts](https://nuxt.com/docs/3.x/examples/features/layouts): This example shows how to define default and custom layouts.
+- [Middleware](https://nuxt.com/docs/3.x/examples/routing/middleware): This example shows how to add route middleware with the middleware/ directory or with a plugin, and how to use them globally or per page.
+- [Pages](https://nuxt.com/docs/3.x/examples/routing/pages): This example shows how to use the pages/ directory to create application routes.
+- [Universal Router](https://nuxt.com/docs/3.x/examples/routing/universal-router): This example demonstrates Nuxt universal routing utilities without depending on `pages/` and `vue-router`.
+- [Layers](https://nuxt.com/docs/3.x/examples/advanced/config-extends): This example shows how to use the extends key in `nuxt.config.ts`.
+- [Error Handling](https://nuxt.com/docs/3.x/examples/advanced/error-handling): This example shows how to handle errors in different contexts: pages, plugins, components and middleware.
+- [JSX / TSX](https://nuxt.com/docs/3.x/examples/advanced/jsx): This example shows how to use JSX syntax with typescript in Nuxt pages and components.
+- [Locale](https://nuxt.com/docs/3.x/examples/advanced/locale): This example shows how to define a locale composable to handle the application's locale, both server and client side.
+- [Module Extend Pages](https://nuxt.com/docs/3.x/examples/advanced/module-extend-pages): This example defines a new `test` page using `extendPages` within a module.
+- [Teleport](https://nuxt.com/docs/3.x/examples/advanced/teleport): This example shows how to use the <Teleport> with client-side and server-side rendering.
+- [Testing](https://nuxt.com/docs/3.x/examples/advanced/testing): This example shows how to test your Nuxt application.
+- [useCookie](https://nuxt.com/docs/3.x/examples/advanced/use-cookie): This example shows how to use the useCookie API to persist small amounts of data that both client and server can use.
+- [Use Custom Fetch Composable](https://nuxt.com/docs/3.x/examples/advanced/use-custom-fetch-composable): This example shows a convenient wrapper for the useFetch composable from nuxt. It allows you to customize the fetch request with default values and user authentication token.
+- [WASM](https://nuxt.com/docs/3.x/examples/experimental/wasm): This example demonstrates the server-side support of WebAssembly in Nuxt.
+- [Getting Help](https://nuxt.com/docs/3.x/community/getting-help): We're a friendly community of developers and we'd love to help.
+- [Reporting Bugs](https://nuxt.com/docs/3.x/community/reporting-bugs): One of the most valuable roles in open source is taking the time to report bugs helpfully.
+- [Contribution](https://nuxt.com/docs/3.x/community/contribution): Nuxt is a community project - and so we love contributions of all kinds! ❤️
+- [Framework](https://nuxt.com/docs/3.x/community/framework-contribution): Some specific points about contributions to the framework repository.
+- [Roadmap](https://nuxt.com/docs/3.x/community/roadmap): Nuxt is constantly evolving, with new features and modules being added all the time.
+- [Releases](https://nuxt.com/docs/3.x/community/changelog): Discover the latest releases of Nuxt & Nuxt official modules.
+- [Overview](https://nuxt.com/docs/3.x/bridge/overview): Reduce the differences with Nuxt 3 and reduce the burden of migration to Nuxt 3.
+- [Configuration](https://nuxt.com/docs/3.x/bridge/configuration): Learn how to configure Nuxt Bridge to your own needs.
+- [TypeScript](https://nuxt.com/docs/3.x/bridge/typescript): Learn how to use TypeScript with Nuxt Bridge.
+- [Legacy Composition API](https://nuxt.com/docs/3.x/bridge/bridge-composition-api): Learn how to migrate to Composition API with Nuxt Bridge.
+- [Plugins and Middleware](https://nuxt.com/docs/3.x/bridge/plugins-and-middleware): Learn how to migrate from Nuxt 2 to Nuxt Bridge new plugins and middleware.
+- [New Composition API](https://nuxt.com/docs/3.x/bridge/nuxt3-compatible-api): Nuxt Bridge implements composables compatible with Nuxt 3.
+- [Meta Tags](https://nuxt.com/docs/3.x/bridge/meta): Learn how to migrate from Nuxt 2 to Nuxt Bridge new meta tags.
+- [Runtime Config](https://nuxt.com/docs/3.x/bridge/runtime-config): Nuxt provides a runtime config API to expose configuration and secrets within your application.
+- [Nitro](https://nuxt.com/docs/3.x/bridge/nitro): Activate Nitro to your Nuxt 2 application with Nuxt Bridge.
+- [Vite](https://nuxt.com/docs/3.x/bridge/vite): Activate Vite to your Nuxt 2 application with Nuxt Bridge.
+- [Overview](https://nuxt.com/docs/3.x/migration/overview): Nuxt 3 is a complete rewrite of Nuxt 2, and also based on a new set of underlying technologies.
+- [Build Tooling](https://nuxt.com/docs/3.x/migration/bundling): Learn how to migrate from Nuxt 2 to Nuxt 3 build tooling.
+- [Server](https://nuxt.com/docs/3.x/migration/server): Learn how to migrate from Nuxt 2 to Nuxt 3 server.
+- [Configuration](https://nuxt.com/docs/3.x/migration/configuration): Learn how to migrate from Nuxt 2 to Nuxt 3 new configuration.
+- [Modules](https://nuxt.com/docs/3.x/migration/module-authors): Learn how to migrate from Nuxt 2 to Nuxt 3 modules.
+- [Auto Imports](https://nuxt.com/docs/3.x/migration/auto-imports): Nuxt 3 adopts a minimal friction approach, meaning wherever possible components and composables are auto-imported.
+- [Meta Tags](https://nuxt.com/docs/3.x/migration/meta): Manage your meta tags, from Nuxt 2 to Nuxt 3.
+- [Plugins and Middleware](https://nuxt.com/docs/3.x/migration/plugins-and-middleware): Learn how to migrate from Nuxt 2 to Nuxt 3 plugins and middleware.
+- [Pages and Layouts](https://nuxt.com/docs/3.x/migration/pages-and-layouts): Learn how to migrate from Nuxt 2 to Nuxt 3 pages and layouts.
+- [Component Options](https://nuxt.com/docs/3.x/migration/component-options): Learn how to migrate from Nuxt 2 components options to Nuxt 3 composables.
+- [Runtime Config](https://nuxt.com/docs/3.x/migration/runtime-config): Learn how to migrate from Nuxt 2 to Nuxt 3 runtime config.
+- [Nuxt Docs](https://nuxt.com/docs/3.x/readme): This repository contains the documentation of Nuxt hosted on https://nuxt.com/docs
+
+## Blog
+
+- [Announcing 3.0](https://nuxt.com/blog/v3): We are thrilled to announce the first stable version of Nuxt 3.0.0
+- [Nuxt 3.3](https://nuxt.com/blog/v3-3): The 3.3.0 is a minor (feature) release with lots of performance and DX improvements, bug fixes and new features to play with.
+- [Nuxt 3.4](https://nuxt.com/blog/v3-4): Nuxt 3.4.0 is the latest release of Nuxt 3, bringing exciting new features, including support for the View Transitions API, transferring rich JavaScript payloads from server to client - and much more.
+- [Nuxt 3.5](https://nuxt.com/blog/v3-5): Nuxt 3.5.0 is out, bringing Vue 3.3, new defaults, interactive server components, typed pages, environment config - and much more.
+- [Nuxt 3.6](https://nuxt.com/blog/v3-6): Nuxt 3.6 is out, bringing performance improvements, fully static server components, better style inlining, static presets, increased type safety - and much more.
+- [Nuxt on the Edge](https://nuxt.com/blog/nuxt-on-the-edge): Learn how we made Nuxt 3 capable of running on edge runtimes to run with server-side rendering close to your users.
+- [Nuxt 3.7](https://nuxt.com/blog/v3-7): Nuxt 3.7 is out, bringing a new CLI, native web streams and response, rendering optimisations, async context support - and much more.
+- [A New Website](https://nuxt.com/blog/new-website): We are thrilled to release the new nuxt.com, powered by Nuxt UI and now open source.
+- [Nuxt 3.8](https://nuxt.com/blog/v3-8): Nuxt 3.8 is out, bringing built-in DevTools, automatic Nuxt Image install, a new app manifest and much more.
+- [Nuxt DevTools v1.0](https://nuxt.com/blog/nuxt-devtools-v1-0): Nuxt DevTools v1.0 is out, generally available to all Nuxt projects!
+- [Nuxt 3.9](https://nuxt.com/blog/v3-9): Nuxt 3.9 is out - a Christmas gift from the Nuxt team bringing Vite 5, interactive server components, new composables, a new loading API and more.
+- [Nuxt: A vision for 2023](https://nuxt.com/blog/vision-2023): This past year has been an exciting one. Looking into the new year, there is a lot we have planned as a team and we'd love to share it with you.
+- [Nuxt 3.10](https://nuxt.com/blog/v3-10): Nuxt 3.10 is out - packed with features and fixes. Here are a few highlights.
+- [The Evolution of Shiki v1.0](https://nuxt.com/blog/shiki-v1): Shiki v1.0 came with many improvements and features - see how Nuxt drives the evolution of Shiki!
+- [Nuxt 3.11](https://nuxt.com/blog/v3-11): Nuxt 3.11 is out - with better logging, preview mode, server pages and much more!
+- [Nuxt: Looking forward](https://nuxt.com/blog/looking-forward-2024): A lot of things have happened for Nuxt over the last year. Sébastien and Daniel share their thoughts on what we've achieved, and where we're going next.
+- [Refreshed Nuxt ESLint Integrations](https://nuxt.com/blog/eslint-module): We revamped our ESLint integrations to support ESLint v9 with the flat config, as well as a new module with many more capabilities.
+- [Nuxt 3.12](https://nuxt.com/blog/v3-12): Nuxt 3.12 is out - full of improvements and preparing the way for Nuxt 4!
+- [Introducing Nuxt Scripts](https://nuxt.com/blog/nuxt-scripts): Nuxt Scripts provides better performance, privacy, security, and developer experience for third-party scripts.
+- [Nuxt 3.13](https://nuxt.com/blog/v3-13): Nuxt 3.13 is out - porting back some of the new features we're building for Nuxt 4!
+- [Nuxt 3.14](https://nuxt.com/blog/v3-14): Nuxt 3.14 is out - with a new rspack builder, shared folder, and performance enhancements!
+- [Introducing Nuxt Icon v1](https://nuxt.com/blog/nuxt-icon-v1-0): Discover Nuxt Icon v1 - a modern, versatile, and customizable icon solution for your Nuxt projects.
+- [Introducing Nuxt DevTools](https://nuxt.com/blog/introducing-nuxt-devtools): Unleash the Developer Experience with Nuxt and understand your app better than ever.
+- [Announcing Nuxt 3 Release Candidate](https://nuxt.com/blog/nuxt3-rc): Nuxt 3 beta was announced on October 12, 2021 after 16 months of work, introducing a new foundation based on Vue 3, Vite and Nitro. Six months later, we are happy to announce the first release candidate of Nuxt 3, code named “Mount Hope“ 🚀
+- [Nuxt 3.15](https://nuxt.com/blog/v3-15): Nuxt 3.15 is out - with Vite 6, better HMR and faster performance
+- [Nuxt 3.16](https://nuxt.com/blog/v3-16): Nuxt 3.16 is out - packed with features and performance improvements
+- [Nuxt UI v3](https://nuxt.com/blog/nuxt-ui-v3): Nuxt UI v3 is out! After 1500+ commits, this major redesign brings improved accessibility, Tailwind CSS v4 support, and full Vue compatibility
+- [Nuxt 3.17](https://nuxt.com/blog/v3-17): Nuxt 3.17 is out - bringing a major reworking of the async data layer, a new built-in component, better warnings, and performance improvements!
+- [Roadmap to v4](https://nuxt.com/blog/roadmap-v4): We have some exciting news about the roadmap to Nuxt 4, including a new timeline and what to expect in the next few weeks.
+- [Building a Privacy-First Feedback Widget](https://nuxt.com/blog/building-a-feedback-widget): A lightweight, privacy-focused widget to gather your feedback on Nuxt documentation, built with Drizzle, NuxtHub database and Motion Vue.
+- [Announcing Nuxt 4.0](https://nuxt.com/blog/v4): Nuxt 4.0 is here! A thoughtful evolution focused on developer experience, with better project organization, smarter data fetching, and improved type safety.
+- [Nuxt 3.18](https://nuxt.com/blog/v3-18): Nuxt 3.18 is out - bringing v4 features to v3, improved accessibility, better browser dev tooling integration, and performance enhancements!
+- [Nuxt 2 End-of-Life (EOL)](https://nuxt.com/blog/nuxt2-eol): Nuxt 2 will reach End of Life (EOL) on June 30th, 2024. We've partnered with HeroDevs on offering Never-Ending Support (NES).
+- [Introducing Nuxt 3 Beta](https://nuxt.com/blog/nuxt3-beta): 468 days after the first commit, the Nuxt 3 beta has finally arrived. Discover what's inside and what to expect from it. Yes, it includes Vue 3 and Vite ⚡️
+- [Going Full Static](https://nuxt.com/blog/going-full-static): Long awaited features for JAMstack fans has been shipped in v2.13: full static export, improved smart prefetching, integrated crawler, faster re-deploy, built-in web server and new target option for config ⚡️
+- [Introducing Smart Prefetching](https://nuxt.com/blog/introducing-smart-prefetching): Starting from Nuxt v2.4.0, Nuxt will automagically prefetch the code-splitted pages linked with a nuxt-link when visible in the viewport by default.
+- [Understanding how fetch works in Nuxt 2.12](https://nuxt.com/blog/understanding-how-fetch-works-in-nuxt-2-12): Explore different features of the fetch hook and learn a brand new way to bring data into Nuxt applications.
+- [Nuxt 2 Static Improvements](https://nuxt.com/blog/nuxt-static-improvements): With Nuxt version 2.13, the full-static mode has been introduced. In addition, a new command nuxt export was added to pre-render your pages without triggering a webpack build with the goal to separate the rendering and build process. The only issue was that most Nuxt users weren't able to unleash the full potential of the separation... until now.
+- [Nuxt 2: From Terminal to Browser](https://nuxt.com/blog/nuxtjs-from-terminal-to-browser): How we changed the developer experience to stop switching between the terminal and browser.
+
+## Deploy
+
+- [AWS Amplify](https://nuxt.com/deploy/aws-amplify): Deploy your Nuxt Application to AWS Amplify infrastructure.
+- [Azure](https://nuxt.com/deploy/azure): Deploy your Nuxt Application to Azure infrastructure.
+- [Cleavr](https://nuxt.com/deploy/cleavr): Deploy your Nuxt Application to Cleavr infrastructure.
+- [Clever Cloud](https://nuxt.com/deploy/clever-cloud): Deploy your Nuxt Application to Clever Cloud infrastructure.
+- [Cloudflare](https://nuxt.com/deploy/cloudflare): Deploy your Nuxt Application to Cloudflare infrastructure.
+- [Deno Deploy](https://nuxt.com/deploy/deno-deploy): Deploy your Nuxt Application to Deno Deploy infrastructure.
+- [DigitalOcean](https://nuxt.com/deploy/digitalocean): Deploy your Nuxt Application to DigitalOcean infrastructure.
+- [Firebase](https://nuxt.com/deploy/firebase): Deploy your Nuxt Application to Firebase infrastructure.
+- [Flightcontrol](https://nuxt.com/deploy/flightcontrol): Deploy your Nuxt Application to Flightcontrol infrastructure.
+- [GitHub Pages](https://nuxt.com/deploy/github-pages): Deploy your Nuxt Application to GitHub Pages infrastructure.
+- [GitLab Pages](https://nuxt.com/deploy/gitlab): Deploy your Nuxt Application to GitLab Pages.
+- [Heroku](https://nuxt.com/deploy/heroku): Deploy your Nuxt Application to Heroku infrastructure.
+- [IIS](https://nuxt.com/deploy/iis): Deploy your Nuxt Application to IIS infrastructure.
+- [Koyeb](https://nuxt.com/deploy/koyeb): Deploy your Nuxt Application to Koyeb infrastructure.
+- [Netlify](https://nuxt.com/deploy/netlify): Deploy your Nuxt Application to Netlify infrastructure.
+- [NuxtHub](https://nuxt.com/deploy/nuxthub): Deploy Nuxt applications globally on your Cloudflare account with zero configuration.
+- [Render](https://nuxt.com/deploy/render): Deploy your Nuxt Application to Render infrastructure.
+- [SST](https://nuxt.com/deploy/sst): Deploy your Nuxt Application to AWS with SST.
+- [Stormkit](https://nuxt.com/deploy/stormkit): Deploy your Nuxt Application to Stormkit infrastructure.
+- [Vercel](https://nuxt.com/deploy/vercel): Deploy your Nuxt Application to Vercel infrastructure.
+- [Zeabur](https://nuxt.com/deploy/zeabur): Deploy your Nuxt Application to Zeabur.
+- [Zerops](https://nuxt.com/deploy/zerops): Deploy your Nuxt Application to Zerops infrastructure.
+
+## Agencies
+
+- [Undefined](https://nuxt.com/enterprise/agencies/undefined): From idea to solution, we craft digital experiences.
+- [EpicMax](https://nuxt.com/enterprise/agencies/epic-max): Vue and Nuxt development agency with 8+ years of experience in commercial and open-source projects, long-term support, and complex migrations to Vue 3 and Nuxt 3
+- [Fidelity Solutions](https://nuxt.com/enterprise/agencies/fidelity-solutions): Fidelity Solutions is a Texas-based web, app, and full-stack software development agency that builds custom, scalable digital solutions for businesses nationwide.
+- [DigiNeat](https://nuxt.com/enterprise/agencies/digi-neat): Our development allows us to achieve more with our clients' fewer resources and optimize their expenses
+- [Magic as a Service](https://nuxt.com/enterprise/agencies/maas): We build high-performing Nuxt and Vue applications, designed for beauty, engineered for performance, and made for humans.
+- [Wimadev](https://nuxt.com/enterprise/agencies/wimadev): Enterprise grade Nuxt development and Node.js backends.
+- [7Span](https://nuxt.com/enterprise/agencies/7span): A Global Software & Design Company. We Make Pixel Perfect Things.
+- [Monterail](https://nuxt.com/enterprise/agencies/monterail): Designing innovative software for industry leaders
+- [The Coding Machine](https://nuxt.com/enterprise/agencies/the-coding-machine): Specialized in tailor-made development around Open Source technologies for more than 15 years.
+- [Coditive](https://nuxt.com/enterprise/agencies/coditive): Bringing your vision to life with our top-notch coding skill both on frontend and backend areas.
+- [Curotec](https://nuxt.com/enterprise/agencies/curotec): Partner with an expert Vue.js & Nuxt team.
+- [Liip AG](https://nuxt.com/enterprise/agencies/liip): Your partner in crime for digital challenges – from websites, mobile apps and online shops through to change management.
+- [WebReinvent](https://nuxt.com/enterprise/agencies/webreinvent): WebReinvent is a software development company and we have delivered MVP to enterprise-level web applications from startup to MSME.
+- [64 Robots](https://nuxt.com/enterprise/agencies/64robots): A complete digital product agency with a Nuxt expertise.
+- [Zen Architects](https://nuxt.com/enterprise/agencies/zen-architects): ZEN Architects provides Nuxt support by specialists with strengths in DevOps and OSS.
+- [SIDESTREAM](https://nuxt.com/enterprise/agencies/sidestream): We develop the best Nuxt 3 software for you.
+- [Passionate People](https://nuxt.com/enterprise/agencies/passionate-people): We provide you with additional technical capacity to power-up your digital transformation.
+- [Geist](https://nuxt.com/enterprise/agencies/geist): Shopify Composable Commerce Expert
+
+## DesignKit
+
+- [Design Kit](https://nuxt.com/design-kit): Welcome to Nuxt design definition page. Identity was redefined by handpicking conscientiously colors, and shapes in order to express how easy & joyful Nuxt products are.
+````
+
+## File: .llms/nuxtui.txt
+````
+# Nuxt UI
+
+> A comprehensive, Nuxt-integrated UI library providing a rich set of fully-styled, accessible and highly customizable components for building modern web applications.
+
+## Getting Started
+
+- [Introduction](https://ui.nuxt.com/raw/getting-started.md): Nuxt UI harnesses the combined strengths of Reka UI, Tailwind CSS, and Tailwind Variants to offer developers an unparalleled set of tools for creating sophisticated, accessible, and highly performant user interfaces.
+- [Installation](https://ui.nuxt.com/raw/getting-started/installation/nuxt.md): Learn how to install and configure Nuxt UI in your Nuxt application.
+- [Installation](https://ui.nuxt.com/raw/getting-started/installation/vue.md): Learn how to install and configure Nuxt UI in your Vue application.
+- [Installation](https://ui.nuxt.com/raw/getting-started/installation/pro/nuxt.md): Learn how to install and configure Nuxt UI Pro in your Nuxt application.
+- [Installation](https://ui.nuxt.com/raw/getting-started/installation/pro/vue.md): Learn how to install and configure Nuxt UI Pro in your Vue application.
+- [Migration](https://ui.nuxt.com/raw/getting-started/migration.md): A comprehensive guide to migrate your application from Nuxt UI v2 to Nuxt UI v3.
+- [License](https://ui.nuxt.com/raw/getting-started/license.md): Nuxt UI Pro is free in development, but you need a license to build your app in production.
+- [Theme](https://ui.nuxt.com/raw/getting-started/theme.md): Learn how to customize Nuxt UI components using Tailwind CSS v4, CSS variables and the Tailwind Variants API for powerful and flexible theming.
+- [Icons](https://ui.nuxt.com/raw/getting-started/icons/nuxt.md): Nuxt UI integrates with Nuxt Icon to access over 200,000+ icons from Iconify.
+- [Icons](https://ui.nuxt.com/raw/getting-started/icons/vue.md): Nuxt UI integrates with Iconify to access over 200,000+ icons.
+- [Fonts](https://ui.nuxt.com/raw/getting-started/fonts.md): Nuxt UI integrates with Nuxt Fonts to provide plug-and-play font optimization.
+- [Color Mode](https://ui.nuxt.com/raw/getting-started/color-mode/nuxt.md): Nuxt UI integrates with Nuxt Color Mode to allow for easy switching between light and dark themes.
+- [Color Mode](https://ui.nuxt.com/raw/getting-started/color-mode/vue.md): Nuxt UI integrates with VueUse to allow for easy switching between light and dark themes.
+- [Internationalization (i18n)](https://ui.nuxt.com/raw/getting-started/i18n/nuxt.md): Learn how to internationalize your Nuxt app with multi-directional support (LTR/RTL).
+- [Internationalization (i18n)](https://ui.nuxt.com/raw/getting-started/i18n/vue.md): Learn how to internationalize your Vue app with multi-directional support (LTR/RTL).
+- [Content](https://ui.nuxt.com/raw/getting-started/content.md): Nuxt UI Pro enhances Nuxt Content with beautiful components and styling.
+- [Typography](https://ui.nuxt.com/raw/getting-started/typography.md): Nuxt UI Pro provides beautiful typography components and utilities to style your content.
+- [Contribution Guide](https://ui.nuxt.com/raw/getting-started/contribution.md): A comprehensive guide on contributing to Nuxt UI, including project structure, development workflow, and best practices.
+
+## Components
+
+- [App](https://ui.nuxt.com/raw/components/app.md): Wraps your app to provide global configurations and more.
+- [Accordion](https://ui.nuxt.com/raw/components/accordion.md): A stacked set of collapsible panels.
+- [Alert](https://ui.nuxt.com/raw/components/alert.md): A callout to draw user's attention.
+- [AuthForm](https://ui.nuxt.com/raw/components/auth-form.md): A customizable Form to create login, register or password reset forms.
+- [Avatar](https://ui.nuxt.com/raw/components/avatar.md): An img element with fallback and Nuxt Image support.
+- [AvatarGroup](https://ui.nuxt.com/raw/components/avatar-group.md): Stack multiple avatars in a group.
+- [Badge](https://ui.nuxt.com/raw/components/badge.md): A short text to represent a status or a category.
+- [Banner](https://ui.nuxt.com/raw/components/banner.md): Display a banner at the top of your website to inform users about important information.
+- [BlogPost](https://ui.nuxt.com/raw/components/blog-post.md): A customizable article to display in a blog page.
+- [BlogPosts](https://ui.nuxt.com/raw/components/blog-posts.md): Display a list of blog posts in a responsive grid layout.
+- [Breadcrumb](https://ui.nuxt.com/raw/components/breadcrumb.md): A hierarchy of links to navigate through a website.
+- [Button](https://ui.nuxt.com/raw/components/button.md): A button element that can act as a link or trigger an action.
+- [ButtonGroup](https://ui.nuxt.com/raw/components/button-group.md): Group multiple button-like elements together.
+- [Calendar](https://ui.nuxt.com/raw/components/calendar.md): A calendar component for selecting single dates, multiple dates or date ranges.
+- [Card](https://ui.nuxt.com/raw/components/card.md): Display content in a card with a header, body and footer.
+- [Carousel](https://ui.nuxt.com/raw/components/carousel.md): A carousel with motion and swipe built using Embla.
+- [ChangelogVersion](https://ui.nuxt.com/raw/components/changelog-version.md): A customizable article to display in a changelog.
+- [ChangelogVersions](https://ui.nuxt.com/raw/components/changelog-versions.md): Display a list of changelog versions in a timeline.
+- [ChatMessage](https://ui.nuxt.com/raw/components/chat-message.md): Display a chat message with icon, avatar, and actions.
+- [ChatMessages](https://ui.nuxt.com/raw/components/chat-messages.md): Display a list of chat messages, designed to work seamlessly with Vercel AI SDK.
+- [ChatPalette](https://ui.nuxt.com/raw/components/chat-palette.md): A chat palette to create a chatbot interface inside an overlay.
+- [ChatPrompt](https://ui.nuxt.com/raw/components/chat-prompt.md): An enhanced Textarea for submitting prompts in AI chat interfaces.
+- [ChatPromptSubmit](https://ui.nuxt.com/raw/components/chat-prompt-submit.md): A Button for submitting chat prompts with automatic status handling.
+- [Checkbox](https://ui.nuxt.com/raw/components/checkbox.md): An input element to toggle between checked and unchecked states.
+- [CheckboxGroup](https://ui.nuxt.com/raw/components/checkbox-group.md): A set of checklist buttons to select multiple option from a list.
+- [Chip](https://ui.nuxt.com/raw/components/chip.md): An indicator of a numeric value or a state.
+- [Collapsible](https://ui.nuxt.com/raw/components/collapsible.md): A collapsible element to toggle visibility of its content.
+- [ColorModeAvatar](https://ui.nuxt.com/raw/components/color-mode-avatar.md): An Avatar with a different source for light and dark mode.
+- [ColorModeButton](https://ui.nuxt.com/raw/components/color-mode-button.md): A Button to switch between light and dark mode.
+- [ColorModeImage](https://ui.nuxt.com/raw/components/color-mode-image.md): An image element with a different source for light and dark mode.
+- [ColorModeSelect](https://ui.nuxt.com/raw/components/color-mode-select.md): A Select to switch between system, dark & light mode.
+- [ColorModeSwitch](https://ui.nuxt.com/raw/components/color-mode-switch.md): A switch to toggle between light and dark mode.
+- [ColorPicker](https://ui.nuxt.com/raw/components/color-picker.md): A component to select a color.
+- [CommandPalette](https://ui.nuxt.com/raw/components/command-palette.md): A command palette with full-text search powered by Fuse.js for efficient fuzzy matching.
+- [Container](https://ui.nuxt.com/raw/components/container.md): A container lets you center and constrain the width of your content.
+- [ContentNavigation](https://ui.nuxt.com/raw/components/content-navigation.md): An accordion-style navigation component for organizing page links.
+- [ContentSearch](https://ui.nuxt.com/raw/components/content-search.md): A ready to use CommandPalette to add to your documentation.
+- [ContentSearchButton](https://ui.nuxt.com/raw/components/content-search-button.md): A pre-styled Button to open the ContentSearch modal.
+- [ContentSurround](https://ui.nuxt.com/raw/components/content-surround.md): A pair of prev and next links to navigate between pages.
+- [ContentToc](https://ui.nuxt.com/raw/components/content-toc.md): A sticky Table of Contents with automatic active anchor link highlighting.
+- [ContextMenu](https://ui.nuxt.com/raw/components/context-menu.md): A menu to display actions when right-clicking on an element.
+- [DashboardGroup](https://ui.nuxt.com/raw/components/dashboard-group.md): A fixed layout component that provides context for dashboard components with sidebar state management and persistence.
+- [DashboardNavbar](https://ui.nuxt.com/raw/components/dashboard-navbar.md): A responsive navbar to display in a dashboard.
+- [DashboardPanel](https://ui.nuxt.com/raw/components/dashboard-panel.md): A resizable panel to display in a dashboard.
+- [DashboardResizeHandle](https://ui.nuxt.com/raw/components/dashboard-resize-handle.md): A handle to resize a sidebar or panel.
+- [DashboardSearch](https://ui.nuxt.com/raw/components/dashboard-search.md): A ready to use CommandPalette to add to your dashboard.
+- [DashboardSearchButton](https://ui.nuxt.com/raw/components/dashboard-search-button.md): A pre-styled Button to open the DashboardSearch modal.
+- [DashboardSidebar](https://ui.nuxt.com/raw/components/dashboard-sidebar.md): A resizable and collapsible sidebar to display in a dashboard.
+- [DashboardSidebarCollapse](https://ui.nuxt.com/raw/components/dashboard-sidebar-collapse.md): A Button to collapse the sidebar on desktop.
+- [DashboardSidebarToggle](https://ui.nuxt.com/raw/components/dashboard-sidebar-toggle.md): A Button to toggle the sidebar on mobile.
+- [DashboardToolbar](https://ui.nuxt.com/raw/components/dashboard-toolbar.md): A toolbar to display under the navbar in a dashboard.
+- [Drawer](https://ui.nuxt.com/raw/components/drawer.md): A drawer that smoothly slides in & out of the screen.
+- [DropdownMenu](https://ui.nuxt.com/raw/components/dropdown-menu.md): A menu to display actions when clicking on an element.
+- [Error](https://ui.nuxt.com/raw/components/error.md): A pre-built error component with NuxtError support.
+- [FileUpload](https://ui.nuxt.com/raw/components/file-upload.md): An input element to upload files.
+- [Footer](https://ui.nuxt.com/raw/components/footer.md): A responsive footer component.
+- [FooterColumns](https://ui.nuxt.com/raw/components/footer-columns.md): A list of links as columns to display in your Footer.
+- [Form](https://ui.nuxt.com/raw/components/form.md): A form component with built-in validation and submission handling.
+- [FormField](https://ui.nuxt.com/raw/components/form-field.md): A wrapper for form elements that provides validation and error handling.
+- [Header](https://ui.nuxt.com/raw/components/header.md): A responsive header component.
+- [Icon](https://ui.nuxt.com/raw/components/icon.md): A component to display any icon from Iconify.
+- [Input](https://ui.nuxt.com/raw/components/input.md): An input element to enter text.
+- [InputMenu](https://ui.nuxt.com/raw/components/input-menu.md): An autocomplete input with real-time suggestions.
+- [InputNumber](https://ui.nuxt.com/raw/components/input-number.md): An input for numerical values with a customizable range.
+- [InputTags](https://ui.nuxt.com/raw/components/input-tags.md): An input element that displays interactive tags.
+- [Kbd](https://ui.nuxt.com/raw/components/kbd.md): A kbd element to display a keyboard key.
+- [Link](https://ui.nuxt.com/raw/components/link.md): A wrapper around <NuxtLink> with extra props.
+- [LocaleSelect](https://ui.nuxt.com/raw/components/locale-select.md): A Select to switch between locales.
+- [Main](https://ui.nuxt.com/raw/components/main.md): A main element that fills the available viewport height.
+- [Modal](https://ui.nuxt.com/raw/components/modal.md): A dialog window that can be used to display a message or request user input.
+- [NavigationMenu](https://ui.nuxt.com/raw/components/navigation-menu.md): A list of links that can be displayed horizontally or vertically.
+- [Page](https://ui.nuxt.com/raw/components/page.md): A grid layout for your pages with left and right columns.
+- [PageAccordion](https://ui.nuxt.com/raw/components/page-accordion.md): A pre-styled Accordion to display in your pages.
+- [PageAnchors](https://ui.nuxt.com/raw/components/page-anchors.md): A list of anchors to be displayed in the page.
+- [PageAside](https://ui.nuxt.com/raw/components/page-aside.md): A sticky aside to display your page navigation.
+- [PageBody](https://ui.nuxt.com/raw/components/page-body.md): The main content of your page.
+- [PageCard](https://ui.nuxt.com/raw/components/page-card.md): A pre-styled card component that displays a title, description and optional link.
+- [PageColumns](https://ui.nuxt.com/raw/components/page-columns.md): A responsive multi-column layout system for organizing content side-by-side.
+- [PageCTA](https://ui.nuxt.com/raw/components/page-cta.md): A call to action section to display in your pages.
+- [PageFeature](https://ui.nuxt.com/raw/components/page-feature.md): A component to showcase key features of your application.
+- [PageGrid](https://ui.nuxt.com/raw/components/page-grid.md): A responsive grid system for displaying content in a flexible layout.
+- [PageHeader](https://ui.nuxt.com/raw/components/page-header.md): A responsive header for your pages.
+- [PageHero](https://ui.nuxt.com/raw/components/page-hero.md): A responsive hero for your pages.
+- [PageLinks](https://ui.nuxt.com/raw/components/page-links.md): A list of links to be displayed in the page.
+- [PageList](https://ui.nuxt.com/raw/components/page-list.md): A vertical list layout for displaying content in a stacked format.
+- [PageLogos](https://ui.nuxt.com/raw/components/page-logos.md): A list of logos or images to display on your pages.
+- [PageMarquee](https://ui.nuxt.com/raw/components/page-marquee.md): A component to create infinite scrolling content.
+- [PageSection](https://ui.nuxt.com/raw/components/page-section.md): A responsive section for your pages.
+- [Pagination](https://ui.nuxt.com/raw/components/pagination.md): A list of buttons or links to navigate through pages.
+- [PinInput](https://ui.nuxt.com/raw/components/pin-input.md): An input element to enter a pin.
+- [Popover](https://ui.nuxt.com/raw/components/popover.md): A non-modal dialog that floats around a trigger element.
+- [PricingPlan](https://ui.nuxt.com/raw/components/pricing-plan.md): A customizable pricing plan to display in a pricing page.
+- [PricingPlans](https://ui.nuxt.com/raw/components/pricing-plans.md): Display a list of pricing plans in a responsive grid layout.
+- [PricingTable](https://ui.nuxt.com/raw/components/pricing-table.md): A responsive pricing table component that displays tiered pricing plans with feature comparisons.
+- [Progress](https://ui.nuxt.com/raw/components/progress.md): An indicator showing the progress of a task.
+- [RadioGroup](https://ui.nuxt.com/raw/components/radio-group.md): A set of radio buttons to select a single option from a list.
+- [Select](https://ui.nuxt.com/raw/components/select.md): A select element to choose from a list of options.
+- [SelectMenu](https://ui.nuxt.com/raw/components/select-menu.md): An advanced searchable select element.
+- [Separator](https://ui.nuxt.com/raw/components/separator.md): Separates content horizontally or vertically.
+- [Skeleton](https://ui.nuxt.com/raw/components/skeleton.md): A placeholder to show while content is loading.
+- [Slideover](https://ui.nuxt.com/raw/components/slideover.md): A dialog that slides in from any side of the screen.
+- [Slider](https://ui.nuxt.com/raw/components/slider.md): An input to select a numeric value within a range.
+- [Stepper](https://ui.nuxt.com/raw/components/stepper.md): A set of steps that are used to indicate progress through a multi-step process.
+- [Switch](https://ui.nuxt.com/raw/components/switch.md): A control that toggles between two states.
+- [Table](https://ui.nuxt.com/raw/components/table.md): A responsive table element to display data in rows and columns.
+- [Tabs](https://ui.nuxt.com/raw/components/tabs.md): A set of tab panels that are displayed one at a time.
+- [Textarea](https://ui.nuxt.com/raw/components/textarea.md): A textarea element to input multi-line text.
+- [Timeline](https://ui.nuxt.com/raw/components/timeline.md): A component that displays a sequence of events with dates, titles, icons or avatars.
+- [Toast](https://ui.nuxt.com/raw/components/toast.md): A succinct message to provide information or feedback to the user.
+- [Tooltip](https://ui.nuxt.com/raw/components/tooltip.md): A popup that reveals information when hovering over an element.
+- [Tree](https://ui.nuxt.com/raw/components/tree.md): A tree view component to display and interact with hierarchical data structures.
+- [User](https://ui.nuxt.com/raw/components/user.md): Display user information with name, description and avatar.
+
+## Composables
+
+- [defineShortcuts](https://ui.nuxt.com/raw/composables/define-shortcuts.md): A composable to define keyboard shortcuts in your app.
+- [useFormField](https://ui.nuxt.com/raw/composables/use-form-field.md): A composable to integrate custom inputs with the Form component
+- [useOverlay](https://ui.nuxt.com/raw/composables/use-overlay.md): A composable to programmatically control overlays.
+- [useToast](https://ui.nuxt.com/raw/composables/use-toast.md): A composable to display toast notifications in your app.
+
+## Documentation Sets
+
+- [Nuxt UI Full Documentation](https://ui.nuxt.com/llms-full.txt): This is the full documentation for Nuxt UI. It includes all the Markdown files written with the MDC syntax.
+
+## Notes
+
+- The documentation excludes Nuxt UI v2 content.
+- The content is automatically generated from the same source as the official documentation.
+````
+
+## File: .llms/orama.txt
+````
+# Docs
+
+base url: https://docs.orama.com/
+
+## cloud
+
+- [Introduction to Orama Cloud](/docs/cloud): Run Orama at scale. Managed.
+- [What is Orama Cloud?](/docs/cloud/what-is-orama-cloud): Learn about the Orama Cloud context server.
+- [Performing AI Session](/docs/cloud/ai-sessions/performing-ai-session): Learn how to perform an AI session with Orama Cloud.
+- [Choosing the Right LLM](/docs/cloud/context-engineering/choosing-llm): Learn how to choose the right LLM for your Orama Cloud project.
+- [Introduction](/docs/cloud/context-engineering/introduction): Learn how to use context engineering to improve RAG.
+- [Adding Your Data to Orama Cloud](/docs/cloud/data-sources/about): Connect Orama Cloud to a data source to index and search your data.
+- [Knowledge Base](/docs/cloud/data-sources/knowledge-base): Store hidden documents to enhance your AI sessions with relevant information.
+- [Uploading a File](/docs/cloud/data-sources/uploading-a-file): Learn how to upload a JSON, CSV, or XML file to Orama Cloud.
+- [Introduction](/docs/cloud/performing-search/introduction): Learn how to perform fast and efficient search operations with Orama Cloud.
+- [Create a Project](/docs/cloud/projects/create): Create a project in Orama Cloud
+- [Project Settings](/docs/cloud/projects/project-settings): Changing language, embedding models, and more.
+- [Manage Teams](/docs/cloud/teams/manage-teams): Learn how to manage teams in Orama Cloud.
+- [Using the REST APIs](/docs/cloud/data-sources/rest-APIs/using-rest-apis): Learn how to use the REST APIs to insert, delete, and update data in an Orama Cloud data source.
+- [AI-Powered NLP Search](/docs/cloud/performing-search/search-modes/ai-powered-nlp-search): Learn how to perform AI-powered NLP search using Orama Cloud.
+- [Full-Text Search](/docs/cloud/performing-search/search-modes/full-text-search): Learn how to perform full-text search with Orama Cloud.
+- [Hybrid Search](/docs/cloud/performing-search/search-modes/hybrid-search): Learn how to perform hybrid search in Orama Cloud.
+- [Vector Search](/docs/cloud/performing-search/search-modes/vector-search): Learn how to perform vector search in Orama Cloud.
+- [Deleting Documents](/docs/cloud/data-sources/rest-APIs/official-SDK/deleting-documents): Learn how to delete documents from your Orama index using the Official SDK.
+- [Inserting Documents](/docs/cloud/data-sources/rest-APIs/official-SDK/inserting-documents): Learn how to insert documents into your database using the official SDK.
+- [Using the Official SDK](/docs/cloud/data-sources/rest-APIs/official-SDK/introduction): Learn how to import data into Orama Cloud using the official SDK.
+- [Updating Documents](/docs/cloud/data-sources/rest-APIs/official-SDK/updating-documents): Learn how to update documents in your database using the official SDK.
+
+## orama-js
+
+- [Answer Engine](/docs/orama-js/answer-engine): Learn how to use Orama as an answer engine to perform ChatGPT-like experiences on your website.
+- [Introduction](/docs/orama-js): A complete search engine and RAG pipeline in your browser, server or edge network with support for full-text, vector, and hybrid search in less than 2kb.
+- [Components](/docs/orama-js/internals/components): Learn how to customize Orama by using its components architecture.
+- [Utilities](/docs/orama-js/internals/utilities): Orama exposes some of its internal utility functions.
+- [Plugin system](/docs/orama-js/plugins): Learn how to extend Orama with plugins.
+- [Plugin Analytics](/docs/orama-js/plugins/plugin-analytics): Learn how to use the Analytics plugin in Orama.
+- [Plugin Astro](/docs/orama-js/plugins/plugin-astro): Learn how to use the Astro plugin in Orama.
+- [Plugin Data Persistence](/docs/orama-js/plugins/plugin-data-persistence): Persist your Orama database to disk or in-memory and restore it later.
+- [Plugin Docusaurus](/docs/orama-js/plugins/plugin-docusaurus): Learn how to connect Orama Cloud to your Docusaurus project.
+- [Plugin Embeddings](/docs/orama-js/plugins/plugin-embeddings): Generate embeddings for your documents offline and use them for vector search.
+- [Plugin Match Highlight](/docs/orama-js/plugins/plugin-match-highlight): Learn how to use the match highlight plugin in Orama.
+- [Plugin Nextra](/docs/orama-js/plugins/plugin-nextra): Learn how to use the Nextra plugin in Orama.
+- [Plugin Parsedoc](/docs/orama-js/plugins/plugin-parsedoc): Learn how to use the Parsedoc plugin in Orama.
+- [Plugin PT15](/docs/orama-js/plugins/plugin-pt15): Boost your search results with the PT15 algorithm.
+- [Plugin QPS](/docs/orama-js/plugins/plugin-qps): Boost your search results with the Quantum Proximity Scoring algorithm.
+- [Plugin Secure Proxy](/docs/orama-js/plugins/plugin-secure-proxy): Learn how to use the Secure Proxy plugin in Orama.
+- [Plugin Vitepress](/docs/orama-js/plugins/plugin-vitepress): Learn how to use the Vitepress plugin in Orama.
+- [Writing your own plugins](/docs/orama-js/plugins/writing-your-own-plugins): Learn how to write your own plugins in Orama.
+- [BM25 Algorithm](/docs/orama-js/search/bm25): Learn how Orama uses the BM25 algorithm to calculate the relevance of a document when searching.
+- [Changing Default Search Algorithm](/docs/orama-js/search/changing-default-search-algorithm): Choosing between BM25, QPS, and PT15 for your search needs.
+- [Facets](/docs/orama-js/search/facets): Learn how to use facets in Orama search engine.
+- [Fields Boosting](/docs/orama-js/search/fields-boosting): Learn how to boost the importance of a field in the search results.
+- [Filters](/docs/orama-js/search/filters): Learn how to use filters in Orama search.
+- [Geosearch](/docs/orama-js/search/geosearch): Learn how to perform geosearch queries in Orama.
+- [Grouping](/docs/orama-js/search/grouping): Learn how to group search results in Orama.
+- [Hybrid Search](/docs/orama-js/search/hybrid-search): Learn how to perform hybrid search in Orama.
+- [Introduction to search](/docs/orama-js/search): Learn how to search through your documents with Orama.
+- [Preflight Search](/docs/orama-js/search/preflight): Preflight search is an Orama feature that allows you to run a preliminary search query that will return just the number of results that match your query.
+- [Sorting](/docs/orama-js/search/sorting): Learn how to sort the search results in Orama.
+- [Threshold](/docs/orama-js/search/threshold): The threshold property is used to set the minimum/maximum number of results to return.
+- [Vector Search](/docs/orama-js/search/vector-search): Learn how to perform vector search using Orama.
+- [Officially Supported Languages](/docs/orama-js/supported-languages): Orama supports 30 languages out of the box in 8 different alphabets. For every language, Orama provides a default tokenizer, stop-words, and stemmer.
+- [Using Chinese with Orama](/docs/orama-js/supported-languages/using-chinese-with-orama): Learn how to use Chinese with Orama.
+- [Using Japanese with Orama](/docs/orama-js/supported-languages/using-japanese-with-orama): Learn how to use Japanese with Orama.
+- [Stemming](/docs/orama-js/text-analysis/stemming): Learn how to use stemming in Orama.
+- [Stop-words](/docs/orama-js/text-analysis/stop-words): Learn how to use stop-words with Orama.
+- [Create a new Orama instance](/docs/orama-js/usage/create): Create a new Orama instance to store and search documents.
+- [Insert Data](/docs/orama-js/usage/insert): Insert data into an Orama database.
+- [Remove data](/docs/orama-js/usage/remove): Learn how to remove data from an Orama database.
+- [Update data](/docs/orama-js/usage/update): Learn how to update data in Orama.
+- [Utility functions for Orama](/docs/orama-js/usage/utilities): Learn how to use utility functions in Orama.
+````
 
 ## File: app/assets/css/dark-hc.css
 ````css
@@ -2380,94 +3315,6 @@ export default defineAppConfig({
 }
 ````
 
-## File: app/composables/useModelStore.ts
-````typescript
-import { kv } from '~/db';
-import modelsService, {
-    type OpenRouterModel,
-    type PriceBucket,
-} from '~/utils/models-service';
-
-export function useModelStore() {
-    const favoriteModels = ref<OpenRouterModel[]>([]);
-    const catalog = ref<OpenRouterModel[]>([]);
-
-    const searchQuery = ref('');
-    const filters = ref<{
-        input?: string[];
-        output?: string[];
-        minContext?: number;
-        parameters?: string[];
-        price?: PriceBucket;
-    }>({});
-
-    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
-        const list = await modelsService.fetchModels(opts);
-
-        catalog.value = list;
-        return list;
-    }
-
-    const KV_KEY = 'favorite_models';
-
-    async function persist() {
-        try {
-            await kv.set(KV_KEY, JSON.stringify(favoriteModels.value));
-        } catch (e) {
-            console.warn('[useModelStore] persist favorites failed', e);
-        }
-    }
-
-    async function addFavoriteModel(model: OpenRouterModel) {
-        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
-        favoriteModels.value.push(model);
-        await persist();
-    }
-
-    async function removeFavoriteModel(model: OpenRouterModel) {
-        favoriteModels.value = favoriteModels.value.filter(
-            (m) => m.id !== model.id
-        );
-        await persist();
-    }
-
-    async function clearFavoriteModels() {
-        favoriteModels.value = [];
-        await persist();
-    }
-
-    async function getFavoriteModels() {
-        try {
-            const record: any = await kv.get(KV_KEY);
-            const raw = record?.value;
-            if (raw && typeof raw === 'string') {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    favoriteModels.value = parsed;
-                } else {
-                    favoriteModels.value = [];
-                }
-            } else {
-                favoriteModels.value = [];
-            }
-        } catch {
-            favoriteModels.value = [];
-        }
-        return favoriteModels.value;
-    }
-
-    return {
-        favoriteModels,
-        catalog,
-        fetchModels,
-        getFavoriteModels,
-        addFavoriteModel,
-        removeFavoriteModel,
-        clearFavoriteModels,
-    };
-}
-````
-
 ## File: app/db/util.ts
 ````typescript
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
@@ -2609,41 +3456,306 @@ bun run preview
 Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
 ````
 
-## File: app/components/chat/ChatMessage.vue
-````vue
-<template>
-    <div :class="outerClass" class="p-2 rounded-md my-2">
-        <div :class="innerClass" v-html="rendered"></div>
-    </div>
-</template>
+## File: app/composables/useModelStore.ts
+````typescript
+import { kv } from '~/db';
+import modelsService, {
+    type OpenRouterModel,
+    type PriceBucket,
+} from '~/utils/models-service';
 
-<script setup lang="ts">
-import { computed } from 'vue';
-import { marked } from 'marked';
+// Module-level in-flight promise for deduping parallel fetches across composable instances
+let inFlight: Promise<OpenRouterModel[]> | null = null;
 
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-};
+export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
+export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-const props = defineProps<{ message: ChatMessage }>();
+function canUseDexie() {
+    try {
+        return (
+            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
+        );
+    } catch {
+        return false;
+    }
+}
 
-const outerClass = computed(() => ({
-    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
-        props.message.role === 'user',
-    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
-        props.message.role === 'assistant',
-}));
+export function useModelStore() {
+    const favoriteModels = ref<OpenRouterModel[]>([]);
+    const catalog = ref<OpenRouterModel[]>([]);
 
-const innerClass = computed(() => ({
-    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
-        props.message.role === 'assistant',
-}));
+    const searchQuery = ref('');
+    const filters = ref<{
+        input?: string[];
+        output?: string[];
+        minContext?: number;
+        parameters?: string[];
+        price?: PriceBucket;
+    }>({});
 
-const rendered = computed(() => marked.parse(props.message.content));
-</script>
+    // Reactive timestamp (ms) of when catalog was last loaded into memory
+    const lastLoadedAt = ref<number | undefined>(undefined);
 
-<style scoped></style>
+    function isFresh(ts: number | undefined, ttl: number) {
+        if (!ts) return false;
+        return Date.now() - ts < ttl;
+    }
+
+    async function loadFromDexie(
+        ttl: number
+    ): Promise<OpenRouterModel[] | null> {
+        if (!canUseDexie()) return null;
+        try {
+            const rec: any = await kv.get(MODELS_CACHE_KEY);
+            if (!rec) return null;
+            // rec.updated_at is seconds in Kv schema; convert to ms
+            const updatedAtMs = rec.updated_at
+                ? rec.updated_at * 1000
+                : undefined;
+            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
+                console.debug(
+                    '[models-cache] dexie record stale or missing timestamp',
+                    {
+                        updatedAtMs,
+                        ttl,
+                    }
+                );
+                return null;
+            }
+            const raw = rec?.value;
+            if (!raw || typeof raw !== 'string') return null;
+            try {
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) return null;
+                catalog.value = parsed;
+                lastLoadedAt.value = updatedAtMs;
+                console.debug(
+                    '[models-cache] dexie hit — hydrated catalog from cache',
+                    {
+                        updatedAtMs,
+                        count: parsed.length,
+                    }
+                );
+                console.log('[models-cache] pulled models from dexie', {
+                    source: 'dexie',
+                    count: parsed.length,
+                });
+                return parsed;
+            } catch (e) {
+                console.warn(
+                    '[models-cache] JSON parse failed; deleting corrupt record',
+                    e
+                );
+                // best-effort cleanup
+                try {
+                    await kv.delete(MODELS_CACHE_KEY);
+                } catch {}
+                return null;
+            }
+        } catch (e) {
+            console.warn('[models-cache] Dexie load failed', e);
+            return null;
+        }
+    }
+
+    async function saveToDexie(list: OpenRouterModel[]) {
+        if (!canUseDexie()) return;
+        try {
+            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
+            console.debug('[models-cache] saved catalog to Dexie', {
+                count: list.length,
+            });
+        } catch (e) {
+            console.warn('[models-cache] Dexie save failed', e);
+        }
+    }
+
+    async function invalidate() {
+        console.info(
+            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
+        );
+        catalog.value = [];
+        lastLoadedAt.value = undefined;
+        if (!canUseDexie()) return;
+        try {
+            await kv.delete(MODELS_CACHE_KEY);
+            console.debug('[models-cache] Dexie record deleted');
+        } catch (e) {
+            console.warn('[models-cache] Dexie delete failed', e);
+        }
+    }
+
+    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
+        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
+
+        // Memory fast-path
+        if (
+            !opts?.force &&
+            catalog.value.length &&
+            isFresh(lastLoadedAt.value, ttl)
+        ) {
+            console.debug(
+                '[models-cache] memory hit — returning in-memory catalog',
+                {
+                    lastLoadedAt: lastLoadedAt.value,
+                    count: catalog.value.length,
+                }
+            );
+            console.log('[models-cache] pulled models from memory', {
+                source: 'memory',
+                count: catalog.value.length,
+            });
+            return catalog.value;
+        }
+
+        // Try Dexie if available and not forced
+        if (!opts?.force) {
+            const dexieHit = await loadFromDexie(ttl);
+            if (dexieHit) return dexieHit;
+            console.debug(
+                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
+            );
+        }
+
+        // Dedupe in-flight network requests
+        if (inFlight && !opts?.force) return inFlight;
+
+        const fetchPromise = (async () => {
+            console.info('[models-cache] fetching models from network');
+            try {
+                const list = await modelsService.fetchModels(opts);
+                catalog.value = list;
+                lastLoadedAt.value = Date.now();
+                console.info(
+                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
+                );
+                console.log('[models-cache] pulled models from network', {
+                    source: 'network',
+                    count: list.length,
+                });
+                // persist async (don't block response)
+                saveToDexie(list).catch(() => {});
+                return list;
+            } catch (err) {
+                console.warn('[models-cache] network fetch failed', err);
+                // On network failure, attempt to serve stale Dexie record (even if expired)
+                if (canUseDexie()) {
+                    try {
+                        const rec: any = await kv.get(MODELS_CACHE_KEY);
+                        const raw = rec?.value;
+                        if (raw && typeof raw === 'string') {
+                            try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length) {
+                                    console.warn(
+                                        '[models-cache] network failed; serving stale cached models',
+                                        { count: parsed.length }
+                                    );
+                                    console.log(
+                                        '[models-cache] pulled models from stale dexie after network failure',
+                                        {
+                                            source: 'stale-dexie',
+                                            count: parsed.length,
+                                        }
+                                    );
+                                    return parsed;
+                                }
+                            } catch (e) {
+                                // corrupted; best-effort delete
+                                try {
+                                    await kv.delete(MODELS_CACHE_KEY);
+                                } catch {}
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(
+                            '[models-cache] Dexie read during network failure failed',
+                            e
+                        );
+                    }
+                }
+                throw err;
+            }
+        })();
+
+        if (!opts?.force) {
+            inFlight = fetchPromise.finally(() => {
+                inFlight = null;
+            });
+        }
+
+        return fetchPromise;
+    }
+
+    async function persist() {
+        try {
+            await kv.set(
+                'favorite_models',
+                JSON.stringify(favoriteModels.value)
+            );
+        } catch (e) {
+            console.warn('[useModelStore] persist favorites failed', e);
+        }
+    }
+
+    async function addFavoriteModel(model: OpenRouterModel) {
+        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
+        favoriteModels.value.push(model);
+        await persist();
+    }
+
+    async function removeFavoriteModel(model: OpenRouterModel) {
+        favoriteModels.value = favoriteModels.value.filter(
+            (m) => m.id !== model.id
+        );
+        await persist();
+    }
+
+    async function clearFavoriteModels() {
+        favoriteModels.value = [];
+        await persist();
+    }
+
+    async function getFavoriteModels() {
+        try {
+            const record: any = await kv.get('favorite_models');
+            const raw = record?.value;
+            if (raw && typeof raw === 'string') {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    favoriteModels.value = parsed;
+                } else {
+                    favoriteModels.value = [];
+                }
+            } else {
+                favoriteModels.value = [];
+            }
+        } catch {
+            favoriteModels.value = [];
+        }
+        return favoriteModels.value;
+    }
+
+    // Convenience wrapper to force network refresh
+    async function refreshModels() {
+        return fetchModels({ force: true });
+    }
+
+    return {
+        favoriteModels,
+        catalog,
+        searchQuery,
+        filters,
+        fetchModels,
+        refreshModels,
+        invalidate,
+        getFavoriteModels,
+        addFavoriteModel,
+        removeFavoriteModel,
+        clearFavoriteModels,
+        lastLoadedAt,
+    };
+}
 ````
 
 ## File: app/composables/useUserApiKey.ts
@@ -3188,6 +4300,48 @@ declare module '#app' {
 }
 
 export {};
+````
+
+## File: app/components/chat/ChatMessage.vue
+````vue
+<template>
+    <div :class="outerClass" class="p-2 rounded-md my-2">
+        <div :class="innerClass" v-html="rendered"></div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+import { marked } from 'marked';
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+};
+
+import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
+
+// Local UI message expects content to be a string (rendered markdown/html)
+type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
+
+const props = defineProps<{ message: UIMessage }>();
+
+const outerClass = computed(() => ({
+    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
+        props.message.role === 'user',
+    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
+        props.message.role === 'assistant',
+}));
+
+const innerClass = computed(() => ({
+    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+        props.message.role === 'assistant',
+}));
+
+const rendered = computed(() => marked.parse(props.message.content));
+</script>
+
+<style scoped></style>
 ````
 
 ## File: app/db/attachments.ts
@@ -3962,438 +5116,6 @@ export async function forkThread(
         return fork;
     });
 }
-````
-
-## File: app/components/chat/ChatInputDropper.vue
-````vue
-<template>
-    <div
-        @dragover.prevent="onDragOver"
-        @dragleave.prevent="onDragLeave"
-        @drop.prevent="handleDrop"
-        :class="[
-            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
-            isDragging
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
-            loading ? 'opacity-90 pointer-events-auto' : '',
-        ]"
-    >
-        <div class="flex flex-col gap-3.5 m-3.5">
-            <!-- Main Input Area -->
-            <div class="relative">
-                <div
-                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
-                >
-                    <textarea
-                        v-model="promptText"
-                        placeholder="How can I help you today?"
-                        class="w-full h-12 break-words max-w-full resize-none bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 text-sm leading-relaxed"
-                        rows="1"
-                        @input="handlePromptInput"
-                        @paste="handlePaste"
-                        ref="textareaRef"
-                        :disabled="loading"
-                    ></textarea>
-                    <div
-                        v-if="loading"
-                        class="absolute top-1 right-1 flex items-center gap-2"
-                    >
-                        <UIcon
-                            name="i-lucide:loader-2"
-                            class="w-4 h-4 animate-spin opacity-70"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Controls -->
-            <div class="flex gap-2.5 w-full items-center">
-                <div
-                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
-                >
-                    <!-- Attachment Button -->
-                    <div class="relative shrink-0">
-                        <UButton
-                            @click="triggerFileInput"
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Add attachments"
-                            :disabled="loading"
-                        >
-                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
-                        </UButton>
-                    </div>
-
-                    <!-- Settings Button (stub) -->
-                    <div class="relative shrink-0">
-                        <UButton
-                            @click="
-                                showSettingsDropdown = !showSettingsDropdown
-                            "
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Settings"
-                            :disabled="loading"
-                        >
-                            <UIcon
-                                name="i-lucide:sliders-horizontal"
-                                class="w-4 h-4"
-                            />
-                        </UButton>
-                    </div>
-                </div>
-
-                <!-- Model Selector (simple) -->
-                <div class="shrink-0">
-                    <USelectMenu
-                        :ui="{
-                            content: 'border-[2px] border-black rounded-[3px]',
-                            input: 'border-0 rounded-none!',
-                            arrow: 'h-[18px] w-[18px]',
-                            itemTrailingIcon:
-                                'shrink-0 w-[18px] h-[18px] text-dimmed',
-                        }"
-                        :search-input="{
-                            icon: 'i-lucide-search',
-                            ui: {
-                                base: 'border-0 border-b-1 rounded-none!',
-                                leadingIcon:
-                                    'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-                            },
-                        }"
-                        v-if="
-                            selectedModel &&
-                            favoriteModels &&
-                            favoriteModels.length > 0
-                        "
-                        v-model="selectedModel as string"
-                        :value-key="'value'"
-                        class="retro-btn h-[32px] min-w-[100px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48"
-                        :disabled="loading"
-                        :items="
-                            favoriteModels.map((m) => ({
-                                label: m.canonical_slug,
-                                value: m.canonical_slug,
-                            }))
-                        "
-                    >
-                    </USelectMenu>
-                </div>
-
-                <!-- Send Button -->
-                <div>
-                    <UButton
-                        @click="handleSend"
-                        :disabled="
-                            loading ||
-                            (!promptText.trim() && uploadedImages.length === 0)
-                        "
-                        :square="true"
-                        size="sm"
-                        color="primary"
-                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
-                        type="button"
-                        aria-label="Send message"
-                    >
-                        <UIcon name="i-lucide:arrow-up" class="w-4 h-4" />
-                    </UButton>
-                </div>
-            </div>
-        </div>
-
-        <!-- Image Thumbnails -->
-        <div
-            v-if="uploadedImages.length > 0"
-            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
-        >
-            <div
-                v-for="(image, index) in uploadedImages"
-                :key="index"
-                class="relative group aspect-square"
-            >
-                <img
-                    :src="image.url"
-                    :alt="'Uploaded Image ' + (index + 1)"
-                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
-                />
-                <button
-                    @click="removeImage(index)"
-                    class="absolute top-1 right-1 bg-black bg-opacity-50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove image"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3 h-3" />
-                </button>
-                <div
-                    class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
-                >
-                    {{ image.name }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Drag and Drop Overlay -->
-        <div
-            v-if="isDragging"
-            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
-        >
-            <div class="text-center">
-                <UIcon
-                    name="i-lucide:upload-cloud"
-                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
-                />
-                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
-                    Drop images here to upload
-                </p>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { ref, nextTick, defineEmits } from 'vue';
-
-const props = defineProps<{ loading?: boolean }>();
-
-const { favoriteModels, getFavoriteModels } = useModelStore();
-
-onMounted(async () => {
-    const fave = await getFavoriteModels();
-    console.log('Favorite models:', fave);
-});
-
-interface UploadedImage {
-    file: File;
-    url: string;
-    name: string;
-}
-
-interface ImageSettings {
-    quality: 'low' | 'medium' | 'high';
-    numResults: number;
-    size: '1024x1024' | '1024x1536' | '1536x1024';
-}
-
-const emit = defineEmits<{
-    (
-        e: 'send',
-        payload: {
-            text: string;
-            images: UploadedImage[];
-            model: string;
-            settings: ImageSettings;
-        }
-    ): void;
-    (e: 'prompt-change', value: string): void;
-    (e: 'image-add', image: UploadedImage): void;
-    (e: 'image-remove', index: number): void;
-    (e: 'model-change', model: string): void;
-    (e: 'settings-change', settings: ImageSettings): void;
-    (e: 'trigger-file-input'): void;
-}>();
-
-const promptText = ref('');
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
-const uploadedImages = ref<UploadedImage[]>([]);
-const isDragging = ref(false);
-const selectedModel = ref<string>('openai/gpt-oss-120b');
-const hiddenFileInput = ref<HTMLInputElement | null>(null);
-const imageSettings = ref<ImageSettings>({
-    quality: 'medium',
-    numResults: 2,
-    size: '1024x1024',
-});
-const showSettingsDropdown = ref(false);
-
-watch(selectedModel, (newModel) => {
-    emit('model-change', newModel);
-});
-
-const autoResize = async () => {
-    await nextTick();
-    if (textareaRef.value) {
-        textareaRef.value.style.height = 'auto';
-        textareaRef.value.style.height =
-            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
-    }
-};
-
-const handlePromptInput = () => {
-    emit('prompt-change', promptText.value);
-    autoResize();
-};
-
-const handlePaste = async (event: ClipboardEvent) => {
-    const clipboardData = event.clipboardData;
-    if (!clipboardData) return;
-    const items = clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
-        if (mime.startsWith('image/')) {
-            event.preventDefault();
-            const file = item.getAsFile();
-            if (!file) continue;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const result = e.target?.result;
-                const url = typeof result === 'string' ? result : '';
-                const image: UploadedImage = {
-                    file: file,
-                    url,
-                    name: file.name || `pasted-image-${Date.now()}.png`,
-                };
-                uploadedImages.value.push(image);
-                emit('image-add', image);
-            };
-            reader.readAsDataURL(file);
-        }
-    }
-};
-
-const triggerFileInput = () => {
-    emit('trigger-file-input');
-    if (!hiddenFileInput.value) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.multiple = true;
-        input.accept = 'image/*';
-        input.style.display = 'none';
-        input.addEventListener('change', (e) => {
-            handleFileChange(e);
-        });
-        document.body.appendChild(input);
-        hiddenFileInput.value = input;
-    }
-    hiddenFileInput.value?.click();
-};
-
-const processFiles = (files: FileList | null) => {
-    if (!files) return;
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file) continue;
-        const mime = file.type || '';
-        if (!mime.startsWith('image/')) continue;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const result = e.target?.result;
-            const url = typeof result === 'string' ? result : '';
-            const image: UploadedImage = {
-                file: file,
-                url,
-                name: file.name,
-            };
-            uploadedImages.value.push(image);
-            emit('image-add', image);
-        };
-        reader.readAsDataURL(file);
-    }
-};
-
-const handleFileChange = (event: Event) => {
-    const target = event.target as HTMLInputElement | null;
-    if (!target || !target.files) return;
-    processFiles(target.files);
-};
-
-const handleDrop = (event: DragEvent) => {
-    isDragging.value = false;
-    processFiles(event.dataTransfer?.files || null);
-};
-
-const onDragOver = (event: DragEvent) => {
-    const items = event.dataTransfer?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
-        if (mime.startsWith('image/')) {
-            isDragging.value = true;
-            return;
-        }
-    }
-};
-
-const onDragLeave = (event: DragEvent) => {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = event.clientX;
-    const y = event.clientY;
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-        isDragging.value = false;
-    }
-};
-
-const removeImage = (index: number) => {
-    uploadedImages.value.splice(index, 1);
-    emit('image-remove', index);
-};
-
-const handleSend = () => {
-    if (props.loading) return;
-    if (promptText.value.trim() || uploadedImages.value.length > 0) {
-        emit('send', {
-            text: promptText.value,
-            images: uploadedImages.value,
-            model: selectedModel.value,
-            settings: imageSettings.value,
-        });
-        promptText.value = '';
-        uploadedImages.value = [];
-        autoResize();
-    }
-};
-</script>
-
-<style scoped>
-/* Custom scrollbar for textarea */
-/* Firefox */
-textarea {
-    scrollbar-width: thin;
-    scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit */
-textarea::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-textarea::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-textarea::-webkit-scrollbar-thumb {
-    background: var(--md-primary);
-    border-radius: 9999px;
-}
-
-textarea::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-
-/* Focus states */
-.group:hover .opacity-0 {
-    opacity: 1;
-}
-
-/* Smooth transitions */
-* {
-    transition-property: color, background-color, border-color, opacity,
-        transform;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-}
-</style>
 ````
 
 ## File: app/components/sidebar/SideBottomNav.vue
@@ -5632,6 +6354,439 @@ Notes:
 }
 ````
 
+## File: app/components/chat/ChatInputDropper.vue
+````vue
+<template>
+    <div
+        @dragover.prevent="onDragOver"
+        @dragleave.prevent="onDragLeave"
+        @drop.prevent="handleDrop"
+        :class="[
+            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            isDragging
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+            loading ? 'opacity-90 pointer-events-auto' : '',
+        ]"
+    >
+        <div class="flex flex-col gap-3.5 m-3.5">
+            <!-- Main Input Area -->
+            <div class="relative">
+                <div
+                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
+                >
+                    <textarea
+                        v-model="promptText"
+                        placeholder="How can I help you today?"
+                        class="w-full h-12 break-words max-w-full resize-none bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 text-sm leading-relaxed"
+                        rows="1"
+                        @input="handlePromptInput"
+                        @paste="handlePaste"
+                        ref="textareaRef"
+                        :disabled="loading"
+                    ></textarea>
+                    <div
+                        v-if="loading"
+                        class="absolute top-1 right-1 flex items-center gap-2"
+                    >
+                        <UIcon
+                            name="i-lucide:loader-2"
+                            class="w-4 h-4 animate-spin opacity-70"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="flex gap-2.5 w-full items-center">
+                <div
+                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
+                >
+                    <!-- Attachment Button -->
+                    <div class="relative shrink-0">
+                        <UButton
+                            @click="triggerFileInput"
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
+                            type="button"
+                            aria-label="Add attachments"
+                            :disabled="loading"
+                        >
+                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
+                        </UButton>
+                    </div>
+
+                    <!-- Settings Button (stub) -->
+                    <div class="relative shrink-0">
+                        <UButton
+                            @click="
+                                showSettingsDropdown = !showSettingsDropdown
+                            "
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
+                            type="button"
+                            aria-label="Settings"
+                            :disabled="loading"
+                        >
+                            <UIcon
+                                name="i-lucide:sliders-horizontal"
+                                class="w-4 h-4"
+                            />
+                        </UButton>
+                    </div>
+                </div>
+
+                <!-- Model Selector (simple) -->
+                <div class="shrink-0">
+                    <USelectMenu
+                        :ui="{
+                            content:
+                                'border-[2px] border-black rounded-[3px] w-[320px]',
+                            input: 'border-0 rounded-none!',
+                            arrow: 'h-[18px] w-[18px]',
+                            itemTrailingIcon:
+                                'shrink-0 w-[18px] h-[18px] text-dimmed',
+                        }"
+                        :search-input="{
+                            icon: 'i-lucide-search',
+                            ui: {
+                                base: 'border-0 border-b-1 rounded-none!',
+                                leadingIcon:
+                                    'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+                            },
+                        }"
+                        v-if="
+                            selectedModel &&
+                            favoriteModels &&
+                            favoriteModels.length > 0
+                        "
+                        v-model="selectedModel as string"
+                        :value-key="'value'"
+                        class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48 min-w-[100px]"
+                        :disabled="loading"
+                        :items="
+                            favoriteModels.map((m) => ({
+                                label: m.canonical_slug,
+                                value: m.canonical_slug,
+                            }))
+                        "
+                    >
+                    </USelectMenu>
+                </div>
+
+                <!-- Send Button -->
+                <div>
+                    <UButton
+                        @click="handleSend"
+                        :disabled="
+                            loading ||
+                            (!promptText.trim() && uploadedImages.length === 0)
+                        "
+                        :square="true"
+                        size="sm"
+                        color="primary"
+                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Send message"
+                    >
+                        <UIcon name="i-lucide:arrow-up" class="w-4 h-4" />
+                    </UButton>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Thumbnails -->
+        <div
+            v-if="uploadedImages.length > 0"
+            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+        >
+            <div
+                v-for="(image, index) in uploadedImages"
+                :key="index"
+                class="relative group aspect-square"
+            >
+                <img
+                    :src="image.url"
+                    :alt="'Uploaded Image ' + (index + 1)"
+                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                />
+                <button
+                    @click="removeImage(index)"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[20px] w-[20px] retro-shadow bg-error border-black border bg-opacity-50 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove image"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+                <div
+                    class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                >
+                    {{ image.name }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Drag and Drop Overlay -->
+        <div
+            v-if="isDragging"
+            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+        >
+            <div class="text-center">
+                <UIcon
+                    name="i-lucide:upload-cloud"
+                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
+                />
+                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                    Drop images here to upload
+                </p>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, nextTick, defineEmits } from 'vue';
+
+const props = defineProps<{ loading?: boolean }>();
+
+const { favoriteModels, getFavoriteModels } = useModelStore();
+
+onMounted(async () => {
+    const fave = await getFavoriteModels();
+    console.log('Favorite models:', fave);
+});
+
+interface UploadedImage {
+    file: File;
+    url: string;
+    name: string;
+}
+
+interface ImageSettings {
+    quality: 'low' | 'medium' | 'high';
+    numResults: number;
+    size: '1024x1024' | '1024x1536' | '1536x1024';
+}
+
+const emit = defineEmits<{
+    (
+        e: 'send',
+        payload: {
+            text: string;
+            images: UploadedImage[];
+            model: string;
+            settings: ImageSettings;
+        }
+    ): void;
+    (e: 'prompt-change', value: string): void;
+    (e: 'image-add', image: UploadedImage): void;
+    (e: 'image-remove', index: number): void;
+    (e: 'model-change', model: string): void;
+    (e: 'settings-change', settings: ImageSettings): void;
+    (e: 'trigger-file-input'): void;
+}>();
+
+const promptText = ref('');
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const uploadedImages = ref<UploadedImage[]>([]);
+const isDragging = ref(false);
+const selectedModel = ref<string>('openai/gpt-oss-120b');
+const hiddenFileInput = ref<HTMLInputElement | null>(null);
+const imageSettings = ref<ImageSettings>({
+    quality: 'medium',
+    numResults: 2,
+    size: '1024x1024',
+});
+const showSettingsDropdown = ref(false);
+
+watch(selectedModel, (newModel) => {
+    emit('model-change', newModel);
+});
+
+const autoResize = async () => {
+    await nextTick();
+    if (textareaRef.value) {
+        textareaRef.value.style.height = 'auto';
+        textareaRef.value.style.height =
+            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
+    }
+};
+
+const handlePromptInput = () => {
+    emit('prompt-change', promptText.value);
+    autoResize();
+};
+
+const handlePaste = async (event: ClipboardEvent) => {
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+    const items = clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (!file) continue;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const result = e.target?.result;
+                const url = typeof result === 'string' ? result : '';
+                const image: UploadedImage = {
+                    file: file,
+                    url,
+                    name: file.name || `pasted-image-${Date.now()}.png`,
+                };
+                uploadedImages.value.push(image);
+                emit('image-add', image);
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+};
+
+const triggerFileInput = () => {
+    emit('trigger-file-input');
+    if (!hiddenFileInput.value) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        input.addEventListener('change', (e) => {
+            handleFileChange(e);
+        });
+        document.body.appendChild(input);
+        hiddenFileInput.value = input;
+    }
+    hiddenFileInput.value?.click();
+};
+
+const processFiles = (files: FileList | null) => {
+    if (!files) return;
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file) continue;
+        const mime = file.type || '';
+        if (!mime.startsWith('image/')) continue;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const result = e.target?.result;
+            const url = typeof result === 'string' ? result : '';
+            const image: UploadedImage = {
+                file: file,
+                url,
+                name: file.name,
+            };
+            uploadedImages.value.push(image);
+            emit('image-add', image);
+        };
+        reader.readAsDataURL(file);
+    }
+};
+
+const handleFileChange = (event: Event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || !target.files) return;
+    processFiles(target.files);
+};
+
+const handleDrop = (event: DragEvent) => {
+    isDragging.value = false;
+    processFiles(event.dataTransfer?.files || null);
+};
+
+const onDragOver = (event: DragEvent) => {
+    const items = event.dataTransfer?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/')) {
+            isDragging.value = true;
+            return;
+        }
+    }
+};
+
+const onDragLeave = (event: DragEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = event.clientX;
+    const y = event.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        isDragging.value = false;
+    }
+};
+
+const removeImage = (index: number) => {
+    uploadedImages.value.splice(index, 1);
+    emit('image-remove', index);
+};
+
+const handleSend = () => {
+    if (props.loading) return;
+    if (promptText.value.trim() || uploadedImages.value.length > 0) {
+        emit('send', {
+            text: promptText.value,
+            images: uploadedImages.value,
+            model: selectedModel.value,
+            settings: imageSettings.value,
+        });
+        promptText.value = '';
+        uploadedImages.value = [];
+        autoResize();
+    }
+};
+</script>
+
+<style scoped>
+/* Custom scrollbar for textarea */
+/* Firefox */
+textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit */
+textarea::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background: var(--md-primary);
+    border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+
+/* Focus states */
+.group:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Smooth transitions */
+* {
+    transition-property: color, background-color, border-color, opacity,
+        transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+</style>
+````
+
 ## File: app/components/sidebar/SideNavContent.vue
 ````vue
 <template>
@@ -6163,9 +7318,37 @@ import { create, db, tx, upsert } from '~/db';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
+// ADD these near your imports
+export type TextPart = { type: 'text'; text: string };
+
+export type ImagePart = {
+    type: 'image';
+    // Base64 data URL (recommended) or raw base64/bytes — data URL is easiest across providers
+    image: string | Uint8Array | Buffer;
+    mediaType?: string; // e.g. 'image/png'
+};
+
+export type FilePart = {
+    type: 'file';
+    data: string | Uint8Array | Buffer; // base64 data URL or bytes
+    mediaType: string; // required for files
+    name?: string;
+};
+
+export type ContentPart = TextPart | ImagePart | FilePart;
+
+// ⬅️ change your ChatMessage to allow either a plain string OR an array of parts
 export interface ChatMessage {
     role: 'user' | 'assistant';
-    content: string;
+    content: string | ContentPart[];
+}
+
+interface SendMessageParams {
+    files?: {
+        type: string;
+        url: string;
+    }[];
+    model?: string;
 }
 
 export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
@@ -6180,13 +7363,23 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         apiKey.value ? createOpenRouter({ apiKey: apiKey.value }) : null
     );
 
-    async function sendMessage(content: string, model = DEFAULT_AI_MODEL) {
+    async function sendMessage(
+        content: string,
+        sendMessagesParams: SendMessageParams = {
+            files: [],
+            model: DEFAULT_AI_MODEL,
+        }
+    ) {
+        console.log('[useChat.sendMessage] invoked', {
+            contentPreview: content.slice(0, 40),
+            contentLength: content.length,
+            paramsKeys: Object.keys(sendMessagesParams || {}),
+        });
         if (!apiKey.value || !openrouter.value) {
             return console.log('No API key set');
         }
 
         if (!threadIdRef.value) {
-            // Pass minimal fields; DB layer (ThreadCreateSchema) fills defaults
             const newThread = await create.thread({
                 title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
                 last_message_at: nowSec(),
@@ -6195,30 +7388,99 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             threadIdRef.value = newThread.id;
         }
 
-        // Allow transforms on outgoing user content
+        let { files, model } = sendMessagesParams;
+        const rawParams: any = sendMessagesParams as any;
+        if ((!files || files.length === 0) && rawParams?.images?.length) {
+            console.warn(
+                '[useChat.sendMessage] images[] provided without files[]. Auto-converting images[] -> files[].',
+                { imageCount: rawParams.images.length }
+            );
+            const inferType = (u: string, provided?: string) => {
+                if (provided && provided.startsWith('image/')) return provided;
+                const m = /^data:([^;]+);/i.exec(u);
+                if (m) return m[1];
+                const lower = (u.split('?')[0] || '').toLowerCase();
+                const ext = lower.substring(lower.lastIndexOf('.') + 1);
+                const map: Record<string, string> = {
+                    jpg: 'image/jpeg',
+                    jpeg: 'image/jpeg',
+                    png: 'image/png',
+                    webp: 'image/webp',
+                    gif: 'image/gif',
+                    svg: 'image/svg+xml',
+                    avif: 'image/avif',
+                    heic: 'image/heic',
+                    heif: 'image/heif',
+                    bmp: 'image/bmp',
+                    tif: 'image/tiff',
+                    tiff: 'image/tiff',
+                    ico: 'image/x-icon',
+                };
+                return map[ext] || 'image/png';
+            };
+            files = rawParams.images.map((img: any) => {
+                const url = typeof img === 'string' ? img : img.url;
+                const provided = typeof img === 'object' ? img.type : undefined;
+                return { type: inferType(url, provided), url } as any;
+            });
+        }
+        if (files?.length) {
+            console.log(
+                '[useChat.sendMessage] files received',
+                files.map((f) => ({
+                    type: f.type,
+                    urlPreview: (f.url || '').slice(0, 50),
+                }))
+            );
+        }
+        if (!model) model = DEFAULT_AI_MODEL;
+
+        // 1) Filter hook for outgoing text
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
             content
         );
-        // Persist user message first (DB fills defaults and index)
+
+        // 2) Persist user message to DB (you can keep storing just the text; attachments optional)
         const userDbMsg = await tx.appendMessage({
             thread_id: threadIdRef.value!,
             role: 'user',
-            data: { content: outgoing },
+            data: { content: outgoing, attachments: files ?? [] },
         });
-        messages.value.push({ role: 'user', content: outgoing });
+
+        // 3) Build the parts array: text part first, then image/file parts
+        const parts: ContentPart[] = [
+            { type: 'text', text: outgoing },
+            ...(files ?? []).map<ContentPart>((f) => {
+                // If you're only sending images, you can treat all as ImagePart.
+                // Use data URLs like `data:image/png;base64,...` in f.url for best compatibility.
+                if ((f.type ?? '').startsWith('image/')) {
+                    return { type: 'image', image: f.url, mediaType: f.type };
+                }
+                // Fallback for non-image files:
+                return { type: 'file', data: f.url, mediaType: f.type };
+            }),
+        ];
+
+        console.log('[useChat.sendMessage] constructed parts', {
+            totalParts: parts.length,
+            types: parts.map((p) => p.type),
+        });
+
+        // 4) Push to UI state with parts (✅ fixes your TS error)
+        messages.value.push({ role: 'user', content: parts });
+
         loading.value = true;
 
         try {
             const startedAt = Date.now();
-            // Let callers change the model or the messages before sending
+
             const modelId = await hooks.applyFilters(
                 'ai.chat.model:filter:select',
                 model
             );
 
-            console.log('Message sending with model:', modelId);
-
+            // Let callers modify messages before sending
             const effectiveMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:input',
                 messages.value
@@ -6243,31 +7505,38 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                     : undefined,
             });
 
+            // 5) Send to AI — OpenRouter vision models accept multiple images as separate parts
             const result = streamText({
                 model: openrouter.value!.chat(modelId),
-                messages: effectiveMessages,
+                messages: effectiveMessages as any, // your parts are already in the right shape
             });
 
-            // Create assistant placeholder in UI
+            // 6) Create assistant placeholder in UI
             const idx =
                 messages.value.push({ role: 'assistant', content: '' }) - 1;
             const current = messages.value[idx]!;
             let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 100; // throttle window
+            const WRITE_INTERVAL_MS = 100;
             let lastPersistAt = 0;
+
             for await (const delta of result.textStream) {
+                if (chunkIndex === 0) {
+                    console.log('[useChat.sendMessage] streaming started');
+                }
                 await hooks.doAction('ai.chat.stream:action:delta', delta, {
                     threadId: threadIdRef.value,
                     assistantId: assistantDbMsg.id,
                     streamId,
                     deltaLength: String(delta ?? '').length,
                     totalLength:
-                        (current.content?.length ?? 0) +
+                        (current.content as string)?.length +
                         String(delta ?? '').length,
                     chunkIndex: chunkIndex++,
                 });
-                current.content = (current.content ?? '') + String(delta ?? '');
-                // Persist incremental content (throttled)
+
+                current.content =
+                    ((current.content as string) ?? '') + String(delta ?? '');
+
                 const now = Date.now();
                 if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
                     const updated = {
@@ -6283,14 +7552,14 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 }
             }
 
-            // Final post-processing of the full assistant text
+            // Final post-processing of full assistant text
             const incoming = await hooks.applyFilters(
                 'ui.chat.message:filter:incoming',
                 current.content,
                 threadIdRef.value
             );
             current.content = incoming;
-            // Finalize assistant message in DB (final upsert ensures last chunk is saved)
+
             const finalized = {
                 ...assistantDbMsg,
                 data: {
@@ -6301,13 +7570,18 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             } as any;
             await upsert.message(finalized);
 
+            console.log('[useChat.sendMessage] stream completed', {
+                totalLength: (incoming as string).length,
+                durationMs: Date.now() - startedAt,
+            });
+
             const endedAt = Date.now();
             await hooks.doAction('ai.chat.send:action:after', {
                 threadId: threadIdRef.value,
                 request: { modelId, userId: userDbMsg.id },
                 response: {
                     assistantId: assistantDbMsg.id,
-                    length: incoming.length,
+                    length: (incoming as string).length,
                 },
                 timings: {
                     startedAt,
@@ -6371,14 +7645,12 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
 
 <script setup lang="ts">
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch } from 'vue';
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    id?: string;
-    stream_id?: string;
-};
+import { shallowRef, computed, watch, ref } from 'vue';
+import { useChat } from '~/composables/useAi';
+import type {
+    ChatMessage as ChatMessageType,
+    ContentPart,
+} from '~/composables/useAi';
 
 const model = ref('openai/gpt-oss-120b');
 
@@ -6389,7 +7661,7 @@ function onModelChange(newModel: string) {
 
 const props = defineProps<{
     threadId?: string;
-    messageHistory?: ChatMessage[];
+    messageHistory?: ChatMessageType[];
 }>();
 
 const emit = defineEmits<{
@@ -6429,13 +7701,104 @@ watch(
     }
 );
 
-// Stable bindings for template consumption
-const messages = computed<ChatMessage[]>(() => chat.value.messages.value);
+// Render messages with content narrowed to string for ChatMessage.vue
+type RenderMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    id?: string;
+    stream_id?: string;
+};
+const messages = computed<RenderMessage[]>(() =>
+    (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
+        let contentStr: string;
+        if (typeof m.content === 'string') contentStr = m.content;
+        else if (Array.isArray(m.content)) {
+            contentStr = (m.content as ContentPart[])
+                .map((p) => {
+                    if (p.type === 'text') return p.text;
+                    if (p.type === 'image')
+                        return `![image](${(p as any).image ?? ''})`;
+                    if (p.type === 'file')
+                        return `**[file:${
+                            (p as any).name ?? (p as any).mediaType ?? 'file'
+                        }]**`;
+                    return '';
+                })
+                .filter(Boolean)
+                .join('\n\n');
+        } else contentStr = String((m as any).content ?? '');
+        return {
+            role: m.role,
+            content: contentStr,
+            id: m.id,
+            stream_id: m.stream_id,
+        } as RenderMessage;
+    })
+);
 const loading = computed(() => chat.value.loading.value);
 
 function onSend(payload: any) {
+    console.log('[ChatContainer.onSend] raw payload', payload);
     if (loading.value) return; // prevent duplicate sends while streaming
-    chat.value.sendMessage(payload.text, model.value || undefined);
+
+    let reqParams: any = {
+        files: [],
+        model: model.value,
+    };
+
+    if (payload.images && payload.images.length > 0) {
+        const inferType = (url: string, provided?: string) => {
+            if (provided && provided.startsWith('image/')) return provided;
+            const m = /^data:([^;]+);/i.exec(url);
+            if (m) return m[1];
+            const lower = (url.split('?')[0] || '').toLowerCase();
+            const ext = lower.substring(lower.lastIndexOf('.') + 1);
+            const map: Record<string, string> = {
+                jpg: 'image/jpeg',
+                jpeg: 'image/jpeg',
+                png: 'image/png',
+                webp: 'image/webp',
+                gif: 'image/gif',
+                svg: 'image/svg+xml',
+                avif: 'image/avif',
+                heic: 'image/heic',
+                heif: 'image/heif',
+                bmp: 'image/bmp',
+                tif: 'image/tiff',
+                tiff: 'image/tiff',
+                ico: 'image/x-icon',
+            };
+            return map[ext] || 'image/png';
+        };
+        reqParams.files = payload.images.map((p: any, i: number) => {
+            const url: string = p.url;
+            const preview = (url || '').slice(0, 60);
+            const mime = inferType(url, p.type);
+            console.log('[ChatContainer.onSend] image found', {
+                index: i,
+                preview,
+                mime,
+            });
+            return { url, type: mime };
+        });
+    }
+
+    console.log('[ChatContainer.onSend] transformed reqParams', reqParams);
+
+    chat.value
+        .sendMessage(payload.text, reqParams as any)
+        .then(() => {
+            console.log('[ChatContainer.onSend] sendMessage resolved', {
+                messageCount: chat.value.messages.value.length,
+                lastMessage:
+                    chat.value.messages.value[
+                        chat.value.messages.value.length - 1
+                    ],
+            });
+        })
+        .catch((e: any) => {
+            console.error('[ChatContainer.onSend] sendMessage error', e);
+        });
 }
 </script>
 
