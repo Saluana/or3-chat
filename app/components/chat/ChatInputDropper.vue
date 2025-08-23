@@ -87,9 +87,19 @@
                     <USelectMenu
                         :ui="{
                             content: 'border-[2px] border-black rounded-[3px]',
-                            input: 'border-2 border-black rounded-none!',
+                            input: 'border-0 rounded-none!',
+                            arrow: 'h-[18px] w-[18px]',
+                            itemTrailingIcon:
+                                'shrink-0 w-[18px] h-[18px] text-dimmed',
                         }"
-                        arrow
+                        :search-input="{
+                            icon: 'i-lucide-search',
+                            ui: {
+                                base: 'border-0 border-b-1 rounded-none!',
+                                leadingIcon:
+                                    'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+                            },
+                        }"
                         v-if="
                             selectedModel &&
                             favoriteModels &&
