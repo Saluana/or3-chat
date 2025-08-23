@@ -22,6 +22,10 @@ export const ThreadSchema = z.object({
     updated_at: z.number().int(),
     last_message_at: z.number().int().nullable().optional(),
     parent_thread_id: z.string().nullable().optional(),
+    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
+    anchor_message_id: z.string().nullable().optional(),
+    anchor_index: z.number().int().nullable().optional(),
+    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
     status: z.string().default('ready'),
     deleted: z.boolean().default(false),
     pinned: z.boolean().default(false),

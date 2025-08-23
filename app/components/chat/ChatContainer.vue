@@ -16,6 +16,7 @@
                         `${index}-${message.role}`
                     "
                     :message="message"
+                    :thread-id="props.threadId"
                     @retry="onRetry"
                 />
             </div>

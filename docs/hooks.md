@@ -187,6 +187,7 @@ The app/db modules are instrumented with hooks at important lifecycle points. Yo
 
 Entities covered: attachments, kv, projects, threads, messages.
 Now also: file storage (files: meta + blobs) and message file hash validation.
+New (branching): fork option filtering & branching cache invalidation.
 
 Common patterns:
 
@@ -208,9 +209,113 @@ Common patterns:
     -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
 -   Advanced operations
     -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
-    -   threads: `db.threads.fork:action:before|after`
+        -   threads: `db.threads.fork:action:before|after`, `db.threads.fork:filter:options` (modify branch creation options before execution)
     -   files: `db.files.create:filter:input`, `db.files.create:action:before|after`, `db.files.refchange:action:after`, `db.files.delete:action:soft:before|after`
     -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
+        -   branching cache: (internal) cache invalidated on `db.threads.create:action:after`, `db.threads.upsert:action:after`, `db.threads.fork:action:after`, and thread delete actions.
+
+### Branching Hooks
+
+Branching adds a light-weight fork mechanism with two additional capabilities:
+
+-   `db.threads.fork:filter:options` — Filter incoming branch creation options (payload BranchOptions). You can change mode (light/full), override title, or veto by throwing.
+-   Existing `db.threads.fork:action:before|after` — Now receive an extended payload (before) `{ source, fork, anchorId, mode }` when branching module supplies it.
+
+Example: force all forks to be light unless user explicitly sets flag.
+
+```ts
+useHookEffect(
+    'db.threads.fork:filter:options',
+    (opts) => ({
+        ...opts,
+        mode: opts.mode === 'full' && !opts.allowFull ? 'light' : opts.mode,
+    }),
+    { kind: 'filter', priority: 8 }
+);
+```
+
+Cache invalidation for light fork anchor metadata is automatic via registered listeners—no action needed. If you manually mutate thread titles bypassing provided helpers, emit a soft upsert so hooks fire.
+
+#### Context Assembly Hooks (Light Forks)
+
+Light fork threads use additional context assembly logic:
+
+-   `ai.context.branch:filter:messages` — (filter) Provide a fully assembled messages array for model input. Registered via `registerBranchContextFilter()`; returns a replacement array when the active thread is a light fork. You can chain on this to inject or prune system messages.
+-   `branch.context.assembled:action:after` — (action) Fired after context assembly completes with payload `{ threadId, light, ancestorCount, localCount, finalCount, tokens, maxTokens }` for performance/analytics.
+
+Register the default filter (done once, e.g. in a client plugin):
+
+```ts
+// plugins/branch-context.client.ts
+import { registerBranchContextFilter } from '~/app/db/branching';
+export default defineNuxtPlugin(() => {
+    registerBranchContextFilter();
+});
+```
+
+Example: prepend a system primer when branching context is used:
+
+```ts
+useHookEffect(
+    'ai.context.branch:filter:messages',
+    async (msgs, threadId) => {
+        if (!Array.isArray(msgs) || !threadId) return msgs;
+        return [
+            {
+                id: 'sys_' + threadId,
+                role: 'system',
+                index: 0,
+                data: {
+                    content:
+                        'You are evaluating an alternate conversation path.',
+                },
+            },
+            ...msgs,
+        ];
+    },
+    { kind: 'filter', priority: 20 }
+);
+```
+
+#### Retry-As-Branch UI Hook
+
+When a user triggers a "Retry as Branch" action (Task 5), the branching module emits a UI-level action so the interface can react (navigate, toast, analytics) without tightly coupling DB logic to presentation:
+
+-   `ui.thread.retryAsBranch:action:after` — Fired after a branch is created (or an existing duplicate light fork is reused) via `retryAsBranch(assistantMessageId, mode)`. Payload shape:
+
+```ts
+{
+    sourceThreadId: string; // original thread where retry occurred
+    assistantMessageId: string; // the assistant message being retried
+    newThreadId: string; // id of the created or reused fork
+    mode: 'full' | 'light'; // branch mode requested
+    duplicate: boolean; // true if an existing light fork was reused
+}
+```
+
+Typical usage in a client plugin or component to perform navigation + toast (pseudo implementation; adapt to your router + UI libs):
+
+```ts
+import { useHookEffect } from '~/app/composables/useHookEffect';
+
+useHookEffect(
+    'ui.thread.retryAsBranch:action:after',
+    async (_ctx, { newThreadId, duplicate, mode }) => {
+        // Navigate to the new branch thread view
+        await navigateTo({ name: 'chat', query: { thread: newThreadId } });
+        // Show a retro-styled toast (replace with actual toast util)
+        showToast(
+            duplicate
+                ? 'Reused existing branch'
+                : mode === 'light'
+                ? 'Created light branch'
+                : 'Created full branch'
+        );
+    }
+);
+```
+
+You can also attach analytics or telemetry here without touching the branching logic.
 
 ### Examples
 

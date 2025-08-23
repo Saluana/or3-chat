@@ -110,6 +110,7 @@
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Branch">
                     <UButton
+                        @click="onBranch"
                         icon="pixelarticons:git-branch"
                         color="info"
                         size="sm"
@@ -146,8 +147,11 @@ import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
 // Local UI message expects content to be a string (rendered markdown/html)
 type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
 
-const props = defineProps<{ message: UIMessage }>();
-const emit = defineEmits<{ (e: 'retry', id: string): void }>();
+const props = defineProps<{ message: UIMessage; threadId?: string }>();
+const emit = defineEmits<{
+    (e: 'retry', id: string): void;
+    (e: 'branch', id: string): void;
+}>();
 
 const outerClass = computed(() => ({
     'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end pb-5':
@@ -215,6 +219,51 @@ function onRetry() {
     const id = (props.message as any).id;
     if (!id) return;
     emit('retry', id);
+}
+
+import { forkThread, retryBranch } from '~/db/branching';
+
+// Branch popover state
+const branchMode = ref<'reference' | 'copy'>('copy');
+const branchModes = [
+    { label: 'Reference', value: 'reference' },
+    { label: 'Copy', value: 'copy' },
+];
+const branchTitle = ref('');
+const branching = ref(false);
+
+async function onBranch() {
+    if (branching.value) return;
+    branching.value = true;
+    const messageId = (props.message as any).id;
+    if (!messageId) return;
+    try {
+        let res: any;
+        // For assistant messages we now allow direct anchoring (captures assistant content in branch).
+        // If "retry" semantics desired, a separate Retry action still uses retryBranch.
+        res = await forkThread({
+            sourceThreadId: props.threadId || '',
+            anchorMessageId: messageId,
+            mode: branchMode.value,
+            titleOverride: branchTitle.value || undefined,
+        });
+        emit('branch', res.thread.id);
+        useToast().add({
+            title: 'Branched',
+            description: `New branch: ${res.thread.title}`,
+            color: 'primary',
+            duration: 2200,
+        });
+    } catch (e: any) {
+        useToast().add({
+            title: 'Branch failed',
+            description: e?.message || 'Error creating branch',
+            color: 'error',
+            duration: 3000,
+        });
+    } finally {
+        branching.value = false;
+    }
 }
 </script>
 

@@ -7,33 +7,33 @@ name: Conversation Branching Implementation Tasks
 
 ## 1. Branch Core Module
 
--   [ ] 1.1 Create `app/db/branching.ts` exporting `createBranch`, `retryAsBranch`, `getAnchorMetaFast`, `parseAnchorMeta`. (Requirements: 1,2,5,7,10,11,13,14)
--   [ ] 1.2 Implement fork option validation + hook `db.threads.fork:filter:options`. (Requirements: 14)
--   [ ] 1.3 Add duplicate empty fork detection (anchor + parent + mode). (Requirements: 5)
--   [ ] 1.4 Add performance marks around branch creation. (Requirements: 9,16,17)
+-   [x] 1.1 Create `app/db/branching.ts` exporting `createBranch`, `retryAsBranch`, `getAnchorMetaFast`, `parseAnchorMeta`. (Requirements: 1,2,5,7,10,11,13,14)
+-   [x] 1.2 Implement fork option validation + hook `db.threads.fork:filter:options` (hook point stubbed via applyFilters usage). (Requirements: 14)
+-   [x] 1.3 Add duplicate empty fork detection (anchor + parent + mode). (Requirements: 5)
+-   [x] 1.4 Add performance marks around branch creation. (Requirements: 9,16,17)
 
 ## 2. Light Fork Metadata
 
--   [ ] 2.1 Implement title prefix encoding & parsing utilities. (Requirements: 11)
--   [ ] 2.2 Caching layer Map for anchor meta retrieval. (Requirements: 11,17)
--   [ ] 2.3 Invalidation logic on thread title update. (Requirements: 11)
+-   [x] 2.1 Implement title prefix encoding & parsing utilities. (Requirements: 11)
+-   [x] 2.2 Caching layer Map for anchor meta retrieval. (Requirements: 11,17)
+-   [x] 2.3 Invalidation logic on thread title update (exported `invalidateAnchorCache`; fork creation triggers). (Requirements: 11)
 
 ## 3. Full Copy Fork Logic
 
--   [ ] 3.1 Query ancestor messages <= anchor.index sorted. (Requirements: 1)
--   [ ] 3.2 Copy with new ids & same indexes inside transaction. (Requirements: 1,10,13)
--   [ ] 3.3 Normalize indexes if collision (call `normalizeThreadIndexes`). (Requirements: 10)
+-   [x] 3.1 Query ancestor messages <= anchor.index sorted. (Requirements: 1)
+-   [x] 3.2 Copy with new ids & same indexes inside transaction. (Requirements: 1,10,13)
+-   [x] 3.3 Normalize indexes if collision (call `normalizeThreadIndexes`). (Requirements: 10)
 
 ## 4. Light Fork Context Assembly
 
--   [ ] 4.1 Implement `assembleContext(threadId)` producing ordered messages array for AI. (Requirements: 2,6)
--   [ ] 4.2 Token budget heuristic + truncation earliest-first. (Requirements: 6)
--   [ ] 4.3 Hook integration `ai.context.branch:filter:messages`. (Requirements: 6,14)
+-   [x] 4.1 Implement `assembleContext(threadId)` producing ordered messages array for AI. (Requirements: 2,6)
+-   [x] 4.2 Token budget heuristic + truncation earliest-first. (Requirements: 6)
+-   [x] 4.3 Hook integration `ai.context.branch:filter:messages`. (Requirements: 6,14)
 
 ## 5. Retry-As-Branch
 
--   [ ] 5.1 Implement `retryAsBranch(assistantMessageId, mode='full'|'light')`. (Requirements: 7)
--   [ ] 5.2 Delete nothing in source; route resend through new fork. (Requirements: 7)
+-   [x] 5.1 Implement `retryAsBranch(assistantMessageId, mode='full'|'light')`. (Requirements: 7)
+-   [x] 5.2 Delete nothing in source; route resend through new fork (returns new thread for navigation). (Requirements: 7)
 -   [ ] 5.3 UI toast success + navigation to new fork. (Requirements: 7,8)
 
 ## 6. UI: Message Actions
