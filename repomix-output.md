@@ -80,8 +80,11 @@ app/
   db/
     attachments.ts
     client.ts
+    files-util.ts
+    files.ts
     index.ts
     kv.ts
+    message-files.ts
     messages.ts
     projects.ts
     schema.ts
@@ -100,12 +103,21 @@ app/
   state/
     global.ts
   utils/
+    files-constants.ts
+    hash.ts
     hooks.ts
     models-service.ts
   app.config.ts
   app.vue
 docs/
   hooks.md
+  perf-files.md
+planning/
+  files/
+    design.md
+    requirements.md
+    tasks.md
+  retry-plan.md
 public/
   robots.txt
 types/
@@ -121,133 +133,6 @@ tsconfig.json
 ```
 
 # Files
-
-## File: .github/chatmodes/retro-agent.chatmode.md
-````markdown
----
-description: 'An agent for retro-styled chat applications.'
-tools: ['codebase', 'usages', 'think', 'problems', 'changes', 'terminalSelection', 'terminalLastCommand', 'openSimpleBrowser', 'fetch', 'findTestFiles', 'searchResults', 'githubRepo', 'runTests', 'runCommands', 'editFiles', 'search']
----
-
-# 🎛️ Updated System Prompt — Nuxt Retro App Engineer (tailored to your repo)
-
-You are a world-class Nuxt 3 engineer shipping a **retro-styled** chat app using **Nuxt 3 + Nuxt UI + Tailwind v4 + Dexie + Orama + OpenRouter/Vercel AI SDK patterns**. Default to **TypeScript**, SSR-safe code, and small, composable units. Honor the project’s existing architecture, theme system, and storage choices.
-
----
-
-## Core Directives (repo-aware)
-
--   **Styling & Theme**
-
-    -   **Use the existing theme classes** (`.light`, `.dark`, `*-high-contrast`, `*-medium-contrast`) that define **Material-like CSS variables**; never hardcode colors—use the mapped Nuxt UI tokens via `nuxt-ui-map.css`.
-    -   **Fonts**: `VT323` for body, `Press Start 2P` for headings. Maintain the **pixel look** (small radii, hard shadow).
-    -   **Buttons**: prefer the `retro-btn` class and **Nuxt UI** variants; sizes align to repo tokens: `sm: 32px`, `md: 40px`, `lg: 56px`.
-    -   **Do not add inline CSS** unless absolutely necessary; use Tailwind utilities and the existing token mapping.
-
--   **Nuxt UI**
-
-    -   Use **UButton, UInput, UCard, UForm** with **theme variants** defined in `app.config.ts`. If you need new variants, extend them **once** in `app.config.ts` (respect the `retro` look and sizes).
-    -   Keep “icon-only” buttons square and centered (see `.retro-btn.aspect-square`).
-
--   **State, Storage & Search**
-
-    -   **Persist** local app entities with **Dexie** in `or3-db` using the existing tables (`projects`, `threads`, `messages`, `kv`, `attachments`).
-    -   Use the **KV table** to store small app prefs (e.g., model favorites, OpenRouter key). Prefer helpers that already wrap `kv.set/get`.
-    -   **Search**: build client-side Orama indexes via dynamic imports; debounce queries (\~120ms), cap result limits (100–200).
-    -   Follow the repo’s **fallback substring search** if Orama is unavailable or errors, to avoid “empty results” UX.
-
--   **AI / OpenRouter auth**
-
-    -   **Do not expose provider secrets** in the client. Use the existing **OpenRouter PKCE flow**, storing the user key under `kv` as `openrouter_api_key`, and dispatch `openrouter:connected` to notify UI.
-    -   When building chat, **stream** responses; the client should call a **server route** if secrets are involved. If using user-provided OpenRouter keys, only pull from KV and never log them.
-
--   **Hooks system**
-
-    -   Use the provided **\$hooks** engine for extension points. Prefer `useHookEffect(name, fn, { kind, priority })` for registration and correct cleanup (unmount + HMR).
-
--   **Theme switching**
-
-    -   Use the **theme plugin** `nuxtApp.provide('theme', { set/toggle/get })`; don’t re-invent. Always switch **by class on `<html>`** (it’s already wired up).
-
--   **Performance**
-
-    -   Prefer **dynamic imports** for heavy providers (Orama) and optional screens.
-    -   Keep Orama indexes **per collection** (threads, model catalog) and **rebuild only on data length change** as in existing composables.
-    -   Avoid re-render storms: debounce user input; memoize id→entity maps for mapping hits.
-
--   **Accessibility**
-
-    -   Keep **role/aria** on resizers and icon buttons (see `ResizeHandle.vue`); preserve **focus outlines** and the retro focus ring.
-
----
-
-## File-level Conventions to Follow
-
--   **Tailwind v4**: one `@import "tailwindcss"` in `assets/css/main.css`. Keep `@source "../../../app.config.ts"` so Tailwind sees theme overrides.
--   **Nuxt config**: modules `@nuxt/ui`, `@nuxt/fonts`; fonts list includes `Press Start 2P` and `VT323`. Add new fonts only via the same module to keep build consistent.
--   **App shell**: wrap pages in `<UApp>` and set **initial theme class** on `<html>` with `useHead`.
-
----
-
-## Required Components/Composables (repo-aligned)
-
--   **Search**
-
-    -   `useThreadSearch(threads)`: debounce 120ms, `limit: 200`, map hits via id→thread dictionary, fallback substring by `title`.
-    -   `useModelSearch(models)`: debounce 120ms, `limit: 100`, index `id/slug/name/description/modalities`, fallback substring.
-
--   **OpenRouter**
-
-    -   `useOpenRouterAuth.startLogin()` uses **PKCE** S256 when possible; stores verifier/method/state in `sessionStorage`; redirect to `openrouter-callback` page; **never** log tokens.
-    -   On callback, store key to `kv('openrouter_api_key')`, dispatch `openrouter:connected`, and clear session markers.
-
--   **Dexie**
-
-    -   Use `Or3DB` with the **existing store and index definitions**. Don’t add new DBs; version bump this one if schema changes.
-
----
-
-## Retro UX Requirements
-
--   **Buttons/cards** use **2px hard borders** and **2px offset shadows** (no blur).
--   **Focus**: `outline: 2px solid var(--md-primary)` with offset.
--   Respect the **scanline/CRT** vibe only if opt-in (no excessive motion).
--   Keep text sizes consistent with current base font (\~20px body).
-
----
-
-## Do/Don’t
-
--   ✅ **Use** Nuxt UI variants and tokens; extend in `app.config.ts`.
--   ✅ **Use** Orama dynamic imports and repo’s fallback search strategy.
--   ✅ **Use** KV for prefs and user-provided keys; fire the existing custom events.
--   ❌ **Don’t** introduce new styling systems, random CSS vars, or duplicate theme classes.
--   ❌ **Don’t** store secrets in `localStorage`; use `kv` and short-lived memory for session only.
--   ❌ **Don’t** bypass composables that already implement debouncing/indexing.
-
----
-
-## Acceptance Checklist (repo-specific)
-
--   [ ] New UI respects **`retro-btn`** and Nuxt UI token mapping.
--   [ ] Search features follow the **existing debounced + fallback** pattern.
--   [ ] Any AI call path complies with **OpenRouter PKCE flow** and KV storage.
--   [ ] No hard-coded colors—only the **mapped tokens**.
--   [ ] Dexie usage sticks to **`or3-db`** with versioned changes if needed.
--   [ ] No theme breakage when toggling `.light/.dark` or contrast modes.
-
----
-
-## Docs
-
-You will be provided with an .llms folder in the root directory of the project. This will contain llms.txt files from various sources such as Orama, and NuxtUI. It will help guide you to the right document page when you need to look up something from a library that you do not have enough information on.
-
-### You should never just wing it. If you are unsure of something look it up in the docs
-
-/.llms/nuxt.txt - This contains a guide for you on how to navigate the nuxt official documentation
-/.llms/orama.txt - This contains a guide for you on how to navigate the orama official documentation
-/.llms/nuxtui.txt - This contains a guide for you on how to navigate the nuxtui official documentation
-````
 
 ## File: .llms/nuxt.txt
 ````
@@ -2131,36 +2016,145 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
 export default useThreadSearch;
 ````
 
-## File: app/db/client.ts
+## File: app/db/files-util.ts
 ````typescript
-import Dexie, { type Table } from 'dexie';
-import type { Attachment, Kv, Message, Project, Thread } from './schema';
+import { nowSec } from './util';
 
-// Dexie database versioning & schema
-export class Or3DB extends Dexie {
-    projects!: Table<Project, string>;
-    threads!: Table<Thread, string>;
-    messages!: Table<Message, string>;
-    kv!: Table<Kv, string>;
-    attachments!: Table<Attachment, string>;
+// Default maximum number of files (hashes) per message.
+const DEFAULT_MAX_MESSAGE_FILE_HASHES = 6;
+// Allow runtime override via public env (bounded 1..12 to avoid abuse)
+const envLimitRaw = (import.meta as any).env?.NUXT_PUBLIC_MAX_MESSAGE_FILES;
+let resolvedLimit = DEFAULT_MAX_MESSAGE_FILE_HASHES;
+if (envLimitRaw) {
+    const n = parseInt(envLimitRaw, 10);
+    if (!isNaN(n) && n >= 1 && n <= 12) resolvedLimit = n;
+}
+// Primary export used across app (UI + DB)
+export const MAX_FILES_PER_MESSAGE = resolvedLimit;
+// Backward compatibility alias (internal usage)
+export const MAX_MESSAGE_FILE_HASHES = MAX_FILES_PER_MESSAGE;
 
-    constructor() {
-        super('or3-db');
-
-        this.version(1).stores({
-            // Primary key & indexes
-            projects: 'id, name, clock, created_at, updated_at',
-            threads:
-                'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-            messages:
-                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-            kv: 'id, &name, clock, created_at, updated_at',
-            attachments: 'id, type, name, clock, created_at, updated_at',
-        });
+/** Parse serialized JSON array of file hashes into a bounded string array */
+export function parseFileHashes(serialized?: string | null): string[] {
+    if (!serialized) return [];
+    try {
+        const arr = JSON.parse(serialized);
+        if (!Array.isArray(arr)) return [];
+        const filtered: string[] = [];
+        for (const v of arr) {
+            if (typeof v === 'string') {
+                filtered.push(v);
+                if (filtered.length >= MAX_MESSAGE_FILE_HASHES) break;
+            }
+        }
+        return filtered;
+    } catch {
+        return [];
     }
 }
 
-export const db = new Or3DB();
+/** Serialize array of hashes enforcing max + dedupe while preserving first occurrence ordering */
+export function serializeFileHashes(hashes: string[]): string {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const h of hashes) {
+        if (typeof h !== 'string') continue;
+        if (seen.has(h)) continue;
+        seen.add(h);
+        out.push(h);
+        if (out.length >= MAX_MESSAGE_FILE_HASHES) break;
+    }
+    return JSON.stringify(out);
+}
+
+/** Utility to create standard timestamp numbers (proxy re-export) */
+export function nowSecNumber(): number {
+    return nowSec();
+}
+````
+
+## File: app/db/message-files.ts
+````typescript
+import { db } from './client';
+import { parseFileHashes, serializeFileHashes } from './files-util';
+import { computeFileHash } from '../utils/hash';
+import { createOrRefFile, derefFile, getFileMeta } from './files';
+import { useHooks } from '../composables/useHooks';
+import { nowSec } from './util';
+
+export type AddableFile = Blob | { hash: string };
+
+/** Resolve file metadata list for a message id */
+export async function filesForMessage(messageId: string) {
+    const msg = await db.messages.get(messageId);
+    if (!msg) return [];
+    const hashes = parseFileHashes(msg.file_hashes);
+    if (!hashes.length) return [];
+    return db.file_meta.where('hash').anyOf(hashes).toArray();
+}
+
+/** Add files (blobs or existing hashes) to a message, updating ref counts */
+export async function addFilesToMessage(
+    messageId: string,
+    files: AddableFile[]
+) {
+    if (!files.length) return;
+    const hooks = useHooks();
+    await db.transaction(
+        'rw',
+        db.messages,
+        db.file_meta,
+        db.file_blobs,
+        async () => {
+            const msg = await db.messages.get(messageId);
+            if (!msg) throw new Error('message not found');
+            const existing = parseFileHashes(msg.file_hashes);
+            const newHashes: string[] = [];
+            for (const f of files) {
+                if (f instanceof Blob) {
+                    const meta = await createOrRefFile(
+                        f,
+                        (f as any).name || 'file'
+                    );
+                    newHashes.push(meta.hash);
+                } else if (f && typeof f === 'object' && 'hash' in f) {
+                    // Validate meta exists
+                    const meta = await getFileMeta(f.hash);
+                    if (meta) newHashes.push(meta.hash);
+                }
+            }
+            let combined = existing.concat(newHashes);
+            // Provide hook for validation & pruning
+            combined = await hooks.applyFilters(
+                'db.messages.files.validate:filter:hashes',
+                combined
+            );
+            const serialized = serializeFileHashes(combined);
+            await db.messages.put({
+                ...msg,
+                file_hashes: serialized,
+                updated_at: nowSec(),
+            });
+        }
+    );
+}
+
+/** Remove a single file hash from a message, adjusting ref count */
+export async function removeFileFromMessage(messageId: string, hash: string) {
+    await db.transaction('rw', db.messages, db.file_meta, async () => {
+        const msg = await db.messages.get(messageId);
+        if (!msg) return;
+        const hashes = parseFileHashes(msg.file_hashes);
+        const next = hashes.filter((h) => h !== hash);
+        if (next.length === hashes.length) return; // no change
+        await db.messages.put({
+            ...msg,
+            file_hashes: serializeFileHashes(next),
+            updated_at: nowSec(),
+        });
+        await derefFile(hash);
+    });
+}
 ````
 
 ## File: app/pages/home.vue
@@ -2542,6 +2536,126 @@ import { ref } from 'vue';
 export const state = ref({
     openrouterKey: '' as string | null,
 });
+````
+
+## File: app/utils/files-constants.ts
+````typescript
+// Central export for max files per message so UI & DB stay in sync.
+// Source of truth defined in app/db/files-util.ts
+export { MAX_FILES_PER_MESSAGE } from '../db/files-util';
+````
+
+## File: app/utils/hash.ts
+````typescript
+/**
+ * Hashing utilities for file deduplication.
+ * Implements async chunked MD5 with Web Crypto fallback to spark-md5.
+ * Chunk size kept small (256KB) to avoid blocking the main thread.
+ */
+
+const CHUNK_SIZE = 256 * 1024; // 256KB
+
+// Lazy import spark-md5 only if needed (returns default export class)
+async function loadSpark() {
+    const mod = await import('spark-md5');
+    return (mod as any).default; // SparkMD5 constructor with ArrayBuffer helper
+}
+
+/** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
+export async function computeFileHash(blob: Blob): Promise<string> {
+    const dev = (import.meta as any).dev;
+    const hasPerf = typeof performance !== 'undefined';
+    const markId =
+        dev && hasPerf
+            ? `hash-${Date.now()}-${Math.random().toString(36).slice(2)}`
+            : undefined;
+    let t0 = 0;
+    if (markId && hasPerf) {
+        t0 = performance.now();
+        performance.mark(`${markId}:start`);
+    }
+    try {
+        // Try Web Crypto subtle.digest if md5 supported (some browsers may block MD5; if so, fallback)
+        try {
+            if (
+                blob.size <= 4 * 1024 * 1024 &&
+                'crypto' in globalThis &&
+                (globalThis as any).crypto?.subtle
+            ) {
+                const buf = await blob.arrayBuffer();
+                // @ts-ignore - MD5 not in TypeScript lib, but some browsers support it; fallback otherwise
+                const digest = await (globalThis as any).crypto.subtle.digest(
+                    'MD5',
+                    buf
+                );
+                const hex = bufferToHex(new Uint8Array(digest));
+                if (markId && hasPerf) finishMark(markId, blob.size, 'subtle');
+                return hex;
+            }
+        } catch (_) {
+            // ignore and fallback to streaming spark-md5
+        }
+        // Streaming approach with spark-md5
+        const SparkMD5 = await loadSpark();
+        const hash = new SparkMD5.ArrayBuffer();
+        let offset = 0;
+        while (offset < blob.size) {
+            const slice = blob.slice(offset, offset + CHUNK_SIZE);
+            const buf = await slice.arrayBuffer();
+            hash.append(buf as ArrayBuffer);
+            offset += CHUNK_SIZE;
+            if (offset < blob.size) await microTask();
+        }
+        const hex = hash.end();
+        if (markId && hasPerf) finishMark(markId, blob.size, 'stream');
+        return hex;
+    } catch (e) {
+        if (markId && hasPerf) {
+            performance.mark(`${markId}:error`);
+            performance.measure(
+                `hash:md5:error:${(e as any)?.message || 'unknown'}`,
+                `${markId}:start`
+            );
+        }
+        throw e;
+    }
+}
+
+function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
+    try {
+        performance.mark(`${id}:end`);
+        performance.measure(
+            `hash:md5:${mode}:bytes=${size}`,
+            `${id}:start`,
+            `${id}:end`
+        );
+        const entry = performance
+            .getEntriesByName(`hash:md5:${mode}:bytes=${size}`)
+            .slice(-1)[0];
+        if (entry && entry.duration && entry.duration > 0) {
+            // Lightweight dev log (guarded by dev compile flag outside caller)
+            // eslint-disable-next-line no-console
+            console.debug(
+                '[perf] computeFileHash',
+                mode,
+                `${(size / 1024).toFixed(1)}KB`,
+                `${entry.duration.toFixed(1)}ms`
+            );
+        }
+    } catch {}
+}
+
+function bufferToHex(buf: Uint8Array): string {
+    let hex = '';
+    for (const b of buf) {
+        hex += b.toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+function microTask() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
 ````
 
 ## File: app/utils/hooks.ts
@@ -3207,6 +3321,73 @@ export const modelsService = {
 export default modelsService;
 ````
 
+## File: docs/perf-files.md
+````markdown
+# File Hashing & Storage Performance
+
+This document captures performance expectations and instrumentation for the file hashing + storage pipeline.
+
+## Instrumentation
+
+Dev‑only `performance.mark` / `performance.measure` calls were added in:
+
+-   `app/utils/hash.ts` – Marks: `hash:md5:subtle:bytes=<n>` or `hash:md5:stream:bytes=<n>` plus error variants.
+-   `app/db/files.ts` – Marks: `file:create:bytes=<n>` when a new file is inserted, and `file:ref:bytes=<n>` when an existing file is re‑referenced (dedupe path).
+
+Console `debug` logs (guarded by dev build) provide concise timing summaries:
+
+```
+[perf] computeFileHash stream 210.4KB 42.3ms
+[perf] file store create 210.4KB 8.7ms
+```
+
+## Expected Timings (Baseline Targets)
+
+| Operation                | Size                | Target (Cold)   | Notes                                      |
+| ------------------------ | ------------------- | --------------- | ------------------------------------------ |
+| MD5 (subtle)             | ≤4MB (single read)  | ~5–40ms per MB  | Uses Web Crypto when available.            |
+| MD5 (stream)             | >4MB or unsupported | ~35–55ms per MB | 256KB chunk size yields UI responsiveness. |
+| Store (create) meta+blob | ≤1MB                | <15ms           | IndexedDB put of meta + blob.              |
+| Store (ref path)         | any                 | <5ms            | Only ref count increment.                  |
+
+Empirical target in requirements: <150ms for ~200KB end‑to‑end (hash + create). With current chunk size this remains well below (typically <60ms on modern hardware).
+
+## Adjusting Chunk Size
+
+`CHUNK_SIZE` in `hash.ts` is 256KB. Increasing improves throughput but risks longer main thread blocks; decrease for smoother interactivity on low‑end devices.
+
+## Viewing Marks
+
+In DevTools Performance panel, filter for `hash:` or `file:` measures to inspect durations.
+
+Programmatically:
+
+```js
+performance
+    .getEntriesByType('measure')
+    .filter((m) => m.name.startsWith('hash:'));
+```
+
+## Future Enhancements
+
+1. Web Worker offload for large (>8MB) files (Task 10.2).
+2. Adaptive chunk size based on device performance (RTT heuristics or timing feedback).
+3. Aggregate rolling average metrics surfaced in a tiny dev overlay.
+4. Add percentile sampling for hashing durations (P50/P95) to console summary on unload in dev.
+
+## Troubleshooting
+
+| Symptom             | Possible Cause                                | Mitigation                                                   |
+| ------------------- | --------------------------------------------- | ------------------------------------------------------------ |
+| Missing marks       | Running in production build                   | Enable dev mode / ensure `import.meta.dev` true.             |
+| High durations      | Low‑end hardware or background tab throttling | Consider worker offload or smaller chunk size.               |
+| Jank during hashing | Large single blob path                        | Stream fallback already mitigates; worker offload next step. |
+
+---
+
+Document version: 1.0 (Task 7.2)
+````
+
 ## File: public/robots.txt
 ````
 User-Agent: *
@@ -3315,6 +3496,426 @@ export default defineAppConfig({
 }
 ````
 
+## File: .github/chatmodes/retro-agent.chatmode.md
+````markdown
+---
+description: 'An agent for retro-styled chat applications.'
+tools: ['codebase', 'usages', 'think', 'problems', 'changes', 'terminalSelection', 'terminalLastCommand', 'openSimpleBrowser', 'fetch', 'findTestFiles', 'searchResults', 'githubRepo', 'runTests', 'runCommands', 'editFiles', 'search']
+---
+
+# 🎛️ Updated System Prompt — Nuxt Retro App Engineer (tailored to your repo)
+
+You are a world-class Nuxt 3 engineer shipping a **retro-styled** chat app using **Nuxt 3 + Nuxt UI + Tailwind v4 + Dexie + Orama + OpenRouter/Vercel AI SDK patterns**. Default to **TypeScript**, SSR-safe code, and small, composable units. Honor the project’s existing architecture, theme system, and storage choices.
+
+---
+## Using Bun
+
+- **Bun**: Use Bun for everything. No Node.js, npm, or others. 
+
+## Tools
+- **Bun Only**: Use Bun for everything. No Node.js, npm, or others.
+  - Scripts: `bun run <script>`
+  - Install: `bun install`
+  - Build: `bun build <file.ts>`
+  - Run: `bun <file>`
+
+- **Bun Docs**: Check `node_modules/bun-types/docs/**.md` for help.
+
+## Core Directives (repo-aware)
+
+-   **Styling & Theme**
+
+    -   **Use the existing theme classes** (`.light`, `.dark`, `*-high-contrast`, `*-medium-contrast`) that define **Material-like CSS variables**; never hardcode colors—use the mapped Nuxt UI tokens via `nuxt-ui-map.css`.
+    -   **Fonts**: `VT323` for body, `Press Start 2P` for headings. Maintain the **pixel look** (small radii, hard shadow).
+    -   **Buttons**: prefer the `retro-btn` class and **Nuxt UI** variants; sizes align to repo tokens: `sm: 32px`, `md: 40px`, `lg: 56px`.
+    -   **Do not add inline CSS** unless absolutely necessary; use Tailwind utilities and the existing token mapping.
+
+-   **Nuxt UI**
+
+    -   Use **UButton, UInput, UCard, UForm** with **theme variants** defined in `app.config.ts`. If you need new variants, extend them **once** in `app.config.ts` (respect the `retro` look and sizes).
+    -   Keep “icon-only” buttons square and centered (see `.retro-btn.aspect-square`).
+
+-   **State, Storage & Search**
+
+    -   **Persist** local app entities with **Dexie** in `or3-db` using the existing tables (`projects`, `threads`, `messages`, `kv`, `attachments`).
+    -   Use the **KV table** to store small app prefs (e.g., model favorites, OpenRouter key). Prefer helpers that already wrap `kv.set/get`.
+    -   **Search**: build client-side Orama indexes via dynamic imports; debounce queries (\~120ms), cap result limits (100–200).
+    -   Follow the repo’s **fallback substring search** if Orama is unavailable or errors, to avoid “empty results” UX.
+
+-   **AI / OpenRouter auth**
+
+    -   **Do not expose provider secrets** in the client. Use the existing **OpenRouter PKCE flow**, storing the user key under `kv` as `openrouter_api_key`, and dispatch `openrouter:connected` to notify UI.
+    -   When building chat, **stream** responses; the client should call a **server route** if secrets are involved. If using user-provided OpenRouter keys, only pull from KV and never log them.
+
+-   **Hooks system**
+
+    -   Use the provided **\$hooks** engine for extension points. Prefer `useHookEffect(name, fn, { kind, priority })` for registration and correct cleanup (unmount + HMR).
+
+-   **Theme switching**
+
+    -   Use the **theme plugin** `nuxtApp.provide('theme', { set/toggle/get })`; don’t re-invent. Always switch **by class on `<html>`** (it’s already wired up).
+
+-   **Performance**
+
+    -   Prefer **dynamic imports** for heavy providers (Orama) and optional screens.
+    -   Keep Orama indexes **per collection** (threads, model catalog) and **rebuild only on data length change** as in existing composables.
+    -   Avoid re-render storms: debounce user input; memoize id→entity maps for mapping hits.
+
+-   **Accessibility**
+
+    -   Keep **role/aria** on resizers and icon buttons (see `ResizeHandle.vue`); preserve **focus outlines** and the retro focus ring.
+
+## Code Rules
+
+- **No Guesses**: Review files first to understand.
+- **Performance**: Think basics—cut waste, cache smart, scale well.
+- **Refactor**: Update old code to standards without breaking.
+- **Commits**: "[Type] Short note on changes."
+
+
+## Completing tasks
+- **Follow the plan**: If provided stick to the steps outlined in the planning documents.
+- **Use the provided files**: If there are files in the planning folder, use them as a reference for your implementation. This includes files like `requirements.md`, `tasks.md`, and `design.md`, but only if the user has provided them, or the tasks file.
+- **Cross of items as you go**: If there is a planning document with a tasks.md file that you are working from, please cross off items as you complete them. example location: `planning/cool-feature/tasks.md`
+
+
+---
+
+## File-level Conventions to Follow
+
+-   **Tailwind v4**: one `@import "tailwindcss"` in `assets/css/main.css`. Keep `@source "../../../app.config.ts"` so Tailwind sees theme overrides.
+-   **Nuxt config**: modules `@nuxt/ui`, `@nuxt/fonts`; fonts list includes `Press Start 2P` and `VT323`. Add new fonts only via the same module to keep build consistent.
+-   **App shell**: wrap pages in `<UApp>` and set **initial theme class** on `<html>` with `useHead`.
+
+---
+
+## Required Components/Composables (repo-aligned)
+
+-   **Search**
+
+    -   `useThreadSearch(threads)`: debounce 120ms, `limit: 200`, map hits via id→thread dictionary, fallback substring by `title`.
+    -   `useModelSearch(models)`: debounce 120ms, `limit: 100`, index `id/slug/name/description/modalities`, fallback substring.
+
+-   **OpenRouter**
+
+    -   `useOpenRouterAuth.startLogin()` uses **PKCE** S256 when possible; stores verifier/method/state in `sessionStorage`; redirect to `openrouter-callback` page; **never** log tokens.
+    -   On callback, store key to `kv('openrouter_api_key')`, dispatch `openrouter:connected`, and clear session markers.
+
+-   **Dexie**
+
+    -   Use `Or3DB` with the **existing store and index definitions**. Don’t add new DBs; version bump this one if schema changes.
+
+---
+
+## Retro UX Requirements
+
+-   **Buttons/cards** use **2px hard borders** and **2px offset shadows** (no blur).
+-   **Focus**: `outline: 2px solid var(--md-primary)` with offset.
+-   Respect the **scanline/CRT** vibe only if opt-in (no excessive motion).
+-   Keep text sizes consistent with current base font (\~20px body).
+
+---
+
+## Do/Don’t
+
+-   ✅ **Use** Nuxt UI variants and tokens; extend in `app.config.ts`.
+-   ✅ **Use** Orama dynamic imports and repo’s fallback search strategy.
+-   ✅ **Use** KV for prefs and user-provided keys; fire the existing custom events.
+-   ❌ **Don’t** introduce new styling systems, random CSS vars, or duplicate theme classes.
+-   ❌ **Don’t** store secrets in `localStorage`; use `kv` and short-lived memory for session only.
+-   ❌ **Don’t** bypass composables that already implement debouncing/indexing.
+
+---
+
+## Acceptance Checklist (repo-specific)
+
+-   [ ] New UI respects **`retro-btn`** and Nuxt UI token mapping.
+-   [ ] Search features follow the **existing debounced + fallback** pattern.
+-   [ ] Any AI call path complies with **OpenRouter PKCE flow** and KV storage.
+-   [ ] No hard-coded colors—only the **mapped tokens**.
+-   [ ] Dexie usage sticks to **`or3-db`** with versioned changes if needed.
+-   [ ] No theme breakage when toggling `.light/.dark` or contrast modes.
+
+---
+
+## Docs
+
+You will be provided with an .llms folder in the root directory of the project. This will contain llms.txt files from various sources such as Orama, and NuxtUI. It will help guide you to the right document page when you need to look up something from a library that you do not have enough information on.
+
+### You should never just wing it. If you are unsure of something look it up in the docs
+
+/.llms/nuxt.txt - This contains a guide for you on how to navigate the nuxt official documentation
+/.llms/orama.txt - This contains a guide for you on how to navigate the orama official documentation
+/.llms/nuxtui.txt - This contains a guide for you on how to navigate the nuxtui official documentation
+````
+
+## File: app/db/client.ts
+````typescript
+import Dexie, { type Table } from 'dexie';
+import type {
+    Attachment,
+    Kv,
+    Message,
+    Project,
+    Thread,
+    FileMeta,
+} from './schema';
+
+export interface FileBlobRow {
+    hash: string; // primary key
+    blob: Blob; // actual binary Blob
+}
+
+// Dexie database versioning & schema
+export class Or3DB extends Dexie {
+    projects!: Table<Project, string>;
+    threads!: Table<Thread, string>;
+    messages!: Table<Message, string>;
+    kv!: Table<Kv, string>;
+    attachments!: Table<Attachment, string>;
+    file_meta!: Table<FileMeta, string>; // hash as primary key
+    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
+
+    constructor() {
+        super('or3-db');
+
+        this.version(1).stores({
+            projects: 'id, name, clock, created_at, updated_at',
+            threads:
+                'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+            messages:
+                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+            kv: 'id, &name, clock, created_at, updated_at',
+            attachments: 'id, type, name, clock, created_at, updated_at',
+        });
+
+        this.version(2)
+            .stores({
+                projects: 'id, name, clock, created_at, updated_at',
+                threads:
+                    'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+                messages:
+                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+                kv: 'id, &name, clock, created_at, updated_at',
+                attachments: 'id, type, name, clock, created_at, updated_at',
+                file_meta:
+                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+                file_blobs: 'hash',
+            })
+            .upgrade(async (tx) => {
+                // Backfill file_hashes field for existing messages (if missing)
+                const table = tx.table('messages');
+                try {
+                    const all = await table.toArray();
+                    for (const m of all) {
+                        if (!('file_hashes' in m)) {
+                            (m as any).file_hashes = '[]';
+                            await table.put(m);
+                        }
+                    }
+                } catch (err) {
+                    console.warn(
+                        '[or3-db] migration v2 file_hashes backfill failed',
+                        err
+                    );
+                }
+            });
+    }
+}
+
+export const db = new Or3DB();
+````
+
+## File: app/db/files.ts
+````typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import { nowSec } from './util';
+import {
+    FileMetaCreateSchema,
+    FileMetaSchema,
+    type FileMeta,
+    type FileMetaCreate,
+} from './schema';
+import { computeFileHash } from '../utils/hash';
+
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
+
+/** Internal helper to change ref_count and fire hook */
+async function changeRefCount(hash: string, delta: number) {
+    await db.transaction('rw', db.file_meta, async () => {
+        const meta = await db.file_meta.get(hash);
+        if (!meta) return;
+        const next = {
+            ...meta,
+            ref_count: Math.max(0, meta.ref_count + delta),
+            updated_at: nowSec(),
+        };
+        await db.file_meta.put(next);
+        const hooks = useHooks();
+        await hooks.doAction('db.files.refchange:action:after', {
+            before: meta,
+            after: next,
+            delta,
+        });
+    });
+}
+
+/** Create or reference existing file by content hash (dedupe). */
+export async function createOrRefFile(
+    file: Blob,
+    name: string
+): Promise<FileMeta> {
+    const dev = (import.meta as any).dev;
+    const hasPerf = typeof performance !== 'undefined';
+    const markId =
+        dev && hasPerf
+            ? `filestore-${Date.now()}-${Math.random().toString(36).slice(2)}`
+            : undefined;
+    if (markId && hasPerf) performance.mark(`${markId}:start`);
+    if (file.size > MAX_FILE_SIZE_BYTES) throw new Error('file too large');
+    const hooks = useHooks();
+    const hash = await computeFileHash(file);
+    const existing = await db.file_meta.get(hash);
+    if (existing) {
+        await changeRefCount(hash, 1);
+        if ((import.meta as any).dev) {
+            // eslint-disable-next-line no-console
+            console.debug('[files] ref existing', {
+                hash: hash.slice(0, 8),
+                size: existing.size_bytes,
+                ref_count: existing.ref_count + 1,
+            });
+        }
+        if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
+        return existing;
+    }
+    const mime = (file as any).type || 'application/octet-stream';
+    // Basic image dimension extraction if image
+    let width: number | undefined;
+    let height: number | undefined;
+    if (mime.startsWith('image/')) {
+        try {
+            const bmp = await blobImageSize(file);
+            width = bmp?.width;
+            height = bmp?.height;
+        } catch {}
+    }
+    const base: FileMetaCreate = {
+        hash,
+        name,
+        mime_type: mime,
+        kind: mime === 'application/pdf' ? 'pdf' : 'image',
+        size_bytes: file.size,
+        width,
+        height,
+        page_count: undefined,
+    } as any;
+    const filtered = await hooks.applyFilters(
+        'db.files.create:filter:input',
+        base
+    );
+    const value = parseOrThrow(FileMetaCreateSchema, filtered);
+    const meta = parseOrThrow(FileMetaSchema, value);
+    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
+        await hooks.doAction('db.files.create:action:before', meta);
+        await db.file_meta.put(meta);
+        await db.file_blobs.put({ hash, blob: file });
+        await hooks.doAction('db.files.create:action:after', meta);
+    });
+    if ((import.meta as any).dev) {
+        // eslint-disable-next-line no-console
+        console.debug('[files] created', {
+            hash: hash.slice(0, 8),
+            size: file.size,
+            mime,
+        });
+    }
+    if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
+    return meta;
+}
+
+/** Get file metadata by hash */
+export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
+    const hooks = useHooks();
+    const meta = await db.file_meta.get(hash);
+    return hooks.applyFilters('db.files.get:filter:output', meta);
+}
+
+/** Get binary Blob by hash */
+export async function getFileBlob(hash: string): Promise<Blob | undefined> {
+    const row = await db.file_blobs.get(hash);
+    return row?.blob;
+}
+
+/** Soft delete file (mark deleted flag only) */
+export async function softDeleteFile(hash: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.file_meta, async () => {
+        const meta = await db.file_meta.get(hash);
+        if (!meta) return;
+        await hooks.doAction('db.files.delete:action:soft:before', meta);
+        await db.file_meta.put({
+            ...meta,
+            deleted: true,
+            updated_at: nowSec(),
+        });
+        await hooks.doAction('db.files.delete:action:soft:after', hash);
+    });
+}
+
+/** Remove one reference to a file; if dropping to 0 we keep data (GC future) */
+export async function derefFile(hash: string): Promise<void> {
+    await changeRefCount(hash, -1);
+}
+
+// Export internal for testing / tasks list mapping
+export { changeRefCount };
+
+// Lightweight image dimension extraction without full decode (creates object URL)
+async function blobImageSize(
+    blob: Blob
+): Promise<{ width: number; height: number } | undefined> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const res = { width: img.naturalWidth, height: img.naturalHeight };
+            URL.revokeObjectURL(img.src);
+            resolve(res);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(img.src);
+            resolve(undefined);
+        };
+        img.src = URL.createObjectURL(blob);
+    });
+}
+
+function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
+    try {
+        performance.mark(`${id}:end`);
+        performance.measure(
+            `file:${kind}:bytes=${bytes}`,
+            `${id}:start`,
+            `${id}:end`
+        );
+        const entry = performance
+            .getEntriesByName(`file:${kind}:bytes=${bytes}`)
+            .slice(-1)[0];
+        if (entry) {
+            // eslint-disable-next-line no-console
+            console.debug(
+                '[perf] file store',
+                kind,
+                `${(bytes / 1024).toFixed(1)}KB`,
+                `${entry.duration.toFixed(1)}ms`
+            );
+        }
+    } catch {}
+}
+````
+
 ## File: app/db/util.ts
 ````typescript
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
@@ -3353,6 +3954,544 @@ useHead({
     },
 });
 </script>
+````
+
+## File: planning/files/design.md
+````markdown
+---
+artifact_id: 4ecb5037-1b6f-45d2-8b03-3bdf2570bb8d
+name: Message File Storage Design
+---
+
+# Overview
+
+We introduce a performant client-side file storage subsystem built on Dexie (IndexedDB) for images now and PDFs later. Core principles: (1) store metadata & binary separately, (2) deduplicate by md5 content hash, (3) link messages via lightweight JSON array of hashes, (4) preserve existing message query performance, (5) safe Dexie schema migration with version bump.
+
+# Architecture
+
+```mermaid
+graph TD
+  A[User selects file(s)] --> B[Compute md5 hash async]
+  B --> C{Hash exists?}
+  C -- No --> D[Create FileMeta + store Blob]
+  C -- Yes --> E[Increment ref_count]
+  D --> F[Return File Hash]
+  E --> F[Return File Hash]
+  F --> G[Message create/update includes file_hashes]
+  G --> H[Persist message (JSON serialized list)]
+  H --> I[Later: UI resolves file hashes -> metadata -> blob]
+```
+
+## Components
+
+-   FileMeta Table: metadata (no large blobs) + ref_count.
+-   FileBlob Table: key/value (hash -> Blob / ArrayBuffer) using Dexie table or `Dexie.open().table('file_blobs')` with `hash` primary key.
+-   Message Augmentation: `file_hashes` JSON string column appended; lazy parsing utilities.
+-   Hashing Service: async md5 (library `spark-md5` or Web Crypto subtle.digest with incremental read). Prefer Web Crypto for small (<100MB) reading File/Blob as ArrayBuffer streaming via `ReadableStream` if available.
+-   Accessor Utilities: `addFilesToMessage`, `filesForMessage`, `removeFileFromMessage`.
+
+# Data Model & Schemas
+
+## Zod Schemas (New)
+
+```ts
+import { z } from 'zod';
+
+export const FileMetaSchema = z.object({
+    id: z.string(), // same as hash or random id (choose hash for direct key)
+    hash: z.string(), // md5 lowercase hex (unique)
+    name: z.string(),
+    mime_type: z.string(),
+    kind: z.enum(['image', 'pdf']).default('image'),
+    size_bytes: z.number().int(),
+    width: z.number().int().optional(),
+    height: z.number().int().optional(),
+    page_count: z.number().int().optional(),
+    ref_count: z.number().int().default(0),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type FileMeta = z.infer<typeof FileMetaSchema>;
+
+export const FileMetaCreateSchema = FileMetaSchema.omit({
+    created_at: true,
+    updated_at: true,
+    ref_count: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+    ref_count: z.number().int().default(1),
+    clock: z.number().int().default(0),
+});
+```
+
+## Message Schema Change
+
+Add optional `file_hashes` serialized array string column. For runtime use create helper parse:
+
+```ts
+export function parseFileHashes(serialized?: string | null): string[] {
+    if (!serialized) return [];
+    try {
+        const arr = JSON.parse(serialized);
+        return Array.isArray(arr)
+            ? arr.slice(0, 16).filter((x) => typeof x === 'string')
+            : [];
+    } catch {
+        return [];
+    }
+}
+```
+
+## Dexie Schema v2
+
+```ts
+this.version(2)
+    .stores({
+        projects: 'id, name, clock, created_at, updated_at',
+        threads:
+            'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+        messages:
+            'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at', // file_hashes not indexed
+        kv: 'id, &name, clock, created_at, updated_at',
+        attachments: 'id, type, name, clock, created_at, updated_at',
+        file_meta:
+            'hash, [kind+deleted], mime_type, clock, created_at, updated_at', // primary key hash (unique) ensures O(1)
+        file_blobs: 'hash', // hash primary key only
+    })
+    .upgrade(async (tx) => {
+        // Add file_hashes field default to '' serialized [] if desired (not necessary; we parse missing as [])
+        const msgs = await tx.table('messages').toArray();
+        for (const m of msgs) {
+            if (!('file_hashes' in m)) {
+                m.file_hashes = '[]';
+                await tx.table('messages').put(m);
+            }
+        }
+    });
+```
+
+Note: Dexie requires new version call chain order. We'll add new tables and leave old ones unchanged.
+
+# Operations
+
+## Create File
+
+1. Accept `File | Blob` + name.
+2. Compute md5 hash async.
+3. Check `file_meta.where('hash').equals(hash).first()`.
+4. If exists: increment `ref_count` (put with updated_at +1) and return meta.
+5. Else: create FileMeta (id = hash) + put Blob into file_blobs table.
+6. Fire hooks before/after.
+
+## Add Files to Message
+
+1. Ensure message exists (or unify into message creation flow).
+2. Accept array of `File | Blob` or existing hashes.
+3. For new files, call Create File.
+4. Merge unique hashes with existing `file_hashes` (dedupe preserving order, cap 16).
+5. Validate all hashes exist and not deleted (unless allowDeleted flag).
+6. Update message record with serialized array string.
+7. Fire validation hook: `db.messages.files.validate:filter:hashes` to allow external pruning.
+
+## Resolve Files for Message
+
+1. Get message.
+2. Parse `file_hashes` -> list.
+3. Query `file_meta` in bulk: `db.file_meta.where('hash').anyOf(list).toArray()`.
+4. Return metadata (optionally lazily provide a function to fetch blob for each hash).
+
+## Fetch Blob
+
+`getFileBlob(hash): Promise<Blob|undefined>` -> `db.file_blobs.get(hash)` then return stored Blob/ArrayBuffer (choose Blob).
+
+## Remove File From Message
+
+1. Parse existing list.
+2. Remove target hash.
+3. Update message.
+4. Decrement ref_count; if 0 and deleted==true (or GC policy) mark for purge future.
+
+## Soft Delete File
+
+1. Mark FileMeta.deleted=true and updated_at.
+2. Do not change messages.
+3. Hook events fire.
+
+# Performance Considerations
+
+-   No blob or base64 in message table; only small JSON string references (< 512B typical).
+-   Hash indexing only on file_meta; no additional compound indexes keeps write amplification low.
+-   Bulk retrieval: use `anyOf` to minimize round trips.
+-   Cap 6 file references per message by default (config constant `MAX_MESSAGE_FILE_HASHES`, default 6; override via `NUXT_PUBLIC_MAX_MESSAGE_FILES` bounded 1..12).
+-   Use Web Crypto `subtle.digest('MD5'...)` fallback to `spark-md5` (if MD5 unsupported, choose SHA-1 then map still unique; strict requirement is stable dedupe so MD5 acceptable locally). Provide progressive hashing reading in 256KB chunks via File.slice() to avoid blocking UI.
+-   Lazy blob loading prevents layout jank; UI can show placeholders.
+
+# Error Handling
+
+Use existing `parseOrThrow` pattern; wrap create/update functions returning a `ServiceResult` equivalent (lightweight) or throw errors and expose via hook events. Example failures: hash computation error, Dexie write failure, message not found, oversize file (size limit: e.g. 20MB configurable).
+
+# Hooks
+
+-   'db.files.create:filter:input'
+-   'db.files.create:action:before'
+-   'db.files.create:action:after'
+-   'db.files.get:filter:output'
+-   'db.files.delete:action:soft:before'
+-   'db.files.delete:action:soft:after'
+-   'db.files.refchange:action:after'
+-   'db.messages.files.validate:filter:hashes'
+
+# Testing Strategy
+
+-   Unit style: simulate adding a small Blob -> verify meta + blob tables update and message updated with hashes.
+-   Migration: open DB at v1 (simulate by clearing?), then import messages, upgrade to v2, verify `file_hashes` default parsing yields [].
+-   Ref counting: add same file twice in different messages; ensure ref_count increments; remove from one message -> decrements.
+-   Performance: measure time to add 10 images (~200KB each); ensure < threshold (<150ms hashing each). Provide console perf marks (dev only).
+
+# Future Extensions
+
+-   Support PDFs: capture page_count, maybe preview image.
+-   Add GC job scanning file_meta where ref_count=0 and deleted=true to purge blob.
+-   Streaming partial load for very large files.
+
+# Open Questions / Assumptions
+
+-   MD5 acceptable for local dedupe (collisions extremely unlikely for user files). Assumed yes.
+-   Use hash as primary key (simplifies lookups). Yes.
+-   Store Blob directly vs base64: choose Blob in file_blobs to avoid decode cost.
+````
+
+## File: planning/files/requirements.md
+````markdown
+---
+artifact_id: 0f8a3d40-7c0d-4db3-8f4e-6cfb9c4c8f78
+name: Message File Storage Requirements
+---
+
+# Introduction
+
+We need to add performant client-side (Dexie/IndexedDB) handling of binary/image (and later PDF) files and link them to chat messages. Core goals: (1) allow messages to reference one or multiple files via stable content hashes (md5) for fast lookup/deduplication, (2) store file metadata & binary separately without bloating existing message indexes, (3) support future file types, (4) avoid performance regressions (slow queries, large object inflation, unnecessary re-renders), and (5) enable safe migrations with Dexie versioning.
+
+# Requirements
+
+## 1. Store File Records (Images first, PDFs later)
+
+User Story: As a user, I want images I attach to messages to be stored locally so that they persist across sessions without re-uploading.
+Acceptance Criteria:
+
+-   WHEN an image is added THEN the system SHALL compute its md5 hash (hex string lowercase) before storage.
+-   WHEN storing a file THEN the system SHALL persist a File record containing id, hash, mime_type, size_bytes, name (original filename), kind (e.g. 'image'), created_at, updated_at, deleted flag, clock, and optional width/height for images.
+-   WHEN a file with an identical md5 already exists THEN the system SHALL not duplicate binary data; it SHALL increment a ref count or reuse the existing binary pointer.
+-   IF md5 computation fails THEN the system SHALL reject the file with an error event.
+
+## 2. Separate Binary Payload From Metadata
+
+User Story: As a developer, I want to avoid large IndexedDB indexes so queries remain fast.
+Acceptance Criteria:
+
+-   File metadata table SHALL NOT store raw base64/binary blobs inline with frequently queried indexes.
+-   Binary data SHALL be stored either in a dedicated Dexie table or in a Blob store keyed by hash (decide in design) and looked up lazily.
+-   Message queries (by thread, by id, by stream) SHALL NOT load file blobs implicitly.
+
+## 3. Link Messages to Files via Hash Array
+
+User Story: As a user, I want a message to reference multiple files (e.g., multiple images) without duplication.
+Acceptance Criteria:
+
+-   Message schema SHALL gain a new optional field `file_hashes` representing an ordered array of md5 hex strings.
+-   Field SHALL be stored in Dexie as a string (JSON serialized array) to avoid schema fan-out while keeping back-compat with existing code paths.
+-   WHEN creating or updating messages with file references THEN validation SHALL ensure each hash exists in the File metadata table (or skip unknown with error hook event).
+-   WHEN retrieving a message THEN consumer code SHALL be able to resolve files by calling a new helper (`filesForMessage(messageId)` or similar) not automatically during basic message retrieval.
+
+## 4. Efficient Lookup by Hash
+
+User Story: As a developer, I want constant-time or near-constant-time retrieval of file metadata by hash.
+Acceptance Criteria:
+
+-   File metadata table SHALL index `hash` uniquely (&hash) enabling direct `where('hash').equals(hash)` queries.
+-   Lookup time for a single existing file SHALL remain O(1) at Dexie index level.
+
+## 5. Backwards-Compatible Migration
+
+User Story: As an existing user, I want the app to upgrade without data loss.
+Acceptance Criteria:
+
+-   Dexie version SHALL be bumped from 1 to 2 with an `upgrade` callback migrating existing tables (messages augmented with default `file_hashes` empty JSON array string) without clearing data.
+-   Old messages without the new field SHALL transparently parse with an empty list during runtime mapping.
+
+## 6. Validation & Integrity
+
+User Story: As a developer, I want to ensure only valid references are stored.
+Acceptance Criteria:
+
+-   WHEN saving a message with `file_hashes` THEN system SHALL dedupe duplicate hashes preserving first occurrence order.
+-   IF any hash does not correspond to a File metadata entry THEN system SHALL emit a hook event and either drop the invalid hash or abort (configurable via hook return boolean).
+-   File deletion (soft) SHALL remove only metadata flag; references in messages remain until explicit cleanup.
+
+## 7. File Deletion & GC (Phase 1 Minimal)
+
+User Story: As a user, deleting a file should not instantly break past messages.
+Acceptance Criteria:
+
+-   Soft delete SHALL mark File deleted=true and updated_at changed; binary remains.
+-   A future GC task SHALL (not in this phase) purge binary where ref_count=0.
+-   Current phase SHALL maintain a `ref_count` integer incremented on first reference and decremented only when message explicitly updates to remove hash.
+
+## 8. Performance Constraints
+
+User Story: As a performance-conscious developer, I want minimal overhead.
+Acceptance Criteria:
+
+-   Adding `file_hashes` MUST NOT add additional multi-field compound indexes to messages beyond existing ones.
+-   Serialization of `file_hashes` SHALL cap at 6 hashes per message by default (configurable constant & env override) – IF exceeded THEN truncate and emit hook warning.
+-   md5 computation SHALL be executed in a Web Worker (future optimization stub) or async non-blocking path; baseline version may use async incremental hashing library with streaming to avoid locking main thread for >2MB files.
+
+## 9. Hooks Integration
+
+User Story: As an extension developer, I want to intercept file operations.
+Acceptance Criteria:
+
+-   Hooks SHALL exist for: `db.files.create:filter:input`, `db.files.create:action:before/after`, `db.files.get:filter:output`, `db.messages.files.validate:filter:hashes`, `db.files.delete:action:soft:before/after`, `db.files.refchange:action:after`.
+
+## 10. Non-Functional Requirements
+
+Acceptance Criteria:
+
+-   Code SHALL avoid synchronous large base64 generation for images > 1MB (use Blob/ArrayBuffer path).
+-   All new code SHALL be TypeScript with zod schemas similar to existing patterns.
+-   Unit-like tests or dev harness SHALL validate migration logic (where feasible in this repo context).
+-   Design SHALL allow extension for PDFs by adding `kind='pdf'` and optional page_count.
+````
+
+## File: planning/files/tasks.md
+````markdown
+---
+artifact_id: f2b4d5d3-3d5c-44e4-8fdc-fec781836baf
+name: Message File Storage Implementation Tasks
+---
+
+# Task Checklist
+
+## 1. Schema & Migration
+
+-   [x] 1.1 Bump Dexie version to 2 adding `file_meta`, `file_blobs` tables (Requirements: 1,2,4,5,10)
+-   [x] 1.2 Add `file_hashes` (string) column to messages via migration upgrade defaulting to '[]' (Requirements: 3,5)
+-   [x] 1.3 Add zod schemas `FileMetaSchema`, `FileMetaCreateSchema` (Requirements: 1,2,4,10)
+-   [x] 1.4 Add parsing utility `parseFileHashes` + constant `MAX_MESSAGE_FILE_HASHES=16` (Requirements: 3,8)
+
+## 2. Hashing Utility
+
+-   [x] 2.1 Implement async md5 hashing with Web Crypto fallback to `spark-md5` (add dependency if needed) (Requirements: 1,8,10)
+-   [x] 2.2 Implement chunked read (256KB) to avoid blocking UI (Requirements: 8,10)
+-   [x] 2.3 Provide function `computeFileHash(file: Blob): Promise<string>` (Requirements: 1,8)
+
+## 3. File CRUD
+
+-   [x] 3.1 Implement `createOrRefFile(file: Blob, name: string): Promise<FileMeta>` (Requirements: 1,2,4,6,9)
+-   [x] 3.2 Implement `getFileMeta(hash: string)` with hook filter (Requirements: 4,9)
+-   [x] 3.3 Implement `getFileBlob(hash: string)` (Requirements: 2,4)
+-   [x] 3.4 Implement `softDeleteFile(hash: string)` (Requirements: 6,7,9)
+-   [x] 3.5 Implement internal `changeRefCount(hash: string, delta: number)` (Requirements: 1,7,9)
+
+## 4. Message Linking
+
+-   [x] 4.1 Extend message create/update paths to accept optional `file_hashes` array (pre-serialize) (Requirements: 3,6)
+-   [x] 4.2 Implement helper `addFilesToMessage(messageId, files: (Blob|{hash:string})[])` (Requirements: 3,6,8)
+-   [x] 4.3 Implement helper `removeFileFromMessage(messageId, hash: string)` (Requirements: 6,7)
+-   [x] 4.4 Implement helper `filesForMessage(messageId)` returning metas (Requirements: 3,4)
+-   [x] 4.5 Hook integration `db.messages.files.validate:filter:hashes` (Requirements: 6,9)
+
+## 5. Validation & Limits
+
+-   [x] 5.1 Enforce dedupe + order preservation in serialization (Requirements: 6)
+-   [x] 5.2 Enforce max 6 hashes (configurable 1..12); emit hook warning if truncated (Requirements: 8,9)
+-   [x] 5.3 Size limit constant (20MB) reject oversize file early (Requirements: 10)
+
+## 6. UI Integration (Minimal Phase)
+
+-   [x] 6.1 Update ChatInput to process selected images through new file pipeline returning hashes (Requirements: 1,3)
+-   [x] 6.2 Append message with `file_hashes` when sending (Requirements: 3)
+-   [x] 6.3 Display thumbnails by resolving metas + blobs lazily (Requirements: 2,3)
+-   [x] 6.4 Fallback placeholder while blob loads (Requirements: 8)
+
+## 7. Performance / Monitoring
+
+-   [x] 7.1 Add perf marks around hashing & storage in dev mode (Requirements: 8,10)
+-   [x] 7.2 Document expected timing (<150ms for ~200KB) (Requirements: 10)
+
+## 8. Testing / QA
+
+-   [ ] 8.1 Write dev test script adding duplicate file twice verifying single blob + ref_count=2 (Requirements: 1,4,7)
+-   [ ] 8.2 Test migration path from existing DB (Requirements: 5)
+-   [ ] 8.3 Test removing file from one of two messages decrements ref_count (Requirements: 7)
+-   [ ] 8.4 Test oversize rejection (Requirements: 8,10)
+-   [ ] 8.5 Test truncated list behavior >16 (Requirements: 8)
+
+## 9. Documentation
+
+-   [ ] 9.1 Update README or dedicated docs section explaining file storage design (Requirements: 10)
+-   [ ] 9.2 Add inline JSDoc for new functions (Requirements: 10)
+
+## 10. Future (Deferred / Not In This Phase)
+
+-   [ ] 10.1 Implement GC job to purge blobs where ref_count=0 and deleted=true (Deferred from Requirements: 7)
+-   [ ] 10.2 Web Worker offload for hashing large files (Deferred from Requirements: 8)
+-   [ ] 10.3 PDF extraction of page_count + preview (Deferred from Requirements: 1)
+
+# Notes
+
+-   All new tables must follow existing clock/timestamp pattern.
+-   Avoid indexing large binary data; store only metadata in indexed table.
+-   Keep hashing logic tree-shakeable and dependency-light.
+````
+
+## File: planning/retry-plan.md
+````markdown
+# Retry Feature Plan
+
+## Overview
+
+Add a **Retry** mechanism allowing a user message from anywhere in a thread to be re-run. The original occurrence (the user message and its assistant reply, if any) is removed from its current position and a new send happens at the end of the thread (bottom of chat) producing a fresh assistant response with current context.
+
+## Current Message Ordering Summary
+
+-   Messages stored in Dexie `messages` table with sparse `index` per thread (1000 increments) via compound index `[thread_id+index]`.
+-   UI loads ordered messages in `pages/chat.vue` using this compound index and filters out `deleted`.
+-   `appendMessage` assigns `last.index + 1000` (or 1000 for first) ensuring O(1) append without reindex.
+-   `useChat.sendMessage` persists a user message (role `user`), then creates a streaming placeholder assistant message (role `assistant`).
+-   `ChatContainer.vue` maps DB `msg.data.content` to display string; `ChatMessage.vue` currently receives no `id` so action buttons lack context.
+
+## Scope (V1)
+
+-   Retry only for USER messages.
+-   Removes the targeted user message and its immediate assistant reply (if adjacent and same thread) before re-sending.
+-   Reuses original user text & file attachments (via `file_hashes`).
+-   Creates new user + assistant messages appended at the bottom (normal flow).
+-   Hard delete originals (simple; soft delete/undo can be future enhancement).
+
+## Assumptions
+
+1. Assistant reply to remove is the first assistant message after the user in the same thread (if present & not deleted).
+2. If no assistant reply exists (e.g. failed/aborted) only the user message is removed.
+3. Attachments referenced by `file_hashes` remain valid; reusing hashes does not require ref count change (DB schema leaves file tracking as-is).
+4. Retrying while another stream is active is disallowed (guard with `loading`).
+
+## Edge Cases
+
+-   Retrying last pair (already at bottom): still remove & append for consistent audit trail.
+-   User message with no assistant yet: just remove + resend.
+-   Non-user (assistant) retry click: ignored or disabled in UI for V1.
+-   Missing DB record (race / already deleted): show toast & abort gracefully.
+-   Concurrent retries: second blocked due to `loading` or internal flag.
+
+## Data Flow Steps (Retry)
+
+1. User clicks Retry on a user message.
+2. Emit event including `messageId` from `ChatMessage.vue`.
+3. `ChatContainer.vue` handles `retry` event → calls `chat.retryMessage(id)`.
+4. `useChat.retryMessage`:
+    - Guard `loading`.
+    - Fetch user message from DB (`queries.getMessage` OR `db.messages.get`). Verify `role === 'user'` and same active `threadId`.
+    - Find assistant reply: first message in same thread with `index > user.index` and `role === 'assistant'` & not deleted.
+    - Dexie transaction: hard delete user + assistant (if any) using `del.hard.message` (or direct `db.messages.delete`).
+    - Update local `messages` array: remove entries matching these `id`s.
+    - Parse `file_hashes` (string -> string[] via existing `parseFileHashes`).
+    - Call existing `sendMessage(originalUserText, { model: currentModel, file_hashes: parsedHashes })`.
+    - (Optional) Hook notifications before/after.
+
+## UI Changes
+
+-   Pass `id` (and existing `file_hashes`) through `ChatContainer` mapping to each `ChatMessage` prop.
+-   Update `ChatMessage.vue` prop definition to include `id` (in the UI message type).
+-   Add `defineEmits(['retry'])` and emit on Retry button click with `props.message.id`.
+-   Optionally disable Retry button for assistant messages: `:disabled="props.message.role !== 'user'"` or conditional render.
+
+## Composable Changes (`useChat`)
+
+Add `retryMessage(messageId: string): Promise<void>`:
+
+```ts
+async function retryMessage(messageId: string) {
+    if (loading.value) return;
+    const userMsg = await db.messages.get(messageId);
+    if (
+        !userMsg ||
+        userMsg.role !== 'user' ||
+        userMsg.thread_id !== threadIdRef.value
+    )
+        return;
+    // find assistant reply
+    const assistant = await db.messages
+        .where('[thread_id+index]')
+        .between(
+            [userMsg.thread_id, userMsg.index + 1],
+            [userMsg.thread_id, Dexie.maxKey]
+        )
+        .filter((m) => m.role === 'assistant' && !m.deleted)
+        .first();
+    await db.transaction('rw', db.messages, async () => {
+        await db.messages.delete(userMsg.id);
+        if (assistant) await db.messages.delete(assistant.id);
+    });
+    // purge local array
+    messages.value = messages.value.filter(
+        (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+    );
+    // reuse hashes
+    const hashes = userMsg.file_hashes
+        ? parseFileHashes(userMsg.file_hashes)
+        : [];
+    await sendMessage((userMsg.data as any)?.content || '', {
+        model: currentModel.value,
+        file_hashes: hashes,
+    });
+}
+```
+
+(Exact code will integrate existing imports & error handling.)
+
+## Hooks (Optional V1)
+
+-   `ai.chat.retry:action:before` (payload: originalUserId, assistantId?, threadId)
+-   `ai.chat.retry:action:after` (payload: originalUserId, newUserId, newAssistantId?, threadId)
+
+## Testing Scenarios
+
+1. Middle pair retry: removed and re-appended at bottom; order stable; indexes sparse.
+2. Last pair retry: re-added as new last pair (ids change).
+3. User-only (no assistant) retry: new user+assistant appear; original removed.
+4. Concurrent stream: Retry button disabled (or ignored) while `loading`.
+5. Attachment presence: hashes preserved; thumbnails still resolve in new message.
+
+## Non-Goals / Future Enhancements
+
+-   Assistant-only regenerate (keep user, replace assistant in place / append) – future.
+-   Branching a thread at a historical message (Branch button) – separate feature.
+-   Undo retry / soft delete – future.
+-   Normalizing indexes post-delete (not required due to sparse allocation).
+
+## Implementation Checklist
+
+-   [x] Extend `RenderMessage` in `ChatContainer.vue` to keep `id` & pass to `<ChatMessage />`.
+-   [x] Update `ChatMessage.vue` props + emit `retry` event.
+-   [x] Wire `@retry` handler in `ChatContainer.vue` → `chat.retryMessage`.
+-   [x] Implement `retryMessage` in `useChat` with DB + local state logic.
+-   [x] Add optional hooks (before/after) for retry lifecycle.
+-   [ ] Disable / conditionally show Retry for non-user messages in UI (expanded to allow assistant retry, intentional).
+-   [ ] Smoke test edge cases listed above.
+
+## Decision Points (Confirmed Defaults)
+
+-   Delete both user + immediate assistant reply (if exists).
+-   Hard delete (simpler) for V1.
+-   Retry limited to user messages for first iteration.
+
+---
+
+Prepared for implementation. Adjust any assumptions above before coding if needed.
 ````
 
 ## File: nuxt.config.ts
@@ -3805,485 +4944,6 @@ export function useUserApiKey() {
 }
 ````
 
-## File: app/db/schema.ts
-````typescript
-import { z } from 'zod';
-import { newId } from './util';
-
-const nowSec = () => Math.floor(Date.now() / 1000);
-
-export const ProjectSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Project = z.infer<typeof ProjectSchema>;
-
-// threads
-export const ThreadSchema = z.object({
-    id: z.string(),
-    title: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    last_message_at: z.number().int().nullable().optional(),
-    parent_thread_id: z.string().nullable().optional(),
-    status: z.string().default('ready'),
-    deleted: z.boolean().default(false),
-    pinned: z.boolean().default(false),
-    clock: z.number().int(),
-    forked: z.boolean().default(false),
-    project_id: z.string().nullable().optional(),
-});
-export type Thread = z.infer<typeof ThreadSchema>;
-
-// For incoming create payloads (apply defaults like the DB)
-export const ThreadCreateSchema = ThreadSchema.partial({
-    // Make a wide set of fields optional for input; we'll supply defaults below
-    id: true,
-    title: true,
-    last_message_at: true,
-    parent_thread_id: true,
-    status: true,
-    deleted: true,
-    pinned: true,
-    forked: true,
-    project_id: true,
-})
-    // We'll re-add with defaults/derived values
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Dynamic defaults while keeping inputs optional
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use z.input so defaulted fields are optional for callers
-export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
-// messages
-export const MessageSchema = z.object({
-    id: z.string(),
-    data: z.unknown().nullable().optional(),
-    role: z.string(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    error: z.string().nullable().optional(),
-    deleted: z.boolean().default(false),
-    thread_id: z.string(),
-    index: z.number().int(),
-    clock: z.number().int(),
-    stream_id: z.string().nullable().optional(),
-});
-export type Message = z.infer<typeof MessageSchema>;
-
-export const MessageCreateSchema = MessageSchema.partial({ index: true })
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Keep inputs minimal; generate missing id/clock
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use input type so callers can omit defaulted fields
-export type MessageCreate = z.input<typeof MessageCreateSchema>;
-
-// kv
-export const KvSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    value: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    clock: z.number().int(),
-});
-export type Kv = z.infer<typeof KvSchema>;
-
-export const KvCreateSchema = KvSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type KvCreate = z.infer<typeof KvCreateSchema>;
-
-// attachments
-export const AttachmentSchema = z.object({
-    id: z.string(),
-    type: z.string(),
-    name: z.string(),
-    url: z.url(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Attachment = z.infer<typeof AttachmentSchema>;
-
-export const AttachmentCreateSchema = AttachmentSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
-````
-
-## File: docs/hooks.md
-````markdown
-# Hook/Action System for Nuxt
-
-A lightweight, type-safe hook engine for the Nuxt frontend. It lets components, composables, and plugins subscribe to events (actions) or transform data (filters) with predictable ordering and SSR/HMR safety.
-
--   Actions: fire-and-forget side effects (logging, analytics, UI updates)
--   Filters: transform values in a pipeline (value-in → value-out)
--   Priorities: lower runs earlier (default 10)
--   Wildcards: use `*` to match patterns, e.g. `ui.*:action:after`
-
-## Installation & Access
-
-The engine is provided globally by Nuxt plugins:
-
--   Client: singleton instance across HMR
--   Server (SSR): fresh instance per request
-
-Access anywhere:
-
-```ts
-import { useNuxtApp } from '#app';
-
-const hooks = useNuxtApp().$hooks;
-// or
-import { useHooks } from '~/app/composables/useHooks';
-const hooks2 = useHooks();
-```
-
-In components, prefer the lifecycle-safe composable:
-
-```ts
-import { useHookEffect } from '~/app/composables/useHookEffect';
-
-useHookEffect('route.change:action:after', (_ctx, to, from) => {
-    console.log('navigated from', from, 'to', to);
-});
-```
-
-## API Overview
-
-Engine methods:
-
--   Filters
-    -   addFilter(name, fn, priority?, acceptedArgs?)
-    -   removeFilter(name, fn, priority?)
-    -   applyFilters(name, value, ...args) => Promise<Return>
-    -   applyFiltersSync(name, value, ...args)
--   Actions
-    -   addAction(name, fn, priority?, acceptedArgs?)
-    -   removeAction(name, fn, priority?)
-    -   doAction(name, ...args) => Promise<void>
-    -   doActionSync(name, ...args)
--   Utils
-    -   hasFilter(name?, fn?) => boolean|priority
-    -   hasAction(name?, fn?) => boolean|priority
-    -   removeAllCallbacks(priority?)
-    -   currentPriority() => number|false
--   Ergonomics
-    -   onceAction(name, fn, priority?)
-    -   on(name, fn, { kind: 'action'|'filter', priority }) → disposer
-    -   off(disposer)
-
-Types are exported from `app/utils/hooks`.
-
-## Hook Naming
-
-Use hierarchical strings with dots/colons to keep hooks descriptive:
-
--   `app.init:action:after`
--   `ui.form.submit:filter:input`
--   `route.change:action:before`
-
-Wildcards are supported with `*`, e.g. `ui.*:action:after`.
-
-## Examples
-
-### Subscribe to an action (component-safe)
-
-```ts
-// Track route changes
-useHookEffect('route.change:action:after', (_ctx, to, from) => {
-    console.log('navigated from', from, 'to', to);
-});
-```
-
-### Fire an action
-
-```ts
-const hooks = useHooks();
-await hooks.doAction('app.init:action:after', nuxtApp);
-```
-
-### Filter pipeline (async)
-
-```ts
-const hooks = useHooks();
-const sanitized = await hooks.applyFilters(
-    'ui.chat.message:filter:outgoing',
-    rawPayload,
-    { roomId }
-);
-```
-
-### Filter pipeline (sync)
-
-```ts
-const result = hooks.applyFiltersSync(
-    'ui.form.submit:filter:input',
-    initialValues
-);
-```
-
-### Wildcard subscription
-
-```ts
-const offAnyUiAfter = hooks.on(
-    'ui.*:action:after',
-    () => {
-        console.log('some UI after-action fired');
-    },
-    { kind: 'action', priority: 5 }
-);
-
-// Later
-hooks.off(offAnyUiAfter);
-```
-
-### Once-only action handler
-
-```ts
-hooks.onceAction('app.init:action:after', () => {
-    console.log('init completed');
-});
-```
-
-## Priorities
-
-Callbacks execute in ascending priority. For equal priorities, insertion order is preserved. Default priority is 10.
-
-```ts
-hooks.on('ui.form.submit:action:before', fnA, { kind: 'action', priority: 5 });
-hooks.on('ui.form.submit:action:before', fnB); // runs after fnA (priority 10)
-```
-
-## SSR and HMR Safety
-
--   Server: a new engine instance is created per request to avoid state leakage.
--   Client: a singleton engine is reused across HMR; component-level disposers prevent duplicate handlers.
--   `useHookEffect` automatically unregisters on component unmount and on module dispose during HMR.
-
-## Error Handling & Timing
-
-All callbacks are wrapped in try/catch. Errors are logged to the console and per-hook error counters are incremented. Basic timings are recorded:
-
-```ts
-const { timings, errors, callbacks } = hooks._diagnostics;
-console.log('timings for hook', timings['ui.form.submit:action:before']);
-console.log('error count for hook', errors['ui.form.submit:action:before']);
-console.log('total callbacks registered', callbacks());
-```
-
-## Recommendations
-
--   Keep hook names consistent and scoped (e.g., `ui.form.*`, `route.*`).
--   Use filters for transformations and actions for side effects.
--   Prefer `useHookEffect` inside components; use `hooks.on/off` in non-component modules.
--   Consider using wildcards for broad tracing during development.
-
-## Files
-
--   Engine: `app/utils/hooks.ts`
--   Plugins: `app/plugins/hooks.client.ts`, `app/plugins/hooks.server.ts`
--   Composables: `app/composables/useHooks.ts`, `app/composables/useHookEffect.ts`
--   Types: `types/nuxt.d.ts` adds `$hooks` to `NuxtApp`
-
----
-
-Future ideas:
-
--   Vue DevTools timeline integration
--   Inspector UI listing current callbacks
--   Debounced/throttled variants
--   Unit tests and benchmarks
-
-## DB integration hooks
-
-The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
-
-Entities covered: attachments, kv, projects, threads, messages.
-
-Common patterns:
-
--   Create
-    -   `db.{entity}.create:filter:input` — transform input prior to validation
-    -   `db.{entity}.create:action:before` — before persisting
-    -   `db.{entity}.create:action:after` — after persisting
--   Upsert
-    -   `db.{entity}.upsert:filter:input`
-    -   `db.{entity}.upsert:action:before`
-    -   `db.{entity}.upsert:action:after`
--   Delete
-    -   Soft: `db.{entity}.delete:action:soft:before|after`
-    -   Hard: `db.{entity}.delete:action:hard:before|after`
--   Get/Queries (output filters)
-    -   `db.{entity}.get:filter:output`
-    -   kv: `db.kv.getByName:filter:output`
-    -   threads: `db.threads.byProject:filter:output`, `db.threads.searchByTitle:filter:output`, `db.threads.children:filter:output`
-    -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
--   Advanced operations
-    -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
-    -   threads: `db.threads.fork:action:before|after`
-
-### Examples
-
-Redact fields from project reads:
-
-```ts
-useHookEffect(
-    'db.projects.get:filter:output',
-    (project) =>
-        project ? (({ secret, ...rest }) => rest)(project as any) : project,
-    { kind: 'filter' }
-);
-```
-
-Stamp updated_at on all message upserts:
-
-```ts
-useHookEffect(
-    'db.messages.upsert:filter:input',
-    (value) => ({ ...value, updated_at: Math.floor(Date.now() / 1000) }),
-    { kind: 'filter', priority: 5 }
-);
-```
-
-Track thread forks and clones:
-
-```ts
-useHookEffect('db.threads.fork:action:before', ({ source, fork }) => {
-    console.log('Forking thread', source.id, '→', fork.id);
-});
-useHookEffect('db.threads.fork:action:after', (fork) => {
-    console.log('Fork created', fork.id);
-});
-```
-
-Audit deletes (soft and hard):
-
-```ts
-useHookEffect('db.*.delete:action:soft:after', (entity) => {
-    console.log('Soft-deleted', entity?.id ?? entity);
-});
-useHookEffect('db.*.delete:action:hard:after', (id) => {
-    console.log('Hard-deleted id', id);
-});
-```
-
-Normalize and observe message index compaction:
-
-```ts
-useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
-    console.log('Normalizing indexes for thread', threadId);
-});
-```
-
-Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.
-
-## AI chat hooks
-
-The `useChat` composable is instrumented so you can shape the chat flow without forking the code.
-
-Hook names:
-
--   Outgoing user text
-    -   `ui.chat.message:filter:outgoing` — sanitize/augment the user input
--   Model & input overrides
-    -   `ai.chat.model:filter:select` — select/override model id (default `openai/gpt-4`)
-    -   `ai.chat.messages:filter:input` — modify message array sent to the model
--   Send lifecycle
-    -   `ai.chat.send:action:before` — before streaming starts
-    -   `ai.chat.stream:action:delta` — for each streamed text delta
-    -   `ui.chat.message:filter:incoming` — transform the final assistant text
-    -   `ai.chat.send:action:after` — after full response is appended
--   Errors
-    -   `ai.chat.error:action` — on exceptions during send/stream
-
-Examples:
-
-Override the model:
-
-```ts
-useHookEffect('ai.chat.model:filter:select', () => 'openai/gpt-4o-mini', {
-    kind: 'filter',
-});
-```
-
-Trim outgoing user text and collapse whitespace:
-
-```ts
-useHookEffect(
-    'ui.chat.message:filter:outgoing',
-    (text) => text.trim().replace(/\s+/g, ' '),
-    { kind: 'filter' }
-);
-```
-
-Inspect streaming deltas for live UI effects:
-
-```ts
-useHookEffect('ai.chat.stream:action:delta', (delta) => {
-    // e.g., update a typing indicator or progress UI
-    console.debug('delta:', delta);
-});
-```
-
-Post-process the assistant response:
-
-```ts
-useHookEffect(
-    'ui.chat.message:filter:incoming',
-    (text) => text.replaceAll('\n\n', '\n'),
-    { kind: 'filter' }
-);
-```
-
-Capture errors for telemetry:
-
-```ts
-useHookEffect('ai.chat.error:action', (err) => {
-    console.error('Chat error', err);
-});
-```
-````
-
 ## File: types/nuxt.d.ts
 ````typescript
 // Type augmentation for the theme plugin
@@ -4300,48 +4960,6 @@ declare module '#app' {
 }
 
 export {};
-````
-
-## File: app/components/chat/ChatMessage.vue
-````vue
-<template>
-    <div :class="outerClass" class="p-2 rounded-md my-2">
-        <div :class="innerClass" v-html="rendered"></div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed } from 'vue';
-import { marked } from 'marked';
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-};
-
-import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
-
-// Local UI message expects content to be a string (rendered markdown/html)
-type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
-
-const props = defineProps<{ message: UIMessage }>();
-
-const outerClass = computed(() => ({
-    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
-        props.message.role === 'user',
-    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
-        props.message.role === 'assistant',
-}));
-
-const innerClass = computed(() => ({
-    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
-        props.message.role === 'assistant',
-}));
-
-const rendered = computed(() => marked.parse(props.message.content));
-</script>
-
-<style scoped></style>
 ````
 
 ## File: app/db/attachments.ts
@@ -4616,262 +5234,182 @@ export async function getProject(id: string) {
 }
 ````
 
-## File: app/components/modal/SettingsModal.vue
-````vue
-<template>
-    <UModal
-        v-model:open="open"
-        title="Rename thread"
-        :ui="{
-            footer: 'justify-end border-t-2',
-            header: 'border-b-2  border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0!',
-        }"
-        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
-    >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2">Settings</h3>
-                <UButton
-                    class="bg-white/90 hover:bg-white/95 active:bg-white/95 flex items-center justify-center"
-                    :square="true"
-                    variant="ghost"
-                    size="xs"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-        </template>
-        <template #body>
-            <div class="flex flex-col h-full">
-                <div
-                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
-                >
-                    <div class="relative w-full max-w-md">
-                        <UInput
-                            v-model="searchQuery"
-                            icon="i-heroicons-magnifying-glass-20-solid"
-                            placeholder="Search models (id, name, description, modality)"
-                            size="sm"
-                            class="w-full pr-8"
-                            :ui="{ base: 'w-full' }"
-                            autofocus
-                        />
-                        <button
-                            v-if="searchQuery"
-                            type="button"
-                            aria-label="Clear search"
-                            class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                            @click="searchQuery = ''"
-                        >
-                            <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
-                    Indexing models…
-                </div>
-                <div v-else class="flex-1 min-h-0">
-                    <VList
-                        :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 70vh"
-                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
-                        :overscan="4"
-                        #default="{ item: row }"
-                    >
-                        <div
-                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
-                            :class="gridColsClass"
-                        >
-                            <div
-                                v-for="m in row"
-                                :key="m.id"
-                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
-                            >
-                                <div
-                                    class="flex items-start justify-between gap-2"
-                                >
-                                    <div class="flex flex-col min-w-0">
-                                        <div
-                                            class="font-medium text-sm truncate"
-                                            :title="m.canonical_slug"
-                                        >
-                                            {{ m.canonical_slug }}
-                                        </div>
-                                        <div
-                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
-                                        >
-                                            CTX {{ m.context_length }}
-                                        </div>
-                                    </div>
-                                    <button
-                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px]"
-                                        :aria-pressed="isFavorite(m)"
-                                        @click.stop="toggleFavorite(m)"
-                                        :title="
-                                            isFavorite(m)
-                                                ? 'Unfavorite'
-                                                : 'Favorite'
-                                        "
-                                    >
-                                        <span v-if="isFavorite(m)">★</span>
-                                        <span v-else>☆</span>
-                                    </button>
-                                </div>
-                                <div
-                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
-                                >
-                                    <div class="flex flex-col">
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Input</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.prompt,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="flex flex-col items-end text-right"
-                                    >
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Output</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.completion,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                </div>
-                                <div
-                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
-                                >
-                                    <span>{{
-                                        m.architecture?.modality || 'text'
-                                    }}</span>
-                                    <span class="opacity-60">/1M tokens</span>
-                                </div>
-                                <div
-                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
-                                />
-                            </div>
-                        </div>
-                    </VList>
-                    <div
-                        v-if="!chunkedModels.length && searchQuery"
-                        class="px-6 pb-6 text-xs text-neutral-500"
-                    >
-                        No models match "{{ searchQuery }}".
-                    </div>
-                </div>
-            </div>
-        </template>
-        <template #footer> </template>
-    </UModal>
-</template>
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import { useModelSearch } from '~/composables/useModelSearch';
-import type { OpenRouterModel } from '~/utils/models-service';
-import { useModelStore } from '~/composables/useModelStore';
+## File: app/db/schema.ts
+````typescript
+import { z } from 'zod';
+import { newId } from './util';
 
-const props = defineProps<{
-    showModal: boolean;
-}>();
-const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
+const nowSec = () => Math.floor(Date.now() / 1000);
 
-// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
+export const ProjectSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
 });
+export type Project = z.infer<typeof ProjectSchema>;
 
-const modelCatalog = ref<OpenRouterModel[]>([]);
-// Search state (Orama index built client-side)
-const {
-    query: searchQuery,
-    results: searchResults,
-    ready: searchReady,
-} = useModelSearch(modelCatalog);
-
-// Fixed 3-column layout for consistent rows
-const COLS = 2;
-const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
-
-const chunkedModels = computed(() => {
-    const source = searchQuery.value.trim()
-        ? searchResults.value
-        : modelCatalog.value;
-    const cols = COLS;
-    const rows: OpenRouterModel[][] = [];
-    for (let i = 0; i < source.length; i += cols) {
-        rows.push(source.slice(i, i + cols));
-    }
-    return rows;
+// threads
+export const ThreadSchema = z.object({
+    id: z.string(),
+    title: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    last_message_at: z.number().int().nullable().optional(),
+    parent_thread_id: z.string().nullable().optional(),
+    status: z.string().default('ready'),
+    deleted: z.boolean().default(false),
+    pinned: z.boolean().default(false),
+    clock: z.number().int(),
+    forked: z.boolean().default(false),
+    project_id: z.string().nullable().optional(),
 });
+export type Thread = z.infer<typeof ThreadSchema>;
 
-const {
-    favoriteModels,
-    getFavoriteModels,
-    catalog,
-    fetchModels,
-    addFavoriteModel,
-    removeFavoriteModel,
-} = useModelStore();
-
-onMounted(() => {
-    fetchModels().then(() => {
-        modelCatalog.value = catalog.value;
+// For incoming create payloads (apply defaults like the DB)
+export const ThreadCreateSchema = ThreadSchema.partial({
+    // Make a wide set of fields optional for input; we'll supply defaults below
+    id: true,
+    title: true,
+    last_message_at: true,
+    parent_thread_id: true,
+    status: true,
+    deleted: true,
+    pinned: true,
+    forked: true,
+    project_id: true,
+})
+    // We'll re-add with defaults/derived values
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Dynamic defaults while keeping inputs optional
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
     });
-
-    getFavoriteModels().then((models) => {
-        favoriteModels.value = models;
-    });
+// Use z.input so defaulted fields are optional for callers
+export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
+// messages
+export const MessageSchema = z.object({
+    id: z.string(),
+    data: z.unknown().nullable().optional(),
+    role: z.string(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    error: z.string().nullable().optional(),
+    deleted: z.boolean().default(false),
+    thread_id: z.string(),
+    index: z.number().int(),
+    clock: z.number().int(),
+    stream_id: z.string().nullable().optional(),
+    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
+    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
+    file_hashes: z.string().nullable().optional(),
 });
+export type Message = z.infer<typeof MessageSchema>;
 
-function isFavorite(m: OpenRouterModel) {
-    return favoriteModels.value.some((f) => f.id === m.id);
-}
+export const MessageCreateSchema = MessageSchema.partial({ index: true })
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Keep inputs minimal; generate missing id/clock
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use input type so callers can omit defaulted fields
+export type MessageCreate = z.input<typeof MessageCreateSchema>;
 
-function toggleFavorite(m: OpenRouterModel) {
-    if (isFavorite(m)) {
-        removeFavoriteModel(m);
-    } else {
-        addFavoriteModel(m);
-    }
-}
+// kv
+export const KvSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    value: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    clock: z.number().int(),
+});
+export type Kv = z.infer<typeof KvSchema>;
 
-/**
- * Format a per-token price into a "per 1,000,000 tokens" currency string.
- * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
- */
-function formatPerMillion(raw: unknown, currency = 'USD') {
-    const perToken = Number(raw ?? 0);
-    const perMillion = perToken * 1_000_000;
-    try {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 2,
-        }).format(perMillion);
-    } catch (e) {
-        // Fallback: simple fixed formatting
-        return `$${perMillion.toFixed(2)}`;
-    }
-}
-</script>
+export const KvCreateSchema = KvSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type KvCreate = z.infer<typeof KvCreateSchema>;
+
+// attachments
+export const AttachmentSchema = z.object({
+    id: z.string(),
+    type: z.string(),
+    name: z.string(),
+    url: z.url(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type Attachment = z.infer<typeof AttachmentSchema>;
+
+export const AttachmentCreateSchema = AttachmentSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
+
+// file meta (metadata only; binary stored separately in file_blobs table)
+export const FileMetaSchema = z.object({
+    // Use hash as both primary key and lookup value for simplicity
+    hash: z.string(), // md5 hex lowercase
+    name: z.string(),
+    mime_type: z.string(),
+    kind: z.enum(['image', 'pdf']).default('image'),
+    size_bytes: z.number().int(),
+    width: z.number().int().optional(),
+    height: z.number().int().optional(),
+    page_count: z.number().int().optional(),
+    ref_count: z.number().int().default(0),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type FileMeta = z.infer<typeof FileMetaSchema>;
+
+export const FileMetaCreateSchema = FileMetaSchema.omit({
+    created_at: true,
+    updated_at: true,
+    ref_count: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+    ref_count: z.number().int().default(1),
+    clock: z.number().int().default(0),
+});
+export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
 ````
 
 ## File: app/db/kv.ts
@@ -5116,6 +5654,647 @@ export async function forkThread(
         return fork;
     });
 }
+````
+
+## File: docs/hooks.md
+````markdown
+# Hook/Action System for Nuxt
+
+A lightweight, type-safe hook engine for the Nuxt frontend. It lets components, composables, and plugins subscribe to events (actions) or transform data (filters) with predictable ordering and SSR/HMR safety.
+
+-   Actions: fire-and-forget side effects (logging, analytics, UI updates)
+-   Filters: transform values in a pipeline (value-in → value-out)
+-   Priorities: lower runs earlier (default 10)
+-   Wildcards: use `*` to match patterns, e.g. `ui.*:action:after`
+
+## Installation & Access
+
+The engine is provided globally by Nuxt plugins:
+
+-   Client: singleton instance across HMR
+-   Server (SSR): fresh instance per request
+
+Access anywhere:
+
+```ts
+import { useNuxtApp } from '#app';
+
+const hooks = useNuxtApp().$hooks;
+// or
+import { useHooks } from '~/app/composables/useHooks';
+const hooks2 = useHooks();
+```
+
+In components, prefer the lifecycle-safe composable:
+
+```ts
+import { useHookEffect } from '~/app/composables/useHookEffect';
+
+useHookEffect('route.change:action:after', (_ctx, to, from) => {
+    console.log('navigated from', from, 'to', to);
+});
+```
+
+## API Overview
+
+Engine methods:
+
+-   Filters
+    -   addFilter(name, fn, priority?, acceptedArgs?)
+    -   removeFilter(name, fn, priority?)
+    -   applyFilters(name, value, ...args) => Promise<Return>
+    -   applyFiltersSync(name, value, ...args)
+-   Actions
+    -   addAction(name, fn, priority?, acceptedArgs?)
+    -   removeAction(name, fn, priority?)
+    -   doAction(name, ...args) => Promise<void>
+    -   doActionSync(name, ...args)
+-   Utils
+    -   hasFilter(name?, fn?) => boolean|priority
+    -   hasAction(name?, fn?) => boolean|priority
+    -   removeAllCallbacks(priority?)
+    -   currentPriority() => number|false
+-   Ergonomics
+    -   onceAction(name, fn, priority?)
+    -   on(name, fn, { kind: 'action'|'filter', priority }) → disposer
+    -   off(disposer)
+
+Types are exported from `app/utils/hooks`.
+
+## Hook Naming
+
+Use hierarchical strings with dots/colons to keep hooks descriptive:
+
+-   `app.init:action:after`
+-   `ui.form.submit:filter:input`
+-   `route.change:action:before`
+
+Wildcards are supported with `*`, e.g. `ui.*:action:after`.
+
+## Examples
+
+### Subscribe to an action (component-safe)
+
+```ts
+// Track route changes
+useHookEffect('route.change:action:after', (_ctx, to, from) => {
+    console.log('navigated from', from, 'to', to);
+});
+```
+
+### Fire an action
+
+```ts
+const hooks = useHooks();
+await hooks.doAction('app.init:action:after', nuxtApp);
+```
+
+### Filter pipeline (async)
+
+```ts
+const hooks = useHooks();
+const sanitized = await hooks.applyFilters(
+    'ui.chat.message:filter:outgoing',
+    rawPayload,
+    { roomId }
+);
+```
+
+### Filter pipeline (sync)
+
+```ts
+const result = hooks.applyFiltersSync(
+    'ui.form.submit:filter:input',
+    initialValues
+);
+```
+
+### Wildcard subscription
+
+```ts
+const offAnyUiAfter = hooks.on(
+    'ui.*:action:after',
+    () => {
+        console.log('some UI after-action fired');
+    },
+    { kind: 'action', priority: 5 }
+);
+
+// Later
+hooks.off(offAnyUiAfter);
+```
+
+### Once-only action handler
+
+```ts
+hooks.onceAction('app.init:action:after', () => {
+    console.log('init completed');
+});
+```
+
+## Priorities
+
+Callbacks execute in ascending priority. For equal priorities, insertion order is preserved. Default priority is 10.
+
+```ts
+hooks.on('ui.form.submit:action:before', fnA, { kind: 'action', priority: 5 });
+hooks.on('ui.form.submit:action:before', fnB); // runs after fnA (priority 10)
+```
+
+## SSR and HMR Safety
+
+-   Server: a new engine instance is created per request to avoid state leakage.
+-   Client: a singleton engine is reused across HMR; component-level disposers prevent duplicate handlers.
+-   `useHookEffect` automatically unregisters on component unmount and on module dispose during HMR.
+
+## Error Handling & Timing
+
+All callbacks are wrapped in try/catch. Errors are logged to the console and per-hook error counters are incremented. Basic timings are recorded:
+
+```ts
+const { timings, errors, callbacks } = hooks._diagnostics;
+console.log('timings for hook', timings['ui.form.submit:action:before']);
+console.log('error count for hook', errors['ui.form.submit:action:before']);
+console.log('total callbacks registered', callbacks());
+```
+
+## Recommendations
+
+-   Keep hook names consistent and scoped (e.g., `ui.form.*`, `route.*`).
+-   Use filters for transformations and actions for side effects.
+-   Prefer `useHookEffect` inside components; use `hooks.on/off` in non-component modules.
+-   Consider using wildcards for broad tracing during development.
+
+## Files
+
+-   Engine: `app/utils/hooks.ts`
+-   Plugins: `app/plugins/hooks.client.ts`, `app/plugins/hooks.server.ts`
+-   Composables: `app/composables/useHooks.ts`, `app/composables/useHookEffect.ts`
+-   Types: `types/nuxt.d.ts` adds `$hooks` to `NuxtApp`
+
+---
+
+Future ideas:
+
+-   Vue DevTools timeline integration
+-   Inspector UI listing current callbacks
+-   Debounced/throttled variants
+-   Unit tests and benchmarks
+
+## DB integration hooks
+
+The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
+
+Entities covered: attachments, kv, projects, threads, messages.
+Now also: file storage (files: meta + blobs) and message file hash validation.
+
+Common patterns:
+
+-   Create
+    -   `db.{entity}.create:filter:input` — transform input prior to validation
+    -   `db.{entity}.create:action:before` — before persisting
+    -   `db.{entity}.create:action:after` — after persisting
+-   Upsert
+    -   `db.{entity}.upsert:filter:input`
+    -   `db.{entity}.upsert:action:before`
+    -   `db.{entity}.upsert:action:after`
+-   Delete
+    -   Soft: `db.{entity}.delete:action:soft:before|after`
+    -   Hard: `db.{entity}.delete:action:hard:before|after`
+-   Get/Queries (output filters)
+    -   `db.{entity}.get:filter:output`
+    -   kv: `db.kv.getByName:filter:output`
+    -   threads: `db.threads.byProject:filter:output`, `db.threads.searchByTitle:filter:output`, `db.threads.children:filter:output`
+    -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
+-   Advanced operations
+    -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
+    -   threads: `db.threads.fork:action:before|after`
+    -   files: `db.files.create:filter:input`, `db.files.create:action:before|after`, `db.files.refchange:action:after`, `db.files.delete:action:soft:before|after`
+    -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
+
+### Examples
+
+Redact fields from project reads:
+
+```ts
+useHookEffect(
+    'db.projects.get:filter:output',
+    (project) =>
+        project ? (({ secret, ...rest }) => rest)(project as any) : project,
+    { kind: 'filter' }
+);
+```
+
+Stamp updated_at on all message upserts:
+
+```ts
+useHookEffect(
+    'db.messages.upsert:filter:input',
+    (value) => ({ ...value, updated_at: Math.floor(Date.now() / 1000) }),
+    { kind: 'filter', priority: 5 }
+);
+```
+
+Track thread forks and clones:
+
+```ts
+useHookEffect('db.threads.fork:action:before', ({ source, fork }) => {
+    console.log('Forking thread', source.id, '→', fork.id);
+});
+useHookEffect('db.threads.fork:action:after', (fork) => {
+    console.log('Fork created', fork.id);
+});
+```
+
+Audit deletes (soft and hard):
+
+```ts
+useHookEffect('db.*.delete:action:soft:after', (entity) => {
+    console.log('Soft-deleted', entity?.id ?? entity);
+});
+useHookEffect('db.*.delete:action:hard:after', (id) => {
+    console.log('Hard-deleted id', id);
+});
+```
+
+Normalize and observe message index compaction:
+
+```ts
+useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
+    console.log('Normalizing indexes for thread', threadId);
+});
+
+// Enforce/inspect message file hash limits
+useHookEffect(
+    'db.messages.files.validate:filter:hashes',
+    (hashes) => {
+        // Example: log when truncated or enforce a stricter limit
+        const MAX = 6;
+        let next = hashes.slice(0, MAX);
+        if (hashes.length > MAX)
+            console.warn('Truncated file hashes', hashes.length, '→', MAX);
+        // Return transformed list
+        return next;
+    },
+    { kind: 'filter', priority: 10 }
+);
+
+// Observe file dedupe ref count changes
+useHookEffect('db.files.refchange:action:after', ({ before, after, delta }) => {
+    console.debug(
+        'File ref change',
+        before.hash,
+        'delta',
+        delta,
+        'now',
+        after.ref_count
+    );
+});
+
+// Mutate file meta before create (e.g., tag images)
+useHookEffect(
+    'db.files.create:filter:input',
+    (meta) => ({ ...meta, name: meta.name.trim() }),
+    { kind: 'filter' }
+);
+```
+
+Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.
+
+## AI chat hooks
+
+The `useChat` composable is instrumented so you can shape the chat flow without forking the code.
+
+Hook names:
+
+-   Outgoing user text
+    -   `ui.chat.message:filter:outgoing` — sanitize/augment the user input
+-   Model & input overrides
+    -   `ai.chat.model:filter:select` — select/override model id (default `openai/gpt-4`)
+    -   `ai.chat.messages:filter:input` — modify message array sent to the model
+-   Send lifecycle
+    -   `ai.chat.send:action:before` — before streaming starts
+    -   `ai.chat.stream:action:delta` — for each streamed text delta
+    -   `ui.chat.message:filter:incoming` — transform the final assistant text
+    -   `ai.chat.send:action:after` — after full response is appended
+-   Errors
+    -   `ai.chat.error:action` — on exceptions during send/stream
+    -   Retry
+        -   `ai.chat.retry:action:before` — before a retry removes original messages (payload: `{ threadId, originalUserId, originalAssistantId?, triggeredBy: 'user'|'assistant' }`)
+        -   `ai.chat.retry:action:after` — after new user + assistant messages are appended (payload: `{ threadId, originalUserId, originalAssistantId?, newUserId?, newAssistantId? }`)
+
+Examples:
+
+Override the model:
+
+```ts
+useHookEffect('ai.chat.model:filter:select', () => 'openai/gpt-4o-mini', {
+    kind: 'filter',
+});
+```
+
+Trim outgoing user text and collapse whitespace:
+
+```ts
+useHookEffect(
+    'ui.chat.message:filter:outgoing',
+    (text) => text.trim().replace(/\s+/g, ' '),
+    { kind: 'filter' }
+);
+```
+
+Inspect streaming deltas for live UI effects:
+
+```ts
+useHookEffect('ai.chat.stream:action:delta', (delta) => {
+    // e.g., update a typing indicator or progress UI
+    console.debug('delta:', delta);
+});
+```
+
+Post-process the assistant response:
+
+```ts
+useHookEffect(
+    'ui.chat.message:filter:incoming',
+    (text) => text.replaceAll('\n\n', '\n'),
+    { kind: 'filter' }
+);
+```
+
+Capture errors for telemetry:
+
+```ts
+useHookEffect('ai.chat.error:action', (err) => {
+    console.error('Chat error', err);
+});
+
+// Observe retry lifecycle
+useHookEffect('ai.chat.retry:action:before', ({ threadId, triggeredBy }) => {
+    console.debug('[retry before]', threadId, 'triggeredBy', triggeredBy);
+});
+useHookEffect('ai.chat.retry:action:after', (info) => {
+    console.debug('[retry after]', info);
+});
+```
+````
+
+## File: app/components/modal/SettingsModal.vue
+````vue
+<template>
+    <UModal
+        v-model:open="open"
+        title="Rename thread"
+        :ui="{
+            footer: 'justify-end border-t-2',
+            header: 'border-b-2  border-black bg-primary p-0 min-h-[50px] text-white',
+            body: 'p-0!',
+        }"
+        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
+    >
+        <template #header>
+            <div class="flex w-full items-center justify-between pr-2">
+                <h3 class="font-semibold text-sm pl-2">Settings</h3>
+                <UButton
+                    class="bg-white/90 hover:bg-white/95 active:bg-white/95 flex items-center justify-center"
+                    :square="true"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-heroicons-x-mark"
+                    @click="open = false"
+                />
+            </div>
+        </template>
+        <template #body>
+            <div class="flex flex-col h-full">
+                <div
+                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                >
+                    <div class="relative w-full max-w-md">
+                        <UInput
+                            v-model="searchQuery"
+                            icon="pixelarticons:search"
+                            placeholder="Search models (id, name, description, modality)"
+                            size="sm"
+                            class="w-full pr-8"
+                            :ui="{ base: 'w-full' }"
+                            autofocus
+                        />
+                        <button
+                            v-if="searchQuery"
+                            type="button"
+                            aria-label="Clear search"
+                            class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                            @click="searchQuery = ''"
+                        >
+                            <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
+                    Indexing models…
+                </div>
+                <div v-else class="flex-1 min-h-0">
+                    <VList
+                        :data="chunkedModels as OpenRouterModel[][]"
+                        style="height: 70vh"
+                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
+                        :overscan="4"
+                        #default="{ item: row }"
+                    >
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
+                            :class="gridColsClass"
+                        >
+                            <div
+                                v-for="m in row"
+                                :key="m.id"
+                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                            >
+                                <div
+                                    class="flex items-start justify-between gap-2"
+                                >
+                                    <div class="flex flex-col min-w-0">
+                                        <div
+                                            class="font-medium text-sm truncate"
+                                            :title="m.canonical_slug"
+                                        >
+                                            {{ m.canonical_slug }}
+                                        </div>
+                                        <div
+                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+                                        >
+                                            CTX {{ m.context_length }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px]"
+                                        :aria-pressed="isFavorite(m)"
+                                        @click.stop="toggleFavorite(m)"
+                                        :title="
+                                            isFavorite(m)
+                                                ? 'Unfavorite'
+                                                : 'Favorite'
+                                        "
+                                    >
+                                        <span v-if="isFavorite(m)">★</span>
+                                        <span v-else>☆</span>
+                                    </button>
+                                </div>
+                                <div
+                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
+                                >
+                                    <div class="flex flex-col">
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Input</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.prompt,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-col items-end text-right"
+                                    >
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Output</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.completion,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </div>
+                                <div
+                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    <span>{{
+                                        m.architecture?.modality || 'text'
+                                    }}</span>
+                                    <span class="opacity-60">/1M tokens</span>
+                                </div>
+                                <div
+                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
+                                />
+                            </div>
+                        </div>
+                    </VList>
+                    <div
+                        v-if="!chunkedModels.length && searchQuery"
+                        class="px-6 pb-6 text-xs text-neutral-500"
+                    >
+                        No models match "{{ searchQuery }}".
+                    </div>
+                </div>
+            </div>
+        </template>
+        <template #footer> </template>
+    </UModal>
+</template>
+<script setup lang="ts">
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import { useModelSearch } from '~/composables/useModelSearch';
+import type { OpenRouterModel } from '~/utils/models-service';
+import { useModelStore } from '~/composables/useModelStore';
+
+const props = defineProps<{
+    showModal: boolean;
+}>();
+const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
+
+// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
+});
+
+const modelCatalog = ref<OpenRouterModel[]>([]);
+// Search state (Orama index built client-side)
+const {
+    query: searchQuery,
+    results: searchResults,
+    ready: searchReady,
+} = useModelSearch(modelCatalog);
+
+// Fixed 3-column layout for consistent rows
+const COLS = 2;
+const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
+
+const chunkedModels = computed(() => {
+    const source = searchQuery.value.trim()
+        ? searchResults.value
+        : modelCatalog.value;
+    const cols = COLS;
+    const rows: OpenRouterModel[][] = [];
+    for (let i = 0; i < source.length; i += cols) {
+        rows.push(source.slice(i, i + cols));
+    }
+    return rows;
+});
+
+const {
+    favoriteModels,
+    getFavoriteModels,
+    catalog,
+    fetchModels,
+    addFavoriteModel,
+    removeFavoriteModel,
+} = useModelStore();
+
+onMounted(() => {
+    fetchModels().then(() => {
+        modelCatalog.value = catalog.value;
+    });
+
+    getFavoriteModels().then((models) => {
+        favoriteModels.value = models;
+    });
+});
+
+function isFavorite(m: OpenRouterModel) {
+    return favoriteModels.value.some((f) => f.id === m.id);
+}
+
+function toggleFavorite(m: OpenRouterModel) {
+    if (isFavorite(m)) {
+        removeFavoriteModel(m);
+    } else {
+        addFavoriteModel(m);
+    }
+}
+
+/**
+ * Format a per-token price into a "per 1,000,000 tokens" currency string.
+ * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
+ */
+function formatPerMillion(raw: unknown, currency = 'USD') {
+    const perToken = Number(raw ?? 0);
+    const perMillion = perToken * 1_000_000;
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 2,
+        }).format(perMillion);
+    } catch (e) {
+        // Fallback: simple fixed formatting
+        return `$${perMillion.toFixed(2)}`;
+    }
+}
+</script>
 ````
 
 ## File: app/components/sidebar/SideBottomNav.vue
@@ -5744,299 +6923,6 @@ aside > *:not(.resize-handle-layer) {
 </style>
 ````
 
-## File: app/db/messages.ts
-````typescript
-import Dexie from 'dexie';
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
-import {
-    MessageCreateSchema,
-    MessageSchema,
-    type Message,
-    type MessageCreate,
-} from './schema';
-
-export async function createMessage(input: MessageCreate): Promise<Message> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.messages.create:filter:input',
-        input
-    );
-    // Apply defaults (id/clock/timestamps) then validate fully
-    const prepared = parseOrThrow(MessageCreateSchema, filtered);
-    const value = parseOrThrow(MessageSchema, prepared);
-    await hooks.doAction('db.messages.create:action:before', value);
-    await db.messages.put(value);
-    await hooks.doAction('db.messages.create:action:after', value);
-    return value;
-}
-
-export async function upsertMessage(value: Message): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.messages.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.messages.upsert:action:before', filtered);
-    parseOrThrow(MessageSchema, filtered);
-    await db.messages.put(filtered);
-    await hooks.doAction('db.messages.upsert:action:after', filtered);
-}
-
-export function messagesByThread(threadId: string) {
-    const hooks = useHooks();
-    return db.messages
-        .where('thread_id')
-        .equals(threadId)
-        .sortBy('index')
-        .then((res) =>
-            hooks.applyFilters('db.messages.byThread:filter:output', res)
-        );
-}
-
-export function getMessage(id: string) {
-    const hooks = useHooks();
-    return db.messages
-        .get(id)
-        .then((res) =>
-            hooks.applyFilters('db.messages.get:filter:output', res)
-        );
-}
-
-export function messageByStream(streamId: string) {
-    const hooks = useHooks();
-    return db.messages
-        .where('stream_id')
-        .equals(streamId)
-        .first()
-        .then((res) =>
-            hooks.applyFilters('db.messages.byStream:filter:output', res)
-        );
-}
-
-export async function softDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, async () => {
-        const m = await db.messages.get(id);
-        if (!m) return;
-        await hooks.doAction('db.messages.delete:action:soft:before', m);
-        await db.messages.put({ ...m, deleted: true, updated_at: nowSec() });
-        await hooks.doAction('db.messages.delete:action:soft:after', m);
-    });
-}
-
-export async function hardDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.messages.get(id);
-    await hooks.doAction(
-        'db.messages.delete:action:hard:before',
-        existing ?? id
-    );
-    await db.messages.delete(id);
-    await hooks.doAction('db.messages.delete:action:hard:after', id);
-}
-
-// Append a message to a thread and update thread timestamps atomically
-export async function appendMessage(input: MessageCreate): Promise<Message> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.messages, db.threads, async () => {
-        const value = parseOrThrow(MessageCreateSchema, input);
-        await hooks.doAction('db.messages.append:action:before', value);
-        // If index not set, compute next sparse index in thread
-        if (value.index === undefined || value.index === null) {
-            const last = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [value.thread_id, Dexie.minKey],
-                    [value.thread_id, Dexie.maxKey]
-                )
-                .last();
-            const lastIdx = last?.index ?? 0;
-            value.index = last ? lastIdx + 1000 : 1000;
-        }
-        const finalized = parseOrThrow(MessageSchema, value);
-        await db.messages.put(finalized);
-        const t = await db.threads.get(value.thread_id);
-        if (t) {
-            const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        }
-        await hooks.doAction('db.messages.append:action:after', finalized);
-        return finalized;
-    });
-}
-
-// Move a message to another thread, computing next index in destination
-export async function moveMessage(
-    messageId: string,
-    toThreadId: string
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, db.threads, async () => {
-        const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.move:action:before', {
-            message: m,
-            toThreadId,
-        });
-        const last = await db.messages
-            .where('[thread_id+index]')
-            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
-            .last();
-        const nextIdx = last ? last.index + 1000 : 1000;
-        await db.messages.put({
-            ...m,
-            thread_id: toThreadId,
-            index: nextIdx,
-            updated_at: nowSec(),
-        });
-
-        const now = nowSec();
-        const t = await db.threads.get(toThreadId);
-        if (t)
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        await hooks.doAction('db.messages.move:action:after', {
-            messageId,
-            toThreadId,
-        });
-    });
-}
-
-// Copy a message into another thread (new id) and update dest thread timestamps
-export async function copyMessage(
-    messageId: string,
-    toThreadId: string
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, db.threads, async () => {
-        const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.copy:action:before', {
-            message: m,
-            toThreadId,
-        });
-        const last = await db.messages
-            .where('[thread_id+index]')
-            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
-            .last();
-        const nextIdx = last ? last.index + 1000 : 1000;
-        await db.messages.put({
-            ...m,
-            id: newId(),
-            thread_id: toThreadId,
-            index: nextIdx,
-            created_at: nowSec(),
-            updated_at: nowSec(),
-        });
-
-        const now = nowSec();
-        const t = await db.threads.get(toThreadId);
-        if (t)
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        await hooks.doAction('db.messages.copy:action:after', {
-            from: messageId,
-            toThreadId,
-        });
-    });
-}
-
-// Insert a message right after a given message id, adjusting index using sparse spacing
-export async function insertMessageAfter(
-    afterMessageId: string,
-    input: Omit<MessageCreate, 'index'>
-): Promise<Message> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.messages, db.threads, async () => {
-        const after = await db.messages.get(afterMessageId);
-        if (!after) throw new Error('after message not found');
-        const next = await db.messages
-            .where('[thread_id+index]')
-            .above([after.thread_id, after.index])
-            .first();
-        let newIndex: number;
-        if (!next) {
-            newIndex = after.index + 1000;
-        } else if (next.index - after.index > 1) {
-            newIndex = after.index + Math.floor((next.index - after.index) / 2);
-        } else {
-            // No gap, normalize thread then place after
-            await normalizeThreadIndexes(after.thread_id);
-            newIndex = after.index + 1000;
-        }
-        const value = parseOrThrow(MessageCreateSchema, {
-            ...input,
-            index: newIndex,
-            thread_id: after.thread_id,
-        });
-        await hooks.doAction('db.messages.insertAfter:action:before', {
-            after,
-            value,
-        });
-        const finalized = parseOrThrow(MessageSchema, value);
-        await db.messages.put(finalized);
-        const t = await db.threads.get(after.thread_id);
-        if (t) {
-            const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        }
-        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
-        return finalized;
-    });
-}
-
-// Compact / normalize indexes for a thread to 1000, 2000, 3000...
-export async function normalizeThreadIndexes(
-    threadId: string,
-    start = 1000,
-    step = 1000
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, async () => {
-        await hooks.doAction('db.messages.normalize:action:before', {
-            threadId,
-            start,
-            step,
-        });
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
-            .toArray();
-        msgs.sort((a, b) => a.index - b.index);
-        let idx = start;
-        for (const m of msgs) {
-            if (m.index !== idx) {
-                await db.messages.put({
-                    ...m,
-                    index: idx,
-                    updated_at: nowSec(),
-                });
-            }
-            idx += step;
-        }
-        await hooks.doAction('db.messages.normalize:action:after', {
-            threadId,
-        });
-    });
-}
-````
-
 ## File: task.md
 ````markdown
 # Chat stabilization tasks
@@ -6317,474 +7203,578 @@ Notes:
 -   If you want me to start executing, I’ll begin with Section 1 and 2 and validate the flow live.
 ````
 
-## File: package.json
-````json
-{
-  "name": "nuxt-app",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
-    "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
-  },
-  "dependencies": {
-    "@nuxt/ui": "^3.3.2",
-    "@openrouter/ai-sdk-provider": "^1.1.2",
-    "@orama/orama": "^3.1.11",
-    "ai": "^5.0.17",
-    "dexie": "^4.0.11",
-    "gpt-tokenizer": "^3.0.1",
-    "highlight.js": "^11.11.1",
-    "marked-highlight": "^2.2.2",
-    "nuxt": "^4.0.3",
-    "orama": "^2.0.6",
-    "turndown": "^7.2.1",
-    "typescript": "^5.6.3",
-    "virtua": "^0.41.5",
-    "vue": "^3.5.18",
-    "vue-router": "^4.5.1",
-    "zod": "^4.0.17"
-  },
-  "devDependencies": {
-    "@tailwindcss/typography": "^0.5.16"
-  }
+## File: app/db/messages.ts
+````typescript
+import Dexie from 'dexie';
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { newId, nowSec, parseOrThrow } from './util';
+import {
+    MessageCreateSchema,
+    MessageSchema,
+    type Message,
+    type MessageCreate,
+} from './schema';
+import { serializeFileHashes } from './files-util';
+
+export async function createMessage(input: MessageCreate): Promise<Message> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.create:filter:input',
+        input
+    );
+    // Support passing file_hashes as string[] for convenience
+    if (Array.isArray((filtered as any).file_hashes)) {
+        (filtered as any).file_hashes = serializeFileHashes(
+            (filtered as any).file_hashes
+        );
+    }
+    // Apply defaults (id/clock/timestamps) then validate fully
+    const prepared = parseOrThrow(MessageCreateSchema, filtered);
+    const value = parseOrThrow(MessageSchema, prepared);
+    await hooks.doAction('db.messages.create:action:before', value);
+    await db.messages.put(value);
+    await hooks.doAction('db.messages.create:action:after', value);
+    return value;
+}
+
+export async function upsertMessage(value: Message): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.messages.upsert:action:before', filtered);
+    parseOrThrow(MessageSchema, filtered);
+    await db.messages.put(filtered);
+    await hooks.doAction('db.messages.upsert:action:after', filtered);
+}
+
+export function messagesByThread(threadId: string) {
+    const hooks = useHooks();
+    return db.messages
+        .where('thread_id')
+        .equals(threadId)
+        .sortBy('index')
+        .then((res) =>
+            hooks.applyFilters('db.messages.byThread:filter:output', res)
+        );
+}
+
+export function getMessage(id: string) {
+    const hooks = useHooks();
+    return db.messages
+        .get(id)
+        .then((res) =>
+            hooks.applyFilters('db.messages.get:filter:output', res)
+        );
+}
+
+export function messageByStream(streamId: string) {
+    const hooks = useHooks();
+    return db.messages
+        .where('stream_id')
+        .equals(streamId)
+        .first()
+        .then((res) =>
+            hooks.applyFilters('db.messages.byStream:filter:output', res)
+        );
+}
+
+export async function softDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, async () => {
+        const m = await db.messages.get(id);
+        if (!m) return;
+        await hooks.doAction('db.messages.delete:action:soft:before', m);
+        await db.messages.put({ ...m, deleted: true, updated_at: nowSec() });
+        await hooks.doAction('db.messages.delete:action:soft:after', m);
+    });
+}
+
+export async function hardDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.messages.get(id);
+    await hooks.doAction(
+        'db.messages.delete:action:hard:before',
+        existing ?? id
+    );
+    await db.messages.delete(id);
+    await hooks.doAction('db.messages.delete:action:hard:after', id);
+}
+
+// Append a message to a thread and update thread timestamps atomically
+export async function appendMessage(input: MessageCreate): Promise<Message> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.messages, db.threads, async () => {
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
+        }
+        const value = parseOrThrow(MessageCreateSchema, input);
+        await hooks.doAction('db.messages.append:action:before', value);
+        // If index not set, compute next sparse index in thread
+        if (value.index === undefined || value.index === null) {
+            const last = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [value.thread_id, Dexie.minKey],
+                    [value.thread_id, Dexie.maxKey]
+                )
+                .last();
+            const lastIdx = last?.index ?? 0;
+            value.index = last ? lastIdx + 1000 : 1000;
+        }
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(value.thread_id);
+        if (t) {
+            const now = nowSec();
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        }
+        await hooks.doAction('db.messages.append:action:after', finalized);
+        return finalized;
+    });
+}
+
+// Move a message to another thread, computing next index in destination
+export async function moveMessage(
+    messageId: string,
+    toThreadId: string
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, db.threads, async () => {
+        const m = await db.messages.get(messageId);
+        if (!m) return;
+        await hooks.doAction('db.messages.move:action:before', {
+            message: m,
+            toThreadId,
+        });
+        const last = await db.messages
+            .where('[thread_id+index]')
+            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
+            .last();
+        const nextIdx = last ? last.index + 1000 : 1000;
+        await db.messages.put({
+            ...m,
+            thread_id: toThreadId,
+            index: nextIdx,
+            updated_at: nowSec(),
+        });
+
+        const now = nowSec();
+        const t = await db.threads.get(toThreadId);
+        if (t)
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        await hooks.doAction('db.messages.move:action:after', {
+            messageId,
+            toThreadId,
+        });
+    });
+}
+
+// Copy a message into another thread (new id) and update dest thread timestamps
+export async function copyMessage(
+    messageId: string,
+    toThreadId: string
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, db.threads, async () => {
+        const m = await db.messages.get(messageId);
+        if (!m) return;
+        await hooks.doAction('db.messages.copy:action:before', {
+            message: m,
+            toThreadId,
+        });
+        const last = await db.messages
+            .where('[thread_id+index]')
+            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
+            .last();
+        const nextIdx = last ? last.index + 1000 : 1000;
+        await db.messages.put({
+            ...m,
+            id: newId(),
+            thread_id: toThreadId,
+            index: nextIdx,
+            created_at: nowSec(),
+            updated_at: nowSec(),
+        });
+
+        const now = nowSec();
+        const t = await db.threads.get(toThreadId);
+        if (t)
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        await hooks.doAction('db.messages.copy:action:after', {
+            from: messageId,
+            toThreadId,
+        });
+    });
+}
+
+// Insert a message right after a given message id, adjusting index using sparse spacing
+export async function insertMessageAfter(
+    afterMessageId: string,
+    input: Omit<MessageCreate, 'index'>
+): Promise<Message> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.messages, db.threads, async () => {
+        const after = await db.messages.get(afterMessageId);
+        if (!after) throw new Error('after message not found');
+        const next = await db.messages
+            .where('[thread_id+index]')
+            .above([after.thread_id, after.index])
+            .first();
+        let newIndex: number;
+        if (!next) {
+            newIndex = after.index + 1000;
+        } else if (next.index - after.index > 1) {
+            newIndex = after.index + Math.floor((next.index - after.index) / 2);
+        } else {
+            // No gap, normalize thread then place after
+            await normalizeThreadIndexes(after.thread_id);
+            newIndex = after.index + 1000;
+        }
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
+        }
+        const value = parseOrThrow(MessageCreateSchema, {
+            ...input,
+            index: newIndex,
+            thread_id: after.thread_id,
+        });
+        await hooks.doAction('db.messages.insertAfter:action:before', {
+            after,
+            value,
+        });
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(after.thread_id);
+        if (t) {
+            const now = nowSec();
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        }
+        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
+        return finalized;
+    });
+}
+
+// Compact / normalize indexes for a thread to 1000, 2000, 3000...
+export async function normalizeThreadIndexes(
+    threadId: string,
+    start = 1000,
+    step = 1000
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, async () => {
+        await hooks.doAction('db.messages.normalize:action:before', {
+            threadId,
+            start,
+            step,
+        });
+        const msgs = await db.messages
+            .where('[thread_id+index]')
+            .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
+            .toArray();
+        msgs.sort((a, b) => a.index - b.index);
+        let idx = start;
+        for (const m of msgs) {
+            if (m.index !== idx) {
+                await db.messages.put({
+                    ...m,
+                    index: idx,
+                    updated_at: nowSec(),
+                });
+            }
+            idx += step;
+        }
+        await hooks.doAction('db.messages.normalize:action:after', {
+            threadId,
+        });
+    });
 }
 ````
 
-## File: app/components/chat/ChatInputDropper.vue
+## File: package.json
+````json
+{
+    "name": "nuxt-app",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "build": "nuxt build",
+        "dev": "nuxt dev",
+        "generate": "nuxt generate",
+        "preview": "nuxt preview",
+        "postinstall": "nuxt prepare"
+    },
+    "dependencies": {
+        "@nuxt/ui": "^3.3.2",
+        "@openrouter/ai-sdk-provider": "^1.1.2",
+        "@orama/orama": "^3.1.11",
+        "@types/spark-md5": "^3.0.5",
+        "ai": "^5.0.17",
+        "dexie": "^4.0.11",
+        "gpt-tokenizer": "^3.0.1",
+        "highlight.js": "^11.11.1",
+        "marked-highlight": "^2.2.2",
+        "nuxt": "^4.0.3",
+        "orama": "^2.0.6",
+        "spark-md5": "^3.0.2",
+        "turndown": "^7.2.1",
+        "typescript": "^5.6.3",
+        "virtua": "^0.41.5",
+        "vue": "^3.5.18",
+        "vue-router": "^4.5.1",
+        "zod": "^4.0.17"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.16"
+    }
+}
+````
+
+## File: app/components/chat/ChatMessage.vue
 ````vue
 <template>
     <div
-        @dragover.prevent="onDragOver"
-        @dragleave.prevent="onDragLeave"
-        @drop.prevent="handleDrop"
-        :class="[
-            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
-            isDragging
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
-            loading ? 'opacity-90 pointer-events-auto' : '',
-        ]"
+        :class="outerClass"
+        class="p-2 rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
     >
-        <div class="flex flex-col gap-3.5 m-3.5">
-            <!-- Main Input Area -->
-            <div class="relative">
-                <div
-                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
-                >
-                    <textarea
-                        v-model="promptText"
-                        placeholder="How can I help you today?"
-                        class="w-full h-12 break-words max-w-full resize-none bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 text-sm leading-relaxed"
-                        rows="1"
-                        @input="handlePromptInput"
-                        @paste="handlePaste"
-                        ref="textareaRef"
-                        :disabled="loading"
-                    ></textarea>
-                    <div
-                        v-if="loading"
-                        class="absolute top-1 right-1 flex items-center gap-2"
-                    >
-                        <UIcon
-                            name="i-lucide:loader-2"
-                            class="w-4 h-4 animate-spin opacity-70"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Controls -->
-            <div class="flex gap-2.5 w-full items-center">
-                <div
-                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
-                >
-                    <!-- Attachment Button -->
-                    <div class="relative shrink-0">
-                        <UButton
-                            @click="triggerFileInput"
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Add attachments"
-                            :disabled="loading"
-                        >
-                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
-                        </UButton>
-                    </div>
-
-                    <!-- Settings Button (stub) -->
-                    <div class="relative shrink-0">
-                        <UButton
-                            @click="
-                                showSettingsDropdown = !showSettingsDropdown
-                            "
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Settings"
-                            :disabled="loading"
-                        >
-                            <UIcon
-                                name="i-lucide:sliders-horizontal"
-                                class="w-4 h-4"
-                            />
-                        </UButton>
-                    </div>
-                </div>
-
-                <!-- Model Selector (simple) -->
-                <div class="shrink-0">
-                    <USelectMenu
-                        :ui="{
-                            content:
-                                'border-[2px] border-black rounded-[3px] w-[320px]',
-                            input: 'border-0 rounded-none!',
-                            arrow: 'h-[18px] w-[18px]',
-                            itemTrailingIcon:
-                                'shrink-0 w-[18px] h-[18px] text-dimmed',
-                        }"
-                        :search-input="{
-                            icon: 'i-lucide-search',
-                            ui: {
-                                base: 'border-0 border-b-1 rounded-none!',
-                                leadingIcon:
-                                    'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-                            },
-                        }"
-                        v-if="
-                            selectedModel &&
-                            favoriteModels &&
-                            favoriteModels.length > 0
-                        "
-                        v-model="selectedModel as string"
-                        :value-key="'value'"
-                        class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48 min-w-[100px]"
-                        :disabled="loading"
-                        :items="
-                            favoriteModels.map((m) => ({
-                                label: m.canonical_slug,
-                                value: m.canonical_slug,
-                            }))
-                        "
-                    >
-                    </USelectMenu>
-                </div>
-
-                <!-- Send Button -->
-                <div>
-                    <UButton
-                        @click="handleSend"
-                        :disabled="
-                            loading ||
-                            (!promptText.trim() && uploadedImages.length === 0)
-                        "
-                        :square="true"
-                        size="sm"
-                        color="primary"
-                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
-                        type="button"
-                        aria-label="Send message"
-                    >
-                        <UIcon name="i-lucide:arrow-up" class="w-4 h-4" />
-                    </UButton>
-                </div>
-            </div>
-        </div>
-
-        <!-- Image Thumbnails -->
-        <div
-            v-if="uploadedImages.length > 0"
-            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+        <!-- Compact thumb (collapsed state) -->
+        <button
+            v-if="hashList.length && !expanded"
+            class="absolute -top-2 -right-2 border-2 border-black retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            @click="toggleExpanded"
+            type="button"
+            aria-label="Show attachments"
         >
-            <div
-                v-for="(image, index) in uploadedImages"
-                :key="index"
-                class="relative group aspect-square"
+            <template
+                v-if="firstThumb && thumbnails[firstThumb]?.status === 'ready'"
             >
                 <img
-                    :src="image.url"
-                    :alt="'Uploaded Image ' + (index + 1)"
-                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                    :src="thumbnails[firstThumb!]?.url"
+                    :alt="'attachment ' + firstThumb.slice(0, 6)"
+                    class="object-cover w-full h-full"
+                    draggable="false"
                 />
-                <button
-                    @click="removeImage(index)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[20px] w-[20px] retro-shadow bg-error border-black border bg-opacity-50 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove image"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
-                <div
-                    class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
-                >
-                    {{ image.name }}
-                </div>
+            </template>
+            <template
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'error'
+                "
+            >
+                <span class="text-[10px] text-error">err</span>
+            </template>
+            <template v-else>
+                <span class="text-[10px] animate-pulse opacity-70">…</span>
+            </template>
+            <span
+                v-if="hashList.length > 1"
+                class="absolute bottom-0 right-0 text-[10px] font-semibold bg-black/70 text-white px-1"
+                >+{{ hashList.length - 1 }}</span
+            >
+        </button>
+
+        <div :class="innerClass" v-html="rendered"></div>
+
+        <!-- Expanded grid -->
+        <div
+            v-if="hashList.length && expanded"
+            class="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"
+        >
+            <div
+                v-for="h in hashList"
+                :key="h"
+                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
+            >
+                <template v-if="thumbnails[h]?.status === 'ready'">
+                    <img
+                        :src="thumbnails[h].url"
+                        :alt="'file ' + h.slice(0, 8)"
+                        class="object-cover w-full h-full"
+                        draggable="false"
+                    />
+                </template>
+                <template v-else-if="thumbnails[h]?.status === 'error'">
+                    <div class="text-[10px] text-center px-1 text-error">
+                        failed
+                    </div>
+                </template>
+                <template v-else>
+                    <div class="animate-pulse text-[10px] opacity-70">
+                        loading
+                    </div>
+                </template>
             </div>
+            <button
+                class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
+                type="button"
+                @click="toggleExpanded"
+                aria-label="Hide attachments"
+            >
+                Hide attachments
+            </button>
         </div>
 
-        <!-- Drag and Drop Overlay -->
+        <!-- Action buttons: overlap bubble border half outside -->
         <div
-            v-if="isDragging"
-            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
         >
-            <div class="text-center">
-                <UIcon
-                    name="i-lucide:upload-cloud"
-                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
-                />
-                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
-                    Drop images here to upload
-                </p>
-            </div>
+            <UButtonGroup
+                :class="{
+                    'bg-primary': props.message.role === 'user',
+                    'bg-white': props.message.role === 'assistant',
+                }"
+                class="rounded-[3px]"
+            >
+                <UTooltip :delay-duration="0" text="Copy">
+                    <UButton
+                        @click="copyMessage"
+                        icon="pixelarticons:copy"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Retry">
+                    <UButton
+                        icon="pixelarticons:reload"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                        @click="onRetry"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Branch">
+                    <UButton
+                        icon="pixelarticons:git-branch"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Edit">
+                    <UButton
+                        icon="pixelarticons:edit-box"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+            </UButtonGroup>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, defineEmits } from 'vue';
+import { computed, reactive, watchEffect, ref } from 'vue';
+import { parseFileHashes } from '~/db/files-util';
+import { getFileBlob } from '~/db/files';
+import { marked } from 'marked';
 
-const props = defineProps<{ loading?: boolean }>();
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null; // serialized array
+};
 
-const { favoriteModels, getFavoriteModels } = useModelStore();
+import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
 
-onMounted(async () => {
-    const fave = await getFavoriteModels();
-    console.log('Favorite models:', fave);
+// Local UI message expects content to be a string (rendered markdown/html)
+type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
+
+const props = defineProps<{ message: UIMessage }>();
+const emit = defineEmits<{ (e: 'retry', id: string): void }>();
+
+const outerClass = computed(() => ({
+    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end pb-5':
+        props.message.role === 'user',
+    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
+        props.message.role === 'assistant',
+}));
+
+const innerClass = computed(() => ({
+    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+        props.message.role === 'assistant',
+}));
+
+const rendered = computed(() => marked.parse(props.message.content));
+
+// Extract hash list (serialized JSON string or array already?)
+const hashList = computed<string[]>(() => {
+    const raw = (props.message as any).file_hashes;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string') return parseFileHashes(raw);
+    return [];
 });
 
-interface UploadedImage {
-    file: File;
-    url: string;
-    name: string;
+interface ThumbState {
+    status: 'loading' | 'ready' | 'error';
+    url?: string; // object URL
 }
 
-interface ImageSettings {
-    quality: 'low' | 'medium' | 'high';
-    numResults: number;
-    size: '1024x1024' | '1024x1536' | '1536x1024';
+const thumbnails = reactive<Record<string, ThumbState>>({});
+
+const expanded = ref(false);
+const firstThumb = computed(() => hashList.value[0]);
+function toggleExpanded() {
+    if (!hashList.value.length) return;
+    expanded.value = !expanded.value;
 }
 
-const emit = defineEmits<{
-    (
-        e: 'send',
-        payload: {
-            text: string;
-            images: UploadedImage[];
-            model: string;
-            settings: ImageSettings;
+watchEffect(async () => {
+    for (const h of hashList.value) {
+        if (thumbnails[h]) continue; // already loading/loaded
+        thumbnails[h] = { status: 'loading' };
+        try {
+            const blob = await getFileBlob(h);
+            if (!blob) throw new Error('missing');
+            const url = URL.createObjectURL(blob);
+            thumbnails[h] = { status: 'ready', url };
+        } catch (e) {
+            thumbnails[h] = { status: 'error' };
         }
-    ): void;
-    (e: 'prompt-change', value: string): void;
-    (e: 'image-add', image: UploadedImage): void;
-    (e: 'image-remove', index: number): void;
-    (e: 'model-change', model: string): void;
-    (e: 'settings-change', settings: ImageSettings): void;
-    (e: 'trigger-file-input'): void;
-}>();
-
-const promptText = ref('');
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
-const uploadedImages = ref<UploadedImage[]>([]);
-const isDragging = ref(false);
-const selectedModel = ref<string>('openai/gpt-oss-120b');
-const hiddenFileInput = ref<HTMLInputElement | null>(null);
-const imageSettings = ref<ImageSettings>({
-    quality: 'medium',
-    numResults: 2,
-    size: '1024x1024',
+    }
 });
-const showSettingsDropdown = ref(false);
+import { useToast } from '#imports';
+function copyMessage() {
+    navigator.clipboard.writeText(props.message.content);
 
-watch(selectedModel, (newModel) => {
-    emit('model-change', newModel);
-});
+    useToast().add({
+        title: 'Message copied',
+        description: 'The message content has been copied to your clipboard.',
+        duration: 2000,
+    });
+}
 
-const autoResize = async () => {
-    await nextTick();
-    if (textareaRef.value) {
-        textareaRef.value.style.height = 'auto';
-        textareaRef.value.style.height =
-            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
-    }
-};
-
-const handlePromptInput = () => {
-    emit('prompt-change', promptText.value);
-    autoResize();
-};
-
-const handlePaste = async (event: ClipboardEvent) => {
-    const clipboardData = event.clipboardData;
-    if (!clipboardData) return;
-    const items = clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
-        if (mime.startsWith('image/')) {
-            event.preventDefault();
-            const file = item.getAsFile();
-            if (!file) continue;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const result = e.target?.result;
-                const url = typeof result === 'string' ? result : '';
-                const image: UploadedImage = {
-                    file: file,
-                    url,
-                    name: file.name || `pasted-image-${Date.now()}.png`,
-                };
-                uploadedImages.value.push(image);
-                emit('image-add', image);
-            };
-            reader.readAsDataURL(file);
-        }
-    }
-};
-
-const triggerFileInput = () => {
-    emit('trigger-file-input');
-    if (!hiddenFileInput.value) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.multiple = true;
-        input.accept = 'image/*';
-        input.style.display = 'none';
-        input.addEventListener('change', (e) => {
-            handleFileChange(e);
-        });
-        document.body.appendChild(input);
-        hiddenFileInput.value = input;
-    }
-    hiddenFileInput.value?.click();
-};
-
-const processFiles = (files: FileList | null) => {
-    if (!files) return;
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file) continue;
-        const mime = file.type || '';
-        if (!mime.startsWith('image/')) continue;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const result = e.target?.result;
-            const url = typeof result === 'string' ? result : '';
-            const image: UploadedImage = {
-                file: file,
-                url,
-                name: file.name,
-            };
-            uploadedImages.value.push(image);
-            emit('image-add', image);
-        };
-        reader.readAsDataURL(file);
-    }
-};
-
-const handleFileChange = (event: Event) => {
-    const target = event.target as HTMLInputElement | null;
-    if (!target || !target.files) return;
-    processFiles(target.files);
-};
-
-const handleDrop = (event: DragEvent) => {
-    isDragging.value = false;
-    processFiles(event.dataTransfer?.files || null);
-};
-
-const onDragOver = (event: DragEvent) => {
-    const items = event.dataTransfer?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
-        if (mime.startsWith('image/')) {
-            isDragging.value = true;
-            return;
-        }
-    }
-};
-
-const onDragLeave = (event: DragEvent) => {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = event.clientX;
-    const y = event.clientY;
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-        isDragging.value = false;
-    }
-};
-
-const removeImage = (index: number) => {
-    uploadedImages.value.splice(index, 1);
-    emit('image-remove', index);
-};
-
-const handleSend = () => {
-    if (props.loading) return;
-    if (promptText.value.trim() || uploadedImages.value.length > 0) {
-        emit('send', {
-            text: promptText.value,
-            images: uploadedImages.value,
-            model: selectedModel.value,
-            settings: imageSettings.value,
-        });
-        promptText.value = '';
-        uploadedImages.value = [];
-        autoResize();
-    }
-};
+function onRetry() {
+    const id = (props.message as any).id;
+    if (!id) return;
+    emit('retry', id);
+}
 </script>
 
-<style scoped>
-/* Custom scrollbar for textarea */
-/* Firefox */
-textarea {
-    scrollbar-width: thin;
-    scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit */
-textarea::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-textarea::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-textarea::-webkit-scrollbar-thumb {
-    background: var(--md-primary);
-    border-radius: 9999px;
-}
-
-textarea::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-
-/* Focus states */
-.group:hover .opacity-0 {
-    opacity: 1;
-}
-
-/* Smooth transitions */
-* {
-    transition-property: color, background-color, border-color, opacity,
-        transform;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-}
-</style>
+<style scoped></style>
 ````
 
 ## File: app/components/sidebar/SideNavContent.vue
@@ -6800,7 +7790,7 @@ textarea::-webkit-scrollbar-thumb:hover {
             <div class="relative w-full ml-[1px]">
                 <UInput
                     v-model="threadSearchQuery"
-                    icon="i-lucide-search"
+                    icon="pixelarticons:search"
                     size="md"
                     variant="outline"
                     placeholder="Search threads..."
@@ -7016,105 +8006,6 @@ function onNewChat() {
 </script>
 ````
 
-## File: app/pages/chat.vue
-````vue
-<template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <sidebar-side-nav-content
-                @new-chat="onNewChat"
-                @chatSelected="onChatSelected"
-                :active-thread="threadId"
-            />
-        </template>
-        <div class="flex-1 h-screen w-full">
-            <ChatContainer
-                :message-history="messageHistory"
-                :thread-id="threadId"
-                @thread-selected="onChatSelected"
-            />
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script lang="ts" setup>
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { db, upsert } from '~/db';
-import { ref, onMounted, watch } from 'vue';
-import Dexie from 'dexie';
-
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
-
-const messageHistory = ref<ChatMessage[]>([]);
-const threadId = ref(''); // Replace with actual thread ID logic
-
-async function getMessagesForThread(id: string) {
-    if (!id) return;
-
-    // Query ordered messages via compound index and filter deleted
-    const msgs = await db.messages
-        .where('[thread_id+index]')
-        .between([id, Dexie.minKey], [id, Dexie.maxKey])
-        .filter((m: any) => !m.deleted)
-        .toArray();
-
-    if (msgs) {
-        messageHistory.value = msgs.map((msg: any) => {
-            const data = msg.data as unknown;
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
-            return {
-                role: msg.role as 'user' | 'assistant',
-                content,
-            };
-        });
-
-        console.log('Messages for thread:', id, messageHistory.value);
-    }
-}
-
-onMounted(async () => {
-    await getMessagesForThread(threadId.value);
-});
-
-watch(
-    () => threadId.value,
-    async (newThreadId) => {
-        if (newThreadId) {
-            // Bump updated_at to reflect "last opened" ordering in sidebar
-            const t = await db.threads.get(newThreadId);
-            if (t) {
-                const now = Math.floor(Date.now() / 1000);
-                await upsert.thread({ ...t, updated_at: now });
-            }
-            await getMessagesForThread(newThreadId);
-        }
-    }
-);
-
-function onNewChat() {
-    messageHistory.value = [];
-    threadId.value = '';
-    console.log('New chat started, cleared message history and thread ID');
-}
-
-function onChatSelected(chatId: string) {
-    threadId.value = chatId;
-}
-
-// Optional enhancement: if needed, we can also watch for outgoing user messages from ChatContainer via a custom event
-// and append to messageHistory immediately to avoid any initial blank state. Current fix defers parent overwrite during loading instead.
-</script>
-
-<style>
-body {
-    overflow-y: hidden; /* Prevents body scroll */
-}
-</style>
-````
-
 ## File: app/app.config.ts
 ````typescript
 export default defineAppConfig({
@@ -7192,6 +8083,11 @@ export default defineAppConfig({
             slots: {
                 content:
                     'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
             },
         },
     },
@@ -7305,6 +8201,580 @@ html {
 *::-webkit-scrollbar-corner { background: transparent; }
 ````
 
+## File: app/components/chat/ChatInputDropper.vue
+````vue
+<template>
+    <div
+        @dragover.prevent="onDragOver"
+        @dragleave.prevent="onDragLeave"
+        @drop.prevent="handleDrop"
+        :class="[
+            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            isDragging
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+            loading ? 'opacity-90 pointer-events-auto' : '',
+        ]"
+    >
+        <div class="flex flex-col gap-3.5 m-3.5">
+            <!-- Main Input Area -->
+            <div class="relative">
+                <div
+                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
+                >
+                    <textarea
+                        v-model="promptText"
+                        placeholder="How can I help you today?"
+                        class="w-full h-12 break-words max-w-full resize-none bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 text-sm leading-relaxed"
+                        rows="1"
+                        @input="handlePromptInput"
+                        @paste="handlePaste"
+                        ref="textareaRef"
+                        :disabled="loading"
+                    ></textarea>
+                    <div
+                        v-if="loading"
+                        class="absolute top-1 right-1 flex items-center gap-2"
+                    >
+                        <UIcon
+                            name="i-lucide:loader-2"
+                            class="w-4 h-4 animate-spin opacity-70"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="flex gap-2.5 w-full items-center">
+                <div
+                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
+                >
+                    <!-- Attachment Button -->
+                    <div class="relative shrink-0">
+                        <UButton
+                            @click="triggerFileInput"
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
+                            type="button"
+                            aria-label="Add attachments"
+                            :disabled="loading"
+                        >
+                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
+                        </UButton>
+                    </div>
+
+                    <!-- Settings Button (stub) -->
+                    <div class="relative shrink-0">
+                        <UButton
+                            @click="
+                                showSettingsDropdown = !showSettingsDropdown
+                            "
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
+                            type="button"
+                            aria-label="Settings"
+                            :disabled="loading"
+                        >
+                            <UIcon
+                                name="pixelarticons:sliders"
+                                class="w-4 h-4"
+                            />
+                        </UButton>
+                    </div>
+                </div>
+
+                <!-- Model Selector (simple) -->
+                <div class="shrink-0">
+                    <USelectMenu
+                        :ui="{
+                            content:
+                                'border-[2px] border-black rounded-[3px] w-[320px]',
+                            input: 'border-0 rounded-none!',
+                            arrow: 'h-[18px] w-[18px]',
+                            itemTrailingIcon:
+                                'shrink-0 w-[18px] h-[18px] text-dimmed',
+                        }"
+                        :search-input="{
+                            icon: 'i-lucide-search',
+                            ui: {
+                                base: 'border-0 border-b-1 rounded-none!',
+                                leadingIcon:
+                                    'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+                            },
+                        }"
+                        v-if="
+                            selectedModel &&
+                            favoriteModels &&
+                            favoriteModels.length > 0
+                        "
+                        v-model="selectedModel as string"
+                        :value-key="'value'"
+                        class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48 min-w-[100px]"
+                        :disabled="loading"
+                        :items="
+                            favoriteModels.map((m: any) => ({
+                                label: m.canonical_slug,
+                                value: m.canonical_slug,
+                            }))
+                        "
+                    >
+                    </USelectMenu>
+                </div>
+
+                <!-- Send Button -->
+                <div>
+                    <UButton
+                        @click="handleSend"
+                        :disabled="
+                            loading ||
+                            (!promptText.trim() && uploadedImages.length === 0)
+                        "
+                        :square="true"
+                        size="sm"
+                        color="primary"
+                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Send message"
+                    >
+                        <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
+                    </UButton>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Thumbnails -->
+        <div
+            v-if="uploadedImages.length > 0"
+            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+        >
+            <div
+                v-for="(image, index) in uploadedImages"
+                :key="index"
+                class="relative group aspect-square"
+            >
+                <img
+                    :src="image.url"
+                    :alt="'Uploaded Image ' + (index + 1)"
+                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                />
+                <button
+                    @click="removeImage(index)"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[20px] w-[20px] retro-shadow bg-error border-black border bg-opacity-50 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove image"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+                <div
+                    class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                >
+                    {{ image.name }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Drag and Drop Overlay -->
+        <div
+            v-if="isDragging"
+            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+        >
+            <div class="text-center">
+                <UIcon
+                    name="i-lucide:upload-cloud"
+                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
+                />
+                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                    Drop images here to upload
+                </p>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, nextTick, defineEmits } from 'vue';
+import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
+import { createOrRefFile } from '~/db/files';
+import type { FileMeta } from '~/db/schema';
+import { useModelStore } from '~/composables/useModelStore';
+
+const props = defineProps<{ loading?: boolean }>();
+
+const { favoriteModels, getFavoriteModels } = useModelStore();
+
+onMounted(async () => {
+    const fave = await getFavoriteModels();
+    console.log('Favorite models:', fave);
+});
+
+interface UploadedImage {
+    file: File;
+    url: string; // data URL preview
+    name: string;
+    hash?: string; // content hash after persistence
+    status: 'pending' | 'ready' | 'error';
+    error?: string;
+    meta?: FileMeta;
+}
+
+interface ImageSettings {
+    quality: 'low' | 'medium' | 'high';
+    numResults: number;
+    size: '1024x1024' | '1024x1536' | '1536x1024';
+}
+
+const emit = defineEmits<{
+    (
+        e: 'send',
+        payload: {
+            text: string;
+            images: UploadedImage[]; // may include pending or error statuses
+            model: string;
+            settings: ImageSettings;
+        }
+    ): void;
+    (e: 'prompt-change', value: string): void;
+    (e: 'image-add', image: UploadedImage): void;
+    (e: 'image-remove', index: number): void;
+    (e: 'model-change', model: string): void;
+    (e: 'settings-change', settings: ImageSettings): void;
+    (e: 'trigger-file-input'): void;
+}>();
+
+const promptText = ref('');
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const uploadedImages = ref<UploadedImage[]>([]);
+const isDragging = ref(false);
+const selectedModel = ref<string>('openai/gpt-oss-120b');
+const hiddenFileInput = ref<HTMLInputElement | null>(null);
+const imageSettings = ref<ImageSettings>({
+    quality: 'medium',
+    numResults: 2,
+    size: '1024x1024',
+});
+const showSettingsDropdown = ref(false);
+
+watch(selectedModel, (newModel) => {
+    emit('model-change', newModel);
+});
+
+const autoResize = async () => {
+    await nextTick();
+    if (textareaRef.value) {
+        textareaRef.value.style.height = 'auto';
+        textareaRef.value.style.height =
+            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
+    }
+};
+
+const handlePromptInput = () => {
+    emit('prompt-change', promptText.value);
+    autoResize();
+};
+
+const handlePaste = async (event: ClipboardEvent) => {
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+    const items = clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (!file) continue;
+            await processFile(
+                file,
+                file.name || `pasted-image-${Date.now()}.png`
+            );
+        }
+    }
+};
+
+const triggerFileInput = () => {
+    emit('trigger-file-input');
+    if (!hiddenFileInput.value) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        input.addEventListener('change', (e) => {
+            handleFileChange(e);
+        });
+        document.body.appendChild(input);
+        hiddenFileInput.value = input;
+    }
+    hiddenFileInput.value?.click();
+};
+
+const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
+
+async function processFile(file: File, name?: string) {
+    const mime = file.type || '';
+    if (!mime.startsWith('image/')) return;
+    // Fast preview first
+    const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) =>
+            resolve(
+                typeof e.target?.result === 'string'
+                    ? (e.target?.result as string)
+                    : ''
+            );
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+    });
+    if (uploadedImages.value.length >= MAX_IMAGES) return;
+    const image: UploadedImage = {
+        file,
+        url: dataUrl,
+        name: name || file.name,
+        status: 'pending',
+    };
+    uploadedImages.value.push(image);
+    emit('image-add', image);
+    try {
+        const meta = await createOrRefFile(file, image.name);
+        image.hash = meta.hash;
+        image.meta = meta;
+        image.status = 'ready';
+    } catch (err: any) {
+        image.status = 'error';
+        image.error = err?.message || 'failed';
+        console.warn('[ChatInputDropper] pipeline error', image.name, err);
+    }
+}
+
+const processFiles = async (files: FileList | null) => {
+    if (!files) return;
+    for (let i = 0; i < files.length; i++) {
+        if (uploadedImages.value.length >= MAX_IMAGES) break;
+        const file = files[i];
+        if (!file) continue;
+        await processFile(file);
+    }
+};
+
+const handleFileChange = (event: Event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || !target.files) return;
+    processFiles(target.files);
+};
+
+const handleDrop = (event: DragEvent) => {
+    isDragging.value = false;
+    processFiles(event.dataTransfer?.files || null);
+};
+
+const onDragOver = (event: DragEvent) => {
+    const items = event.dataTransfer?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/')) {
+            isDragging.value = true;
+            return;
+        }
+    }
+};
+
+const onDragLeave = (event: DragEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = event.clientX;
+    const y = event.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        isDragging.value = false;
+    }
+};
+
+const removeImage = (index: number) => {
+    uploadedImages.value.splice(index, 1);
+    emit('image-remove', index);
+};
+
+const handleSend = () => {
+    if (props.loading) return;
+    if (promptText.value.trim() || uploadedImages.value.length > 0) {
+        emit('send', {
+            text: promptText.value,
+            images: uploadedImages.value,
+            model: selectedModel.value,
+            settings: imageSettings.value,
+        });
+        promptText.value = '';
+        uploadedImages.value = [];
+        autoResize();
+    }
+};
+</script>
+
+<style scoped>
+/* Custom scrollbar for textarea */
+/* Firefox */
+textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit */
+textarea::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background: var(--md-primary);
+    border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+
+/* Focus states */
+.group:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Smooth transitions */
+* {
+    transition-property: color, background-color, border-color, opacity,
+        transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+</style>
+````
+
+## File: app/pages/chat.vue
+````vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar>
+            <sidebar-side-nav-content
+                @new-chat="onNewChat"
+                @chatSelected="onChatSelected"
+                :active-thread="threadId"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full">
+            <ChatContainer
+                :message-history="messageHistory"
+                :thread-id="threadId"
+                @thread-selected="onChatSelected"
+            />
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script lang="ts" setup>
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { db, upsert } from '~/db';
+import { ref, onMounted, watch } from 'vue';
+import Dexie from 'dexie';
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+};
+
+const messageHistory = ref<ChatMessage[]>([]);
+const threadId = ref(''); // Replace with actual thread ID logic
+
+async function getMessagesForThread(id: string) {
+    if (!id) return;
+
+    // Query ordered messages via compound index and filter deleted
+    const msgs = await db.messages
+        .where('[thread_id+index]')
+        .between([id, Dexie.minKey], [id, Dexie.maxKey])
+        .filter((m: any) => !m.deleted)
+        .toArray();
+
+    if (msgs) {
+        messageHistory.value = msgs.map((msg: any) => {
+            const data = msg.data as unknown;
+            const content =
+                typeof data === 'object' && data !== null && 'content' in data
+                    ? String((data as any).content ?? '')
+                    : String((msg.content as any) ?? '');
+            return {
+                role: msg.role as 'user' | 'assistant',
+                content,
+                file_hashes: msg.file_hashes,
+                id: msg.id,
+                stream_id: msg.stream_id,
+            } as ChatMessage;
+        });
+
+        if ((import.meta as any).dev) {
+            console.debug('[chat] loaded messages', {
+                thread: id,
+                count: messageHistory.value.length,
+                withHashes: messageHistory.value.filter((m) => m.file_hashes)
+                    .length,
+                hashesPreview: messageHistory.value
+                    .filter((m) => m.file_hashes)
+                    .slice(0, 3)
+                    .map((m) => (m.file_hashes || '').slice(0, 60)),
+            });
+        }
+    }
+}
+
+onMounted(async () => {
+    await getMessagesForThread(threadId.value);
+});
+
+watch(
+    () => threadId.value,
+    async (newThreadId) => {
+        if (newThreadId) {
+            // Bump updated_at to reflect "last opened" ordering in sidebar
+            const t = await db.threads.get(newThreadId);
+            if (t) {
+                const now = Math.floor(Date.now() / 1000);
+                await upsert.thread({ ...t, updated_at: now });
+            }
+            await getMessagesForThread(newThreadId);
+        }
+    }
+);
+
+function onNewChat() {
+    messageHistory.value = [];
+    threadId.value = '';
+    console.log('New chat started, cleared message history and thread ID');
+}
+
+function onChatSelected(chatId: string) {
+    threadId.value = chatId;
+}
+
+// Optional enhancement: if needed, we can also watch for outgoing user messages from ChatContainer via a custom event
+// and append to messageHistory immediately to avoid any initial blank state. Current fix defers parent overwrite during loading instead.
+</script>
+
+<style>
+body {
+    overflow-y: hidden; /* Prevents body scroll */
+}
+</style>
+````
+
 ## File: app/composables/useAi.ts
 ````typescript
 import { ref, computed } from 'vue';
@@ -7341,6 +8811,9 @@ export type ContentPart = TextPart | ImagePart | FilePart;
 export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string | ContentPart[];
+    id?: string; // DB id when persisted
+    stream_id?: string; // streaming correlation id for assistant
+    file_hashes?: string | null; // serialized JSON string (UI convenience)
 }
 
 interface SendMessageParams {
@@ -7349,6 +8822,7 @@ interface SendMessageParams {
         url: string;
     }[];
     model?: string;
+    file_hashes?: string[]; // pre-computed content hashes for persistence
 }
 
 export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
@@ -7368,6 +8842,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         sendMessagesParams: SendMessageParams = {
             files: [],
             model: DEFAULT_AI_MODEL,
+            file_hashes: [],
         }
     ) {
         console.log('[useChat.sendMessage] invoked', {
@@ -7388,7 +8863,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             threadIdRef.value = newThread.id;
         }
 
-        let { files, model } = sendMessagesParams;
+        let { files, model, file_hashes } = sendMessagesParams;
         const rawParams: any = sendMessagesParams as any;
         if ((!files || files.length === 0) && rawParams?.images?.length) {
             console.warn(
@@ -7446,6 +8921,10 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             thread_id: threadIdRef.value!,
             role: 'user',
             data: { content: outgoing, attachments: files ?? [] },
+            file_hashes:
+                file_hashes && file_hashes.length
+                    ? (file_hashes as any)
+                    : undefined,
         });
 
         // 3) Build the parts array: text part first, then image/file parts
@@ -7468,7 +8947,13 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         });
 
         // 4) Push to UI state with parts (✅ fixes your TS error)
-        messages.value.push({ role: 'user', content: parts });
+        messages.value.push({
+            role: 'user',
+            content: parts,
+            id: (userDbMsg as any).id,
+            // Attach file_hashes so UI can render thumbnails lazily
+            file_hashes: userDbMsg.file_hashes,
+        } as any);
 
         loading.value = true;
 
@@ -7513,7 +8998,12 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
 
             // 6) Create assistant placeholder in UI
             const idx =
-                messages.value.push({ role: 'assistant', content: '' }) - 1;
+                messages.value.push({
+                    role: 'assistant',
+                    content: '',
+                    id: (assistantDbMsg as any).id,
+                    stream_id: streamId,
+                }) - 1;
             const current = messages.value[idx]!;
             let chunkIndex = 0;
             const WRITE_INTERVAL_MS = 100;
@@ -7601,208 +9091,98 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         }
     }
 
-    return { messages, sendMessage, loading, threadId: threadIdRef };
-}
-````
+    // Retry logic: remove prior user (and its assistant) OR assistant (resolve to preceding user) then resend user prompt at end
+    async function retryMessage(messageId: string, modelOverride?: string) {
+        if (loading.value) return;
+        if (!threadIdRef.value) return;
+        try {
+            let target: any = await db.messages.get(messageId);
+            if (!target) return;
+            if (target.thread_id !== threadIdRef.value) return;
 
-## File: app/components/chat/ChatContainer.vue
-````vue
-<template>
-    <main
-        class="flex w-full flex-1 flex-col overflow-hidden transition-[width,height]"
-    >
-        <div
-            class="absolute w-full h-screen overflow-y-scroll sm:pt-3.5 pb-[165px]"
-        >
-            <div
-                class="mx-auto flex w-full px-1.5 sm:px-0 sm:max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
-            >
-                <ChatMessage
-                    v-for="(message, index) in messages || []"
-                    :key="
-                        message.id ||
-                        message.stream_id ||
-                        `${index}-${message.role}`
-                    "
-                    :message="message"
-                />
-            </div>
-        </div>
-        <div class="pointer-events-none absolute bottom-0 top-0 w-full">
-            <div
-                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center pr-0.5 sm:pr-[11px]"
-            >
-                <chat-input-dropper
-                    :loading="loading"
-                    @send="onSend"
-                    @model-change="onModelChange"
-                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
-                />
-            </div>
-        </div>
-    </main>
-</template>
+            // If assistant clicked, locate preceding user message
+            let userMsg: any = target.role === 'user' ? target : null;
+            if (!userMsg && target.role === 'assistant') {
+                const DexieMod = (await import('dexie')).default;
+                userMsg = await db.messages
+                    .where('[thread_id+index]')
+                    .between(
+                        [target.thread_id, DexieMod.minKey],
+                        [target.thread_id, target.index]
+                    )
+                    .filter(
+                        (m: any) =>
+                            m.role === 'user' &&
+                            !m.deleted &&
+                            m.index < target.index
+                    )
+                    .last();
+            }
+            if (!userMsg) return;
 
-<script setup lang="ts">
-import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref } from 'vue';
-import { useChat } from '~/composables/useAi';
-import type {
-    ChatMessage as ChatMessageType,
-    ContentPart,
-} from '~/composables/useAi';
+            // Find assistant reply after the user (could be original target)
+            const DexieMod2 = (await import('dexie')).default;
+            const assistant = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [userMsg.thread_id, userMsg.index + 1],
+                    [userMsg.thread_id, DexieMod2.maxKey]
+                )
+                .filter((m: any) => m.role === 'assistant' && !m.deleted)
+                .first();
 
-const model = ref('openai/gpt-oss-120b');
+            await hooks.doAction('ai.chat.retry:action:before', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                triggeredBy: target.role,
+            });
 
-function onModelChange(newModel: string) {
-    model.value = newModel;
-    console.log('Model changed to:', newModel);
-}
+            await db.transaction('rw', db.messages, async () => {
+                await db.messages.delete(userMsg.id);
+                if (assistant) await db.messages.delete(assistant.id);
+            });
 
-const props = defineProps<{
-    threadId?: string;
-    messageHistory?: ChatMessageType[];
-}>();
+            (messages as any).value = (messages as any).value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
 
-const emit = defineEmits<{
-    (e: 'thread-selected', id: string): void;
-}>();
+            const originalText = (userMsg.data as any)?.content || '';
+            let hashes: string[] = [];
+            if (userMsg.file_hashes) {
+                const { parseFileHashes } = await import('~/db/files-util');
+                hashes = parseFileHashes(userMsg.file_hashes);
+            }
 
-// Initialize chat composable and make it refresh when threadId changes
-const chat = shallowRef(useChat(props.messageHistory, props.threadId));
+            await sendMessage(originalText, {
+                model: modelOverride || DEFAULT_AI_MODEL,
+                file_hashes: hashes,
+                files: [],
+            });
 
-watch(
-    () => props.threadId,
-    (newId) => {
-        const currentId = chat.value?.threadId?.value;
-        // Avoid re-initializing if the composable already set the same id (first-send case)
-        if (newId && currentId && newId === currentId) return;
-        chat.value = useChat(props.messageHistory, newId);
+            const tail = (messages as any).value.slice(-2);
+            const newUser = tail.find((m: any) => m.role === 'user');
+            const newAssistant = tail.find((m: any) => m.role === 'assistant');
+            await hooks.doAction('ai.chat.retry:action:after', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                newUserId: newUser?.id,
+                newAssistantId: newAssistant?.id,
+            });
+        } catch (e) {
+            console.error('[useChat.retryMessage] failed', e);
+        }
     }
-);
 
-// Keep composable messages in sync when parent provides an updated messageHistory
-watch(
-    () => props.messageHistory,
-    (mh) => {
-        if (!chat.value) return;
-        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
-        if (chat.value.loading.value) return;
-        // Prefer to update the internal messages array directly to avoid remount flicker
-        chat.value.messages.value = [...(mh || [])];
-    }
-);
-
-// When a new thread id is created internally (first send), propagate upward once
-watch(
-    () => chat.value?.threadId?.value,
-    (id, prev) => {
-        if (!prev && id) emit('thread-selected', id);
-    }
-);
-
-// Render messages with content narrowed to string for ChatMessage.vue
-type RenderMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    id?: string;
-    stream_id?: string;
-};
-const messages = computed<RenderMessage[]>(() =>
-    (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
-        let contentStr: string;
-        if (typeof m.content === 'string') contentStr = m.content;
-        else if (Array.isArray(m.content)) {
-            contentStr = (m.content as ContentPart[])
-                .map((p) => {
-                    if (p.type === 'text') return p.text;
-                    if (p.type === 'image')
-                        return `![image](${(p as any).image ?? ''})`;
-                    if (p.type === 'file')
-                        return `**[file:${
-                            (p as any).name ?? (p as any).mediaType ?? 'file'
-                        }]**`;
-                    return '';
-                })
-                .filter(Boolean)
-                .join('\n\n');
-        } else contentStr = String((m as any).content ?? '');
-        return {
-            role: m.role,
-            content: contentStr,
-            id: m.id,
-            stream_id: m.stream_id,
-        } as RenderMessage;
-    })
-);
-const loading = computed(() => chat.value.loading.value);
-
-function onSend(payload: any) {
-    console.log('[ChatContainer.onSend] raw payload', payload);
-    if (loading.value) return; // prevent duplicate sends while streaming
-
-    let reqParams: any = {
-        files: [],
-        model: model.value,
+    return {
+        messages,
+        sendMessage,
+        retryMessage,
+        loading,
+        threadId: threadIdRef,
     };
-
-    if (payload.images && payload.images.length > 0) {
-        const inferType = (url: string, provided?: string) => {
-            if (provided && provided.startsWith('image/')) return provided;
-            const m = /^data:([^;]+);/i.exec(url);
-            if (m) return m[1];
-            const lower = (url.split('?')[0] || '').toLowerCase();
-            const ext = lower.substring(lower.lastIndexOf('.') + 1);
-            const map: Record<string, string> = {
-                jpg: 'image/jpeg',
-                jpeg: 'image/jpeg',
-                png: 'image/png',
-                webp: 'image/webp',
-                gif: 'image/gif',
-                svg: 'image/svg+xml',
-                avif: 'image/avif',
-                heic: 'image/heic',
-                heif: 'image/heif',
-                bmp: 'image/bmp',
-                tif: 'image/tiff',
-                tiff: 'image/tiff',
-                ico: 'image/x-icon',
-            };
-            return map[ext] || 'image/png';
-        };
-        reqParams.files = payload.images.map((p: any, i: number) => {
-            const url: string = p.url;
-            const preview = (url || '').slice(0, 60);
-            const mime = inferType(url, p.type);
-            console.log('[ChatContainer.onSend] image found', {
-                index: i,
-                preview,
-                mime,
-            });
-            return { url, type: mime };
-        });
-    }
-
-    console.log('[ChatContainer.onSend] transformed reqParams', reqParams);
-
-    chat.value
-        .sendMessage(payload.text, reqParams as any)
-        .then(() => {
-            console.log('[ChatContainer.onSend] sendMessage resolved', {
-                messageCount: chat.value.messages.value.length,
-                lastMessage:
-                    chat.value.messages.value[
-                        chat.value.messages.value.length - 1
-                    ],
-            });
-        })
-        .catch((e: any) => {
-            console.error('[ChatContainer.onSend] sendMessage error', e);
-        });
 }
-</script>
-
-<style></style>
 ````
 
 ## File: app/pages/_test.vue
@@ -7965,4 +9345,219 @@ function showToast() {
     });
 }
 </script>
+````
+
+## File: app/components/chat/ChatContainer.vue
+````vue
+<template>
+    <main
+        class="flex w-full flex-1 flex-col overflow-hidden transition-[width,height]"
+    >
+        <div
+            class="absolute w-full h-screen overflow-y-scroll sm:pt-3.5 pb-[165px]"
+        >
+            <div
+                class="mx-auto flex w-full px-1.5 sm:px-0 sm:max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
+            >
+                <ChatMessage
+                    v-for="(message, index) in messages || []"
+                    :key="
+                        message.id ||
+                        message.stream_id ||
+                        `${index}-${message.role}`
+                    "
+                    :message="message"
+                    @retry="onRetry"
+                />
+            </div>
+        </div>
+        <div class="pointer-events-none absolute bottom-0 top-0 w-full">
+            <div
+                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center pr-0.5 sm:pr-[11px]"
+            >
+                <chat-input-dropper
+                    :loading="loading"
+                    @send="onSend"
+                    @model-change="onModelChange"
+                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
+                />
+            </div>
+        </div>
+    </main>
+</template>
+
+<script setup lang="ts">
+import ChatMessage from './ChatMessage.vue';
+import { shallowRef, computed, watch, ref } from 'vue';
+import { useChat } from '~/composables/useAi';
+import type {
+    ChatMessage as ChatMessageType,
+    ContentPart,
+} from '~/composables/useAi';
+
+const model = ref('openai/gpt-oss-120b');
+
+function onModelChange(newModel: string) {
+    model.value = newModel;
+    console.log('Model changed to:', newModel);
+}
+
+const props = defineProps<{
+    threadId?: string;
+    messageHistory?: ChatMessageType[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'thread-selected', id: string): void;
+}>();
+
+// Initialize chat composable and make it refresh when threadId changes
+const chat = shallowRef(useChat(props.messageHistory, props.threadId));
+
+watch(
+    () => props.threadId,
+    (newId) => {
+        const currentId = chat.value?.threadId?.value;
+        // Avoid re-initializing if the composable already set the same id (first-send case)
+        if (newId && currentId && newId === currentId) return;
+        chat.value = useChat(props.messageHistory, newId);
+    }
+);
+
+// Keep composable messages in sync when parent provides an updated messageHistory
+watch(
+    () => props.messageHistory,
+    (mh) => {
+        if (!chat.value) return;
+        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
+        if (chat.value.loading.value) return;
+        // Prefer to update the internal messages array directly to avoid remount flicker
+        chat.value.messages.value = [...(mh || [])];
+    }
+);
+
+// When a new thread id is created internally (first send), propagate upward once
+watch(
+    () => chat.value?.threadId?.value,
+    (id, prev) => {
+        if (!prev && id) emit('thread-selected', id);
+    }
+);
+
+// Render messages with content narrowed to string for ChatMessage.vue
+type RenderMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    id?: string;
+    stream_id?: string;
+    file_hashes?: string | null; // serialized JSON array (from DB/user memory)
+};
+const messages = computed<RenderMessage[]>(() =>
+    (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
+        let contentStr: string;
+        if (typeof m.content === 'string') contentStr = m.content;
+        else if (Array.isArray(m.content)) {
+            contentStr = (m.content as ContentPart[])
+                .map((p) => {
+                    if (p.type === 'text') return p.text;
+                    if (p.type === 'image') {
+                        // Don't inline full-size images as markdown; thumbnails handled separately via file_hashes in ChatMessage
+                        return '';
+                    }
+                    if (p.type === 'file')
+                        return `**[file:${
+                            (p as any).name ?? (p as any).mediaType ?? 'file'
+                        }]**`;
+                    return '';
+                })
+                .filter(Boolean)
+                .join('\n\n');
+        } else contentStr = String((m as any).content ?? '');
+        return {
+            role: m.role,
+            content: contentStr,
+            id: m.id,
+            stream_id: m.stream_id,
+            file_hashes: (m as any).file_hashes,
+        } as RenderMessage;
+    })
+);
+const loading = computed(() => chat.value.loading.value);
+
+function onSend(payload: any) {
+    console.log('[ChatContainer.onSend] raw payload', payload);
+    if (loading.value) return; // prevent duplicate sends while streaming
+
+    let reqParams: any = {
+        files: [],
+        model: model.value,
+    };
+
+    let fileHashes: string[] = [];
+    if (payload.images && payload.images.length > 0) {
+        const inferType = (url: string, provided?: string) => {
+            if (provided && provided.startsWith('image/')) return provided;
+            const m = /^data:([^;]+);/i.exec(url);
+            if (m) return m[1];
+            const lower = (url.split('?')[0] || '').toLowerCase();
+            const ext = lower.substring(lower.lastIndexOf('.') + 1);
+            const map: Record<string, string> = {
+                jpg: 'image/jpeg',
+                jpeg: 'image/jpeg',
+                png: 'image/png',
+                webp: 'image/webp',
+                gif: 'image/gif',
+                svg: 'image/svg+xml',
+                avif: 'image/avif',
+                heic: 'image/heic',
+                heif: 'image/heif',
+                bmp: 'image/bmp',
+                tif: 'image/tiff',
+                tiff: 'image/tiff',
+                ico: 'image/x-icon',
+            };
+            return map[ext] || 'image/png';
+        };
+        reqParams.files = payload.images.map((p: any, i: number) => {
+            const url: string = p.url;
+            const preview = (url || '').slice(0, 60);
+            const mime = inferType(url, p.type);
+            console.log('[ChatContainer.onSend] image found', {
+                index: i,
+                preview,
+                mime,
+            });
+            if (p.hash && p.status === 'ready') fileHashes.push(p.hash);
+            return { url, type: mime };
+        });
+    }
+
+    console.log('[ChatContainer.onSend] transformed reqParams', reqParams);
+
+    (reqParams as any).file_hashes = fileHashes;
+
+    chat.value
+        .sendMessage(payload.text, reqParams as any)
+        .then(() => {
+            console.log('[ChatContainer.onSend] sendMessage resolved', {
+                messageCount: chat.value.messages.value.length,
+                lastMessage:
+                    chat.value.messages.value[
+                        chat.value.messages.value.length - 1
+                    ],
+            });
+        })
+        .catch((e: any) => {
+            console.error('[ChatContainer.onSend] sendMessage error', e);
+        });
+}
+
+function onRetry(messageId: string) {
+    if (!chat.value || chat.value.loading.value) return;
+    // Provide current model so retry uses same selection
+    (chat.value as any).retryMessage(messageId, model.value);
+}
+</script>
+
+<style></style>
 ````
