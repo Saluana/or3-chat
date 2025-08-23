@@ -165,7 +165,7 @@ Note: Dexie requires new version call chain order. We'll add new tables and leav
 -   No blob or base64 in message table; only small JSON string references (< 512B typical).
 -   Hash indexing only on file_meta; no additional compound indexes keeps write amplification low.
 -   Bulk retrieval: use `anyOf` to minimize round trips.
--   Cap 16 file references per message to control size (config constant `MAX_MESSAGE_FILE_HASHES=16`).
+-   Cap 6 file references per message by default (config constant `MAX_MESSAGE_FILE_HASHES`, default 6; override via `NUXT_PUBLIC_MAX_MESSAGE_FILES` bounded 1..12).
 -   Use Web Crypto `subtle.digest('MD5'...)` fallback to `spark-md5` (if MD5 unsupported, choose SHA-1 then map still unique; strict requirement is stable dedupe so MD5 acceptable locally). Provide progressive hashing reading in 256KB chunks via File.slice() to avoid blocking UI.
 -   Lazy blob loading prevents layout jank; UI can show placeholders.
 

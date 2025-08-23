@@ -186,6 +186,7 @@ Future ideas:
 The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
 
 Entities covered: attachments, kv, projects, threads, messages.
+Now also: file storage (files: meta + blobs) and message file hash validation.
 
 Common patterns:
 
@@ -208,6 +209,8 @@ Common patterns:
 -   Advanced operations
     -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
     -   threads: `db.threads.fork:action:before|after`
+    -   files: `db.files.create:filter:input`, `db.files.create:action:before|after`, `db.files.refchange:action:after`, `db.files.delete:action:soft:before|after`
+    -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
 
 ### Examples
 
@@ -260,6 +263,40 @@ Normalize and observe message index compaction:
 useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
     console.log('Normalizing indexes for thread', threadId);
 });
+
+// Enforce/inspect message file hash limits
+useHookEffect(
+    'db.messages.files.validate:filter:hashes',
+    (hashes) => {
+        // Example: log when truncated or enforce a stricter limit
+        const MAX = 6;
+        let next = hashes.slice(0, MAX);
+        if (hashes.length > MAX)
+            console.warn('Truncated file hashes', hashes.length, '→', MAX);
+        // Return transformed list
+        return next;
+    },
+    { kind: 'filter', priority: 10 }
+);
+
+// Observe file dedupe ref count changes
+useHookEffect('db.files.refchange:action:after', ({ before, after, delta }) => {
+    console.debug(
+        'File ref change',
+        before.hash,
+        'delta',
+        delta,
+        'now',
+        after.ref_count
+    );
+});
+
+// Mutate file meta before create (e.g., tag images)
+useHookEffect(
+    'db.files.create:filter:input',
+    (meta) => ({ ...meta, name: meta.name.trim() }),
+    { kind: 'filter' }
+);
 ```
 
 Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.

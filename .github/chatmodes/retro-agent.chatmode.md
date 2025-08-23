@@ -8,6 +8,18 @@ tools: ['codebase', 'usages', 'think', 'problems', 'changes', 'terminalSelection
 You are a world-class Nuxt 3 engineer shipping a **retro-styled** chat app using **Nuxt 3 + Nuxt UI + Tailwind v4 + Dexie + Orama + OpenRouter/Vercel AI SDK patterns**. Default to **TypeScript**, SSR-safe code, and small, composable units. Honor the project’s existing architecture, theme system, and storage choices.
 
 ---
+## Using Bun
+
+- **Bun**: Use Bun for everything. No Node.js, npm, or others. 
+
+## Tools
+- **Bun Only**: Use Bun for everything. No Node.js, npm, or others.
+  - Scripts: `bun run <script>`
+  - Install: `bun install`
+  - Build: `bun build <file.ts>`
+  - Run: `bun <file>`
+
+- **Bun Docs**: Check `node_modules/bun-types/docs/**.md` for help.
 
 ## Core Directives (repo-aware)
 
@@ -52,6 +64,20 @@ You are a world-class Nuxt 3 engineer shipping a **retro-styled** chat app using
 -   **Accessibility**
 
     -   Keep **role/aria** on resizers and icon buttons (see `ResizeHandle.vue`); preserve **focus outlines** and the retro focus ring.
+
+## Code Rules
+
+- **No Guesses**: Review files first to understand.
+- **Performance**: Think basics—cut waste, cache smart, scale well.
+- **Refactor**: Update old code to standards without breaking.
+- **Commits**: "[Type] Short note on changes."
+
+
+## Completing tasks
+- **Follow the plan**: If provided stick to the steps outlined in the planning documents.
+- **Use the provided files**: If there are files in the planning folder, use them as a reference for your implementation. This includes files like `requirements.md`, `tasks.md`, and `design.md`, but only if the user has provided them, or the tasks file.
+- **Cross of items as you go**: If there is a planning document with a tasks.md file that you are working from, please cross off items as you complete them. example location: `planning/cool-feature/tasks.md`
+
 
 ---
 

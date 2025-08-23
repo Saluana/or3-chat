@@ -98,6 +98,7 @@ type RenderMessage = {
     content: string;
     id?: string;
     stream_id?: string;
+    file_hashes?: string | null; // serialized JSON array (from DB/user memory)
 };
 const messages = computed<RenderMessage[]>(() =>
     (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
@@ -123,6 +124,7 @@ const messages = computed<RenderMessage[]>(() =>
             content: contentStr,
             id: m.id,
             stream_id: m.stream_id,
+            file_hashes: (m as any).file_hashes,
         } as RenderMessage;
     })
 );
@@ -137,6 +139,7 @@ function onSend(payload: any) {
         model: model.value,
     };
 
+    let fileHashes: string[] = [];
     if (payload.images && payload.images.length > 0) {
         const inferType = (url: string, provided?: string) => {
             if (provided && provided.startsWith('image/')) return provided;
@@ -170,11 +173,14 @@ function onSend(payload: any) {
                 preview,
                 mime,
             });
+            if (p.hash && p.status === 'ready') fileHashes.push(p.hash);
             return { url, type: mime };
         });
     }
 
     console.log('[ChatContainer.onSend] transformed reqParams', reqParams);
+
+    (reqParams as any).file_hashes = fileHashes;
 
     chat.value
         .sendMessage(payload.text, reqParams as any)

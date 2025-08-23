@@ -192,6 +192,9 @@
 
 <script setup lang="ts">
 import { ref, nextTick, defineEmits } from 'vue';
+import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
+import { createOrRefFile } from '~/db/files';
+import type { FileMeta } from '~/db/schema';
 
 const props = defineProps<{ loading?: boolean }>();
 
@@ -204,8 +207,12 @@ onMounted(async () => {
 
 interface UploadedImage {
     file: File;
-    url: string;
+    url: string; // data URL preview
     name: string;
+    hash?: string; // content hash after persistence
+    status: 'pending' | 'ready' | 'error';
+    error?: string;
+    meta?: FileMeta;
 }
 
 interface ImageSettings {
@@ -219,7 +226,7 @@ const emit = defineEmits<{
         e: 'send',
         payload: {
             text: string;
-            images: UploadedImage[];
+            images: UploadedImage[]; // may include pending or error statuses
             model: string;
             settings: ImageSettings;
         }
@@ -275,19 +282,10 @@ const handlePaste = async (event: ClipboardEvent) => {
             event.preventDefault();
             const file = item.getAsFile();
             if (!file) continue;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const result = e.target?.result;
-                const url = typeof result === 'string' ? result : '';
-                const image: UploadedImage = {
-                    file: file,
-                    url,
-                    name: file.name || `pasted-image-${Date.now()}.png`,
-                };
-                uploadedImages.value.push(image);
-                emit('image-add', image);
-            };
-            reader.readAsDataURL(file);
+            await processFile(
+                file,
+                file.name || `pasted-image-${Date.now()}.png`
+            );
         }
     }
 };
@@ -309,26 +307,51 @@ const triggerFileInput = () => {
     hiddenFileInput.value?.click();
 };
 
-const processFiles = (files: FileList | null) => {
+const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
+
+async function processFile(file: File, name?: string) {
+    const mime = file.type || '';
+    if (!mime.startsWith('image/')) return;
+    // Fast preview first
+    const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) =>
+            resolve(
+                typeof e.target?.result === 'string'
+                    ? (e.target?.result as string)
+                    : ''
+            );
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+    });
+    if (uploadedImages.value.length >= MAX_IMAGES) return;
+    const image: UploadedImage = {
+        file,
+        url: dataUrl,
+        name: name || file.name,
+        status: 'pending',
+    };
+    uploadedImages.value.push(image);
+    emit('image-add', image);
+    try {
+        const meta = await createOrRefFile(file, image.name);
+        image.hash = meta.hash;
+        image.meta = meta;
+        image.status = 'ready';
+    } catch (err: any) {
+        image.status = 'error';
+        image.error = err?.message || 'failed';
+        console.warn('[ChatInputDropper] pipeline error', image.name, err);
+    }
+}
+
+const processFiles = async (files: FileList | null) => {
     if (!files) return;
     for (let i = 0; i < files.length; i++) {
+        if (uploadedImages.value.length >= MAX_IMAGES) break;
         const file = files[i];
         if (!file) continue;
-        const mime = file.type || '';
-        if (!mime.startsWith('image/')) continue;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const result = e.target?.result;
-            const url = typeof result === 'string' ? result : '';
-            const image: UploadedImage = {
-                file: file,
-                url,
-                name: file.name,
-            };
-            uploadedImages.value.push(image);
-            emit('image-add', image);
-        };
-        reader.readAsDataURL(file);
+        await processFile(file);
     }
 };
 

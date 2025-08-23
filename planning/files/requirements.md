@@ -78,7 +78,7 @@ User Story: As a performance-conscious developer, I want minimal overhead.
 Acceptance Criteria:
 
 -   Adding `file_hashes` MUST NOT add additional multi-field compound indexes to messages beyond existing ones.
--   Serialization of `file_hashes` SHALL cap at 16 hashes per message (configurable constant) – IF exceeded THEN truncate and emit hook warning.
+-   Serialization of `file_hashes` SHALL cap at 6 hashes per message by default (configurable constant & env override) – IF exceeded THEN truncate and emit hook warning.
 -   md5 computation SHALL be executed in a Web Worker (future optimization stub) or async non-blocking path; baseline version may use async incremental hashing library with streaming to avoid locking main thread for >2MB files.
 
 ## 9. Hooks Integration

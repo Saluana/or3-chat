@@ -75,6 +75,9 @@ export const MessageSchema = z.object({
     index: z.number().int(),
     clock: z.number().int(),
     stream_id: z.string().nullable().optional(),
+    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
+    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
+    file_hashes: z.string().nullable().optional(),
 });
 export type Message = z.infer<typeof MessageSchema>;
 
@@ -138,3 +141,34 @@ export const AttachmentCreateSchema = AttachmentSchema.omit({
     updated_at: z.number().int().default(nowSec()),
 });
 export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
+
+// file meta (metadata only; binary stored separately in file_blobs table)
+export const FileMetaSchema = z.object({
+    // Use hash as both primary key and lookup value for simplicity
+    hash: z.string(), // md5 hex lowercase
+    name: z.string(),
+    mime_type: z.string(),
+    kind: z.enum(['image', 'pdf']).default('image'),
+    size_bytes: z.number().int(),
+    width: z.number().int().optional(),
+    height: z.number().int().optional(),
+    page_count: z.number().int().optional(),
+    ref_count: z.number().int().default(0),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type FileMeta = z.infer<typeof FileMetaSchema>;
+
+export const FileMetaCreateSchema = FileMetaSchema.omit({
+    created_at: true,
+    updated_at: true,
+    ref_count: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+    ref_count: z.number().int().default(1),
+    clock: z.number().int().default(0),
+});
+export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;

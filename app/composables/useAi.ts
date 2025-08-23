@@ -40,6 +40,7 @@ interface SendMessageParams {
         url: string;
     }[];
     model?: string;
+    file_hashes?: string[]; // pre-computed content hashes for persistence
 }
 
 export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
@@ -59,6 +60,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         sendMessagesParams: SendMessageParams = {
             files: [],
             model: DEFAULT_AI_MODEL,
+            file_hashes: [],
         }
     ) {
         console.log('[useChat.sendMessage] invoked', {
@@ -79,7 +81,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             threadIdRef.value = newThread.id;
         }
 
-        let { files, model } = sendMessagesParams;
+        let { files, model, file_hashes } = sendMessagesParams;
         const rawParams: any = sendMessagesParams as any;
         if ((!files || files.length === 0) && rawParams?.images?.length) {
             console.warn(
@@ -137,6 +139,10 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             thread_id: threadIdRef.value!,
             role: 'user',
             data: { content: outgoing, attachments: files ?? [] },
+            file_hashes:
+                file_hashes && file_hashes.length
+                    ? (file_hashes as any)
+                    : undefined,
         });
 
         // 3) Build the parts array: text part first, then image/file parts
@@ -159,7 +165,12 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         });
 
         // 4) Push to UI state with parts (✅ fixes your TS error)
-        messages.value.push({ role: 'user', content: parts });
+        messages.value.push({
+            role: 'user',
+            content: parts,
+            // Attach file_hashes so UI can render thumbnails lazily
+            file_hashes: userDbMsg.file_hashes,
+        } as any);
 
         loading.value = true;
 

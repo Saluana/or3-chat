@@ -8,6 +8,7 @@ import {
     type Message,
     type MessageCreate,
 } from './schema';
+import { serializeFileHashes } from './files-util';
 
 export async function createMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
@@ -15,6 +16,12 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
         'db.messages.create:filter:input',
         input
     );
+    // Support passing file_hashes as string[] for convenience
+    if (Array.isArray((filtered as any).file_hashes)) {
+        (filtered as any).file_hashes = serializeFileHashes(
+            (filtered as any).file_hashes
+        );
+    }
     // Apply defaults (id/clock/timestamps) then validate fully
     const prepared = parseOrThrow(MessageCreateSchema, filtered);
     const value = parseOrThrow(MessageSchema, prepared);
@@ -93,6 +100,11 @@ export async function hardDeleteMessage(id: string): Promise<void> {
 export async function appendMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
     return db.transaction('rw', db.messages, db.threads, async () => {
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
+        }
         const value = parseOrThrow(MessageCreateSchema, input);
         await hooks.doAction('db.messages.append:action:before', value);
         // If index not set, compute next sparse index in thread
@@ -227,6 +239,11 @@ export async function insertMessageAfter(
             // No gap, normalize thread then place after
             await normalizeThreadIndexes(after.thread_id);
             newIndex = after.index + 1000;
+        }
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
         }
         const value = parseOrThrow(MessageCreateSchema, {
             ...input,
