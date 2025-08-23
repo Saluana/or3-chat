@@ -1,6 +1,12 @@
 <template>
     <div
         :class="outerClass"
+        :style="{
+            paddingRight:
+                props.message.role === 'user' && hashList.length && !expanded
+                    ? '80px'
+                    : '0',
+        }"
         class="p-2 rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
     >
         <!-- Compact thumb (collapsed state) -->
@@ -33,7 +39,7 @@
             </template>
             <span
                 v-if="hashList.length > 1"
-                class="absolute bottom-0 right-0 text-[10px] font-semibold bg-black/70 text-white px-1"
+                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
                 >+{{ hashList.length - 1 }}</span
             >
         </button>
