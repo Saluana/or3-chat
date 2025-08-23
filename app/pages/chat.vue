@@ -81,12 +81,12 @@ watch(
     () => threadId.value,
     async (newThreadId) => {
         if (newThreadId) {
-            // Bump updated_at to reflect "last opened" ordering in sidebar
-            const t = await db.threads.get(newThreadId);
-            if (t) {
-                const now = Math.floor(Date.now() / 1000);
-                await upsert.thread({ ...t, updated_at: now });
-            }
+            // NOTE: We intentionally do NOT bump updated_at when merely opening / viewing a thread.
+            // The sidebar liveQuery is ordered by updated_at (desc) so bumping here caused the list
+            // to reorder every time you clicked different threads. We now only bump updated_at when
+            // a new message is appended (user or assistant) or when other mutating actions occur
+            // (rename, delete, etc.). This keeps navigation stable while still floating active
+            // conversations to the top once they actually receive new content.
             await getMessagesForThread(newThreadId);
         }
     }
