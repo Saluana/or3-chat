@@ -9,7 +9,7 @@
             <div class="relative w-full ml-[1px]">
                 <UInput
                     v-model="threadSearchQuery"
-                    icon="i-lucide-search"
+                    icon="pixelarticons:search"
                     size="md"
                     variant="outline"
                     placeholder="Search threads..."

@@ -30,7 +30,7 @@
                     <div class="relative w-full max-w-md">
                         <UInput
                             v-model="searchQuery"
-                            icon="i-heroicons-magnifying-glass-20-solid"
+                            icon="pixelarticons:search"
                             placeholder="Search models (id, name, description, modality)"
                             size="sm"
                             class="w-full pr-8"

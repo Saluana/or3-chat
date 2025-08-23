@@ -75,5 +75,10 @@ export default defineAppConfig({
                     'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
             },
         },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
     },
 });

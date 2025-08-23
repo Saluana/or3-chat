@@ -1,5 +1,8 @@
 <template>
-    <div :class="outerClass" class="p-2 rounded-md my-2 relative">
+    <div
+        :class="outerClass"
+        class="p-2 rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
+    >
         <!-- Compact thumb (collapsed state) -->
         <button
             v-if="hashList.length && !expanded"
@@ -75,6 +78,52 @@
                 Hide attachments
             </button>
         </div>
+
+        <!-- Action buttons: overlap bubble border half outside -->
+        <div
+            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+        >
+            <UButtonGroup
+                :class="{
+                    'bg-primary': props.message.role === 'user',
+                    'bg-white': props.message.role === 'assistant',
+                }"
+                class="rounded-[3px]"
+            >
+                <UTooltip :delay-duration="0" text="Copy">
+                    <UButton
+                        icon="pixelarticons:copy"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Retry">
+                    <UButton
+                        icon="pixelarticons:reload"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Branch">
+                    <UButton
+                        icon="pixelarticons:git-branch"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Edit">
+                    <UButton
+                        icon="pixelarticons:edit-box"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+            </UButtonGroup>
+        </div>
     </div>
 </template>
 
@@ -98,7 +147,7 @@ type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
 const props = defineProps<{ message: UIMessage }>();
 
 const outerClass = computed(() => ({
-    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end':
+    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end pb-5':
         props.message.role === 'user',
     'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
         props.message.role === 'assistant',
