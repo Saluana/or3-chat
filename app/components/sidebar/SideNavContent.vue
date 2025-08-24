@@ -113,8 +113,9 @@
         <UModal
             v-model:open="showRenameModal"
             title="Rename thread"
-            :ui="{ footer: 'justify-end' }"
-            class="border-2"
+            :ui="{
+                footer: 'justify-end ',
+            }"
         >
             <template #header> <h3>Rename thread?</h3> </template>
             <template #body>
@@ -122,7 +123,7 @@
                     <UInput
                         v-model="renameTitle"
                         placeholder="Thread title"
-                        icon="i-lucide-pencil"
+                        icon="pixelarticons:edit"
                         @keyup.enter="saveRename"
                     />
                 </div>

@@ -130,7 +130,7 @@
                         icon="pixelarticons:copy"
                         color="info"
                         size="sm"
-                        class="text-black flex items-center justify-center"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip
@@ -143,7 +143,7 @@
                         icon="pixelarticons:reload"
                         color="info"
                         size="sm"
-                        class="text-black flex items-center justify-center"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
@@ -153,7 +153,7 @@
                         icon="pixelarticons:git-branch"
                         color="info"
                         size="sm"
-                        class="text-black flex items-center justify-center"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Edit" :teleport="true">
@@ -161,7 +161,7 @@
                         icon="pixelarticons:edit-box"
                         color="info"
                         size="sm"
-                        class="text-black flex items-center justify-center"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
                         @click="beginEdit"
                     ></UButton>
                 </UTooltip>
@@ -197,14 +197,14 @@ const emit = defineEmits<{
 }>();
 
 const outerClass = computed(() => ({
-    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+    'bg-primary text-white dark:text-black border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
         props.message.role === 'user',
     'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
         props.message.role === 'assistant',
 }));
 
 const innerClass = computed(() => ({
-    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+    'prose max-w-none dark:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
         props.message.role === 'assistant',
 }));
 

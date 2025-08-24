@@ -14,7 +14,24 @@
                 @chatSelected="onSidebarSelected"
             />
         </template>
-        <div class="flex-1 h-screen w-full">
+        <div class="flex-1 h-screen w-full relative">
+            <div
+                class="absolute z-50 top-0 w-full border-b-2 border-black h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"
+            >
+                <UButton
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    :square="true"
+                    :class="'retro-btn pointer-events-auto mr-4'"
+                    :ui="{ base: 'retro-btn' }"
+                    :aria-label="themeAriaLabel"
+                    :title="themeAriaLabel"
+                    @click="toggleTheme"
+                >
+                    <UIcon :name="themeIcon" class="w-5 h-5" />
+                </UButton>
+            </div>
             <ChatContainer
                 :message-history="messageHistory"
                 :thread-id="threadId"
@@ -134,8 +151,50 @@ async function initInitialThread() {
     validating.value = false;
 }
 
+// Theme toggle (SSR safe)
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    const api = nuxtApp.$theme as any;
+    if (api?.toggle) api.toggle();
+    // After toggle, re-read
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
 onMounted(() => {
     initInitialThread();
+    syncTheme();
 });
 
 watch(

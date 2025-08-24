@@ -3,15 +3,18 @@ export default defineAppConfig({
         modal: {
             slots: {
                 content:
-                    'fixed border-2 border-black divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-2 border-black',
-                wrapper: 'border-2 border-black',
+                    'fixed border-2 border-[var(--tw-border-style)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--tw-border-style)] ',
+                header: 'border-0',
             },
         },
         button: {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
-                base: ['transition-colors', 'retro-btn dark:retro-btn'],
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate uppercase tracking-wider',
                 leadingIcon: 'shrink-0',

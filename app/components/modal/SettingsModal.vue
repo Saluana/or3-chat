@@ -11,9 +11,11 @@
     >
         <template #header>
             <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2">Settings</h3>
+                <h3 class="font-semibold text-sm pl-2 dark:text-black">
+                    Settings
+                </h3>
                 <UButton
-                    class="bg-white/90 hover:bg-white/95 active:bg-white/95 flex items-center justify-center"
+                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
                     :square="true"
                     variant="ghost"
                     size="xs"
@@ -85,7 +87,7 @@
                                         </div>
                                     </div>
                                     <button
-                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px]"
+                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
                                         :aria-pressed="isFavorite(m)"
                                         @click.stop="toggleFavorite(m)"
                                         :title="
