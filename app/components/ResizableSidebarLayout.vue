@@ -155,7 +155,7 @@ const props = defineProps({
     modelValue: { type: Boolean, default: undefined },
     defaultOpen: { type: Boolean, default: true },
     side: { type: String as () => Side, default: 'left' },
-    minWidth: { type: Number, default: 200 },
+    minWidth: { type: Number, default: 320 },
     maxWidth: { type: Number, default: 480 },
     defaultWidth: { type: Number, default: 280 },
     collapsedWidth: { type: Number, default: 56 },

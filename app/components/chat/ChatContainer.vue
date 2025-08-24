@@ -1,5 +1,6 @@
 <template>
     <main
+        ref="containerRoot"
         class="flex w-full flex-1 flex-col overflow-hidden transition-[width,height]"
     >
         <!-- Scroll container / viewport for virtualization -->
@@ -67,6 +68,7 @@
             >
                 <chat-input-dropper
                     :loading="loading"
+                    :container-width="containerWidth"
                     @send="onSend"
                     @model-change="onModelChange"
                     class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
@@ -86,6 +88,7 @@ import {
     nextTick,
     onMounted,
     onBeforeUnmount,
+    onUnmounted,
 } from 'vue';
 import { useChat } from '~/composables/useAi';
 import type {
@@ -97,6 +100,37 @@ import { useHookEffect } from '~/composables/useHookEffect';
 import { marked } from 'marked';
 
 const model = ref('openai/gpt-oss-120b');
+
+// Track container width and expose to ChatInputDropper (debounced for perf)
+const containerRoot = ref<HTMLElement | null>(null);
+const containerWidth = ref(0);
+let _resizeObserver: ResizeObserver | null = null;
+let _widthDebounceTimer: number | null = null;
+let _pendingWidth = 0;
+const WIDTH_DEBOUNCE_MS = 80;
+
+function commitWidth() {
+    containerWidth.value = _pendingWidth;
+    _widthDebounceTimer = null;
+}
+function queueWidth(next: number) {
+    _pendingWidth = next;
+    if (_widthDebounceTimer != null) return; // already scheduled
+    _widthDebounceTimer = window.setTimeout(commitWidth, WIDTH_DEBOUNCE_MS);
+}
+function measureAndQueueWidth() {
+    if (!containerRoot.value) return;
+    const w = containerRoot.value.getBoundingClientRect().width;
+    queueWidth(w);
+}
+function handleObserverEntries(entries: ResizeObserverEntry[]) {
+    for (const entry of entries) {
+        if (entry.target === containerRoot.value) {
+            queueWidth(entry.contentRect.width);
+        }
+    }
+}
+const onWindowResize = () => measureAndQueueWidth();
 
 function onModelChange(newModel: string) {
     model.value = newModel;
@@ -310,9 +344,32 @@ onMounted(() => {
     });
     // Initial scroll after mount for existing history
     nextTick(() => scrollToBottom(false));
+
+    // Initialize container width & observer
+    measureAndQueueWidth();
+    if (typeof ResizeObserver !== 'undefined' && containerRoot.value) {
+        _resizeObserver = new ResizeObserver(handleObserverEntries);
+        _resizeObserver.observe(containerRoot.value);
+    } else {
+        // Fallback: listen to window resize
+        window.addEventListener('resize', onWindowResize);
+    }
 });
 onBeforeUnmount(() => {
     scrollParent.value?.removeEventListener('scroll', handleScrollEvent);
+});
+onUnmounted(() => {
+    if (_resizeObserver && containerRoot.value) {
+        try {
+            _resizeObserver.unobserve(containerRoot.value);
+        } catch {}
+    }
+    _resizeObserver = null;
+    window.removeEventListener('resize', onWindowResize);
+    if (_widthDebounceTimer != null) {
+        clearTimeout(_widthDebounceTimer);
+        _widthDebounceTimer = null;
+    }
 });
 
 // Hook: streaming delta buffering

@@ -420,7 +420,8 @@ const themeAriaLabel = computed(() =>
 );
 
 // Mobile detection to keep padding on small screens
-const isMobile = ref(false);
+import { isMobile } from '~/state/global';
+
 if (process.client) {
     onMounted(() => {
         const mq = window.matchMedia('(max-width: 640px)');

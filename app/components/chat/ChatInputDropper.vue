@@ -76,6 +76,16 @@
                             </UButton>
                             <template #content>
                                 <div class="flex flex-col w-[320px]">
+                                    <!-- Model Selector extracted -->
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2"
+                                    >
+                                        <ModelSelect
+                                            v-model:model="selectedModel"
+                                            :loading="loading"
+                                            class="w-full!"
+                                        />
+                                    </div>
                                     <div
                                         class="flex justify-between w-full items-center py-1 px-2 border-b"
                                     >
@@ -136,43 +146,13 @@
                     </div>
                 </div>
 
-                <!-- Model Selector (simple) -->
-                <div class="shrink-0">
-                    <USelectMenu
-                        :ui="{
-                            content:
-                                'border-[2px] border-black rounded-[3px] w-[320px]',
-                            input: 'border-0 rounded-none!',
-                            arrow: 'h-[18px] w-[18px]',
-                            itemTrailingIcon:
-                                'shrink-0 w-[18px] h-[18px] text-dimmed',
-                        }"
-                        :search-input="{
-                            icon: 'pixelarticons:search',
-                            ui: {
-                                base: 'border-0 border-b-1 rounded-none!',
-                                leadingIcon:
-                                    'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-                            },
-                        }"
-                        v-if="
-                            selectedModel &&
-                            favoriteModels &&
-                            favoriteModels.length > 0
-                        "
-                        v-model="selectedModel as string"
-                        :value-key="'value'"
-                        class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-48 min-w-[100px]"
-                        :disabled="loading"
-                        :items="
-                            favoriteModels.map((m: any) => ({
-                                label: m.canonical_slug,
-                                value: m.canonical_slug,
-                            }))
-                        "
-                    >
-                    </USelectMenu>
-                </div>
+                <!-- Model Selector extracted -->
+                <ModelSelect
+                    v-if="!isMobile"
+                    v-model:model="selectedModel"
+                    :loading="loading"
+                    class="shrink-0 hidden sm:block"
+                />
 
                 <!-- Send Button -->
                 <div>
@@ -294,8 +274,9 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
-
-const props = defineProps<{ loading?: boolean }>();
+import ModelSelect from './ModelSelect.vue';
+import { isMobile } from '~/state/global';
+const props = defineProps<{ loading?: boolean; containerWidth?: number }>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
 const webSearchEnabled = ref<boolean>(false);
