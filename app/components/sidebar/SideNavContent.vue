@@ -1,11 +1,33 @@
 <template>
     <div class="flex flex-col h-full relative">
         <div class="px-2 pt-2 flex flex-col space-y-2">
-            <UButton
-                @click="onNewChat"
-                class="w-full flex items-center justify-center backdrop-blur-2xl"
-                >New Chat</UButton
-            >
+            <div class="flex">
+                <UButton
+                    @click="onNewChat"
+                    class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
+                    >New Chat</UButton
+                >
+                <UTooltip :delay-duration="0" text="Create project">
+                    <UButton
+                        color="secondary"
+                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                        icon="pixelarticons:folder-plus"
+                        :ui="{
+                            leadingIcon: 'w-5 h-5',
+                        }"
+                    />
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Create document">
+                    <UButton
+                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                        icon="pixelarticons:note-plus"
+                        :ui="{
+                            base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                            leadingIcon: 'w-5 h-5',
+                        }"
+                    />
+                </UTooltip>
+            </div>
             <div
                 class="relative w-full ml-[1px] border-b-3 border-primary/50 pb-3"
             >
