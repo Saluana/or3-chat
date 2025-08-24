@@ -671,12 +671,13 @@ textarea::-webkit-scrollbar-thumb:hover {
 
 /* Placeholder (needs :deep due to scoped styles) */
 .prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    color: var(--placeholder-color, #6b7280);
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
     content: attr(data-placeholder);
     float: left;
     height: 0;
     pointer-events: none;
-    opacity: 0.55;
+    opacity: 0.85; /* increase for dark background readability */
     font-weight: normal;
 }
 </style>
