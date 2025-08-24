@@ -56,10 +56,35 @@
                 ></UInput>
             </div>
         </div>
-        <!-- Virtualized thread list -->
+        <!-- Projects Tree + Threads List -->
+        <div class="px-2 mt-2 space-y-3 overflow-hidden">
+            <div v-if="projects.length" class="space-y-1">
+                <h4
+                    class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
+                >
+                    Projects
+                </h4>
+                <UTree
+                    v-model:expanded="expandedProjects"
+                    :items="projectTreeItems"
+                    color="neutral"
+                    size="sm"
+                    :ui="{
+                        root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden',
+                        link: 'text-[13px] rounded-[4px] py-1',
+                    }"
+                />
+            </div>
+            <h4
+                class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
+            >
+                Chats
+            </h4>
+        </div>
+        <!-- Virtualized thread list (below projects) -->
         <VList
             :data="displayThreads as any[]"
-            class="h-[calc(100vh-250px)]! px-2 pb-8 pt-3 w-full overflow-x-hidden scrollbar-hidden"
+            class="h-[calc(100vh-315px)]! px-2 pb-8 pt-3 w-full overflow-x-hidden scrollbar-hidden"
             :overscan="8"
             #default="{ item }"
         >
@@ -114,6 +139,15 @@
                                     icon="i-lucide-pencil"
                                     @click="openRename(item)"
                                     >Rename</UButton
+                                >
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="pixelarticons:folder-plus"
+                                    @click="openAddToProject(item)"
+                                    >Add to project</UButton
                                 >
                                 <UButton
                                     color="error"
@@ -241,6 +275,107 @@
                 </UButton>
             </template>
         </UModal>
+
+        <!-- Add To Project Modal -->
+        <UModal
+            v-model:open="showAddToProjectModal"
+            title="Add to project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Add thread to project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <div class="flex gap-2 text-xs font-mono">
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'select'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'select'"
+                        >
+                            Select Existing
+                        </button>
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'create'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'create'"
+                        >
+                            Create New
+                        </button>
+                    </div>
+                    <div v-if="addMode === 'select'" class="space-y-3">
+                        <UFormField label="Project" name="project">
+                            <USelectMenu
+                                v-model="selectedProjectId"
+                                :items="projectSelectOptions"
+                                :value-key="'value'"
+                                searchable
+                                placeholder="Select project"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                    <div v-else class="space-y-3">
+                        <UFormField label="Project Title" name="newProjectName">
+                            <UInput
+                                v-model="newProjectName"
+                                placeholder="Project name"
+                                icon="pixelarticons:folder"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <UFormField
+                            label="Description"
+                            name="newProjectDescription"
+                        >
+                            <UTextarea
+                                v-model="newProjectDescription"
+                                :rows="3"
+                                placeholder="Optional description"
+                                class="w-full border-2 rounded-[6px]"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeAddToProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        addingToProject ||
+                        (addMode === 'select'
+                            ? !selectedProjectId
+                            : !newProjectName.trim())
+                    "
+                    @click="submitAddToProject"
+                >
+                    <span v-if="!addingToProject">Add</span>
+                    <span v-else class="inline-flex items-center gap-1"
+                        ><UIcon
+                            name="i-lucide-loader"
+                            class="animate-spin"
+                        />Adding</span
+                    >
+                </UButton>
+            </template>
+        </UModal>
     </div>
 </template>
 <script setup lang="ts">
@@ -254,6 +389,8 @@ const props = defineProps<{
 }>();
 
 const items = ref<any[]>([]);
+const projects = ref<any[]>([]);
+const expandedProjects = ref<string[]>([]);
 import { useThreadSearch } from '~/composables/useThreadSearch';
 const { query: threadSearchQuery, results: threadSearchResults } =
     useThreadSearch(items as any);
@@ -261,9 +398,10 @@ const displayThreads = computed(() =>
     threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
 );
 let sub: { unsubscribe: () => void } | null = null;
+let subProjects: { unsubscribe: () => void } | null = null;
 
 onMounted(() => {
-    // Sort by last opened using updated_at index; filter out deleted
+    // Threads subscription (sorted by last opened, excluding deleted)
     sub = liveQuery(() =>
         db.threads
             .orderBy('updated_at')
@@ -274,17 +412,41 @@ onMounted(() => {
         next: (results) => (items.value = results),
         error: (err) => console.error('liveQuery error', err),
     });
+    // Projects subscription (most recently updated first)
+    subProjects = liveQuery(() =>
+        db.projects
+            .orderBy('updated_at')
+            .reverse()
+            .filter((p: any) => !p.deleted)
+            .toArray()
+    ).subscribe({
+        next: (res) => {
+            // Normalize data field (ensure array)
+            projects.value = res.map((p: any) => ({
+                ...p,
+                data: Array.isArray(p.data)
+                    ? p.data
+                    : typeof p.data === 'string'
+                    ? (() => {
+                          try {
+                              const parsed = JSON.parse(p.data);
+                              return Array.isArray(parsed) ? parsed : [];
+                          } catch {
+                              return [];
+                          }
+                      })()
+                    : [],
+            }));
+        },
+        error: (err) => console.error('projects liveQuery error', err),
+    });
 });
 
-watch(
-    () => items.value,
-    (newItems) => {
-        console.log('Items updated:', newItems);
-    }
-);
+// (Removed verbose debug watcher)
 
 onUnmounted(() => {
     sub?.unsubscribe();
+    subProjects?.unsubscribe();
 });
 
 const emit = defineEmits(['chatSelected', 'newChat']);
@@ -309,6 +471,40 @@ async function saveRename() {
     if (!t) return;
     const now = Math.floor(Date.now() / 1000);
     await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
+    // Sync title inside any project entries containing this thread
+    try {
+        const allProjects = await db.projects.toArray();
+        const updates: any[] = [];
+        for (const p of allProjects) {
+            if (!p.data) continue;
+            const arr = Array.isArray(p.data)
+                ? p.data
+                : typeof p.data === 'string'
+                ? (() => {
+                      try {
+                          return JSON.parse(p.data);
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : [];
+            let changed = false;
+            for (const entry of arr) {
+                if (entry.id === t.id && entry.name !== renameTitle.value) {
+                    entry.name = renameTitle.value;
+                    changed = true;
+                }
+            }
+            if (changed) {
+                updates.push({ ...p, data: arr, updated_at: now });
+            }
+        }
+        if (updates.length) {
+            await db.projects.bulkPut(updates);
+        }
+    } catch (e) {
+        console.error('project title sync failed', e);
+    }
     showRenameModal.value = false;
     renameId.value = null;
     renameTitle.value = '';
@@ -360,21 +556,157 @@ async function submitCreateProject() {
     try {
         const now = Math.floor(Date.now() / 1000);
         // data holds ordered list of entities (chat/doc) we include kind now per request
+        const newId = crypto.randomUUID();
         await create.project({
-            id: crypto.randomUUID(),
+            id: newId,
             name,
             description: createProjectState.value.description?.trim() || null,
-            data: JSON.stringify([]), // store as JSON string for now; could be array directly if schema allows any
+            data: [], // store as array; schema allows any
             created_at: now,
             updated_at: now,
             deleted: false,
             clock: 0,
         } as any);
+        // Auto expand the new project
+        if (!expandedProjects.value.includes(newId))
+            expandedProjects.value.push(newId);
         closeCreateProject();
     } catch (e) {
         console.error('Failed to create project', e);
     } finally {
         creatingProject.value = false;
+    }
+}
+
+// ---- Project Tree Items ----
+function normalizeProjectData(p: any): any[] {
+    const raw = p?.data;
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+        } catch (e) {
+            // ignore
+        }
+    }
+    return [];
+}
+
+const projectTreeItems = computed(() => {
+    return projects.value.map((p) => {
+        const children = normalizeProjectData(p).map((entry) => {
+            const kind = entry.kind || 'chat';
+            return {
+                label: entry.name || '(untitled)',
+                value: entry.id,
+                icon:
+                    kind === 'doc'
+                        ? 'pixelarticons:note-text'
+                        : 'pixelarticons:chat',
+                onSelect: (e: Event) => {
+                    // Only chats currently selectable -> emit
+                    if (kind === 'chat') emit('chatSelected', entry.id);
+                },
+            };
+        });
+        return {
+            label: p.name,
+            value: p.id,
+            defaultExpanded: false,
+            children,
+            onSelect: (e: Event) => {
+                // Prevent selecting the project itself; toggle handled internally
+                e.preventDefault();
+            },
+        };
+    });
+});
+
+// ---- Add To Project Flow ----
+const showAddToProjectModal = ref(false);
+const addToProjectThreadId = ref<string | null>(null);
+const addMode = ref<'select' | 'create'>('select');
+const selectedProjectId = ref<string | null>(null);
+const newProjectName = ref('');
+const newProjectDescription = ref('');
+const addingToProject = ref(false);
+const addToProjectError = ref<string | null>(null);
+
+const projectSelectOptions = computed(() =>
+    projects.value.map((p) => ({ label: p.name, value: p.id }))
+);
+
+function openAddToProject(thread: any) {
+    addToProjectThreadId.value = thread.id;
+    addMode.value = 'select';
+    selectedProjectId.value = null;
+    newProjectName.value = '';
+    newProjectDescription.value = '';
+    addToProjectError.value = null;
+    showAddToProjectModal.value = true;
+}
+function closeAddToProject() {
+    showAddToProjectModal.value = false;
+    addToProjectThreadId.value = null;
+}
+
+async function submitAddToProject() {
+    if (addingToProject.value || !addToProjectThreadId.value) return;
+    addToProjectError.value = null;
+    addingToProject.value = true;
+    try {
+        const thread = await db.threads.get(addToProjectThreadId.value);
+        if (!thread) throw new Error('Thread not found');
+        const entry = {
+            id: thread.id,
+            name: thread.title || 'New Thread',
+            kind: 'chat',
+        };
+        const now = Math.floor(Date.now() / 1000);
+        let projectId: string | null = null;
+        if (addMode.value === 'create') {
+            const pid = crypto.randomUUID();
+            await create.project({
+                id: pid,
+                name: newProjectName.value.trim(),
+                description: newProjectDescription.value.trim() || null,
+                data: [entry],
+                created_at: now,
+                updated_at: now,
+                deleted: false,
+                clock: 0,
+            } as any);
+            projectId = pid;
+            if (!expandedProjects.value.includes(pid))
+                expandedProjects.value.push(pid);
+        } else {
+            if (!selectedProjectId.value) {
+                addToProjectError.value = 'Select a project';
+                return;
+            }
+            projectId = selectedProjectId.value;
+            const project = await db.projects.get(projectId);
+            if (!project) throw new Error('Project not found');
+            const dataArr = normalizeProjectData(project);
+            const existing = dataArr.find((d) => d.id === entry.id);
+            if (!existing) {
+                dataArr.push(entry);
+            } else {
+                existing.name = entry.name; // update name if changed
+            }
+            await upsert.project({
+                ...project,
+                data: dataArr,
+                updated_at: now,
+            });
+        }
+        closeAddToProject();
+    } catch (e: any) {
+        console.error('add to project failed', e);
+        addToProjectError.value = e?.message || 'Failed to add';
+    } finally {
+        addingToProject.value = false;
     }
 }
 </script>
