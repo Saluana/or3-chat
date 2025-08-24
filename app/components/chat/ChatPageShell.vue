@@ -1,5 +1,5 @@
 <template>
-    <resizable-sidebar-layout>
+    <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
             <sidebar-side-nav-content
                 :active-thread="threadId"
@@ -26,22 +26,27 @@
                 <!-- New Window Button -->
                 <div
                     v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
                 >
-                    <UButton
-                        label="Open"
-                        size="xs"
-                        color="neutral"
-                        variant="ghost"
-                        :square="true"
-                        aria-label="Open sidebar"
-                        title="Open sidebar"
-                    >
-                        <UIcon
-                            name="pixelarticons:arrow-bar-right"
-                            class="w-5 h-5"
-                        />
-                    </UButton>
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
                 </div>
                 <div
                     class="h-full items-center justify-center px-4 hidden md:flex"
@@ -181,6 +186,7 @@ const props = withDefaults(
 
 const router = useRouter();
 const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -477,6 +483,12 @@ function onNewChat() {
         pane.threadId = '';
     }
     updateUrlThread(undefined);
+}
+
+// Mobile sidebar control
+function openMobileSidebar() {
+    // call exposed method on layout to force open
+    (layoutRef.value as any)?.openSidebar?.();
 }
 </script>
 

@@ -244,6 +244,11 @@ function close() {
     open.value = false;
 }
 function toggleCollapse() {
+    // On mobile, treat the collapse toggle as a full close of the overlay
+    if (!isDesktop.value) {
+        open.value = false;
+        return;
+    }
     if (!collapsed.value) {
         lastExpandedWidth.value = width.value;
         collapsed.value = true;
@@ -303,7 +308,10 @@ function onHandleKeydown(e: KeyboardEvent) {
 }
 
 // expose minimal API if needed
-defineExpose({ toggle, close });
+function openSidebar() {
+    open.value = true;
+}
+defineExpose({ toggle, close, openSidebar });
 
 const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
 // Icon and aria label for collapse/expand button
