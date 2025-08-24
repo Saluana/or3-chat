@@ -16,7 +16,12 @@
         </template>
         <div class="flex-1 h-screen w-full relative">
             <div
-                class="absolute z-50 top-0 w-full border-b-2 border-[var(--tw-border)] bg-[var(--md-surface-variant)]/20 backdrop-blur-sm h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+                id="top-nav"
+                :class="{
+                    'border-[var(--tw-border)] z-50 border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1,
+                }"
+                class="absolute top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
             >
                 <!-- New Window Button -->
                 <div class="h-full flex items-center justify-center px-4">
@@ -66,14 +71,14 @@
             </div>
             <!-- Panes Container -->
             <div
-                class="pt-[46px] h-full flex flex-row gap-0 items-stretch w-full overflow-hidden"
+                class="pt-[46px] z-[49] h-full flex flex-row gap-0 items-stretch w-full overflow-hidden"
             >
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
                     class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
                     :class="[
-                        i === activePaneIndex
+                        i === activePaneIndex && panes.length > 1
                             ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
                             : 'border-[var(--tw-border)]',
                         'transition-colors',
@@ -433,5 +438,33 @@ function onNewChat() {
 <style scoped>
 body {
     overflow-y: hidden;
+}
+
+/* Active pane visual indicator (retro glow using primary color) */
+.pane-active {
+    position: relative;
+    /* Smooth color / shadow transition when switching panes */
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0; /* cover full pane */
+    border: 1px solid var(--md-primary);
+
+    /* Layered shadows for a subtle glow while still retro / crisp */
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
 }
 </style>

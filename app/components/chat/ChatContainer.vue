@@ -9,7 +9,7 @@
         >
             <!-- Virtualized message list -->
             <div
-                class="mx-auto w-full px-1.5 sm:px-0 sm:max-w-[768px] pb-10 pt-safe-offset-10"
+                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10"
             >
                 <Virtualizer
                     ref="virtualizerRef"
@@ -63,7 +63,7 @@
         </div>
         <div class="pointer-events-none absolute bottom-0 top-0 w-full">
             <div
-                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center pr-0.5 sm:pr-[11px]"
+                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1"
             >
                 <chat-input-dropper
                     :loading="loading"
