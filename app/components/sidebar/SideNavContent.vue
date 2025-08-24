@@ -1,12 +1,14 @@
 <template>
     <div class="flex flex-col h-full relative">
-        <div class="p-2 flex flex-col space-y-2">
+        <div class="px-2 pt-2 flex flex-col space-y-2">
             <UButton
                 @click="onNewChat"
                 class="w-full flex items-center justify-center backdrop-blur-2xl"
                 >New Chat</UButton
             >
-            <div class="relative w-full ml-[1px]">
+            <div
+                class="relative w-full ml-[1px] border-b-3 border-primary/50 pb-3"
+            >
                 <UInput
                     v-model="threadSearchQuery"
                     icon="pixelarticons:search"
@@ -27,7 +29,7 @@
             </div>
         </div>
         <div
-            class="flex flex-col p-2 space-y-1.5 h-[calc(100vh-262px)] overflow-y-auto w-full overflow-x-hidden scrollbar-hidden"
+            class="flex flex-col px-2 pb-8 pt-3 space-y-1.5 h-[calc(100vh-262px)] overflow-y-auto w-full overflow-x-hidden scrollbar-hidden"
         >
             <div v-for="item in displayThreads" :key="item.id">
                 <RetroGlassBtn
