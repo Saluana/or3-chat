@@ -20,21 +20,25 @@ function canUseDexie() {
     }
 }
 
+// --- Singleton reactive state (shared across all composable callers) ---
+// These are intentionally hoisted so that different components (e.g. SettingsModal
+// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
+// useModelStore() created new refs, so favoriting a model in the modal did not
+// propagate to the chat input until a full reload re-hydrated from KV.
+const favoriteModels = ref<OpenRouterModel[]>([]);
+const catalog = ref<OpenRouterModel[]>([]);
+const searchQuery = ref('');
+const filters = ref<{
+    input?: string[];
+    output?: string[];
+    minContext?: number;
+    parameters?: string[];
+    price?: PriceBucket;
+}>({});
+// Reactive timestamp (ms) of when catalog was last loaded into memory
+const lastLoadedAt = ref<number | undefined>(undefined);
+
 export function useModelStore() {
-    const favoriteModels = ref<OpenRouterModel[]>([]);
-    const catalog = ref<OpenRouterModel[]>([]);
-
-    const searchQuery = ref('');
-    const filters = ref<{
-        input?: string[];
-        output?: string[];
-        minContext?: number;
-        parameters?: string[];
-        price?: PriceBucket;
-    }>({});
-
-    // Reactive timestamp (ms) of when catalog was last loaded into memory
-    const lastLoadedAt = ref<number | undefined>(undefined);
 
     function isFresh(ts: number | undefined, ttl: number) {
         if (!ts) return false;
