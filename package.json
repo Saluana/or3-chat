@@ -25,6 +25,7 @@
         "nuxt": "^4.0.3",
         "orama": "^2.0.6",
         "spark-md5": "^3.0.2",
+        "tiptap-markdown": "^0.8.10",
         "turndown": "^7.2.1",
         "typescript": "^5.6.3",
         "virtua": "^0.41.5",

@@ -1,60 +1,61 @@
 <template>
     <div class="relative min-h-[40px]">
-        <component
-            v-if="client && ready"
-            :is="EditorContentCmp"
-            :editor="editor"
+        <EditorContent
+            v-if="editor"
+            :editor="editor as Editor"
             class="tiptap-editor fade-in"
         />
-        <!-- No loading text; blank space avoids visual glitch -->
     </div>
 </template>
+
 <script setup lang="ts">
-import {
-    ref,
-    watch,
-    onMounted,
-    onBeforeUnmount,
-    nextTick,
-    defineAsyncComponent,
-} from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+// If you still want markdown extension keep it; otherwise remove these two lines:
+import { Markdown } from 'tiptap-markdown';
 
 const props = defineProps<{
     modelValue: string;
     autofocus?: boolean;
-    focusDelay?: number; // ms delay before focusing when autofocus true
+    focusDelay?: number;
 }>();
 const emit = defineEmits<{
     (e: 'update:modelValue', v: string): void;
     (e: 'ready'): void;
 }>();
 
-const client = ref(false);
 const editor = ref<any>(null);
-const ready = ref(false);
 let destroy: (() => void) | null = null;
-// Dynamically load EditorContent only on client
-const EditorContentCmp = defineAsyncComponent(async () => {
-    const mod: any = await import('@tiptap/vue-3');
-    return mod.EditorContent;
-});
+// Prevent feedback loop when emitting updates -> watcher -> setContent -> update
+let internalUpdate = false;
+let lastEmitted = '';
 
 async function init() {
-    const [{ Editor }, { default: StarterKit }] = await Promise.all([
-        import('@tiptap/vue-3'),
-        import('@tiptap/starter-kit'),
-    ]);
-    const extensions = [StarterKit.configure({ codeBlock: {} })];
+    const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
+
     const instance = new Editor({
         extensions,
         content: props.modelValue,
-        onUpdate: ({ editor }: any) => {
-            emit('update:modelValue', editor.getText());
+        onUpdate: ({ editor: e }) => {
+            // Access markdown storage; fall back gracefully
+            const md: string | undefined =
+                // @ts-expect-error
+                e?.storage?.markdown?.getMarkdown?.();
+            const nextVal = md ?? e.getText();
+            if (nextVal === lastEmitted) return;
+            internalUpdate = true;
+            lastEmitted = nextVal;
+            emit('update:modelValue', nextVal);
+            queueMicrotask(() => {
+                internalUpdate = false;
+            });
         },
     });
+
     editor.value = instance;
     destroy = () => instance.destroy();
-    ready.value = true;
+
     await nextTick();
     if (props.autofocus) {
         const delay =
@@ -65,29 +66,35 @@ async function init() {
             } catch {}
         }, delay);
     }
+    lastEmitted = props.modelValue;
     emit('ready');
 }
 
 onMounted(() => {
-    client.value = true;
     init();
 });
+
 onBeforeUnmount(() => {
-    if (destroy) destroy();
+    destroy && destroy();
 });
 
 watch(
     () => props.modelValue,
     (val) => {
         if (!editor.value) return;
-        // Prevent circular update; only set if changed
-        const currentText = editor.value.getText() as string;
-        if (val !== currentText) {
-            editor.value.commands.setContent(val, false);
-        }
+        if (internalUpdate) return; // skip updates we originated
+        // Determine current markdown representation (markdown storage optional)
+        const currentMd: string | undefined =
+            editor.value?.storage?.markdown?.getMarkdown?.();
+        const current = currentMd ?? editor.value.getText();
+        if (val === current) return;
+        // Update editor without firing transactions that cause flicker (emitUpdate: false not available; use setContent with emitUpdate false param)
+        editor.value.commands.setContent(val || '', false);
+        lastEmitted = val || '';
     }
 );
 </script>
+
 <style scoped>
 .tiptap-editor {
     min-height: 40px;
