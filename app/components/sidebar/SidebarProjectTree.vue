@@ -12,15 +12,14 @@
         >
             <template #item-trailing="{ item, level }">
                 <UPopover
-                    :content="{
-                        side: 'right',
-                        align: 'start',
-                        sideOffset: 6,
-                    }"
+                    :content="{ side: 'right', align: 'start', sideOffset: 6 }"
                 >
                     <span
                         class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                         @click.stop
+                        :aria-label="
+                            level === 0 ? 'Project actions' : 'Entry actions'
+                        "
                     >
                         <UIcon
                             name="pixelarticons:more-vertical"
@@ -28,23 +27,63 @@
                         />
                     </span>
                     <template #content>
-                        <div class="p-1 w-44 space-y-1">
-                            <UButton
-                                color="neutral"
-                                variant="ghost"
-                                size="sm"
-                                class="w-full justify-start"
-                                icon="i-lucide-pencil"
-                                >Rename</UButton
-                            >
-                            <UButton
-                                color="error"
-                                variant="ghost"
-                                size="sm"
-                                class="w-full justify-start"
-                                icon="i-lucide-trash-2"
-                                >Delete</UButton
-                            >
+                        <div class="p-1 w-48 space-y-1">
+                            <template v-if="level === 0">
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-pencil"
+                                    @click.stop.prevent="
+                                        emit('renameProject', item.value)
+                                    "
+                                    >Rename Project</UButton
+                                >
+                                <UButton
+                                    color="error"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-trash-2"
+                                    @click.stop.prevent="
+                                        emit('deleteProject', item.value)
+                                    "
+                                    >Delete Project</UButton
+                                >
+                            </template>
+                            <template v-else>
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-pencil"
+                                    @click.stop.prevent="
+                                        emit('renameEntry', {
+                                            projectId: item.parentId,
+                                            entryId: item.value,
+                                            kind: item.kind,
+                                        })
+                                    "
+                                    >Rename</UButton
+                                >
+                                <UButton
+                                    color="error"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-x"
+                                    @click.stop.prevent="
+                                        emit('removeFromProject', {
+                                            projectId: item.parentId,
+                                            entryId: item.value,
+                                            kind: item.kind,
+                                        })
+                                    "
+                                    >Remove from Project</UButton
+                                >
+                            </template>
                         </div>
                     </template>
                 </UPopover>
@@ -76,6 +115,16 @@ const emit = defineEmits<{
     (e: 'update:expanded', value: string[]): void;
     (e: 'chatSelected', id: string): void;
     (e: 'addChat', projectId: string): void;
+    (e: 'deleteProject', projectId: string): void;
+    (e: 'renameProject', projectId: string): void;
+    (
+        e: 'renameEntry',
+        payload: { projectId: string; entryId: string; kind?: string }
+    ): void;
+    (
+        e: 'removeFromProject',
+        payload: { projectId: string; entryId: string; kind?: string }
+    ): void;
 }>();
 
 // Local mirror for v-model:expanded
@@ -116,6 +165,8 @@ const treeItems = computed<any[]>(() =>
                     kind === 'doc'
                         ? 'pixelarticons:note-text'
                         : 'pixelarticons:chat',
+                kind,
+                parentId: p.id,
                 onSelect: (e: Event) => {
                     if (kind === 'chat') emit('chatSelected', entry.id);
                 },
