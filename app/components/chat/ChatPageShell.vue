@@ -19,12 +19,32 @@
                 id="top-nav"
                 :class="{
                     'border-[var(--tw-border)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
-                        panes.length > 1,
+                        panes.length > 1 || isMobile,
                 }"
                 class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
             >
                 <!-- New Window Button -->
-                <div class="h-full flex items-center justify-center px-4">
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4"
+                >
+                    <UButton
+                        size="xs"
+                        color="neutral"
+                        variant="ghost"
+                        :square="true"
+                        aria-label="Open sidebar"
+                        title="Open sidebar"
+                    >
+                        <UIcon
+                            name="pixelarticons:arrow-bar-right"
+                            class="w-5 h-5"
+                        />
+                    </UButton>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
                     <UTooltip :delay-duration="0" :text="newWindowTooltip">
                         <UButton
                             size="xs"
