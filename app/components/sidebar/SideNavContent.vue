@@ -13,29 +13,34 @@
                     v-model="threadSearchQuery"
                     icon="pixelarticons:search"
                     size="md"
+                    :ui="{
+                        leadingIcon: 'h-[20px] w-[20px]',
+                    }"
                     variant="outline"
                     placeholder="Search threads..."
                     class="w-full"
-                />
-                <button
-                    v-if="threadSearchQuery"
-                    type="button"
-                    aria-label="Clear thread search"
-                    class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                    @click="threadSearchQuery = ''"
                 >
-                    <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
-                </button>
+                    <template v-if="threadSearchQuery.length > 0" #trailing>
+                        <UButton
+                            color="neutral"
+                            variant="subtle"
+                            size="xs"
+                            class="flex items-center justify-center p-0"
+                            icon="pixelarticons:close-box"
+                            aria-label="Clear input"
+                            @click="threadSearchQuery = ''"
+                        /> </template
+                ></UInput>
             </div>
         </div>
         <!-- Virtualized thread list -->
         <VList
             :data="displayThreads as any[]"
             class="h-[calc(100vh-250px)]! px-2 pb-8 pt-3 w-full overflow-x-hidden scrollbar-hidden"
-            :overscan="6"
+            :overscan="8"
             #default="{ item }"
         >
-            <div class="mb-1.5" :key="item.id">
+            <div class="mb-2" :key="item.id">
                 <RetroGlassBtn
                     :class="{
                         'active-element bg-primary/25':

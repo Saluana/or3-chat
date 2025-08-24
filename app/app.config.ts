@@ -12,6 +12,9 @@ export default defineAppConfig({
                 trailingIcon: 'shrink-0',
             },
             variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
                 // Override size variant so padding wins over defaults
                 size: {
                     xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },

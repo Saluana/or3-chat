@@ -284,13 +284,13 @@ const toggleIcon = computed(() => {
     // When collapsed, show the icon that suggests expanding back toward content area
     if (collapsed.value) {
         return side.value === 'right'
-            ? 'i-lucide:chevron-left'
-            : 'i-lucide:chevron-right';
+            ? 'pixelarticons:arrow-bar-left'
+            : 'pixelarticons:arrow-bar-right';
     }
     // When expanded, show icon pointing into the sidebar to collapse it
     return side.value === 'right'
-        ? 'i-lucide:chevron-right'
-        : 'i-lucide:chevron-left';
+        ? 'pixelarticons:arrow-bar-right'
+        : 'pixelarticons:arrow-bar-left';
 });
 const toggleAria = computed(() =>
     collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
