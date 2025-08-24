@@ -83,5 +83,14 @@ export default defineAppConfig({
                 content: 'border-2 text-[18px]!',
             },
         },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
     },
 });

@@ -62,23 +62,72 @@
 
                     <!-- Settings Button (stub) -->
                     <div class="relative shrink-0">
-                        <UButton
-                            @click="
-                                showSettingsDropdown = !showSettingsDropdown
-                            "
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Settings"
-                            :disabled="loading"
-                        >
-                            <UIcon
-                                name="pixelarticons:sliders"
-                                class="w-4 h-4"
-                            />
-                        </UButton>
+                        <UPopover>
+                            <UButton
+                                label="Open"
+                                :square="true"
+                                size="sm"
+                                color="info"
+                                class="retro-btn text-black dark:text-white flex items-center justify-center"
+                                type="button"
+                                aria-label="Settings"
+                                :disabled="loading"
+                            >
+                                <UIcon
+                                    name="pixelarticons:sliders"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                            <template #content>
+                                <div class="flex flex-col w-[320px]">
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable web search"
+                                            class="w-full"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:visible"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable thinking"
+                                            class="w-full"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:lightbulb-on"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+
+                                    <button
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
+                                    >
+                                        <span class="px-1">System prompts</span>
+                                        <UIcon
+                                            name="pixelarticons:script-text"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
+                                    <button
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
+                                    >
+                                        <span class="px-1">Model Catalog</span>
+                                        <UIcon
+                                            name="pixelarticons:android"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
+                                </div>
+                            </template>
+                        </UPopover>
                     </div>
                 </div>
 
