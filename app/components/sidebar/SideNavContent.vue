@@ -28,10 +28,14 @@
                 </button>
             </div>
         </div>
-        <div
-            class="flex flex-col px-2 pb-8 pt-3 space-y-1.5 h-[calc(100vh-262px)] overflow-y-auto w-full overflow-x-hidden scrollbar-hidden"
+        <!-- Virtualized thread list -->
+        <VList
+            :data="displayThreads as any[]"
+            class="h-[calc(100vh-250px)]! px-2 pb-8 pt-3 w-full overflow-x-hidden scrollbar-hidden"
+            :overscan="6"
+            #default="{ item }"
         >
-            <div v-for="item in displayThreads" :key="item.id">
+            <div class="mb-1.5" :key="item.id">
                 <RetroGlassBtn
                     :class="{
                         'active-element bg-primary/25':
@@ -40,17 +44,22 @@
                     class="w-full flex items-center justify-between text-left"
                     @click="() => emit('chatSelected', item.id)"
                 >
-                    <div class="flex items-center space-x-1.5">
+                    <div
+                        class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
+                    >
                         <UIcon
                             v-if="item.forked"
                             name="pixelarticons:git-branch"
+                            class="shrink-0"
                         ></UIcon>
-                        <span class="truncate">{{
-                            item.title || 'New Thread'
-                        }}</span>
+                        <!-- The title span gets flex-1 + min-w-0 so it actually truncates instead of pushing the action icon off-screen -->
+                        <span
+                            class="block flex-1 min-w-0 truncate"
+                            :title="item.title || 'New Thread'"
+                        >
+                            {{ item.title || 'New Thread' }}
+                        </span>
                     </div>
-
-                    <!-- Three-dot popover INSIDE the retro button -->
                     <UPopover
                         :content="{
                             side: 'right',
@@ -58,7 +67,6 @@
                             sideOffset: 6,
                         }"
                     >
-                        <!-- Trigger -->
                         <span
                             class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop
@@ -68,8 +76,6 @@
                                 class="w-4 h-4 opacity-70"
                             />
                         </span>
-
-                        <!-- Content -->
                         <template #content>
                             <div class="p-1 w-44 space-y-1">
                                 <UButton
@@ -95,7 +101,7 @@
                     </UPopover>
                 </RetroGlassBtn>
             </div>
-        </div>
+        </VList>
         <sidebar-side-bottom-nav />
 
         <!-- Rename modal -->
@@ -150,6 +156,7 @@
 import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { VList } from 'virtua/vue';
 
 const props = defineProps<{
     activeThread?: string;
