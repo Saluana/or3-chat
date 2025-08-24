@@ -45,7 +45,7 @@
         </button>
 
         <div v-if="!editing" :class="innerClass" v-html="rendered"></div>
-        <!-- Editing surface (user messages only) -->
+        <!-- Editing surface -->
         <div v-else class="w-full">
             <LazyChatMessageEditor
                 hydrate-on-visible
@@ -163,7 +163,6 @@
                         size="sm"
                         class="text-black flex items-center justify-center"
                         @click="beginEdit"
-                        :disabled="props.message.role !== 'user'"
                     ></UButton>
                 </UTooltip>
             </UButtonGroup>
@@ -219,7 +218,7 @@ const saving = ref(false);
 const focusRequested = ref(false);
 
 function beginEdit() {
-    if (props.message.role !== 'user' || editing.value) return;
+    if (editing.value) return;
     original.value = props.message.content;
     draft.value = props.message.content;
     editing.value = true;
