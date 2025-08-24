@@ -81,6 +81,10 @@
                                         class="flex justify-between w-full items-center py-1 px-2"
                                     >
                                         <ModelSelect
+                                            v-if="
+                                                containerWidth &&
+                                                containerWidth < 400
+                                            "
                                             v-model:model="selectedModel"
                                             :loading="loading"
                                             class="w-full!"
@@ -148,7 +152,7 @@
 
                 <!-- Model Selector extracted -->
                 <ModelSelect
-                    v-if="!isMobile"
+                    v-if="!isMobile && containerWidth && containerWidth > 400"
                     v-model:model="selectedModel"
                     :loading="loading"
                     class="shrink-0 hidden sm:block"
