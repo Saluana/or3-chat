@@ -28,6 +28,7 @@
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import Dexie from 'dexie';
 import { db } from '~/db';
+// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
 
 /**
  * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
@@ -144,25 +145,32 @@ watch(
     }
 );
 
+function updateUrlThread(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/chat/${id}` : '/chat';
+    if (window.location.pathname === newPath) return; // no-op
+    // Preserve existing history.state so back button stack stays intact
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
 // Sidebar selection
 function onSidebarSelected(id: string) {
     if (!id) return;
     threadId.value = id;
-    if (props.routeSync) router.push(`/chat/${id}`);
+    updateUrlThread(id);
 }
 
 // ChatContainer emitted new thread (first user send)
 function onInternalThreadCreated(id: string) {
     if (!id) return;
-    // Avoid loop if already set
     if (threadId.value !== id) threadId.value = id;
-    if (props.routeSync) router.push(`/chat/${id}`);
+    updateUrlThread(id); // immediate URL update without triggering Nuxt routing
 }
 
 function onNewChat() {
     messageHistory.value = [];
     threadId.value = '';
-    if (props.routeSync) router.push('/chat');
+    updateUrlThread(undefined);
 }
 </script>
 

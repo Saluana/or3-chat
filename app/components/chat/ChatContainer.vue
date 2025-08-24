@@ -189,8 +189,8 @@ const tailBuffer = ref(''); // accumulated but not yet flushed
 const tailDisplay = ref(''); // flushed text (rendered markdown)
 const tailStartedAt = ref<number | null>(null);
 const tailLastFlush = ref(0);
-const tailInitialDelayMs = 1000; // per spec
-const tailMinFlushInterval = 90; // ms between flush rAF batches
+const tailInitialDelayMs = 500; // per spec
+const tailMinFlushInterval = 50; // ms between flush rAF batches
 let tailRaf: number | null = null;
 
 function resetTail() {
