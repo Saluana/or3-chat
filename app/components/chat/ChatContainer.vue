@@ -5,7 +5,7 @@
         <!-- Scroll container / viewport for virtualization -->
         <div
             ref="scrollParent"
-            class="absolute w-full h-screen overflow-y-auto overscroll-contain sm:pt-3.5 pb-[165px] scrollbars"
+            class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 pb-[165px] scrollbars"
         >
             <!-- Virtualized message list -->
             <div
