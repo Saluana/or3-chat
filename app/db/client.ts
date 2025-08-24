@@ -23,6 +23,7 @@ export class Or3DB extends Dexie {
     attachments!: Table<Attachment, string>;
     file_meta!: Table<FileMeta, string>; // hash as primary key
     file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
+    posts!: Table<Post, string>;
 
     constructor() {
         super('or3-db');
@@ -112,6 +113,25 @@ export class Or3DB extends Dexie {
                         err
                     );
                 }
+            });
+
+        // v4: introduce posts table with basic indexes
+        this.version(4)
+            .stores({
+                projects: 'id, name, clock, created_at, updated_at',
+                threads:
+                    'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+                messages:
+                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+                kv: 'id, &name, clock, created_at, updated_at',
+                attachments: 'id, type, name, clock, created_at, updated_at',
+                file_meta:
+                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+                file_blobs: 'hash',
+                posts: 'id, title, postType, deleted, created_at, updated_at',
+            })
+            .upgrade(async () => {
+                // No backfill needed; posts are new.
             });
     }
 }

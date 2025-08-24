@@ -185,8 +185,8 @@ Future ideas:
 
 The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
 
-Entities covered: attachments, kv, projects, threads, messages.
-Now also: file storage (files: meta + blobs) and message file hash validation.
+Entities covered: attachments, kv, projects, threads, messages, posts.
+Now also: file storage (files: meta + blobs), message file hash validation, and post content/meta management.
 New (branching): fork option filtering & branching cache invalidation.
 
 Common patterns:
@@ -207,11 +207,17 @@ Common patterns:
     -   kv: `db.kv.getByName:filter:output`
     -   threads: `db.threads.byProject:filter:output`, `db.threads.searchByTitle:filter:output`, `db.threads.children:filter:output`
     -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
+    -   posts: `db.posts.get:filter:output`, `db.posts.all:filter:output`, `db.posts.search:filter:output`
 -   Advanced operations
     -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
         -   threads: `db.threads.fork:action:before|after`, `db.threads.fork:filter:options` (modify branch creation options before execution)
     -   files: `db.files.create:filter:input`, `db.files.create:action:before|after`, `db.files.refchange:action:after`, `db.files.delete:action:soft:before|after`
     -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
+    -   posts: (standard CRUD only) create/upsert/delete hooks plus query output filters
+        -   Create: `db.posts.create:filter:input`, `db.posts.create:action:before|after`
+        -   Upsert: `db.posts.upsert:filter:input`, `db.posts.upsert:action:before|after`
+        -   Delete: `db.posts.delete:action:soft:before|after`, `db.posts.delete:action:hard:before|after`
+        -   Queries: `db.posts.get:filter:output`, `db.posts.all:filter:output`, `db.posts.search:filter:output`
         -   branching cache: (internal) cache invalidated on `db.threads.create:action:after`, `db.threads.upsert:action:after`, `db.threads.fork:action:after`, and thread delete actions.
 
 ### Branching (Minimal) Hooks
@@ -350,6 +356,21 @@ useHookEffect(
     'db.files.create:filter:input',
     (meta) => ({ ...meta, name: meta.name.trim() }),
     { kind: 'filter' }
+);
+
+// Normalize or inject default post title / meta prior to creation
+useHookEffect(
+    'db.posts.create:filter:input',
+    (post) => ({
+        ...post,
+        title: (post.title || 'Untitled Post').trim(),
+        // If meta provided as object, ensure a specific key exists
+        meta:
+            typeof post.meta === 'string'
+                ? post.meta
+                : JSON.stringify({ ...(post.meta || {}), source: 'hook' }),
+    }),
+    { kind: 'filter', priority: 8 }
 );
 ```
 

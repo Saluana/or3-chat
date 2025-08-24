@@ -88,17 +88,52 @@ export type Message = z.infer<typeof MessageSchema>;
 
 export const PostSchema = z.object({
     id: z.string(),
-    title: z.string(),
+    // Title must be non-empty after trimming
+    title: z
+        .string()
+        .transform((s) => s.trim())
+        .refine((s) => s.length > 0, 'Title is required'),
     content: z.string().default(''),
     postType: z.string().default('markdown'),
     created_at: z.number().int(),
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),
-    meta: z.string().nullable().optional(),
+    meta: z.union([
+        z.string(),
+        z.object({
+            key: z.string(),
+            value: z.string().nullable().optional(),
+        }),
+        z
+            .array(
+                z.object({
+                    key: z.string(),
+                    value: z.string().nullable().optional(),
+                })
+            )
+            .nullable()
+            .optional(),
+    ]),
     file_hashes: z.string().nullable().optional(),
 });
 
 export type Post = z.infer<typeof PostSchema>;
+
+// Create schema for posts allowing omission of id/timestamps; meta may be provided as
+// string | object | array and will be normalized to string upstream before storage.
+export const PostCreateSchema = PostSchema.partial({
+    id: true,
+    created_at: true,
+    updated_at: true,
+}).extend({
+    id: z
+        .string()
+        .optional()
+        .transform((v) => v ?? newId()),
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type PostCreate = z.input<typeof PostCreateSchema>;
 
 export const MessageCreateSchema = MessageSchema.partial({ index: true })
     .omit({ created_at: true, updated_at: true, id: true, clock: true })
