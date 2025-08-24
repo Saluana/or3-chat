@@ -7,6 +7,7 @@ export const ProjectSchema = z.object({
     id: z.string(),
     name: z.string(),
     description: z.string().nullable().optional(),
+    data: z.any(),
     created_at: z.number().int(),
     updated_at: z.number().int(),
     deleted: z.boolean().default(false),
