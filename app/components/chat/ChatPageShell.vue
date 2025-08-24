@@ -29,6 +29,7 @@
                     class="h-full flex items-center justify-center px-4"
                 >
                     <UButton
+                        label="Open"
                         size="xs"
                         color="neutral"
                         variant="ghost"
