@@ -16,20 +16,27 @@
         </template>
         <div class="flex-1 h-screen w-full relative">
             <div
-                class="absolute z-50 top-0 w-full border-b-2 border-[var(--tw-border)] sm:border-none bg-[var(--md-surface-variant)]/20 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+                class="absolute z-50 top-0 w-full border-b-2 border-[var(--tw-border)] bg-[var(--md-surface-variant)]/20 backdrop-blur-sm h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
             >
+                <!-- New Window Button -->
                 <div class="h-full flex items-center justify-center px-4">
-                    <UTooltip :delay-duration="0" text="New window">
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
                         <UButton
                             size="xs"
                             color="neutral"
                             variant="ghost"
                             :square="true"
-                            :class="'retro-btn pointer-events-auto mr-4'"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
                             :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
                         >
                             <UIcon
                                 name="pixelarticons:card-plus"
@@ -38,6 +45,7 @@
                         </UButton>
                     </UTooltip>
                 </div>
+                <!-- Theme Toggle Button -->
                 <div class="h-full flex items-center justify-center px-4">
                     <UTooltip :delay-duration="0" text="Toggle theme">
                         <UButton
@@ -56,11 +64,63 @@
                     </UTooltip>
                 </div>
             </div>
-            <ChatContainer
-                :message-history="messageHistory"
-                :thread-id="threadId"
-                @thread-selected="onInternalThreadCreated"
-            />
+            <!-- Panes Container -->
+            <div
+                class="pt-[46px] h-full flex flex-row gap-0 items-stretch w-full overflow-hidden"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--tw-border)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <!-- Close button (only if >1 pane) -->
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <ChatContainer
+                        class="flex-1 min-h-0"
+                        :message-history="pane.messages"
+                        :thread-id="pane.threadId"
+                        @thread-selected="
+                            (id) => onInternalThreadCreated(id, i)
+                        "
+                    />
+                </div>
+            </div>
         </div>
     </resizable-sidebar-layout>
 </template>
@@ -101,32 +161,139 @@ type ChatMessage = {
     stream_id?: string;
 };
 
-const messageHistory = ref<ChatMessage[]>([]);
-const threadId = ref<string>(props.initialThreadId || '');
-const validating = ref(false);
-let validateToken = 0;
+// ---------------- Multi-pane (phase 1: internal refactor) ----------------
+// PaneState holds per-pane chat state. For Task 1 we still render a single pane; template
+// continues to use computed aliases `threadId` & `messageHistory` pointing at pane[0].
+interface PaneState {
+    id: string; // local pane id (not thread id)
+    threadId: string; // current thread id ('' if new chat)
+    messages: ChatMessage[]; // loaded messages for the thread
+    validating: boolean; // reserved for potential per-pane validation
+}
 
-async function loadMessages(id: string) {
-    if (!id) return;
-    const msgs = await db.messages
-        .where('[thread_id+index]')
-        .between([id, Dexie.minKey], [id, Dexie.maxKey])
-        .filter((m: any) => !m.deleted)
-        .toArray();
-    messageHistory.value = (msgs || []).map((msg: any) => {
-        const data = msg.data as unknown;
-        const content =
-            typeof data === 'object' && data !== null && 'content' in data
-                ? String((data as any).content ?? '')
-                : String((msg.content as any) ?? '');
-        return {
-            role: msg.role as 'user' | 'assistant',
-            content,
-            file_hashes: msg.file_hashes,
-            id: msg.id,
-            stream_id: msg.stream_id,
-        } as ChatMessage;
-    });
+function createEmptyPane(initialThreadId = ''): PaneState {
+    const genId = () =>
+        typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : 'pane-' + Math.random().toString(36).slice(2);
+    return {
+        id: genId(),
+        threadId: initialThreadId,
+        messages: [],
+        validating: false,
+    };
+}
+
+// Primary state: array of panes (currently single until Task 2 UI changes)
+const panes = ref<PaneState[]>([createEmptyPane(props.initialThreadId || '')]);
+// Active pane index (for future multi-pane interactions)
+const activePaneIndex = ref(0);
+
+// Backward compatible aliases used by existing template (will be removed in Task 2 step 2.1)
+const threadId = computed<string>({
+    get: () => panes.value[0]?.threadId || '',
+    set: (v) => {
+        if (panes.value[0]) panes.value[0].threadId = v;
+    },
+});
+const messageHistory = computed<ChatMessage[]>(
+    () => panes.value[0]?.messages || []
+);
+// Legacy validating handling mapped to pane[0]
+const validating = computed<boolean>({
+    get: () => panes.value[0]?.validating || false,
+    set: (v) => {
+        if (panes.value[0]) panes.value[0].validating = v;
+    },
+});
+let validateToken = 0; // reused for initial validation, scoped now to pane[0]
+
+// Extracted loader now returns messages for a thread id (Task 1.3)
+async function loadMessagesFor(id: string): Promise<ChatMessage[]> {
+    if (!id) return [];
+    try {
+        const msgs = await db.messages
+            .where('[thread_id+index]')
+            .between([id, Dexie.minKey], [id, Dexie.maxKey])
+            .filter((m: any) => !m.deleted)
+            .toArray();
+        return (msgs || []).map((msg: any) => {
+            const data = msg.data as unknown;
+            const content =
+                typeof data === 'object' && data !== null && 'content' in data
+                    ? String((data as any).content ?? '')
+                    : String((msg.content as any) ?? '');
+            return {
+                role: msg.role as 'user' | 'assistant',
+                content,
+                file_hashes: msg.file_hashes,
+                id: msg.id,
+                stream_id: msg.stream_id,
+            } as ChatMessage;
+        });
+    } catch (e) {
+        // Fail soft; log once if desired (kept silent for now per simplicity)
+        return [];
+    }
+}
+
+// Helper to set a pane's thread & load messages (Task 1.4)
+async function setPaneThread(index: number, id: string) {
+    const pane = panes.value[index];
+    if (!pane) return;
+    pane.threadId = id;
+    pane.messages = await loadMessagesFor(id);
+}
+
+// Activate pane (Task 1.5; not yet wired in template until Task 2)
+function setActive(i: number) {
+    if (i >= 0 && i < panes.value.length) activePaneIndex.value = i;
+}
+
+// ---------------- Task 2: UI / interaction helpers ----------------
+const canAddPane = computed(() => panes.value.length < 3);
+const newWindowTooltip = computed(() =>
+    canAddPane.value ? 'New window' : 'Max 3 windows'
+);
+
+function addPane() {
+    // Guard (Task 3.1): never exceed 3 panes even if called externally
+    if (panes.value.length >= 3) return;
+    panes.value.push(createEmptyPane());
+    setActive(panes.value.length - 1);
+}
+
+function closePane(i: number) {
+    if (panes.value.length <= 1) return; // never close last
+    const wasActive = i === activePaneIndex.value;
+    panes.value.splice(i, 1);
+    if (!panes.value.length) {
+        // Safety: recreate a blank pane (should not normally happen)
+        panes.value.push(createEmptyPane());
+        activePaneIndex.value = 0;
+        return;
+    }
+    if (wasActive) {
+        // Task 3.2: ensure logical new active (nearest existing)
+        const newIndex = Math.min(i, panes.value.length - 1);
+        setActive(newIndex);
+        const activeThread = panes.value[newIndex]?.threadId;
+        updateUrlThread(activeThread || undefined);
+    } else if (i < activePaneIndex.value) {
+        // shift active index left because array shrank before it
+        activePaneIndex.value -= 1;
+    }
+}
+
+function focusPrev(current: number) {
+    if (panes.value.length < 2) return;
+    const target = current - 1;
+    if (target >= 0) setActive(target);
+}
+function focusNext(current: number) {
+    if (panes.value.length < 2) return;
+    const target = current + 1;
+    if (target < panes.value.length) setActive(target);
 }
 
 async function ensureDbOpen() {
@@ -160,8 +327,10 @@ function redirectNotFound() {
 async function initInitialThread() {
     if (!process.client) return;
     if (!props.initialThreadId) return;
+    const pane = panes.value[0];
+    if (!pane) return;
     if (props.validateInitial) {
-        validating.value = true;
+        pane.validating = true;
         const token = ++validateToken;
         const ok = await validateThread(props.initialThreadId);
         if (token !== validateToken) return; // superseded
@@ -170,9 +339,8 @@ async function initInitialThread() {
             return;
         }
     }
-    threadId.value = props.initialThreadId;
-    await loadMessages(threadId.value);
-    validating.value = false;
+    await setPaneThread(0, props.initialThreadId);
+    pane.validating = false;
 }
 
 // Theme toggle (SSR safe)
@@ -219,14 +387,11 @@ const themeAriaLabel = computed(() =>
 onMounted(() => {
     initInitialThread();
     syncTheme();
+    // Safety: ensure at least one pane exists (Task 3.5 defensive)
+    if (!panes.value.length) panes.value.push(createEmptyPane());
 });
 
-watch(
-    () => threadId.value,
-    async (id) => {
-        if (id) await loadMessages(id);
-    }
-);
+// Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
 
 function updateUrlThread(id?: string) {
     if (!process.client || !props.routeSync) return;
@@ -239,20 +404,28 @@ function updateUrlThread(id?: string) {
 // Sidebar selection
 function onSidebarSelected(id: string) {
     if (!id) return;
-    threadId.value = id;
-    updateUrlThread(id);
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    if (target === activePaneIndex.value) updateUrlThread(id);
 }
 
 // ChatContainer emitted new thread (first user send)
-function onInternalThreadCreated(id: string) {
+function onInternalThreadCreated(id: string, paneIndex?: number) {
     if (!id) return;
-    if (threadId.value !== id) threadId.value = id;
-    updateUrlThread(id); // immediate URL update without triggering Nuxt routing
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrlThread(id);
 }
 
 function onNewChat() {
-    messageHistory.value = [];
-    threadId.value = '';
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.messages = [];
+        pane.threadId = '';
+    }
     updateUrlThread(undefined);
 }
 </script>
