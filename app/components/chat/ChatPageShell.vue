@@ -16,21 +16,45 @@
         </template>
         <div class="flex-1 h-screen w-full relative">
             <div
-                class="absolute z-50 top-0 w-full border-b-2 border-black h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"
+                class="absolute z-50 top-0 w-full border-b-2 border-[var(--tw-border)] sm:border-none bg-[var(--md-surface-variant)]/20 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
             >
-                <UButton
-                    size="xs"
-                    color="neutral"
-                    variant="ghost"
-                    :square="true"
-                    :class="'retro-btn pointer-events-auto mr-4'"
-                    :ui="{ base: 'retro-btn' }"
-                    :aria-label="themeAriaLabel"
-                    :title="themeAriaLabel"
-                    @click="toggleTheme"
-                >
-                    <UIcon :name="themeIcon" class="w-5 h-5" />
-                </UButton>
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="New window">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto mr-4'"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
             </div>
             <ChatContainer
                 :message-history="messageHistory"
