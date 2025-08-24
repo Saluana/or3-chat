@@ -70,7 +70,7 @@
 
                 <!-- Sidebar content -->
                 <div class="flex-1 overflow-auto">
-                    <div v-if="!collapsed" class="flex-1 h-full">
+                    <div v-show="!collapsed" class="flex-1 h-full">
                         <slot name="sidebar-expanded">
                             <div class="p-3 space-y-2 text-sm opacity-80">
                                 <p>Add your nav here…</p>
@@ -86,7 +86,7 @@
                             </div>
                         </slot>
                     </div>
-                    <div v-else class="flex-1 h-full">
+                    <div v-show="collapsed" class="flex-1 h-full">
                         <slot name="sidebar-collapsed">
                             <div class="p-3 space-y-2 text-sm opacity-80">
                                 <p>Add your nav here…</p>
