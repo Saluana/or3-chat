@@ -9,6 +9,8 @@ import type {
     Project,
     Thread,
     ThreadCreate,
+    Post,
+    PostCreate,
 } from './schema';
 import {
     createThread,
@@ -53,6 +55,15 @@ import {
     hardDeleteProject,
     getProject,
 } from './projects';
+import {
+    createPost,
+    upsertPost,
+    getPost,
+    allPosts,
+    searchPosts,
+    softDeletePost,
+    hardDeletePost,
+} from './posts';
 
 // Barrel API (backward compatible shape)
 export { db } from './client';
@@ -63,6 +74,7 @@ export const create = {
     kv: createKv,
     attachment: createAttachment,
     project: createProject,
+    post: createPost,
 };
 
 export const upsert = {
@@ -71,6 +83,7 @@ export const upsert = {
     kv: upsertKv,
     attachment: upsertAttachment,
     project: upsertProject,
+    post: upsertPost,
 };
 
 export const queries = {
@@ -83,6 +96,9 @@ export const queries = {
     getKvByName,
     getAttachment,
     getProject,
+    getPost,
+    allPosts,
+    searchPosts,
 };
 
 export const del = {
@@ -92,6 +108,7 @@ export const del = {
         thread: softDeleteThread,
         message: softDeleteMessage,
         attachment: softDeleteAttachment,
+        post: softDeletePost,
         // kv has no deleted flag; only hard delete is supported
     },
     // hard deletes (destructive)
@@ -102,6 +119,7 @@ export const del = {
         attachment: hardDeleteAttachment,
         kv: hardDeleteKv,
         kvByName: hardDeleteKvByName,
+        post: hardDeletePost,
     },
 };
 
@@ -128,4 +146,6 @@ export type {
     Attachment,
     AttachmentCreate,
     Project,
+    Post,
+    PostCreate,
 };

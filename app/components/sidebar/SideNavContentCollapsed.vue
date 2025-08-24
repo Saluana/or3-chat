@@ -3,6 +3,7 @@
         <div class="px-1 pt-2 flex flex-col space-y-2">
             <UTooltip :delay-duration="0" text="New chat">
                 <UButton
+                    @click="onNewChat"
                     size="md"
                     class="flex item-center justify-center"
                     icon="pixelarticons:message-plus"
@@ -18,6 +19,7 @@
                         base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
                         leadingIcon: 'w-5 h-5',
                     }"
+                    @click="emit('focusSearch')"
                 ></UButton>
             </UTooltip>
         </div>
@@ -78,7 +80,7 @@ onUnmounted(() => {
     sub?.unsubscribe();
 });
 
-const emit = defineEmits(['chatSelected', 'newChat']);
+const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
 
 // ----- Actions: menu, rename, delete -----
 const showRenameModal = ref(false);

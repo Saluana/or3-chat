@@ -311,7 +311,15 @@ function onHandleKeydown(e: KeyboardEvent) {
 function openSidebar() {
     open.value = true;
 }
-defineExpose({ toggle, close, openSidebar });
+function expand() {
+    // Ensure sidebar is open (mobile) and uncollapsed (desktop)
+    open.value = true;
+    if (collapsed.value) {
+        collapsed.value = false;
+        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
+    }
+}
+defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
 
 const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
 // Icon and aria label for collapse/expand button

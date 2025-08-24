@@ -12,6 +12,7 @@
                 :active-thread="threadId"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
             />
         </template>
         <div class="flex-1 h-screen w-full relative">
@@ -490,6 +491,19 @@ function onNewChat() {
 function openMobileSidebar() {
     // call exposed method on layout to force open
     (layoutRef.value as any)?.openSidebar?.();
+}
+
+// Exposed to collapsed sidebar search button via emit
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    // Defer focus to next tick so sidebar DOM present if previously collapsed
+    requestAnimationFrame(() => {
+        const input = document.querySelector(
+            'aside input[placeholder="Search threads..."]'
+        ) as HTMLInputElement | null;
+        if (input) input.focus();
+    });
 }
 </script>
 
