@@ -41,6 +41,7 @@ The content is organized as follows:
   nuxt.txt
   nuxtui.txt
   orama.txt
+  tiptap.txt
 app/
   assets/
     css/
@@ -59,6 +60,7 @@ app/
       ChatInput.vue
       ChatInputDropper.vue
       ChatMessage.vue
+      MessageEditor.vue
     modal/
       SettingsModal.vue
     sidebar/
@@ -79,6 +81,7 @@ app/
     useUserApiKey.ts
   db/
     attachments.ts
+    branching.ts
     client.ts
     files-util.ts
     files.ts
@@ -116,6 +119,11 @@ planning/
   files/
     design.md
     requirements.md
+    tasks.md
+  thread-branching/
+    design.md
+    requirements.md
+    simple-tasks.md
     tasks.md
   retry-plan.md
 public/
@@ -933,6 +941,393 @@ base url: https://docs.orama.com/
 - [Remove data](/docs/orama-js/usage/remove): Learn how to remove data from an Orama database.
 - [Update data](/docs/orama-js/usage/update): Learn how to update data in Orama.
 - [Utility functions for Orama](/docs/orama-js/usage/utilities): Learn how to use utility functions in Orama.
+````
+
+## File: .llms/tiptap.txt
+````
+#Tiptap
+
+> Tiptap is the headless and extensible rich-text editor framework tailored to modern web and app development needs. 
+
+
+Core Benefits
+- Build rich text editors similar to Notion within days
+- Supports React, Next, Vue, Svelte, JavaScript and many more
+- Robust, battle-tested open source framework under the MIT license
+- With over 100 extensions highly adaptable
+
+
+Key Features
+- Collaboration: Allow your users to collaborate in real time in any document
+- Comments: Integrate threaded conversations and suggestions in your editor experience
+- Content AI: Empower your users to create and transform text, images & documents with AI
+- Import / Export: Enable easy file conversions in your documents (e.g. DOCX, PDF, JSON, Markdown)
+- Documents: Manage structured documents in our cloud database or on your premises
+- Templates: Ready-made templates to quickly create complex editors like Notion, Google Docs or Slack
+- UI Components: Drop-in React components to build your editor UI faster, without the boilerplate 
+
+
+Tailored Solutions
+- Enterprises that need a scalable editor framework with enterprise-grade security to accelerate time to market
+- Startups requiring rapid development of feature-rich applications to deliver exceptional user experiences
+
+
+Use Cases
+- Advanced WYSIWYG editors for SaaS platforms and apps
+- Real-time collaboration and team-focused editing tools
+- AI-powered content generation and editing
+
+
+## Products
+- [Tiptap Rich Text Editor](https://tiptap.dev): Headless JavaScript framework to create advanced content editing experiences.
+- [Tiptap Collaboration](https://tiptap.dev/product/collaboration): Enable real-time collaborative editing in your documents.
+- [Tiptap Comments](https://tiptap.dev/product/comments): Integrate a commenting system into your rich text editor to enhance teamwork and real-time discussions.
+- [Tiptap Content AI](https://tiptap.dev/product/content-ai): Integrate AI into your editor for enhanced content creation, allowing users to generate text, images, and more.
+- [Tiptap Documents API](https://tiptap.dev/product/documents): Manage your editor documents with our API and webhooks.
+- [Tiptap Templates](https://tiptap.dev/templates): Ready-to-use editor templates designed for quick integration, e.g. the notion-like block editor template.
+- [Tiptap for Enterprises](https://tiptap.dev/enterprise): Enterprise-grade solutions for security and scalability.
+- [Tiptap Conversion](https://tiptap.dev/product/conversion): Discover how to seamlessly import and export DOCX, ODT and more to your editor,
+- [Tiptap UI Components](https://tiptap.dev/product/ui-components): Discover ready-made and uniquely designed UI components for creating user-friendly rich editor interfaces.
+
+
+## Docs
+- [Tiptap Docs](https://tiptap.dev/docs): Tiptap provides a framework to create custom content editors with extensible features and cloud services.
+
+
+### Editor Docs
+- [Getting started](https://tiptap.dev/docs/editor/getting-started/overview): Learn how to integrate the Tiptap Editor, a customizable rich text editor framework, into your projects.
+- [Install the Editor](https://tiptap.dev/docs/editor/getting-started/install): Integrate the Tiptap editor into your project with guides for various frameworks.
+- [React Integration Guide](https://tiptap.dev/docs/editor/getting-started/install/react): Learn how to integrate the Tiptap Editor with a React app and develop your custom editor experience.
+- [Next.js Integration](https://tiptap.dev/docs/editor/getting-started/install/nextjs): Learn how to integrate Tiptap with Next.js to create a versatile and powerful rich text editor for your project.
+- [Vue 2](https://tiptap.dev/docs/editor/getting-started/install/vue2): Learn how to set up Tiptap with Vue 2 for enhanced wysiwyg editing capabilities.
+- [Vue 3](https://tiptap.dev/docs/editor/getting-started/install/vue3): Learn how to set up Tiptap with Vue 3 for enhanced rich text editing through a detailed step-by-step guide.
+- [Svelte Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/svelte): Learn how to integrate Tiptap with your SvelteKit project through a step-by-step guide.
+- [Nuxt Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/nuxt): Learn how to set up the Tiptap Editor with Nuxt.js for a dynamic wysiwyg editing experience.
+- [Alpine Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/alpine): A guide on how to integrate Tiptap with Alpine.js to create a powerful rich text editor using Vite.
+- [CDN](https://tiptap.dev/docs/editor/getting-started/install/cdn): Learn how to use Tiptap via CDN for quick and easy setup in demos or tests.
+- [PHP](https://tiptap.dev/docs/editor/getting-started/install/php): Discover how to utilize Tiptap within PHP environments, including Laravel and Livewire. Access the guide in our docs!
+- [Vanilla JavaScript](https://tiptap.dev/docs/editor/getting-started/install/vanilla-javascript): Learn how to set up the Tiptap Editor with Vanilla JavaScript, install dependencies and initialize the editor.
+- [Configure the Editor](https://tiptap.dev/docs/editor/getting-started/configure): Learn how to set up your Tiptap Editor's elements, extensions, and content settings.
+- [Styling the Editor](https://tiptap.dev/docs/editor/getting-started/style-editor): Learn how to apply custom styles to your Tiptap editor using plain HTML, custom classes, or Tailwind CSS.
+- [Custom Menu](https://tiptap.dev/docs/editor/getting-started/style-editor/custom-menus): Learn how to develop a custom bubble or floating menu in your Tiptap editor.
+- [Tiptap Concepts](https://tiptap.dev/docs/editor/core-concepts/introduction): Explore the foundational elements of Tiptap's API, designed for intricate rich text editing based on ProseMirror's architecture.
+- [Keyboard Shortcuts in Tiptap](https://tiptap.dev/docs/editor/core-concepts/keyboard-shortcuts): Discover the predefined keyboard shortcuts for Tiptap and learn how to customize these shortcuts to fit your editing needs.
+- [Nodes and Marks](https://tiptap.dev/docs/editor/core-concepts/nodes-and-marks): Discover the different types of nodes in Tiptap, like paragraphs, headings, code blocks, and more.
+- [ProseMirror](https://tiptap.dev/docs/editor/core-concepts/prosemirror): Access the ProseMirror API and functionality with the Tiptap PM package while developing your editor.
+- [Tiptap Schemas](https://tiptap.dev/docs/editor/core-concepts/schema): Learn how content is structured in TiptapÃ¢â‚¬â„¢s schema and control your nodes, marks, and more in your documents.
+- [Pro License](https://tiptap.dev/docs/resources/pro-license): Understand the licensing terms for Tiptap Pro extensions and what usage is permitted under each plan.
+- [Extensions](https://tiptap.dev/docs/editor/core-concepts/extensions): Learn how to create, customize, and integrate extensions into Tiptap to improve your text editor's functionality.
+
+
+### Editor Extensions Docs
+- [Extensions](https://tiptap.dev/docs/editor/extensions/overview): Explore numerous editor extensions to enhance your Tiptap content experience.
+- [Custom extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions): Learn how to customize and create extensions in Tiptap to enhance your editor with new features and functionalities.
+- [Create extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions/create-new): Learn how to create a new extension for your Tiptap editor and build a unique editor experience from scratch.
+- [Extend extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions/extend-existing): Learn how to extend existing extensions in Tiptap to add new features and functionalities to your editor.
+- [Node views](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views): Learn how to customize and create interactive nodes in your Tiptap editor for editable and non-editable content.
+- [Node view examples](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/examples): Review customizable node view examples and create drag handles, dynamic tables of contents, and interactive drawing tools.
+- [JavaScript node views](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/javascript): Learn how to create custom node views using Vanilla JavaScript in Tiptap, focusing on direct manipulation of node properties and interactive content.
+- [Node views with React](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/react): Learn how to use React components to create custom node views in Tiptap, enabling direct manipulation of node properties and interactive content.
+- [Node views with Vue](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/vue): Learn how to use Vue to create custom node views in Tiptap, allowing direct manipulation of node properties and interactive content.
+- [Functionality extensions](https://tiptap.dev/docs/editor/extensions/functionality): Discover Tiptap's functionality extensions that enhance the editor with collaboration tools, text editing features, and more.
+- [Integrate AI Generation into your editor](https://tiptap.dev/docs/editor/extensions/functionality/ai-generation): Learn how to integrate AI-powered editor commands and content generation in Tiptap using the AI Generation extension.
+- [Integrate AI Suggestion into your editor](https://tiptap.dev/docs/editor/extensions/functionality/ai-suggestion): Learn how to integrate AI-powered proofreading and more into your editor using the AI Suggestion extension.
+- [BubbleMenu extension](https://tiptap.dev/docs/editor/extensions/functionality/bubble-menu): Add a contextual menu that appears near text selections in your Tiptap editor to apply various text marks.
+- [CharacterCount extension](https://tiptap.dev/docs/editor/extensions/functionality/character-count): Learn how to limit and count characters in your editor using the Character Count extension.
+- [Collaboration extension](https://tiptap.dev/docs/editor/extensions/functionality/collaboration): Learn how to set up and use collaborative editing with the Collaboration extension in Tiptap.
+- [Collaboration Cursor extension](https://tiptap.dev/docs/editor/extensions/functionality/collaboration-cursor): Learn how to use the Collaboration Cursor extension in Tiptap to show other users' cursors and their names while they type.
+- [Color extension](https://tiptap.dev/docs/editor/extensions/functionality/color): Add text color support to your Tiptap editor with the Color extension. 
+- [Integrate Comments into your editor](https://tiptap.dev/docs/editor/extensions/functionality/comments): Learn how to integrate and manage comments within your editor using the Tiptap Comments extension, including creating threads and comments via REST API.
+- [Integrate AI into your editor](https://tiptap.dev/docs/editor/extensions/functionality/content-ai): Learn how to integrate AI-powered editor commands and content generation using the Content AI extension in Tiptap.
+- [Drag Handle extension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle): Enable dragging nodes around your Tiptap Editor with the Drag Handle Extension.
+- [Drag Handle React extension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle-react): Learn how to enable dragging nodes in your React-based Tiptap Editor with the Drag Handle React Extension.
+- [Drag Handle VueeExtension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle-vue): Learn how to enable dragging nodes around your Vue-based Tiptap Editor with the Drag Handle Vue extension.
+- [Dropcursor extension](https://tiptap.dev/docs/editor/extensions/functionality/dropcursor): Add a cursor when dragging items inside the editor with the Dropcursor extension.
+- [Export extension](https://tiptap.dev/docs/editor/extensions/functionality/export): Export Tiptap's editor content to various formats like docx, odt, and markdown.
+- [FileHandler extension](https://tiptap.dev/docs/editor/extensions/functionality/filehandler): Learn how to handle file drops and pastes in your Tiptap editor with the FileHandler extension.
+- [FloatingMenu extension](https://tiptap.dev/docs/editor/extensions/functionality/floatingmenu): Use the Floating Menu extension in Tiptap to add a menu that appears on empty lines. 
+- [Focus extension](https://tiptap.dev/docs/editor/extensions/functionality/focus): Learn how to use the Focus extension in Tiptap to track and highlight the cursor's position.
+- [FontFamily extension](https://tiptap.dev/docs/editor/extensions/functionality/fontfamily): Learn how to set custom font families in your Tiptap Editor using the Font Family extension.
+- [Gapcursor extension](https://tiptap.dev/docs/editor/extensions/functionality/gapcursor): Learn how to use the Gapcursor extension in Tiptap to prevent your cursor from getting stuck in areas that don't allow regular selection.
+- [Integrate Document History into your editor](https://tiptap.dev/docs/editor/extensions/functionality/history): Learn how to integrate and manage document revisions using the History extension in Tiptap, enabling tracking of changes and version control.
+- [Import extension](https://tiptap.dev/docs/editor/extensions/functionality/import): Learn how to import documents from various formats like docx, odt, and markdown into Tiptap's JSON format.
+- [InvisibleCharacters extension](https://tiptap.dev/docs/editor/extensions/functionality/invisiblecharacters): This extension allows users to see invisible characters like spaces, hard breaks, and paragraphs to enhance accessibility.
+- [List Keymap extension](https://tiptap.dev/docs/editor/extensions/functionality/listkeymap): Learn how to modify default backspace and delete behavior for lists in Tiptap with the List Keymap extension.
+- [Mathematics extension](https://tiptap.dev/docs/editor/extensions/functionality/mathematics): This extension allows users to write and visualize mathematical formulas via LaTeX. 
+- [Placeholder extension](https://tiptap.dev/docs/editor/extensions/functionality/placeholder): Configure a helpful placeholder to fill the emptiness in your Tiptap editor.
+- [Snapshot Compare extension](https://tiptap.dev/docs/editor/extensions/functionality/snapshot-compare): Visualize changes between two document versions, highlighting differences and edits made.
+- [StarterKit extension](https://tiptap.dev/docs/editor/extensions/functionality/starterkit): Discover all the popular extensions bundled in the StarterKit, perfect for getting started with Tiptap.
+- [Table of Contents extension](https://tiptap.dev/docs/editor/extensions/functionality/table-of-contents): Learn how to integrate a list of anchors into your document and manage a Table of Contents (TOC) effectively.
+- [TextAlign extension](https://tiptap.dev/docs/editor/extensions/functionality/textalign): Learn how to use the TextAlign extension to align text in various ways like left, center, right, or justify in your Tiptap editor.
+- [Typography extension](https://tiptap.dev/docs/editor/extensions/functionality/typography): Replace common text patterns with typographic characters using the typography extension in your Tiptap editor.
+- [Undo/Redo extension](https://tiptap.dev/docs/editor/extensions/functionality/undo-redo): Learn how to implement undo and redo functionality in your Tiptap Editor to easily revert or reapply edits.
+- [UniqueID extension](https://tiptap.dev/docs/editor/extensions/functionality/uniqueid): Add a unique ID to every single node and keep track of them with the UniqueID extension.
+- [Mark extensions](https://tiptap.dev/docs/editor/extensions/marks): Learn about mark extensions like bold, code, link, and more to improve your usersÃ¢â‚¬â„¢ text editor experience in Tiptap.
+- [Bold extension](https://tiptap.dev/docs/editor/extensions/marks/bold): Use the Bold extension in Tiptap to make your text bold and let it stand out.
+- [Code extension](https://tiptap.dev/docs/editor/extensions/marks/code): Learn how to use the Code extension in your Tiptap Editor to add inline code to your texts.
+- [Highlight extension](https://tiptap.dev/docs/editor/extensions/marks/highlight): Learn how to use the Highlight extension in Tiptap Editor to add colorful text highlights.
+- [Italic extension](https://tiptap.dev/docs/editor/extensions/marks/italic): Use the Italic extension in your Tiptap Editor to emphasize your text with italics.
+- [Link extension](https://tiptap.dev/docs/editor/extensions/marks/link): Learn how to use the Link extension in Tiptap to add support for <a> tags.
+- [Strike extension](https://tiptap.dev/docs/editor/extensions/marks/strike): Learn how to use the Strike extension in Tiptap to cut through the words you wrote if you're too afraid to delete it.
+- [Subscript extension](https://tiptap.dev/docs/editor/extensions/marks/subscript): Learn how to use the Subscript extension in Tiptap to write slightly below the normal line and show your unique style.
+- [Superscript extension](https://tiptap.dev/docs/editor/extensions/marks/superscript): Use the Superscript extension in Tiptap to write text above the normal line. 
+- [TextStyle extension](https://tiptap.dev/docs/editor/extensions/marks/text-style): Learn how to use the Text Style extension in Tiptap to add <span> tags with custom styles.
+- [Underline extension](https://tiptap.dev/docs/editor/extensions/marks/underline): Learn how to render text as underlined in Tiptap, including installation and usage details.
+- [Nodes extensions](https://tiptap.dev/docs/editor/extensions/nodes): Discover the different types of nodes in Tiptap, like paragraphs, headings, code blocks, and more.
+- [Blockquote extension](https://tiptap.dev/docs/editor/extensions/nodes/blockquote): Use the Blockquote extension in Tiptap to enable the quote HTML tag in the editor.
+- [BulletList extension](https://tiptap.dev/docs/editor/extensions/nodes/bullet-list): Use the Bullet list extension to enable bullet lists in your Tiptap Editor.
+- [CodeBlock extension](https://tiptap.dev/docs/editor/extensions/nodes/code-block): Learn how to use the CodeBlock extension in Tiptap to add fenced code blocks to your documents.
+- [CodeBlockLowlight extension](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight): Learn how to use the CodeBlockLowlight extension to add code blocks with syntax highlighting to your documents.
+- [Details extension](https://tiptap.dev/docs/editor/extensions/nodes/details): Learn how to use the Details extension in Tiptap to enable the <details> HTML tag for showing and hiding content.
+- [DetailsContent extension](https://tiptap.dev/docs/editor/extensions/nodes/details-content): Learn how to use the Details and DetailsContent extensions in your Tiptap Editor to show and hide content effectively.
+- [DetailsSummary extension](https://tiptap.dev/docs/editor/extensions/nodes/details-summary): Learn how to use the DetailsSummary extension to enable the `<summary>` HTML tag for your `<details>` content in Tiptap.
+- [Document extension](https://tiptap.dev/docs/editor/extensions/nodes/document): Learn about the required Document extension, which serves as the home for all nodes in Tiptap editors.
+- [Emoji extension](https://tiptap.dev/docs/editor/extensions/nodes/emoji): Use the Emoji extension in Tiptap to render emojis as inline nodes with fallback images for unsupported emojis.
+- [HardBreak extension](https://tiptap.dev/docs/editor/extensions/nodes/hard-break): Use the Hard Break extension in Tiptap to add support for the <br> HTML tag for line breaks.
+- [Heading extension](https://tiptap.dev/docs/editor/extensions/nodes/heading): Learn how to use the Heading extension in Tiptap to support headings of different levels with HTML tags.
+- [Horizontal Rule extension](https://tiptap.dev/docs/editor/extensions/nodes/horizontal-rule): Use the Horizontal Rule extension in Tiptap to render the `<hr>` HTML tag for separating content.
+- [Image extension](https://tiptap.dev/docs/editor/extensions/nodes/image): Learn how to use the Image extension in Tiptap to render <img> HTML tags for adding images to your documents.
+- [ListItem extension](https://tiptap.dev/docs/editor/extensions/nodes/list-item): Use the List Item extension in Tiptap to add support for the `<li>` tag used in bullet and ordered lists.
+- [Mention extension](https://tiptap.dev/docs/editor/extensions/nodes/mention): Learn how to use the Mention extension in Tiptap to mention other users with a suggestion popup.
+- [Ordered List extension](https://tiptap.dev/docs/editor/extensions/nodes/ordered-list): Learn how to use the Ordered List extension in Tiptap to create ordered lists rendered as <ol> HTML tags.
+- [Paragraph extension](https://tiptap.dev/docs/editor/extensions/nodes/paragraph): Use the Paragraph extension in Tiptap to add support for paragraphs with the <p> HTML tag.
+- [Table extension](https://tiptap.dev/docs/editor/extensions/nodes/table): Use the Table extension in Tiptap to add tables to your documents with a range of customization options.
+- [TableCell extension](https://tiptap.dev/docs/editor/extensions/nodes/table-cell): Use the Table Cell extension in Tiptap to add cells to your tables for proper data structure. 
+- [TableHeader extension](https://tiptap.dev/docs/editor/extensions/nodes/table-header): Improve tables with TiptapÃ¢â‚¬â„¢s TableHeader extension. 
+- [TableRow extension](https://tiptap.dev/docs/editor/extensions/nodes/table-row): Use the Table Row extension in Tiptap to add rows to your tables for a better table structure.
+- [TaskItem extension](https://tiptap.dev/docs/editor/extensions/nodes/task-item): Use the TaskItem extension to add support for task items rendered as <li data-type=\taskItem\> with checkboxes.
+- [TaskList extension](https://tiptap.dev/docs/editor/extensions/nodes/task-list): Learn how to use the Task List extension in Tiptap to create task lists rendered as <ul data-type='taskList'>.
+- [Text extension](https://tiptap.dev/docs/editor/extensions/nodes/text): Enable plain text support in your Tiptap editor with the Text extension.
+- [Youtube extension](https://tiptap.dev/docs/editor/extensions/nodes/youtube): Use the Youtube extension in Tiptap to easily embed Youtube videos in your documents.
+
+
+### Editor API Docs
+- [Editor commands](https://tiptap.dev/docs/editor/api/commands): Learn about command execution and chaining in Tiptap, and discover how to extend functionalities.
+- [Content commands](https://tiptap.dev/docs/editor/api/commands/content): Learn about the clearContent, insertContent, insertContentAt, and setContent commands to efficiently manage content in Tiptap.
+- [clearContent command](https://tiptap.dev/docs/editor/api/commands/content/clear-content): Learn how to delete all content in the editor using the clearContent command in Tiptap.
+- [Cut command](https://tiptap.dev/docs/editor/api/commands/content/cut): Learn how to use the cut command in Tiptap to cut out content from a range and place it at a specified position.
+- [insertContent command](https://tiptap.dev/docs/editor/api/commands/content/insert-content): Use the insertContent command in Tiptap to add content to the document using plain text, HTML, or JSON.
+- [insertContentAt command](https://tiptap.dev/docs/editor/api/commands/content/insert-content-at): Learn how to insert content at a specific position or range using plain text, HTML, or JSON with the insertContentAt command.
+- [setContent command](https://tiptap.dev/docs/editor/api/commands/content/set-content): Replace the document with a new one using JSON or HTML with the setContent command.
+- [forEach command](https://tiptap.dev/docs/editor/api/commands/for-each): Use the forEach command in Tiptap to loop through an array of items and insert content into the editor.
+- [List commands](https://tiptap.dev/docs/editor/api/commands/lists): Discover essential commands in Tiptap for managing lists, including creating, updating, and manipulating list structures.
+- [liftListItem command](https://tiptap.dev/docs/editor/api/commands/lists/lift-list-item): Learn how to use the liftListItem command in Tiptap to lift the list item into a wrapping parent list.
+- [sinkListItem command](https://tiptap.dev/docs/editor/api/commands/lists/sink-list-item): Learn how to use the sinkListItem command in Tiptap to sink the list item into a wrapping child list.
+- [splitListItem command](https://tiptap.dev/docs/editor/api/commands/lists/split-list-item): Learn how to use the splitListItem command in Tiptap to split one list item into two separate list items.
+- [toggleList command](https://tiptap.dev/docs/editor/api/commands/lists/toggle-list): Use the toggleList command in Tiptap to toggle between different types of lists.
+- [wrapInList command](https://tiptap.dev/docs/editor/api/commands/lists/wrap-in-list): Use the wrapInList command in Tiptap to wrap a node in the current selection in a list.
+- [Nodes and Marks commands](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks): Learn to use commands for managing nodes and marks in Tiptap, including creating, manipulating, and cleaning up nodes and marks.
+- [clearNodes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/clear-nodes): Use the clearNodes command in Tiptap to normalize all nodes in the document to the default paragraph node.
+- [createParagraphNear command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/create-paragraph-near): Learn how to use the createParagraphNear command in Tiptap to add paragraphs adjacent to the current block node selection.
+- [deleteNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/delete-node): Use the deleteNode command in Tiptap to selectively remove nodes from your document.
+- [exitCode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/exit-code): Learn how to use the exitCode command in Tiptap to exit code blocks and continue editing in a new default block.
+- [extendMarkRange command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/extend-mark-range): Use the extendMarkRange command in Tiptap to expand the current selection to include the specified mark.
+- [joinBackward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-backward): Join two nodes backwards from the current selection in your Tiptap Editor with the joinBackward command.
+- [joinDown command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-down): Learn how to use the joinDown command in Tiptap to join the selected block with the sibling below it.
+- [joinForward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-forward): Learn how to join two nodes forwards from the current selection in the Tiptap Editor with the joinForward command.
+- [joinTextblockBackward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-textblock-backward): Learn how to use the joinTextblockBackward command in Tiptap to join the current textblock to the one before it.
+- [joinTextblockForward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-textblock-forward): Use the joinTextblockForward command in Tiptap to join the current textblock to the one after it.
+- [joinUp command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-up): Use the joinUp command in Tiptap to join the selected block with the sibling above it.
+- [Lift command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/lift): Learn how to lift a node up into its parent node in your Tiptap Editor using the lift command.
+- [liftEmptyBlock command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/lift-empty-block): Learn how to lift the currently selected empty textblock in your Tiptap Editor with the liftEmptyBlock command.
+- [newlineInCode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/newline-in-code): Use the newlineInCode command in Tiptap to insert a new line in the current code block.
+- [resetAttributes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/reset-attributes): Use the resetAttributes command in Tiptap to reset a node's attributes to their default values.
+- [setMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/set-mark): Use the setMark command in Tiptap to add a new mark at the current selection
+- [setNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/set-node): Learn how to use the setNode command in Tiptap to replace a given range with a specified text block node.
+- [splitBlock command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/split-block): Use the splitBlock command in Tiptap to split the current node into two at the current NodeSelection.
+- [toggleMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-mark): Learn how to use the toggleMark command in Tiptap to toggle a specific mark on and off at the current selection.
+- [toggleNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-node): Learn how to use the toggleNode command in your Tiptap Editor to toggle one node with another.
+- [toggleWrap command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-wrap): Learn how to use the toggleWrap command in Tiptap to wrap the current node with a new node or remove a wrapping node.
+- [undoInputRule command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/undo-input-rule): Learn how to use the undoInputRule command in Tiptap to undo the most recent input rule that was triggered.
+- [unsetAllMarks command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/unset-all-marks): Use the unsetAllMarks command in Tiptap to remove all marks from the current selection.
+- [unsetMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/unset-mark): Learn how to use the unsetMark command in Tiptap to remove a specific mark from the current or across a selection.
+- [updateAttributes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/update-attributes): Learn how to use the updateAttributes command in Tiptap to set new attribute values for a node or mark.
+- [selectTextblockEnd command](https://tiptap.dev/docs/editor/api/commands/select-textblock-end): Learn how to use the selectTextblockEnd command in Tiptap to move the cursor to the end of the current textblock.
+- [selectTextblockStart command](https://tiptap.dev/docs/editor/api/commands/select-textblock-start): Use the selectTextblockStart command in Tiptap to move the cursor to the start of the current textblock.
+- [Selection commands](https://tiptap.dev/docs/editor/api/commands/selection): Discover how to manage selections and focus in Tiptap Editor with commands like blur, focus, deleteSelection, and more.
+- [Blur command](https://tiptap.dev/docs/editor/api/commands/selection/blur): Understand the functionality of the blur command in Tiptap, which removes focus from the editor.
+- [deleteRange command](https://tiptap.dev/docs/editor/api/commands/selection/delete-range): Use the deleteRange command in Tiptap to remove content within a specific range in your document.
+- [deleteSelection command](https://tiptap.dev/docs/editor/api/commands/selection/delete-selection): The deleteSelection command in Tiptap removes any nodes or content that are currently selected within the editor.
+- [Enter Command](https://tiptap.dev/docs/editor/api/commands/selection/enter): Learn how to use the enter command in Tiptap to trigger an enter key action for automated text entry and formatting.
+- [Focus Command](https://tiptap.dev/docs/editor/api/commands/selection/focus): Learn how to use the focus command in Tiptap to set the focus back to the editor at a specific position.
+- [keyboardShortcut command](https://tiptap.dev/docs/editor/api/commands/selection/keyboard-shortcut): Use the keyboardShortcut command in Tiptap to trigger a ShortcutEvent with a given name.
+- [scrollIntoView command](https://tiptap.dev/docs/editor/api/commands/selection/scroll-into-view): Use the scrollIntoView command in Tiptap to scroll the view to the current selection or cursor position.
+- [selectAll command](https://tiptap.dev/docs/editor/api/commands/selection/select-all): Use the selectAll command in your Tiptap Editor to select the whole document at once.
+- [selectNodeBackward command](https://tiptap.dev/docs/editor/api/commands/selection/select-node-backward): Learn how to use the selectNodeBackward command in Tiptap to select the node before the current textblock.
+- [selectNodeForward command](https://tiptap.dev/docs/editor/api/commands/selection/select-node-forward): Use the selectNodeForward command in Tiptap to select the node after the current textblock if the selection is empty.
+- [selectParentNode command](https://tiptap.dev/docs/editor/api/commands/selection/select-parent-node): Use the selectParentNode command in Tiptap to move the selection to the parent node.
+- [setNodeSelection command](https://tiptap.dev/docs/editor/api/commands/selection/set-node-selection): Use the setNodeSelection command in Tiptap to create a new NodeSelection at a given position.
+- [setTextSelection command](https://tiptap.dev/docs/editor/api/commands/selection/set-text-selection): Use the setTextSelection command to control and set text selection to a specified range or position.
+- [setMeta command](https://tiptap.dev/docs/editor/api/commands/set-meta): Learn how to use the setMeta command in Tiptap to store a metadata property in the current transaction.
+- [Editor Instance API](https://tiptap.dev/docs/editor/api/editor): Learn how to use the Editor instance in Tiptap, including methods, settings, and functionalities for creating a rich text editing experience.
+- [Events in Tiptap](https://tiptap.dev/docs/editor/api/events): Learn to use and handle various events in Tiptap, including creation, updates, focus, blur, and destruction.
+- [Node Positions](https://tiptap.dev/docs/editor/api/node-positions): Learn about Node Positions in Tiptap for document navigation and manipulation.
+- [Tiptap utilities](https://tiptap.dev/docs/editor/api/utilities): Discover Tiptap Utilities that enhance the Editor API, offering tools for improved interaction and content management.
+- [HTML utility](https://tiptap.dev/docs/editor/api/utilities/html): Learn how to use the HTML Utility to render JSON as HTML and convert HTML to JSON without an editor instance.
+- [Suggestion utility](https://tiptap.dev/docs/editor/api/utilities/suggestion): Customize autocomplete suggestions using nodes like Mention and Emoji.
+- [Tiptap for PHP utility](https://tiptap.dev/docs/editor/api/utilities/tiptap-for-php): A PHP package for transforming Tiptap-compatible JSON to HTML and modifying content.
+
+
+### Collaboration Docs
+- [Collaboration Overview](https://tiptap.dev/docs/collaboration/getting-started/overview): Learn how to make your text editor collaborative with Tiptap Collaboration, enabling features like real-time editing and asynchronous updates.
+- [Install Collaboration](https://tiptap.dev/docs/collaboration/getting-started/install): Set up collaborative editing in your Tiptap Editor by following this installation guide.
+- [Awareness in Collaboration](https://tiptap.dev/docs/collaboration/core-concepts/awareness): Learn how to integrate real-time user activity tracking in Tiptap Collaboration, including user presence and cursor positions.
+- [Webhooks](https://tiptap.dev/docs/collaboration/core-concepts/webhooks): Set up and understand webhook payloads, and manage settings to integrate advanced features.
+- [Documents in Collaboration](https://tiptap.dev/docs/collaboration/documents): Learn how to store, manage, and track documents using Tiptap Collaboration with REST API and webhooks for real-time updates.
+- [Inject content API](https://tiptap.dev/docs/collaboration/documents/content-injection): Manage your Collaboration documents with JSON updates using the Inject Content API.
+- [History extension](https://tiptap.dev/docs/collaboration/documents/history): Learn how to set up and use document version history for manual and automatic versioning in Tiptap.
+- [REST API | Tiptap Collaboration Docs](https://tiptap.dev/docs/collaboration/documents/rest-api): Manage your Tiptap documents programmatically with the Collaboration Management API.
+- [Semantic Search](https://tiptap.dev/docs/collaboration/documents/semantic-search): Discover how to implement AI-native search capabilities in your document library to enhance content discovery with contextual understanding.
+- [Snapshot Compare extension](https://tiptap.dev/docs/collaboration/documents/snapshot-compare): Compare snapshots of your documents to see changes made between two versions.
+- [Auth Guide](https://tiptap.dev/docs/collaboration/getting-started/authenticate): Secure and manage access in your collaborative editor with JWTs, covering setup, testing, and production integration.
+- [Runtime configuration](https://tiptap.dev/docs/collaboration/operations/configure): Learn how to dynamically adjust collaboration settings in your Tiptap app using straightforward API calls.
+- [Metrics](https://tiptap.dev/docs/collaboration/operations/metrics): Access real-time server and document statistics for your Tiptap Collaboration application.
+- [Provider events](https://tiptap.dev/docs/collaboration/provider/events): Learn how to use event listeners with Tiptap Collaboration providers to manage real-time states and changes effectively.
+- [Integrate the Collaboration provider](https://tiptap.dev/docs/collaboration/provider/integration): Set up and configure the Collaboration provider to manage real-time document synchronization across users.
+
+
+### Comments Docs
+- [Comments Overview](https://tiptap.dev/docs/comments/getting-started/overview): Learn how to integrate and manage comments in your Tiptap editor, including features like threads and REST API access.
+- [Install Comments](https://tiptap.dev/docs/comments/getting-started/install): Learn how to install the comments extension in Tiptap to enable threaded discussions in your editor.
+- [Comments editor commands](https://tiptap.dev/docs/comments/integrate/editor-commands): Learn how to use editor commands to manage comments and threads in your Tiptap Editor.
+- [Comments REST API](https://tiptap.dev/docs/comments/integrate/rest-api): Manage comment threads and comments from outside the Tiptap Editor using the REST API.
+- [Webhook in Comments](https://tiptap.dev/docs/comments/integrate/webhook): Enable and manage webhooks for Comments in Tiptap to receive notifications on thread and comment activities.
+- [Configure Comments](https://tiptap.dev/docs/comments/core-concepts/configure): Learn how to set up the TiptapCollabProvider and customize thread classes in your Tiptap editor.
+- [Manage threads](https://tiptap.dev/docs/comments/core-concepts/manage-threads): Learn how to integrate and manage discussions in Tiptap Editor using threads and comments with editor commands.
+- [Style threads](https://tiptap.dev/docs/comments/core-concepts/style-threads): Learn how to style and manage thread visibility in your Tiptap editor using CSS decoration classes for inline and block threads.
+
+
+### Content AI Docs
+- [Content AI overview](https://tiptap.dev/docs/content-ai/getting-started/overview): Integrate AI features into your editor like like ai suggestion, smart autocompletion, text generation, and more.
+- [AI Suggestion overview](https://tiptap.dev/docs/content-ai/capabilities/suggestion/overview): Overview of the AI Suggestion extension, its features, and how it integrates with your editor.
+- [Install AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/install): A setup guide for integrating the AI Suggestion extension into your application.
+- [AI Suggestion extension setup](https://tiptap.dev/docs/content-ai/capabilities/suggestion/use-with-content-ai-cloud): Learn how to configure the AI Suggestion extension with Tiptap Content AI Cloud API by providing authentication credentials.
+- [AI Suggestion extension configuration](https://tiptap.dev/docs/content-ai/capabilities/suggestion/configure): Configure the AI Suggestion extension with rules, initial suggestions, and custom styles.
+- [API reference for AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/api-reference): Detailed API reference for the Tiptap AI Suggestion extension, covering configuration options, commands, storage, and features.
+- [Custom LLM in AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/custom-llms): Integrate your own backend and LLMs with the AI Suggestion extension for custom suggestions.
+- [Apply AI Suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/apply-suggestions): Learn how to apply, reject, and highlight AI Suggestions in your Tiptap editor.
+- [Configure when to load AI suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/configure-when-to-load-suggestions): Customize when the AI Suggestion extension loads suggestions with options like loadOnStart and reloadOnUpdate.
+- [Define rules for AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/define-rules): Configure the AI Suggestion extension with a list of rules to generate suggestions.
+- [Display AI Suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/display-suggestions): Customize how AI Suggestions are displayed in the editor with custom styles and popovers.
+- [Lock content](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/lock-content): Learn how to mark specific content as 'locked' to prevent AI suggestions from modifying it.
+- [Provide LLM context](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/provide-llm-context): Learn how to provide extra context to the LLM to improve the results of the AI Suggestion extension.
+- [AI Generation overview](https://tiptap.dev/docs/content-ai/capabilities/generation/overview): Integrate AI features into your Tiptap editor, including smart autocompletion, image generation, and custom commands.
+- [Install AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/install): A guide on setting up the AI Generation extension in Tiptap, including configuring OpenAI keys and JWT authentication.
+- [Configure AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/configure): Learn how to configure the AI Generation extension in your Tiptap editor and explore various options available.
+- [Custom LLMs in AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/custom-llms): Implement custom LLMs with the Generative AI extension and override resolver functions in your editor.
+- [AI image generation editor command](https://tiptap.dev/docs/content-ai/capabilities/generation/image-generation): Use the aiImagePrompt command in Tiptap Content AI to generate images directly within the editor, customizing prompts and styles.
+-[AI Autocompletion](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/autocompletion): Set up your AI Generation extension to autocomplete and stream text when a user hits tab in your editor. 
+- [AI Generation editor commands](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/built-in-commands): Integrate AI into your Tiptap Editor to access preconfigured commands for text manipulation and image generation.
+- [Custom commands in AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/custom-commands): Extend the AI Generation extension to create a custom editor command and prompt for your Tiptap editor.
+- [AI Auto Format](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/format): Enable AI to automatically format generated content in your Tiptap editor with rich text, lists, and more.
+- [Manage AI responses](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/manage-responses): Learn how to use the Content AI storage to save, regenerate, and insert AI responses into your Tiptap editor.
+- [Provide more context to your prompts](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/provide-context): Learn how to add context in text or URL format to enhance your AI's responses in Tiptap.
+- [Stream content](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/stream): Learn how to use the low-level API to stream content directly into the Tiptap editor, supporting both appending and replacing content.
+- [Custom LLMs in content AI](https://tiptap.dev/docs/content-ai/custom-llms): Learn how to integrate Tiptap AI extensions with your custom backend and AI models.
+- [Privacy in Content AI](https://tiptap.dev/docs/content-ai/resources/privacy): Discover how Tiptap Content AI prioritizes your privacy with robust cloud integration and on-premise options.
+
+
+### Conversion Docs
+- [Tiptap Conversion overview](https://tiptap.dev/docs/conversion/getting-started/overview): Use Tiptap Conversion to import and export DOCX, ODT or Markdown documents to your editor.
+- [Install Conversion](https://tiptap.dev/docs/conversion/getting-started/install): Retrieve your credentials to authenticate your application with Tiptap's conversion service.
+- [Import & export DOCX](https://tiptap.dev/docs/conversion/import-export/docx): Learn how to manage DOCX file import and export with Tiptap, including editor integration and REST API options.
+- [Import customs marks from DOCX](https://tiptap.dev/docs/conversion/import-export/docx/custom-mark-conversion): Learn how to import custom marks from DOCX (Word) files using the Import extension.
+- [Custom nodes in DOCX](https://tiptap.dev/docs/conversion/import-export/docx/custom-node-conversion): Learn how to export custom nodes to DOCX (Word) files using the Export extension.
+- [Export DOCX](https://tiptap.dev/docs/conversion/import-export/docx/editor-export): Learn how to export Tiptap editor content to DOCX (Word) files using the Export extension.
+- [Import DOCX](https://tiptap.dev/docs/conversion/import-export/docx/editor-import): Learn how to import DOCX (Word) documents into a Tiptap editor using the Import extension in our docs.
+- [Export DOCX styles](https://tiptap.dev/docs/conversion/import-export/docx/export-styles): Learn how to export custom styles from Tiptap JSON to DOCX in our documentation.
+- [Preserve images](https://tiptap.dev/docs/conversion/import-export/docx/preserve-images): Learn how to preserve images in converted documents by providing an image upload callback URL.
+- [DOCX REST API | Tiptap Conversion](https://tiptap.dev/docs/conversion/import-export/docx/rest-api): Learn how to integrate import and export functionality via REST API for docx files in our documentation.
+- [Markdown in Tiptap Conversion](https://tiptap.dev/docs/conversion/import-export/markdown/editor-extensions): Learn how to handle Markdown files in a Tiptap editor, including in-editor import/export and REST API usage.
+- [Markdown REST API](https://tiptap.dev/docs/conversion/import-export/markdown/rest-api): Learn how to handle Markdown files in a Tiptap editor, including in-editor import/export and REST API usage.
+- [Import & export ODT files](https://tiptap.dev/docs/conversion/import-export/odt/editor-extensions): Learn how to handle ODT files (OpenDocument Text) in a Tiptap editor, including in-editor import/export and REST API usage.
+- [ODT REST API](https://tiptap.dev/docs/conversion/import-export/odt/rest-api): Learn how to handle ODT files (OpenDocument Text) in a Tiptap editor, including in-editor import/export and REST API usage.
+
+
+### UI Components Docs
+- [UI Components overview](https://tiptap.dev/docs/ui-components/getting-started/overview): Set up Tiptap UI Components using prebuilt templates or integrate individual components for customizable editing experiences.
+- [Using the CLI for UI Components](https://tiptap.dev/docs/ui-components/getting-started/cli): A command-line interface to quickly install and configure Tiptap UI components. Learn how to get started.
+- [Components Overview](https://tiptap.dev/docs/ui-components/components/overview): Discover a range of UI components and primitives to integrate into your Tiptap editor for enhanced functionality.
+- [Heading button](https://tiptap.dev/docs/ui-components/components/heading-button): Add a button that toggles through different heading levels in your Tiptap editor.
+- [Heading dropdown menu](https://tiptap.dev/docs/ui-components/components/heading-dropdown-menu): Integrate a dropdown menu from which you can select a heading in your Tiptap editor.
+- [Highlight popover](https://tiptap.dev/docs/ui-components/components/highlight-popover): Add a popover in which you can select a highlight. Add this UI component to your Tiptap Editor.
+- [Image upload button](https://tiptap.dev/docs/ui-components/components/image-upload-button): Learn how to add a button that uploads and inserts an image into your Tiptap editor.
+- [Link popover](https://tiptap.dev/docs/ui-components/components/link-popover): Select link options in a popover element with this Tiptap UI component. More in our documentation.
+- [List button](https://tiptap.dev/docs/ui-components/components/list-button): Add a button to your Tiptap editor that toggles through bullet, ordered, or task lists.
+- [List menu](https://tiptap.dev/docs/ui-components/components/list-dropdown-menu): Add a dropdown menu that helps selecting different list types in your Tiptap editor.
+- [Mark button](https://tiptap.dev/docs/ui-components/components/mark-button): Integrate a button that toggles through text marks like bold, italics and underline.
+- [Node button](https://tiptap.dev/docs/ui-components/components/node-button): Toggle through block-level nodes like code blocks and blockquotes with the node button.
+- [Text align button](https://tiptap.dev/docs/ui-components/components/text-align-button): Change the text alignment in your Tiptap editor with this button UI component.
+- [Undo redo button](https://tiptap.dev/docs/ui-components/components/undo-redo-button): Integrate a button that helps undo and redo editor actions for your Tiptap editor.
+- [Code block](https://tiptap.dev/docs/ui-components/node-components/code-block-node): Integrate a node component displaying code content in your Tiptap Editor. 
+- [Image node](https://tiptap.dev/docs/ui-components/node-components/image-node): Add an image node UI component to your Tiptap Editor.
+- [Image upload node](https://tiptap.dev/docs/ui-components/node-components/image-upload-node): Integrate a node UI component that adds an image upload in your Tiptap Editor.
+- [List node](https://tiptap.dev/docs/ui-components/node-components/list-node): Add a list node UI component into your Tiptap Editor, including styling for ordered, unordered, and task lists.
+- [Paragraph node](https://tiptap.dev/docs/ui-components/node-components/paragraph-node): Add a paragraph node UI component to your Tiptap editor with comprehensive styling for text elements.
+- [Primitives: Avatar](https://tiptap.dev/docs/ui-components/primitives/avatar): Learn how to integrate a visual representation of a user or entity into your Tiptap editor with detailed installation and usage instructions.
+- [Primitives: Button](https://tiptap.dev/docs/ui-components/primitives/button): Integrate a button in your Tiptap Editor with the Button UI Component.
+- [Primitives: Dropdown Menu](https://tiptap.dev/docs/ui-components/primitives/dropdown-menu): Add a dropdown menu into your Tiptap Editor with this UI Component. 
+- [Primitives: Popover](https://tiptap.dev/docs/ui-components/primitives/popover): Add a pop-up UI element appearing when a user clicks on a trigger element.
+- [Primitives: Separator](https://tiptap.dev/docs/ui-components/primitives/separator): Add a visual divider between content in menus, toolbars, or other UI elements.
+- [Primitives: Spacer](https://tiptap.dev/docs/ui-components/primitives/spacer): Learn how to use the spacer UI component for layout spacing in your Tiptap editor.
+- [Primitives: Toolbar](https://tiptap.dev/docs/ui-components/primitives/toolbar): Learn how to add a toolbar UI component in Tiptap to organize actions and controls in your editor.
+- [Primitives: Tooltip](https://tiptap.dev/docs/ui-components/primitives/tooltip): Add a small informational popup that appears when hovering over an element. 
+- [Simple Editor Tiptap Template](https://tiptap.dev/docs/ui-components/templates/simple-editor): A fully working setup for the Tiptap editor with commonly used open source extensions and UI components, ready to customize.
+
+
+### Examples
+- [Examples Overview](https://tiptap.dev/docs/examples): Discover a variety of code examples that demonstrate how to use Tiptap for custom content editing and integration.
+- [Clever Editor example](https://tiptap.dev/docs/examples/advanced/clever-editor): Discover how to create highly customized extensions for your text editor using Tiptap.
+- [Collaborative editing example](https://tiptap.dev/docs/examples/advanced/collaborative-editing): Learn how to create a simple collaborative text editor in Tiptap with a short code example.
+- [Drawing example](https://tiptap.dev/docs/examples/advanced/drawing): Learn how to create a text editor with drawing capabilities using Tiptap with an easy code example.
+- [Forced content structure example](https://tiptap.dev/docs/examples/advanced/forced-content-structure): Learn how to add a text editor with a forced content structure using Tiptap.
+- [Interactive React & Vue views](https://tiptap.dev/docs/examples/advanced/interactive-react-and-vue-views): Learn how to build a text editor with React or Vue support using Tiptap.
+- [Mentions example](https://tiptap.dev/docs/examples/advanced/mentions): Learn how to build a text editor with mentions in Tiptap with a quick code example.
+- [Menus example](https://tiptap.dev/docs/examples/advanced/menus): Learn how to create floating menus for your text editor in Tiptap with a short code example.
+- [React rendering performance demo](https://tiptap.dev/docs/examples/advanced/react-performance): Learn how to integrate Tiptap with React and improve the rendering performance of your editor.
+- [Retrieval-Augmented Generation (RAG)](https://tiptap.dev/docs/examples/advanced/retrieval-augmented-generation-rag): Learn how to use Tiptap Semantic Search to retrieve context for your Tiptap AI commands.
+- [Syntax Highlighting Example](https://tiptap.dev/docs/examples/advanced/syntax-highlighting): Learn how to create code blocks with syntax highlighting using Tiptap and the CodeBlockLowlight extension.
+- [Default text editor example](https://tiptap.dev/docs/examples/basics/default-text-editor): Learn how to create a super basic text editor in Tiptap with a short code example.
+- [Formatting example](https://tiptap.dev/docs/examples/basics/formatting): Learn how to create a text editor with text formatting in Tiptap with an easy code example.
+- [Images example](https://tiptap.dev/docs/examples/basics/images): Learn how to create a text editor supporting images in Tiptap with a short code example.
+- [Long texts example](https://tiptap.dev/docs/examples/basics/long-texts): Learn how to create a text editor supporting large content with Tiptap with an easy example.
+- [Markdown shortcuts example](https://tiptap.dev/docs/examples/basics/markdown-shortcuts): Learn how to create a text editor with Markdown shortcuts using Tiptap with an easy code example.
+- [Minimal setup for paragraphs & text only](https://tiptap.dev/docs/examples/basics/minimal-setup): Learn how to create a very minimal text editor in Tiptap with a short code example.
+- [Adding table support to Tiptap](https://tiptap.dev/docs/examples/basics/tables): Learn how to create a text editor supporting tables in Tiptap with a quick code example.
+- [Tasks example](https://tiptap.dev/docs/examples/basics/tasks): Learn how to create a text editor supporting task lists with Tiptap with an easy code example.
+- [Collaborative fields](https://tiptap.dev/docs/examples/experiments/collaborative-fields): Learn how to save different content on one collaboration document with Tiptap Editor.
+- [Figure Extension](https://tiptap.dev/docs/examples/experiments/figure): Learn how to use the Figure extension in Tiptap to add figure nodes to your editor content.
+- [Generic figure example](https://tiptap.dev/docs/examples/experiments/generic-figure): Learn how to create a generic figure extension for your Tiptap Editor with an easy example.
+- [iFrame Extension](https://tiptap.dev/docs/examples/experiments/iframe): Learn how to use the iFrame extension in Tiptap to embed iframes in your editor content.
+- [Linting example](https://tiptap.dev/docs/examples/experiments/linting): Learn how to add a content linter to your Tiptap Editor with a short but sweet code example.
+- [Slash Commands Extension](https://tiptap.dev/docs/examples/experiments/slash-commands): Learn how to use the Slash Commands extension in Tiptap to add a toolbar that pops up at the slash position for quick content insertion.
+- [Trailing Node Extension](https://tiptap.dev/docs/examples/experiments/trailing-node): Use the Trailing node extension in Tiptap to add a node at the end of the document.
+
+
+### Tiptap Guides
+- [Tiptap Guides Overview](https://tiptap.dev/docs/guides): Explore practical advice on configuring Tiptap editors, enhancing user experience, and ensuring accessibility.
+- [Accessibility](https://tiptap.dev/docs/guides/accessibility): Quick notes on ensuring accessibility by providing semantic markup, keyboard accessibility, and guidelines.
+- [JWT Authentication with Collaboration](https://tiptap.dev/docs/guides/authentication): Implement JWT authentication with Tiptap's collaboration and securely generate and manage JWTs server-side.
+- [Invalid Schema Handling](https://tiptap.dev/docs/guides/invalid-schema): Learn how to manage invalid schemas in Tiptap to maintain content integrity in collaborative editing environments.
+- [Name Documents](https://tiptap.dev/docs/guides/naming-documents): Learn best practices for naming and organizing documents in Tiptap Collaboration using unique identifiers and Y.js fragments.
+- [Offline Support](https://tiptap.dev/docs/guides/offline-support): Learn how to add offline functionality to your collaborative editor, enabling local data storage and automatic sync when online.
+- [Export to JSON and HTML](https://tiptap.dev/docs/guides/output-json-html): Manage content formats in Tiptap Editor and export to JSON and HTML, using Y.js for advanced features.
+- [Integration performance](https://tiptap.dev/docs/guides/performance): Learn how to integrate Tiptap Editor performantly in your app with tips to avoid re-rendering issues.
+- [Pro Extensions](https://tiptap.dev/docs/guides/pro-extensions): Learn how to install and use Tiptap Pro extensions, which enhance the Tiptap Editor with advanced features like versioning and AI-assisted content generation.
+- [Working with TypeScript](https://tiptap.dev/docs/guides/typescript): Learn how to extend and use TypeScript with the Tiptap Editor for enhanced development.
+- [Upgrade Tiptap V1 to V2](https://tiptap.dev/docs/guides/upgrade-tiptap-v1): A comprehensive guide on upgrading from Tiptap V1 to V2, covering installation, changes, and new features.
+
+
+##Optional
+- [Tiptap Changelog](https://tiptap.dev/docs/resources/changelog): Tiptap consists of more than 50 separate packages. Here is everything you need to follow changes.
+- [System Status](https://status.tiptap.dev/)
+- [Contributing to Tiptap](https://tiptap.dev/docs/resources/contributing): Step-by-step guide for those interested in contributing to Tiptap, from setting up your development environment to tips for successful pull requests and creating your own extensions.
+- [Create your account](https://cloud.tiptap.dev/register): Sign up for a Tiptap account with no credit card required.
+- [Tiptap News](https://tiptap.dev/blog)
+- [GitHub](https://github.com/ueberdosis/tiptap)
+- [Discord](https://discord.com/invite/DDXcGKt4Zk)
+- [LinkedIn](https://www.linkedin.com/company/tiptapdev/)
+- [Bluesky](https://bsky.app/profile/tiptap.dev)
 ````
 
 ## File: app/assets/css/dark-hc.css
@@ -3388,6 +3783,533 @@ performance
 Document version: 1.0 (Task 7.2)
 ````
 
+## File: planning/thread-branching/design.md
+````markdown
+---
+artifact_id: 0d9bf3f2-7206-4ca0-84a1-7a404ad45551
+name: Conversation Branching Design
+---
+
+# Overview
+
+We enable hierarchical branching of chat threads using existing Dexie schema (`threads.parent_thread_id`, `threads.forked`). Two fork modes: (1) **Full Copy Fork** (copy messages up to anchor) and (2) **Light Fork** (no copy; ancestor history rendered read-only & used only for model context). The design focuses on: atomic fork creation, efficient context assembly, lazy lineage traversal, UI affordances, and minimal schema churn.
+
+# Architecture
+
+```mermaid
+flowchart TD
+  U[User selects Branch from Message] --> M{Mode?}
+  M -- Full Copy --> TX[Dexie Transaction]
+  M -- Light Fork --> TX
+  TX -->|Create new thread (forked=true,parent=source)| T[Fork Thread]
+  M -- Full Copy --> C[Copy ancestor messages <= anchor]
+  M -- Light Fork --> A[Persist anchor meta]
+  C --> IDX[Normalize indexes if needed]
+  A --> IDX
+  IDX --> DONE[Emit hooks & return thread id]
+  DONE --> UI[Open new thread view]
+  UI --> CTX[Assemble AI Context]
+  CTX --> AI[Send Prompt]
+
+  subgraph Context Assembly
+    P1[Local fork messages]\n(excluding ancestor copies) --> P2
+    P0[If light fork: fetch ancestor messages up to anchor] --> P2[Merge + dedupe]
+    P2 --> TKN[Truncate by token budget]
+  end
+```
+
+# Components
+
+-   BranchService (new module `app/db/branching.ts`): core creation, metadata parsing, context assembly.
+-   Branch Explorer UI: tree navigation panel (new component group `app/components/threads/branching/*`).
+-   Message Action Menu Extension: adds "Branch from here" and "Retry as Branch".
+-   ContextAssembler: merges messages for AI invocation (hook-in to `useChat.sendMessage`).
+-   Metadata Cache: in-memory Map<threadId, AnchorMeta> for light forks.
+
+# Data Structures
+
+```ts
+export interface AnchorMeta {
+    anchorMessageId: string; // message id in parent thread
+    mode: 'light' | 'full';
+    parentThreadId: string; // redundancy for quick checks
+}
+
+// Stored encoding strategy v1: prefix JSON + '|' + (user visible title)
+// Example title in DB: '{"anchor":"m_123","mode":"light"}|Exploring alt'
+```
+
+Helper to parse:
+
+```ts
+const ANCHOR_PREFIX_RE = /^\{\"anchor\":/;
+export function parseAnchorMeta(title?: string | null): {
+    meta?: AnchorMeta;
+    userTitle: string;
+} {
+    if (!title) return { userTitle: '' };
+    if (!ANCHOR_PREFIX_RE.test(title)) return { userTitle: title };
+    const pipe = title.indexOf('|');
+    if (pipe === -1) return { userTitle: title };
+    try {
+        const meta = JSON.parse(title.slice(0, pipe));
+        if (meta && meta.anchor && meta.mode) {
+            return {
+                meta: {
+                    anchorMessageId: meta.anchor,
+                    mode: meta.mode,
+                    parentThreadId: meta.parent,
+                },
+                userTitle: title.slice(pipe + 1),
+            };
+        }
+    } catch {}
+    return { userTitle: title };
+}
+```
+
+Caching layer:
+
+```ts
+const anchorCache = new Map<string, AnchorMeta>();
+export function getAnchorMetaFast(thread: Thread): AnchorMeta | undefined {
+    const cached = anchorCache.get(thread.id);
+    if (cached) return cached;
+    const { meta } = parseAnchorMeta(thread.title);
+    if (meta) anchorCache.set(thread.id, meta);
+    return meta;
+}
+```
+
+# Fork Creation Algorithm
+
+```ts
+interface ForkOptions {
+    anchorMessageId: string; // required
+    mode: 'full' | 'light';
+    titleOverride?: string;
+    copyStrategy?: 'upto-anchor' | 'none'; // derived from mode; allowing future variations
+}
+
+async function createBranch(
+    sourceThreadId: string,
+    opts: ForkOptions
+): Promise<Thread> {
+    return db.transaction('rw', db.threads, db.messages, async () => {
+        const src = await db.threads.get(sourceThreadId);
+        if (!src) throw new Error('source thread missing');
+        const anchor = await db.messages.get(opts.anchorMessageId);
+        if (!anchor || anchor.thread_id !== sourceThreadId)
+            throw new Error('anchor invalid');
+
+        const now = nowSec();
+        const forkId = newId();
+        const baseTitle =
+            opts.titleOverride ||
+            src.title ||
+            (anchor.data as any)?.content?.slice(0, 32) ||
+            'Branch';
+
+        const threadTitle =
+            opts.mode === 'light'
+                ? JSON.stringify({
+                      anchor: anchor.id,
+                      mode: 'light',
+                      parent: src.id,
+                  }) +
+                  '|' +
+                  baseTitle
+                : baseTitle + ' • alt';
+
+        const fork: Thread = {
+            ...src,
+            id: forkId,
+            title: threadTitle,
+            parent_thread_id: src.id,
+            forked: true,
+            created_at: now,
+            updated_at: now,
+            last_message_at: null,
+        };
+        await db.threads.put(fork);
+
+        if (opts.mode === 'full') {
+            const ancestors = await db.messages
+                .where('thread_id')
+                .equals(src.id)
+                .filter((m) => m.index <= anchor.index)
+                .sortBy('index');
+            for (const m of ancestors) {
+                await db.messages.put({ ...m, id: newId(), thread_id: forkId });
+            }
+            if (ancestors.length) {
+                await db.threads.put({
+                    ...fork,
+                    last_message_at: now,
+                    updated_at: now,
+                });
+            }
+        }
+        return fork;
+    });
+}
+```
+
+# Context Assembly
+
+Add a hook inside `useChat.sendMessage` before streaming:
+
+```ts
+const contextualMessages = await hooks.applyFilters(
+    'ai.context.branch:filter:messages',
+    effectiveMessages,
+    threadIdRef.value
+);
+```
+
+Implementation of filter:
+
+1. Determine if current thread is light fork (getAnchorMetaFast(thread)).
+2. If not light, return messages unchanged.
+3. If light: fetch ancestor messages up to anchor (ordered), merge with branch's own local messages (exclude duplicates by original id stored maybe in data.\_src_id for copies).
+4. Token budget: estimate via simple heuristic (chars/4) vs `MAX_TOKENS_CONTEXT` constant (e.g., 8k). Drop earliest ancestor messages first until under budget.
+
+# Branch Explorer Algorithm
+
+1. Load root threads: `where('parent_thread_id').equals(null)` (need a null sentinel; ensure existing creation sets null).
+2. For node expansion load children: `where('parent_thread_id').equals(thread.id).toArray()`.
+3. Cache children arrays in reactive store to avoid duplicate queries.
+4. Provide computed flattened view for virtualization if needed.
+
+# UI Interactions
+
+-   Message contextual menu gets new choices: Branch from here, Retry as Branch.
+-   Branch creation modal: radio full vs light, title input, create button.
+-   Branch indicator chip beside thread title if `forked` true.
+-   Ancestor divider for light forks uses `getAnchorMetaFast` to decide.
+
+# Error Handling
+
+-   All branch operations run in Dexie transaction; if any put fails, rollback automatic.
+-   Validation errors (missing anchor) throw and are caught to display toast.
+-   Performance marks: `performance.mark('branch:start')`, `performance.mark('branch:end')`, measure via `performance.measure`.
+
+# Hooks
+
+-   `ui.thread.branch:action:before` (payload { sourceThreadId, anchorMessageId, mode })
+-   `ui.thread.branch:action:after` (payload { forkThreadId })
+-   `ai.context.branch:filter:messages` (see above)
+-   `db.threads.fork:filter:options` (allows altering copy strategy)
+
+# Testing Strategy
+
+-   Script: create thread with 5 messages, branch full & verify copies count == anchor index subset.
+-   Light fork: no copied messages, anchor meta parsing returns expected anchor.
+-   Retry-as-branch: branch created and new assistant message appears only in fork.
+-   Duplicate prevention: create same branch twice => second returns existing thread id.
+-   Performance: measure time copying 200 synthetic messages; assert < 50ms.
+
+# Performance Considerations
+
+-   Avoid full project thread scan for Branch Explorer: only load children per node.
+-   Cache anchor meta parse results.
+-   Use sparse indexes already in place for message insertions after branching.
+-   Virtualize long message lists (>300) combining ancestor + local.
+
+# Security / Integrity
+
+-   Never mutate original message objects; always shallow clone with new ids.
+-   Light fork context assembly read-only; no writes to ancestor threads.
+
+# Future Extensions
+
+-   Dedicated `thread_meta` table to store anchor & mode instead of encoding into title.
+-   Merge tool: consolidate branches.
+-   Graph visualization (force directed or timeline view).
+-   Remote sync conflict resolution using clock vector.
+
+# Assumptions
+
+-   Null stored as `parent_thread_id: null` for root threads (current code sets null).
+-   Branch frequency moderate (< 500 branches per project); depth rarely > 10.
+-   Token estimation heuristic sufficient (no exact tokenizer needed initially).
+````
+
+## File: planning/thread-branching/requirements.md
+````markdown
+---
+artifact_id: 6d6fb70f-3c9a-4a9f-85d2-6b1bf07ae6d7
+name: Conversation Branching Requirements
+---
+
+# Introduction
+
+We will implement **conversation branching** (thread forking & navigation) in the local chat app so users can explore alternate continuations from any prior message without losing history. The DB already supports `parent_thread_id` and `forked` flags. This phase adds a robust UX + APIs for creating, visualizing, traversing, and managing branch trees while keeping message queries performant and preventing index fragmentation or accidental data loss.
+
+Objectives:
+
+-   Fast fork creation (O(n messages) only when copying; default no-copy).
+-   Intuitive UI affordances to branch at any user or assistant message.
+-   Deterministic sparse message indexing preserved per thread.
+-   Clear lineage: ability to see ancestor chain and siblings.
+-   Retry-as-branch semantics (turn a retry into a fork instead of overwriting).
+-   Non-destructive: never mutates source thread messages when branching.
+-   Hooks for extension (analytics, autosave, remote sync later).
+
+# Requirements
+
+## 1. Create Branch From Message
+
+User Story: As a user, I want to branch a conversation from any earlier message to explore an alternative path while retaining the original.
+Acceptance Criteria:
+
+-   WHEN user selects "Branch from here" on a message (id M, thread T) THEN system SHALL create a new thread F with `parent_thread_id = T` and `forked = true`.
+-   WHEN branch is created THEN system SHALL copy all messages in T with `index <= M.index` into F preserving original ordering and sparse indexes OR (config flag) copy none except the last selected message (default: copy up-to anchor).
+-   WHEN branch created THEN new thread title SHALL default to original thread title + `• alt` (or first 6 words of anchor message if no title) unless user edits inline.
+-   IF source thread not found or message not in thread THEN system SHALL abort and show error toast.
+
+## 2. Branch Without Copy (Light Fork)
+
+User Story: As a power user, I want to create an empty branch that references history implicitly to save storage.
+Acceptance Criteria:
+
+-   WHEN user holds modifier (e.g., Alt+Click) on "Branch" THEN system SHALL create fork thread with **no copied messages**; first new user message in fork SHALL reference ancestor chain for context (see Req 6 context assembly).
+-   WHEN listing messages in such a branch THEN UI SHALL display ancestor history in read-only mode above a visual divider (not persisted duplicates).
+
+## 3. Visualize Branch Lineage
+
+User Story: As a user, I want to understand where a branch came from and navigate between branches.
+Acceptance Criteria:
+
+-   WHEN viewing a thread with a `parent_thread_id` THEN UI SHALL show breadcrumb: Root Thread > ... > Parent > Current.
+-   WHEN thread has child branches THEN UI SHALL show a branch indicator (badge with count) and expandable list of child threads.
+-   IF branch depth > 6 THEN breadcrumb SHALL collapse middle ancestors into an overflow dropdown.
+
+## 4. Branch Discovery & Navigation Panel
+
+User Story: As a user, I want a side panel to explore all branches of a project hierarchically.
+Acceptance Criteria:
+
+-   WHEN user opens Branch Explorer THEN system SHALL render a tree of threads grouped by `parent_thread_id` (root threads first by `updated_at desc`).
+-   Tree nodes SHALL lazily load children (no full scan) unless project < 200 threads (config threshold) THEN eager load.
+-   Selecting a node SHALL navigate to thread view preserving scroll position state per thread.
+
+## 5. Prevent Accidental Duplicate Branches
+
+User Story: As a user, I don't want to create redundant branches from the same anchor and title.
+Acceptance Criteria:
+
+-   WHEN creating a fork for (thread T, anchor message A) THEN system SHALL check for existing fork where `parent_thread_id = T` AND `last_message_at = null` AND metadata anchor_id = A.id (stored transiently in thread title JSON or future meta table) THEN system SHALL prompt to reuse or force new.
+-   Default SHALL be reuse existing empty fork if found.
+
+## 6. Context Assembly For AI From Branch
+
+User Story: As a user, I want AI replies in a branch to include appropriate ancestor history.
+Acceptance Criteria:
+
+-   WHEN sending a message in fork F THEN system SHALL assemble prompt context consisting of all copied local messages in F plus (if light fork w/out copies) the ancestor thread messages up to anchor (bounded by token limit constant) in chronological order.
+-   System SHALL avoid duplicating identical history segments if they already exist in F.
+-   IF total tokens exceed limit THEN system SHALL truncate earliest ancestor messages first, preserving anchor message.
+
+## 7. Retry-As-Branch
+
+User Story: As a user, I want to transform a retry into a new branch so original stays intact.
+Acceptance Criteria:
+
+-   WHEN user clicks "Retry as Branch" on assistant reply R (following user message U) THEN system SHALL create a fork anchored at U.index and copy messages through U (not R) into new fork before sending retry prompt.
+-   Original thread SHALL remain unchanged.
+
+## 8. UI Indicators & Styling
+
+User Story: As a user, I need clear differentiation between original and branched threads.
+Acceptance Criteria:
+
+-   Forked thread cards/list entries SHALL display a branch icon.
+-   Messages copied from ancestor SHALL display subtle "(from parent)" hover label.
+-   Divider SHALL label: "Ancestor History (read-only)" for light forks.
+
+## 9. Performance Constraints
+
+User Story: As a performance-minded developer, I want branching to scale.
+Acceptance Criteria:
+
+-   Creation of a branch with copy of N messages SHALL complete in < 50ms for N ≤ 200 on modern laptop (baseline metric; measure with performance marks).
+-   Branch Explorer tree expansion for node with ≤ 20 children SHALL resolve in < 16ms average (excluding Dexie I/O) after initial warm cache.
+-   Thread view render with ancestor read-only messages SHALL virtualize if total messages > 300.
+
+## 10. Data Integrity & Indexing
+
+User Story: As a developer, I want indexes to remain efficient.
+Acceptance Criteria:
+
+-   Branch creation SHALL NOT introduce new Dexie indexes (reuse existing schema).
+-   Copied messages SHALL receive new `id`s and preserved `index` spacing; if collision arises (rare) system SHALL normalize indexes via existing `normalizeThreadIndexes` utility post-copy.
+-   Light forks SHALL store only anchor reference metadata (see Req 11) to reconstruct history.
+
+## 11. Anchor Metadata Persistence
+
+User Story: As a developer, I need to know which message a light fork derives from.
+Acceptance Criteria:
+
+-   Light fork creation SHALL persist an anchor record (temporary approach: JSON encoded prefix in `title` like `{"anchor":"<messageId>","mode":"light"}|<userTitle>` OR dedicated kv entry keyed `thread_anchor:<threadId>`).
+-   Retrieval utilities SHALL parse this metadata quickly (<0.1ms parse aim) and cache in-memory map.
+
+## 12. Deleting / Pruning Branches
+
+User Story: As a user, I want safe branch deletion.
+Acceptance Criteria:
+
+-   Soft-deleting a parent thread SHALL NOT cascade delete children; Branch Explorer SHALL indicate orphaned branches (parent deleted) with warning badge.
+-   WHEN deleting a branch with children THEN system SHALL prompt user to confirm; default action SHALL keep children (re-parent to deleted thread's parent) unless user chooses cascade.
+
+## 13. Conflict / Race Handling
+
+User Story: As a developer, I want thread forking operations to be atomic.
+Acceptance Criteria:
+
+-   Branch creation and message copy SHALL run in a single Dexie transaction across `threads` and `messages` tables.
+-   IF transaction fails (e.g., quota error) THEN no partial fork thread SHALL remain.
+
+## 14. Hooks Integration
+
+User Story: As an extension dev, I want to intercept branching.
+Acceptance Criteria:
+
+-   Hooks SHALL exist: `db.threads.fork:filter:options`, `ui.thread.branch:action:before`, `ui.thread.branch:action:after`, `ai.context.branch:filter:messages`.
+
+## 15. Accessibility & Keyboard Support
+
+User Story: As a keyboard user, I want to branch quickly.
+Acceptance Criteria:
+
+-   Focused message + shortcut (e.g., Cmd+B) SHALL open branch creation modal with anchor pre-selected.
+-   Branch Explorer SHALL be navigable via arrow keys and Enter to open thread.
+
+## 16. Testing & QA
+
+User Story: As a developer, I want automated validation of branching logic.
+Acceptance Criteria:
+
+-   Unit tests (or dev harness script) SHALL verify: branch copy correctness, light fork ancestor assembly, retry-as-branch, duplicate prevention.
+-   Performance marks SHALL be logged with label prefix `branch:`.
+
+## 17. Non-Functional Requirements
+
+Acceptance Criteria:
+
+-   All new code SHALL be TypeScript.
+-   No blocking synchronous loops over > 500 messages; use chunked async yields for extreme cases.
+-   Branch metadata parsing SHALL avoid JSON.parse in tight render loops (cache results).
+-   UI SHALL remain responsive (no frame > 50ms) during branch creation.
+````
+
+## File: planning/thread-branching/simple-tasks.md
+````markdown
+---
+name: Simple Branching Task List
+summary: Minimal, functional branching system (fork + retry + context) without advanced metadata, hooks, caching, or performance layers.
+version: v1-slim
+---
+
+# Minimal Branching Implementation
+
+Goal: Ship the smallest useful branching feature: fork a thread at a user message (reference or copy), retry an assistant turn by branching at its preceding user, and build context for AI calls. No JSON-in-title, no hooks, no caching, no token budgeting, no performance marks.
+
+## Core Principles
+
+-   Store branch state directly in thread columns.
+-   Only two fork modes: `reference` (reuse ancestor messages) and `copy` (duplicate earlier messages into new thread).
+-   Context for AI = ancestor slice (up to anchor) + local branch messages (reference mode) OR just local messages (root/copy mode).
+-   Keep UI additions minimal (message action menu + basic toast + navigation).
+-   Keep schema migration small and forward-only.
+
+## Task Checklist
+
+### 1. Schema & Types
+
+-   [x] 1.1 Add fields to `threads` schema: `parent_thread_id?`, `anchor_message_id?`, `anchor_index?` (number), `branch_mode?` ('reference' | 'copy').
+-   [x] 1.2 Bump Dexie DB version with upgrade adding new indexes if needed (e.g. `[parent_thread_id+anchor_index]` if useful later; optional for MVP).
+-   [x] 1.3 Update TypeScript `Thread` interface.
+-   [x] 1.4 Data backfill: existing rows get `branch_mode = null` (implicitly root).
+
+### 2. Core Branching Module
+
+-   [x] 2.1 Create `app/db/branching.ts` with exports: `forkThread`, `retryBranch`, `buildContext` (per user’s simple examples).
+-   [x] 2.2 Implement `forkThread` supporting `mode: 'reference' | 'copy'` and optional `titleOverride`.
+-   [x] 2.3 Implement `retryBranch(assistantMessageId, mode)` (find preceding user message and call `forkThread`).
+-   [x] 2.4 Implement `buildContext({ threadId })` (ancestor slice + locals for reference; locals only for copy/root).
+-   [x] 2.5 Add minimal input validation / error throwing (source thread exists, anchor belongs to source, roles, etc.).
+
+### 3. UI Integration (Minimal)
+
+-   [ ] 3.1 Add "Branch from here" action to user messages (opens small inline popover/modal with mode + optional title + Create button).
+-   [ ] 3.2 Add "Retry as Branch" action to assistant messages (auto-select preceding user anchor; maybe skip extra UI unless changing mode/title).
+-   [ ] 3.3 After creation: navigate to new thread route and show success toast (e.g. "Branched: <title>").
+-   [ ] 3.4 Indicate branched thread in header: simple badge "Branch" if `parent_thread_id` present.
+-   [ ] 3.5 (Optional nice-to-have) Button in branched thread to "Open Parent".
+
+### 4. Message Send Flow
+
+-   [ ] 4.1 On AI context assembly (wherever messages assembled now), replace logic with call to `buildContext` when thread has `parent_thread_id`.
+-   [ ] 4.2 Ensure no duplicate messages if user already sees ancestor messages in UI (UI can continue to render only local messages for MVP; context building is independent).
+-   [ ] 4.3 (Optional) For reference branches, visually mark ancestor boundary with a simple divider if time allows (not required for functionality).
+
+### 5. Navigation & State
+
+-   [ ] 5.1 Ensure new thread added to in-memory thread list/store after fork.
+-   [ ] 5.2 Ensure selection switching triggers message list refresh.
+-   [ ] 5.3 No special indexing normalization beyond what `forkThread` already handles (copy mode resets indexes starting at 0).
+
+### 6. Testing (Basic Scripts or Manual Steps)
+
+-   [ ] 6.1 Create root thread with 3 user+assistant pairs; branch at 2nd user (reference) → verify new thread has 0 local messages initially & metadata correct.
+-   [ ] 6.2 Branch same anchor with copy mode → verify duplicated messages count matches slice length & indexes start at 0.
+-   [ ] 6.3 Retry-as-branch from assistant #3 → anchor = preceding user (#3's user); verify new thread anchor points correctly.
+-   [ ] 6.4 Send a new message in reference branch → ensure context includes ancestor slice + new message.
+-   [ ] 6.5 Send a new message in copy branch → ensure context includes only copied + new message (all local).
+
+### 7. Error / Edge Cases
+
+-   [ ] 7.1 Attempt branch with invalid anchor id → throws.
+-   [ ] 7.2 Attempt retry with assistant message lacking preceding user → throws.
+-   [ ] 7.3 Branching at last user message allowed (creates empty branch ready for alt continuation).
+-   [ ] 7.4 Prevent branching from system/tool messages (only user anchors) – enforce in UI.
+
+### 8. DX & Docs
+
+-   [ ] 8.1 Add short README section `Branching (Minimal)` describing modes and functions.
+-   [ ] 8.2 JSDoc headers on the three exported functions (inputs, returns, errors).
+-   [ ] 8.3 Note future extensions (caching, metrics, explorer tree) in a "Next Ideas" subsection.
+
+### 9. Cleanup / Non-Functional
+
+-   [ ] 9.1 Type-safety: no `any` usage introduced.
+-   [ ] 9.2 Keep module under ~150 LOC.
+-   [ ] 9.3 No new dependencies.
+-   [ ] 9.4 Keep UI additions styled with existing retro classes (no new color vars).
+
+## Deliverable Definition of Done
+
+-   Can create reference or copy branch from a user message.
+-   Can retry from an assistant message (auto-branch).
+-   New thread opens automatically; toast confirms.
+-   AI context resolves correctly for both modes.
+-   Minimal docs & basic manual test steps validated.
+
+## Next Ideas (Explicitly Out of Scope Now)
+
+-   Branch explorer tree
+-   Token budgeting / truncation
+-   Performance instrumentation
+-   Hook system integration
+-   Anchor metadata caching
+-   Duplicate branch detection & reuse
+
+---
+
+This slim list supersedes the complex plan for the first shippable branching iteration. Use only this until core UX validated.
+````
+
 ## File: public/robots.txt
 ````
 User-Agent: *
@@ -3649,81 +4571,132 @@ You will be provided with an .llms folder in the root directory of the project. 
 /.llms/nuxtui.txt - This contains a guide for you on how to navigate the nuxtui official documentation
 ````
 
-## File: app/db/client.ts
-````typescript
-import Dexie, { type Table } from 'dexie';
-import type {
-    Attachment,
-    Kv,
-    Message,
-    Project,
-    Thread,
-    FileMeta,
-} from './schema';
+## File: app/components/chat/MessageEditor.vue
+````vue
+<template>
+    <div class="relative min-h-[40px]">
+        <EditorContent
+            v-if="editor"
+            :editor="editor as Editor"
+            class="tiptap-editor fade-in"
+        />
+    </div>
+</template>
 
-export interface FileBlobRow {
-    hash: string; // primary key
-    blob: Blob; // actual binary Blob
+<script setup lang="ts">
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+// If you still want markdown extension keep it; otherwise remove these two lines:
+import { Markdown } from 'tiptap-markdown';
+
+const props = defineProps<{
+    modelValue: string;
+    autofocus?: boolean;
+    focusDelay?: number;
+}>();
+const emit = defineEmits<{
+    (e: 'update:modelValue', v: string): void;
+    (e: 'ready'): void;
+}>();
+
+const editor = ref<any>(null);
+let destroy: (() => void) | null = null;
+// Prevent feedback loop when emitting updates -> watcher -> setContent -> update
+let internalUpdate = false;
+let lastEmitted = '';
+
+async function init() {
+    const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
+
+    const instance = new Editor({
+        extensions,
+        content: props.modelValue,
+        onUpdate: ({ editor: e }) => {
+            // Access markdown storage; fall back gracefully
+            const md: string | undefined =
+                // @ts-expect-error
+                e?.storage?.markdown?.getMarkdown?.();
+            const nextVal = md ?? e.getText();
+            if (nextVal === lastEmitted) return;
+            internalUpdate = true;
+            lastEmitted = nextVal;
+            emit('update:modelValue', nextVal);
+            queueMicrotask(() => {
+                internalUpdate = false;
+            });
+        },
+    });
+
+    editor.value = instance;
+    destroy = () => instance.destroy();
+
+    await nextTick();
+    if (props.autofocus) {
+        const delay =
+            typeof props.focusDelay === 'number' ? props.focusDelay : 90;
+        setTimeout(() => {
+            try {
+                instance.commands.focus('end');
+            } catch {}
+        }, delay);
+    }
+    lastEmitted = props.modelValue;
+    emit('ready');
 }
 
-// Dexie database versioning & schema
-export class Or3DB extends Dexie {
-    projects!: Table<Project, string>;
-    threads!: Table<Thread, string>;
-    messages!: Table<Message, string>;
-    kv!: Table<Kv, string>;
-    attachments!: Table<Attachment, string>;
-    file_meta!: Table<FileMeta, string>; // hash as primary key
-    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
+onMounted(() => {
+    init();
+});
 
-    constructor() {
-        super('or3-db');
+onBeforeUnmount(() => {
+    destroy && destroy();
+});
 
-        this.version(1).stores({
-            projects: 'id, name, clock, created_at, updated_at',
-            threads:
-                'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-            messages:
-                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-            kv: 'id, &name, clock, created_at, updated_at',
-            attachments: 'id, type, name, clock, created_at, updated_at',
-        });
+watch(
+    () => props.modelValue,
+    (val) => {
+        if (!editor.value) return;
+        if (internalUpdate) return; // skip updates we originated
+        // Determine current markdown representation (markdown storage optional)
+        const currentMd: string | undefined =
+            editor.value?.storage?.markdown?.getMarkdown?.();
+        const current = currentMd ?? editor.value.getText();
+        if (val === current) return;
+        // Update editor without firing transactions that cause flicker (emitUpdate: false not available; use setContent with emitUpdate false param)
+        editor.value.commands.setContent(val || '', false);
+        lastEmitted = val || '';
+    }
+);
+</script>
 
-        this.version(2)
-            .stores({
-                projects: 'id, name, clock, created_at, updated_at',
-                threads:
-                    'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-                messages:
-                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-                kv: 'id, &name, clock, created_at, updated_at',
-                attachments: 'id, type, name, clock, created_at, updated_at',
-                file_meta:
-                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-                file_blobs: 'hash',
-            })
-            .upgrade(async (tx) => {
-                // Backfill file_hashes field for existing messages (if missing)
-                const table = tx.table('messages');
-                try {
-                    const all = await table.toArray();
-                    for (const m of all) {
-                        if (!('file_hashes' in m)) {
-                            (m as any).file_hashes = '[]';
-                            await table.put(m);
-                        }
-                    }
-                } catch (err) {
-                    console.warn(
-                        '[or3-db] migration v2 file_hashes backfill failed',
-                        err
-                    );
-                }
-            });
+<style scoped>
+.tiptap-editor {
+    min-height: 40px;
+    outline: none;
+    font: inherit;
+}
+.tiptap-editor :deep(p) {
+    margin: 0 0 0.5rem;
+}
+.tiptap-editor :deep(pre) {
+    background: var(--md-surface-container-lowest);
+    padding: 0.5rem;
+    border: 1px solid var(--md-outline);
+}
+.tiptap-editor :deep(.ProseMirror) {
+    outline: none;
+}
+.fade-in {
+    opacity: 0;
+    animation: fadeInEditor 0.14s ease-out forwards;
+}
+@keyframes fadeInEditor {
+    to {
+        opacity: 1;
     }
 }
-
-export const db = new Or3DB();
+</style>
 ````
 
 ## File: app/db/files.ts
@@ -4348,6 +5321,116 @@ name: Message File Storage Implementation Tasks
 -   Keep hashing logic tree-shakeable and dependency-light.
 ````
 
+## File: planning/thread-branching/tasks.md
+````markdown
+---
+artifact_id: e6e1e063-049a-4b61-a13b-0ce717a672a6
+name: Conversation Branching Implementation Tasks
+---
+
+# Task Checklist
+
+## 1. Branch Core Module
+
+-   [x] 1.1 Create `app/db/branching.ts` exporting `createBranch`, `retryAsBranch`, `getAnchorMetaFast`, `parseAnchorMeta`. (Requirements: 1,2,5,7,10,11,13,14)
+-   [x] 1.2 Implement fork option validation + hook `db.threads.fork:filter:options` (hook point stubbed via applyFilters usage). (Requirements: 14)
+-   [x] 1.3 Add duplicate empty fork detection (anchor + parent + mode). (Requirements: 5)
+-   [x] 1.4 Add performance marks around branch creation. (Requirements: 9,16,17)
+
+## 2. Light Fork Metadata
+
+-   [x] 2.1 Implement title prefix encoding & parsing utilities. (Requirements: 11)
+-   [x] 2.2 Caching layer Map for anchor meta retrieval. (Requirements: 11,17)
+-   [x] 2.3 Invalidation logic on thread title update (exported `invalidateAnchorCache`; fork creation triggers). (Requirements: 11)
+
+## 3. Full Copy Fork Logic
+
+-   [x] 3.1 Query ancestor messages <= anchor.index sorted. (Requirements: 1)
+-   [x] 3.2 Copy with new ids & same indexes inside transaction. (Requirements: 1,10,13)
+-   [x] 3.3 Normalize indexes if collision (call `normalizeThreadIndexes`). (Requirements: 10)
+
+## 4. Light Fork Context Assembly
+
+-   [x] 4.1 Implement `assembleContext(threadId)` producing ordered messages array for AI. (Requirements: 2,6)
+-   [x] 4.2 Token budget heuristic + truncation earliest-first. (Requirements: 6)
+-   [x] 4.3 Hook integration `ai.context.branch:filter:messages`. (Requirements: 6,14)
+
+## 5. Retry-As-Branch
+
+-   [x] 5.1 Implement `retryAsBranch(assistantMessageId, mode='full'|'light')`. (Requirements: 7)
+-   [x] 5.2 Delete nothing in source; route resend through new fork (returns new thread for navigation). (Requirements: 7)
+-   [ ] 5.3 UI toast success + navigation to new fork. (Requirements: 7,8)
+
+## 6. UI: Message Actions
+
+-   [ ] 6.1 Extend message action menu to include Branch from here + Retry as Branch. (Requirements: 1,7,8,15)
+-   [ ] 6.2 Implement keyboard shortcut Cmd+B on focused message -> open branch modal. (Requirements: 15)
+-   [ ] 6.3 Modal with: mode selector (Full Copy / Light), title input, create button. (Requirements: 1,2,11,15)
+
+## 7. UI: Branch Explorer
+
+-   [ ] 7.1 Create `BranchExplorer.vue` tree component. (Requirements: 4,3)
+-   [ ] 7.2 Lazy load children on expand except when project threads < threshold. (Requirements: 4,9)
+-   [ ] 7.3 Breadcrumb component with overflow collapse >6 depth. (Requirements: 3)
+-   [ ] 7.4 Branch count badge + icon on nodes with children. (Requirements: 3,8)
+
+## 8. UI: Thread View Enhancements
+
+-   [ ] 8.1 Ancestor divider & rendering for light forks (read-only styling). (Requirements: 2,8)
+-   [ ] 8.2 Hover label "(from parent)" on copied messages. (Requirements: 8)
+-   [ ] 8.3 Virtualization if ancestor+local messages >300 (use existing virtualization lib or simple window). (Requirements: 9)
+
+## 9. Duplicate Prevention
+
+-   [ ] 9.1 Pre-create check for existing empty fork with same anchor (mode-specific). (Requirements: 5)
+-   [ ] 9.2 Prompt user to reuse existing; implement UI confirm dialog. (Requirements: 5)
+
+## 10. Deletion & Pruning
+
+-   [ ] 10.1 Update thread deletion flow: if deleting thread with children, prompt re-parent or cascade. (Requirements: 12)
+-   [ ] 10.2 Implement re-parent logic (child.parent_thread_id = deleted.parent_thread_id). (Requirements: 12)
+-   [ ] 10.3 Orphan badge for child whose parent deleted. (Requirements: 12,8)
+
+## 11. Accessibility & Keyboard
+
+-   [ ] 11.1 Add ARIA roles to Branch Explorer tree items (role=tree, treeitem). (Requirements: 15,17)
+-   [ ] 11.2 Arrow key navigation & Enter to open thread. (Requirements: 15)
+
+## 12. Hooks & Extensibility
+
+-   [ ] 12.1 Register new hooks in hooks system with docs. (Requirements: 14)
+-   [ ] 12.2 Add examples in docs for hooking into branch context assembly. (Requirements: 14,16)
+
+## 13. Performance & Metrics
+
+-   [ ] 13.1 Add performance marks prefix `branch:` for creation and context assembly. (Requirements: 9,16,17)
+-   [ ] 13.2 Log copy count & ms duration dev-only. (Requirements: 9,16)
+
+## 14. Testing / QA
+
+-   [ ] 14.1 Script: create thread, branch full copy, assert message counts. (Requirements: 16)
+-   [ ] 14.2 Script: light fork context assembly merges ancestor + local. (Requirements: 2,6,16)
+-   [ ] 14.3 Script: retry-as-branch creates fork and leaves original unchanged. (Requirements: 7,16)
+-   [ ] 14.4 Script: duplicate prevention finds existing fork. (Requirements: 5,16)
+-   [ ] 14.5 Performance measure copying 200 messages < 50ms. (Requirements: 9,16)
+
+## 15. Documentation
+
+-   [ ] 15.1 Add `planning/thread-branching/README` summary or update main README section. (Requirements: 16,17)
+-   [ ] 15.2 JSDoc for public branching APIs. (Requirements: 17)
+
+## 16. Non-Functional
+
+-   [ ] 16.1 Ensure all new code typed, no `any` leaks (lint). (Requirements: 17)
+-   [ ] 16.2 Avoid blocking loops > 250 iterations without `await Promise.resolve()`. (Requirements: 17)
+-   [ ] 16.3 Cache anchor meta lookups; measure hits vs misses (dev log). (Requirements: 17)
+
+# Mapping Summary
+
+-   Requirements coverage: Each task notes its linked requirement IDs.
+-   Deferred: Dedicated thread_meta table (future), graph visualization, merge branches (not in this phase).
+````
+
 ## File: planning/retry-plan.md
 ````markdown
 # Retry Feature Plan
@@ -4595,308 +5678,6 @@ bun run preview
 Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
 ````
 
-## File: app/composables/useModelStore.ts
-````typescript
-import { kv } from '~/db';
-import modelsService, {
-    type OpenRouterModel,
-    type PriceBucket,
-} from '~/utils/models-service';
-
-// Module-level in-flight promise for deduping parallel fetches across composable instances
-let inFlight: Promise<OpenRouterModel[]> | null = null;
-
-export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
-export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
-
-function canUseDexie() {
-    try {
-        return (
-            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
-        );
-    } catch {
-        return false;
-    }
-}
-
-export function useModelStore() {
-    const favoriteModels = ref<OpenRouterModel[]>([]);
-    const catalog = ref<OpenRouterModel[]>([]);
-
-    const searchQuery = ref('');
-    const filters = ref<{
-        input?: string[];
-        output?: string[];
-        minContext?: number;
-        parameters?: string[];
-        price?: PriceBucket;
-    }>({});
-
-    // Reactive timestamp (ms) of when catalog was last loaded into memory
-    const lastLoadedAt = ref<number | undefined>(undefined);
-
-    function isFresh(ts: number | undefined, ttl: number) {
-        if (!ts) return false;
-        return Date.now() - ts < ttl;
-    }
-
-    async function loadFromDexie(
-        ttl: number
-    ): Promise<OpenRouterModel[] | null> {
-        if (!canUseDexie()) return null;
-        try {
-            const rec: any = await kv.get(MODELS_CACHE_KEY);
-            if (!rec) return null;
-            // rec.updated_at is seconds in Kv schema; convert to ms
-            const updatedAtMs = rec.updated_at
-                ? rec.updated_at * 1000
-                : undefined;
-            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
-                console.debug(
-                    '[models-cache] dexie record stale or missing timestamp',
-                    {
-                        updatedAtMs,
-                        ttl,
-                    }
-                );
-                return null;
-            }
-            const raw = rec?.value;
-            if (!raw || typeof raw !== 'string') return null;
-            try {
-                const parsed = JSON.parse(raw);
-                if (!Array.isArray(parsed)) return null;
-                catalog.value = parsed;
-                lastLoadedAt.value = updatedAtMs;
-                console.debug(
-                    '[models-cache] dexie hit — hydrated catalog from cache',
-                    {
-                        updatedAtMs,
-                        count: parsed.length,
-                    }
-                );
-                console.log('[models-cache] pulled models from dexie', {
-                    source: 'dexie',
-                    count: parsed.length,
-                });
-                return parsed;
-            } catch (e) {
-                console.warn(
-                    '[models-cache] JSON parse failed; deleting corrupt record',
-                    e
-                );
-                // best-effort cleanup
-                try {
-                    await kv.delete(MODELS_CACHE_KEY);
-                } catch {}
-                return null;
-            }
-        } catch (e) {
-            console.warn('[models-cache] Dexie load failed', e);
-            return null;
-        }
-    }
-
-    async function saveToDexie(list: OpenRouterModel[]) {
-        if (!canUseDexie()) return;
-        try {
-            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
-            console.debug('[models-cache] saved catalog to Dexie', {
-                count: list.length,
-            });
-        } catch (e) {
-            console.warn('[models-cache] Dexie save failed', e);
-        }
-    }
-
-    async function invalidate() {
-        console.info(
-            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
-        );
-        catalog.value = [];
-        lastLoadedAt.value = undefined;
-        if (!canUseDexie()) return;
-        try {
-            await kv.delete(MODELS_CACHE_KEY);
-            console.debug('[models-cache] Dexie record deleted');
-        } catch (e) {
-            console.warn('[models-cache] Dexie delete failed', e);
-        }
-    }
-
-    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
-        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
-
-        // Memory fast-path
-        if (
-            !opts?.force &&
-            catalog.value.length &&
-            isFresh(lastLoadedAt.value, ttl)
-        ) {
-            console.debug(
-                '[models-cache] memory hit — returning in-memory catalog',
-                {
-                    lastLoadedAt: lastLoadedAt.value,
-                    count: catalog.value.length,
-                }
-            );
-            console.log('[models-cache] pulled models from memory', {
-                source: 'memory',
-                count: catalog.value.length,
-            });
-            return catalog.value;
-        }
-
-        // Try Dexie if available and not forced
-        if (!opts?.force) {
-            const dexieHit = await loadFromDexie(ttl);
-            if (dexieHit) return dexieHit;
-            console.debug(
-                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
-            );
-        }
-
-        // Dedupe in-flight network requests
-        if (inFlight && !opts?.force) return inFlight;
-
-        const fetchPromise = (async () => {
-            console.info('[models-cache] fetching models from network');
-            try {
-                const list = await modelsService.fetchModels(opts);
-                catalog.value = list;
-                lastLoadedAt.value = Date.now();
-                console.info(
-                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
-                );
-                console.log('[models-cache] pulled models from network', {
-                    source: 'network',
-                    count: list.length,
-                });
-                // persist async (don't block response)
-                saveToDexie(list).catch(() => {});
-                return list;
-            } catch (err) {
-                console.warn('[models-cache] network fetch failed', err);
-                // On network failure, attempt to serve stale Dexie record (even if expired)
-                if (canUseDexie()) {
-                    try {
-                        const rec: any = await kv.get(MODELS_CACHE_KEY);
-                        const raw = rec?.value;
-                        if (raw && typeof raw === 'string') {
-                            try {
-                                const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length) {
-                                    console.warn(
-                                        '[models-cache] network failed; serving stale cached models',
-                                        { count: parsed.length }
-                                    );
-                                    console.log(
-                                        '[models-cache] pulled models from stale dexie after network failure',
-                                        {
-                                            source: 'stale-dexie',
-                                            count: parsed.length,
-                                        }
-                                    );
-                                    return parsed;
-                                }
-                            } catch (e) {
-                                // corrupted; best-effort delete
-                                try {
-                                    await kv.delete(MODELS_CACHE_KEY);
-                                } catch {}
-                            }
-                        }
-                    } catch (e) {
-                        console.warn(
-                            '[models-cache] Dexie read during network failure failed',
-                            e
-                        );
-                    }
-                }
-                throw err;
-            }
-        })();
-
-        if (!opts?.force) {
-            inFlight = fetchPromise.finally(() => {
-                inFlight = null;
-            });
-        }
-
-        return fetchPromise;
-    }
-
-    async function persist() {
-        try {
-            await kv.set(
-                'favorite_models',
-                JSON.stringify(favoriteModels.value)
-            );
-        } catch (e) {
-            console.warn('[useModelStore] persist favorites failed', e);
-        }
-    }
-
-    async function addFavoriteModel(model: OpenRouterModel) {
-        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
-        favoriteModels.value.push(model);
-        await persist();
-    }
-
-    async function removeFavoriteModel(model: OpenRouterModel) {
-        favoriteModels.value = favoriteModels.value.filter(
-            (m) => m.id !== model.id
-        );
-        await persist();
-    }
-
-    async function clearFavoriteModels() {
-        favoriteModels.value = [];
-        await persist();
-    }
-
-    async function getFavoriteModels() {
-        try {
-            const record: any = await kv.get('favorite_models');
-            const raw = record?.value;
-            if (raw && typeof raw === 'string') {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    favoriteModels.value = parsed;
-                } else {
-                    favoriteModels.value = [];
-                }
-            } else {
-                favoriteModels.value = [];
-            }
-        } catch {
-            favoriteModels.value = [];
-        }
-        return favoriteModels.value;
-    }
-
-    // Convenience wrapper to force network refresh
-    async function refreshModels() {
-        return fetchModels({ force: true });
-    }
-
-    return {
-        favoriteModels,
-        catalog,
-        searchQuery,
-        filters,
-        fetchModels,
-        refreshModels,
-        invalidate,
-        getFavoriteModels,
-        addFavoriteModel,
-        removeFavoriteModel,
-        clearFavoriteModels,
-        lastLoadedAt,
-    };
-}
-````
-
 ## File: app/composables/useUserApiKey.ts
 ````typescript
 import { computed } from 'vue';
@@ -4942,6 +5723,349 @@ export function useUserApiKey() {
         clearKey,
     };
 }
+````
+
+## File: app/db/branching.ts
+````typescript
+import Dexie from 'dexie';
+import { db } from './client';
+import { newId, nowSec } from './util';
+import type { Thread, Message } from './schema';
+import { useHooks } from '../composables/useHooks';
+
+export type ForkMode = 'reference' | 'copy';
+
+interface ForkThreadParams {
+    sourceThreadId: string;
+    anchorMessageId: string; // must be a user message in source thread
+    mode?: ForkMode;
+    titleOverride?: string;
+}
+
+/**
+ * Create a new thread branching off an existing thread at a specific user message.
+ * - reference mode: no ancestor messages copied; context builder will stitch.
+ * - copy mode: ancestor slice (<= anchor.index) copied into new thread with normalized indexes.
+ */
+export async function forkThread({
+    sourceThreadId,
+    anchorMessageId,
+    mode = 'reference',
+    titleOverride,
+}: ForkThreadParams): Promise<{ thread: Thread; anchor: Message }> {
+    const hooks = useHooks();
+    // Allow filters to mutate basic fork options (mode, title)
+    const filtered = await hooks.applyFilters('branch.fork:filter:options', {
+        sourceThreadId,
+        anchorMessageId,
+        mode,
+        titleOverride,
+    } as ForkThreadParams);
+    sourceThreadId = filtered.sourceThreadId;
+    anchorMessageId = filtered.anchorMessageId;
+    mode = filtered.mode ?? mode;
+    titleOverride = filtered.titleOverride;
+    return db.transaction('rw', db.threads, db.messages, async () => {
+        const src = await db.threads.get(sourceThreadId);
+        if (!src) throw new Error('Source thread not found');
+
+        const anchor = await db.messages.get(anchorMessageId);
+        if (!anchor || anchor.thread_id !== sourceThreadId)
+            throw new Error('Invalid anchor message');
+        // Minimal model: allow either user OR assistant anchor. (User anchors enable alt assistant responses; assistant anchors capture existing reply.)
+
+        const now = nowSec();
+        const forkId = newId();
+
+        const fork: Thread = {
+            ...src,
+            id: forkId,
+            title: titleOverride || `${src.title || 'Branch'} - fork`,
+            parent_thread_id: sourceThreadId,
+            anchor_message_id: anchorMessageId,
+            anchor_index: anchor.index,
+            branch_mode: mode,
+            created_at: now,
+            updated_at: now,
+            last_message_at: null,
+            // Preserve some flags; ensure forked boolean set
+            forked: true,
+        } as Thread;
+
+        await hooks.doAction('branch.fork:action:before', {
+            source: src,
+            anchor,
+            mode,
+            options: { titleOverride },
+        });
+
+        await db.threads.put(fork);
+
+        if (mode === 'copy') {
+            const ancestors = await db.messages
+                .where('[thread_id+index]')
+                // includeLower=true, includeUpper=true to include anchor row
+                .between(
+                    [sourceThreadId, Dexie.minKey],
+                    [sourceThreadId, anchor.index],
+                    true,
+                    true
+                )
+                .sortBy('index');
+
+            let i = 0;
+            for (const m of ancestors) {
+                await db.messages.put({
+                    ...m,
+                    id: newId(),
+                    thread_id: forkId,
+                    index: i++, // normalize sequential indexes starting at 0
+                });
+            }
+            await db.threads.put({
+                ...fork,
+                last_message_at: anchor.created_at,
+                updated_at: nowSec(),
+            });
+        }
+
+        await hooks.doAction('branch.fork:action:after', {
+            thread: fork,
+            anchor,
+            mode,
+            copied: mode === 'copy',
+        });
+        return { thread: fork, anchor };
+    });
+}
+
+interface RetryBranchParams {
+    assistantMessageId: string;
+    mode?: ForkMode;
+    titleOverride?: string;
+}
+
+/**
+ * Given an assistant message, locate the preceding user message and fork the thread there.
+ */
+export async function retryBranch({
+    assistantMessageId,
+    mode = 'reference',
+    titleOverride,
+}: RetryBranchParams) {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters('branch.retry:filter:options', {
+        assistantMessageId,
+        mode,
+        titleOverride,
+    } as RetryBranchParams);
+    assistantMessageId = filtered.assistantMessageId;
+    mode = filtered.mode ?? mode;
+    titleOverride = filtered.titleOverride;
+    const assistant = await db.messages.get(assistantMessageId);
+    if (!assistant || assistant.role !== 'assistant')
+        throw new Error('Assistant message not found');
+    // Retry semantics: branch at preceding user (to produce alternate assistant response)
+    const prevUser = await db.messages
+        .where('[thread_id+index]')
+        .between(
+            [assistant.thread_id, Dexie.minKey],
+            [assistant.thread_id, assistant.index],
+            true,
+            true
+        )
+        .filter((m) => m.role === 'user' && m.index < assistant.index)
+        .last();
+    if (!prevUser) throw new Error('No preceding user message found');
+    await hooks.doAction('branch.retry:action:before', {
+        assistantMessageId,
+        precedingUserId: prevUser.id,
+        mode,
+    });
+    const res = await forkThread({
+        sourceThreadId: assistant.thread_id,
+        anchorMessageId: prevUser.id,
+        mode,
+        titleOverride,
+    });
+    await hooks.doAction('branch.retry:action:after', {
+        assistantMessageId,
+        precedingUserId: prevUser.id,
+        newThreadId: res.thread.id,
+        mode,
+    });
+    return res;
+}
+
+interface BuildContextParams {
+    threadId: string;
+}
+
+/**
+ * Build AI context for a (possibly branched) thread.
+ * - Root or copy branches: just local messages.
+ * - Reference branches: ancestor slice (<= anchor_index) from parent + local messages.
+ */
+export async function buildContext({ threadId }: BuildContextParams) {
+    const hooks = useHooks();
+    const t = await db.threads.get(threadId);
+    if (!t) return [] as Message[];
+
+    if (!t.parent_thread_id || t.branch_mode === 'copy') {
+        return db.messages.where('thread_id').equals(threadId).sortBy('index');
+    }
+
+    const [ancestors, locals] = await Promise.all([
+        db.messages
+            .where('[thread_id+index]')
+            // include anchor message by setting includeUpper=true
+            .between(
+                [t.parent_thread_id, Dexie.minKey],
+                [t.parent_thread_id, t.anchor_index!],
+                true,
+                true
+            )
+            .sortBy('index'),
+        db.messages.where('thread_id').equals(threadId).sortBy('index'),
+    ]);
+
+    let combined = [...ancestors, ...locals];
+    combined = await hooks.applyFilters(
+        'branch.context:filter:messages',
+        combined,
+        threadId,
+        t.branch_mode
+    );
+    await hooks.doAction('branch.context:action:after', {
+        threadId,
+        mode: t.branch_mode,
+        ancestorCount: ancestors.length,
+        localCount: locals.length,
+        finalCount: combined.length,
+    });
+    return combined;
+}
+````
+
+## File: app/db/client.ts
+````typescript
+import Dexie, { type Table } from 'dexie';
+import type {
+    Attachment,
+    Kv,
+    Message,
+    Project,
+    Thread,
+    FileMeta,
+} from './schema';
+
+export interface FileBlobRow {
+    hash: string; // primary key
+    blob: Blob; // actual binary Blob
+}
+
+// Dexie database versioning & schema
+export class Or3DB extends Dexie {
+    projects!: Table<Project, string>;
+    threads!: Table<Thread, string>;
+    messages!: Table<Message, string>;
+    kv!: Table<Kv, string>;
+    attachments!: Table<Attachment, string>;
+    file_meta!: Table<FileMeta, string>; // hash as primary key
+    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
+
+    constructor() {
+        super('or3-db');
+
+        this.version(1).stores({
+            projects: 'id, name, clock, created_at, updated_at',
+            threads:
+                'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+            messages:
+                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+            kv: 'id, &name, clock, created_at, updated_at',
+            attachments: 'id, type, name, clock, created_at, updated_at',
+        });
+
+        this.version(2)
+            .stores({
+                projects: 'id, name, clock, created_at, updated_at',
+                threads:
+                    'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+                messages:
+                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+                kv: 'id, &name, clock, created_at, updated_at',
+                attachments: 'id, type, name, clock, created_at, updated_at',
+                file_meta:
+                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+                file_blobs: 'hash',
+            })
+            .upgrade(async (tx) => {
+                // Backfill file_hashes field for existing messages (if missing)
+                const table = tx.table('messages');
+                try {
+                    const all = await table.toArray();
+                    for (const m of all) {
+                        if (!('file_hashes' in m)) {
+                            (m as any).file_hashes = '[]';
+                            await table.put(m);
+                        }
+                    }
+                } catch (err) {
+                    console.warn(
+                        '[or3-db] migration v2 file_hashes backfill failed',
+                        err
+                    );
+                }
+            });
+
+        // v3: minimal branching fields added to threads (anchor_message_id, anchor_index, branch_mode)
+        this.version(3)
+            .stores({
+                projects: 'id, name, clock, created_at, updated_at',
+                // Added optional composite index for future ancestor queries (not required but cheap now)
+                threads:
+                    'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+                messages:
+                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+                kv: 'id, &name, clock, created_at, updated_at',
+                attachments: 'id, type, name, clock, created_at, updated_at',
+                file_meta:
+                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+                file_blobs: 'hash',
+            })
+            .upgrade(async (tx) => {
+                // Backfill: ensure existing thread rows have explicit nulls for new fields (optional but keeps shape consistent)
+                try {
+                    const t = tx.table('threads');
+                    const rows: any[] = await t.toArray();
+                    for (const row of rows) {
+                        let changed = false;
+                        if (!('anchor_message_id' in row)) {
+                            (row as any).anchor_message_id = null;
+                            changed = true;
+                        }
+                        if (!('anchor_index' in row)) {
+                            (row as any).anchor_index = null;
+                            changed = true;
+                        }
+                        if (!('branch_mode' in row)) {
+                            (row as any).branch_mode = null;
+                            changed = true;
+                        }
+                        if (changed) await t.put(row);
+                    }
+                } catch (err) {
+                    console.warn(
+                        '[or3-db] migration v3 branching backfill failed',
+                        err
+                    );
+                }
+            });
+    }
+}
+
+export const db = new Or3DB();
 ````
 
 ## File: types/nuxt.d.ts
@@ -5234,6 +6358,399 @@ export async function getProject(id: string) {
 }
 ````
 
+## File: app/composables/useModelStore.ts
+````typescript
+import { kv } from '~/db';
+import modelsService, {
+    type OpenRouterModel,
+    type PriceBucket,
+} from '~/utils/models-service';
+
+// Module-level in-flight promise for deduping parallel fetches across composable instances
+let inFlight: Promise<OpenRouterModel[]> | null = null;
+
+export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
+export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function canUseDexie() {
+    try {
+        return (
+            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
+        );
+    } catch {
+        return false;
+    }
+}
+
+// --- Singleton reactive state (shared across all composable callers) ---
+// These are intentionally hoisted so that different components (e.g. SettingsModal
+// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
+// useModelStore() created new refs, so favoriting a model in the modal did not
+// propagate to the chat input until a full reload re-hydrated from KV.
+const favoriteModels = ref<OpenRouterModel[]>([]);
+const catalog = ref<OpenRouterModel[]>([]);
+const searchQuery = ref('');
+const filters = ref<{
+    input?: string[];
+    output?: string[];
+    minContext?: number;
+    parameters?: string[];
+    price?: PriceBucket;
+}>({});
+// Reactive timestamp (ms) of when catalog was last loaded into memory
+const lastLoadedAt = ref<number | undefined>(undefined);
+
+export function useModelStore() {
+    function isFresh(ts: number | undefined, ttl: number) {
+        if (!ts) return false;
+        return Date.now() - ts < ttl;
+    }
+
+    async function loadFromDexie(
+        ttl: number
+    ): Promise<OpenRouterModel[] | null> {
+        if (!canUseDexie()) return null;
+        try {
+            const rec: any = await kv.get(MODELS_CACHE_KEY);
+            if (!rec) return null;
+            // rec.updated_at is seconds in Kv schema; convert to ms
+            const updatedAtMs = rec.updated_at
+                ? rec.updated_at * 1000
+                : undefined;
+            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
+                console.debug(
+                    '[models-cache] dexie record stale or missing timestamp',
+                    {
+                        updatedAtMs,
+                        ttl,
+                    }
+                );
+                return null;
+            }
+            const raw = rec?.value;
+            if (!raw || typeof raw !== 'string') return null;
+            try {
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) return null;
+                catalog.value = parsed;
+                lastLoadedAt.value = updatedAtMs;
+                console.debug(
+                    '[models-cache] dexie hit — hydrated catalog from cache',
+                    {
+                        updatedAtMs,
+                        count: parsed.length,
+                    }
+                );
+                console.log('[models-cache] pulled models from dexie', {
+                    source: 'dexie',
+                    count: parsed.length,
+                });
+                return parsed;
+            } catch (e) {
+                console.warn(
+                    '[models-cache] JSON parse failed; deleting corrupt record',
+                    e
+                );
+                // best-effort cleanup
+                try {
+                    await kv.delete(MODELS_CACHE_KEY);
+                } catch {}
+                return null;
+            }
+        } catch (e) {
+            console.warn('[models-cache] Dexie load failed', e);
+            return null;
+        }
+    }
+
+    async function saveToDexie(list: OpenRouterModel[]) {
+        if (!canUseDexie()) return;
+        try {
+            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
+            console.debug('[models-cache] saved catalog to Dexie', {
+                count: list.length,
+            });
+        } catch (e) {
+            console.warn('[models-cache] Dexie save failed', e);
+        }
+    }
+
+    async function invalidate() {
+        console.info(
+            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
+        );
+        catalog.value = [];
+        lastLoadedAt.value = undefined;
+        if (!canUseDexie()) return;
+        try {
+            await kv.delete(MODELS_CACHE_KEY);
+            console.debug('[models-cache] Dexie record deleted');
+        } catch (e) {
+            console.warn('[models-cache] Dexie delete failed', e);
+        }
+    }
+
+    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
+        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
+
+        // Memory fast-path
+        if (
+            !opts?.force &&
+            catalog.value.length &&
+            isFresh(lastLoadedAt.value, ttl)
+        ) {
+            console.debug(
+                '[models-cache] memory hit — returning in-memory catalog',
+                {
+                    lastLoadedAt: lastLoadedAt.value,
+                    count: catalog.value.length,
+                }
+            );
+            console.log('[models-cache] pulled models from memory', {
+                source: 'memory',
+                count: catalog.value.length,
+            });
+            return catalog.value;
+        }
+
+        // Try Dexie if available and not forced
+        if (!opts?.force) {
+            const dexieHit = await loadFromDexie(ttl);
+            if (dexieHit) return dexieHit;
+            console.debug(
+                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
+            );
+        }
+
+        // Dedupe in-flight network requests
+        if (inFlight && !opts?.force) return inFlight;
+
+        const fetchPromise = (async () => {
+            console.info('[models-cache] fetching models from network');
+            try {
+                const list = await modelsService.fetchModels(opts);
+                catalog.value = list;
+                lastLoadedAt.value = Date.now();
+                console.info(
+                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
+                );
+                console.log('[models-cache] pulled models from network', {
+                    source: 'network',
+                    count: list.length,
+                });
+                // persist async (don't block response)
+                saveToDexie(list).catch(() => {});
+                return list;
+            } catch (err) {
+                console.warn('[models-cache] network fetch failed', err);
+                // On network failure, attempt to serve stale Dexie record (even if expired)
+                if (canUseDexie()) {
+                    try {
+                        const rec: any = await kv.get(MODELS_CACHE_KEY);
+                        const raw = rec?.value;
+                        if (raw && typeof raw === 'string') {
+                            try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length) {
+                                    console.warn(
+                                        '[models-cache] network failed; serving stale cached models',
+                                        { count: parsed.length }
+                                    );
+                                    console.log(
+                                        '[models-cache] pulled models from stale dexie after network failure',
+                                        {
+                                            source: 'stale-dexie',
+                                            count: parsed.length,
+                                        }
+                                    );
+                                    return parsed;
+                                }
+                            } catch (e) {
+                                // corrupted; best-effort delete
+                                try {
+                                    await kv.delete(MODELS_CACHE_KEY);
+                                } catch {}
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(
+                            '[models-cache] Dexie read during network failure failed',
+                            e
+                        );
+                    }
+                }
+                throw err;
+            }
+        })();
+
+        if (!opts?.force) {
+            inFlight = fetchPromise.finally(() => {
+                inFlight = null;
+            });
+        }
+
+        return fetchPromise;
+    }
+
+    async function persist() {
+        try {
+            await kv.set(
+                'favorite_models',
+                JSON.stringify(favoriteModels.value)
+            );
+        } catch (e) {
+            console.warn('[useModelStore] persist favorites failed', e);
+        }
+    }
+
+    async function addFavoriteModel(model: OpenRouterModel) {
+        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
+        favoriteModels.value.push(model);
+        await persist();
+    }
+
+    async function removeFavoriteModel(model: OpenRouterModel) {
+        favoriteModels.value = favoriteModels.value.filter(
+            (m) => m.id !== model.id
+        );
+        await persist();
+    }
+
+    async function clearFavoriteModels() {
+        favoriteModels.value = [];
+        await persist();
+    }
+
+    async function getFavoriteModels() {
+        try {
+            const record: any = await kv.get('favorite_models');
+            const raw = record?.value;
+            if (raw && typeof raw === 'string') {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    favoriteModels.value = parsed;
+                } else {
+                    favoriteModels.value = [];
+                }
+            } else {
+                favoriteModels.value = [];
+            }
+        } catch {
+            favoriteModels.value = [];
+        }
+        return favoriteModels.value;
+    }
+
+    // Convenience wrapper to force network refresh
+    async function refreshModels() {
+        return fetchModels({ force: true });
+    }
+
+    return {
+        favoriteModels,
+        catalog,
+        searchQuery,
+        filters,
+        fetchModels,
+        refreshModels,
+        invalidate,
+        getFavoriteModels,
+        addFavoriteModel,
+        removeFavoriteModel,
+        clearFavoriteModels,
+        lastLoadedAt,
+    };
+}
+````
+
+## File: app/db/kv.ts
+````typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
+
+export async function createKv(input: KvCreate): Promise<Kv> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.kv.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.kv.create:action:before', filtered);
+    const value = parseOrThrow(KvCreateSchema, filtered);
+    await db.kv.put(value);
+    await hooks.doAction('db.kv.create:action:after', value);
+    return value;
+}
+
+export async function upsertKv(value: Kv): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.kv.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.kv.upsert:action:before', filtered);
+    parseOrThrow(KvSchema, filtered);
+    await db.kv.put(filtered);
+    await hooks.doAction('db.kv.upsert:action:after', filtered);
+}
+
+export async function hardDeleteKv(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.kv.get(id);
+    await hooks.doAction('db.kv.delete:action:hard:before', existing ?? id);
+    await db.kv.delete(id);
+    await hooks.doAction('db.kv.delete:action:hard:after', id);
+}
+
+export async function getKv(id: string) {
+    const hooks = useHooks();
+    const res = await db.kv.get(id);
+    return hooks.applyFilters('db.kv.get:filter:output', res);
+}
+
+export async function getKvByName(name: string) {
+    const hooks = useHooks();
+    const res = await db.kv.where('name').equals(name).first();
+    return hooks.applyFilters('db.kv.getByName:filter:output', res);
+}
+
+// Convenience helpers for auth/session flows
+export async function setKvByName(
+    name: string,
+    value: string | null
+): Promise<Kv> {
+    const hooks = useHooks();
+    const existing = await db.kv.where('name').equals(name).first();
+    const now = Math.floor(Date.now() / 1000);
+    const record: Kv = {
+        id: existing?.id ?? `kv:${name}`,
+        name,
+        value,
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+        clock: (existing?.clock ?? 0) + 1,
+    };
+    const filtered = await hooks.applyFilters(
+        'db.kv.upsertByName:filter:input',
+        record
+    );
+    parseOrThrow(KvSchema, filtered);
+    await db.kv.put(filtered);
+    await hooks.doAction('db.kv.upsertByName:action:after', filtered);
+    return filtered;
+}
+
+export async function hardDeleteKvByName(name: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.kv.where('name').equals(name).first();
+    if (!existing) return; // nothing to do
+    await hooks.doAction('db.kv.deleteByName:action:hard:before', existing);
+    await db.kv.delete(existing.id);
+    await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
+}
+````
+
 ## File: app/db/schema.ts
 ````typescript
 import { z } from 'zod';
@@ -5260,6 +6777,10 @@ export const ThreadSchema = z.object({
     updated_at: z.number().int(),
     last_message_at: z.number().int().nullable().optional(),
     parent_thread_id: z.string().nullable().optional(),
+    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
+    anchor_message_id: z.string().nullable().optional(),
+    anchor_index: z.number().int().nullable().optional(),
+    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
     status: z.string().default('ready'),
     deleted: z.boolean().default(false),
     pinned: z.boolean().default(false),
@@ -5410,94 +6931,6 @@ export const FileMetaCreateSchema = FileMetaSchema.omit({
     clock: z.number().int().default(0),
 });
 export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
-````
-
-## File: app/db/kv.ts
-````typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
-
-export async function createKv(input: KvCreate): Promise<Kv> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.kv.create:filter:input',
-        input
-    );
-    await hooks.doAction('db.kv.create:action:before', filtered);
-    const value = parseOrThrow(KvCreateSchema, filtered);
-    await db.kv.put(value);
-    await hooks.doAction('db.kv.create:action:after', value);
-    return value;
-}
-
-export async function upsertKv(value: Kv): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.kv.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.kv.upsert:action:before', filtered);
-    parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
-    await hooks.doAction('db.kv.upsert:action:after', filtered);
-}
-
-export async function hardDeleteKv(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.kv.get(id);
-    await hooks.doAction('db.kv.delete:action:hard:before', existing ?? id);
-    await db.kv.delete(id);
-    await hooks.doAction('db.kv.delete:action:hard:after', id);
-}
-
-export async function getKv(id: string) {
-    const hooks = useHooks();
-    const res = await db.kv.get(id);
-    return hooks.applyFilters('db.kv.get:filter:output', res);
-}
-
-export async function getKvByName(name: string) {
-    const hooks = useHooks();
-    const res = await db.kv.where('name').equals(name).first();
-    return hooks.applyFilters('db.kv.getByName:filter:output', res);
-}
-
-// Convenience helpers for auth/session flows
-export async function setKvByName(
-    name: string,
-    value: string | null
-): Promise<Kv> {
-    const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
-    const now = Math.floor(Date.now() / 1000);
-    const record: Kv = {
-        id: existing?.id ?? `kv:${name}`,
-        name,
-        value,
-        created_at: existing?.created_at ?? now,
-        updated_at: now,
-        clock: (existing?.clock ?? 0) + 1,
-    };
-    const filtered = await hooks.applyFilters(
-        'db.kv.upsertByName:filter:input',
-        record
-    );
-    parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
-    await hooks.doAction('db.kv.upsertByName:action:after', filtered);
-    return filtered;
-}
-
-export async function hardDeleteKvByName(name: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
-    if (!existing) return; // nothing to do
-    await hooks.doAction('db.kv.deleteByName:action:hard:before', existing);
-    await db.kv.delete(existing.id);
-    await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
-}
 ````
 
 ## File: app/db/threads.ts
@@ -5654,389 +7087,6 @@ export async function forkThread(
         return fork;
     });
 }
-````
-
-## File: docs/hooks.md
-````markdown
-# Hook/Action System for Nuxt
-
-A lightweight, type-safe hook engine for the Nuxt frontend. It lets components, composables, and plugins subscribe to events (actions) or transform data (filters) with predictable ordering and SSR/HMR safety.
-
--   Actions: fire-and-forget side effects (logging, analytics, UI updates)
--   Filters: transform values in a pipeline (value-in → value-out)
--   Priorities: lower runs earlier (default 10)
--   Wildcards: use `*` to match patterns, e.g. `ui.*:action:after`
-
-## Installation & Access
-
-The engine is provided globally by Nuxt plugins:
-
--   Client: singleton instance across HMR
--   Server (SSR): fresh instance per request
-
-Access anywhere:
-
-```ts
-import { useNuxtApp } from '#app';
-
-const hooks = useNuxtApp().$hooks;
-// or
-import { useHooks } from '~/app/composables/useHooks';
-const hooks2 = useHooks();
-```
-
-In components, prefer the lifecycle-safe composable:
-
-```ts
-import { useHookEffect } from '~/app/composables/useHookEffect';
-
-useHookEffect('route.change:action:after', (_ctx, to, from) => {
-    console.log('navigated from', from, 'to', to);
-});
-```
-
-## API Overview
-
-Engine methods:
-
--   Filters
-    -   addFilter(name, fn, priority?, acceptedArgs?)
-    -   removeFilter(name, fn, priority?)
-    -   applyFilters(name, value, ...args) => Promise<Return>
-    -   applyFiltersSync(name, value, ...args)
--   Actions
-    -   addAction(name, fn, priority?, acceptedArgs?)
-    -   removeAction(name, fn, priority?)
-    -   doAction(name, ...args) => Promise<void>
-    -   doActionSync(name, ...args)
--   Utils
-    -   hasFilter(name?, fn?) => boolean|priority
-    -   hasAction(name?, fn?) => boolean|priority
-    -   removeAllCallbacks(priority?)
-    -   currentPriority() => number|false
--   Ergonomics
-    -   onceAction(name, fn, priority?)
-    -   on(name, fn, { kind: 'action'|'filter', priority }) → disposer
-    -   off(disposer)
-
-Types are exported from `app/utils/hooks`.
-
-## Hook Naming
-
-Use hierarchical strings with dots/colons to keep hooks descriptive:
-
--   `app.init:action:after`
--   `ui.form.submit:filter:input`
--   `route.change:action:before`
-
-Wildcards are supported with `*`, e.g. `ui.*:action:after`.
-
-## Examples
-
-### Subscribe to an action (component-safe)
-
-```ts
-// Track route changes
-useHookEffect('route.change:action:after', (_ctx, to, from) => {
-    console.log('navigated from', from, 'to', to);
-});
-```
-
-### Fire an action
-
-```ts
-const hooks = useHooks();
-await hooks.doAction('app.init:action:after', nuxtApp);
-```
-
-### Filter pipeline (async)
-
-```ts
-const hooks = useHooks();
-const sanitized = await hooks.applyFilters(
-    'ui.chat.message:filter:outgoing',
-    rawPayload,
-    { roomId }
-);
-```
-
-### Filter pipeline (sync)
-
-```ts
-const result = hooks.applyFiltersSync(
-    'ui.form.submit:filter:input',
-    initialValues
-);
-```
-
-### Wildcard subscription
-
-```ts
-const offAnyUiAfter = hooks.on(
-    'ui.*:action:after',
-    () => {
-        console.log('some UI after-action fired');
-    },
-    { kind: 'action', priority: 5 }
-);
-
-// Later
-hooks.off(offAnyUiAfter);
-```
-
-### Once-only action handler
-
-```ts
-hooks.onceAction('app.init:action:after', () => {
-    console.log('init completed');
-});
-```
-
-## Priorities
-
-Callbacks execute in ascending priority. For equal priorities, insertion order is preserved. Default priority is 10.
-
-```ts
-hooks.on('ui.form.submit:action:before', fnA, { kind: 'action', priority: 5 });
-hooks.on('ui.form.submit:action:before', fnB); // runs after fnA (priority 10)
-```
-
-## SSR and HMR Safety
-
--   Server: a new engine instance is created per request to avoid state leakage.
--   Client: a singleton engine is reused across HMR; component-level disposers prevent duplicate handlers.
--   `useHookEffect` automatically unregisters on component unmount and on module dispose during HMR.
-
-## Error Handling & Timing
-
-All callbacks are wrapped in try/catch. Errors are logged to the console and per-hook error counters are incremented. Basic timings are recorded:
-
-```ts
-const { timings, errors, callbacks } = hooks._diagnostics;
-console.log('timings for hook', timings['ui.form.submit:action:before']);
-console.log('error count for hook', errors['ui.form.submit:action:before']);
-console.log('total callbacks registered', callbacks());
-```
-
-## Recommendations
-
--   Keep hook names consistent and scoped (e.g., `ui.form.*`, `route.*`).
--   Use filters for transformations and actions for side effects.
--   Prefer `useHookEffect` inside components; use `hooks.on/off` in non-component modules.
--   Consider using wildcards for broad tracing during development.
-
-## Files
-
--   Engine: `app/utils/hooks.ts`
--   Plugins: `app/plugins/hooks.client.ts`, `app/plugins/hooks.server.ts`
--   Composables: `app/composables/useHooks.ts`, `app/composables/useHookEffect.ts`
--   Types: `types/nuxt.d.ts` adds `$hooks` to `NuxtApp`
-
----
-
-Future ideas:
-
--   Vue DevTools timeline integration
--   Inspector UI listing current callbacks
--   Debounced/throttled variants
--   Unit tests and benchmarks
-
-## DB integration hooks
-
-The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
-
-Entities covered: attachments, kv, projects, threads, messages.
-Now also: file storage (files: meta + blobs) and message file hash validation.
-
-Common patterns:
-
--   Create
-    -   `db.{entity}.create:filter:input` — transform input prior to validation
-    -   `db.{entity}.create:action:before` — before persisting
-    -   `db.{entity}.create:action:after` — after persisting
--   Upsert
-    -   `db.{entity}.upsert:filter:input`
-    -   `db.{entity}.upsert:action:before`
-    -   `db.{entity}.upsert:action:after`
--   Delete
-    -   Soft: `db.{entity}.delete:action:soft:before|after`
-    -   Hard: `db.{entity}.delete:action:hard:before|after`
--   Get/Queries (output filters)
-    -   `db.{entity}.get:filter:output`
-    -   kv: `db.kv.getByName:filter:output`
-    -   threads: `db.threads.byProject:filter:output`, `db.threads.searchByTitle:filter:output`, `db.threads.children:filter:output`
-    -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
--   Advanced operations
-    -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
-    -   threads: `db.threads.fork:action:before|after`
-    -   files: `db.files.create:filter:input`, `db.files.create:action:before|after`, `db.files.refchange:action:after`, `db.files.delete:action:soft:before|after`
-    -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
-
-### Examples
-
-Redact fields from project reads:
-
-```ts
-useHookEffect(
-    'db.projects.get:filter:output',
-    (project) =>
-        project ? (({ secret, ...rest }) => rest)(project as any) : project,
-    { kind: 'filter' }
-);
-```
-
-Stamp updated_at on all message upserts:
-
-```ts
-useHookEffect(
-    'db.messages.upsert:filter:input',
-    (value) => ({ ...value, updated_at: Math.floor(Date.now() / 1000) }),
-    { kind: 'filter', priority: 5 }
-);
-```
-
-Track thread forks and clones:
-
-```ts
-useHookEffect('db.threads.fork:action:before', ({ source, fork }) => {
-    console.log('Forking thread', source.id, '→', fork.id);
-});
-useHookEffect('db.threads.fork:action:after', (fork) => {
-    console.log('Fork created', fork.id);
-});
-```
-
-Audit deletes (soft and hard):
-
-```ts
-useHookEffect('db.*.delete:action:soft:after', (entity) => {
-    console.log('Soft-deleted', entity?.id ?? entity);
-});
-useHookEffect('db.*.delete:action:hard:after', (id) => {
-    console.log('Hard-deleted id', id);
-});
-```
-
-Normalize and observe message index compaction:
-
-```ts
-useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
-    console.log('Normalizing indexes for thread', threadId);
-});
-
-// Enforce/inspect message file hash limits
-useHookEffect(
-    'db.messages.files.validate:filter:hashes',
-    (hashes) => {
-        // Example: log when truncated or enforce a stricter limit
-        const MAX = 6;
-        let next = hashes.slice(0, MAX);
-        if (hashes.length > MAX)
-            console.warn('Truncated file hashes', hashes.length, '→', MAX);
-        // Return transformed list
-        return next;
-    },
-    { kind: 'filter', priority: 10 }
-);
-
-// Observe file dedupe ref count changes
-useHookEffect('db.files.refchange:action:after', ({ before, after, delta }) => {
-    console.debug(
-        'File ref change',
-        before.hash,
-        'delta',
-        delta,
-        'now',
-        after.ref_count
-    );
-});
-
-// Mutate file meta before create (e.g., tag images)
-useHookEffect(
-    'db.files.create:filter:input',
-    (meta) => ({ ...meta, name: meta.name.trim() }),
-    { kind: 'filter' }
-);
-```
-
-Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.
-
-## AI chat hooks
-
-The `useChat` composable is instrumented so you can shape the chat flow without forking the code.
-
-Hook names:
-
--   Outgoing user text
-    -   `ui.chat.message:filter:outgoing` — sanitize/augment the user input
--   Model & input overrides
-    -   `ai.chat.model:filter:select` — select/override model id (default `openai/gpt-4`)
-    -   `ai.chat.messages:filter:input` — modify message array sent to the model
--   Send lifecycle
-    -   `ai.chat.send:action:before` — before streaming starts
-    -   `ai.chat.stream:action:delta` — for each streamed text delta
-    -   `ui.chat.message:filter:incoming` — transform the final assistant text
-    -   `ai.chat.send:action:after` — after full response is appended
--   Errors
-    -   `ai.chat.error:action` — on exceptions during send/stream
-    -   Retry
-        -   `ai.chat.retry:action:before` — before a retry removes original messages (payload: `{ threadId, originalUserId, originalAssistantId?, triggeredBy: 'user'|'assistant' }`)
-        -   `ai.chat.retry:action:after` — after new user + assistant messages are appended (payload: `{ threadId, originalUserId, originalAssistantId?, newUserId?, newAssistantId? }`)
-
-Examples:
-
-Override the model:
-
-```ts
-useHookEffect('ai.chat.model:filter:select', () => 'openai/gpt-4o-mini', {
-    kind: 'filter',
-});
-```
-
-Trim outgoing user text and collapse whitespace:
-
-```ts
-useHookEffect(
-    'ui.chat.message:filter:outgoing',
-    (text) => text.trim().replace(/\s+/g, ' '),
-    { kind: 'filter' }
-);
-```
-
-Inspect streaming deltas for live UI effects:
-
-```ts
-useHookEffect('ai.chat.stream:action:delta', (delta) => {
-    // e.g., update a typing indicator or progress UI
-    console.debug('delta:', delta);
-});
-```
-
-Post-process the assistant response:
-
-```ts
-useHookEffect(
-    'ui.chat.message:filter:incoming',
-    (text) => text.replaceAll('\n\n', '\n'),
-    { kind: 'filter' }
-);
-```
-
-Capture errors for telemetry:
-
-```ts
-useHookEffect('ai.chat.error:action', (err) => {
-    console.error('Chat error', err);
-});
-
-// Observe retry lifecycle
-useHookEffect('ai.chat.retry:action:before', ({ threadId, triggeredBy }) => {
-    console.debug('[retry before]', threadId, 'triggeredBy', triggeredBy);
-});
-useHookEffect('ai.chat.retry:action:after', (info) => {
-    console.debug('[retry after]', info);
-});
-```
 ````
 
 ## File: app/components/modal/SettingsModal.vue
@@ -6297,6 +7347,286 @@ function formatPerMillion(raw: unknown, currency = 'USD') {
 </script>
 ````
 
+## File: task.md
+````markdown
+# Chat stabilization tasks
+
+A concise, checkable plan to make chat behavior correct, reactive, and performant. I’ll check items off as we complete them.
+
+Legend: [ ] todo, [x] done, [~] optional
+
+## 0) Current progress snapshot
+
+-   [x] ChatContainer re-initializes useChat when threadId changes (watch + shallowRef)
+    -   File: `app/components/chat/ChatContainer.vue`
+    -   Status: Implemented
+-   [ ] All other tasks pending
+
+---
+
+## 1) Fix thread selection event mismatch (critical)
+
+Goal: Ensure clicking a thread in the sidebar updates the page `threadId`.
+
+-   Files:
+    -   `app/pages/chat.vue`
+    -   `app/components/sidebar/SideNavContent.vue`
+
+Tasks:
+
+-   [ ] Standardize the event name between child and parent.
+    -   Minimal fix: In `chat.vue`, listen to the existing camelCase event.
+        -   Change: `<sidebar-side-nav-content @chatSelected="onChatSelected" />`
+    -   [x] Minimal fix applied: `chat.vue` now listens for `@chatSelected`.
+    -   [~] Alternative: Switch to kebab-case consistently (child emits `'chat-selected'`, parent listens `@chat-selected`). Choose one and apply to both files.
+
+Acceptance:
+
+-   [x] Clicking a sidebar item calls `onChatSelected` and sets `threadId`.
+
+---
+
+## 2) Keep ChatContainer messages in sync on thread and history changes
+
+Goal: No stale/empty messages after switching threads or after async history load.
+
+-   File: `app/components/chat/ChatContainer.vue`
+
+Tasks:
+
+-   [x] Also react to `props.messageHistory` changes (implemented):
+    -   Used the direct-assignment approach in `ChatContainer.vue`:
+        -   `chat.value.messages.value = [...(props.messageHistory || [])]`
+    -   (Alternative re-init approach is still valid if you prefer.)
+-   [ ] Remove reliance on parent `:key` remount (optional) once the above sync is in place.
+
+Acceptance:
+
+-   [x] Switching threads updates the list immediately.
+-   [x] Messages do not flicker or show stale content.
+
+---
+
+## 3) Propagate new thread id created on first send
+
+Goal: When sending a first message without a selected thread, a new thread is created and the page learns its id.
+
+-   Files:
+    -   `app/composables/useAi.ts`
+    -   `app/components/chat/ChatContainer.vue`
+    -   `app/pages/chat.vue`
+
+Tasks:
+
+-   [x] In `useAi.ts`, make `threadId` reactive:
+    -   Use `const threadIdRef = ref(threadId)`; update `threadIdRef.value` when creating a thread.
+    -   Return `threadId: threadIdRef` from `useChat`.
+-   [x] In `ChatContainer.vue`:
+    -   Watch the returned `chat.value.threadId` and emit upward when it transitions from falsy to a real id, e.g., `emit('thread-selected', id)`.
+-   [x] In `chat.vue`:
+    -   Listen for `@thread-selected` from `ChatContainer` and set page-level `threadId`.
+
+Acceptance:
+
+-   [x] Sending the first message when no thread is selected creates a thread and binds the UI to it.
+
+---
+
+## 4) Use stable keys for message rendering
+
+Goal: Avoid DOM reuse glitches and ensure predictable rendering.
+
+-   File: `app/components/chat/ChatContainer.vue`
+
+Tasks:
+
+-   [ ] Update `v-for` key to a stable identifier:
+    -   Prefer DB `message.id`.
+    -   Fallback: `message.stream_id` for streaming assistant placeholders.
+    -   As a last resort: a composite key such as `${index}-${message.role}` only if no ids exist yet (not ideal for long-term).
+
+Acceptance:
+
+-   [ ] No warning about duplicate/unstable keys; UI remains stable during updates and streaming.
+
+---
+
+## 5) Improve Dexie query performance and ordering
+
+Goal: Efficiently fetch ordered messages per thread without client-side resort.
+
+-   Files:
+    -   `app/db/client.ts` (Dexie schema; add an index)
+    -   `app/pages/chat.vue`
+
+Tasks:
+
+-   [x] Add a compound index to messages: `[thread_id+index]`.
+-   [x] Query ordered messages via the compound index:
+    -   Replace `.where('thread_id').equals(id).sortBy('index')` with
+        `.where('[thread_id+index]').between([id, Dexie.minKey], [id, Dexie.maxKey]).toArray()`.
+-   [x] Remove extra JS sorting when possible.
+
+Acceptance:
+
+-   [x] Message fetch is ordered and fast on large datasets.
+
+---
+
+## 6) Wire up "New Chat" button
+
+Goal: Create a new thread and select it immediately.
+
+-   Files:
+    -   `app/components/sidebar/SideNavContent.vue`
+    -   `app/pages/chat.vue`
+
+Tasks:
+
+-   [ ] Implement click handler on New Chat:
+    -   Create a thread via `create.thread({ title: 'New Thread', ... })`.
+    -   Emit upward the new id (`emit('chatSelected', newId)` or kebab-case version).
+-   [ ] Parent `chat.vue` sets `threadId` in `onChatSelected` and fetches messages.
+
+Acceptance:
+
+-   [ ] Clicking New Chat opens an empty conversation bound to the new thread id.
+
+---
+
+## 7) Streaming write optimization (optional but recommended)
+
+Goal: Reduce write amplification during assistant streaming while remaining correct.
+
+-   File: `app/composables/useAi.ts`
+
+Tasks:
+
+-   [x] Throttle `upsert.message` during streaming (e.g., 50–150ms) and ensure a final upsert at end.
+-   [x] Keep hooks (`ai.chat.stream:action:delta`) intact.
+
+Acceptance:
+
+-   [x] Noticeably fewer writes during long responses without losing final content.
+
+---
+
+## 8) Loading UX and input state
+
+Goal: Visual feedback and prevent duplicate sends while streaming.
+
+-   File: `app/components/chat/ChatContainer.vue`
+
+Tasks:
+
+-   [x] Bind `loading` to disable send UI or show a subtle spinner/typing indicator.
+-   [x] Guard `onSend` to no-op while `loading` is true.
+
+Acceptance:
+
+-   [x] Input disabled/indicates streaming; no duplicate sends mid-stream.
+
+---
+
+## 9) Delete semantics consistency (soft vs hard)
+
+Goal: Predictable UX for delete vs trash.
+
+-   Files:
+    -   `app/components/sidebar/SideNavContent.vue`
+    -   `app/db/index.ts` (only if changing which API is used)
+
+Tasks:
+
+-   [ ] Choose a policy:
+    -   Soft delete: Use `del.soft.thread(id)` and filter out `deleted` in lists (current UI already filters).
+    -   Hard delete: Keep current hard delete but adjust copy to warn it’s permanent and ensure no other code expects soft-deleted items.
+-   [ ] Apply consistently in menu actions and list queries.
+
+Acceptance:
+
+-   [ ] Delete behavior matches the chosen policy across UI and data layer.
+
+---
+
+## 10) Minor schema and docs polish (optional)
+
+Goal: Align expectations and reduce surprises.
+
+-   Files:
+    -   `app/composables/useAi.ts` (model default consistency with docs)
+    -   `app/db/schema.ts` (only if relaxing URL constraints for attachments)
+
+Tasks:
+
+-   [~] Align default model id with docs or update docs to reflect `'openai/gpt-oss-120b'`.
+-   [~] If needed, relax `AttachmentSchema.url` to allow `blob:`/`data:`/relative URLs, or validate upstream.
+
+Acceptance:
+
+-   [ ] Docs and defaults align; attachment storage behavior is intentional.
+
+---
+
+## File-by-file quick reference
+
+-   `app/pages/chat.vue`
+
+    -   [ ] Fix event listener name (`@chatSelected` or kebab-case strategy)
+    -   [ ] Optional: remove `:key` remount after child sync is robust
+    -   [ ] Switch to compound-index query once available
+
+-   `app/components/sidebar/SideNavContent.vue`
+
+    -   [ ] Event name consistency with parent
+    -   [ ] Implement New Chat creation and emit id
+    -   [ ] Decide and apply delete policy (soft vs hard)
+
+-   `app/components/chat/ChatContainer.vue`
+
+    -   [x] Re-init `useChat` on `threadId` change (done)
+    -   [ ] Sync messages on `messageHistory` change
+    -   [ ] Stable `v-for` keys (prefer `message.id`)
+    -   [ ] Use `loading` to disable input / show indicator
+    -   [ ] Emit upward when thread id is created by `useChat`
+
+-   `app/composables/useAi.ts`
+
+    -   [ ] Return reactive `threadId` (ref)
+    -   [ ] Throttle streaming upserts (optional)
+    -   [~] Model default/docs alignment
+
+-   `app/db/client.ts`
+
+    -   [ ] Add `[thread_id+index]` index for messages
+
+-   `app/db/index.ts`
+
+    -   [ ] No code change required unless delete policy changes (then switch to soft/hard helpers accordingly)
+
+-   `app/db/schema.ts`
+    -   [~] Optional: relax `AttachmentSchema.url` if non-absolute URLs are used
+
+---
+
+## Acceptance checklist (end-to-end)
+
+-   [ ] Clicking a thread selects it and loads messages quickly
+-   [ ] New Chat creates and selects a new thread with empty history
+-   [ ] Switching threads shows the correct messages without flicker
+-   [ ] First send without a thread creates one and binds the UI to it
+-   [ ] Streaming is smooth; input disabled; minimal DB writes
+-   [ ] Delete behavior matches chosen policy consistently
+-   [ ] No console errors; keys stable; queries efficient
+
+---
+
+Notes:
+
+-   Prefer minimal-diff fixes first (event name, message sync) to restore core functionality, then ship performance and UX improvements.
+-   If you want me to start executing, I’ll begin with Section 1 and 2 and validate the flow live.
+````
+
 ## File: app/components/sidebar/SideBottomNav.vue
 ````vue
 <template>
@@ -6320,14 +7650,10 @@ function formatPerMillion(raw: unknown, currency = 'USD') {
                     <div
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
-                        <svg
-                            class="w-5 h-5 fill-current pointer-events-none"
-                            viewBox="0 0 64 64"
-                            aria-hidden="true"
-                        >
-                            <path d="M12 52c4-8 12-12 20-12s16 4 20 12v4H12z" />
-                            <circle cx="32" cy="26" r="12" />
-                        </svg>
+                        <UIcon
+                            name="pixelarticons:user"
+                            class="h-5 w-5"
+                        ></UIcon>
                     </div>
                     <div
                         class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
@@ -6420,16 +7746,10 @@ function formatPerMillion(raw: unknown, currency = 'USD') {
                     <div
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
-                        <svg
-                            class="w-5 h-5 fill-current pointer-events-none"
-                            viewBox="0 0 64 64"
-                            aria-hidden="true"
-                        >
-                            <path d="M32 46a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-                            <path
-                                d="M32 10c-7 0-12 4.7-12 10h8c0-2.1 1.9-4 4-4 2.2 0 4 1.6 4 3.6 0 1.6-.6 2.6-2.7 4.1-3.8 2.8-5.3 5.2-5.3 10.3v2h8v-1c0-3.1.8-4.3 3.4-6.1C42.2 26.7 44 24 44 20.6 44 14.5 38.5 10 32 10z"
-                            />
-                        </svg>
+                        <UIcon
+                            class="w-5 h-5"
+                            name="pixelarticons:sliders-2"
+                        ></UIcon>
                     </div>
                     <div
                         class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
@@ -6833,13 +8153,13 @@ const toggleIcon = computed(() => {
     // When collapsed, show the icon that suggests expanding back toward content area
     if (collapsed.value) {
         return side.value === 'right'
-            ? 'i-lucide:chevron-left'
-            : 'i-lucide:chevron-right';
+            ? 'pixelarticons:arrow-bar-left'
+            : 'pixelarticons:arrow-bar-right';
     }
     // When expanded, show icon pointing into the sidebar to collapse it
     return side.value === 'right'
-        ? 'i-lucide:chevron-right'
-        : 'i-lucide:chevron-left';
+        ? 'pixelarticons:arrow-bar-right'
+        : 'pixelarticons:arrow-bar-left';
 });
 const toggleAria = computed(() =>
     collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
@@ -6921,286 +8241,6 @@ aside > *:not(.resize-handle-layer) {
     z-index: 1;
 }
 </style>
-````
-
-## File: task.md
-````markdown
-# Chat stabilization tasks
-
-A concise, checkable plan to make chat behavior correct, reactive, and performant. I’ll check items off as we complete them.
-
-Legend: [ ] todo, [x] done, [~] optional
-
-## 0) Current progress snapshot
-
--   [x] ChatContainer re-initializes useChat when threadId changes (watch + shallowRef)
-    -   File: `app/components/chat/ChatContainer.vue`
-    -   Status: Implemented
--   [ ] All other tasks pending
-
----
-
-## 1) Fix thread selection event mismatch (critical)
-
-Goal: Ensure clicking a thread in the sidebar updates the page `threadId`.
-
--   Files:
-    -   `app/pages/chat.vue`
-    -   `app/components/sidebar/SideNavContent.vue`
-
-Tasks:
-
--   [ ] Standardize the event name between child and parent.
-    -   Minimal fix: In `chat.vue`, listen to the existing camelCase event.
-        -   Change: `<sidebar-side-nav-content @chatSelected="onChatSelected" />`
-    -   [x] Minimal fix applied: `chat.vue` now listens for `@chatSelected`.
-    -   [~] Alternative: Switch to kebab-case consistently (child emits `'chat-selected'`, parent listens `@chat-selected`). Choose one and apply to both files.
-
-Acceptance:
-
--   [x] Clicking a sidebar item calls `onChatSelected` and sets `threadId`.
-
----
-
-## 2) Keep ChatContainer messages in sync on thread and history changes
-
-Goal: No stale/empty messages after switching threads or after async history load.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [x] Also react to `props.messageHistory` changes (implemented):
-    -   Used the direct-assignment approach in `ChatContainer.vue`:
-        -   `chat.value.messages.value = [...(props.messageHistory || [])]`
-    -   (Alternative re-init approach is still valid if you prefer.)
--   [ ] Remove reliance on parent `:key` remount (optional) once the above sync is in place.
-
-Acceptance:
-
--   [x] Switching threads updates the list immediately.
--   [x] Messages do not flicker or show stale content.
-
----
-
-## 3) Propagate new thread id created on first send
-
-Goal: When sending a first message without a selected thread, a new thread is created and the page learns its id.
-
--   Files:
-    -   `app/composables/useAi.ts`
-    -   `app/components/chat/ChatContainer.vue`
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [x] In `useAi.ts`, make `threadId` reactive:
-    -   Use `const threadIdRef = ref(threadId)`; update `threadIdRef.value` when creating a thread.
-    -   Return `threadId: threadIdRef` from `useChat`.
--   [x] In `ChatContainer.vue`:
-    -   Watch the returned `chat.value.threadId` and emit upward when it transitions from falsy to a real id, e.g., `emit('thread-selected', id)`.
--   [x] In `chat.vue`:
-    -   Listen for `@thread-selected` from `ChatContainer` and set page-level `threadId`.
-
-Acceptance:
-
--   [x] Sending the first message when no thread is selected creates a thread and binds the UI to it.
-
----
-
-## 4) Use stable keys for message rendering
-
-Goal: Avoid DOM reuse glitches and ensure predictable rendering.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [ ] Update `v-for` key to a stable identifier:
-    -   Prefer DB `message.id`.
-    -   Fallback: `message.stream_id` for streaming assistant placeholders.
-    -   As a last resort: a composite key such as `${index}-${message.role}` only if no ids exist yet (not ideal for long-term).
-
-Acceptance:
-
--   [ ] No warning about duplicate/unstable keys; UI remains stable during updates and streaming.
-
----
-
-## 5) Improve Dexie query performance and ordering
-
-Goal: Efficiently fetch ordered messages per thread without client-side resort.
-
--   Files:
-    -   `app/db/client.ts` (Dexie schema; add an index)
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [x] Add a compound index to messages: `[thread_id+index]`.
--   [x] Query ordered messages via the compound index:
-    -   Replace `.where('thread_id').equals(id).sortBy('index')` with
-        `.where('[thread_id+index]').between([id, Dexie.minKey], [id, Dexie.maxKey]).toArray()`.
--   [x] Remove extra JS sorting when possible.
-
-Acceptance:
-
--   [x] Message fetch is ordered and fast on large datasets.
-
----
-
-## 6) Wire up "New Chat" button
-
-Goal: Create a new thread and select it immediately.
-
--   Files:
-    -   `app/components/sidebar/SideNavContent.vue`
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [ ] Implement click handler on New Chat:
-    -   Create a thread via `create.thread({ title: 'New Thread', ... })`.
-    -   Emit upward the new id (`emit('chatSelected', newId)` or kebab-case version).
--   [ ] Parent `chat.vue` sets `threadId` in `onChatSelected` and fetches messages.
-
-Acceptance:
-
--   [ ] Clicking New Chat opens an empty conversation bound to the new thread id.
-
----
-
-## 7) Streaming write optimization (optional but recommended)
-
-Goal: Reduce write amplification during assistant streaming while remaining correct.
-
--   File: `app/composables/useAi.ts`
-
-Tasks:
-
--   [x] Throttle `upsert.message` during streaming (e.g., 50–150ms) and ensure a final upsert at end.
--   [x] Keep hooks (`ai.chat.stream:action:delta`) intact.
-
-Acceptance:
-
--   [x] Noticeably fewer writes during long responses without losing final content.
-
----
-
-## 8) Loading UX and input state
-
-Goal: Visual feedback and prevent duplicate sends while streaming.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [x] Bind `loading` to disable send UI or show a subtle spinner/typing indicator.
--   [x] Guard `onSend` to no-op while `loading` is true.
-
-Acceptance:
-
--   [x] Input disabled/indicates streaming; no duplicate sends mid-stream.
-
----
-
-## 9) Delete semantics consistency (soft vs hard)
-
-Goal: Predictable UX for delete vs trash.
-
--   Files:
-    -   `app/components/sidebar/SideNavContent.vue`
-    -   `app/db/index.ts` (only if changing which API is used)
-
-Tasks:
-
--   [ ] Choose a policy:
-    -   Soft delete: Use `del.soft.thread(id)` and filter out `deleted` in lists (current UI already filters).
-    -   Hard delete: Keep current hard delete but adjust copy to warn it’s permanent and ensure no other code expects soft-deleted items.
--   [ ] Apply consistently in menu actions and list queries.
-
-Acceptance:
-
--   [ ] Delete behavior matches the chosen policy across UI and data layer.
-
----
-
-## 10) Minor schema and docs polish (optional)
-
-Goal: Align expectations and reduce surprises.
-
--   Files:
-    -   `app/composables/useAi.ts` (model default consistency with docs)
-    -   `app/db/schema.ts` (only if relaxing URL constraints for attachments)
-
-Tasks:
-
--   [~] Align default model id with docs or update docs to reflect `'openai/gpt-oss-120b'`.
--   [~] If needed, relax `AttachmentSchema.url` to allow `blob:`/`data:`/relative URLs, or validate upstream.
-
-Acceptance:
-
--   [ ] Docs and defaults align; attachment storage behavior is intentional.
-
----
-
-## File-by-file quick reference
-
--   `app/pages/chat.vue`
-
-    -   [ ] Fix event listener name (`@chatSelected` or kebab-case strategy)
-    -   [ ] Optional: remove `:key` remount after child sync is robust
-    -   [ ] Switch to compound-index query once available
-
--   `app/components/sidebar/SideNavContent.vue`
-
-    -   [ ] Event name consistency with parent
-    -   [ ] Implement New Chat creation and emit id
-    -   [ ] Decide and apply delete policy (soft vs hard)
-
--   `app/components/chat/ChatContainer.vue`
-
-    -   [x] Re-init `useChat` on `threadId` change (done)
-    -   [ ] Sync messages on `messageHistory` change
-    -   [ ] Stable `v-for` keys (prefer `message.id`)
-    -   [ ] Use `loading` to disable input / show indicator
-    -   [ ] Emit upward when thread id is created by `useChat`
-
--   `app/composables/useAi.ts`
-
-    -   [ ] Return reactive `threadId` (ref)
-    -   [ ] Throttle streaming upserts (optional)
-    -   [~] Model default/docs alignment
-
--   `app/db/client.ts`
-
-    -   [ ] Add `[thread_id+index]` index for messages
-
--   `app/db/index.ts`
-
-    -   [ ] No code change required unless delete policy changes (then switch to soft/hard helpers accordingly)
-
--   `app/db/schema.ts`
-    -   [~] Optional: relax `AttachmentSchema.url` if non-absolute URLs are used
-
----
-
-## Acceptance checklist (end-to-end)
-
--   [ ] Clicking a thread selects it and loads messages quickly
--   [ ] New Chat creates and selects a new thread with empty history
--   [ ] Switching threads shows the correct messages without flicker
--   [ ] First send without a thread creates one and binds the UI to it
--   [ ] Streaming is smooth; input disabled; minimal DB writes
--   [ ] Delete behavior matches chosen policy consistently
--   [ ] No console errors; keys stable; queries efficient
-
----
-
-Notes:
-
--   Prefer minimal-diff fixes first (event name, message sync) to restore core functionality, then ship performance and UX improvements.
--   If you want me to start executing, I’ll begin with Section 1 and 2 and validate the flow live.
 ````
 
 ## File: app/db/messages.ts
@@ -7513,6 +8553,443 @@ export async function normalizeThreadIndexes(
 }
 ````
 
+## File: docs/hooks.md
+````markdown
+# Hook/Action System for Nuxt
+
+A lightweight, type-safe hook engine for the Nuxt frontend. It lets components, composables, and plugins subscribe to events (actions) or transform data (filters) with predictable ordering and SSR/HMR safety.
+
+-   Actions: fire-and-forget side effects (logging, analytics, UI updates)
+-   Filters: transform values in a pipeline (value-in → value-out)
+-   Priorities: lower runs earlier (default 10)
+-   Wildcards: use `*` to match patterns, e.g. `ui.*:action:after`
+
+## Installation & Access
+
+The engine is provided globally by Nuxt plugins:
+
+-   Client: singleton instance across HMR
+-   Server (SSR): fresh instance per request
+
+Access anywhere:
+
+```ts
+import { useNuxtApp } from '#app';
+
+const hooks = useNuxtApp().$hooks;
+// or
+import { useHooks } from '~/app/composables/useHooks';
+const hooks2 = useHooks();
+```
+
+In components, prefer the lifecycle-safe composable:
+
+```ts
+import { useHookEffect } from '~/app/composables/useHookEffect';
+
+useHookEffect('route.change:action:after', (_ctx, to, from) => {
+    console.log('navigated from', from, 'to', to);
+});
+```
+
+## API Overview
+
+Engine methods:
+
+-   Filters
+    -   addFilter(name, fn, priority?, acceptedArgs?)
+    -   removeFilter(name, fn, priority?)
+    -   applyFilters(name, value, ...args) => Promise<Return>
+    -   applyFiltersSync(name, value, ...args)
+-   Actions
+    -   addAction(name, fn, priority?, acceptedArgs?)
+    -   removeAction(name, fn, priority?)
+    -   doAction(name, ...args) => Promise<void>
+    -   doActionSync(name, ...args)
+-   Utils
+    -   hasFilter(name?, fn?) => boolean|priority
+    -   hasAction(name?, fn?) => boolean|priority
+    -   removeAllCallbacks(priority?)
+    -   currentPriority() => number|false
+-   Ergonomics
+    -   onceAction(name, fn, priority?)
+    -   on(name, fn, { kind: 'action'|'filter', priority }) → disposer
+    -   off(disposer)
+
+Types are exported from `app/utils/hooks`.
+
+## Hook Naming
+
+Use hierarchical strings with dots/colons to keep hooks descriptive:
+
+-   `app.init:action:after`
+-   `ui.form.submit:filter:input`
+-   `route.change:action:before`
+
+Wildcards are supported with `*`, e.g. `ui.*:action:after`.
+
+## Examples
+
+### Subscribe to an action (component-safe)
+
+```ts
+// Track route changes
+useHookEffect('route.change:action:after', (_ctx, to, from) => {
+    console.log('navigated from', from, 'to', to);
+});
+```
+
+### Fire an action
+
+```ts
+const hooks = useHooks();
+await hooks.doAction('app.init:action:after', nuxtApp);
+```
+
+### Filter pipeline (async)
+
+```ts
+const hooks = useHooks();
+const sanitized = await hooks.applyFilters(
+    'ui.chat.message:filter:outgoing',
+    rawPayload,
+    { roomId }
+);
+```
+
+### Filter pipeline (sync)
+
+```ts
+const result = hooks.applyFiltersSync(
+    'ui.form.submit:filter:input',
+    initialValues
+);
+```
+
+### Wildcard subscription
+
+```ts
+const offAnyUiAfter = hooks.on(
+    'ui.*:action:after',
+    () => {
+        console.log('some UI after-action fired');
+    },
+    { kind: 'action', priority: 5 }
+);
+
+// Later
+hooks.off(offAnyUiAfter);
+```
+
+### Once-only action handler
+
+```ts
+hooks.onceAction('app.init:action:after', () => {
+    console.log('init completed');
+});
+```
+
+## Priorities
+
+Callbacks execute in ascending priority. For equal priorities, insertion order is preserved. Default priority is 10.
+
+```ts
+hooks.on('ui.form.submit:action:before', fnA, { kind: 'action', priority: 5 });
+hooks.on('ui.form.submit:action:before', fnB); // runs after fnA (priority 10)
+```
+
+## SSR and HMR Safety
+
+-   Server: a new engine instance is created per request to avoid state leakage.
+-   Client: a singleton engine is reused across HMR; component-level disposers prevent duplicate handlers.
+-   `useHookEffect` automatically unregisters on component unmount and on module dispose during HMR.
+
+## Error Handling & Timing
+
+All callbacks are wrapped in try/catch. Errors are logged to the console and per-hook error counters are incremented. Basic timings are recorded:
+
+```ts
+const { timings, errors, callbacks } = hooks._diagnostics;
+console.log('timings for hook', timings['ui.form.submit:action:before']);
+console.log('error count for hook', errors['ui.form.submit:action:before']);
+console.log('total callbacks registered', callbacks());
+```
+
+## Recommendations
+
+-   Keep hook names consistent and scoped (e.g., `ui.form.*`, `route.*`).
+-   Use filters for transformations and actions for side effects.
+-   Prefer `useHookEffect` inside components; use `hooks.on/off` in non-component modules.
+-   Consider using wildcards for broad tracing during development.
+
+## Files
+
+-   Engine: `app/utils/hooks.ts`
+-   Plugins: `app/plugins/hooks.client.ts`, `app/plugins/hooks.server.ts`
+-   Composables: `app/composables/useHooks.ts`, `app/composables/useHookEffect.ts`
+-   Types: `types/nuxt.d.ts` adds `$hooks` to `NuxtApp`
+
+---
+
+Future ideas:
+
+-   Vue DevTools timeline integration
+-   Inspector UI listing current callbacks
+-   Debounced/throttled variants
+-   Unit tests and benchmarks
+
+## DB integration hooks
+
+The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
+
+Entities covered: attachments, kv, projects, threads, messages.
+Now also: file storage (files: meta + blobs) and message file hash validation.
+New (branching): fork option filtering & branching cache invalidation.
+
+Common patterns:
+
+-   Create
+    -   `db.{entity}.create:filter:input` — transform input prior to validation
+    -   `db.{entity}.create:action:before` — before persisting
+    -   `db.{entity}.create:action:after` — after persisting
+-   Upsert
+    -   `db.{entity}.upsert:filter:input`
+    -   `db.{entity}.upsert:action:before`
+    -   `db.{entity}.upsert:action:after`
+-   Delete
+    -   Soft: `db.{entity}.delete:action:soft:before|after`
+    -   Hard: `db.{entity}.delete:action:hard:before|after`
+-   Get/Queries (output filters)
+    -   `db.{entity}.get:filter:output`
+    -   kv: `db.kv.getByName:filter:output`
+    -   threads: `db.threads.byProject:filter:output`, `db.threads.searchByTitle:filter:output`, `db.threads.children:filter:output`
+    -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
+-   Advanced operations
+    -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
+        -   threads: `db.threads.fork:action:before|after`, `db.threads.fork:filter:options` (modify branch creation options before execution)
+    -   files: `db.files.create:filter:input`, `db.files.create:action:before|after`, `db.files.refchange:action:after`, `db.files.delete:action:soft:before|after`
+    -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
+        -   branching cache: (internal) cache invalidated on `db.threads.create:action:after`, `db.threads.upsert:action:after`, `db.threads.fork:action:after`, and thread delete actions.
+
+### Branching (Minimal) Hooks
+
+The simplified branching system exposes a small set of hooks so you can still observe or tweak behavior without the previous complexity.
+
+Hook names:
+
+-   `branch.fork:filter:options` (filter) — Adjust `{ sourceThreadId, anchorMessageId, mode, titleOverride }` before a fork is created.
+-   `branch.fork:action:before` / `branch.fork:action:after` — Observe fork lifecycle. `before` payload: `{ source, anchor, mode, options }`, `after` payload: `{ thread, anchor, mode, copied }`.
+-   `branch.retry:filter:options` (filter) — Adjust `{ assistantMessageId, mode, titleOverride }` before a retry-based branch.
+-   `branch.retry:action:before` / `branch.retry:action:after` — Retry lifecycle. `after` payload: `{ assistantMessageId, precedingUserId, newThreadId, mode }`.
+-   `branch.context:filter:messages` (filter) — Transform the assembled message array for a branched thread (reference mode) before it is returned.
+-   `branch.context:action:after` (action) — Inspect context assembly metrics `{ threadId, mode, ancestorCount, localCount, finalCount }`.
+
+Example: Force all branches to reference mode and tag titles.
+
+```ts
+useHookEffect(
+    'branch.fork:filter:options',
+    (opts) => ({
+        ...opts,
+        mode: 'reference',
+        titleOverride: (opts.titleOverride || 'Alt Path') + ' • ref',
+    }),
+    { kind: 'filter' }
+);
+```
+
+Example: Inject a system primer into branched context.
+
+```ts
+useHookEffect(
+    'branch.context:filter:messages',
+    (msgs, threadId, mode) => {
+        if (!Array.isArray(msgs) || mode !== 'reference') return msgs;
+        return [
+            {
+                id: 'sys_' + threadId,
+                role: 'system',
+                index: -1,
+                data: { content: 'Alternate branch context.' },
+            },
+            ...msgs,
+        ];
+    },
+    { kind: 'filter', priority: 15 }
+);
+```
+
+These replace all prior advanced branching / context hooks from the earlier design.
+
+You can also attach analytics or telemetry here without touching the branching logic.
+
+### Examples
+
+Redact fields from project reads:
+
+```ts
+useHookEffect(
+    'db.projects.get:filter:output',
+    (project) =>
+        project ? (({ secret, ...rest }) => rest)(project as any) : project,
+    { kind: 'filter' }
+);
+```
+
+Stamp updated_at on all message upserts:
+
+```ts
+useHookEffect(
+    'db.messages.upsert:filter:input',
+    (value) => ({ ...value, updated_at: Math.floor(Date.now() / 1000) }),
+    { kind: 'filter', priority: 5 }
+);
+```
+
+Track thread forks and clones:
+
+```ts
+useHookEffect('db.threads.fork:action:before', ({ source, fork }) => {
+    console.log('Forking thread', source.id, '→', fork.id);
+});
+useHookEffect('db.threads.fork:action:after', (fork) => {
+    console.log('Fork created', fork.id);
+});
+```
+
+Audit deletes (soft and hard):
+
+```ts
+useHookEffect('db.*.delete:action:soft:after', (entity) => {
+    console.log('Soft-deleted', entity?.id ?? entity);
+});
+useHookEffect('db.*.delete:action:hard:after', (id) => {
+    console.log('Hard-deleted id', id);
+});
+```
+
+Normalize and observe message index compaction:
+
+```ts
+useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
+    console.log('Normalizing indexes for thread', threadId);
+});
+
+// Enforce/inspect message file hash limits
+useHookEffect(
+    'db.messages.files.validate:filter:hashes',
+    (hashes) => {
+        // Example: log when truncated or enforce a stricter limit
+        const MAX = 6;
+        let next = hashes.slice(0, MAX);
+        if (hashes.length > MAX)
+            console.warn('Truncated file hashes', hashes.length, '→', MAX);
+        // Return transformed list
+        return next;
+    },
+    { kind: 'filter', priority: 10 }
+);
+
+// Observe file dedupe ref count changes
+useHookEffect('db.files.refchange:action:after', ({ before, after, delta }) => {
+    console.debug(
+        'File ref change',
+        before.hash,
+        'delta',
+        delta,
+        'now',
+        after.ref_count
+    );
+});
+
+// Mutate file meta before create (e.g., tag images)
+useHookEffect(
+    'db.files.create:filter:input',
+    (meta) => ({ ...meta, name: meta.name.trim() }),
+    { kind: 'filter' }
+);
+```
+
+Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.
+
+## AI chat hooks
+
+The `useChat` composable is instrumented so you can shape the chat flow without forking the code.
+
+Hook names:
+
+-   Outgoing user text
+    -   `ui.chat.message:filter:outgoing` — sanitize/augment the user input
+-   Model & input overrides
+    -   `ai.chat.model:filter:select` — select/override model id (default `openai/gpt-4`)
+    -   `ai.chat.messages:filter:input` — modify message array sent to the model
+-   Send lifecycle
+    -   `ai.chat.send:action:before` — before streaming starts
+    -   `ai.chat.stream:action:delta` — for each streamed text delta
+    -   `ui.chat.message:filter:incoming` — transform the final assistant text
+    -   `ai.chat.send:action:after` — after full response is appended
+-   Errors
+    -   `ai.chat.error:action` — on exceptions during send/stream
+    -   Retry
+        -   `ai.chat.retry:action:before` — before a retry removes original messages (payload: `{ threadId, originalUserId, originalAssistantId?, triggeredBy: 'user'|'assistant' }`)
+        -   `ai.chat.retry:action:after` — after new user + assistant messages are appended (payload: `{ threadId, originalUserId, originalAssistantId?, newUserId?, newAssistantId? }`)
+
+Examples:
+
+Override the model:
+
+```ts
+useHookEffect('ai.chat.model:filter:select', () => 'openai/gpt-4o-mini', {
+    kind: 'filter',
+});
+```
+
+Trim outgoing user text and collapse whitespace:
+
+```ts
+useHookEffect(
+    'ui.chat.message:filter:outgoing',
+    (text) => text.trim().replace(/\s+/g, ' '),
+    { kind: 'filter' }
+);
+```
+
+Inspect streaming deltas for live UI effects:
+
+```ts
+useHookEffect('ai.chat.stream:action:delta', (delta) => {
+    // e.g., update a typing indicator or progress UI
+    console.debug('delta:', delta);
+});
+```
+
+Post-process the assistant response:
+
+```ts
+useHookEffect(
+    'ui.chat.message:filter:incoming',
+    (text) => text.replaceAll('\n\n', '\n'),
+    { kind: 'filter' }
+);
+```
+
+Capture errors for telemetry:
+
+```ts
+useHookEffect('ai.chat.error:action', (err) => {
+    console.error('Chat error', err);
+});
+
+// Observe retry lifecycle
+useHookEffect('ai.chat.retry:action:before', ({ threadId, triggeredBy }) => {
+    console.debug('[retry before]', threadId, 'triggeredBy', triggeredBy);
+});
+useHookEffect('ai.chat.retry:action:after', (info) => {
+    console.debug('[retry after]', info);
+});
+```
+````
+
 ## File: package.json
 ````json
 {
@@ -7530,6 +9007,9 @@ export async function normalizeThreadIndexes(
         "@nuxt/ui": "^3.3.2",
         "@openrouter/ai-sdk-provider": "^1.1.2",
         "@orama/orama": "^3.1.11",
+        "@tiptap/pm": "^3.3.0",
+        "@tiptap/starter-kit": "^3.3.0",
+        "@tiptap/vue-3": "^3.3.0",
         "@types/spark-md5": "^3.0.5",
         "ai": "^5.0.17",
         "dexie": "^4.0.11",
@@ -7539,6 +9019,7 @@ export async function normalizeThreadIndexes(
         "nuxt": "^4.0.3",
         "orama": "^2.0.6",
         "spark-md5": "^3.0.2",
+        "tiptap-markdown": "^0.8.10",
         "turndown": "^7.2.1",
         "typescript": "^5.6.3",
         "virtua": "^0.41.5",
@@ -7550,460 +9031,6 @@ export async function normalizeThreadIndexes(
         "@tailwindcss/typography": "^0.5.16"
     }
 }
-````
-
-## File: app/components/chat/ChatMessage.vue
-````vue
-<template>
-    <div
-        :class="outerClass"
-        class="p-2 rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
-    >
-        <!-- Compact thumb (collapsed state) -->
-        <button
-            v-if="hashList.length && !expanded"
-            class="absolute -top-2 -right-2 border-2 border-black retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
-            @click="toggleExpanded"
-            type="button"
-            aria-label="Show attachments"
-        >
-            <template
-                v-if="firstThumb && thumbnails[firstThumb]?.status === 'ready'"
-            >
-                <img
-                    :src="thumbnails[firstThumb!]?.url"
-                    :alt="'attachment ' + firstThumb.slice(0, 6)"
-                    class="object-cover w-full h-full"
-                    draggable="false"
-                />
-            </template>
-            <template
-                v-else-if="
-                    firstThumb && thumbnails[firstThumb]?.status === 'error'
-                "
-            >
-                <span class="text-[10px] text-error">err</span>
-            </template>
-            <template v-else>
-                <span class="text-[10px] animate-pulse opacity-70">…</span>
-            </template>
-            <span
-                v-if="hashList.length > 1"
-                class="absolute bottom-0 right-0 text-[10px] font-semibold bg-black/70 text-white px-1"
-                >+{{ hashList.length - 1 }}</span
-            >
-        </button>
-
-        <div :class="innerClass" v-html="rendered"></div>
-
-        <!-- Expanded grid -->
-        <div
-            v-if="hashList.length && expanded"
-            class="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"
-        >
-            <div
-                v-for="h in hashList"
-                :key="h"
-                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
-            >
-                <template v-if="thumbnails[h]?.status === 'ready'">
-                    <img
-                        :src="thumbnails[h].url"
-                        :alt="'file ' + h.slice(0, 8)"
-                        class="object-cover w-full h-full"
-                        draggable="false"
-                    />
-                </template>
-                <template v-else-if="thumbnails[h]?.status === 'error'">
-                    <div class="text-[10px] text-center px-1 text-error">
-                        failed
-                    </div>
-                </template>
-                <template v-else>
-                    <div class="animate-pulse text-[10px] opacity-70">
-                        loading
-                    </div>
-                </template>
-            </div>
-            <button
-                class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
-                type="button"
-                @click="toggleExpanded"
-                aria-label="Hide attachments"
-            >
-                Hide attachments
-            </button>
-        </div>
-
-        <!-- Action buttons: overlap bubble border half outside -->
-        <div
-            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
-        >
-            <UButtonGroup
-                :class="{
-                    'bg-primary': props.message.role === 'user',
-                    'bg-white': props.message.role === 'assistant',
-                }"
-                class="rounded-[3px]"
-            >
-                <UTooltip :delay-duration="0" text="Copy">
-                    <UButton
-                        @click="copyMessage"
-                        icon="pixelarticons:copy"
-                        color="info"
-                        size="sm"
-                        class="text-black flex items-center justify-center"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Retry">
-                    <UButton
-                        icon="pixelarticons:reload"
-                        color="info"
-                        size="sm"
-                        class="text-black flex items-center justify-center"
-                        @click="onRetry"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Branch">
-                    <UButton
-                        icon="pixelarticons:git-branch"
-                        color="info"
-                        size="sm"
-                        class="text-black flex items-center justify-center"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Edit">
-                    <UButton
-                        icon="pixelarticons:edit-box"
-                        color="info"
-                        size="sm"
-                        class="text-black flex items-center justify-center"
-                    ></UButton>
-                </UTooltip>
-            </UButtonGroup>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed, reactive, watchEffect, ref } from 'vue';
-import { parseFileHashes } from '~/db/files-util';
-import { getFileBlob } from '~/db/files';
-import { marked } from 'marked';
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null; // serialized array
-};
-
-import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
-
-// Local UI message expects content to be a string (rendered markdown/html)
-type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
-
-const props = defineProps<{ message: UIMessage }>();
-const emit = defineEmits<{ (e: 'retry', id: string): void }>();
-
-const outerClass = computed(() => ({
-    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end pb-5':
-        props.message.role === 'user',
-    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
-        props.message.role === 'assistant',
-}));
-
-const innerClass = computed(() => ({
-    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
-        props.message.role === 'assistant',
-}));
-
-const rendered = computed(() => marked.parse(props.message.content));
-
-// Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => {
-    const raw = (props.message as any).file_hashes;
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as string[];
-    if (typeof raw === 'string') return parseFileHashes(raw);
-    return [];
-});
-
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string; // object URL
-}
-
-const thumbnails = reactive<Record<string, ThumbState>>({});
-
-const expanded = ref(false);
-const firstThumb = computed(() => hashList.value[0]);
-function toggleExpanded() {
-    if (!hashList.value.length) return;
-    expanded.value = !expanded.value;
-}
-
-watchEffect(async () => {
-    for (const h of hashList.value) {
-        if (thumbnails[h]) continue; // already loading/loaded
-        thumbnails[h] = { status: 'loading' };
-        try {
-            const blob = await getFileBlob(h);
-            if (!blob) throw new Error('missing');
-            const url = URL.createObjectURL(blob);
-            thumbnails[h] = { status: 'ready', url };
-        } catch (e) {
-            thumbnails[h] = { status: 'error' };
-        }
-    }
-});
-import { useToast } from '#imports';
-function copyMessage() {
-    navigator.clipboard.writeText(props.message.content);
-
-    useToast().add({
-        title: 'Message copied',
-        description: 'The message content has been copied to your clipboard.',
-        duration: 2000,
-    });
-}
-
-function onRetry() {
-    const id = (props.message as any).id;
-    if (!id) return;
-    emit('retry', id);
-}
-</script>
-
-<style scoped></style>
-````
-
-## File: app/components/sidebar/SideNavContent.vue
-````vue
-<template>
-    <div class="flex flex-col h-full relative">
-        <div class="p-2 flex flex-col space-y-2">
-            <UButton
-                @click="onNewChat"
-                class="w-full flex items-center justify-center backdrop-blur-2xl"
-                >New Chat</UButton
-            >
-            <div class="relative w-full ml-[1px]">
-                <UInput
-                    v-model="threadSearchQuery"
-                    icon="pixelarticons:search"
-                    size="md"
-                    variant="outline"
-                    placeholder="Search threads..."
-                    class="w-full"
-                />
-                <button
-                    v-if="threadSearchQuery"
-                    type="button"
-                    aria-label="Clear thread search"
-                    class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                    @click="threadSearchQuery = ''"
-                >
-                    <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
-                </button>
-            </div>
-        </div>
-        <div class="flex flex-col p-2 space-y-1.5">
-            <div v-for="item in displayThreads" :key="item.id">
-                <RetroGlassBtn
-                    :class="{
-                        'active-element bg-primary/25':
-                            item.id === props.activeThread,
-                    }"
-                    class="w-full flex items-center justify-between text-left"
-                    @click="() => emit('chatSelected', item.id)"
-                >
-                    <span class="truncate">{{
-                        item.title || 'New Thread'
-                    }}</span>
-
-                    <!-- Three-dot popover INSIDE the retro button -->
-                    <UPopover
-                        :content="{
-                            side: 'right',
-                            align: 'start',
-                            sideOffset: 6,
-                        }"
-                    >
-                        <!-- Trigger -->
-                        <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop
-                        >
-                            <UIcon
-                                name="i-lucide-more-vertical"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </span>
-
-                        <!-- Content -->
-                        <template #content>
-                            <div class="p-1 w-44 space-y-1">
-                                <UButton
-                                    color="neutral"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-pencil"
-                                    @click="openRename(item)"
-                                    >Rename</UButton
-                                >
-                                <UButton
-                                    color="error"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-trash-2"
-                                    @click="confirmDelete(item)"
-                                    >Delete</UButton
-                                >
-                            </div>
-                        </template>
-                    </UPopover>
-                </RetroGlassBtn>
-            </div>
-        </div>
-        <sidebar-side-bottom-nav />
-
-        <!-- Rename modal -->
-        <UModal
-            v-model:open="showRenameModal"
-            title="Rename thread"
-            :ui="{ footer: 'justify-end' }"
-            class="border-2"
-        >
-            <template #header> <h3>Rename thread?</h3> </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameTitle"
-                        placeholder="Thread title"
-                        icon="i-lucide-pencil"
-                        @keyup.enter="saveRename"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="primary" @click="saveRename">Save</UButton>
-            </template>
-        </UModal>
-
-        <!-- Delete confirm modal -->
-        <UModal
-            v-model:open="showDeleteModal"
-            title="Delete thread?"
-            :ui="{ footer: 'justify-end' }"
-            class="border-2"
-        >
-            <template #header> <h3>Delete thread?</h3> </template>
-            <template #body>
-                <p class="text-sm opacity-70">
-                    This will permanently remove the thread and its messages.
-                </p>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showDeleteModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="error" @click="deleteThread">Delete</UButton>
-            </template>
-        </UModal>
-    </div>
-</template>
-<script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
-import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
-
-const props = defineProps<{
-    activeThread?: string;
-}>();
-
-const items = ref<any[]>([]);
-import { useThreadSearch } from '~/composables/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
-const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
-);
-let sub: { unsubscribe: () => void } | null = null;
-
-onMounted(() => {
-    // Sort by last opened using updated_at index; filter out deleted
-    sub = liveQuery(() =>
-        db.threads
-            .orderBy('updated_at')
-            .reverse()
-            .filter((t) => !t.deleted)
-            .toArray()
-    ).subscribe({
-        next: (results) => (items.value = results),
-        error: (err) => console.error('liveQuery error', err),
-    });
-});
-
-watch(
-    () => items.value,
-    (newItems) => {
-        console.log('Items updated:', newItems);
-    }
-);
-
-onUnmounted(() => {
-    sub?.unsubscribe();
-});
-
-const emit = defineEmits(['chatSelected', 'newChat']);
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-
-const showDeleteModal = ref(false);
-const deleteId = ref<string | null>(null);
-
-function openRename(thread: any) {
-    renameId.value = thread.id;
-    renameTitle.value = thread.title ?? '';
-    showRenameModal.value = true;
-}
-
-async function saveRename() {
-    if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
-    const now = Math.floor(Date.now() / 1000);
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-}
-
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
-    showDeleteModal.value = true;
-}
-
-async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
-    showDeleteModal.value = false;
-    deleteId.value = null;
-}
-
-function onNewChat() {
-    emit('newChat');
-    console.log('New chat requested');
-}
-</script>
 ````
 
 ## File: app/app.config.ts
@@ -8022,6 +9049,9 @@ export default defineAppConfig({
                 trailingIcon: 'shrink-0',
             },
             variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
                 // Override size variant so padding wins over defaults
                 size: {
                     xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
@@ -8094,6 +9124,123 @@ export default defineAppConfig({
 });
 ````
 
+## File: app/pages/chat.vue
+````vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar>
+            <sidebar-side-nav-content
+                @new-chat="onNewChat"
+                @chatSelected="onChatSelected"
+                :active-thread="threadId"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full">
+            <ChatContainer
+                :message-history="messageHistory"
+                :thread-id="threadId"
+                @thread-selected="onChatSelected"
+            />
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script lang="ts" setup>
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { db, upsert } from '~/db';
+import { ref, onMounted, watch } from 'vue';
+import Dexie from 'dexie';
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+};
+
+const messageHistory = ref<ChatMessage[]>([]);
+const threadId = ref(''); // Replace with actual thread ID logic
+
+async function getMessagesForThread(id: string) {
+    if (!id) return;
+
+    // Query ordered messages via compound index and filter deleted
+    const msgs = await db.messages
+        .where('[thread_id+index]')
+        .between([id, Dexie.minKey], [id, Dexie.maxKey])
+        .filter((m: any) => !m.deleted)
+        .toArray();
+
+    if (msgs) {
+        messageHistory.value = msgs.map((msg: any) => {
+            const data = msg.data as unknown;
+            const content =
+                typeof data === 'object' && data !== null && 'content' in data
+                    ? String((data as any).content ?? '')
+                    : String((msg.content as any) ?? '');
+            return {
+                role: msg.role as 'user' | 'assistant',
+                content,
+                file_hashes: msg.file_hashes,
+                id: msg.id,
+                stream_id: msg.stream_id,
+            } as ChatMessage;
+        });
+
+        if ((import.meta as any).dev) {
+            console.debug('[chat] loaded messages', {
+                thread: id,
+                count: messageHistory.value.length,
+                withHashes: messageHistory.value.filter((m) => m.file_hashes)
+                    .length,
+                hashesPreview: messageHistory.value
+                    .filter((m) => m.file_hashes)
+                    .slice(0, 3)
+                    .map((m) => (m.file_hashes || '').slice(0, 60)),
+            });
+        }
+    }
+}
+
+onMounted(async () => {
+    await getMessagesForThread(threadId.value);
+});
+
+watch(
+    () => threadId.value,
+    async (newThreadId) => {
+        if (newThreadId) {
+            // NOTE: We intentionally do NOT bump updated_at when merely opening / viewing a thread.
+            // The sidebar liveQuery is ordered by updated_at (desc) so bumping here caused the list
+            // to reorder every time you clicked different threads. We now only bump updated_at when
+            // a new message is appended (user or assistant) or when other mutating actions occur
+            // (rename, delete, etc.). This keeps navigation stable while still floating active
+            // conversations to the top once they actually receive new content.
+            await getMessagesForThread(newThreadId);
+        }
+    }
+);
+
+function onNewChat() {
+    messageHistory.value = [];
+    threadId.value = '';
+    console.log('New chat started, cleared message history and thread ID');
+}
+
+function onChatSelected(chatId: string) {
+    threadId.value = chatId;
+}
+
+// Optional enhancement: if needed, we can also watch for outgoing user messages from ChatContainer via a custom event
+// and append to messageHistory immediately to avoid any initial blank state. Current fix defers parent overwrite during loading instead.
+</script>
+
+<style>
+body {
+    overflow-y: hidden; /* Prevents body scroll */
+}
+</style>
+````
+
 ## File: app/assets/css/main.css
 ````css
 /* Tailwind v4: single import includes preflight + utilities */
@@ -8125,6 +9272,22 @@ export default defineAppConfig({
 html, body {
 	font-family: var(--font-sans) !important;
     font-size: 20px; 
+}
+
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
 }
 
 h1, h2, h3, h4, h5, h6, .font-heading {
@@ -8299,7 +9462,7 @@ html {
                                 'shrink-0 w-[18px] h-[18px] text-dimmed',
                         }"
                         :search-input="{
-                            icon: 'i-lucide-search',
+                            icon: 'pixelarticons:search',
                             ui: {
                                 base: 'border-0 border-b-1 rounded-none!',
                                 leadingIcon:
@@ -8346,14 +9509,15 @@ html {
             </div>
         </div>
 
-        <!-- Image Thumbnails -->
+        <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
         <div
-            v-if="uploadedImages.length > 0"
+            v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
             class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
         >
+            <!-- Images -->
             <div
                 v-for="(image, index) in uploadedImages"
-                :key="index"
+                :key="'img-' + index"
                 class="relative group aspect-square"
             >
                 <img
@@ -8363,17 +9527,49 @@ html {
                 />
                 <button
                     @click="removeImage(index)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[20px] w-[20px] retro-shadow bg-error border-black border bg-opacity-50 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
                 >
                     <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
                 </button>
                 <div
-                    class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
                 >
                     {{ image.name }}
                 </div>
+            </div>
+            <!-- Large Text Blocks -->
+            <div
+                v-for="(block, tIndex) in largeTextBlocks"
+                :key="'txt-' + block.id"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >TXT</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="block.previewFull"
+                    >
+                        {{ block.preview }}
+                    </span>
+                    <span class="mt-1 text-[10px] opacity-70"
+                        >{{ block.wordCount }}w</span
+                    >
+                </div>
+                <button
+                    @click="removeTextBlock(tIndex)"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove text block"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
             </div>
         </div>
 
@@ -8396,7 +9592,7 @@ html {
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, defineEmits } from 'vue';
+import { ref, nextTick, defineEmits, onMounted, watch } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
 import type { FileMeta } from '~/db/schema';
@@ -8433,6 +9629,7 @@ const emit = defineEmits<{
         payload: {
             text: string;
             images: UploadedImage[]; // may include pending or error statuses
+            largeTexts: LargeTextBlock[];
             model: string;
             settings: ImageSettings;
         }
@@ -8448,6 +9645,19 @@ const emit = defineEmits<{
 const promptText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const uploadedImages = ref<UploadedImage[]>([]);
+// Large pasted text blocks (> threshold)
+interface LargeTextBlock {
+    id: string;
+    text: string;
+    wordCount: number;
+    preview: string;
+    previewFull: string;
+}
+const largeTextBlocks = ref<LargeTextBlock[]>([]);
+const LARGE_TEXT_WORD_THRESHOLD = 600;
+function makeId() {
+    return Math.random().toString(36).slice(2, 9);
+}
 const isDragging = ref(false);
 const selectedModel = ref<string>('openai/gpt-oss-120b');
 const hiddenFileInput = ref<HTMLInputElement | null>(null);
@@ -8477,22 +9687,46 @@ const handlePromptInput = () => {
 };
 
 const handlePaste = async (event: ClipboardEvent) => {
-    const clipboardData = event.clipboardData;
-    if (!clipboardData) return;
-    const items = clipboardData.items;
+    const cd = event.clipboardData;
+    if (!cd) return;
+    // 1. Handle images first (current behavior)
+    const items = cd.items;
+    let handled = false;
     for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
+        const it = items[i];
+        if (!it) continue;
+        const mime = it.type || '';
         if (mime.startsWith('image/')) {
             event.preventDefault();
-            const file = item.getAsFile();
+            handled = true;
+            const file = it.getAsFile();
             if (!file) continue;
             await processFile(
                 file,
                 file.name || `pasted-image-${Date.now()}.png`
             );
         }
+    }
+    if (handled) return; // skip text path if image already captured
+
+    // 2. Large text detection
+    const text = cd.getData('text/plain');
+    if (!text) return; // allow normal behavior
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
+        event.preventDefault();
+        // Create a block instead of inserting raw text
+        const previewFull = text.slice(0, 800).trim();
+        const preview =
+            previewFull.split(/\s+/).slice(0, 12).join(' ') +
+            (wordCount > 12 ? '…' : '');
+        largeTextBlocks.value.push({
+            id: makeId(),
+            text,
+            wordCount,
+            preview,
+            previewFull,
+        });
     }
 };
 
@@ -8600,17 +9834,27 @@ const removeImage = (index: number) => {
     emit('image-remove', index);
 };
 
+const removeTextBlock = (index: number) => {
+    largeTextBlocks.value.splice(index, 1);
+};
+
 const handleSend = () => {
     if (props.loading) return;
-    if (promptText.value.trim() || uploadedImages.value.length > 0) {
+    if (
+        promptText.value.trim() ||
+        uploadedImages.value.length > 0 ||
+        largeTextBlocks.value.length > 0
+    ) {
         emit('send', {
             text: promptText.value,
             images: uploadedImages.value,
+            largeTexts: largeTextBlocks.value,
             model: selectedModel.value,
             settings: imageSettings.value,
         });
         promptText.value = '';
         uploadedImages.value = [];
+        largeTextBlocks.value = [];
         autoResize();
     }
 };
@@ -8658,121 +9902,417 @@ textarea::-webkit-scrollbar-thumb:hover {
 </style>
 ````
 
-## File: app/pages/chat.vue
+## File: app/components/sidebar/SideNavContent.vue
+````vue
+<template>
+    <div class="flex flex-col h-full relative">
+        <div class="px-2 pt-2 flex flex-col space-y-2">
+            <UButton
+                @click="onNewChat"
+                class="w-full flex items-center justify-center backdrop-blur-2xl"
+                >New Chat</UButton
+            >
+            <div
+                class="relative w-full ml-[1px] border-b-3 border-primary/50 pb-3"
+            >
+                <UInput
+                    v-model="threadSearchQuery"
+                    icon="pixelarticons:search"
+                    size="md"
+                    :ui="{
+                        leadingIcon: 'h-[20px] w-[20px]',
+                    }"
+                    variant="outline"
+                    placeholder="Search threads..."
+                    class="w-full"
+                >
+                    <template v-if="threadSearchQuery.length > 0" #trailing>
+                        <UButton
+                            color="neutral"
+                            variant="subtle"
+                            size="xs"
+                            class="flex items-center justify-center p-0"
+                            icon="pixelarticons:close-box"
+                            aria-label="Clear input"
+                            @click="threadSearchQuery = ''"
+                        /> </template
+                ></UInput>
+            </div>
+        </div>
+        <!-- Virtualized thread list -->
+        <VList
+            :data="displayThreads as any[]"
+            class="h-[calc(100vh-250px)]! px-2 pb-8 pt-3 w-full overflow-x-hidden scrollbar-hidden"
+            :overscan="8"
+            #default="{ item }"
+        >
+            <div class="mb-2" :key="item.id">
+                <RetroGlassBtn
+                    :class="{
+                        'active-element bg-primary/25':
+                            item.id === props.activeThread,
+                    }"
+                    class="w-full flex items-center justify-between text-left"
+                    @click="() => emit('chatSelected', item.id)"
+                >
+                    <div
+                        class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
+                    >
+                        <UIcon
+                            v-if="item.forked"
+                            name="pixelarticons:git-branch"
+                            class="shrink-0"
+                        ></UIcon>
+                        <!-- The title span gets flex-1 + min-w-0 so it actually truncates instead of pushing the action icon off-screen -->
+                        <span
+                            class="block flex-1 min-w-0 truncate"
+                            :title="item.title || 'New Thread'"
+                        >
+                            {{ item.title || 'New Thread' }}
+                        </span>
+                    </div>
+                    <UPopover
+                        :content="{
+                            side: 'right',
+                            align: 'start',
+                            sideOffset: 6,
+                        }"
+                    >
+                        <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop
+                        >
+                            <UIcon
+                                name="pixelarticons:more-vertical"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </span>
+                        <template #content>
+                            <div class="p-1 w-44 space-y-1">
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-pencil"
+                                    @click="openRename(item)"
+                                    >Rename</UButton
+                                >
+                                <UButton
+                                    color="error"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-trash-2"
+                                    @click="confirmDelete(item)"
+                                    >Delete</UButton
+                                >
+                            </div>
+                        </template>
+                    </UPopover>
+                </RetroGlassBtn>
+            </div>
+        </VList>
+        <sidebar-side-bottom-nav />
+
+        <!-- Rename modal -->
+        <UModal
+            v-model:open="showRenameModal"
+            title="Rename thread"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Rename thread?</h3> </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameTitle"
+                        placeholder="Thread title"
+                        icon="i-lucide-pencil"
+                        @keyup.enter="saveRename"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="primary" @click="saveRename">Save</UButton>
+            </template>
+        </UModal>
+
+        <!-- Delete confirm modal -->
+        <UModal
+            v-model:open="showDeleteModal"
+            title="Delete thread?"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Delete thread?</h3> </template>
+            <template #body>
+                <p class="text-sm opacity-70">
+                    This will permanently remove the thread and its messages.
+                </p>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showDeleteModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="error" @click="deleteThread">Delete</UButton>
+            </template>
+        </UModal>
+    </div>
+</template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
+import { liveQuery } from 'dexie';
+import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { VList } from 'virtua/vue';
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
+
+const items = ref<any[]>([]);
+import { useThreadSearch } from '~/composables/useThreadSearch';
+const { query: threadSearchQuery, results: threadSearchResults } =
+    useThreadSearch(items as any);
+const displayThreads = computed(() =>
+    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+);
+let sub: { unsubscribe: () => void } | null = null;
+
+onMounted(() => {
+    // Sort by last opened using updated_at index; filter out deleted
+    sub = liveQuery(() =>
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
+    ).subscribe({
+        next: (results) => (items.value = results),
+        error: (err) => console.error('liveQuery error', err),
+    });
+});
+
+watch(
+    () => items.value,
+    (newItems) => {
+        console.log('Items updated:', newItems);
+    }
+);
+
+onUnmounted(() => {
+    sub?.unsubscribe();
+});
+
+const emit = defineEmits(['chatSelected', 'newChat']);
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+
+const showDeleteModal = ref(false);
+const deleteId = ref<string | null>(null);
+
+function openRename(thread: any) {
+    renameId.value = thread.id;
+    renameTitle.value = thread.title ?? '';
+    showRenameModal.value = true;
+}
+
+async function saveRename() {
+    if (!renameId.value) return;
+    const t = await db.threads.get(renameId.value);
+    if (!t) return;
+    const now = Math.floor(Date.now() / 1000);
+    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+}
+
+function confirmDelete(thread: any) {
+    deleteId.value = thread.id as string;
+    showDeleteModal.value = true;
+}
+
+async function deleteThread() {
+    if (!deleteId.value) return;
+    await dbDel.hard.thread(deleteId.value);
+    showDeleteModal.value = false;
+    deleteId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+    console.log('New chat requested');
+}
+</script>
+````
+
+## File: app/pages/_test.vue
 ````vue
 <template>
     <resizable-sidebar-layout>
         <template #sidebar>
-            <sidebar-side-nav-content
-                @new-chat="onNewChat"
-                @chatSelected="onChatSelected"
-                :active-thread="threadId"
-            />
+            <div class="flex flex-col h-full relative">
+                <div class="p-2 flex flex-col space-y-2">
+                    <UButton class="w-full flex items-center justify-center"
+                        >New Chat</UButton
+                    >
+                    <UInput
+                        icon="i-lucide-search"
+                        size="md"
+                        variant="outline"
+                        placeholder="Search..."
+                        class="w-full ml-[1px]"
+                    ></UInput>
+                </div>
+                <div class="flex flex-col p-2 space-y-1.5">
+                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about aids</UButton
+                    >
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about dogs</UButton
+                    >
+                </div>
+                <sidebar-side-bottom-nav />
+            </div>
         </template>
-        <div class="flex-1 h-screen w-full">
-            <ChatContainer
-                :message-history="messageHistory"
-                :thread-id="threadId"
-                @thread-selected="onChatSelected"
-            />
+
+        <!-- Default slot = main content (right side) -->
+        <div class="h-screen overflow-y-scroll">
+            <div
+                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
+            ></div>
+
+            <div class="p-6 space-y-4">
+                <div class="flex flex-row space-x-2">
+                    <UButton @click="showToast" size="sm" color="primary"
+                        >Nuxt UI Button</UButton
+                    >
+                    <UButton color="success">Nuxt UI Button</UButton>
+                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+                </div>
+                <div class="flex flex-row space-x-2">
+                    <UButtonGroup size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                    <UButtonGroup orientation="vertical" size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                </div>
+
+                <div class="flex space-x-2">
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="sm"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="md"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="lg"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
+                        @click="toggle()"
+                    >
+                        Toggle Light/Dark
+                    </button>
+                    <span class="text-[var(--md-on-surface)]"
+                        >Current: {{ theme }}</span
+                    >
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div
+                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
+                    >
+                        Surface / On-Surface
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
+                    >
+                        Secondary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
+                    >
+                        Tertiary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
+                    >
+                        Error Container
+                    </div>
+                </div>
+
+                <chat-input-dropper />
+            </div>
         </div>
     </resizable-sidebar-layout>
 </template>
 
-<script lang="ts" setup>
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { db, upsert } from '~/db';
-import { ref, onMounted, watch } from 'vue';
-import Dexie from 'dexie';
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
 
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-};
+const nuxtApp = useNuxtApp();
+const theme = computed(() => (nuxtApp.$theme as any).get());
+const toggle = () => (nuxtApp.$theme as any).toggle();
+const toast = useToast();
 
-const messageHistory = ref<ChatMessage[]>([]);
-const threadId = ref(''); // Replace with actual thread ID logic
-
-async function getMessagesForThread(id: string) {
-    if (!id) return;
-
-    // Query ordered messages via compound index and filter deleted
-    const msgs = await db.messages
-        .where('[thread_id+index]')
-        .between([id, Dexie.minKey], [id, Dexie.maxKey])
-        .filter((m: any) => !m.deleted)
-        .toArray();
-
-    if (msgs) {
-        messageHistory.value = msgs.map((msg: any) => {
-            const data = msg.data as unknown;
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
-            return {
-                role: msg.role as 'user' | 'assistant',
-                content,
-                file_hashes: msg.file_hashes,
-                id: msg.id,
-                stream_id: msg.stream_id,
-            } as ChatMessage;
-        });
-
-        if ((import.meta as any).dev) {
-            console.debug('[chat] loaded messages', {
-                thread: id,
-                count: messageHistory.value.length,
-                withHashes: messageHistory.value.filter((m) => m.file_hashes)
-                    .length,
-                hashesPreview: messageHistory.value
-                    .filter((m) => m.file_hashes)
-                    .slice(0, 3)
-                    .map((m) => (m.file_hashes || '').slice(0, 60)),
-            });
-        }
-    }
+function showToast() {
+    toast.add({
+        title: 'Success',
+        description: 'Your action was completed successfully.',
+        color: 'success',
+    });
 }
-
-onMounted(async () => {
-    await getMessagesForThread(threadId.value);
-});
-
-watch(
-    () => threadId.value,
-    async (newThreadId) => {
-        if (newThreadId) {
-            // Bump updated_at to reflect "last opened" ordering in sidebar
-            const t = await db.threads.get(newThreadId);
-            if (t) {
-                const now = Math.floor(Date.now() / 1000);
-                await upsert.thread({ ...t, updated_at: now });
-            }
-            await getMessagesForThread(newThreadId);
-        }
-    }
-);
-
-function onNewChat() {
-    messageHistory.value = [];
-    threadId.value = '';
-    console.log('New chat started, cleared message history and thread ID');
-}
-
-function onChatSelected(chatId: string) {
-    threadId.value = chatId;
-}
-
-// Optional enhancement: if needed, we can also watch for outgoing user messages from ChatContainer via a custom event
-// and append to messageHistory immediately to avoid any initial blank state. Current fix defers parent overwrite during loading instead.
 </script>
-
-<style>
-body {
-    overflow-y: hidden; /* Prevents body scroll */
-}
-</style>
 ````
 
 ## File: app/composables/useAi.ts
@@ -8823,6 +10363,7 @@ interface SendMessageParams {
     }[];
     model?: string;
     file_hashes?: string[]; // pre-computed content hashes for persistence
+    extraTextParts?: string[]; // additional large pasted text blocks
 }
 
 export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
@@ -8863,7 +10404,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             threadIdRef.value = newThread.id;
         }
 
-        let { files, model, file_hashes } = sendMessagesParams;
+        let { files, model, file_hashes, extraTextParts } = sendMessagesParams;
         const rawParams: any = sendMessagesParams as any;
         if ((!files || files.length === 0) && rawParams?.images?.length) {
             console.warn(
@@ -8930,13 +10471,14 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         // 3) Build the parts array: text part first, then image/file parts
         const parts: ContentPart[] = [
             { type: 'text', text: outgoing },
+            ...(extraTextParts || []).map<ContentPart>((t) => ({
+                type: 'text',
+                text: t,
+            })),
             ...(files ?? []).map<ContentPart>((f) => {
-                // If you're only sending images, you can treat all as ImagePart.
-                // Use data URLs like `data:image/png;base64,...` in f.url for best compatibility.
                 if ((f.type ?? '').startsWith('image/')) {
                     return { type: 'image', image: f.url, mediaType: f.type };
                 }
-                // Fallback for non-image files:
                 return { type: 'file', data: f.url, mediaType: f.type };
             }),
         ];
@@ -9185,166 +10727,373 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
 }
 ````
 
-## File: app/pages/_test.vue
+## File: app/components/chat/ChatMessage.vue
 ````vue
 <template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <div class="flex flex-col h-full relative">
-                <div class="p-2 flex flex-col space-y-2">
-                    <UButton class="w-full flex items-center justify-center"
-                        >New Chat</UButton
-                    >
-                    <UInput
-                        icon="i-lucide-search"
-                        size="md"
-                        variant="outline"
-                        placeholder="Search..."
-                        class="w-full ml-[1px]"
-                    ></UInput>
-                </div>
-                <div class="flex flex-col p-2 space-y-1.5">
-                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about aids</UButton
-                    >
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about dogs</UButton
-                    >
-                </div>
-                <sidebar-side-bottom-nav />
-            </div>
-        </template>
+    <div
+        :class="outerClass"
+        :style="{
+            paddingRight:
+                props.message.role === 'user' && hashList.length && !expanded
+                    ? '80px'
+                    : '16px',
+        }"
+        class="p-2 min-w-[140px] rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
+    >
+        <!-- Compact thumb (collapsed state) -->
+        <button
+            v-if="hashList.length && !expanded"
+            class="absolute -top-2 -right-2 border-2 border-black retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            @click="toggleExpanded"
+            type="button"
+            aria-label="Show attachments"
+        >
+            <template
+                v-if="firstThumb && thumbnails[firstThumb]?.status === 'ready'"
+            >
+                <img
+                    :src="thumbnails[firstThumb!]?.url"
+                    :alt="'attachment ' + firstThumb.slice(0, 6)"
+                    class="object-cover w-full h-full"
+                    draggable="false"
+                />
+            </template>
+            <template
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'error'
+                "
+            >
+                <span class="text-[10px] text-error">err</span>
+            </template>
+            <template v-else>
+                <span class="text-[10px] animate-pulse opacity-70">…</span>
+            </template>
+            <span
+                v-if="hashList.length > 1"
+                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
+                >+{{ hashList.length - 1 }}</span
+            >
+        </button>
 
-        <!-- Default slot = main content (right side) -->
-        <div class="h-screen overflow-y-scroll">
-            <div
-                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
-            ></div>
-
-            <div class="p-6 space-y-4">
-                <div class="flex flex-row space-x-2">
-                    <UButton @click="showToast" size="sm" color="primary"
-                        >Nuxt UI Button</UButton
-                    >
-                    <UButton color="success">Nuxt UI Button</UButton>
-                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
-                </div>
-                <div class="flex flex-row space-x-2">
-                    <UButtonGroup size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                    <UButtonGroup orientation="vertical" size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                </div>
-
-                <div class="flex space-x-2">
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="sm"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="md"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="lg"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button
-                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
-                        @click="toggle()"
-                    >
-                        Toggle Light/Dark
-                    </button>
-                    <span class="text-[var(--md-on-surface)]"
-                        >Current: {{ theme }}</span
-                    >
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div
-                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
-                    >
-                        Surface / On-Surface
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
-                    >
-                        Secondary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
-                    >
-                        Tertiary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
-                    >
-                        Error Container
-                    </div>
-                </div>
-
-                <chat-input-dropper />
+        <div v-if="!editing" :class="innerClass" v-html="rendered"></div>
+        <!-- Editing surface -->
+        <div v-else class="w-full">
+            <LazyChatMessageEditor
+                hydrate-on-visible
+                v-model="draft"
+                :autofocus="true"
+                :focus-delay="120"
+                @ready="focusRequested = true"
+            />
+            <div class="flex w-full justify-end gap-2 mt-2">
+                <UButton
+                    size="sm"
+                    color="success"
+                    class="retro-btn"
+                    @click="saveEdit"
+                    :loading="saving"
+                    >Save</UButton
+                >
+                <UButton
+                    size="sm"
+                    color="error"
+                    class="retro-btn"
+                    @click="cancelEdit"
+                    >Cancel</UButton
+                >
             </div>
         </div>
-    </resizable-sidebar-layout>
+
+        <!-- Expanded grid -->
+        <div
+            v-if="hashList.length && expanded"
+            class="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"
+        >
+            <div
+                v-for="h in hashList"
+                :key="h"
+                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
+            >
+                <template v-if="thumbnails[h]?.status === 'ready'">
+                    <img
+                        :src="thumbnails[h].url"
+                        :alt="'file ' + h.slice(0, 8)"
+                        class="object-cover w-full h-full"
+                        draggable="false"
+                    />
+                </template>
+                <template v-else-if="thumbnails[h]?.status === 'error'">
+                    <div class="text-[10px] text-center px-1 text-error">
+                        failed
+                    </div>
+                </template>
+                <template v-else>
+                    <div class="animate-pulse text-[10px] opacity-70">
+                        loading
+                    </div>
+                </template>
+            </div>
+            <button
+                class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
+                type="button"
+                @click="toggleExpanded"
+                aria-label="Hide attachments"
+            >
+                Hide attachments
+            </button>
+        </div>
+
+        <!-- Action buttons: overlap bubble border half outside -->
+        <div
+            v-if="!editing"
+            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+        >
+            <UButtonGroup
+                :class="{
+                    'bg-primary': props.message.role === 'user',
+                    'bg-white': props.message.role === 'assistant',
+                }"
+                class="rounded-[3px]"
+            >
+                <UTooltip :delay-duration="0" text="Copy" :teleport="true">
+                    <UButton
+                        @click="copyMessage"
+                        icon="pixelarticons:copy"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip
+                    :delay-duration="0"
+                    text="Retry"
+                    :popper="{ strategy: 'fixed' }"
+                    :teleport="true"
+                >
+                    <UButton
+                        icon="pixelarticons:reload"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                        @click="onRetry"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Branch" :teleport="true">
+                    <UButton
+                        @click="onBranch"
+                        icon="pixelarticons:git-branch"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Edit" :teleport="true">
+                    <UButton
+                        icon="pixelarticons:edit-box"
+                        color="info"
+                        size="sm"
+                        class="text-black flex items-center justify-center"
+                        @click="beginEdit"
+                    ></UButton>
+                </UTooltip>
+            </UButtonGroup>
+        </div>
+    </div>
 </template>
 
 <script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import { computed, reactive, watchEffect, ref } from 'vue';
+import { parseFileHashes } from '~/db/files-util';
+import { getFileBlob } from '~/db/files';
+import { marked } from 'marked';
+import { upsert } from '~/db';
+import { nowSec } from '~/db/util';
 
-const nuxtApp = useNuxtApp();
-const theme = computed(() => (nuxtApp.$theme as any).get());
-const toggle = () => (nuxtApp.$theme as any).toggle();
-const toast = useToast();
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null; // serialized array
+};
 
-function showToast() {
-    toast.add({
-        title: 'Success',
-        description: 'Your action was completed successfully.',
-        color: 'success',
+import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
+
+// Local UI message expects content to be a string (rendered markdown/html)
+type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
+
+const props = defineProps<{ message: UIMessage; threadId?: string }>();
+const emit = defineEmits<{
+    (e: 'retry', id: string): void;
+    (e: 'branch', id: string): void;
+    (e: 'edited', payload: { id: string; content: string }): void;
+}>();
+
+const outerClass = computed(() => ({
+    'bg-primary text-white border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+        props.message.role === 'user',
+    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
+        props.message.role === 'assistant',
+}));
+
+const innerClass = computed(() => ({
+    'prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+        props.message.role === 'assistant',
+}));
+
+const rendered = computed(() => marked.parse(props.message.content));
+
+// Editing state -------------------------------------------------
+const editing = ref(false);
+const draft = ref('');
+const original = ref('');
+const saving = ref(false);
+const focusRequested = ref(false);
+
+function beginEdit() {
+    if (editing.value) return;
+    original.value = props.message.content;
+    draft.value = props.message.content;
+    editing.value = true;
+}
+function cancelEdit() {
+    if (saving.value) return;
+    editing.value = false;
+    draft.value = '';
+    original.value = '';
+}
+async function saveEdit() {
+    if (saving.value) return;
+    const id = (props.message as any).id;
+    if (!id) return;
+    const trimmed = draft.value.trim();
+    if (!trimmed) {
+        // Empty -> cancel (could also allow deletion later)
+        cancelEdit();
+        return;
+    }
+    try {
+        saving.value = true;
+        // Upsert message with new content (plain text). (DB schema stores data.content.)
+        const existing: any = await (
+            await import('~/db/client')
+        ).db.messages.get(id);
+        if (!existing) throw new Error('Message not found');
+        await upsert.message({
+            ...existing,
+            data: { ...(existing.data || {}), content: trimmed },
+            updated_at: nowSec(),
+        });
+        // Reflect in local props.message (parent reactive array will normally pick up via watcher; update eagerly)
+        (props.message as any).content = trimmed;
+        emit('edited', { id, content: trimmed });
+        editing.value = false;
+    } catch (e) {
+        console.error('[ChatMessage.saveEdit] failed', e);
+    } finally {
+        saving.value = false;
+    }
+}
+
+// Extract hash list (serialized JSON string or array already?)
+const hashList = computed<string[]>(() => {
+    const raw = (props.message as any).file_hashes;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string') return parseFileHashes(raw);
+    return [];
+});
+
+interface ThumbState {
+    status: 'loading' | 'ready' | 'error';
+    url?: string; // object URL
+}
+
+const thumbnails = reactive<Record<string, ThumbState>>({});
+
+const expanded = ref(false);
+const firstThumb = computed(() => hashList.value[0]);
+function toggleExpanded() {
+    if (!hashList.value.length) return;
+    expanded.value = !expanded.value;
+}
+
+watchEffect(async () => {
+    for (const h of hashList.value) {
+        if (thumbnails[h]) continue; // already loading/loaded
+        thumbnails[h] = { status: 'loading' };
+        try {
+            const blob = await getFileBlob(h);
+            if (!blob) throw new Error('missing');
+            const url = URL.createObjectURL(blob);
+            thumbnails[h] = { status: 'ready', url };
+        } catch (e) {
+            thumbnails[h] = { status: 'error' };
+        }
+    }
+});
+import { useToast } from '#imports';
+function copyMessage() {
+    navigator.clipboard.writeText(props.message.content);
+
+    useToast().add({
+        title: 'Message copied',
+        description: 'The message content has been copied to your clipboard.',
+        duration: 2000,
     });
 }
+
+function onRetry() {
+    const id = (props.message as any).id;
+    if (!id) return;
+    emit('retry', id);
+}
+
+import { forkThread, retryBranch } from '~/db/branching';
+
+// Branch popover state
+const branchMode = ref<'reference' | 'copy'>('copy');
+const branchModes = [
+    { label: 'Reference', value: 'reference' },
+    { label: 'Copy', value: 'copy' },
+];
+const branchTitle = ref('');
+const branching = ref(false);
+
+async function onBranch() {
+    if (branching.value) return;
+    branching.value = true;
+    const messageId = (props.message as any).id;
+    if (!messageId) return;
+    try {
+        let res: any;
+        // For assistant messages we now allow direct anchoring (captures assistant content in branch).
+        // If "retry" semantics desired, a separate Retry action still uses retryBranch.
+        res = await forkThread({
+            sourceThreadId: props.threadId || '',
+            anchorMessageId: messageId,
+            mode: branchMode.value,
+            titleOverride: branchTitle.value || undefined,
+        });
+        emit('branch', res.thread.id);
+        useToast().add({
+            title: 'Branched',
+            description: `New branch: ${res.thread.title}`,
+            color: 'primary',
+            duration: 2200,
+        });
+    } catch (e: any) {
+        useToast().add({
+            title: 'Branch failed',
+            description: e?.message || 'Error creating branch',
+            color: 'error',
+            duration: 3000,
+        });
+    } finally {
+        branching.value = false;
+    }
+}
 </script>
+
+<style scoped></style>
 ````
 
 ## File: app/components/chat/ChatContainer.vue
@@ -9353,22 +11102,63 @@ function showToast() {
     <main
         class="flex w-full flex-1 flex-col overflow-hidden transition-[width,height]"
     >
+        <!-- Scroll container / viewport for virtualization -->
         <div
-            class="absolute w-full h-screen overflow-y-scroll sm:pt-3.5 pb-[165px]"
+            ref="scrollParent"
+            class="absolute w-full h-screen overflow-y-auto overscroll-contain sm:pt-3.5 pb-[165px] scrollbars"
         >
+            <!-- Virtualized message list -->
             <div
-                class="mx-auto flex w-full px-1.5 sm:px-0 sm:max-w-[768px] flex-col space-y-12 pb-10 pt-safe-offset-10"
+                class="mx-auto w-full px-1.5 sm:px-0 sm:max-w-[768px] pb-10 pt-safe-offset-10"
             >
-                <ChatMessage
-                    v-for="(message, index) in messages || []"
-                    :key="
-                        message.id ||
-                        message.stream_id ||
-                        `${index}-${message.role}`
-                    "
-                    :message="message"
-                    @retry="onRetry"
-                />
+                <Virtualizer
+                    ref="virtualizerRef"
+                    :data="virtualMessages"
+                    :itemSize="virtualItemSize"
+                    :overscan="8"
+                    :scrollRef="scrollParent || undefined"
+                    class="flex flex-col"
+                >
+                    <template #default="{ item, index }">
+                        <div
+                            :key="item.id || item.stream_id || index"
+                            class="first:mt-0 mt-10"
+                            :data-index="index"
+                        >
+                            <ChatMessage
+                                :message="item"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                            />
+                        </div>
+                    </template>
+                </Virtualizer>
+                <!-- Live streaming tail (excluded from virtualizer for smoother incremental updates) -->
+                <div
+                    v-if="tailActive"
+                    class="mt-10 first:mt-0"
+                    :key="tailStreamId || 'streaming-tail'"
+                >
+                    <div
+                        class="bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm p-1 sm:p-5 rounded-md relative animate-in fade-in"
+                        style="animation-duration: 120ms"
+                    >
+                        <div
+                            class="prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                            v-html="tailRendered || tailPlaceholder"
+                        />
+                        <div
+                            class="absolute -bottom-5 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+                        >
+                            <span
+                                class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
+                                >Streaming…</span
+                            >
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="pointer-events-none absolute bottom-0 top-0 w-full">
@@ -9388,12 +11178,23 @@ function showToast() {
 
 <script setup lang="ts">
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref } from 'vue';
+import {
+    shallowRef,
+    computed,
+    watch,
+    ref,
+    nextTick,
+    onMounted,
+    onBeforeUnmount,
+} from 'vue';
 import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
     ContentPart,
 } from '~/composables/useAi';
+import { Virtualizer } from 'virtua/vue';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { marked } from 'marked';
 
 const model = ref('openai/gpt-oss-120b');
 
@@ -9460,10 +11261,7 @@ const messages = computed<RenderMessage[]>(() =>
             contentStr = (m.content as ContentPart[])
                 .map((p) => {
                     if (p.type === 'text') return p.text;
-                    if (p.type === 'image') {
-                        // Don't inline full-size images as markdown; thumbnails handled separately via file_hashes in ChatMessage
-                        return '';
-                    }
+                    if (p.type === 'image') return '';
                     if (p.type === 'file')
                         return `**[file:${
                             (p as any).name ?? (p as any).mediaType ?? 'file'
@@ -9483,6 +11281,209 @@ const messages = computed<RenderMessage[]>(() =>
     })
 );
 const loading = computed(() => chat.value.loading.value);
+
+// --- Hybrid tail streaming state ---
+const tailActive = ref(false);
+const tailStreamId = ref<string | null>(null);
+const tailBuffer = ref(''); // accumulated but not yet flushed
+const tailDisplay = ref(''); // flushed text (rendered markdown)
+const tailStartedAt = ref<number | null>(null);
+const tailLastFlush = ref(0);
+const tailInitialDelayMs = 1000; // per spec
+const tailMinFlushInterval = 90; // ms between flush rAF batches
+let tailRaf: number | null = null;
+
+function resetTail() {
+    tailActive.value = false;
+    tailStreamId.value = null;
+    tailBuffer.value = '';
+    tailDisplay.value = '';
+    tailStartedAt.value = null;
+    tailLastFlush.value = 0;
+    if (tailRaf) {
+        cancelAnimationFrame(tailRaf);
+        tailRaf = null;
+    }
+}
+
+function ensureTailFlushLoop() {
+    if (tailRaf != null) return;
+    const loop = () => {
+        tailRaf = null;
+        if (!tailActive.value) return; // stopped
+        const now = performance.now();
+        const elapsed = tailStartedAt.value ? now - tailStartedAt.value : 0;
+        const ready =
+            elapsed >= tailInitialDelayMs &&
+            tailBuffer.value.length > 0 &&
+            now - tailLastFlush.value >= tailMinFlushInterval;
+        if (ready) {
+            tailDisplay.value += tailBuffer.value;
+            tailBuffer.value = '';
+            tailLastFlush.value = now;
+        }
+        if (tailActive.value) tailRaf = requestAnimationFrame(loop);
+    };
+    tailRaf = requestAnimationFrame(loop);
+}
+
+// Rendered HTML for tail (markdown parse only on flush increments to keep cost lower)
+const tailRendered = computed(() =>
+    tailDisplay.value ? marked.parse(tailDisplay.value) : ''
+);
+const tailPlaceholder = computed(() =>
+    !tailDisplay.value && !tailBuffer.value ? 'Thinking…' : ''
+);
+
+// Identify the current streaming assistant message (last assistant with empty OR growing content while loading)
+const streamingAssistant = computed(() => {
+    if (!loading.value) return null;
+    const arr = messages.value;
+    if (!arr.length) return null;
+    const last = arr[arr.length - 1];
+    if (last && last.role === 'assistant') return last;
+    return null;
+});
+
+// Virtualizer data excludes the active streaming assistant when tailActive
+const virtualMessages = computed(() => {
+    if (!tailActive.value || !tailStreamId.value) return messages.value;
+    return messages.value.filter((m) => m.stream_id !== tailStreamId.value);
+});
+
+// Virtualization helpers
+const scrollParent = ref<HTMLElement | null>(null);
+const virtualizerRef = ref<any>(null);
+const userIsAtBottom = ref(true);
+
+// Provide a numeric size (dynamic measurement handled internally by virtua if content resizes)
+const virtualItemSize = 320;
+
+const lastMessage = computed(() => messages.value[messages.value.length - 1]);
+
+function handleScrollEvent() {
+    if (!scrollParent.value) return;
+    const el = scrollParent.value;
+    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    userIsAtBottom.value = distance < 16; // 1rem threshold
+}
+
+function scrollToBottom(smooth = true) {
+    if (!scrollParent.value) return;
+    // While streaming tail is active we exclude the assistant message from virtualizer; scrolling to index would jump upward.
+    if (tailActive.value) {
+        scrollParent.value.scrollTo({
+            top: scrollParent.value.scrollHeight,
+            behavior: smooth ? 'smooth' : 'auto',
+        });
+        return;
+    }
+    if (virtualizerRef.value && messages.value.length) {
+        try {
+            virtualizerRef.value.scrollToIndex(messages.value.length - 1, {
+                align: 'end',
+                smooth,
+            });
+            return; // success
+        } catch (_) {
+            /* fallback below */
+        }
+    }
+    scrollParent.value.scrollTo({
+        top: scrollParent.value.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+    });
+}
+
+// Auto-scroll on new messages if user at bottom
+watch(
+    () => messages.value.length,
+    async () => {
+        await nextTick();
+        if (userIsAtBottom.value) scrollToBottom(false);
+    }
+);
+
+onMounted(() => {
+    scrollParent.value?.addEventListener('scroll', handleScrollEvent, {
+        passive: true,
+    });
+    // Initial scroll after mount for existing history
+    nextTick(() => scrollToBottom(false));
+});
+onBeforeUnmount(() => {
+    scrollParent.value?.removeEventListener('scroll', handleScrollEvent);
+});
+
+// Hook: streaming delta buffering
+useHookEffect(
+    'ai.chat.stream:action:delta',
+    (delta: string, meta: any) => {
+        // Activate tail if first delta for a new stream
+        if (!tailActive.value) {
+            tailActive.value = true;
+            tailStreamId.value =
+                meta?.streamId || meta?.assistantId || 'stream';
+            tailStartedAt.value = performance.now();
+            tailBuffer.value = '';
+            tailDisplay.value = '';
+            ensureTailFlushLoop();
+        }
+        // Different stream? finalize previous and start new.
+        if (
+            tailActive.value &&
+            tailStreamId.value &&
+            meta?.streamId &&
+            meta.streamId !== tailStreamId.value
+        ) {
+            // finalize old silently (will be brought in when loading toggles false)
+            resetTail();
+            tailActive.value = true;
+            tailStreamId.value = meta.streamId;
+            tailStartedAt.value = performance.now();
+            ensureTailFlushLoop();
+        }
+        tailBuffer.value += String(delta || '');
+    },
+    { kind: 'action', priority: 20 }
+);
+
+// Hook: after send (finalize)
+useHookEffect(
+    'ai.chat.send:action:after',
+    () => {
+        // Force final flush
+        if (tailBuffer.value.length) {
+            tailDisplay.value += tailBuffer.value;
+            tailBuffer.value = '';
+        }
+        // Delay re-including the message until next tick so virtualizer sees stable array
+        nextTick(() => {
+            resetTail();
+            nextTick(() => {
+                if (userIsAtBottom.value) scrollToBottom(false);
+            });
+        });
+    },
+    { kind: 'action', priority: 50 }
+);
+
+// Hook: error path
+useHookEffect(
+    'ai.chat.error:action',
+    () => {
+        resetTail();
+    },
+    { kind: 'action', priority: 50 }
+);
+
+// Auto-scroll as tailDisplay grows
+watch(
+    () => tailDisplay.value,
+    () => {
+        if (tailActive.value && userIsAtBottom.value) scrollToBottom(false);
+    }
+);
 
 function onSend(payload: any) {
     console.log('[ChatContainer.onSend] raw payload', payload);
@@ -9532,6 +11533,11 @@ function onSend(payload: any) {
         });
     }
 
+    // Large pasted text blocks -> send as extraTextParts so they become additional text parts (not files)
+    if (payload.largeTexts && payload.largeTexts.length) {
+        reqParams.extraTextParts = payload.largeTexts.map((b: any) => b.text);
+    }
+
     console.log('[ChatContainer.onSend] transformed reqParams', reqParams);
 
     (reqParams as any).file_hashes = fileHashes;
@@ -9557,7 +11563,36 @@ function onRetry(messageId: string) {
     // Provide current model so retry uses same selection
     (chat.value as any).retryMessage(messageId, model.value);
 }
+
+function onBranch(newThreadId: string) {
+    if (newThreadId) emit('thread-selected', newThreadId);
+}
+
+function onEdited(payload: { id: string; content: string }) {
+    if (!chat.value) return;
+    const arr = chat.value.messages.value;
+    const idx = arr.findIndex((m: any) => m.id === payload.id);
+    if (idx === -1) return;
+    const msg = arr[idx];
+    if (!msg) return;
+    // If message content is a parts array, update the first text part; else update string directly
+    if (Array.isArray(msg.content)) {
+        const firstText = (msg.content as any[]).find((p) => p.type === 'text');
+        if (firstText) firstText.text = payload.content;
+        else
+            (msg.content as any[]).unshift({
+                type: 'text',
+                text: payload.content,
+            });
+    } else {
+        msg.content = payload.content;
+    }
+    // Trigger reactivity for computed messages mapping
+    chat.value.messages.value = [...arr];
+}
 </script>
 
-<style></style>
+<style>
+/* Optional custom styles placeholder */
+</style>
 ````
