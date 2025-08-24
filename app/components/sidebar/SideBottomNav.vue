@@ -19,14 +19,10 @@
                     <div
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
-                        <svg
-                            class="w-5 h-5 fill-current pointer-events-none"
-                            viewBox="0 0 64 64"
-                            aria-hidden="true"
-                        >
-                            <path d="M12 52c4-8 12-12 20-12s16 4 20 12v4H12z" />
-                            <circle cx="32" cy="26" r="12" />
-                        </svg>
+                        <UIcon
+                            name="pixelarticons:user"
+                            class="h-5 w-5"
+                        ></UIcon>
                     </div>
                     <div
                         class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
@@ -119,16 +115,10 @@
                     <div
                         class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                     >
-                        <svg
-                            class="w-5 h-5 fill-current pointer-events-none"
-                            viewBox="0 0 64 64"
-                            aria-hidden="true"
-                        >
-                            <path d="M32 46a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-                            <path
-                                d="M32 10c-7 0-12 4.7-12 10h8c0-2.1 1.9-4 4-4 2.2 0 4 1.6 4 3.6 0 1.6-.6 2.6-2.7 4.1-3.8 2.8-5.3 5.2-5.3 10.3v2h8v-1c0-3.1.8-4.3 3.4-6.1C42.2 26.7 44 24 44 20.6 44 14.5 38.5 10 32 10z"
-                            />
-                        </svg>
+                        <UIcon
+                            class="w-5 h-5"
+                            name="pixelarticons:sliders-2"
+                        ></UIcon>
                     </div>
                     <div
                         class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
