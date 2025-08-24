@@ -26,7 +26,9 @@
                 </button>
             </div>
         </div>
-        <div class="flex flex-col p-2 space-y-1.5">
+        <div
+            class="flex flex-col p-2 space-y-1.5 h-[calc(100vh-262px)] overflow-y-auto w-full overflow-x-hidden scrollbar-hidden"
+        >
             <div v-for="item in displayThreads" :key="item.id">
                 <RetroGlassBtn
                     :class="{
@@ -60,7 +62,7 @@
                             @click.stop
                         >
                             <UIcon
-                                name="i-lucide-more-vertical"
+                                name="pixelarticons:more-vertical"
                                 class="w-4 h-4 opacity-70"
                             />
                         </span>

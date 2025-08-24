@@ -35,6 +35,16 @@ html, body {
 	scrollbar-color: var(--md-primary) transparent;
 }
 
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
 h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--font-heading) !important;
 }
