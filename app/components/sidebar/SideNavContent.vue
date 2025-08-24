@@ -66,6 +66,11 @@
                 :projects="projects"
                 v-model:expanded="expandedProjects"
                 @chatSelected="(id: string) => emit('chatSelected', id)"
+                @addChat="handleAddChatToProject"
+                @deleteProject="handleDeleteProject"
+                @renameProject="openRenameProject"
+                @renameEntry="openRename"
+                @removeFromProject="handleRemoveFromProject"
             />
             <div>
                 <h4
@@ -268,6 +273,36 @@
                     >Cancel</UButton
                 >
                 <UButton color="primary" @click="saveRename">Save</UButton>
+            </template>
+        </UModal>
+
+        <!-- Rename Project Modal -->
+        <UModal
+            v-model:open="showRenameProjectModal"
+            title="Rename project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header><h3>Rename project?</h3></template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameProjectName"
+                        placeholder="Project name"
+                        icon="pixelarticons:folder"
+                        @keyup.enter="saveRenameProject"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameProjectModal = false"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="!renameProjectName.trim()"
+                    @click="saveRenameProject"
+                    >Save</UButton
+                >
             </template>
         </UModal>
 
@@ -587,10 +622,31 @@ const renameTitle = ref('');
 const showDeleteModal = ref(false);
 const deleteId = ref<string | null>(null);
 
-function openRename(thread: any) {
-    renameId.value = thread.id;
-    renameTitle.value = thread.title ?? '';
-    showRenameModal.value = true;
+async function openRename(target: any) {
+    // Case 1: payload from project tree: { projectId, entryId, kind }
+    if (target && typeof target === 'object' && 'entryId' in target) {
+        const { entryId, kind } = target as {
+            projectId: string;
+            entryId: string;
+            kind?: string;
+        };
+        if (kind === 'chat') {
+            const t = await db.threads.get(entryId);
+            renameId.value = entryId;
+            renameTitle.value = t?.title || 'New Thread';
+            showRenameModal.value = true;
+        } else {
+            // Non-chat entries (e.g., docs) could be handled here later
+            console.warn('Rename for non-chat entry not implemented');
+        }
+        return;
+    }
+    // Case 2: direct thread object from thread list
+    if (target && typeof target === 'object' && 'id' in target) {
+        renameId.value = (target as any).id;
+        renameTitle.value = (target as any).title ?? '';
+        showRenameModal.value = true;
+    }
 }
 
 async function saveRename() {
@@ -653,6 +709,173 @@ async function deleteThread() {
 function onNewChat() {
     emit('newChat');
     console.log('New chat requested');
+}
+
+// ---- Project Tree Handlers ----
+async function handleAddChatToProject(projectId: string) {
+    // Create a new chat thread and insert into project data array
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        const threadId = crypto.randomUUID();
+        await create.thread({
+            id: threadId,
+            title: 'New Thread',
+            forked: false,
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+            meta: null,
+        } as any);
+        const project = await db.projects.get(projectId);
+        if (project) {
+            const dataArr = Array.isArray(project.data)
+                ? project.data
+                : typeof project.data === 'string'
+                ? (() => {
+                      try {
+                          const parsed = JSON.parse(project.data);
+                          return Array.isArray(parsed) ? parsed : [];
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : [];
+            dataArr.push({ id: threadId, name: 'New Thread', kind: 'chat' });
+            await upsert.project({
+                ...project,
+                data: dataArr,
+                updated_at: now,
+            });
+            if (!expandedProjects.value.includes(projectId))
+                expandedProjects.value.push(projectId);
+            emit('chatSelected', threadId);
+        }
+    } catch (e) {
+        console.error('add chat to project failed', e);
+    }
+}
+
+async function handleDeleteProject(projectId: string) {
+    try {
+        await dbDel.soft.project(projectId); // soft delete for recoverability
+    } catch (e) {
+        console.error('delete project failed', e);
+    }
+}
+
+// ---- Project Rename Modal Logic ----
+const showRenameProjectModal = ref(false);
+const renameProjectId = ref<string | null>(null);
+const renameProjectName = ref('');
+
+async function openRenameProject(projectId: string) {
+    const project = await db.projects.get(projectId);
+    if (!project) return;
+    renameProjectId.value = projectId;
+    renameProjectName.value = project.name || '';
+    showRenameProjectModal.value = true;
+}
+
+async function saveRenameProject() {
+    if (!renameProjectId.value) return;
+    const name = renameProjectName.value.trim();
+    if (!name) return;
+    const project = await db.projects.get(renameProjectId.value);
+    if (!project) return;
+    try {
+        await upsert.project({
+            ...project,
+            name,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        showRenameProjectModal.value = false;
+        renameProjectId.value = null;
+        renameProjectName.value = '';
+    } catch (e) {
+        console.error('rename project failed', e);
+    }
+}
+
+async function handleRenameEntry(payload: {
+    projectId: string;
+    entryId: string;
+    kind?: string;
+}) {
+    try {
+        const project = await db.projects.get(payload.projectId);
+        if (!project) return;
+        const dataArr = Array.isArray(project.data)
+            ? project.data
+            : typeof project.data === 'string'
+            ? (() => {
+                  try {
+                      const parsed = JSON.parse(project.data);
+                      return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                      return [];
+                  }
+              })()
+            : [];
+        const entry = dataArr.find((d: any) => d.id === payload.entryId);
+        if (!entry) return;
+        const newName = prompt('Rename entry', entry.name || '');
+        if (newName == null) return;
+        const name = newName.trim();
+        if (!name) return;
+        entry.name = name;
+        await upsert.project({
+            ...project,
+            data: dataArr,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        if (payload.kind === 'chat') {
+            // sync thread title too
+            const t = await db.threads.get(payload.entryId);
+            if (t && t.title !== name) {
+                await upsert.thread({
+                    ...t,
+                    title: name,
+                    updated_at: Math.floor(Date.now() / 1000),
+                });
+            }
+        }
+    } catch (e) {
+        console.error('rename entry failed', e);
+    }
+}
+
+async function handleRemoveFromProject(payload: {
+    projectId: string;
+    entryId: string;
+    kind?: string;
+}) {
+    try {
+        const project = await db.projects.get(payload.projectId);
+        if (!project) return;
+        const dataArr = Array.isArray(project.data)
+            ? project.data
+            : typeof project.data === 'string'
+            ? (() => {
+                  try {
+                      const parsed = JSON.parse(project.data);
+                      return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                      return [];
+                  }
+              })()
+            : [];
+        const idx = dataArr.findIndex((d: any) => d.id === payload.entryId);
+        if (idx === -1) return;
+        dataArr.splice(idx, 1);
+        await upsert.project({
+            ...project,
+            data: dataArr,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+    } catch (e) {
+        console.error('remove from project failed', e);
+    }
 }
 
 // ---- Project Creation ----
