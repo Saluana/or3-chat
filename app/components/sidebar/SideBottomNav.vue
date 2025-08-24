@@ -11,38 +11,65 @@
                 class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
             >
                 <!-- MY INFO -->
-                <button
-                    type="button"
-                    aria-label="My Info"
-                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                >
-                    <div
-                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                    >
-                        <UIcon
-                            name="pixelarticons:user"
-                            class="h-5 w-5"
-                        ></UIcon>
-                    </div>
-                    <div
-                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                <UPopover>
+                    <button
+                        type="button"
+                        aria-label="My Info"
+                        class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
                     >
                         <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                            class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
                         >
-                            INFO
+                            <UIcon
+                                name="pixelarticons:user"
+                                class="h-5 w-5"
+                            ></UIcon>
                         </div>
                         <div
-                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                            class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
                         >
-                            <div class="h-[2px] bg-current"></div>
-                            <div class="h-[2px] bg-current"></div>
+                            <div
+                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                            >
+                                INFO
+                            </div>
+                            <div
+                                class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                            >
+                                <div class="h-[2px] bg-current"></div>
+                                <div class="h-[2px] bg-current"></div>
+                            </div>
                         </div>
-                    </div>
-                </button>
+                    </button>
+                    <template #content>
+                        <div class="flex flex-col items-start w-[140px]">
+                            <button
+                                class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToActivity"
+                            >
+                                <UIcon
+                                    name="pixelarticons:human-run"
+                                    class="mr-1.5"
+                                />
+                                Activity
+                            </button>
+                            <button
+                                class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToCredits"
+                            >
+                                <UIcon
+                                    name="pixelarticons:coin"
+                                    class="mr-1.5"
+                                />
+                                Credits
+                            </button>
+                        </div>
+                    </template>
+                </UPopover>
 
                 <!-- Connect -->
                 <button
+                    label="Open"
                     @click="onConnectButtonClick"
                     type="button"
                     aria-label="Connect"
@@ -160,6 +187,14 @@ function onConnectButtonClick() {
         // Logic to connect
         openrouter.startLogin();
     }
+}
+
+function navigateToActivity() {
+    window.open('https://openrouter.ai/activity', '_blank');
+}
+
+function navigateToCredits() {
+    window.open('https://openrouter.ai/settings/credits', '_blank');
 }
 </script>
 
