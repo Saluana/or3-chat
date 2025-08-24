@@ -15,6 +15,7 @@
                         :ui="{
                             leadingIcon: 'w-5 h-5',
                         }"
+                        @click="openCreateProject"
                     />
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Create document">
@@ -178,12 +179,74 @@
                 <UButton color="error" @click="deleteThread">Delete</UButton>
             </template>
         </UModal>
+
+        <!-- Create Project Modal -->
+        <UModal
+            v-model:open="showCreateProjectModal"
+            title="New Project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Create project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="createProjectState"
+                        @submit.prevent="submitCreateProject"
+                    >
+                        <div class="flex flex-col space-y-3">
+                            <UFormField
+                                label="Title"
+                                name="name"
+                                :error="createProjectErrors.name"
+                            >
+                                <UInput
+                                    v-model="createProjectState.name"
+                                    required
+                                    placeholder="Project title"
+                                    icon="pixelarticons:folder"
+                                    class="w-full"
+                                    @keyup.enter="submitCreateProject"
+                                />
+                            </UFormField>
+                            <UFormField label="Description" name="description">
+                                <UTextarea
+                                    class="w-full border-2 rounded-[6px]"
+                                    v-model="createProjectState.description"
+                                    :rows="3"
+                                    placeholder="Optional description"
+                                />
+                            </UFormField>
+                        </div>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    :disabled="
+                        !createProjectState.name.trim() || creatingProject
+                    "
+                    color="primary"
+                    @click="submitCreateProject"
+                >
+                    <span v-if="!creatingProject">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
     </div>
 </template>
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpers
 import { VList } from 'virtua/vue';
 
 const props = defineProps<{
@@ -266,5 +329,52 @@ async function deleteThread() {
 function onNewChat() {
     emit('newChat');
     console.log('New chat requested');
+}
+
+// ---- Project Creation ----
+const showCreateProjectModal = ref(false);
+const creatingProject = ref(false);
+const createProjectState = ref<{ name: string; description: string }>({
+    name: '',
+    description: '',
+});
+const createProjectErrors = ref<{ name?: string }>({});
+
+function openCreateProject() {
+    showCreateProjectModal.value = true;
+    createProjectState.value = { name: '', description: '' };
+    createProjectErrors.value = {};
+}
+function closeCreateProject() {
+    showCreateProjectModal.value = false;
+}
+
+async function submitCreateProject() {
+    if (creatingProject.value) return;
+    const name = createProjectState.value.name.trim();
+    if (!name) {
+        createProjectErrors.value.name = 'Title required';
+        return;
+    }
+    creatingProject.value = true;
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        // data holds ordered list of entities (chat/doc) we include kind now per request
+        await create.project({
+            id: crypto.randomUUID(),
+            name,
+            description: createProjectState.value.description?.trim() || null,
+            data: JSON.stringify([]), // store as JSON string for now; could be array directly if schema allows any
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+        } as any);
+        closeCreateProject();
+    } catch (e) {
+        console.error('Failed to create project', e);
+    } finally {
+        creatingProject.value = false;
+    }
 }
 </script>
