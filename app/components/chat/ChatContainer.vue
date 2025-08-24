@@ -30,6 +30,7 @@
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
+                                @edited="onEdited"
                             />
                         </div>
                     </template>
@@ -465,6 +466,29 @@ function onRetry(messageId: string) {
 
 function onBranch(newThreadId: string) {
     if (newThreadId) emit('thread-selected', newThreadId);
+}
+
+function onEdited(payload: { id: string; content: string }) {
+    if (!chat.value) return;
+    const arr = chat.value.messages.value;
+    const idx = arr.findIndex((m: any) => m.id === payload.id);
+    if (idx === -1) return;
+    const msg = arr[idx];
+    if (!msg) return;
+    // If message content is a parts array, update the first text part; else update string directly
+    if (Array.isArray(msg.content)) {
+        const firstText = (msg.content as any[]).find((p) => p.type === 'text');
+        if (firstText) firstText.text = payload.content;
+        else
+            (msg.content as any[]).unshift({
+                type: 'text',
+                text: payload.content,
+            });
+    } else {
+        msg.content = payload.content;
+    }
+    // Trigger reactivity for computed messages mapping
+    chat.value.messages.value = [...arr];
 }
 </script>
 

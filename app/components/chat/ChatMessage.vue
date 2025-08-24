@@ -194,6 +194,7 @@ const props = defineProps<{ message: UIMessage; threadId?: string }>();
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
     (e: 'branch', id: string): void;
+    (e: 'edited', payload: { id: string; content: string }): void;
 }>();
 
 const outerClass = computed(() => ({
@@ -253,6 +254,7 @@ async function saveEdit() {
         });
         // Reflect in local props.message (parent reactive array will normally pick up via watcher; update eagerly)
         (props.message as any).content = trimmed;
+        emit('edited', { id, content: trimmed });
         editing.value = false;
     } catch (e) {
         console.error('[ChatMessage.saveEdit] failed', e);
