@@ -1,7 +1,14 @@
 <template>
     <resizable-sidebar-layout>
-        <template #sidebar>
+        <template #sidebar-expanded>
             <sidebar-side-nav-content
+                :active-thread="threadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <SidebarSideNavContentCollapsed
                 :active-thread="threadId"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"

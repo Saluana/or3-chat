@@ -69,21 +69,39 @@
                 </SidebarHeader>
 
                 <!-- Sidebar content -->
-                <div v-show="!collapsed" class="flex-1 overflow-auto">
-                    <slot name="sidebar">
-                        <div class="p-3 space-y-2 text-sm opacity-80">
-                            <p>Add your nav here…</p>
-                            <ul class="space-y-1">
-                                <li
-                                    v-for="i in 10"
-                                    :key="i"
-                                    class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
-                                >
-                                    Item {{ i }}
-                                </li>
-                            </ul>
-                        </div>
-                    </slot>
+                <div class="flex-1 overflow-auto">
+                    <div v-if="!collapsed" class="flex-1 h-full">
+                        <slot name="sidebar-expanded">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
+                    <div v-else class="flex-1 h-full">
+                        <slot name="sidebar-collapsed">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
                 </div>
             </div>
 
