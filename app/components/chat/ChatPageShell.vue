@@ -18,10 +18,10 @@
             <div
                 id="top-nav"
                 :class="{
-                    'border-[var(--tw-border)] z-50 border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                    'border-[var(--tw-border)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
                         panes.length > 1,
                 }"
-                class="absolute top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
             >
                 <!-- New Window Button -->
                 <div class="h-full flex items-center justify-center px-4">
@@ -71,7 +71,10 @@
             </div>
             <!-- Panes Container -->
             <div
-                class="pt-[46px] z-[49] h-full flex flex-row gap-0 items-stretch w-full overflow-hidden"
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
             >
                 <div
                     v-for="(pane, i) in panes"
@@ -388,6 +391,27 @@ const themeIcon = computed(() =>
 const themeAriaLabel = computed(() =>
     themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 );
+
+// Mobile detection to keep padding on small screens
+const isMobile = ref(false);
+if (process.client) {
+    onMounted(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        const apply = () => (isMobile.value = mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() =>
+                mq.removeEventListener('change', apply)
+            );
+        } else {
+            onUnmounted(() => mq.removeEventListener('change', apply));
+        }
+    });
+}
+
+// Only offset content when multi-pane OR on mobile (toolbar overlap avoidance)
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
 
 onMounted(() => {
     initInitialThread();
