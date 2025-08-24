@@ -17,16 +17,12 @@
                 <div
                     class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
                 >
-                    <textarea
-                        v-model="promptText"
-                        placeholder="How can I help you today?"
-                        class="w-full h-12 break-words max-w-full resize-none bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 text-sm leading-relaxed"
-                        rows="1"
-                        @input="handlePromptInput"
-                        @paste="handlePaste"
-                        ref="textareaRef"
-                        :disabled="loading"
-                    ></textarea>
+                    <!-- TipTap Editor -->
+                    <EditorContent
+                        :editor="editor as Editor"
+                        class="prosemirror-host"
+                    ></EditorContent>
+
                     <div
                         v-if="loading"
                         class="absolute top-1 right-1 flex items-center gap-2"
@@ -281,11 +277,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, defineEmits, onMounted, watch } from 'vue';
+import {
+    ref,
+    nextTick,
+    defineEmits,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+} from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
 import type { FileMeta } from '~/db/schema';
 import { useModelStore } from '~/composables/useModelStore';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
+import { computed } from 'vue';
 
 const props = defineProps<{ loading?: boolean }>();
 
@@ -294,6 +301,55 @@ const { favoriteModels, getFavoriteModels } = useModelStore();
 onMounted(async () => {
     const fave = await getFavoriteModels();
     console.log('Favorite models:', fave);
+});
+
+onMounted(() => {
+    if (!process.client) return;
+    try {
+        editor.value = new Editor({
+            extensions: [
+                Placeholder.configure({
+                    // Use a placeholder:
+                    placeholder: 'Write something …',
+                }),
+                StarterKit.configure({
+                    bold: false,
+                    italic: false,
+                    strike: false,
+                    code: false,
+                    blockquote: false,
+                    heading: false,
+                    bulletList: false,
+                    orderedList: false,
+                    codeBlock: false,
+                    horizontalRule: false,
+                    dropcursor: false,
+                    gapcursor: false,
+                }),
+            ],
+            onUpdate: ({ editor: ed }) => {
+                promptText.value = ed.getText();
+                autoResize();
+            },
+            onPaste: (event) => {
+                handlePaste(event);
+            },
+            content: '',
+        });
+    } catch (err) {
+        console.warn(
+            '[ChatInputDropper] TipTap init failed, using fallback textarea',
+            err
+        );
+    }
+});
+
+onBeforeUnmount(() => {
+    try {
+        editor.value?.destroy();
+    } catch (err) {
+        console.warn('[ChatInputDropper] TipTap destroy error', err);
+    }
 });
 
 interface UploadedImage {
@@ -332,7 +388,15 @@ const emit = defineEmits<{
 }>();
 
 const promptText = ref('');
+// Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+// Future TipTap editor container & instance refs (Task 2 structure only)
+const editorContainerRef = ref<HTMLElement | null>(null);
+const editor = ref<Editor | null>(null);
+const editorIsEmpty = computed(() => {
+    return editor.value ? editor.value.isEmpty : true;
+});
+
 const uploadedImages = ref<UploadedImage[]>([]);
 // Large pasted text blocks (> threshold)
 interface LargeTextBlock {
@@ -541,7 +605,13 @@ const handleSend = () => {
             model: selectedModel.value,
             settings: imageSettings.value,
         });
+        // Reset local state and editor content so placeholder shows again
         promptText.value = '';
+        try {
+            editor.value?.commands.clearContent();
+        } catch (e) {
+            // noop
+        }
         uploadedImages.value = [];
         largeTextBlocks.value = [];
         autoResize();
@@ -587,5 +657,26 @@ textarea::-webkit-scrollbar-thumb:hover {
         transform;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 150ms;
+}
+
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    color: var(--placeholder-color, #6b7280);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.55;
+    font-weight: normal;
 }
 </style>

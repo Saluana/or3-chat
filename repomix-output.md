@@ -60,6 +60,7 @@ app/
       ChatInput.vue
       ChatInputDropper.vue
       ChatMessage.vue
+      ChatPageShell.vue
       MessageEditor.vue
     modal/
       SettingsModal.vue
@@ -68,6 +69,7 @@ app/
       SidebarHeader.vue
       SideBottomNav.vue
       SideNavContent.vue
+      SideNavContentCollapsed.vue
     ResizableSidebarLayout.vue
     RetroGlassBtn.vue
   composables/
@@ -94,8 +96,10 @@ app/
     threads.ts
     util.ts
   pages/
+    chat/
+      [id].vue
+      index.vue
     _test.vue
-    chat.vue
     home.vue
     homepage.vue
     openrouter-callback.vue
@@ -1935,6 +1939,134 @@ function onToggle() {
 </style>
 ````
 
+## File: app/components/sidebar/SideNavContentCollapsed.vue
+````vue
+<template>
+    <div class="flex flex-col justify-between h-full relative">
+        <div class="px-1 pt-2 flex flex-col space-y-2">
+            <UTooltip :delay-duration="0" text="New chat">
+                <UButton
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:message-plus"
+                    :ui="{
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                ></UButton>
+                <UButton
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:search"
+                    :ui="{
+                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                ></UButton>
+            </UTooltip>
+        </div>
+        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
+            <UButton
+                size="md"
+                class="flex item-center justify-center"
+                icon="pixelarticons:sliders-2"
+                :ui="{
+                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
+                    leadingIcon: 'w-5 h-5',
+                }"
+            ></UButton>
+        </div>
+    </div>
+</template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
+import { liveQuery } from 'dexie';
+import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { VList } from 'virtua/vue';
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
+
+const items = ref<any[]>([]);
+import { useThreadSearch } from '~/composables/useThreadSearch';
+const { query: threadSearchQuery, results: threadSearchResults } =
+    useThreadSearch(items as any);
+const displayThreads = computed(() =>
+    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+);
+let sub: { unsubscribe: () => void } | null = null;
+
+onMounted(() => {
+    // Sort by last opened using updated_at index; filter out deleted
+    sub = liveQuery(() =>
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
+    ).subscribe({
+        next: (results) => (items.value = results),
+        error: (err) => console.error('liveQuery error', err),
+    });
+});
+
+watch(
+    () => items.value,
+    (newItems) => {
+        console.log('Items updated:', newItems);
+    }
+);
+
+onUnmounted(() => {
+    sub?.unsubscribe();
+});
+
+const emit = defineEmits(['chatSelected', 'newChat']);
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+
+const showDeleteModal = ref(false);
+const deleteId = ref<string | null>(null);
+
+function openRename(thread: any) {
+    renameId.value = thread.id;
+    renameTitle.value = thread.title ?? '';
+    showRenameModal.value = true;
+}
+
+async function saveRename() {
+    if (!renameId.value) return;
+    const t = await db.threads.get(renameId.value);
+    if (!t) return;
+    const now = Math.floor(Date.now() / 1000);
+    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+}
+
+function confirmDelete(thread: any) {
+    deleteId.value = thread.id as string;
+    showDeleteModal.value = true;
+}
+
+async function deleteThread() {
+    if (!deleteId.value) return;
+    await dbDel.hard.thread(deleteId.value);
+    showDeleteModal.value = false;
+    deleteId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+    console.log('New chat requested');
+}
+</script>
+````
+
 ## File: app/components/RetroGlassBtn.vue
 ````vue
 <template>
@@ -2550,6 +2682,28 @@ export async function removeFileFromMessage(messageId: string, hash: string) {
         await derefFile(hash);
     });
 }
+````
+
+## File: app/pages/chat/[id].vue
+````vue
+<template>
+    <ChatPageShell :initial-thread-id="routeId" validate-initial />
+</template>
+<script setup lang="ts">
+import ChatPageShell from '~/components/chat/ChatPageShell.vue';
+const route = useRoute();
+const routeId = (route.params.id as string) || '';
+</script>
+````
+
+## File: app/pages/chat/index.vue
+````vue
+<template>
+    <ChatPageShell />
+</template>
+<script setup lang="ts">
+import ChatPageShell from '~/components/chat/ChatPageShell.vue';
+</script>
 ````
 
 ## File: app/pages/home.vue
@@ -5678,6 +5832,191 @@ bun run preview
 Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
 ````
 
+## File: app/components/chat/ChatPageShell.vue
+````vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar-expanded>
+            <sidebar-side-nav-content
+                :active-thread="threadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <SidebarSideNavContentCollapsed
+                :active-thread="threadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full">
+            <ChatContainer
+                :message-history="messageHistory"
+                :thread-id="threadId"
+                @thread-selected="onInternalThreadCreated"
+            />
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import Dexie from 'dexie';
+import { db } from '~/db';
+// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
+
+/**
+ * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
+ * Props:
+ *  - initialThreadId: optional id to load immediately (deep link)
+ *  - validateInitial: if true, ensure the initial thread exists else redirect + toast
+ *  - routeSync: keep URL in sync with active thread id (default true)
+ */
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        validateInitial?: boolean;
+        routeSync?: boolean;
+    }>(),
+    {
+        validateInitial: false,
+        routeSync: true,
+    }
+);
+
+const router = useRouter();
+const toast = useToast();
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+    id?: string;
+    stream_id?: string;
+};
+
+const messageHistory = ref<ChatMessage[]>([]);
+const threadId = ref<string>(props.initialThreadId || '');
+const validating = ref(false);
+let validateToken = 0;
+
+async function loadMessages(id: string) {
+    if (!id) return;
+    const msgs = await db.messages
+        .where('[thread_id+index]')
+        .between([id, Dexie.minKey], [id, Dexie.maxKey])
+        .filter((m: any) => !m.deleted)
+        .toArray();
+    messageHistory.value = (msgs || []).map((msg: any) => {
+        const data = msg.data as unknown;
+        const content =
+            typeof data === 'object' && data !== null && 'content' in data
+                ? String((data as any).content ?? '')
+                : String((msg.content as any) ?? '');
+        return {
+            role: msg.role as 'user' | 'assistant',
+            content,
+            file_hashes: msg.file_hashes,
+            id: msg.id,
+            stream_id: msg.stream_id,
+        } as ChatMessage;
+    });
+}
+
+async function ensureDbOpen() {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+}
+
+async function validateThread(id: string): Promise<boolean> {
+    await ensureDbOpen();
+    const ATTEMPTS = 5;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t) return !t.deleted;
+        } catch {}
+        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+function redirectNotFound() {
+    router.replace('/chat');
+    toast.add({
+        title: 'Not found',
+        description: 'This chat does not exist.',
+        color: 'error',
+    });
+}
+
+async function initInitialThread() {
+    if (!process.client) return;
+    if (!props.initialThreadId) return;
+    if (props.validateInitial) {
+        validating.value = true;
+        const token = ++validateToken;
+        const ok = await validateThread(props.initialThreadId);
+        if (token !== validateToken) return; // superseded
+        if (!ok) {
+            redirectNotFound();
+            return;
+        }
+    }
+    threadId.value = props.initialThreadId;
+    await loadMessages(threadId.value);
+    validating.value = false;
+}
+
+onMounted(() => {
+    initInitialThread();
+});
+
+watch(
+    () => threadId.value,
+    async (id) => {
+        if (id) await loadMessages(id);
+    }
+);
+
+function updateUrlThread(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/chat/${id}` : '/chat';
+    if (window.location.pathname === newPath) return; // no-op
+    // Preserve existing history.state so back button stack stays intact
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+// Sidebar selection
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    threadId.value = id;
+    updateUrlThread(id);
+}
+
+// ChatContainer emitted new thread (first user send)
+function onInternalThreadCreated(id: string) {
+    if (!id) return;
+    if (threadId.value !== id) threadId.value = id;
+    updateUrlThread(id); // immediate URL update without triggering Nuxt routing
+}
+
+function onNewChat() {
+    messageHistory.value = [];
+    threadId.value = '';
+    updateUrlThread(undefined);
+}
+</script>
+
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+</style>
+````
+
 ## File: app/composables/useUserApiKey.ts
 ````typescript
 import { computed } from 'vue';
@@ -7865,384 +8204,6 @@ function onConnectButtonClick() {
 </style>
 ````
 
-## File: app/components/ResizableSidebarLayout.vue
-````vue
-<template>
-    <div
-        class="relative w-full h-screen border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
-    >
-        <!-- Backdrop on mobile when open -->
-        <Transition
-            enter-active-class="transition-opacity duration-150"
-            leave-active-class="transition-opacity duration-150"
-            enter-from-class="opacity-0"
-            leave-to-class="opacity-0"
-        >
-            <div
-                v-if="!isDesktop && open"
-                class="absolute inset-0 bg-black/40 z-30 md:hidden"
-                @click="close()"
-            />
-        </Transition>
-
-        <!-- Sidebar -->
-        <aside
-            :class="[
-                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-black',
-                // width transition on desktop
-                'md:transition-[width] md:duration-200 md:ease-out',
-                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
-                side === 'right' ? 'md:border-l md:border-r-0' : '',
-                // mobile overlay behavior
-                !isDesktop
-                    ? [
-                          'absolute top-0 bottom-0 w-[80vw] max-w-[90vw] shadow-xl',
-                          // animated slide
-                          'transition-transform duration-200 ease-out',
-                          side === 'right'
-                              ? 'right-0 translate-x-full'
-                              : 'left-0 -translate-x-full',
-                          open ? 'translate-x-0' : '',
-                      ]
-                    : '',
-            ]"
-            :style="
-                Object.assign(
-                    isDesktop ? { width: computedWidth + 'px' } : {},
-                    {
-                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
-                        '--sidebar-rep-opacity': String(
-                            props.sidebarPatternOpacity
-                        ),
-                    }
-                )
-            "
-            @keydown.esc.stop.prevent="close()"
-        >
-            <div class="h-full flex flex-col">
-                <!-- Sidebar header -->
-                <SidebarHeader
-                    :collapsed="collapsed"
-                    :toggle-icon="toggleIcon"
-                    :toggle-aria="toggleAria"
-                    @toggle="toggleCollapse"
-                >
-                    <template #sidebar-header>
-                        <slot name="sidebar-header" />
-                    </template>
-                    <template #sidebar-toggle="slotProps">
-                        <slot name="sidebar-toggle" v-bind="slotProps" />
-                    </template>
-                </SidebarHeader>
-
-                <!-- Sidebar content -->
-                <div v-show="!collapsed" class="flex-1 overflow-auto">
-                    <slot name="sidebar">
-                        <div class="p-3 space-y-2 text-sm opacity-80">
-                            <p>Add your nav here…</p>
-                            <ul class="space-y-1">
-                                <li
-                                    v-for="i in 10"
-                                    :key="i"
-                                    class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
-                                >
-                                    Item {{ i }}
-                                </li>
-                            </ul>
-                        </div>
-                    </slot>
-                </div>
-            </div>
-
-            <!-- Resize handle (desktop only) -->
-            <ResizeHandle
-                :is-desktop="isDesktop"
-                :collapsed="collapsed"
-                :side="side"
-                :min-width="props.minWidth"
-                :max-width="props.maxWidth"
-                :computed-width="computedWidth"
-                @resize-start="onPointerDown"
-                @resize-keydown="onHandleKeydown"
-            />
-        </aside>
-
-        <!-- Main content -->
-        <div class="relative z-10 flex-1 h-full flex flex-col">
-            <div
-                class="flex-1 overflow-hidden content-bg"
-                :style="{
-                    '--content-bg-size': props.patternSize + 'px',
-                    '--content-bg-opacity': String(props.patternOpacity),
-                    '--content-overlay-size': props.overlaySize + 'px',
-                    '--content-overlay-opacity': String(props.overlayOpacity),
-                }"
-            >
-                <slot>
-                    <div class="p-4 space-y-2 text-sm opacity-80">
-                        <p>Put your main content here…</p>
-                        <p>
-                            Resize the sidebar on desktop by dragging the
-                            handle. On mobile, use the Menu button to open/close
-                            the overlay.
-                        </p>
-                    </div>
-                </slot>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import SidebarHeader from './sidebar/SidebarHeader.vue';
-import ResizeHandle from './sidebar/ResizeHandle.vue';
-
-type Side = 'left' | 'right';
-
-const props = defineProps({
-    modelValue: { type: Boolean, default: undefined },
-    defaultOpen: { type: Boolean, default: true },
-    side: { type: String as () => Side, default: 'left' },
-    minWidth: { type: Number, default: 200 },
-    maxWidth: { type: Number, default: 480 },
-    defaultWidth: { type: Number, default: 280 },
-    collapsedWidth: { type: Number, default: 56 },
-    storageKey: { type: String, default: 'sidebar:width' },
-    // Visual tuning for content pattern
-    patternOpacity: { type: Number, default: 0.05 }, // 0..1
-    patternSize: { type: Number, default: 150 }, // px
-    // Overlay pattern (renders above the base pattern)
-    overlayOpacity: { type: Number, default: 0.05 },
-    overlaySize: { type: Number, default: 120 },
-    // Sidebar repeating background
-    sidebarPatternOpacity: { type: Number, default: 0.09 },
-    sidebarPatternSize: { type: Number, default: 240 },
-});
-const emit = defineEmits<{
-    (e: 'update:modelValue', v: boolean): void;
-    (e: 'resize', width: number): void;
-}>();
-
-// open state (controlled or uncontrolled)
-const openState = ref<boolean>(props.modelValue ?? props.defaultOpen);
-const open = computed({
-    get: () =>
-        props.modelValue === undefined ? openState.value : props.modelValue,
-    set: (v) => {
-        if (props.modelValue === undefined) openState.value = v;
-        emit('update:modelValue', v);
-    },
-});
-
-// collapsed toggle remembers last expanded width
-const collapsed = ref(false);
-const lastExpandedWidth = ref(props.defaultWidth);
-
-// width state with persistence
-const width = ref<number>(props.defaultWidth);
-const computedWidth = computed(() =>
-    collapsed.value ? props.collapsedWidth : width.value
-);
-
-// responsive
-const isDesktop = ref(false);
-let mq: MediaQueryList | undefined;
-const updateMq = () => {
-    if (typeof window === 'undefined') return;
-    mq = window.matchMedia('(min-width: 768px)');
-    isDesktop.value = mq.matches;
-};
-
-onMounted(() => {
-    updateMq();
-    mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-
-    // restore width
-    try {
-        const saved = localStorage.getItem(props.storageKey);
-        if (saved) width.value = clamp(parseInt(saved, 10));
-    } catch {}
-});
-
-onBeforeUnmount(() => {
-    mq?.removeEventListener('change', () => {});
-});
-
-watch(width, (w) => {
-    try {
-        localStorage.setItem(props.storageKey, String(w));
-    } catch {}
-    emit('resize', w);
-});
-
-const clamp = (w: number) =>
-    Math.min(props.maxWidth, Math.max(props.minWidth, w));
-
-function toggle() {
-    open.value = !open.value;
-}
-function close() {
-    open.value = false;
-}
-function toggleCollapse() {
-    if (!collapsed.value) {
-        lastExpandedWidth.value = width.value;
-        collapsed.value = true;
-    } else {
-        collapsed.value = false;
-        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
-    }
-}
-
-// Resize logic (desktop only)
-let startX = 0;
-let startWidth = 0;
-function onPointerDown(e: PointerEvent) {
-    if (!isDesktop.value || collapsed.value) return;
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    startX = e.clientX;
-    startWidth = width.value;
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp, { once: true });
-}
-function onPointerMove(e: PointerEvent) {
-    const dx = e.clientX - startX;
-    const delta = props.side === 'right' ? -dx : dx;
-    width.value = clamp(startWidth + delta);
-}
-function onPointerUp() {
-    window.removeEventListener('pointermove', onPointerMove);
-}
-
-// Keyboard a11y for the resize handle
-function onHandleKeydown(e: KeyboardEvent) {
-    if (!isDesktop.value || collapsed.value) return;
-    const step = e.shiftKey ? 32 : 16;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        const dir = e.key === 'ArrowRight' ? 1 : -1;
-        // reverse on right side
-        const signed = props.side === 'right' ? -dir : dir;
-        width.value = clamp(width.value + signed * step);
-    } else if (e.key === 'Home') {
-        e.preventDefault();
-        width.value = props.minWidth;
-    } else if (e.key === 'End') {
-        e.preventDefault();
-        width.value = props.maxWidth;
-    } else if (e.key === 'PageUp') {
-        e.preventDefault();
-        const big = step * 2;
-        const signed = props.side === 'right' ? -1 : 1;
-        width.value = clamp(width.value + signed * big);
-    } else if (e.key === 'PageDown') {
-        e.preventDefault();
-        const big = step * 2;
-        const signed = props.side === 'right' ? 1 : -1;
-        width.value = clamp(width.value - signed * big);
-    }
-}
-
-// expose minimal API if needed
-defineExpose({ toggle, close });
-
-const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
-// Icon and aria label for collapse/expand button
-const toggleIcon = computed(() => {
-    // When collapsed, show the icon that suggests expanding back toward content area
-    if (collapsed.value) {
-        return side.value === 'right'
-            ? 'pixelarticons:arrow-bar-left'
-            : 'pixelarticons:arrow-bar-right';
-    }
-    // When expanded, show icon pointing into the sidebar to collapse it
-    return side.value === 'right'
-        ? 'pixelarticons:arrow-bar-right'
-        : 'pixelarticons:arrow-bar-left';
-});
-const toggleAria = computed(() =>
-    collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
-);
-</script>
-
-<style scoped>
-/* Optional: could add extra visual flair for the resize handle here */
-.content-bg {
-    position: relative;
-    /* Base matches sidebar/header */
-    background-color: var(--md-surface);
-}
-
-.content-bg::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/bg-repeat.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    /* Default variables; can be overridden via inline style */
-    --content-bg-size: 150px;
-    --content-bg-opacity: 0.08;
-    background-size: var(--content-bg-size) var(--content-bg-size);
-    opacity: var(--content-bg-opacity);
-    z-index: 0;
-}
-
-/* Ensure the real content sits above the pattern */
-.content-bg > * {
-    position: relative;
-    z-index: 1;
-}
-
-/* Overlay layer above base pattern but below content */
-.content-bg::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/bg-repeat-2.png');
-    background-repeat: repeat;
-    background-position: top left;
-    --content-overlay-size: 380px;
-    --content-overlay-opacity: 0.125;
-    background-size: var(--content-overlay-size) var(--content-overlay-size);
-    opacity: var(--content-overlay-opacity);
-    z-index: 0.5;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Sidebar repeating background layer */
-aside::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/sidebar-repeater.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
-    opacity: var(--sidebar-rep-opacity);
-    z-index: 0;
-}
-
-/* Ensure sidebar children render above the pattern, but keep handle on top */
-aside > *:not(.resize-handle-layer) {
-    position: relative;
-    z-index: 1;
-}
-</style>
-````
-
 ## File: app/db/messages.ts
 ````typescript
 import Dexie from 'dexie';
@@ -8990,6 +8951,411 @@ useHookEffect('ai.chat.retry:action:after', (info) => {
 ```
 ````
 
+## File: app/components/ResizableSidebarLayout.vue
+````vue
+<template>
+    <div
+        class="relative w-full h-screen border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+    >
+        <!-- Backdrop on mobile when open -->
+        <Transition
+            enter-active-class="transition-opacity duration-150"
+            leave-active-class="transition-opacity duration-150"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="!isDesktop && open"
+                class="absolute inset-0 bg-black/40 z-30 md:hidden"
+                @click="close()"
+            />
+        </Transition>
+
+        <!-- Sidebar -->
+        <aside
+            :class="[
+                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-black',
+                // width transition on desktop
+                initialized
+                    ? 'md:transition-[width] md:duration-200 md:ease-out'
+                    : 'hidden',
+                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
+                side === 'right' ? 'md:border-l md:border-r-0' : '',
+                // mobile overlay behavior
+                !isDesktop
+                    ? [
+                          'absolute top-0 bottom-0 w-[380px] max-w-[90vw] shadow-xl',
+                          // animated slide
+                          'transition-transform duration-200 ease-out',
+                          side === 'right'
+                              ? 'right-0 translate-x-full'
+                              : 'left-0 -translate-x-full',
+                          open ? 'translate-x-0' : '',
+                      ]
+                    : '',
+            ]"
+            :style="
+                Object.assign(
+                    isDesktop ? { width: computedWidth + 'px' } : {},
+                    {
+                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
+                        '--sidebar-rep-opacity': String(
+                            props.sidebarPatternOpacity
+                        ),
+                    }
+                )
+            "
+            @keydown.esc.stop.prevent="close()"
+        >
+            <div class="h-full flex flex-col">
+                <!-- Sidebar header -->
+                <SidebarHeader
+                    :collapsed="collapsed"
+                    :toggle-icon="toggleIcon"
+                    :toggle-aria="toggleAria"
+                    @toggle="toggleCollapse"
+                >
+                    <template #sidebar-header>
+                        <slot name="sidebar-header" />
+                    </template>
+                    <template #sidebar-toggle="slotProps">
+                        <slot name="sidebar-toggle" v-bind="slotProps" />
+                    </template>
+                </SidebarHeader>
+
+                <!-- Sidebar content -->
+                <div class="flex-1 overflow-auto">
+                    <div v-show="!collapsed" class="flex-1 h-full">
+                        <slot name="sidebar-expanded">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
+                    <div v-show="collapsed" class="flex-1 h-full">
+                        <slot name="sidebar-collapsed">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resize handle (desktop only) -->
+            <ResizeHandle
+                :is-desktop="isDesktop"
+                :collapsed="collapsed"
+                :side="side"
+                :min-width="props.minWidth"
+                :max-width="props.maxWidth"
+                :computed-width="computedWidth"
+                @resize-start="onPointerDown"
+                @resize-keydown="onHandleKeydown"
+            />
+        </aside>
+
+        <!-- Main content -->
+        <div class="relative z-10 flex-1 h-full flex flex-col">
+            <div
+                class="flex-1 overflow-hidden content-bg"
+                :style="{
+                    '--content-bg-size': props.patternSize + 'px',
+                    '--content-bg-opacity': String(props.patternOpacity),
+                    '--content-overlay-size': props.overlaySize + 'px',
+                    '--content-overlay-opacity': String(props.overlayOpacity),
+                }"
+            >
+                <slot>
+                    <div class="p-4 space-y-2 text-sm opacity-80">
+                        <p>Put your main content here…</p>
+                        <p>
+                            Resize the sidebar on desktop by dragging the
+                            handle. On mobile, use the Menu button to open/close
+                            the overlay.
+                        </p>
+                    </div>
+                </slot>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import SidebarHeader from './sidebar/SidebarHeader.vue';
+import ResizeHandle from './sidebar/ResizeHandle.vue';
+
+type Side = 'left' | 'right';
+
+const props = defineProps({
+    modelValue: { type: Boolean, default: undefined },
+    defaultOpen: { type: Boolean, default: true },
+    side: { type: String as () => Side, default: 'left' },
+    minWidth: { type: Number, default: 200 },
+    maxWidth: { type: Number, default: 480 },
+    defaultWidth: { type: Number, default: 280 },
+    collapsedWidth: { type: Number, default: 56 },
+    storageKey: { type: String, default: 'sidebar:width' },
+    // Visual tuning for content pattern
+    patternOpacity: { type: Number, default: 0.05 }, // 0..1
+    patternSize: { type: Number, default: 150 }, // px
+    // Overlay pattern (renders above the base pattern)
+    overlayOpacity: { type: Number, default: 0.05 },
+    overlaySize: { type: Number, default: 120 },
+    // Sidebar repeating background
+    sidebarPatternOpacity: { type: Number, default: 0.09 },
+    sidebarPatternSize: { type: Number, default: 240 },
+});
+const emit = defineEmits<{
+    (e: 'update:modelValue', v: boolean): void;
+    (e: 'resize', width: number): void;
+}>();
+
+// helper
+const clamp = (w: number) =>
+    Math.min(props.maxWidth, Math.max(props.minWidth, w));
+
+// open state (controlled or uncontrolled)
+const openState = ref<boolean>(props.modelValue ?? props.defaultOpen);
+const open = computed({
+    get: () =>
+        props.modelValue === undefined ? openState.value : props.modelValue,
+    set: (v) => {
+        if (props.modelValue === undefined) openState.value = v;
+        emit('update:modelValue', v);
+    },
+});
+
+// collapsed toggle remembers last expanded width
+const collapsed = ref(false);
+const lastExpandedWidth = ref(props.defaultWidth);
+
+// width state with persistence
+const width = ref<number>(props.defaultWidth);
+const computedWidth = computed(() =>
+    collapsed.value ? props.collapsedWidth : width.value
+);
+
+// Attempt early (pre-mount) restoration to avoid post-mount jank
+if (import.meta.client) {
+    try {
+        const saved = localStorage.getItem(props.storageKey);
+        if (saved) width.value = clamp(parseInt(saved, 10));
+    } catch {}
+}
+
+// responsive
+const isDesktop = ref(false);
+let mq: MediaQueryList | undefined;
+const updateMq = () => {
+    if (typeof window === 'undefined') return;
+    mq = window.matchMedia('(min-width: 768px)');
+    isDesktop.value = mq.matches;
+};
+
+// Defer enabling transitions until after first paint so restored width doesn't animate
+const initialized = ref(false);
+
+onMounted(() => {
+    updateMq();
+    mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
+    requestAnimationFrame(() => (initialized.value = true));
+});
+
+onBeforeUnmount(() => {
+    mq?.removeEventListener('change', () => {});
+});
+
+watch(width, (w) => {
+    try {
+        localStorage.setItem(props.storageKey, String(w));
+    } catch {}
+    emit('resize', w);
+});
+
+function toggle() {
+    open.value = !open.value;
+}
+function close() {
+    open.value = false;
+}
+function toggleCollapse() {
+    if (!collapsed.value) {
+        lastExpandedWidth.value = width.value;
+        collapsed.value = true;
+    } else {
+        collapsed.value = false;
+        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
+    }
+}
+
+// Resize logic (desktop only)
+let startX = 0;
+let startWidth = 0;
+function onPointerDown(e: PointerEvent) {
+    if (!isDesktop.value || collapsed.value) return;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    startX = e.clientX;
+    startWidth = width.value;
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp, { once: true });
+}
+function onPointerMove(e: PointerEvent) {
+    const dx = e.clientX - startX;
+    const delta = props.side === 'right' ? -dx : dx;
+    width.value = clamp(startWidth + delta);
+}
+function onPointerUp() {
+    window.removeEventListener('pointermove', onPointerMove);
+}
+
+// Keyboard a11y for the resize handle
+function onHandleKeydown(e: KeyboardEvent) {
+    if (!isDesktop.value || collapsed.value) return;
+    const step = e.shiftKey ? 32 : 16;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        // reverse on right side
+        const signed = props.side === 'right' ? -dir : dir;
+        width.value = clamp(width.value + signed * step);
+    } else if (e.key === 'Home') {
+        e.preventDefault();
+        width.value = props.minWidth;
+    } else if (e.key === 'End') {
+        e.preventDefault();
+        width.value = props.maxWidth;
+    } else if (e.key === 'PageUp') {
+        e.preventDefault();
+        const big = step * 2;
+        const signed = props.side === 'right' ? -1 : 1;
+        width.value = clamp(width.value + signed * big);
+    } else if (e.key === 'PageDown') {
+        e.preventDefault();
+        const big = step * 2;
+        const signed = props.side === 'right' ? 1 : -1;
+        width.value = clamp(width.value - signed * big);
+    }
+}
+
+// expose minimal API if needed
+defineExpose({ toggle, close });
+
+const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
+// Icon and aria label for collapse/expand button
+const toggleIcon = computed(() => {
+    // When collapsed, show the icon that suggests expanding back toward content area
+    if (collapsed.value) {
+        return side.value === 'right'
+            ? 'pixelarticons:arrow-bar-left'
+            : 'pixelarticons:arrow-bar-right';
+    }
+    // When expanded, show icon pointing into the sidebar to collapse it
+    return side.value === 'right'
+        ? 'pixelarticons:arrow-bar-right'
+        : 'pixelarticons:arrow-bar-left';
+});
+const toggleAria = computed(() =>
+    collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
+);
+</script>
+
+<style scoped>
+/* Optional: could add extra visual flair for the resize handle here */
+.content-bg {
+    position: relative;
+    /* Base matches sidebar/header */
+    background-color: var(--md-surface);
+}
+
+.content-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    /* Default variables; can be overridden via inline style */
+    --content-bg-size: 150px;
+    --content-bg-opacity: 0.08;
+    background-size: var(--content-bg-size) var(--content-bg-size);
+    opacity: var(--content-bg-opacity);
+    z-index: 0;
+}
+
+/* Ensure the real content sits above the pattern */
+.content-bg > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Overlay layer above base pattern but below content */
+.content-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat-2.png');
+    background-repeat: repeat;
+    background-position: top left;
+    --content-overlay-size: 380px;
+    --content-overlay-opacity: 0.125;
+    background-size: var(--content-overlay-size) var(--content-overlay-size);
+    opacity: var(--content-overlay-opacity);
+    z-index: 0.5;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Sidebar repeating background layer */
+aside::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/sidebar-repeater.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
+    opacity: var(--sidebar-rep-opacity);
+    z-index: 0;
+}
+
+/* Ensure sidebar children render above the pattern, but keep handle on top */
+aside > *:not(.resize-handle-layer) {
+    position: relative;
+    z-index: 1;
+}
+</style>
+````
+
 ## File: package.json
 ````json
 {
@@ -9031,214 +9397,6 @@ useHookEffect('ai.chat.retry:action:after', (info) => {
         "@tailwindcss/typography": "^0.5.16"
     }
 }
-````
-
-## File: app/app.config.ts
-````typescript
-export default defineAppConfig({
-    ui: {
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: ['transition-colors', 'retro-btn dark:retro-btn'],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-    },
-});
-````
-
-## File: app/pages/chat.vue
-````vue
-<template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <sidebar-side-nav-content
-                @new-chat="onNewChat"
-                @chatSelected="onChatSelected"
-                :active-thread="threadId"
-            />
-        </template>
-        <div class="flex-1 h-screen w-full">
-            <ChatContainer
-                :message-history="messageHistory"
-                :thread-id="threadId"
-                @thread-selected="onChatSelected"
-            />
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script lang="ts" setup>
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { db, upsert } from '~/db';
-import { ref, onMounted, watch } from 'vue';
-import Dexie from 'dexie';
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-};
-
-const messageHistory = ref<ChatMessage[]>([]);
-const threadId = ref(''); // Replace with actual thread ID logic
-
-async function getMessagesForThread(id: string) {
-    if (!id) return;
-
-    // Query ordered messages via compound index and filter deleted
-    const msgs = await db.messages
-        .where('[thread_id+index]')
-        .between([id, Dexie.minKey], [id, Dexie.maxKey])
-        .filter((m: any) => !m.deleted)
-        .toArray();
-
-    if (msgs) {
-        messageHistory.value = msgs.map((msg: any) => {
-            const data = msg.data as unknown;
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
-            return {
-                role: msg.role as 'user' | 'assistant',
-                content,
-                file_hashes: msg.file_hashes,
-                id: msg.id,
-                stream_id: msg.stream_id,
-            } as ChatMessage;
-        });
-
-        if ((import.meta as any).dev) {
-            console.debug('[chat] loaded messages', {
-                thread: id,
-                count: messageHistory.value.length,
-                withHashes: messageHistory.value.filter((m) => m.file_hashes)
-                    .length,
-                hashesPreview: messageHistory.value
-                    .filter((m) => m.file_hashes)
-                    .slice(0, 3)
-                    .map((m) => (m.file_hashes || '').slice(0, 60)),
-            });
-        }
-    }
-}
-
-onMounted(async () => {
-    await getMessagesForThread(threadId.value);
-});
-
-watch(
-    () => threadId.value,
-    async (newThreadId) => {
-        if (newThreadId) {
-            // NOTE: We intentionally do NOT bump updated_at when merely opening / viewing a thread.
-            // The sidebar liveQuery is ordered by updated_at (desc) so bumping here caused the list
-            // to reorder every time you clicked different threads. We now only bump updated_at when
-            // a new message is appended (user or assistant) or when other mutating actions occur
-            // (rename, delete, etc.). This keeps navigation stable while still floating active
-            // conversations to the top once they actually receive new content.
-            await getMessagesForThread(newThreadId);
-        }
-    }
-);
-
-function onNewChat() {
-    messageHistory.value = [];
-    threadId.value = '';
-    console.log('New chat started, cleared message history and thread ID');
-}
-
-function onChatSelected(chatId: string) {
-    threadId.value = chatId;
-}
-
-// Optional enhancement: if needed, we can also watch for outgoing user messages from ChatContainer via a custom event
-// and append to messageHistory immediately to avoid any initial blank state. Current fix defers parent overwrite during loading instead.
-</script>
-
-<style>
-body {
-    overflow-y: hidden; /* Prevents body scroll */
-}
-</style>
 ````
 
 ## File: app/assets/css/main.css
@@ -9364,6 +9522,527 @@ html {
 *::-webkit-scrollbar-corner { background: transparent; }
 ````
 
+## File: app/app.config.ts
+````typescript
+export default defineAppConfig({
+    ui: {
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-black divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-2 border-black',
+                wrapper: 'border-2 border-black',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: ['transition-colors', 'retro-btn dark:retro-btn'],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
+    },
+});
+````
+
+## File: app/components/sidebar/SideNavContent.vue
+````vue
+<template>
+    <div class="flex flex-col h-full relative">
+        <div class="px-2 pt-2 flex flex-col space-y-2">
+            <UButton
+                @click="onNewChat"
+                class="w-full flex items-center justify-center backdrop-blur-2xl"
+                >New Chat</UButton
+            >
+            <div
+                class="relative w-full ml-[1px] border-b-3 border-primary/50 pb-3"
+            >
+                <UInput
+                    v-model="threadSearchQuery"
+                    icon="pixelarticons:search"
+                    size="md"
+                    :ui="{
+                        leadingIcon: 'h-[20px] w-[20px]',
+                    }"
+                    variant="outline"
+                    placeholder="Search threads..."
+                    class="w-full"
+                >
+                    <template v-if="threadSearchQuery.length > 0" #trailing>
+                        <UButton
+                            color="neutral"
+                            variant="subtle"
+                            size="xs"
+                            class="flex items-center justify-center p-0"
+                            icon="pixelarticons:close-box"
+                            aria-label="Clear input"
+                            @click="threadSearchQuery = ''"
+                        /> </template
+                ></UInput>
+            </div>
+        </div>
+        <!-- Virtualized thread list -->
+        <VList
+            :data="displayThreads as any[]"
+            class="h-[calc(100vh-250px)]! px-2 pb-8 pt-3 w-full overflow-x-hidden scrollbar-hidden"
+            :overscan="8"
+            #default="{ item }"
+        >
+            <div class="mb-2" :key="item.id">
+                <RetroGlassBtn
+                    :class="{
+                        'active-element bg-primary/25':
+                            item.id === props.activeThread,
+                    }"
+                    class="w-full flex items-center justify-between text-left"
+                    @click="() => emit('chatSelected', item.id)"
+                >
+                    <div
+                        class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
+                    >
+                        <UIcon
+                            v-if="item.forked"
+                            name="pixelarticons:git-branch"
+                            class="shrink-0"
+                        ></UIcon>
+                        <!-- The title span gets flex-1 + min-w-0 so it actually truncates instead of pushing the action icon off-screen -->
+                        <span
+                            class="block flex-1 min-w-0 truncate"
+                            :title="item.title || 'New Thread'"
+                        >
+                            {{ item.title || 'New Thread' }}
+                        </span>
+                    </div>
+                    <UPopover
+                        :content="{
+                            side: 'right',
+                            align: 'start',
+                            sideOffset: 6,
+                        }"
+                    >
+                        <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop
+                        >
+                            <UIcon
+                                name="pixelarticons:more-vertical"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </span>
+                        <template #content>
+                            <div class="p-1 w-44 space-y-1">
+                                <UButton
+                                    color="neutral"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-pencil"
+                                    @click="openRename(item)"
+                                    >Rename</UButton
+                                >
+                                <UButton
+                                    color="error"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    icon="i-lucide-trash-2"
+                                    @click="confirmDelete(item)"
+                                    >Delete</UButton
+                                >
+                            </div>
+                        </template>
+                    </UPopover>
+                </RetroGlassBtn>
+            </div>
+        </VList>
+        <sidebar-side-bottom-nav />
+
+        <!-- Rename modal -->
+        <UModal
+            v-model:open="showRenameModal"
+            title="Rename thread"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Rename thread?</h3> </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameTitle"
+                        placeholder="Thread title"
+                        icon="i-lucide-pencil"
+                        @keyup.enter="saveRename"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="primary" @click="saveRename">Save</UButton>
+            </template>
+        </UModal>
+
+        <!-- Delete confirm modal -->
+        <UModal
+            v-model:open="showDeleteModal"
+            title="Delete thread?"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Delete thread?</h3> </template>
+            <template #body>
+                <p class="text-sm opacity-70">
+                    This will permanently remove the thread and its messages.
+                </p>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showDeleteModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="error" @click="deleteThread">Delete</UButton>
+            </template>
+        </UModal>
+    </div>
+</template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
+import { liveQuery } from 'dexie';
+import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { VList } from 'virtua/vue';
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
+
+const items = ref<any[]>([]);
+import { useThreadSearch } from '~/composables/useThreadSearch';
+const { query: threadSearchQuery, results: threadSearchResults } =
+    useThreadSearch(items as any);
+const displayThreads = computed(() =>
+    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+);
+let sub: { unsubscribe: () => void } | null = null;
+
+onMounted(() => {
+    // Sort by last opened using updated_at index; filter out deleted
+    sub = liveQuery(() =>
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
+    ).subscribe({
+        next: (results) => (items.value = results),
+        error: (err) => console.error('liveQuery error', err),
+    });
+});
+
+watch(
+    () => items.value,
+    (newItems) => {
+        console.log('Items updated:', newItems);
+    }
+);
+
+onUnmounted(() => {
+    sub?.unsubscribe();
+});
+
+const emit = defineEmits(['chatSelected', 'newChat']);
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+
+const showDeleteModal = ref(false);
+const deleteId = ref<string | null>(null);
+
+function openRename(thread: any) {
+    renameId.value = thread.id;
+    renameTitle.value = thread.title ?? '';
+    showRenameModal.value = true;
+}
+
+async function saveRename() {
+    if (!renameId.value) return;
+    const t = await db.threads.get(renameId.value);
+    if (!t) return;
+    const now = Math.floor(Date.now() / 1000);
+    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+}
+
+function confirmDelete(thread: any) {
+    deleteId.value = thread.id as string;
+    showDeleteModal.value = true;
+}
+
+async function deleteThread() {
+    if (!deleteId.value) return;
+    await dbDel.hard.thread(deleteId.value);
+    showDeleteModal.value = false;
+    deleteId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+    console.log('New chat requested');
+}
+</script>
+````
+
+## File: app/pages/_test.vue
+````vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar>
+            <div class="flex flex-col h-full relative">
+                <div class="p-2 flex flex-col space-y-2">
+                    <UButton class="w-full flex items-center justify-center"
+                        >New Chat</UButton
+                    >
+                    <UInput
+                        icon="i-lucide-search"
+                        size="md"
+                        variant="outline"
+                        placeholder="Search..."
+                        class="w-full ml-[1px]"
+                    ></UInput>
+                </div>
+                <div class="flex flex-col p-2 space-y-1.5">
+                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about aids</UButton
+                    >
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about dogs</UButton
+                    >
+                </div>
+                <sidebar-side-bottom-nav />
+            </div>
+        </template>
+
+        <!-- Default slot = main content (right side) -->
+        <div class="h-screen overflow-y-scroll">
+            <div
+                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
+            ></div>
+
+            <div class="p-6 space-y-4">
+                <div class="flex flex-row space-x-2">
+                    <UButton @click="showToast" size="sm" color="primary"
+                        >Nuxt UI Button</UButton
+                    >
+                    <UButton color="success">Nuxt UI Button</UButton>
+                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+                </div>
+                <div class="flex flex-row space-x-2">
+                    <UButtonGroup size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                    <UButtonGroup orientation="vertical" size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                </div>
+
+                <div class="flex space-x-2">
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="sm"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="md"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="lg"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
+                        @click="toggle()"
+                    >
+                        Toggle Light/Dark
+                    </button>
+                    <span class="text-[var(--md-on-surface)]"
+                        >Current: {{ theme }}</span
+                    >
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div
+                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
+                    >
+                        Surface / On-Surface
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
+                    >
+                        Secondary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
+                    >
+                        Tertiary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
+                    >
+                        Error Container
+                    </div>
+                </div>
+
+                <chat-input-dropper />
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+
+const nuxtApp = useNuxtApp();
+const theme = computed(() => (nuxtApp.$theme as any).get());
+const toggle = () => (nuxtApp.$theme as any).toggle();
+const toast = useToast();
+
+function showToast() {
+    toast.add({
+        title: 'Success',
+        description: 'Your action was completed successfully.',
+        color: 'success',
+    });
+}
+</script>
+````
+
 ## File: app/components/chat/ChatInputDropper.vue
 ````vue
 <template>
@@ -9430,23 +10109,80 @@ html {
 
                     <!-- Settings Button (stub) -->
                     <div class="relative shrink-0">
-                        <UButton
-                            @click="
-                                showSettingsDropdown = !showSettingsDropdown
-                            "
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Settings"
-                            :disabled="loading"
-                        >
-                            <UIcon
-                                name="pixelarticons:sliders"
-                                class="w-4 h-4"
-                            />
-                        </UButton>
+                        <UPopover>
+                            <UButton
+                                label="Open"
+                                :square="true"
+                                size="sm"
+                                color="info"
+                                class="retro-btn text-black dark:text-white flex items-center justify-center"
+                                type="button"
+                                aria-label="Settings"
+                                :disabled="loading"
+                            >
+                                <UIcon
+                                    name="pixelarticons:sliders"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                            <template #content>
+                                <div class="flex flex-col w-[320px]">
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable web search"
+                                            class="w-full"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:visible"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable thinking"
+                                            class="w-full"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:lightbulb-on"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+                                    <UModal>
+                                        <button
+                                            class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
+                                        >
+                                            <span class="px-1"
+                                                >System prompts</span
+                                            >
+                                            <UIcon
+                                                name="pixelarticons:script-text"
+                                                class="w-4 h-4"
+                                            />
+                                        </button>
+                                        <template #content>
+                                            <div
+                                                class="w-[50vw] h-[80vh]"
+                                            ></div>
+                                        </template>
+                                    </UModal>
+                                    <button
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
+                                    >
+                                        <span class="px-1">Model Catalog</span>
+                                        <UIcon
+                                            name="pixelarticons:android"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
+                                </div>
+                            </template>
+                        </UPopover>
                     </div>
                 </div>
 
@@ -9900,419 +10636,6 @@ textarea::-webkit-scrollbar-thumb:hover {
     transition-duration: 150ms;
 }
 </style>
-````
-
-## File: app/components/sidebar/SideNavContent.vue
-````vue
-<template>
-    <div class="flex flex-col h-full relative">
-        <div class="px-2 pt-2 flex flex-col space-y-2">
-            <UButton
-                @click="onNewChat"
-                class="w-full flex items-center justify-center backdrop-blur-2xl"
-                >New Chat</UButton
-            >
-            <div
-                class="relative w-full ml-[1px] border-b-3 border-primary/50 pb-3"
-            >
-                <UInput
-                    v-model="threadSearchQuery"
-                    icon="pixelarticons:search"
-                    size="md"
-                    :ui="{
-                        leadingIcon: 'h-[20px] w-[20px]',
-                    }"
-                    variant="outline"
-                    placeholder="Search threads..."
-                    class="w-full"
-                >
-                    <template v-if="threadSearchQuery.length > 0" #trailing>
-                        <UButton
-                            color="neutral"
-                            variant="subtle"
-                            size="xs"
-                            class="flex items-center justify-center p-0"
-                            icon="pixelarticons:close-box"
-                            aria-label="Clear input"
-                            @click="threadSearchQuery = ''"
-                        /> </template
-                ></UInput>
-            </div>
-        </div>
-        <!-- Virtualized thread list -->
-        <VList
-            :data="displayThreads as any[]"
-            class="h-[calc(100vh-250px)]! px-2 pb-8 pt-3 w-full overflow-x-hidden scrollbar-hidden"
-            :overscan="8"
-            #default="{ item }"
-        >
-            <div class="mb-2" :key="item.id">
-                <RetroGlassBtn
-                    :class="{
-                        'active-element bg-primary/25':
-                            item.id === props.activeThread,
-                    }"
-                    class="w-full flex items-center justify-between text-left"
-                    @click="() => emit('chatSelected', item.id)"
-                >
-                    <div
-                        class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
-                    >
-                        <UIcon
-                            v-if="item.forked"
-                            name="pixelarticons:git-branch"
-                            class="shrink-0"
-                        ></UIcon>
-                        <!-- The title span gets flex-1 + min-w-0 so it actually truncates instead of pushing the action icon off-screen -->
-                        <span
-                            class="block flex-1 min-w-0 truncate"
-                            :title="item.title || 'New Thread'"
-                        >
-                            {{ item.title || 'New Thread' }}
-                        </span>
-                    </div>
-                    <UPopover
-                        :content="{
-                            side: 'right',
-                            align: 'start',
-                            sideOffset: 6,
-                        }"
-                    >
-                        <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop
-                        >
-                            <UIcon
-                                name="pixelarticons:more-vertical"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </span>
-                        <template #content>
-                            <div class="p-1 w-44 space-y-1">
-                                <UButton
-                                    color="neutral"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-pencil"
-                                    @click="openRename(item)"
-                                    >Rename</UButton
-                                >
-                                <UButton
-                                    color="error"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-trash-2"
-                                    @click="confirmDelete(item)"
-                                    >Delete</UButton
-                                >
-                            </div>
-                        </template>
-                    </UPopover>
-                </RetroGlassBtn>
-            </div>
-        </VList>
-        <sidebar-side-bottom-nav />
-
-        <!-- Rename modal -->
-        <UModal
-            v-model:open="showRenameModal"
-            title="Rename thread"
-            :ui="{ footer: 'justify-end' }"
-            class="border-2"
-        >
-            <template #header> <h3>Rename thread?</h3> </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameTitle"
-                        placeholder="Thread title"
-                        icon="i-lucide-pencil"
-                        @keyup.enter="saveRename"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="primary" @click="saveRename">Save</UButton>
-            </template>
-        </UModal>
-
-        <!-- Delete confirm modal -->
-        <UModal
-            v-model:open="showDeleteModal"
-            title="Delete thread?"
-            :ui="{ footer: 'justify-end' }"
-            class="border-2"
-        >
-            <template #header> <h3>Delete thread?</h3> </template>
-            <template #body>
-                <p class="text-sm opacity-70">
-                    This will permanently remove the thread and its messages.
-                </p>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showDeleteModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="error" @click="deleteThread">Delete</UButton>
-            </template>
-        </UModal>
-    </div>
-</template>
-<script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
-import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
-import { VList } from 'virtua/vue';
-
-const props = defineProps<{
-    activeThread?: string;
-}>();
-
-const items = ref<any[]>([]);
-import { useThreadSearch } from '~/composables/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
-const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
-);
-let sub: { unsubscribe: () => void } | null = null;
-
-onMounted(() => {
-    // Sort by last opened using updated_at index; filter out deleted
-    sub = liveQuery(() =>
-        db.threads
-            .orderBy('updated_at')
-            .reverse()
-            .filter((t) => !t.deleted)
-            .toArray()
-    ).subscribe({
-        next: (results) => (items.value = results),
-        error: (err) => console.error('liveQuery error', err),
-    });
-});
-
-watch(
-    () => items.value,
-    (newItems) => {
-        console.log('Items updated:', newItems);
-    }
-);
-
-onUnmounted(() => {
-    sub?.unsubscribe();
-});
-
-const emit = defineEmits(['chatSelected', 'newChat']);
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-
-const showDeleteModal = ref(false);
-const deleteId = ref<string | null>(null);
-
-function openRename(thread: any) {
-    renameId.value = thread.id;
-    renameTitle.value = thread.title ?? '';
-    showRenameModal.value = true;
-}
-
-async function saveRename() {
-    if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
-    const now = Math.floor(Date.now() / 1000);
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-}
-
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
-    showDeleteModal.value = true;
-}
-
-async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
-    showDeleteModal.value = false;
-    deleteId.value = null;
-}
-
-function onNewChat() {
-    emit('newChat');
-    console.log('New chat requested');
-}
-</script>
-````
-
-## File: app/pages/_test.vue
-````vue
-<template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <div class="flex flex-col h-full relative">
-                <div class="p-2 flex flex-col space-y-2">
-                    <UButton class="w-full flex items-center justify-center"
-                        >New Chat</UButton
-                    >
-                    <UInput
-                        icon="i-lucide-search"
-                        size="md"
-                        variant="outline"
-                        placeholder="Search..."
-                        class="w-full ml-[1px]"
-                    ></UInput>
-                </div>
-                <div class="flex flex-col p-2 space-y-1.5">
-                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about aids</UButton
-                    >
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about dogs</UButton
-                    >
-                </div>
-                <sidebar-side-bottom-nav />
-            </div>
-        </template>
-
-        <!-- Default slot = main content (right side) -->
-        <div class="h-screen overflow-y-scroll">
-            <div
-                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
-            ></div>
-
-            <div class="p-6 space-y-4">
-                <div class="flex flex-row space-x-2">
-                    <UButton @click="showToast" size="sm" color="primary"
-                        >Nuxt UI Button</UButton
-                    >
-                    <UButton color="success">Nuxt UI Button</UButton>
-                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
-                </div>
-                <div class="flex flex-row space-x-2">
-                    <UButtonGroup size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                    <UButtonGroup orientation="vertical" size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                </div>
-
-                <div class="flex space-x-2">
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="sm"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="md"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="lg"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button
-                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
-                        @click="toggle()"
-                    >
-                        Toggle Light/Dark
-                    </button>
-                    <span class="text-[var(--md-on-surface)]"
-                        >Current: {{ theme }}</span
-                    >
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div
-                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
-                    >
-                        Surface / On-Surface
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
-                    >
-                        Secondary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
-                    >
-                        Tertiary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
-                    >
-                        Error Container
-                    </div>
-                </div>
-
-                <chat-input-dropper />
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-
-const nuxtApp = useNuxtApp();
-const theme = computed(() => (nuxtApp.$theme as any).get());
-const toggle = () => (nuxtApp.$theme as any).toggle();
-const toast = useToast();
-
-function showToast() {
-    toast.add({
-        title: 'Success',
-        description: 'Your action was completed successfully.',
-        color: 'success',
-    });
-}
-</script>
 ````
 
 ## File: app/composables/useAi.ts
@@ -11289,8 +11612,8 @@ const tailBuffer = ref(''); // accumulated but not yet flushed
 const tailDisplay = ref(''); // flushed text (rendered markdown)
 const tailStartedAt = ref<number | null>(null);
 const tailLastFlush = ref(0);
-const tailInitialDelayMs = 1000; // per spec
-const tailMinFlushInterval = 90; // ms between flush rAF batches
+const tailInitialDelayMs = 500; // per spec
+const tailMinFlushInterval = 50; // ms between flush rAF batches
 let tailRaf: number | null = null;
 
 function resetTail() {
