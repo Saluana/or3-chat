@@ -6,6 +6,7 @@ import type {
     Project,
     Thread,
     FileMeta,
+    Post,
 } from './schema';
 
 export interface FileBlobRow {
@@ -34,6 +35,7 @@ export class Or3DB extends Dexie {
                 'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
             kv: 'id, &name, clock, created_at, updated_at',
             attachments: 'id, type, name, clock, created_at, updated_at',
+            posts: 'id, title, content, postType, created_at, updated_at',
         });
 
         this.version(2)

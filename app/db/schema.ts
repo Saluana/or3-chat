@@ -83,7 +83,22 @@ export const MessageSchema = z.object({
     // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
     file_hashes: z.string().nullable().optional(),
 });
+
 export type Message = z.infer<typeof MessageSchema>;
+
+export const PostSchema = z.object({
+    id: z.string(),
+    title: z.string(),
+    content: z.string().default(''),
+    postType: z.string().default('markdown'),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    meta: z.string().nullable().optional(),
+    file_hashes: z.string().nullable().optional(),
+});
+
+export type Post = z.infer<typeof PostSchema>;
 
 export const MessageCreateSchema = MessageSchema.partial({ index: true })
     .omit({ created_at: true, updated_at: true, id: true, clock: true })
