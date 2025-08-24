@@ -64,6 +64,14 @@ import {
     softDeletePost,
     hardDeletePost,
 } from './posts';
+import {
+    createDocument,
+    getDocument,
+    listDocuments,
+    updateDocument,
+    softDeleteDocument,
+    hardDeleteDocument,
+} from './documents';
 
 // Barrel API (backward compatible shape)
 export { db } from './client';
@@ -75,6 +83,7 @@ export const create = {
     attachment: createAttachment,
     project: createProject,
     post: createPost,
+    document: createDocument,
 };
 
 export const upsert = {
@@ -84,6 +93,7 @@ export const upsert = {
     attachment: upsertAttachment,
     project: upsertProject,
     post: upsertPost,
+    document: updateDocument, // upsert alias (update only for now)
 };
 
 export const queries = {
@@ -99,6 +109,8 @@ export const queries = {
     getPost,
     allPosts,
     searchPosts,
+    getDocument,
+    listDocuments,
 };
 
 export const del = {
@@ -109,6 +121,7 @@ export const del = {
         message: softDeleteMessage,
         attachment: softDeleteAttachment,
         post: softDeletePost,
+        document: softDeleteDocument,
         // kv has no deleted flag; only hard delete is supported
     },
     // hard deletes (destructive)
@@ -120,6 +133,7 @@ export const del = {
         kv: hardDeleteKv,
         kvByName: hardDeleteKvByName,
         post: hardDeletePost,
+        document: hardDeleteDocument,
     },
 };
 
@@ -149,3 +163,5 @@ export type {
     Post,
     PostCreate,
 };
+
+export type { Document } from './documents';

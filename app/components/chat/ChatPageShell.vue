@@ -5,6 +5,8 @@
                 :active-thread="threadId"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
             />
         </template>
         <template #sidebar-collapsed>
@@ -146,14 +148,29 @@
                         </UTooltip>
                     </div>
 
-                    <ChatContainer
-                        class="flex-1 min-h-0"
-                        :message-history="pane.messages"
-                        :thread-id="pane.threadId"
-                        @thread-selected="
-                            (id) => onInternalThreadCreated(id, i)
-                        "
-                    />
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            @thread-selected="
+                                (id) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <DocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        />
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
@@ -162,6 +179,7 @@
 
 <script setup lang="ts">
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import DocumentEditor from '~/components/documents/DocumentEditor.vue';
 import Dexie from 'dexie';
 import { db } from '~/db';
 // No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
@@ -202,7 +220,9 @@ type ChatMessage = {
 // continues to use computed aliases `threadId` & `messageHistory` pointing at pane[0].
 interface PaneState {
     id: string; // local pane id (not thread id)
-    threadId: string; // current thread id ('' if new chat)
+    mode: 'chat' | 'doc';
+    threadId: string; // current thread id ('' if new chat) when mode==='chat'
+    documentId?: string; // active document when mode==='doc'
     messages: ChatMessage[]; // loaded messages for the thread
     validating: boolean; // reserved for potential per-pane validation
 }
@@ -214,6 +234,7 @@ function createEmptyPane(initialThreadId = ''): PaneState {
             : 'pane-' + Math.random().toString(36).slice(2);
     return {
         id: genId(),
+        mode: 'chat',
         threadId: initialThreadId,
         messages: [],
         validating: false,
@@ -302,6 +323,11 @@ function addPane() {
 function closePane(i: number) {
     if (panes.value.length <= 1) return; // never close last
     const wasActive = i === activePaneIndex.value;
+    // Flush document if closing a doc pane
+    const closing = panes.value[i];
+    if (closing?.mode === 'doc' && closing.documentId) {
+        flushDocument(closing.documentId);
+    }
     panes.value.splice(i, 1);
     if (!panes.value.length) {
         // Safety: recreate a blank pane (should not normally happen)
@@ -313,8 +339,14 @@ function closePane(i: number) {
         // Task 3.2: ensure logical new active (nearest existing)
         const newIndex = Math.min(i, panes.value.length - 1);
         setActive(newIndex);
-        const activeThread = panes.value[newIndex]?.threadId;
-        updateUrlThread(activeThread || undefined);
+        const newPane = panes.value[newIndex];
+        if (!newPane) return; // safety guard
+        if (newPane.mode === 'chat') {
+            updateUrlThread(newPane.threadId || undefined);
+        } else {
+            // Clear URL if previously a chat (remain at /chat)
+            updateUrlThread(undefined);
+        }
     } else if (i < activePaneIndex.value) {
         // shift active index left because array shrank before it
         activePaneIndex.value -= 1;
@@ -464,6 +496,11 @@ function onSidebarSelected(id: string) {
     if (!id) return;
     const target = activePaneIndex.value;
     setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
     if (target === activePaneIndex.value) updateUrlThread(id);
 }
 
@@ -474,6 +511,8 @@ function onInternalThreadCreated(id: string, paneIndex?: number) {
         typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
     const pane = panes.value[idx];
     if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
     if (pane.threadId !== id) setPaneThread(idx, id);
     if (idx === activePaneIndex.value) updateUrlThread(id);
 }
@@ -481,10 +520,82 @@ function onInternalThreadCreated(id: string, paneIndex?: number) {
 function onNewChat() {
     const pane = panes.value[activePaneIndex.value];
     if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
         pane.messages = [];
         pane.threadId = '';
     }
     updateUrlThread(undefined);
+}
+
+// --------------- Documents Integration (minimal) ---------------
+import {
+    newDocument as createNewDoc,
+    flush as flushDocument,
+} from '~/composables/useDocumentsStore';
+
+async function onNewDocument() {
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    try {
+        // Flush existing doc if switching from another document
+        if (pane.mode === 'doc' && pane.documentId) {
+            await flushDocument(pane.documentId);
+        }
+        const doc = await createNewDoc();
+        pane.mode = 'doc';
+        pane.documentId = doc.id;
+        // Clear chat-specific state
+        pane.threadId = '';
+        pane.messages = [];
+        // Do NOT route sync for documents (out of scope)
+    } catch {}
+}
+
+function onDocumentSelected(id: string) {
+    if (!id) return;
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    // Flush any current doc before switching
+    if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
+        flushDocument(pane.documentId);
+    }
+    pane.mode = 'doc';
+    pane.documentId = id;
+    pane.threadId = '';
+    pane.messages = [];
+}
+
+// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document in active pane
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            // Ignore if focused in input/textarea/contentEditable
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
 }
 
 // Mobile sidebar control

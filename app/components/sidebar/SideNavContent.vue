@@ -26,6 +26,7 @@
                             base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
                             leadingIcon: 'w-5 h-5',
                         }"
+                        @click="emit('newDocument')"
                     />
                 </UTooltip>
             </div>
@@ -244,6 +245,12 @@
                     </div>
                 </div>
             </div>
+            <!-- Documents list -->
+            <SidebarDocumentsList
+                class="mt-4"
+                @select="(id:string) => emit('documentSelected', id)"
+                @new-document="emit('newDocument')"
+            />
         </div>
         <div ref="bottomNavRef" class="shrink-0">
             <sidebar-side-bottom-nav />
@@ -612,7 +619,12 @@ onUnmounted(() => {
     if (mh) window.removeEventListener('resize', mh);
 });
 
-const emit = defineEmits(['chatSelected', 'newChat']);
+const emit = defineEmits([
+    'chatSelected',
+    'newChat',
+    'newDocument',
+    'documentSelected',
+]);
 
 // ----- Actions: menu, rename, delete -----
 const showRenameModal = ref(false);
