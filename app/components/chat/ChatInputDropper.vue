@@ -106,16 +106,24 @@
                                             class="w-4 h-4"
                                         />
                                     </div>
-
-                                    <button
-                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
-                                    >
-                                        <span class="px-1">System prompts</span>
-                                        <UIcon
-                                            name="pixelarticons:script-text"
-                                            class="w-4 h-4"
-                                        />
-                                    </button>
+                                    <UModal>
+                                        <button
+                                            class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
+                                        >
+                                            <span class="px-1"
+                                                >System prompts</span
+                                            >
+                                            <UIcon
+                                                name="pixelarticons:script-text"
+                                                class="w-4 h-4"
+                                            />
+                                        </button>
+                                        <template #content>
+                                            <div
+                                                class="w-[50vw] h-[80vh]"
+                                            ></div>
+                                        </template>
+                                    </UModal>
                                     <button
                                         class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
                                     >

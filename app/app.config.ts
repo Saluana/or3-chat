@@ -1,5 +1,13 @@
 export default defineAppConfig({
     ui: {
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-black divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-2 border-black',
+                wrapper: 'border-2 border-black',
+            },
+        },
         button: {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
