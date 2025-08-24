@@ -21,13 +21,15 @@
             :class="[
                 'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-black',
                 // width transition on desktop
-                'md:transition-[width] md:duration-200 md:ease-out',
+                initialized
+                    ? 'md:transition-[width] md:duration-200 md:ease-out'
+                    : 'hidden',
                 'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
                 // mobile overlay behavior
                 !isDesktop
                     ? [
-                          'absolute top-0 bottom-0 w-[80vw] max-w-[90vw] shadow-xl',
+                          'absolute top-0 bottom-0 w-[380px] max-w-[90vw] shadow-xl',
                           // animated slide
                           'transition-transform duration-200 ease-out',
                           side === 'right'
@@ -155,6 +157,10 @@ const emit = defineEmits<{
     (e: 'resize', width: number): void;
 }>();
 
+// helper
+const clamp = (w: number) =>
+    Math.min(props.maxWidth, Math.max(props.minWidth, w));
+
 // open state (controlled or uncontrolled)
 const openState = ref<boolean>(props.modelValue ?? props.defaultOpen);
 const open = computed({
@@ -176,6 +182,14 @@ const computedWidth = computed(() =>
     collapsed.value ? props.collapsedWidth : width.value
 );
 
+// Attempt early (pre-mount) restoration to avoid post-mount jank
+if (import.meta.client) {
+    try {
+        const saved = localStorage.getItem(props.storageKey);
+        if (saved) width.value = clamp(parseInt(saved, 10));
+    } catch {}
+}
+
 // responsive
 const isDesktop = ref(false);
 let mq: MediaQueryList | undefined;
@@ -185,15 +199,13 @@ const updateMq = () => {
     isDesktop.value = mq.matches;
 };
 
+// Defer enabling transitions until after first paint so restored width doesn't animate
+const initialized = ref(false);
+
 onMounted(() => {
     updateMq();
     mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-
-    // restore width
-    try {
-        const saved = localStorage.getItem(props.storageKey);
-        if (saved) width.value = clamp(parseInt(saved, 10));
-    } catch {}
+    requestAnimationFrame(() => (initialized.value = true));
 });
 
 onBeforeUnmount(() => {
@@ -206,9 +218,6 @@ watch(width, (w) => {
     } catch {}
     emit('resize', w);
 });
-
-const clamp = (w: number) =>
-    Math.min(props.maxWidth, Math.max(props.minWidth, w));
 
 function toggle() {
     open.value = !open.value;
