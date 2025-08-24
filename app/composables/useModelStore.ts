@@ -39,7 +39,6 @@ const filters = ref<{
 const lastLoadedAt = ref<number | undefined>(undefined);
 
 export function useModelStore() {
-
     function isFresh(ts: number | undefined, ttl: number) {
         if (!ts) return false;
         return Date.now() - ts < ttl;

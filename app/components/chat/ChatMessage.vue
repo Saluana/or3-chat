@@ -7,7 +7,7 @@
                     ? '80px'
                     : '16px',
         }"
-        class="p-2 rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
+        class="p-2 min-w-[140px] rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
     >
         <!-- Compact thumb (collapsed state) -->
         <button
