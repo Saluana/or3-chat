@@ -442,6 +442,10 @@ function onSend(payload: any) {
 
     (reqParams as any).file_hashes = fileHashes;
 
+    if (payload.webSearchEnabled) {
+        reqParams.online = true;
+    }
+
     chat.value
         .sendMessage(payload.text, reqParams as any)
         .then(() => {

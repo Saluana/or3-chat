@@ -83,6 +83,7 @@
                                             color="primary"
                                             label="Enable web search"
                                             class="w-full"
+                                            v-model="webSearchEnabled"
                                         ></USwitch>
                                         <UIcon
                                             name="pixelarticons:visible"
@@ -297,6 +298,7 @@ import { computed } from 'vue';
 const props = defineProps<{ loading?: boolean }>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
+const webSearchEnabled = ref<boolean>(false);
 
 onMounted(async () => {
     const fave = await getFavoriteModels();
@@ -377,6 +379,7 @@ const emit = defineEmits<{
             largeTexts: LargeTextBlock[];
             model: string;
             settings: ImageSettings;
+            webSearchEnabled: boolean;
         }
     ): void;
     (e: 'prompt-change', value: string): void;
@@ -604,6 +607,7 @@ const handleSend = () => {
             largeTexts: largeTextBlocks.value,
             model: selectedModel.value,
             settings: imageSettings.value,
+            webSearchEnabled: webSearchEnabled.value,
         });
         // Reset local state and editor content so placeholder shows again
         promptText.value = '';

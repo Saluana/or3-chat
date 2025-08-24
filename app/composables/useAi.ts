@@ -45,6 +45,7 @@ interface SendMessageParams {
     model?: string;
     file_hashes?: string[]; // pre-computed content hashes for persistence
     extraTextParts?: string[]; // additional large pasted text blocks
+    online: boolean;
 }
 
 export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
@@ -65,6 +66,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             files: [],
             model: DEFAULT_AI_MODEL,
             file_hashes: [],
+            online: false,
         }
     ) {
         console.log('[useChat.sendMessage] invoked', {
@@ -85,7 +87,8 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             threadIdRef.value = newThread.id;
         }
 
-        let { files, model, file_hashes, extraTextParts } = sendMessagesParams;
+        let { files, model, file_hashes, extraTextParts, online } =
+            sendMessagesParams;
         const rawParams: any = sendMessagesParams as any;
         if ((!files || files.length === 0) && rawParams?.images?.length) {
             console.warn(
@@ -131,6 +134,10 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             );
         }
         if (!model) model = DEFAULT_AI_MODEL;
+
+        if (online === true) {
+            model = model + ':online';
+        }
 
         // 1) Filter hook for outgoing text
         const outgoing = await hooks.applyFilters(
@@ -381,6 +388,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 model: modelOverride || DEFAULT_AI_MODEL,
                 file_hashes: hashes,
                 files: [],
+                online: false,
             });
 
             const tail = (messages as any).value.slice(-2);
