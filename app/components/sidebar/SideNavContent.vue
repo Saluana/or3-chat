@@ -62,23 +62,11 @@
             class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 pt-2 space-y-3 scrollbar-hidden"
             :style="{ paddingBottom: bottomPad + 'px' }"
         >
-            <div v-if="projects.length" class="space-y-1">
-                <h4
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
-                >
-                    Projects
-                </h4>
-                <UTree
-                    v-model:expanded="expandedProjects"
-                    :items="projectTreeItems"
-                    color="neutral"
-                    size="sm"
-                    :ui="{
-                        root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden',
-                        link: 'text-[13px] rounded-[4px] py-1',
-                    }"
-                />
-            </div>
+            <SidebarProjectTree
+                :projects="projects"
+                v-model:expanded="expandedProjects"
+                @chatSelected="(id: string) => emit('chatSelected', id)"
+            />
             <div>
                 <h4
                     class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
@@ -470,6 +458,7 @@
 </template>
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
+import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpers
 // NOTE: Only load virtua when we actually need virtualization (perf + less layout jank)
@@ -717,50 +706,7 @@ async function submitCreateProject() {
     }
 }
 
-// ---- Project Tree Items ----
-function normalizeProjectData(p: any): any[] {
-    const raw = p?.data;
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === 'string') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed;
-        } catch (e) {
-            // ignore
-        }
-    }
-    return [];
-}
-
-const projectTreeItems = computed(() => {
-    return projects.value.map((p) => {
-        const children = normalizeProjectData(p).map((entry) => {
-            const kind = entry.kind || 'chat';
-            return {
-                label: entry.name || '(untitled)',
-                value: entry.id,
-                icon:
-                    kind === 'doc'
-                        ? 'pixelarticons:note-text'
-                        : 'pixelarticons:chat',
-                onSelect: (e: Event) => {
-                    // Only chats currently selectable -> emit
-                    if (kind === 'chat') emit('chatSelected', entry.id);
-                },
-            };
-        });
-        return {
-            label: p.name,
-            value: p.id,
-            defaultExpanded: false,
-            children,
-            onSelect: (e: Event) => {
-                // Prevent selecting the project itself; toggle handled internally
-                e.preventDefault();
-            },
-        };
-    });
-});
+// (Project tree logic moved to SidebarProjectTree component)
 
 // ---- Add To Project Flow ----
 const showAddToProjectModal = ref(false);
@@ -827,7 +773,18 @@ async function submitAddToProject() {
             projectId = selectedProjectId.value;
             const project = await db.projects.get(projectId);
             if (!project) throw new Error('Project not found');
-            const dataArr = normalizeProjectData(project);
+            const dataArr = Array.isArray(project.data)
+                ? project.data
+                : typeof project.data === 'string'
+                ? (() => {
+                      try {
+                          const parsed = JSON.parse(project.data);
+                          return Array.isArray(parsed) ? parsed : [];
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : [];
             const existing = dataArr.find((d) => d.id === entry.id);
             if (!existing) {
                 dataArr.push(entry);
