@@ -136,6 +136,7 @@
                                         </template>
                                     </UModal>
                                     <button
+                                        @click="showModelCatalog = true"
                                         class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
                                     >
                                         <span class="px-1">Model Catalog</span>
@@ -258,6 +259,7 @@
                 </p>
             </div>
         </div>
+        <modal-settings-modal v-model:showModal="showModelCatalog" />
     </div>
 </template>
 
@@ -354,6 +356,8 @@ interface ImageSettings {
     numResults: number;
     size: '1024x1024' | '1024x1536' | '1536x1024';
 }
+
+const showModelCatalog = ref(false);
 
 const emit = defineEmits<{
     (
