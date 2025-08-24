@@ -44,7 +44,34 @@
             >
         </button>
 
-        <div :class="innerClass" v-html="rendered"></div>
+        <div v-if="!editing" :class="innerClass" v-html="rendered"></div>
+        <!-- Editing surface (user messages only) -->
+        <div v-else class="w-full">
+            <LazyChatMessageEditor
+                hydrate-on-visible
+                v-model="draft"
+                :autofocus="true"
+                :focus-delay="120"
+                @ready="focusRequested = true"
+            />
+            <div class="flex w-full justify-end gap-2 mt-2">
+                <UButton
+                    size="sm"
+                    color="success"
+                    class="retro-btn"
+                    @click="saveEdit"
+                    :loading="saving"
+                    >Save</UButton
+                >
+                <UButton
+                    size="sm"
+                    color="error"
+                    class="retro-btn"
+                    @click="cancelEdit"
+                    >Cancel</UButton
+                >
+            </div>
+        </div>
 
         <!-- Expanded grid -->
         <div
@@ -87,6 +114,7 @@
 
         <!-- Action buttons: overlap bubble border half outside -->
         <div
+            v-if="!editing"
             class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
         >
             <UButtonGroup
@@ -134,6 +162,8 @@
                         color="info"
                         size="sm"
                         class="text-black flex items-center justify-center"
+                        @click="beginEdit"
+                        :disabled="props.message.role !== 'user'"
                     ></UButton>
                 </UTooltip>
             </UButtonGroup>
@@ -146,6 +176,8 @@ import { computed, reactive, watchEffect, ref } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
 import { getFileBlob } from '~/db/files';
 import { marked } from 'marked';
+import { upsert } from '~/db';
+import { nowSec } from '~/db/util';
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -177,6 +209,57 @@ const innerClass = computed(() => ({
 }));
 
 const rendered = computed(() => marked.parse(props.message.content));
+
+// Editing state -------------------------------------------------
+const editing = ref(false);
+const draft = ref('');
+const original = ref('');
+const saving = ref(false);
+const focusRequested = ref(false);
+
+function beginEdit() {
+    if (props.message.role !== 'user' || editing.value) return;
+    original.value = props.message.content;
+    draft.value = props.message.content;
+    editing.value = true;
+}
+function cancelEdit() {
+    if (saving.value) return;
+    editing.value = false;
+    draft.value = '';
+    original.value = '';
+}
+async function saveEdit() {
+    if (saving.value) return;
+    const id = (props.message as any).id;
+    if (!id) return;
+    const trimmed = draft.value.trim();
+    if (!trimmed) {
+        // Empty -> cancel (could also allow deletion later)
+        cancelEdit();
+        return;
+    }
+    try {
+        saving.value = true;
+        // Upsert message with new content (plain text). (DB schema stores data.content.)
+        const existing: any = await (
+            await import('~/db/client')
+        ).db.messages.get(id);
+        if (!existing) throw new Error('Message not found');
+        await upsert.message({
+            ...existing,
+            data: { ...(existing.data || {}), content: trimmed },
+            updated_at: nowSec(),
+        });
+        // Reflect in local props.message (parent reactive array will normally pick up via watcher; update eagerly)
+        (props.message as any).content = trimmed;
+        editing.value = false;
+    } catch (e) {
+        console.error('[ChatMessage.saveEdit] failed', e);
+    } finally {
+        saving.value = false;
+    }
+}
 
 // Extract hash list (serialized JSON string or array already?)
 const hashList = computed<string[]>(() => {
