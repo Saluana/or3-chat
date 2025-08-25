@@ -136,3 +136,9 @@ html {
     background-position: left center;
     background-size: auto 100%;
 }
+
+/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
+.dark .prose strong,
+.dark .prosemirror-host :where(.ProseMirror) strong {
+	color: var(--md-on-surface);
+}
