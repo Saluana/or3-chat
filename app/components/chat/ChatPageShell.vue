@@ -534,7 +534,7 @@ import {
     flush as flushDocument,
 } from '~/composables/useDocumentsStore';
 
-async function onNewDocument() {
+async function onNewDocument(initial?: { title?: string }) {
     const pane = panes.value[activePaneIndex.value];
     if (!pane) return;
     try {
@@ -542,7 +542,7 @@ async function onNewDocument() {
         if (pane.mode === 'doc' && pane.documentId) {
             await flushDocument(pane.documentId);
         }
-        const doc = await createNewDoc();
+        const doc = await createNewDoc(initial);
         pane.mode = 'doc';
         pane.documentId = doc.id;
         // Clear chat-specific state

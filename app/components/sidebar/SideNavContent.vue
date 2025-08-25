@@ -26,7 +26,7 @@
                             base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
                             leadingIcon: 'w-5 h-5',
                         }"
-                        @click="emit('newDocument')"
+                        @click="openCreateDocumentModal"
                     />
                 </UTooltip>
             </div>
@@ -249,7 +249,7 @@
             <SidebarDocumentsList
                 class="mt-4"
                 @select="(id:string) => emit('documentSelected', id)"
-                @new-document="emit('newDocument')"
+                @new-document="openCreateDocumentModal"
             />
         </div>
         <div ref="bottomNavRef" class="shrink-0">
@@ -496,6 +496,57 @@
                 </UButton>
             </template>
         </UModal>
+        <!-- New Document Naming Modal -->
+        <UModal
+            v-model:open="showCreateDocumentModal"
+            title="New Document"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Name new document</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="newDocumentState"
+                        @submit.prevent="submitCreateDocument"
+                    >
+                        <UFormField
+                            label="Title"
+                            name="title"
+                            :error="newDocumentErrors.title"
+                        >
+                            <UInput
+                                v-model="newDocumentState.title"
+                                required
+                                placeholder="Document title"
+                                icon="pixelarticons:note"
+                                class="w-full"
+                                @keyup.enter="submitCreateDocument"
+                            />
+                        </UFormField>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateDocumentModal"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        creatingDocument || !newDocumentState.title.trim()
+                    "
+                    @click="submitCreateDocument"
+                >
+                    <span v-if="!creatingDocument">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
     </div>
 </template>
 <script setup lang="ts">
@@ -619,12 +670,12 @@ onUnmounted(() => {
     if (mh) window.removeEventListener('resize', mh);
 });
 
-const emit = defineEmits([
-    'chatSelected',
-    'newChat',
-    'newDocument',
-    'documentSelected',
-]);
+const emit = defineEmits<{
+    (e: 'chatSelected', id: string): void;
+    (e: 'newChat'): void;
+    (e: 'newDocument', initial?: { title?: string }): void;
+    (e: 'documentSelected', id: string): void;
+}>();
 
 // ----- Actions: menu, rename, delete -----
 const showRenameModal = ref(false);
@@ -1038,6 +1089,36 @@ async function submitAddToProject() {
         addToProjectError.value = e?.message || 'Failed to add';
     } finally {
         addingToProject.value = false;
+    }
+}
+
+// ---- New Document Flow (naming modal) ----
+const showCreateDocumentModal = ref(false);
+const creatingDocument = ref(false);
+const newDocumentState = ref<{ title: string }>({ title: '' });
+const newDocumentErrors = ref<{ title?: string }>({});
+
+function openCreateDocumentModal() {
+    showCreateDocumentModal.value = true;
+    newDocumentState.value = { title: '' };
+    newDocumentErrors.value = {};
+}
+function closeCreateDocumentModal() {
+    showCreateDocumentModal.value = false;
+}
+async function submitCreateDocument() {
+    if (creatingDocument.value) return;
+    const title = newDocumentState.value.title.trim();
+    if (!title) {
+        newDocumentErrors.value.title = 'Title required';
+        return;
+    }
+    creatingDocument.value = true;
+    try {
+        emit('newDocument', { title });
+        closeCreateDocumentModal();
+    } finally {
+        creatingDocument.value = false;
     }
 }
 </script>
