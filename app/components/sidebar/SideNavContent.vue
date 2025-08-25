@@ -74,7 +74,7 @@
                 @renameEntry="openRename"
                 @removeFromProject="handleRemoveFromProject"
             />
-            <div>
+            <div v-if="displayThreads.length > 0">
                 <h4
                     class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
                 >
