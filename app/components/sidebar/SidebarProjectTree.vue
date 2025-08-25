@@ -114,6 +114,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'update:expanded', value: string[]): void;
     (e: 'chatSelected', id: string): void;
+    (e: 'documentSelected', id: string): void;
     (e: 'addChat', projectId: string): void;
     (e: 'deleteProject', projectId: string): void;
     (e: 'renameProject', projectId: string): void;
@@ -163,12 +164,13 @@ const treeItems = computed<any[]>(() =>
                 value: entry.id,
                 icon:
                     kind === 'doc'
-                        ? 'pixelarticons:note-text'
+                        ? 'pixelarticons:note'
                         : 'pixelarticons:chat',
                 kind,
                 parentId: p.id,
                 onSelect: (e: Event) => {
                     if (kind === 'chat') emit('chatSelected', entry.id);
+                    else if (kind === 'doc') emit('documentSelected', entry.id);
                 },
             };
         });

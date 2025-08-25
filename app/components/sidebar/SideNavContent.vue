@@ -67,6 +67,7 @@
                 :projects="projects"
                 v-model:expanded="expandedProjects"
                 @chatSelected="(id: string) => emit('chatSelected', id)"
+                @documentSelected="(id: string) => emit('documentSelected', id)"
                 @addChat="handleAddChatToProject"
                 @deleteProject="handleDeleteProject"
                 @renameProject="openRenameProject"
@@ -250,6 +251,8 @@
                 class="mt-4"
                 @select="(id:string) => emit('documentSelected', id)"
                 @new-document="openCreateDocumentModal"
+                @add-to-project="(d:any) => openAddDocumentToProject(d)"
+                @delete-document="(d:any) => confirmDeleteDocument(d)"
             />
         </div>
         <div ref="bottomNavRef" class="shrink-0">
@@ -331,6 +334,29 @@
                     >Cancel</UButton
                 >
                 <UButton color="error" @click="deleteThread">Delete</UButton>
+            </template>
+        </UModal>
+
+        <!-- Delete document confirm modal -->
+        <UModal
+            v-model:open="showDeleteDocumentModal"
+            title="Delete document?"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Delete document?</h3> </template>
+            <template #body>
+                <p class="text-sm opacity-70">
+                    This will permanently remove the document.
+                </p>
+            </template>
+            <template #footer>
+                <UButton
+                    variant="ghost"
+                    @click="showDeleteDocumentModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="error" @click="deleteDocument">Delete</UButton>
             </template>
         </UModal>
 
@@ -684,6 +710,9 @@ const renameTitle = ref('');
 
 const showDeleteModal = ref(false);
 const deleteId = ref<string | null>(null);
+// Document delete state
+const showDeleteDocumentModal = ref(false);
+const deleteDocumentId = ref<string | null>(null);
 
 async function openRename(target: any) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
@@ -767,6 +796,18 @@ async function deleteThread() {
     await dbDel.hard.thread(deleteId.value);
     showDeleteModal.value = false;
     deleteId.value = null;
+}
+
+// Document delete handling
+function confirmDeleteDocument(doc: any) {
+    deleteDocumentId.value = doc.id as string;
+    showDeleteDocumentModal.value = true;
+}
+async function deleteDocument() {
+    if (!deleteDocumentId.value) return;
+    await dbDel.hard.document(deleteDocumentId.value);
+    showDeleteDocumentModal.value = false;
+    deleteDocumentId.value = null;
 }
 
 function onNewChat() {
@@ -997,6 +1038,8 @@ async function submitCreateProject() {
 // ---- Add To Project Flow ----
 const showAddToProjectModal = ref(false);
 const addToProjectThreadId = ref<string | null>(null);
+// Support documents
+const addToProjectDocumentId = ref<string | null>(null);
 const addMode = ref<'select' | 'create'>('select');
 const selectedProjectId = ref<string | null>(null);
 const newProjectName = ref('');
@@ -1010,6 +1053,17 @@ const projectSelectOptions = computed(() =>
 
 function openAddToProject(thread: any) {
     addToProjectThreadId.value = thread.id;
+    addToProjectDocumentId.value = null;
+    addMode.value = 'select';
+    selectedProjectId.value = null;
+    newProjectName.value = '';
+    newProjectDescription.value = '';
+    addToProjectError.value = null;
+    showAddToProjectModal.value = true;
+}
+function openAddDocumentToProject(doc: any) {
+    addToProjectDocumentId.value = doc.id;
+    addToProjectThreadId.value = null;
     addMode.value = 'select';
     selectedProjectId.value = null;
     newProjectName.value = '';
@@ -1020,20 +1074,35 @@ function openAddToProject(thread: any) {
 function closeAddToProject() {
     showAddToProjectModal.value = false;
     addToProjectThreadId.value = null;
+    addToProjectDocumentId.value = null;
 }
 
 async function submitAddToProject() {
-    if (addingToProject.value || !addToProjectThreadId.value) return;
+    if (addingToProject.value) return;
+    if (!addToProjectThreadId.value && !addToProjectDocumentId.value) return;
     addToProjectError.value = null;
     addingToProject.value = true;
     try {
-        const thread = await db.threads.get(addToProjectThreadId.value);
-        if (!thread) throw new Error('Thread not found');
-        const entry = {
-            id: thread.id,
-            name: thread.title || 'New Thread',
-            kind: 'chat',
-        };
+        let entry: any | null = null;
+        if (addToProjectThreadId.value) {
+            const thread = await db.threads.get(addToProjectThreadId.value);
+            if (!thread) throw new Error('Thread not found');
+            entry = {
+                id: thread.id,
+                name: thread.title || 'New Thread',
+                kind: 'chat',
+            };
+        } else if (addToProjectDocumentId.value) {
+            const doc = await db.posts.get(addToProjectDocumentId.value);
+            if (!doc || (doc as any).postType !== 'doc')
+                throw new Error('Document not found');
+            entry = {
+                id: doc.id,
+                name: (doc as any).title || 'Untitled',
+                kind: 'doc',
+            };
+        }
+        if (!entry) throw new Error('Nothing to add');
         const now = Math.floor(Date.now() / 1000);
         let projectId: string | null = null;
         if (addMode.value === 'create') {
@@ -1071,12 +1140,11 @@ async function submitAddToProject() {
                       }
                   })()
                 : [];
-            const existing = dataArr.find((d) => d.id === entry.id);
-            if (!existing) {
-                dataArr.push(entry);
-            } else {
-                existing.name = entry.name; // update name if changed
-            }
+            const existing = dataArr.find(
+                (d: any) => d.id === entry.id && d.kind === entry.kind
+            );
+            if (!existing) dataArr.push(entry);
+            else existing.name = entry.name;
             await upsert.project({
                 ...project,
                 data: dataArr,
