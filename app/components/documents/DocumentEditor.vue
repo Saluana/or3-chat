@@ -1,5 +1,7 @@
 <template>
-    <div class="flex flex-col h-full w-full bg-white/10 backdrop-blur-sm">
+    <div
+        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+    >
         <div class="flex items-center justify-center gap-3 px-3 pt-2 pb-2">
             <UInput
                 v-model="titleDraft"
@@ -21,13 +23,13 @@
             class="flex flex-row items-stretch border-b-2 px-2 py-1 gap-1 flex-wrap"
         >
             <ToolbarButton
-                icon="pixelarticons:bold"
+                icon="carbon:text-bold"
                 :active="isActive('bold')"
                 label="Bold (⌘B)"
                 @activate="cmd('toggleBold')"
             />
             <ToolbarButton
-                icon="pixelarticons:italic"
+                icon="carbon:text-italic"
                 :active="isActive('italic')"
                 label="Italic (⌘I)"
                 @activate="cmd('toggleItalic')"
@@ -39,16 +41,22 @@
                 @activate="cmd('toggleCode')"
             />
             <ToolbarButton
-                icon="pixelarticons:heading"
+                text="H1"
                 :active="isActiveHeading(1)"
                 label="H1"
                 @activate="toggleHeading(1)"
             />
             <ToolbarButton
-                icon="pixelarticons:heading"
+                text="H2"
                 :active="isActiveHeading(2)"
                 label="H2"
                 @activate="toggleHeading(2)"
+            />
+            <ToolbarButton
+                text="H3"
+                :active="isActiveHeading(3)"
+                label="H3"
+                @activate="toggleHeading(3)"
             />
             <ToolbarButton
                 icon="pixelarticons:list"
@@ -57,7 +65,7 @@
                 @activate="cmd('toggleBulletList')"
             />
             <ToolbarButton
-                icon="pixelarticons:list-ol"
+                icon="carbon:list-numbered"
                 :active="isActive('orderedList')"
                 label="Ordered"
                 @activate="cmd('toggleOrderedList')"
@@ -82,7 +90,7 @@
             <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
                 <EditorContent
                     :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
                 ></EditorContent>
             </div>
         </div>
@@ -90,14 +98,8 @@
 </template>
 
 <script setup lang="ts">
-import {
-    onMounted,
-    onBeforeUnmount,
-    ref,
-    watch,
-    computed,
-    defineComponent,
-} from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
+import ToolbarButton from './ToolbarButton.vue';
 import {
     useDocumentState,
     setDocumentContent,
@@ -207,35 +209,6 @@ const statusText = computed(() => {
         default:
             return 'Ready';
     }
-});
-
-// Toolbar button sub-component (local)
-const ToolbarButton = defineComponent({
-    name: 'ToolbarButton',
-    props: {
-        icon: { type: String, required: true },
-        active: { type: Boolean, default: false },
-        label: { type: String, default: '' },
-    },
-    emits: ['activate'],
-    setup(props, { emit }) {
-        function onClick() {
-            emit('activate');
-        }
-        return { onClick, props };
-    },
-    template: `
-    <button
-      class="retro-btn px-2 h-8 flex items-center gap-1 border-2 rounded-[4px] text-sm"
-      :class="props.active ? 'bg-primary/40' : 'opacity-80 hover:opacity-100'"
-      :title="props.label"
-      :aria-pressed="props.active"
-      type="button"
-      @click="onClick"
-    >
-      <UIcon :name="props.icon" class="w-4 h-4" />
-    </button>
-  `,
 });
 </script>
 
