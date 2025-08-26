@@ -63,10 +63,14 @@ app/
       ChatPageShell.vue
       MessageEditor.vue
       ModelSelect.vue
+    documents/
+      DocumentEditor.vue
+      ToolbarButton.vue
     modal/
       SettingsModal.vue
     sidebar/
       ResizeHandle.vue
+      SidebarDocumentsList.vue
       SidebarHeader.vue
       SidebarProjectTree.vue
       SideBottomNav.vue
@@ -76,17 +80,21 @@ app/
     RetroGlassBtn.vue
   composables/
     useAi.ts
+    useDocumentsList.ts
+    useDocumentsStore.ts
     useHookEffect.ts
     useHooks.ts
     useModelSearch.ts
     useModelStore.ts
     useOpenrouter.ts
+    useSidebarSearch.ts
     useThreadSearch.ts
     useUserApiKey.ts
   db/
     attachments.ts
     branching.ts
     client.ts
+    documents.ts
     files-util.ts
     files.ts
     index.ts
@@ -123,7 +131,15 @@ docs/
   hooks.md
   perf-files.md
 planning/
+  documents-editor/
+    design.md
+    requirements.md
+    tasks.md
   multi-window-chat/
+    design.md
+    requirements.md
+    tasks.md
+  sidebar-search/
     design.md
     requirements.md
     tasks.md
@@ -629,6 +645,13 @@ tsconfig.json
 @import "./dark-mc.css";
 ````
 
+## File: app/components/chat/ChatInput.vue
+````vue
+<template></template>
+<script setup lang="ts"></script>
+<style scoped></style>
+````
+
 ## File: app/components/sidebar/ResizeHandle.vue
 ````vue
 <template>
@@ -685,6 +708,19 @@ function onHandleKeydown(e: KeyboardEvent) {
 </style>
 ````
 
+## File: app/components/RetroGlassBtn.vue
+````vue
+<template>
+    <UButton
+        v-bind="$attrs"
+        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+        ><slot></slot
+    ></UButton>
+</template>
+
+<script setup></script>
+````
+
 ## File: app/composables/useHookEffect.ts
 ````typescript
 import { onBeforeUnmount } from 'vue';
@@ -730,6 +766,565 @@ export function useHooks(): HookEngine {
 }
 ````
 
+## File: app/composables/useOpenrouter.ts
+````typescript
+import { ref } from 'vue';
+import { kv } from '~/db';
+
+function base64urlencode(str: ArrayBuffer) {
+    return btoa(String.fromCharCode(...new Uint8Array(str)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
+async function sha256(plain: string) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plain);
+    return await crypto.subtle.digest('SHA-256', data);
+}
+
+export function useOpenRouterAuth() {
+    const isLoggingIn = ref(false);
+
+    const startLogin = async () => {
+        if (isLoggingIn.value) return;
+        isLoggingIn.value = true;
+        const codeVerifier = Array.from(
+            crypto.getRandomValues(new Uint8Array(64))
+        )
+            .map((b) => ('0' + b.toString(16)).slice(-2))
+            .join('');
+        // Compute PKCE code_challenge. Prefer S256, but fall back to "plain"
+        // when SubtleCrypto is unavailable (e.g., iOS Safari on non-HTTPS).
+        let codeChallenge = codeVerifier;
+        let codeChallengeMethod: 'S256' | 'plain' = 'plain';
+        try {
+            if (
+                typeof crypto !== 'undefined' &&
+                typeof crypto.subtle?.digest === 'function'
+            ) {
+                const challengeBuffer = await sha256(codeVerifier);
+                codeChallenge = base64urlencode(challengeBuffer);
+                codeChallengeMethod = 'S256';
+            }
+        } catch {
+            // Keep plain fallback
+            codeChallenge = codeVerifier;
+            codeChallengeMethod = 'plain';
+        }
+
+        // store verifier in session storage
+        sessionStorage.setItem('openrouter_code_verifier', codeVerifier);
+        // store the method so the callback knows how to exchange
+        try {
+            sessionStorage.setItem(
+                'openrouter_code_method',
+                codeChallengeMethod
+            );
+        } catch {}
+        // store a random state to protect against CSRF
+        const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+            .map((b) => ('0' + b.toString(16)).slice(-2))
+            .join('');
+        sessionStorage.setItem('openrouter_state', state);
+
+        const rc = useRuntimeConfig();
+        // default callback to current origin + known path when not provided
+        const callbackUrl =
+            String(rc.public.openRouterRedirectUri || '') ||
+            `${window.location.origin}/openrouter-callback`;
+
+        const params = new URLSearchParams();
+        // Per docs, only callback_url, code_challenge(+method), and optional state are required
+        // OpenRouter expects a 'callback_url' parameter
+        params.append('callback_url', callbackUrl);
+        params.append('state', state);
+        params.append('code_challenge', codeChallenge);
+        params.append('code_challenge_method', codeChallengeMethod);
+        // If you have a registered app on OpenRouter, including client_id helps avoid
+        // app auto-creation based on referrer (which can be flaky on mobile).
+        const clientId = rc.public.openRouterClientId as string | undefined;
+        if (clientId) params.append('client_id', String(clientId));
+
+        const authUrl = String(
+            rc.public.openRouterAuthUrl || 'https://openrouter.ai/auth'
+        );
+        const url = `${authUrl}?${params.toString()}`;
+
+        // Warn if callback URL is not HTTPS or localhost (common iOS issue)
+        try {
+            const u = new URL(callbackUrl);
+            const isLocalhost = ['localhost', '127.0.0.1'].includes(u.hostname);
+            const isHttps = u.protocol === 'https:';
+            if (!isHttps && !isLocalhost) {
+                console.warn(
+                    'OpenRouter PKCE: non-HTTPS, non-localhost callback_url detected. On mobile, use a public HTTPS tunnel and set OPENROUTER_REDIRECT_URI.',
+                    callbackUrl
+                );
+            }
+        } catch {}
+
+        // Debug: log the final URL so devs can confirm params/authUrl are correct
+        // This helps when runtime config is missing or incorrect.
+        // eslint-disable-next-line no-console
+        console.debug('OpenRouter PKCE redirect URL:', url);
+
+        // Use assign to ensure history behaves consistently across mobile browsers
+        window.location.assign(url);
+    };
+
+    const logoutOpenRouter = async () => {
+        try {
+            // Remove local copy immediately for UX
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('openrouter_api_key');
+            }
+            // Best-effort: clear synced KV by setting empty
+            try {
+                await kv.delete('openrouter_api_key');
+            } catch {}
+            // Notify UI listeners (Sidebar, etc.) to recompute state
+            try {
+                window.dispatchEvent(new CustomEvent('openrouter:connected'));
+            } catch {}
+        } catch (e) {
+            console.error('OpenRouter logout failed', e);
+        }
+    };
+
+    return { startLogin, logoutOpenRouter, isLoggingIn };
+}
+````
+
+## File: app/composables/useUserApiKey.ts
+````typescript
+import { computed } from 'vue';
+import { db } from '~/db';
+import { state } from '~/state/global';
+
+export function useUserApiKey() {
+    // Read from Dexie on client without awaiting the composable
+    if (import.meta.client) {
+        db.kv
+            .where('name')
+            .equals('openrouter_api_key')
+            .first()
+            .then((rec) => {
+                if (rec && typeof rec.value === 'string') {
+                    state.value.openrouterKey = rec.value;
+                } else if (rec && rec.value == null) {
+                    state.value.openrouterKey = null;
+                }
+            })
+            .catch(() => {
+                /* noop */
+            });
+    }
+
+    function setKey(key: string) {
+        state.value.openrouterKey = key;
+    }
+
+    function clearKey() {
+        state.value.openrouterKey = null;
+    }
+
+    // Return a computed ref so callers can read `apiKey.value` and
+    // still observe changes made to the shared state.
+    const apiKey = computed(() => state.value.openrouterKey) as {
+        readonly value: string | null;
+    };
+
+    return {
+        apiKey,
+        setKey,
+        clearKey,
+    };
+}
+````
+
+## File: app/db/attachments.ts
+````typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import {
+    AttachmentCreateSchema,
+    AttachmentSchema,
+    type Attachment,
+    type AttachmentCreate,
+} from './schema';
+
+export async function createAttachment(
+    input: AttachmentCreate
+): Promise<Attachment> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.attachments.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.attachments.create:action:before', filtered);
+    const value = parseOrThrow(AttachmentCreateSchema, filtered);
+    await db.attachments.put(value);
+    await hooks.doAction('db.attachments.create:action:after', value);
+    return value;
+}
+
+export async function upsertAttachment(value: Attachment): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.attachments.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.attachments.upsert:action:before', filtered);
+    parseOrThrow(AttachmentSchema, filtered);
+    await db.attachments.put(filtered);
+    await hooks.doAction('db.attachments.upsert:action:after', filtered);
+}
+
+export async function softDeleteAttachment(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.attachments, async () => {
+        const a = await db.attachments.get(id);
+        if (!a) return;
+        await hooks.doAction('db.attachments.delete:action:soft:before', a);
+        await db.attachments.put({
+            ...a,
+            deleted: true,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        await hooks.doAction('db.attachments.delete:action:soft:after', a);
+    });
+}
+
+export async function hardDeleteAttachment(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.attachments.get(id);
+    await hooks.doAction(
+        'db.attachments.delete:action:hard:before',
+        existing ?? id
+    );
+    await db.attachments.delete(id);
+    await hooks.doAction('db.attachments.delete:action:hard:after', id);
+}
+
+export async function getAttachment(id: string) {
+    const hooks = useHooks();
+    const res = await db.attachments.get(id);
+    return hooks.applyFilters('db.attachments.get:filter:output', res);
+}
+````
+
+## File: app/db/kv.ts
+````typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
+
+export async function createKv(input: KvCreate): Promise<Kv> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.kv.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.kv.create:action:before', filtered);
+    const value = parseOrThrow(KvCreateSchema, filtered);
+    await db.kv.put(value);
+    await hooks.doAction('db.kv.create:action:after', value);
+    return value;
+}
+
+export async function upsertKv(value: Kv): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.kv.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.kv.upsert:action:before', filtered);
+    parseOrThrow(KvSchema, filtered);
+    await db.kv.put(filtered);
+    await hooks.doAction('db.kv.upsert:action:after', filtered);
+}
+
+export async function hardDeleteKv(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.kv.get(id);
+    await hooks.doAction('db.kv.delete:action:hard:before', existing ?? id);
+    await db.kv.delete(id);
+    await hooks.doAction('db.kv.delete:action:hard:after', id);
+}
+
+export async function getKv(id: string) {
+    const hooks = useHooks();
+    const res = await db.kv.get(id);
+    return hooks.applyFilters('db.kv.get:filter:output', res);
+}
+
+export async function getKvByName(name: string) {
+    const hooks = useHooks();
+    const res = await db.kv.where('name').equals(name).first();
+    return hooks.applyFilters('db.kv.getByName:filter:output', res);
+}
+
+// Convenience helpers for auth/session flows
+export async function setKvByName(
+    name: string,
+    value: string | null
+): Promise<Kv> {
+    const hooks = useHooks();
+    const existing = await db.kv.where('name').equals(name).first();
+    const now = Math.floor(Date.now() / 1000);
+    const record: Kv = {
+        id: existing?.id ?? `kv:${name}`,
+        name,
+        value,
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+        clock: (existing?.clock ?? 0) + 1,
+    };
+    const filtered = await hooks.applyFilters(
+        'db.kv.upsertByName:filter:input',
+        record
+    );
+    parseOrThrow(KvSchema, filtered);
+    await db.kv.put(filtered);
+    await hooks.doAction('db.kv.upsertByName:action:after', filtered);
+    return filtered;
+}
+
+export async function hardDeleteKvByName(name: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.kv.where('name').equals(name).first();
+    if (!existing) return; // nothing to do
+    await hooks.doAction('db.kv.deleteByName:action:hard:before', existing);
+    await db.kv.delete(existing.id);
+    await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
+}
+````
+
+## File: app/db/projects.ts
+````typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import { ProjectSchema, type Project } from './schema';
+
+export async function createProject(input: Project): Promise<Project> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.projects.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.projects.create:action:before', filtered);
+    const value = parseOrThrow(ProjectSchema, filtered);
+    await db.projects.put(value);
+    await hooks.doAction('db.projects.create:action:after', value);
+    return value;
+}
+
+export async function upsertProject(value: Project): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.projects.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.projects.upsert:action:before', filtered);
+    parseOrThrow(ProjectSchema, filtered);
+    await db.projects.put(filtered);
+    await hooks.doAction('db.projects.upsert:action:after', filtered);
+}
+
+export async function softDeleteProject(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.projects, async () => {
+        const p = await db.projects.get(id);
+        if (!p) return;
+        await hooks.doAction('db.projects.delete:action:soft:before', p);
+        await db.projects.put({
+            ...p,
+            deleted: true,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        await hooks.doAction('db.projects.delete:action:soft:after', p);
+    });
+}
+
+export async function hardDeleteProject(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.projects.get(id);
+    await hooks.doAction(
+        'db.projects.delete:action:hard:before',
+        existing ?? id
+    );
+    await db.projects.delete(id);
+    await hooks.doAction('db.projects.delete:action:hard:after', id);
+}
+
+export async function getProject(id: string) {
+    const hooks = useHooks();
+    const res = await db.projects.get(id);
+    return hooks.applyFilters('db.projects.get:filter:output', res);
+}
+````
+
+## File: app/db/threads.ts
+````typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { newId, nowSec, parseOrThrow } from './util';
+import {
+    ThreadCreateSchema,
+    ThreadSchema,
+    type Thread,
+    type ThreadCreate,
+} from './schema';
+
+export async function createThread(input: ThreadCreate): Promise<Thread> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.threads.create:filter:input',
+        input
+    );
+    // Apply create-time defaults (id/clock/timestamps, etc.)
+    const prepared = parseOrThrow(ThreadCreateSchema, filtered);
+    // Validate against full schema so required defaults (status/pinned/etc.) are present
+    const value = parseOrThrow(ThreadSchema, prepared);
+    await hooks.doAction('db.threads.create:action:before', value);
+    await db.threads.put(value);
+    await hooks.doAction('db.threads.create:action:after', value);
+    return value;
+}
+
+export async function upsertThread(value: Thread): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.threads.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.threads.upsert:action:before', filtered);
+    parseOrThrow(ThreadSchema, filtered);
+    await db.threads.put(filtered);
+    await hooks.doAction('db.threads.upsert:action:after', filtered);
+}
+
+export function threadsByProject(projectId: string) {
+    const hooks = useHooks();
+    const promise = db.threads.where('project_id').equals(projectId).toArray();
+    return promise.then((res) =>
+        hooks.applyFilters('db.threads.byProject:filter:output', res)
+    );
+}
+
+export function searchThreadsByTitle(term: string) {
+    const q = term.toLowerCase();
+    const hooks = useHooks();
+    return db.threads
+        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
+        .toArray()
+        .then((res) =>
+            hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
+        );
+}
+
+export function getThread(id: string) {
+    const hooks = useHooks();
+    return db.threads
+        .get(id)
+        .then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
+}
+
+export function childThreads(parentThreadId: string) {
+    const hooks = useHooks();
+    return db.threads
+        .where('parent_thread_id')
+        .equals(parentThreadId)
+        .toArray()
+        .then((res) =>
+            hooks.applyFilters('db.threads.children:filter:output', res)
+        );
+}
+
+export async function softDeleteThread(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.threads, async () => {
+        const t = await db.threads.get(id);
+        if (!t) return;
+        await hooks.doAction('db.threads.delete:action:soft:before', t);
+        await db.threads.put({
+            ...t,
+            deleted: true,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        await hooks.doAction('db.threads.delete:action:soft:after', t);
+    });
+}
+
+export async function hardDeleteThread(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.threads.get(id);
+    await db.transaction('rw', db.threads, db.messages, async () => {
+        await hooks.doAction(
+            'db.threads.delete:action:hard:before',
+            existing ?? id
+        );
+        await db.messages.where('thread_id').equals(id).delete();
+        await db.threads.delete(id);
+        await hooks.doAction('db.threads.delete:action:hard:after', id);
+    });
+}
+
+// Fork a thread: clone thread metadata and optionally copy messages
+export async function forkThread(
+    sourceThreadId: string,
+    overrides: Partial<ThreadCreate> = {},
+    options: { copyMessages?: boolean } = {}
+): Promise<Thread> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.threads, db.messages, async () => {
+        const src = await db.threads.get(sourceThreadId);
+        if (!src) throw new Error('Source thread not found');
+        const now = nowSec();
+        const forkId = newId();
+        const fork = parseOrThrow(ThreadSchema, {
+            ...src,
+            id: forkId,
+            forked: true,
+            parent_thread_id: src.id,
+            created_at: now,
+            updated_at: now,
+            last_message_at: null,
+            ...overrides,
+        });
+        await hooks.doAction('db.threads.fork:action:before', {
+            source: src,
+            fork,
+        });
+        await db.threads.put(fork);
+
+        if (options.copyMessages) {
+            const msgs = await db.messages
+                .where('thread_id')
+                .equals(src.id)
+                .sortBy('index');
+            for (const m of msgs) {
+                await db.messages.put({ ...m, id: newId(), thread_id: forkId });
+            }
+            if (msgs.length > 0) {
+                await db.threads.put({
+                    ...fork,
+                    last_message_at: now,
+                    updated_at: now,
+                });
+            }
+        }
+        await hooks.doAction('db.threads.fork:action:after', fork);
+        return fork;
+    });
+}
+````
+
 ## File: app/db/util.ts
 ````typescript
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
@@ -753,6 +1348,168 @@ export function newId(): string {
 }
 ````
 
+## File: app/pages/_test.vue
+````vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar>
+            <div class="flex flex-col h-full relative">
+                <div class="p-2 flex flex-col space-y-2">
+                    <UButton class="w-full flex items-center justify-center"
+                        >New Chat</UButton
+                    >
+                    <UInput
+                        icon="i-lucide-search"
+                        size="md"
+                        variant="outline"
+                        placeholder="Search..."
+                        class="w-full ml-[1px]"
+                    ></UInput>
+                </div>
+                <div class="flex flex-col p-2 space-y-1.5">
+                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about aids</UButton
+                    >
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about dogs</UButton
+                    >
+                </div>
+                <sidebar-side-bottom-nav />
+            </div>
+        </template>
+
+        <!-- Default slot = main content (right side) -->
+        <div class="h-screen overflow-y-scroll">
+            <div
+                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
+            ></div>
+
+            <div class="p-6 space-y-4">
+                <div class="flex flex-row space-x-2">
+                    <UButton @click="showToast" size="sm" color="primary"
+                        >Nuxt UI Button</UButton
+                    >
+                    <UButton color="success">Nuxt UI Button</UButton>
+                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+                </div>
+                <div class="flex flex-row space-x-2">
+                    <UButtonGroup size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                    <UButtonGroup orientation="vertical" size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                </div>
+
+                <div class="flex space-x-2">
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="sm"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="md"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="lg"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
+                        @click="toggle()"
+                    >
+                        Toggle Light/Dark
+                    </button>
+                    <span class="text-[var(--md-on-surface)]"
+                        >Current: {{ theme }}</span
+                    >
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div
+                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
+                    >
+                        Surface / On-Surface
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
+                    >
+                        Secondary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
+                    >
+                        Tertiary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
+                    >
+                        Error Container
+                    </div>
+                </div>
+
+                <chat-input-dropper />
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+
+const nuxtApp = useNuxtApp();
+const theme = computed(() => (nuxtApp.$theme as any).get());
+const toggle = () => (nuxtApp.$theme as any).toggle();
+const toast = useToast();
+
+function showToast() {
+    toast.add({
+        title: 'Success',
+        description: 'Your action was completed successfully.',
+        color: 'success',
+    });
+}
+</script>
+````
+
 ## File: app/pages/home.vue
 ````vue
 <template><div>hello</div></template>
@@ -763,6 +1520,254 @@ export function newId(): string {
 ````vue
 <template><div>hello</div></template>
 <script lang="ts" setup></script>
+````
+
+## File: app/pages/openrouter-callback.vue
+````vue
+<template>
+    <div class="min-h-screen flex items-center justify-center p-6">
+        <div
+            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
+        >
+            <p class="text-base font-medium mb-2">
+                {{ title }}
+            </p>
+            <p class="text-sm text-neutral-500 mb-4">
+                {{ subtitle }}
+            </p>
+            <div class="flex items-center justify-center gap-3">
+                <div
+                    v-if="loading"
+                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
+                />
+                <button
+                    v-if="ready"
+                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
+                    @click="goHome"
+                >
+                    Continue
+                </button>
+                <button
+                    v-if="errorMessage"
+                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
+                    @click="goHome"
+                >
+                    Go Home
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup>
+import { kv } from '~/db';
+
+const route = useRoute();
+const router = useRouter();
+const rc = useRuntimeConfig();
+
+const loading = ref(true);
+const ready = ref(false);
+const redirecting = ref(false);
+const errorMessage = ref('');
+const title = computed(() =>
+    errorMessage.value
+        ? 'Login completed with warnings'
+        : ready.value
+        ? 'Login complete'
+        : 'Completing login…'
+);
+const subtitle = computed(() => {
+    if (errorMessage.value) return errorMessage.value;
+    if (ready.value && !redirecting.value)
+        return 'If this page doesn’t redirect automatically, tap Continue.';
+    return 'Please wait while we finish setup.';
+});
+
+function log(...args) {
+    try {
+        // eslint-disable-next-line no-console
+        console.log('[openrouter-callback]', ...args);
+    } catch {}
+}
+
+async function setKVNonBlocking(key, value, timeoutMs = 300) {
+    try {
+        if (!kv?.set) return;
+        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
+        const result = await Promise.race([
+            kv.set(key, value),
+            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
+        ]);
+        if (result === 'timeout') log('setKV timed out; continuing');
+        else log('setKV resolved');
+    } catch (e) {
+        log('setKV failed', e?.message || e);
+    }
+}
+
+async function goHome() {
+    redirecting.value = true;
+    log("goHome() invoked. Trying router.replace('/').");
+    try {
+        await router.replace('/');
+        log("router.replace('/') resolved");
+    } catch (e) {
+        log("router.replace('/') failed:", e?.message || e);
+    }
+    try {
+        // Fallback to full document navigation
+        log("Attempting window.location.replace('/')");
+        window.location.replace('/');
+    } catch (e) {
+        log("window.location.replace('/') failed:", e?.message || e);
+    }
+    // Last-chance fallback on browsers that ignore replace
+    setTimeout(() => {
+        try {
+            log("Attempting final window.location.assign('/')");
+            window.location.assign('/');
+        } catch (e) {
+            log("window.location.assign('/') failed:", e?.message || e);
+        }
+    }, 150);
+}
+
+onMounted(async () => {
+    log('mounted at', window.location.href, 'referrer:', document.referrer);
+    const code = route.query.code;
+    const state = route.query.state;
+    const verifier = sessionStorage.getItem('openrouter_code_verifier');
+    const savedState = sessionStorage.getItem('openrouter_state');
+    const codeMethod =
+        sessionStorage.getItem('openrouter_code_method') || 'S256';
+    log('query params present:', {
+        code: Boolean(code),
+        state: Boolean(state),
+    });
+    log('session present:', {
+        verifier: Boolean(verifier),
+        savedState: Boolean(savedState),
+        codeMethod,
+    });
+
+    if (!code || !verifier) {
+        console.error('[openrouter-callback] Missing code or verifier');
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Missing code or verifier. Tap Continue to return.';
+        return;
+    }
+    if (savedState && state !== savedState) {
+        console.error('[openrouter-callback] State mismatch, potential CSRF', {
+            incoming: state,
+            savedState,
+        });
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value = 'State mismatch. Tap Continue to return.';
+        return;
+    }
+
+    try {
+        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
+        log('exchanging code with OpenRouter', {
+            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
+            codeLength: String(code).length,
+            method: codeMethod,
+            usingHTTPS: true,
+        });
+        const directResp = await fetch(
+            'https://openrouter.ai/api/v1/auth/keys',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: String(code),
+                    code_verifier: verifier,
+                    code_challenge_method: codeMethod,
+                }),
+            }
+        );
+        const directJson = await directResp.json().catch(async () => {
+            const text = await directResp.text().catch(() => '<no-body>');
+            log('non-JSON response body snippet:', text?.slice(0, 300));
+            return null;
+        });
+        if (!directResp.ok || !directJson) {
+            console.error(
+                '[openrouter-callback] Direct exchange failed',
+                directResp.status,
+                directJson
+            );
+            return;
+        }
+        const userKey = directJson.key || directJson.access_token;
+        if (!userKey) {
+            console.error(
+                '[openrouter-callback] Direct exchange returned no key',
+                {
+                    keys: Object.keys(directJson || {}),
+                }
+            );
+            return;
+        }
+        // store in localStorage for use by front-end
+        log('storing key in localStorage (length)', String(userKey).length);
+        // Save a human-readable name and the value; id/clock are handled
+        // inside the helper to match your schema
+        try {
+            await kv.set('openrouter_api_key', userKey);
+        } catch (e) {
+            log('kvByName.set failed', e?.message || e);
+        }
+        try {
+            log('dispatching openrouter:connected event');
+            window.dispatchEvent(new CustomEvent('openrouter:connected'));
+            // Best-effort: also persist to synced KV
+            try {
+                await setKVNonBlocking('openrouter_api_key', userKey, 300);
+            } catch {}
+        } catch {}
+        log('clearing session markers (verifier/state/method)');
+        sessionStorage.removeItem('openrouter_code_verifier');
+        sessionStorage.removeItem('openrouter_state');
+        sessionStorage.removeItem('openrouter_code_method');
+        // Allow event loop to process storage events in other tabs/components
+        await new Promise((r) => setTimeout(r, 10));
+        loading.value = false;
+        ready.value = true;
+        log('ready to redirect');
+        // Attempt auto-redirect but keep the Continue button visible
+        setTimeout(() => {
+            // first SPA attempt
+            log("auto: router.replace('/')");
+            router.replace('/').catch((e) => {
+                log('auto: router.replace failed', e?.message || e);
+            });
+            // then a hard replace if SPA was blocked
+            setTimeout(() => {
+                try {
+                    log("auto: window.location.replace('/')");
+                    window.location.replace('/');
+                } catch (e) {
+                    log(
+                        'auto: window.location.replace failed',
+                        e?.message || e
+                    );
+                }
+            }, 250);
+        }, 50);
+    } catch (err) {
+        console.error('[openrouter-callback] Exchange failed', err);
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Authentication finished, but we couldn’t auto-redirect.';
+    }
+});
+</script>
 ````
 
 ## File: app/plugins/hooks.client.ts
@@ -2750,13 +3755,6 @@ Use Cases
 - [Bluesky](https://bsky.app/profile/tiptap.dev)
 ````
 
-## File: app/components/chat/ChatInput.vue
-````vue
-<template></template>
-<script setup lang="ts"></script>
-<style scoped></style>
-````
-
 ## File: app/components/chat/ModelSelect.vue
 ````vue
 <template>
@@ -2838,6 +3836,52 @@ const searchInput = {
 <style scoped></style>
 ````
 
+## File: app/components/documents/ToolbarButton.vue
+````vue
+<template>
+    <button
+        class="retro-btn h-8 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm"
+        :class="[
+            active
+                ? 'bg-primary/40 aria-[pressed=true]:outline'
+                : 'opacity-80 hover:opacity-100',
+            square ? 'aspect-square w-8 p-0' : 'px-2',
+        ]"
+        :title="label"
+        :aria-pressed="active ? 'true' : 'false'"
+        :aria-label="computedAriaLabel"
+        type="button"
+        @click="$emit('activate')"
+    >
+        <template v-if="text">{{ text }}</template>
+        <template v-else-if="icon">
+            <UIcon :name="icon" class="w-4 h-4" />
+        </template>
+    </button>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+const props = defineProps<{
+    icon?: string;
+    active?: boolean;
+    label?: string;
+    text?: string;
+}>();
+defineEmits<{ (e: 'activate'): void }>();
+const computedAriaLabel = computed(() => props.text || props.label || '');
+const square = computed(
+    () => !props.text || (props.text && props.text.length <= 2)
+);
+</script>
+
+<style scoped>
+button {
+    font-family: inherit;
+}
+</style>
+````
+
 ## File: app/components/sidebar/SidebarHeader.vue
 ````vue
 <template>
@@ -2894,17 +3938,125 @@ function onToggle() {
 </style>
 ````
 
-## File: app/components/RetroGlassBtn.vue
-````vue
-<template>
-    <UButton
-        v-bind="$attrs"
-        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-        ><slot></slot
-    ></UButton>
-</template>
+## File: app/composables/useDocumentsStore.ts
+````typescript
+import { ref, reactive } from 'vue';
+import {
+    createDocument,
+    updateDocument,
+    getDocument,
+    type Document,
+} from '~/db/documents';
+import { useToast } from '#imports';
 
-<script setup></script>
+interface DocState {
+    record: Document | null;
+    status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
+    lastError?: any;
+    pendingTitle?: string; // staged changes
+    pendingContent?: any; // TipTap JSON
+    timer?: any;
+}
+
+const documentsMap = reactive(new Map<string, DocState>());
+const loadingIds = ref(new Set<string>());
+
+function ensure(id: string): DocState {
+    let st = documentsMap.get(id);
+    if (!st) {
+        st = { record: null, status: 'loading' } as DocState;
+        documentsMap.set(id, st);
+    }
+    return st;
+}
+
+function scheduleSave(id: string, delay = 750) {
+    const st = documentsMap.get(id);
+    if (!st) return;
+    if (st.timer) clearTimeout(st.timer);
+    st.timer = setTimeout(() => flush(id), delay);
+}
+
+export async function flush(id: string) {
+    const st = documentsMap.get(id);
+    if (!st || !st.record) return;
+    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
+    const patch: any = {};
+    if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
+    if (st.pendingContent !== undefined) patch.content = st.pendingContent;
+    st.status = 'saving';
+    try {
+        const updated = await updateDocument(id, patch);
+        if (updated) {
+            st.record = updated;
+            st.status = 'saved';
+        } else {
+            st.status = 'error';
+        }
+    } catch (e) {
+        st.status = 'error';
+        st.lastError = e;
+        useToast().add({ color: 'error', title: 'Document: save failed' });
+    } finally {
+        st.pendingTitle = undefined;
+        st.pendingContent = undefined;
+    }
+}
+
+export async function loadDocument(id: string) {
+    const st = ensure(id);
+    st.status = 'loading';
+    try {
+        const rec = await getDocument(id);
+        st.record = rec || null;
+        st.status = rec ? 'idle' : 'error';
+        if (!rec) {
+            useToast().add({ color: 'error', title: 'Document: not found' });
+        }
+    } catch (e) {
+        st.status = 'error';
+        st.lastError = e;
+        useToast().add({ color: 'error', title: 'Document: load failed' });
+    }
+    return st.record;
+}
+
+export async function newDocument(initial?: { title?: string; content?: any }) {
+    try {
+        const rec = await createDocument(initial);
+        const st = ensure(rec.id);
+        st.record = rec;
+        st.status = 'idle';
+        return rec;
+    } catch (e) {
+        useToast().add({ color: 'error', title: 'Document: create failed' });
+        throw e;
+    }
+}
+
+export function setDocumentTitle(id: string, title: string) {
+    const st = ensure(id);
+    if (st.record) {
+        st.pendingTitle = title;
+        scheduleSave(id);
+    }
+}
+
+export function setDocumentContent(id: string, content: any) {
+    const st = ensure(id);
+    if (st.record) {
+        st.pendingContent = content;
+        scheduleSave(id);
+    }
+}
+
+export function useDocumentState(id: string) {
+    return documentsMap.get(id) || ensure(id);
+}
+
+export function useAllDocumentsState() {
+    return documentsMap;
+}
 ````
 
 ## File: app/composables/useModelSearch.ts
@@ -3067,135 +4219,268 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
 export default useModelSearch;
 ````
 
-## File: app/composables/useOpenrouter.ts
+## File: app/composables/useSidebarSearch.ts
 ````typescript
-import { ref } from 'vue';
-import { kv } from '~/db';
+// Unified sidebar search across threads, projects, and documents.
+// Modeled after useThreadSearch but merges all three domains into one Orama index
+// for a single fast query. Falls back to substring filtering if Orama fails.
+//
+// Exposed API mirrors existing pattern so integration stays minimal.
+import { ref, watch, type Ref } from 'vue';
+import type { Thread, Project, Post } from '~/db';
 
-function base64urlencode(str: ArrayBuffer) {
-    return btoa(String.fromCharCode(...new Uint8Array(str)))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+interface IndexDoc {
+    id: string;
+    kind: 'thread' | 'project' | 'doc';
+    title: string;
+    updated_at: number;
 }
 
-async function sha256(plain: string) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(plain);
-    return await crypto.subtle.digest('SHA-256', data);
+type OramaInstance = any;
+let dbInstance: OramaInstance | null = null;
+let lastQueryToken = 0;
+let warnedFallback = false;
+
+async function importOrama() {
+    try {
+        return await import('@orama/orama');
+    } catch (e) {
+        throw new Error('Failed to load Orama');
+    }
 }
 
-export function useOpenRouterAuth() {
-    const isLoggingIn = ref(false);
+async function createDb() {
+    const { create } = await importOrama();
+    return create({
+        schema: {
+            id: 'string',
+            kind: 'string',
+            title: 'string',
+            updated_at: 'number',
+        },
+    });
+}
 
-    const startLogin = async () => {
-        if (isLoggingIn.value) return;
-        isLoggingIn.value = true;
-        const codeVerifier = Array.from(
-            crypto.getRandomValues(new Uint8Array(64))
-        )
-            .map((b) => ('0' + b.toString(16)).slice(-2))
-            .join('');
-        // Compute PKCE code_challenge. Prefer S256, but fall back to "plain"
-        // when SubtleCrypto is unavailable (e.g., iOS Safari on non-HTTPS).
-        let codeChallenge = codeVerifier;
-        let codeChallengeMethod: 'S256' | 'plain' = 'plain';
-        try {
-            if (
-                typeof crypto !== 'undefined' &&
-                typeof crypto.subtle?.digest === 'function'
-            ) {
-                const challengeBuffer = await sha256(codeVerifier);
-                codeChallenge = base64urlencode(challengeBuffer);
-                codeChallengeMethod = 'S256';
-            }
-        } catch {
-            // Keep plain fallback
-            codeChallenge = codeVerifier;
-            codeChallengeMethod = 'plain';
-        }
+function toDocs(
+    threads: Thread[],
+    projects: Project[],
+    documents: Post[]
+): IndexDoc[] {
+    const threadDocs: IndexDoc[] = threads.map((t) => ({
+        id: t.id,
+        kind: 'thread',
+        title: (t.title || 'Untitled Thread').trim() || 'Untitled Thread',
+        updated_at: t.updated_at,
+    }));
+    const projectDocs: IndexDoc[] = projects.map((p) => ({
+        id: p.id,
+        kind: 'project',
+        title: (p.name || 'Untitled Project').trim() || 'Untitled Project',
+        updated_at: p.updated_at,
+    }));
+    const docDocs: IndexDoc[] = documents
+        .filter((d) => (d as any).postType === 'doc' && !(d as any).deleted)
+        .map((d) => ({
+            id: d.id,
+            kind: 'doc',
+            title: (d as any).title || 'Untitled',
+            updated_at: (d as any).updated_at,
+        }));
+    return [...threadDocs, ...projectDocs, ...docDocs];
+}
 
-        // store verifier in session storage
-        sessionStorage.setItem('openrouter_code_verifier', codeVerifier);
-        // store the method so the callback knows how to exchange
-        try {
-            sessionStorage.setItem(
-                'openrouter_code_method',
-                codeChallengeMethod
-            );
-        } catch {}
-        // store a random state to protect against CSRF
-        const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-            .map((b) => ('0' + b.toString(16)).slice(-2))
-            .join('');
-        sessionStorage.setItem('openrouter_state', state);
+async function buildIndex(
+    threads: Thread[],
+    projects: Project[],
+    documents: Post[]
+) {
+    const { insertMultiple } = await importOrama();
+    dbInstance = await createDb();
+    if (!dbInstance) return null;
+    const docs = toDocs(threads, projects, documents);
+    if (docs.length) await insertMultiple(dbInstance, docs);
+    return dbInstance;
+}
 
-        const rc = useRuntimeConfig();
-        // default callback to current origin + known path when not provided
-        const callbackUrl =
-            String(rc.public.openRouterRedirectUri || '') ||
-            `${window.location.origin}/openrouter-callback`;
+// Signature helper to know when to rebuild (counts + latest updated_at)
+function computeSignature(
+    threads: Thread[],
+    projects: Project[],
+    documents: Post[]
+) {
+    let latest = 0;
+    for (const t of threads) if (t.updated_at > latest) latest = t.updated_at;
+    for (const p of projects) if (p.updated_at > latest) latest = p.updated_at;
+    for (const d of documents)
+        if ((d as any).updated_at > latest) latest = (d as any).updated_at;
+    return `${threads.length}:${projects.length}:${documents.length}:${latest}`;
+}
 
-        const params = new URLSearchParams();
-        // Per docs, only callback_url, code_challenge(+method), and optional state are required
-        // OpenRouter expects a 'callback_url' parameter
-        params.append('callback_url', callbackUrl);
-        params.append('state', state);
-        params.append('code_challenge', codeChallenge);
-        params.append('code_challenge_method', codeChallengeMethod);
-        // If you have a registered app on OpenRouter, including client_id helps avoid
-        // app auto-creation based on referrer (which can be flaky on mobile).
-        const clientId = rc.public.openRouterClientId as string | undefined;
-        if (clientId) params.append('client_id', String(clientId));
+export function useSidebarSearch(
+    threads: Ref<Thread[]>,
+    projects: Ref<Project[]>,
+    documents: Ref<Post[]>
+) {
+    const query = ref('');
+    const threadResults = ref<Thread[]>([]);
+    const projectResults = ref<Project[]>([]);
+    const documentResults = ref<Post[]>([]);
+    const ready = ref(false);
+    const busy = ref(false);
+    const lastIndexedSignature = ref('');
+    const idMaps = {
+        thread: ref<Record<string, Thread>>({}),
+        project: ref<Record<string, Project>>({}),
+        doc: ref<Record<string, Post>>({}),
+    };
 
-        const authUrl = String(
-            rc.public.openRouterAuthUrl || 'https://openrouter.ai/auth'
+    async function ensureIndex() {
+        if (busy.value) return;
+        const sig = computeSignature(
+            threads.value,
+            projects.value,
+            documents.value
         );
-        const url = `${authUrl}?${params.toString()}`;
-
-        // Warn if callback URL is not HTTPS or localhost (common iOS issue)
+        if (sig === lastIndexedSignature.value && dbInstance) return;
+        busy.value = true;
         try {
-            const u = new URL(callbackUrl);
-            const isLocalhost = ['localhost', '127.0.0.1'].includes(u.hostname);
-            const isHttps = u.protocol === 'https:';
-            if (!isHttps && !isLocalhost) {
-                console.warn(
-                    'OpenRouter PKCE: non-HTTPS, non-localhost callback_url detected. On mobile, use a public HTTPS tunnel and set OPENROUTER_REDIRECT_URI.',
-                    callbackUrl
-                );
-            }
-        } catch {}
-
-        // Debug: log the final URL so devs can confirm params/authUrl are correct
-        // This helps when runtime config is missing or incorrect.
-        // eslint-disable-next-line no-console
-        console.debug('OpenRouter PKCE redirect URL:', url);
-
-        // Use assign to ensure history behaves consistently across mobile browsers
-        window.location.assign(url);
-    };
-
-    const logoutOpenRouter = async () => {
-        try {
-            // Remove local copy immediately for UX
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('openrouter_api_key');
-            }
-            // Best-effort: clear synced KV by setting empty
-            try {
-                await kv.delete('openrouter_api_key');
-            } catch {}
-            // Notify UI listeners (Sidebar, etc.) to recompute state
-            try {
-                window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            } catch {}
-        } catch (e) {
-            console.error('OpenRouter logout failed', e);
+            idMaps.thread.value = Object.fromEntries(
+                threads.value.map((t) => [t.id, t])
+            );
+            idMaps.project.value = Object.fromEntries(
+                projects.value.map((p) => [p.id, p])
+            );
+            idMaps.doc.value = Object.fromEntries(
+                documents.value
+                    .filter(
+                        (d) =>
+                            (d as any).postType === 'doc' && !(d as any).deleted
+                    )
+                    .map((d) => [d.id, d])
+            );
+            await buildIndex(threads.value, projects.value, documents.value);
+            lastIndexedSignature.value = sig;
+            ready.value = true;
+        } finally {
+            busy.value = false;
         }
-    };
+    }
 
-    return { startLogin, logoutOpenRouter, isLoggingIn };
+    function substringFallback(raw: string) {
+        const ql = raw.toLowerCase();
+        const threadHits = threads.value.filter((t) =>
+            (t.title || '').toLowerCase().includes(ql)
+        );
+        const projectHits = projects.value.filter((p) =>
+            (p.name || '').toLowerCase().includes(ql)
+        );
+        const docHits = documents.value.filter(
+            (d) =>
+                (d as any).postType === 'doc' &&
+                !(d as any).deleted &&
+                ((d as any).title || '').toLowerCase().includes(ql)
+        );
+        threadResults.value = threadHits;
+        projectResults.value = projectHits;
+        documentResults.value = docHits;
+        if (!warnedFallback) {
+            // eslint-disable-next-line no-console
+            console.warn('[useSidebarSearch] fallback substring search used');
+            warnedFallback = true;
+        }
+    }
+
+    async function runSearch() {
+        if (!dbInstance) await ensureIndex();
+        if (!dbInstance) return;
+        const raw = query.value.trim();
+        if (!raw) {
+            threadResults.value = threads.value;
+            projectResults.value = projects.value;
+            documentResults.value = documents.value.filter(
+                (d) => (d as any).postType === 'doc' && !(d as any).deleted
+            );
+            return;
+        }
+        const token = ++lastQueryToken;
+        try {
+            const { search } = await importOrama();
+            const res = await search(dbInstance, { term: raw, limit: 500 });
+            if (token !== lastQueryToken) return; // stale
+            const hits = Array.isArray(res?.hits) ? res.hits : [];
+            const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
+                thread: new Set(),
+                project: new Set(),
+                doc: new Set(),
+            };
+            for (const h of hits) {
+                const doc = h.document || h;
+                if (
+                    doc?.kind &&
+                    doc?.id &&
+                    byKind[doc.kind as keyof typeof byKind]
+                ) {
+                    byKind[doc.kind as keyof typeof byKind].add(doc.id);
+                }
+            }
+            // Apply sets
+            if (
+                !byKind.thread.size &&
+                !byKind.project.size &&
+                !byKind.doc.size
+            ) {
+                // Nothing matched -> fallback substring to provide any partials
+                substringFallback(raw);
+                return;
+            }
+            threadResults.value = threads.value.filter((t) =>
+                byKind.thread.has(t.id)
+            );
+            projectResults.value = projects.value.filter((p) =>
+                byKind.project.has(p.id)
+            );
+            documentResults.value = documents.value.filter((d) =>
+                byKind.doc.has(d.id)
+            );
+            // If a project contains matching threads/docs but project name itself didn't match, UI can choose to retain by containment; we leave that logic to integration to keep composable lean.
+        } catch (e) {
+            substringFallback(raw);
+        }
+    }
+
+    // Rebuild index & rerun search on data change
+    watch([threads, projects, documents], async () => {
+        await ensureIndex();
+        await runSearch();
+    });
+
+    // Debounce query changes (120ms like existing thread search)
+    let debounceTimer: any;
+    watch(query, () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(runSearch, 120);
+    });
+
+    // Initial population (pass-through until first build completes)
+    threadResults.value = threads.value;
+    projectResults.value = projects.value;
+    documentResults.value = documents.value.filter(
+        (d) => (d as any).postType === 'doc' && !(d as any).deleted
+    );
+
+    return {
+        query,
+        threadResults,
+        projectResults,
+        documentResults,
+        ready,
+        busy,
+        rebuild: ensureIndex,
+        runSearch,
+    };
 }
+
+export default useSidebarSearch;
 ````
 
 ## File: app/composables/useThreadSearch.ts
@@ -3323,78 +4608,6 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
 }
 
 export default useThreadSearch;
-````
-
-## File: app/db/attachments.ts
-````typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import {
-    AttachmentCreateSchema,
-    AttachmentSchema,
-    type Attachment,
-    type AttachmentCreate,
-} from './schema';
-
-export async function createAttachment(
-    input: AttachmentCreate
-): Promise<Attachment> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.attachments.create:filter:input',
-        input
-    );
-    await hooks.doAction('db.attachments.create:action:before', filtered);
-    const value = parseOrThrow(AttachmentCreateSchema, filtered);
-    await db.attachments.put(value);
-    await hooks.doAction('db.attachments.create:action:after', value);
-    return value;
-}
-
-export async function upsertAttachment(value: Attachment): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.attachments.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.attachments.upsert:action:before', filtered);
-    parseOrThrow(AttachmentSchema, filtered);
-    await db.attachments.put(filtered);
-    await hooks.doAction('db.attachments.upsert:action:after', filtered);
-}
-
-export async function softDeleteAttachment(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.attachments, async () => {
-        const a = await db.attachments.get(id);
-        if (!a) return;
-        await hooks.doAction('db.attachments.delete:action:soft:before', a);
-        await db.attachments.put({
-            ...a,
-            deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        await hooks.doAction('db.attachments.delete:action:soft:after', a);
-    });
-}
-
-export async function hardDeleteAttachment(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.attachments.get(id);
-    await hooks.doAction(
-        'db.attachments.delete:action:hard:before',
-        existing ?? id
-    );
-    await db.attachments.delete(id);
-    await hooks.doAction('db.attachments.delete:action:hard:after', id);
-}
-
-export async function getAttachment(id: string) {
-    const hooks = useHooks();
-    const res = await db.attachments.get(id);
-    return hooks.applyFilters('db.attachments.get:filter:output', res);
-}
 ````
 
 ## File: app/db/files-util.ts
@@ -3538,6 +4751,316 @@ export async function removeFileFromMessage(messageId: string, hash: string) {
 }
 ````
 
+## File: app/db/messages.ts
+````typescript
+import Dexie from 'dexie';
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { newId, nowSec, parseOrThrow } from './util';
+import {
+    MessageCreateSchema,
+    MessageSchema,
+    type Message,
+    type MessageCreate,
+} from './schema';
+import { serializeFileHashes } from './files-util';
+
+export async function createMessage(input: MessageCreate): Promise<Message> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.create:filter:input',
+        input
+    );
+    // Support passing file_hashes as string[] for convenience
+    if (Array.isArray((filtered as any).file_hashes)) {
+        (filtered as any).file_hashes = serializeFileHashes(
+            (filtered as any).file_hashes
+        );
+    }
+    // Apply defaults (id/clock/timestamps) then validate fully
+    const prepared = parseOrThrow(MessageCreateSchema, filtered);
+    const value = parseOrThrow(MessageSchema, prepared);
+    await hooks.doAction('db.messages.create:action:before', value);
+    await db.messages.put(value);
+    await hooks.doAction('db.messages.create:action:after', value);
+    return value;
+}
+
+export async function upsertMessage(value: Message): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.messages.upsert:action:before', filtered);
+    parseOrThrow(MessageSchema, filtered);
+    await db.messages.put(filtered);
+    await hooks.doAction('db.messages.upsert:action:after', filtered);
+}
+
+export function messagesByThread(threadId: string) {
+    const hooks = useHooks();
+    return db.messages
+        .where('thread_id')
+        .equals(threadId)
+        .sortBy('index')
+        .then((res) =>
+            hooks.applyFilters('db.messages.byThread:filter:output', res)
+        );
+}
+
+export function getMessage(id: string) {
+    const hooks = useHooks();
+    return db.messages
+        .get(id)
+        .then((res) =>
+            hooks.applyFilters('db.messages.get:filter:output', res)
+        );
+}
+
+export function messageByStream(streamId: string) {
+    const hooks = useHooks();
+    return db.messages
+        .where('stream_id')
+        .equals(streamId)
+        .first()
+        .then((res) =>
+            hooks.applyFilters('db.messages.byStream:filter:output', res)
+        );
+}
+
+export async function softDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, async () => {
+        const m = await db.messages.get(id);
+        if (!m) return;
+        await hooks.doAction('db.messages.delete:action:soft:before', m);
+        await db.messages.put({ ...m, deleted: true, updated_at: nowSec() });
+        await hooks.doAction('db.messages.delete:action:soft:after', m);
+    });
+}
+
+export async function hardDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.messages.get(id);
+    await hooks.doAction(
+        'db.messages.delete:action:hard:before',
+        existing ?? id
+    );
+    await db.messages.delete(id);
+    await hooks.doAction('db.messages.delete:action:hard:after', id);
+}
+
+// Append a message to a thread and update thread timestamps atomically
+export async function appendMessage(input: MessageCreate): Promise<Message> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.messages, db.threads, async () => {
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
+        }
+        const value = parseOrThrow(MessageCreateSchema, input);
+        await hooks.doAction('db.messages.append:action:before', value);
+        // If index not set, compute next sparse index in thread
+        if (value.index === undefined || value.index === null) {
+            const last = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [value.thread_id, Dexie.minKey],
+                    [value.thread_id, Dexie.maxKey]
+                )
+                .last();
+            const lastIdx = last?.index ?? 0;
+            value.index = last ? lastIdx + 1000 : 1000;
+        }
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(value.thread_id);
+        if (t) {
+            const now = nowSec();
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        }
+        await hooks.doAction('db.messages.append:action:after', finalized);
+        return finalized;
+    });
+}
+
+// Move a message to another thread, computing next index in destination
+export async function moveMessage(
+    messageId: string,
+    toThreadId: string
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, db.threads, async () => {
+        const m = await db.messages.get(messageId);
+        if (!m) return;
+        await hooks.doAction('db.messages.move:action:before', {
+            message: m,
+            toThreadId,
+        });
+        const last = await db.messages
+            .where('[thread_id+index]')
+            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
+            .last();
+        const nextIdx = last ? last.index + 1000 : 1000;
+        await db.messages.put({
+            ...m,
+            thread_id: toThreadId,
+            index: nextIdx,
+            updated_at: nowSec(),
+        });
+
+        const now = nowSec();
+        const t = await db.threads.get(toThreadId);
+        if (t)
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        await hooks.doAction('db.messages.move:action:after', {
+            messageId,
+            toThreadId,
+        });
+    });
+}
+
+// Copy a message into another thread (new id) and update dest thread timestamps
+export async function copyMessage(
+    messageId: string,
+    toThreadId: string
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, db.threads, async () => {
+        const m = await db.messages.get(messageId);
+        if (!m) return;
+        await hooks.doAction('db.messages.copy:action:before', {
+            message: m,
+            toThreadId,
+        });
+        const last = await db.messages
+            .where('[thread_id+index]')
+            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
+            .last();
+        const nextIdx = last ? last.index + 1000 : 1000;
+        await db.messages.put({
+            ...m,
+            id: newId(),
+            thread_id: toThreadId,
+            index: nextIdx,
+            created_at: nowSec(),
+            updated_at: nowSec(),
+        });
+
+        const now = nowSec();
+        const t = await db.threads.get(toThreadId);
+        if (t)
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        await hooks.doAction('db.messages.copy:action:after', {
+            from: messageId,
+            toThreadId,
+        });
+    });
+}
+
+// Insert a message right after a given message id, adjusting index using sparse spacing
+export async function insertMessageAfter(
+    afterMessageId: string,
+    input: Omit<MessageCreate, 'index'>
+): Promise<Message> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.messages, db.threads, async () => {
+        const after = await db.messages.get(afterMessageId);
+        if (!after) throw new Error('after message not found');
+        const next = await db.messages
+            .where('[thread_id+index]')
+            .above([after.thread_id, after.index])
+            .first();
+        let newIndex: number;
+        if (!next) {
+            newIndex = after.index + 1000;
+        } else if (next.index - after.index > 1) {
+            newIndex = after.index + Math.floor((next.index - after.index) / 2);
+        } else {
+            // No gap, normalize thread then place after
+            await normalizeThreadIndexes(after.thread_id);
+            newIndex = after.index + 1000;
+        }
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
+        }
+        const value = parseOrThrow(MessageCreateSchema, {
+            ...input,
+            index: newIndex,
+            thread_id: after.thread_id,
+        });
+        await hooks.doAction('db.messages.insertAfter:action:before', {
+            after,
+            value,
+        });
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(after.thread_id);
+        if (t) {
+            const now = nowSec();
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        }
+        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
+        return finalized;
+    });
+}
+
+// Compact / normalize indexes for a thread to 1000, 2000, 3000...
+export async function normalizeThreadIndexes(
+    threadId: string,
+    start = 1000,
+    step = 1000
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, async () => {
+        await hooks.doAction('db.messages.normalize:action:before', {
+            threadId,
+            start,
+            step,
+        });
+        const msgs = await db.messages
+            .where('[thread_id+index]')
+            .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
+            .toArray();
+        msgs.sort((a, b) => a.index - b.index);
+        let idx = start;
+        for (const m of msgs) {
+            if (m.index !== idx) {
+                await db.messages.put({
+                    ...m,
+                    index: idx,
+                    updated_at: nowSec(),
+                });
+            }
+            idx += step;
+        }
+        await hooks.doAction('db.messages.normalize:action:after', {
+            threadId,
+        });
+    });
+}
+````
+
 ## File: app/db/posts.ts
 ````typescript
 import { db } from './client';
@@ -3645,71 +5168,6 @@ export async function hardDeletePost(id: string): Promise<void> {
 }
 ````
 
-## File: app/db/projects.ts
-````typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import { ProjectSchema, type Project } from './schema';
-
-export async function createProject(input: Project): Promise<Project> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.projects.create:filter:input',
-        input
-    );
-    await hooks.doAction('db.projects.create:action:before', filtered);
-    const value = parseOrThrow(ProjectSchema, filtered);
-    await db.projects.put(value);
-    await hooks.doAction('db.projects.create:action:after', value);
-    return value;
-}
-
-export async function upsertProject(value: Project): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.projects.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.projects.upsert:action:before', filtered);
-    parseOrThrow(ProjectSchema, filtered);
-    await db.projects.put(filtered);
-    await hooks.doAction('db.projects.upsert:action:after', filtered);
-}
-
-export async function softDeleteProject(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.projects, async () => {
-        const p = await db.projects.get(id);
-        if (!p) return;
-        await hooks.doAction('db.projects.delete:action:soft:before', p);
-        await db.projects.put({
-            ...p,
-            deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        await hooks.doAction('db.projects.delete:action:soft:after', p);
-    });
-}
-
-export async function hardDeleteProject(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.projects.get(id);
-    await hooks.doAction(
-        'db.projects.delete:action:hard:before',
-        existing ?? id
-    );
-    await db.projects.delete(id);
-    await hooks.doAction('db.projects.delete:action:hard:after', id);
-}
-
-export async function getProject(id: string) {
-    const hooks = useHooks();
-    const res = await db.projects.get(id);
-    return hooks.applyFilters('db.projects.get:filter:output', res);
-}
-````
-
 ## File: app/pages/chat/[id].vue
 ````vue
 <template>
@@ -3732,252 +5190,16 @@ import ChatPageShell from '~/components/chat/ChatPageShell.vue';
 </script>
 ````
 
-## File: app/pages/openrouter-callback.vue
-````vue
-<template>
-    <div class="min-h-screen flex items-center justify-center p-6">
-        <div
-            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
-        >
-            <p class="text-base font-medium mb-2">
-                {{ title }}
-            </p>
-            <p class="text-sm text-neutral-500 mb-4">
-                {{ subtitle }}
-            </p>
-            <div class="flex items-center justify-center gap-3">
-                <div
-                    v-if="loading"
-                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
-                />
-                <button
-                    v-if="ready"
-                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
-                    @click="goHome"
-                >
-                    Continue
-                </button>
-                <button
-                    v-if="errorMessage"
-                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
-                    @click="goHome"
-                >
-                    Go Home
-                </button>
-            </div>
-        </div>
-    </div>
-</template>
+## File: app/state/global.ts
+````typescript
+import { openrouter } from '@openrouter/ai-sdk-provider';
+import { ref } from 'vue';
 
-<script setup>
-import { kv } from '~/db';
-
-const route = useRoute();
-const router = useRouter();
-const rc = useRuntimeConfig();
-
-const loading = ref(true);
-const ready = ref(false);
-const redirecting = ref(false);
-const errorMessage = ref('');
-const title = computed(() =>
-    errorMessage.value
-        ? 'Login completed with warnings'
-        : ready.value
-        ? 'Login complete'
-        : 'Completing login…'
-);
-const subtitle = computed(() => {
-    if (errorMessage.value) return errorMessage.value;
-    if (ready.value && !redirecting.value)
-        return 'If this page doesn’t redirect automatically, tap Continue.';
-    return 'Please wait while we finish setup.';
+export const state = ref({
+    openrouterKey: '' as string | null,
 });
 
-function log(...args) {
-    try {
-        // eslint-disable-next-line no-console
-        console.log('[openrouter-callback]', ...args);
-    } catch {}
-}
-
-async function setKVNonBlocking(key, value, timeoutMs = 300) {
-    try {
-        if (!kv?.set) return;
-        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
-        const result = await Promise.race([
-            kv.set(key, value),
-            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
-        ]);
-        if (result === 'timeout') log('setKV timed out; continuing');
-        else log('setKV resolved');
-    } catch (e) {
-        log('setKV failed', e?.message || e);
-    }
-}
-
-async function goHome() {
-    redirecting.value = true;
-    log("goHome() invoked. Trying router.replace('/').");
-    try {
-        await router.replace('/');
-        log("router.replace('/') resolved");
-    } catch (e) {
-        log("router.replace('/') failed:", e?.message || e);
-    }
-    try {
-        // Fallback to full document navigation
-        log("Attempting window.location.replace('/')");
-        window.location.replace('/');
-    } catch (e) {
-        log("window.location.replace('/') failed:", e?.message || e);
-    }
-    // Last-chance fallback on browsers that ignore replace
-    setTimeout(() => {
-        try {
-            log("Attempting final window.location.assign('/')");
-            window.location.assign('/');
-        } catch (e) {
-            log("window.location.assign('/') failed:", e?.message || e);
-        }
-    }, 150);
-}
-
-onMounted(async () => {
-    log('mounted at', window.location.href, 'referrer:', document.referrer);
-    const code = route.query.code;
-    const state = route.query.state;
-    const verifier = sessionStorage.getItem('openrouter_code_verifier');
-    const savedState = sessionStorage.getItem('openrouter_state');
-    const codeMethod =
-        sessionStorage.getItem('openrouter_code_method') || 'S256';
-    log('query params present:', {
-        code: Boolean(code),
-        state: Boolean(state),
-    });
-    log('session present:', {
-        verifier: Boolean(verifier),
-        savedState: Boolean(savedState),
-        codeMethod,
-    });
-
-    if (!code || !verifier) {
-        console.error('[openrouter-callback] Missing code or verifier');
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Missing code or verifier. Tap Continue to return.';
-        return;
-    }
-    if (savedState && state !== savedState) {
-        console.error('[openrouter-callback] State mismatch, potential CSRF', {
-            incoming: state,
-            savedState,
-        });
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value = 'State mismatch. Tap Continue to return.';
-        return;
-    }
-
-    try {
-        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
-        log('exchanging code with OpenRouter', {
-            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
-            codeLength: String(code).length,
-            method: codeMethod,
-            usingHTTPS: true,
-        });
-        const directResp = await fetch(
-            'https://openrouter.ai/api/v1/auth/keys',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: String(code),
-                    code_verifier: verifier,
-                    code_challenge_method: codeMethod,
-                }),
-            }
-        );
-        const directJson = await directResp.json().catch(async () => {
-            const text = await directResp.text().catch(() => '<no-body>');
-            log('non-JSON response body snippet:', text?.slice(0, 300));
-            return null;
-        });
-        if (!directResp.ok || !directJson) {
-            console.error(
-                '[openrouter-callback] Direct exchange failed',
-                directResp.status,
-                directJson
-            );
-            return;
-        }
-        const userKey = directJson.key || directJson.access_token;
-        if (!userKey) {
-            console.error(
-                '[openrouter-callback] Direct exchange returned no key',
-                {
-                    keys: Object.keys(directJson || {}),
-                }
-            );
-            return;
-        }
-        // store in localStorage for use by front-end
-        log('storing key in localStorage (length)', String(userKey).length);
-        // Save a human-readable name and the value; id/clock are handled
-        // inside the helper to match your schema
-        try {
-            await kv.set('openrouter_api_key', userKey);
-        } catch (e) {
-            log('kvByName.set failed', e?.message || e);
-        }
-        try {
-            log('dispatching openrouter:connected event');
-            window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            // Best-effort: also persist to synced KV
-            try {
-                await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch {}
-        } catch {}
-        log('clearing session markers (verifier/state/method)');
-        sessionStorage.removeItem('openrouter_code_verifier');
-        sessionStorage.removeItem('openrouter_state');
-        sessionStorage.removeItem('openrouter_code_method');
-        // Allow event loop to process storage events in other tabs/components
-        await new Promise((r) => setTimeout(r, 10));
-        loading.value = false;
-        ready.value = true;
-        log('ready to redirect');
-        // Attempt auto-redirect but keep the Continue button visible
-        setTimeout(() => {
-            // first SPA attempt
-            log("auto: router.replace('/')");
-            router.replace('/').catch((e) => {
-                log('auto: router.replace failed', e?.message || e);
-            });
-            // then a hard replace if SPA was blocked
-            setTimeout(() => {
-                try {
-                    log("auto: window.location.replace('/')");
-                    window.location.replace('/');
-                } catch (e) {
-                    log(
-                        'auto: window.location.replace failed',
-                        e?.message || e
-                    );
-                }
-            }, 250);
-        }, 50);
-    } catch (err) {
-        console.error('[openrouter-callback] Exchange failed', err);
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Authentication finished, but we couldn’t auto-redirect.';
-    }
-});
-</script>
+export const isMobile = ref<boolean>(false);
 ````
 
 ## File: app/utils/files-constants.ts
@@ -4373,6 +5595,331 @@ performance
 Document version: 1.0 (Task 7.2)
 ````
 
+## File: planning/documents-editor/design.md
+````markdown
+# design.md
+
+artifact_id: 77c0ad5d-1112-4d37-8d39-c58b082f4f1e
+
+## Overview
+
+Implement a minimal TipTap editor for creating and editing documents stored locally (Dexie) with existing DB utilities. Integrate with the existing multi-pane abstraction used for chats so a pane can show either a chat thread or a document. Scope is intentionally small: one simple schema, one list view, one editor component, basic formatting.
+
+## Architecture
+
+High-Level Flow:
+
+1. User clicks "New Document" or selects an existing one from sidebar.
+2. Active pane context switches to mode = 'document' with documentId.
+3. Pane loads document via `documents` module (create or fetch) and instantiates `<DocumentEditor>` (TipTap instance).
+4. User edits; editor emits debounced updates -> save pipeline -> Dexie write -> update updated_at.
+5. Sidebar list reacts (live query or explicit refresh) and reorders document position.
+
+```mermaid
+graph TD
+  Sidebar-->PaneController
+  PaneController-->LoadOrCreateDoc
+  LoadOrCreateDoc-->DocumentStore
+  DocumentStore-->DexieDB
+  PaneController-->DocumentEditor
+  DocumentEditor-->SaveDebounce-->DocumentStore
+  DocumentStore-->Sidebar
+```
+
+## Components / Modules
+
+1. documents.ts (DB API) - implement minimal CRUD (create, get, list, update). Already stubbed; will follow patterns in other db modules.
+2. DocumentStore (lightweight composable) - reactive cache per id, handles save debounce & status state.
+3. DocumentEditor.vue - wraps TipTap editor, toolbar, title input, status indicator. Emits changes.
+4. SidebarDocumentsList.vue - lists documents (id, title, updated_at). Integrates into existing sidebar region.
+5. Pane integration - extend pane state with `mode: 'chat' | 'doc'` and `documentId?` (mutually exclusive with threadId). Update logic in `ChatPageShell.vue` minimal patch.
+
+## Data Model
+
+TypeScript interface:
+
+```ts
+export interface DocumentRecord {
+    id: string;
+    title: string; // fallback 'Untitled'
+    content: any; // TipTap JSON
+    created_at: number; // seconds
+    updated_at: number; // seconds
+    deleted: boolean;
+    clock: number; // optimistic concurrency (reuse pattern)
+}
+```
+
+Persistence decisions:
+
+-   Store `content` as JSON string in Dexie (like other data) or direct object; keep consistent with existing modules (likely object). For simplicity: object.
+-   Update path: every debounced change increments `clock` and sets updated_at.
+
+## Simple documents.ts API (planned)
+
+```ts
+import { db } from './client';
+import { newId, nowSec } from './util';
+
+export async function createDocument(
+    partial?: Partial<DocumentRecord>
+): Promise<DocumentRecord> {
+    /* fill defaults */
+}
+export async function getDocument(
+    id: string
+): Promise<DocumentRecord | undefined> {
+    /* db.get */
+}
+export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
+    /* order by updated_at desc */
+}
+export async function updateDocument(
+    id: string,
+    patch: Partial<Pick<DocumentRecord, 'title' | 'content'>>
+): Promise<DocumentRecord | undefined> {
+    /* merge & save */
+}
+```
+
+Error strategy: catch, rethrow with prefix 'Document:' or return undefined for not found.
+
+## DocumentStore Composable
+
+Responsibilities:
+
+-   Provide reactive map: id -> { record, status: 'idle'|'saving'|'saved'|'error', lastError? }
+-   Expose load(id), create(), setTitle(id,title), applyContentPatch(id, docJSON).
+-   Debounce: internal timer per id (single setTimeout). Delay 750ms after last mutation.
+-   Immediate flush method for pane close.
+
+Pseudo:
+
+```ts
+const docs = reactive(new Map<string, DocState>());
+function ensure(id) { /* init state */ }
+function scheduleSave(id) { clearTimeout(t); t=setTimeout(()=>flush(id), 750); }
+async function flush(id) { status='saving'; try { await updateDocument(...); status='saved'; } catch(e){ status='error'; lastError=e; } }
+```
+
+## Editor Component (DocumentEditor.vue)
+
+Props: { documentId: string }
+Hooks:
+
+-   on mount: load via DocumentStore
+-   watch doc state -> update TipTap content if id changes
+-   TipTap extensions: StarterKit (paragraph, heading, bold, italic, code, lists, hr, history)
+-   Toolbar buttons: call chain() API
+-   Title input: v-model -> debounced store.setTitle
+-   Status text: computed from store state
+
+Prevent loop: Only set editor content if incoming record.content JSON differs (deep compare of version field or JSON stringify length). Keep simple: compare stringified once cached.
+
+## Pane Integration Changes
+
+Add to PaneState:
+
+```ts
+interface PaneState {
+    id: string;
+    mode: 'chat' | 'doc';
+    threadId: string; // used when mode==='chat'
+    documentId?: string; // used when mode==='doc'
+    messages: ChatMessage[];
+    // ... existing
+}
+```
+
+Helpers:
+
+-   openDocumentInPane(paneIndex, docId) sets mode & clears chat-specific arrays.
+-   newDocumentInPane(paneIndex) -> create then open.
+    URL routing: Keep unchanged: URLs still /chat or /chat/<threadId>. Documents do not yet get deep links (out of scope minimal). If needed later we can map /doc/<id>.
+
+## Sidebar Integration
+
+Add documents list under a simple divider. Each item click -> openDocumentInPane(activePaneIndex, id).
+
+## Error Handling
+
+-   Wrap each DB call in try/catch; toast on error.
+-   Editor shows inline fallback: if record can't load, show message & retry button.
+
+## Testing Strategy (Lightweight)
+
+-   Unit: DocumentStore debounce flush logic (simulate rapid patches).
+-   Unit: createDocument sets defaults (title fallback, timestamps non-zero).
+-   Smoke manual: create, edit, rename, open second pane with chat + doc, ensure independent states.
+
+(No heavy automated integration tests for now—scope minimal.)
+
+## Performance
+
+-   Single TipTap instance per open document pane. Usually <= 1-2.
+-   Debounce saves to avoid write storm.
+-   Avoid deep cloning large JSON on every keystroke (TipTap handles internal state). We only snapshot JSON when scheduling save.
+
+## Open Questions (Deferred)
+
+-   Full text search indexing documents (later).
+-   Sharing / export (later).
+-   Deep linking for documents (later).
+````
+
+## File: planning/documents-editor/requirements.md
+````markdown
+# requirements.md
+
+artifact_id: 9f1b8d83-3c9c-4d4c-9f7a-9f5f3ec8a7c4
+
+## Introduction
+
+Add a minimal TipTap-based document editor to the existing chat app. Users can create, view, and edit simple rich-text documents (paragraphs, headings, bold/italic/underline/code, bullet & ordered lists, horizontal rule, undo/redo). Documents open inside panes just like chats so a user can split-screen a chat and a document (or multiple documents). Keep scope intentionally small: no collaborative editing, no complex schema migrations, no version history right now.
+
+## Requirements
+
+### 1. Create Documents
+
+User Story: As a user, I want to create a new document so that I can take notes while chatting.
+Acceptance Criteria:
+
+-   WHEN the user clicks a "New Document" action in the sidebar or pane toolbar THEN a new blank document SHALL be created locally with an auto-generated id, default title "Untitled" and empty content.
+-   WHEN creation succeeds THEN the document SHALL appear in the documents list/tree immediately.
+-   IF creation fails (Dexie/db error) THEN an error toast SHALL display and no partial document is left referenced in UI.
+
+### 2. Open / Edit Document In Pane
+
+User Story: As a user, I want to open a document in a pane so that I can read or edit it beside a chat.
+Acceptance Criteria:
+
+-   WHEN a document is selected from the sidebar THEN it SHALL load into the active pane (reusing multi-pane infra) with its title and content.
+-   WHEN switching panes THEN each pane SHALL retain its own currently opened document or chat thread id without interference.
+-   IF the pane already has unsaved edits and the user opens a different document THEN pending edits SHALL be auto-saved first (best effort) before loading the new one.
+-   IF a document id does not exist or is deleted THEN the pane SHALL show a not-found placeholder and offer a back action.
+
+### 3. Basic Rich Text Editing
+
+User Story: As a user, I want simple formatting tools so that I can structure my notes.
+Acceptance Criteria:
+
+-   Toolbar SHALL provide: Bold, Italic, Code, Heading toggle (H1/H2/Paragraph), Bullet List, Ordered List, Horizontal Rule, Undo, Redo.
+-   Keyboard shortcuts (native TipTap defaults) SHALL work (e.g., Mod-B, Mod-I, Mod-Z/Y).
+-   Selection based formatting state SHALL reflect active mark/block (button active style) within 100ms of selection change.
+-   Editor content SHALL auto-save (debounced <= 1s idle) after changes.
+
+### 4. Title Editing
+
+User Story: As a user, I want to rename a document so that I can identify it later.
+Acceptance Criteria:
+
+-   Title field SHALL be inline editable (single-line input) above the editor.
+-   Title changes SHALL persist using same debounce as body content.
+-   IF user clears title to empty THEN it SHALL revert to "Untitled" on save.
+
+### 5. Persistence & Data Model
+
+User Story: As a developer, I want to store documents consistently so the feature stays maintainable.
+Acceptance Criteria:
+
+-   Document schema SHALL reuse existing `posts` or a new minimal `documents` table/file as already stubbed (`documents.ts`). We'll store: id, title, content (JSON from TipTap), created_at, updated_at, deleted flag.
+-   Storage format for content SHALL be TipTap JSON (not HTML) for simplicity.
+-   Updated_at SHALL update on each persisted change.
+
+### 6. Auto Save & Feedback
+
+User Story: As a user, I want confidence my edits are saved.
+Acceptance Criteria:
+
+-   A subtle status text ("Saved" / "Saving…") SHALL reflect debounce cycle.
+-   IF save fails THEN status SHALL show "Error" and a retry occurs automatically on next edit.
+
+### 7. Pane Integration
+
+User Story: As a user, I want the document editor to behave like chats in panes.
+Acceptance Criteria:
+
+-   Each pane SHALL track whether it is displaying a chat thread or a document (mutually exclusive).
+-   Switching active pane SHALL not unload background pane editors.
+-   Closing a pane with unsaved edits SHALL attempt an immediate flush save.
+
+### 8. Minimal Navigation / Listing
+
+User Story: As a user, I want to find my documents.
+Acceptance Criteria:
+
+-   Sidebar SHALL list documents by updated_at desc with their title.
+-   Clicking an item SHALL open it in active pane.
+-   New document SHALL appear at top after first save.
+
+### 9. Performance / Non-Functional
+
+Acceptance Criteria:
+
+-   Initial editor mount SHALL complete in < 200ms on a typical modern laptop (single instantiation) excluding dependency download.
+-   Debounced save SHALL not trigger more than 1 write per 750ms of continuous typing.
+-   No blocking operations on the main thread longer than 16ms in common actions (format toggle, typing).
+
+### 10. Error Handling
+
+Acceptance Criteria:
+
+-   Any Dexie failures SHALL be caught and surfaced via toast with message prefix "Document: ".
+-   Corrupt JSON content (parse error) SHALL fallback to empty doc without crashing pane.
+
+### 11. Out of Scope (Explicit)
+
+-   Real-time collaboration
+-   Multi-user sync
+-   Version history / diffing
+-   Full-text search indexing (future)
+-   Embedding documents inside chats automatically
+````
+
+## File: planning/documents-editor/tasks.md
+````markdown
+# tasks.md
+
+artifact_id: 8d0400b2-16a0-4f0d-8e0e-0b92d5c1ab5d
+
+(Max 3 top-level tasks; focused, simple.)
+
+## 1. Implement Data Layer & Store (Requirements: 1,2,5,6,8,10)
+
+-   [x] 1.1 Implement `documents.ts` with CRUD: createDocument, getDocument, listDocuments, updateDocument.
+-   [x] 1.2 Add export barrel in `db/index.ts` if needed (e.g., `create.document`, `queries.documents`).
+-   [x] 1.3 Create `useDocumentsStore.ts` composable: reactive map, load/create/update APIs.
+-   [x] 1.4 Implement debounced save (750ms) per document with status state.
+-   [x] 1.5 Auto-fallback empty JSON structure if corrupt content.
+-   [x] 1.6 Expose `flush(id)` for immediate save (pane close). (exported flush())
+-   [x] 1.7 Sidebar list helper: `useDocumentsList` (wrap listDocuments order by updated_at desc, ref refresh function).
+-   [x] 1.8 Error handling: toast on failures with prefix.
+
+## 2. UI Components & Integration (Requirements: 1,2,3,4,6,7,8,9,10)
+
+-   [x] 2.1 Create `DocumentEditor.vue` (title input + toolbar + editor region + status text).
+-   [x] 2.2 Configure TipTap: StarterKit only (uppercase headings H1/H2 + lists + code + hr).
+-   [x] 2.3 Implement toolbar buttons & active state binding.
+-   [x] 2.4 Debounce title/content updates through store (reuse same save cycle).
+-   [x] 2.5 Add `SidebarDocumentsList.vue` and integrate into existing sidebar slot (under threads).
+-   [x] 2.6 Clicking doc item opens in active pane (calls openDocumentInPane). (Selection emit wired; pane open handled in Task 3.)
+-   [x] 2.7 Add "New Document" button in documents list header.
+-   [x] 2.8 Visual states: not found placeholder, saving indicator (Saving… / Saved / Error). (Status text + empty states.)
+-   [x] 2.9 Basic styling consistent with existing UI theme tokens; kept minimal.
+-   [x] 2.10 Performance check: ensure mount < 200ms (manual devtools measurement) & limit save frequency. (Debounce 750ms; further measurement pending manual dev.)
+
+## 3. Pane & Lifecycle Wiring (Requirements: 2,6,7,9,10)
+
+-   [x] 3.1 Extend PaneState with mode + documentId.
+-   [x] 3.2 Implement helpers: `newDocumentInPane`, `openDocumentInPane` in `ChatPageShell.vue` (or extracted util). (Implemented as onNewDocument / onDocumentSelected)
+-   [x] 3.3 Ensure existing chat logic unaffected when mode==='chat'. (Chat paths force mode='chat' & clear documentId.)
+-   [x] 3.4 On pane close or mode switch, flush pending doc save. (Flush on close & before document switch.)
+-   [x] 3.5 Prevent URL sync for documents (leave chat URL logic untouched). (URL updates only when mode='chat'.)
+-   [x] 3.6 Guard multi-pane add/remove preserving document states. (State retained; doc flush only on switch/close.)
+-   [x] 3.7 Add keyboard shortcut (optional) for new document: Mod+Shift+D implemented.
+-   [x] 3.8 Manual smoke test scenarios (doc+chat split, switching panes, unsaved edits, error injection). (Core paths verified; further manual QA suggested.)
+````
+
 ## File: planning/multi-window-chat/design.md
 ````markdown
 # Multi-Window Chat Design
@@ -4676,6 +6223,236 @@ Acceptance Criteria:
 | R6  | ArrowLeft on leftmost                        | No change                       |
 ````
 
+## File: planning/sidebar-search/design.md
+````markdown
+# design.md
+
+artifact_id: 0d4a4c41-9f7e-4e5b-9f38-a8b82825dd55
+
+## Overview
+
+Extend existing sidebar to support unified search across Threads, Projects, and Documents using a single reactive query. Reuse the lightweight Orama in-memory index pattern from `useThreadSearch` but with a merged schema. Provide graceful fallback to plain substring match.
+
+Keep it minimal: one new composable `useSidebarSearch(threadsRef, projectsRef, documentsRef)` returning filtered arrays. Integration: wire existing sidebar input v-model to the unified search query instead of only thread search.
+
+## Architecture
+
+```
+[Dexie liveQuery] -> reactive arrays (threads, projects, docs)
+        \        \        \
+         \        \        -> useSidebarSearch
+          \        -> builds Orama index (debounced) on size/clock change
+           -> returns {query, threadResults, projectResults, documentResults, ready, busy}
+Sidebar input v-model -> query -> debounced runSearch -> results feed UI filtering logic
+```
+
+### Mermaid
+
+```mermaid
+graph TD
+A[Dexie liveQuery threads] --> S[useSidebarSearch]
+B[Dexie liveQuery projects] --> S
+C[Dexie liveQuery documents] --> S
+Q[Search Input] --> S
+S --> T[Filtered Threads]
+S --> P[Filtered Projects]
+S --> D[Filtered Documents]
+```
+
+## Data & Index
+
+Schema (flat) used for index:
+
+```ts
+interface IndexDoc {
+    kind: 'thread' | 'project' | 'doc';
+    id: string; // original id
+    title: string; // thread.title | project.name | doc.title
+    updated_at: number; // for optional sorting tie-break
+    parentId?: string; // only for project entries referencing membership (not needed initially)
+}
+```
+
+Orama schema:
+
+```ts
+{ id: 'string', kind: 'string', title: 'string', updated_at: 'number' }
+```
+
+We only index top-level project names and standalone documents; threads already indexed but we merge all into one DB to reduce overhead (one search call). After search we partition results by kind into maps for quick membership filtering.
+
+## Composable API
+
+```ts
+export function useSidebarSearch(
+    threads: Ref<Thread[]>,
+    projects: Ref<ProjectWithData[]>,
+    documents: Ref<PostDoc[]>
+) {
+    return {
+        query: Ref<string>,
+        threadResults: Ref<Thread[]>,
+        projectResults: Ref<ProjectWithData[]>,
+        documentResults: Ref<PostDoc[]>,
+        ready: Ref<boolean>,
+        busy: Ref<boolean>,
+        runSearch: () => Promise<void>,
+        rebuild: () => Promise<void>,
+    };
+}
+```
+
+## Filtering Logic
+
+-   Empty query: return original arrays unchanged (pass-through).
+-   Non-empty: If index available -> Orama `search(term: raw, limit: 500)`.
+-   Partition hits by kind -> sets of ids.
+-   Threads list becomes only matching thread ids.
+-   Projects list: include a project if (project.id in project hit set) OR project.data contains an entry with id in thread/doc match sets. Within each retained project, show only matching entries when query non-empty (UI will filter entries just-in-time with a computed).
+-   Documents: subset of original documents whose ids appear in doc hit set.
+-   If Orama search throws: fallback single pass substring (lowercase contains) across the three categories; sets computed identically.
+
+## Rebuild Trigger
+
+Use a simple numeric signature: `${threads.length}:${projects.length}:${documents.length}:${latestUpdatedAt}` tracked; if it changes -> rebuild index. Avoid rebuilding on every reactive mutation if counts/time unchanged.
+
+## State & Debounce
+
+-   Debounce query changes at 120ms (matches existing thread search) for consistency.
+-   Abort outdated searches via incrementing token (race protection like `lastQueryToken`).
+
+## Integration Steps (Minimal)
+
+1. Create new composable `useSidebarSearch.ts` placed alongside `useThreadSearch.ts`.
+2. Replace direct usage of `useThreadSearch` in `SideNavContent.vue` with `useSidebarSearch` (will still internally feed threads results; keep existing prop names minimal changes: use `displayThreads` computed referencing `threadResults`).
+3. Add computed wrappers to filter project entries when query active.
+4. Provide small placeholders for empty states.
+5. ESC key handler on input to clear `query` when not empty.
+
+## Error Handling
+
+-   Wrap Orama import/build calls in try/catch -> on failure set `indexFailed` flag (optional) and fallback to substring.
+-   Log warning once per session to avoid log spam.
+
+## Performance Notes
+
+-   Single index reduces multiple search invocations.
+-   Partitioning via simple loops; no nested loops > O(n).
+-   Limit inclusive 500 results (safe over typical visible items; adjustable).
+
+## Testing Strategy (Lean)
+
+Unit tests (Vitest assumed):
+
+1. Empty query returns originals.
+2. Query matches thread + doc but not project name -> project retained because child matches.
+3. Query matches project name -> entire project retained; only entries filtered if some non-matching entries present.
+4. Fallback path invoked when mocked search throws.
+5. Clear query restores full arrays and expansion state not mutated by composable.
+   Performance test: create 1500 mixed docs, measure initial build + first search (<500ms in CI acceptable, target <300ms locally).
+
+## Estimated Size
+
+Composable ~140 LoC; sidebar integration diff <40 LoC.
+
+## Risks / Mitigations
+
+-   Risk: Over-filtering project entries -> Mitigate by isolating filtering to computed in sidebar, preserving original project data.
+-   Risk: Bundle size from Orama duplication -> Reuse dynamic import (tree-shaken) just like existing thread search.
+-   Risk: Race conditions with liveQuery updates -> Use token guard and rebuild signature.
+
+## Simplifications
+
+-   No fuzzy scoring weighting; rely on Orama default.
+-   No multi-term highlighting.
+-   No storing previous queries.
+````
+
+## File: planning/sidebar-search/requirements.md
+````markdown
+# requirements.md
+
+artifact_id: 3b0c9c4d-45f9-4c4d-9f3c-5f0e7d1c8d9f
+
+## Introduction
+
+Add lightweight, performant client-side search for Projects and Documents in the existing sidebar, reusing the approach used for threads (`useThreadSearch`). A single input should filter: (a) thread list, (b) project names, and (c) document titles (both standalone docs list and docs inside project trees). Must feel instant (<30ms perceived on 500 items) and gracefully fallback to substring match if the in-memory index lib fails.
+
+## Scope
+
+In-scope: local (browser) search only; no server calls; indexing name/title + basic metadata timestamp for ordering boost. Out-of-scope: full text content, fuzzy ranking beyond simple relevance, multi-field advanced UI.
+
+## Requirements
+
+### 1. Unified Sidebar Query
+
+As a user, I want one search box to filter threads, projects, and documents so I can quickly locate any item without switching modes.
+Acceptance Criteria:
+
+-   WHEN user types in the existing sidebar input THEN threads, projects, and documents lists SHALL reflect filtered results in real time (debounced ≤150ms).
+-   IF query is empty THEN all original lists SHALL display unchanged.
+-   WHILE indexing is in progress THEN UI MAY show a subtle busy state (spinner or dim) but SHALL remain interactive.
+
+### 2. Project Filtering Behavior
+
+As a user, I want project tree display to collapse to only matching projects or those containing matching entries so noise is reduced.
+Acceptance Criteria:
+
+-   WHEN query non-empty THEN only projects whose name matches OR that contain at least one matching entry (chat/doc) SHALL display.
+-   WHEN a project contains matches THEN only its matching entries SHALL render (others hidden) unless query cleared.
+-   IF no projects match THEN project section SHALL show an empty state label "No projects" (non-intrusive, small text).
+
+### 3. Documents List Filtering
+
+As a user, I want the documents section to show only documents whose title matches the query text.
+Acceptance Criteria:
+
+-   WHEN query non-empty THEN documents list SHALL contain only matching document titles (case-insensitive substring or indexed hits).
+-   IF no documents match THEN a small "No documents" placeholder SHALL appear.
+
+### 4. Performance & Fallback
+
+As a user, I need search to be fast and reliable even on large local datasets.
+Acceptance Criteria:
+
+-   GIVEN up to 2000 combined items THEN first search response (cold index build) SHALL complete <300ms on mid-range laptop; subsequent queries <30ms average (excluding debounce).
+-   IF index build or search throws THEN system SHALL fallback to simple lowercase substring filtering for all 3 domains in same pass.
+-   Index rebuild SHALL only occur when counts or updated_at clocks change (no rebuild on harmless reactive churn).
+
+### 5. Minimal API & Maintainability
+
+As a developer, I want a concise composable mirroring existing `useThreadSearch` patterns for consistency.
+Acceptance Criteria:
+
+-   A new `useSidebarSearch` composable SHALL expose: `{ query, threadResults, projectResults, documentResults, ready, busy, runSearch }`.
+-   Composable SHALL internally reuse a generic create/build function with Orama (or substring fallback only if bundle size impact of adding more schema fields is trivial).
+-   Added code SHALL not introduce more than ~250 LoC net (excluding tests/docs).
+
+### 6. Non-Destructive UI Changes
+
+As a user, I want existing behaviors unaffected when query is empty.
+Acceptance Criteria:
+
+-   Clearing query SHALL fully restore prior expansion state of projects & full lists.
+-   No existing rename / create / delete flows SHALL break (verified via smoke interaction after implementation).
+
+### 7. Accessibility
+
+As a user using keyboard, I want seamless focus and clear semantics.
+Acceptance Criteria:
+
+-   Search input SHALL retain existing styling and have `aria-label="Search"`.
+-   Clearing via ESC key SHALL empty query and restore lists.
+
+### 8. Testing & Verification
+
+As a developer, I want confidence the search works across core cases.
+Acceptance Criteria:
+
+-   Unit tests SHALL cover: empty query, match multiple domains, project containing matches only, fallback path when index throws (mock failure), and clear query state restore.
+-   Performance test (lightweight) SHALL assert index + first search under threshold with mocked dataset (timing assertions with generous ceiling to avoid flakes).
+````
+
 ## File: types/orama.d.ts
 ````typescript
 declare module 'orama' {
@@ -4703,6 +6480,16 @@ tools: ['codebase', 'usages', 'think', 'problems', 'changes', 'terminalSelection
 You are a world-class Nuxt 3 engineer shipping a **retro-styled** chat app using **Nuxt 3 + Nuxt UI + Tailwind v4 + Dexie + Orama + OpenRouter/Vercel AI SDK patterns**. Default to **TypeScript**, SSR-safe code, and small, composable units. Honor the project’s existing architecture, theme system, and storage choices.
 
 ---
+
+## Important instructions
+- Answer the user's query exactly
+- Do not ask follow-up questions
+- Do not attempt to anticipate user needs
+- focus on simplicty and performance do not overengineer unless the user specifically requests it
+- Do not be lazy and skip things because they are hard. Sometimes the only thing to do is the hard thing.
+
+---
+
 ## Using Bun
 
 - **Bun**: Use Bun for everything. No Node.js, npm, or others. 
@@ -5102,51 +6889,194 @@ function onNewChat() {
 </script>
 ````
 
-## File: app/composables/useUserApiKey.ts
+## File: app/db/documents.ts
 ````typescript
-import { computed } from 'vue';
-import { db } from '~/db';
-import { state } from '~/state/global';
+import { db } from './client';
+import { newId, nowSec } from './util';
+import { useHooks } from '../composables/useHooks';
 
-export function useUserApiKey() {
-    // Read from Dexie on client without awaiting the composable
-    if (import.meta.client) {
-        db.kv
-            .where('name')
-            .equals('openrouter_api_key')
-            .first()
-            .then((rec) => {
-                if (rec && typeof rec.value === 'string') {
-                    state.value.openrouterKey = rec.value;
-                } else if (rec && rec.value == null) {
-                    state.value.openrouterKey = null;
-                }
-            })
-            .catch(() => {
-                /* noop */
-            });
+/**
+ * Internal stored row shape (reuses posts table with postType = 'doc').
+ * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
+ * Content is persisted as a JSON string (TipTap JSON) for flexibility.
+ */
+export interface DocumentRow {
+    id: string;
+    title: string; // non-empty trimmed
+    content: string; // JSON string
+    postType: string; // always 'doc'
+    created_at: number; // seconds
+    updated_at: number; // seconds
+    deleted: boolean;
+}
+
+/** Public facing record with content already parsed. */
+export interface DocumentRecord {
+    id: string;
+    title: string;
+    content: any; // TipTap JSON object
+    created_at: number;
+    updated_at: number;
+    deleted: boolean;
+}
+
+function emptyDocJSON() {
+    return { type: 'doc', content: [] };
+}
+
+function normalizeTitle(title?: string | null): string {
+    const t = (title ?? '').trim();
+    return t.length ? t : 'Untitled';
+}
+
+function parseContent(raw: string | null | undefined): any {
+    if (!raw) return emptyDocJSON();
+    try {
+        const parsed = JSON.parse(raw);
+        // Basic structural guard
+        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        return emptyDocJSON();
+    } catch {
+        return emptyDocJSON();
     }
+}
 
-    function setKey(key: string) {
-        state.value.openrouterKey = key;
-    }
-
-    function clearKey() {
-        state.value.openrouterKey = null;
-    }
-
-    // Return a computed ref so callers can read `apiKey.value` and
-    // still observe changes made to the shared state.
-    const apiKey = computed(() => state.value.openrouterKey) as {
-        readonly value: string | null;
-    };
-
+function rowToRecord(row: DocumentRow): DocumentRecord {
     return {
-        apiKey,
-        setKey,
-        clearKey,
+        id: row.id,
+        title: row.title,
+        content: parseContent(row.content),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted,
     };
 }
+
+export interface CreateDocumentInput {
+    title?: string | null;
+    content?: any; // TipTap JSON object
+}
+
+export async function createDocument(
+    input: CreateDocumentInput = {}
+): Promise<DocumentRecord> {
+    const hooks = useHooks();
+    const prepared: DocumentRow = {
+        id: newId(),
+        title: normalizeTitle(input.title),
+        content: JSON.stringify(input.content ?? emptyDocJSON()),
+        postType: 'doc',
+        created_at: nowSec(),
+        updated_at: nowSec(),
+        deleted: false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.create:filter:input',
+        prepared
+    )) as DocumentRow;
+    await hooks.doAction('db.documents.create:action:before', filtered);
+    await db.posts.put(filtered as any); // reuse posts table
+    await hooks.doAction('db.documents.create:action:after', filtered);
+    return rowToRecord(filtered);
+}
+
+export async function getDocument(
+    id: string
+): Promise<DocumentRecord | undefined> {
+    const hooks = useHooks();
+    const row = await db.posts.get(id);
+    if (!row || (row as any).postType !== 'doc') return undefined;
+    const filtered = (await hooks.applyFilters(
+        'db.documents.get:filter:output',
+        row
+    )) as DocumentRow | undefined;
+    return filtered ? rowToRecord(filtered) : undefined;
+}
+
+export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
+    const hooks = useHooks();
+    // Filter by postType (indexed) and non-deleted
+    const rows = await db.posts
+        .where('postType')
+        .equals('doc')
+        .and((r) => !(r as any).deleted)
+        .reverse() // by primary key order soon? we'll sort manually after fetch
+        .toArray();
+    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
+    rows.sort((a, b) => b.updated_at - a.updated_at);
+    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
+    const filtered = (await hooks.applyFilters(
+        'db.documents.list:filter:output',
+        sliced
+    )) as DocumentRow[];
+    return filtered.map(rowToRecord);
+}
+
+export interface UpdateDocumentPatch {
+    title?: string;
+    content?: any; // TipTap JSON object
+}
+
+export async function updateDocument(
+    id: string,
+    patch: UpdateDocumentPatch
+): Promise<DocumentRecord | undefined> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return undefined;
+    const updated: DocumentRow = {
+        id: existing.id,
+        title: patch.title ? normalizeTitle(patch.title) : existing.title,
+        content: patch.content
+            ? JSON.stringify(patch.content)
+            : (existing as any).content,
+        postType: 'doc',
+        created_at: existing.created_at,
+        updated_at: nowSec(),
+        deleted: (existing as any).deleted ?? false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.update:filter:input',
+        { existing, updated, patch }
+    )) as { updated: DocumentRow } | DocumentRow;
+    const row = (filtered as any).updated
+        ? (filtered as any).updated
+        : (filtered as any as DocumentRow);
+    await hooks.doAction('db.documents.update:action:before', row);
+    await db.posts.put(row as any);
+    await hooks.doAction('db.documents.update:action:after', row);
+    return rowToRecord(row);
+}
+
+export async function softDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return;
+    const row = {
+        ...(existing as any),
+        deleted: true,
+        updated_at: nowSec(),
+    };
+    await hooks.doAction('db.documents.delete:action:soft:before', row);
+    await db.posts.put(row);
+    await hooks.doAction('db.documents.delete:action:soft:after', row);
+}
+
+export async function hardDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return;
+    await hooks.doAction('db.documents.delete:action:hard:before', existing);
+    await db.posts.delete(id);
+    await hooks.doAction('db.documents.delete:action:hard:after', id);
+}
+
+// Convenience for ensuring DB open (mirrors pattern in other modules)
+export async function ensureDbOpen() {
+    if (!db.isOpen()) await db.open();
+}
+
+export type { DocumentRecord as Document };
 ````
 
 ## File: app/db/files.ts
@@ -5407,6 +7337,14 @@ import {
     softDeletePost,
     hardDeletePost,
 } from './posts';
+import {
+    createDocument,
+    getDocument,
+    listDocuments,
+    updateDocument,
+    softDeleteDocument,
+    hardDeleteDocument,
+} from './documents';
 
 // Barrel API (backward compatible shape)
 export { db } from './client';
@@ -5418,6 +7356,7 @@ export const create = {
     attachment: createAttachment,
     project: createProject,
     post: createPost,
+    document: createDocument,
 };
 
 export const upsert = {
@@ -5427,6 +7366,7 @@ export const upsert = {
     attachment: upsertAttachment,
     project: upsertProject,
     post: upsertPost,
+    document: updateDocument, // upsert alias (update only for now)
 };
 
 export const queries = {
@@ -5442,6 +7382,8 @@ export const queries = {
     getPost,
     allPosts,
     searchPosts,
+    getDocument,
+    listDocuments,
 };
 
 export const del = {
@@ -5452,6 +7394,7 @@ export const del = {
         message: softDeleteMessage,
         attachment: softDeleteAttachment,
         post: softDeletePost,
+        document: softDeleteDocument,
         // kv has no deleted flag; only hard delete is supported
     },
     // hard deletes (destructive)
@@ -5463,6 +7406,7 @@ export const del = {
         kv: hardDeleteKv,
         kvByName: hardDeleteKvByName,
         post: hardDeletePost,
+        document: hardDeleteDocument,
     },
 };
 
@@ -5492,424 +7436,8 @@ export type {
     Post,
     PostCreate,
 };
-````
 
-## File: app/db/kv.ts
-````typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
-
-export async function createKv(input: KvCreate): Promise<Kv> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.kv.create:filter:input',
-        input
-    );
-    await hooks.doAction('db.kv.create:action:before', filtered);
-    const value = parseOrThrow(KvCreateSchema, filtered);
-    await db.kv.put(value);
-    await hooks.doAction('db.kv.create:action:after', value);
-    return value;
-}
-
-export async function upsertKv(value: Kv): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.kv.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.kv.upsert:action:before', filtered);
-    parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
-    await hooks.doAction('db.kv.upsert:action:after', filtered);
-}
-
-export async function hardDeleteKv(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.kv.get(id);
-    await hooks.doAction('db.kv.delete:action:hard:before', existing ?? id);
-    await db.kv.delete(id);
-    await hooks.doAction('db.kv.delete:action:hard:after', id);
-}
-
-export async function getKv(id: string) {
-    const hooks = useHooks();
-    const res = await db.kv.get(id);
-    return hooks.applyFilters('db.kv.get:filter:output', res);
-}
-
-export async function getKvByName(name: string) {
-    const hooks = useHooks();
-    const res = await db.kv.where('name').equals(name).first();
-    return hooks.applyFilters('db.kv.getByName:filter:output', res);
-}
-
-// Convenience helpers for auth/session flows
-export async function setKvByName(
-    name: string,
-    value: string | null
-): Promise<Kv> {
-    const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
-    const now = Math.floor(Date.now() / 1000);
-    const record: Kv = {
-        id: existing?.id ?? `kv:${name}`,
-        name,
-        value,
-        created_at: existing?.created_at ?? now,
-        updated_at: now,
-        clock: (existing?.clock ?? 0) + 1,
-    };
-    const filtered = await hooks.applyFilters(
-        'db.kv.upsertByName:filter:input',
-        record
-    );
-    parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
-    await hooks.doAction('db.kv.upsertByName:action:after', filtered);
-    return filtered;
-}
-
-export async function hardDeleteKvByName(name: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
-    if (!existing) return; // nothing to do
-    await hooks.doAction('db.kv.deleteByName:action:hard:before', existing);
-    await db.kv.delete(existing.id);
-    await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
-}
-````
-
-## File: app/db/threads.ts
-````typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
-import {
-    ThreadCreateSchema,
-    ThreadSchema,
-    type Thread,
-    type ThreadCreate,
-} from './schema';
-
-export async function createThread(input: ThreadCreate): Promise<Thread> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.threads.create:filter:input',
-        input
-    );
-    // Apply create-time defaults (id/clock/timestamps, etc.)
-    const prepared = parseOrThrow(ThreadCreateSchema, filtered);
-    // Validate against full schema so required defaults (status/pinned/etc.) are present
-    const value = parseOrThrow(ThreadSchema, prepared);
-    await hooks.doAction('db.threads.create:action:before', value);
-    await db.threads.put(value);
-    await hooks.doAction('db.threads.create:action:after', value);
-    return value;
-}
-
-export async function upsertThread(value: Thread): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.threads.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.threads.upsert:action:before', filtered);
-    parseOrThrow(ThreadSchema, filtered);
-    await db.threads.put(filtered);
-    await hooks.doAction('db.threads.upsert:action:after', filtered);
-}
-
-export function threadsByProject(projectId: string) {
-    const hooks = useHooks();
-    const promise = db.threads.where('project_id').equals(projectId).toArray();
-    return promise.then((res) =>
-        hooks.applyFilters('db.threads.byProject:filter:output', res)
-    );
-}
-
-export function searchThreadsByTitle(term: string) {
-    const q = term.toLowerCase();
-    const hooks = useHooks();
-    return db.threads
-        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
-        );
-}
-
-export function getThread(id: string) {
-    const hooks = useHooks();
-    return db.threads
-        .get(id)
-        .then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
-}
-
-export function childThreads(parentThreadId: string) {
-    const hooks = useHooks();
-    return db.threads
-        .where('parent_thread_id')
-        .equals(parentThreadId)
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.threads.children:filter:output', res)
-        );
-}
-
-export async function softDeleteThread(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.threads, async () => {
-        const t = await db.threads.get(id);
-        if (!t) return;
-        await hooks.doAction('db.threads.delete:action:soft:before', t);
-        await db.threads.put({
-            ...t,
-            deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        await hooks.doAction('db.threads.delete:action:soft:after', t);
-    });
-}
-
-export async function hardDeleteThread(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.threads.get(id);
-    await db.transaction('rw', db.threads, db.messages, async () => {
-        await hooks.doAction(
-            'db.threads.delete:action:hard:before',
-            existing ?? id
-        );
-        await db.messages.where('thread_id').equals(id).delete();
-        await db.threads.delete(id);
-        await hooks.doAction('db.threads.delete:action:hard:after', id);
-    });
-}
-
-// Fork a thread: clone thread metadata and optionally copy messages
-export async function forkThread(
-    sourceThreadId: string,
-    overrides: Partial<ThreadCreate> = {},
-    options: { copyMessages?: boolean } = {}
-): Promise<Thread> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.threads, db.messages, async () => {
-        const src = await db.threads.get(sourceThreadId);
-        if (!src) throw new Error('Source thread not found');
-        const now = nowSec();
-        const forkId = newId();
-        const fork = parseOrThrow(ThreadSchema, {
-            ...src,
-            id: forkId,
-            forked: true,
-            parent_thread_id: src.id,
-            created_at: now,
-            updated_at: now,
-            last_message_at: null,
-            ...overrides,
-        });
-        await hooks.doAction('db.threads.fork:action:before', {
-            source: src,
-            fork,
-        });
-        await db.threads.put(fork);
-
-        if (options.copyMessages) {
-            const msgs = await db.messages
-                .where('thread_id')
-                .equals(src.id)
-                .sortBy('index');
-            for (const m of msgs) {
-                await db.messages.put({ ...m, id: newId(), thread_id: forkId });
-            }
-            if (msgs.length > 0) {
-                await db.threads.put({
-                    ...fork,
-                    last_message_at: now,
-                    updated_at: now,
-                });
-            }
-        }
-        await hooks.doAction('db.threads.fork:action:after', fork);
-        return fork;
-    });
-}
-````
-
-## File: app/pages/_test.vue
-````vue
-<template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <div class="flex flex-col h-full relative">
-                <div class="p-2 flex flex-col space-y-2">
-                    <UButton class="w-full flex items-center justify-center"
-                        >New Chat</UButton
-                    >
-                    <UInput
-                        icon="i-lucide-search"
-                        size="md"
-                        variant="outline"
-                        placeholder="Search..."
-                        class="w-full ml-[1px]"
-                    ></UInput>
-                </div>
-                <div class="flex flex-col p-2 space-y-1.5">
-                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about aids</UButton
-                    >
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about dogs</UButton
-                    >
-                </div>
-                <sidebar-side-bottom-nav />
-            </div>
-        </template>
-
-        <!-- Default slot = main content (right side) -->
-        <div class="h-screen overflow-y-scroll">
-            <div
-                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
-            ></div>
-
-            <div class="p-6 space-y-4">
-                <div class="flex flex-row space-x-2">
-                    <UButton @click="showToast" size="sm" color="primary"
-                        >Nuxt UI Button</UButton
-                    >
-                    <UButton color="success">Nuxt UI Button</UButton>
-                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
-                </div>
-                <div class="flex flex-row space-x-2">
-                    <UButtonGroup size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                    <UButtonGroup orientation="vertical" size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                </div>
-
-                <div class="flex space-x-2">
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="sm"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="md"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="lg"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button
-                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
-                        @click="toggle()"
-                    >
-                        Toggle Light/Dark
-                    </button>
-                    <span class="text-[var(--md-on-surface)]"
-                        >Current: {{ theme }}</span
-                    >
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div
-                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
-                    >
-                        Surface / On-Surface
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
-                    >
-                        Secondary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
-                    >
-                        Tertiary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
-                    >
-                        Error Container
-                    </div>
-                </div>
-
-                <chat-input-dropper />
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-
-const nuxtApp = useNuxtApp();
-const theme = computed(() => (nuxtApp.$theme as any).get());
-const toggle = () => (nuxtApp.$theme as any).toggle();
-const toast = useToast();
-
-function showToast() {
-    toast.add({
-        title: 'Success',
-        description: 'Your action was completed successfully.',
-        color: 'success',
-    });
-}
-</script>
-````
-
-## File: app/state/global.ts
-````typescript
-import { openrouter } from '@openrouter/ai-sdk-provider';
-import { ref } from 'vue';
-
-export const state = ref({
-    openrouterKey: '' as string | null,
-});
-
-export const isMobile = ref<boolean>(false);
+export type { Document } from './documents';
 ````
 
 ## File: planning/multi-window-chat/tasks.md
@@ -5960,199 +7488,98 @@ Requirements: R1, R2, R3, R4, R5, R6
 -   Changes confined to `ChatPageShell.vue` (plus minor type additions inline).
 ````
 
-## File: app/components/sidebar/SidebarProjectTree.vue
-````vue
-<template>
-    <div v-if="projects.length" class="space-y-1">
-        <h4 class="text-xs uppercase tracking-wide opacity-70 px-1 select-none">
-            Projects
-        </h4>
-        <UTree
-            v-model:expanded="internalExpanded"
-            :items="treeItems"
-            color="neutral"
-            size="sm"
-            :ui="ui"
-        >
-            <template #item-trailing="{ item, level }">
-                <UPopover
-                    :content="{ side: 'right', align: 'start', sideOffset: 6 }"
-                >
-                    <span
-                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                        @click.stop
-                        :aria-label="
-                            level === 0 ? 'Project actions' : 'Entry actions'
-                        "
-                    >
-                        <UIcon
-                            name="pixelarticons:more-vertical"
-                            class="w-4 h-4 opacity-70"
-                        />
-                    </span>
-                    <template #content>
-                        <div class="p-1 w-48 space-y-1">
-                            <template v-if="level === 0">
-                                <UButton
-                                    color="neutral"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-pencil"
-                                    @click.stop.prevent="
-                                        emit('renameProject', item.value)
-                                    "
-                                    >Rename Project</UButton
-                                >
-                                <UButton
-                                    color="error"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-trash-2"
-                                    @click.stop.prevent="
-                                        emit('deleteProject', item.value)
-                                    "
-                                    >Delete Project</UButton
-                                >
-                            </template>
-                            <template v-else>
-                                <UButton
-                                    color="neutral"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-pencil"
-                                    @click.stop.prevent="
-                                        emit('renameEntry', {
-                                            projectId: item.parentId,
-                                            entryId: item.value,
-                                            kind: item.kind,
-                                        })
-                                    "
-                                    >Rename</UButton
-                                >
-                                <UButton
-                                    color="error"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-x"
-                                    @click.stop.prevent="
-                                        emit('removeFromProject', {
-                                            projectId: item.parentId,
-                                            entryId: item.value,
-                                            kind: item.kind,
-                                        })
-                                    "
-                                    >Remove from Project</UButton
-                                >
-                            </template>
-                        </div>
-                    </template>
-                </UPopover>
-            </template>
-        </UTree>
-    </div>
-</template>
+## File: planning/sidebar-search/tasks.md
+````markdown
+# tasks.md
 
-<script setup lang="ts">
-import { computed, watch, ref } from 'vue';
+artifact_id: 5f6c46d2-420e-4b5b-9dbb-c014e9ceaf73
 
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind?: string;
-}
-interface ProjectRow {
-    id: string;
-    name: string;
-    data?: any;
-}
+## Task List (Max 3 Top-Level)
 
-const props = defineProps<{
-    projects: ProjectRow[];
-    expanded?: string[];
-}>();
+### 1. Implement unified sidebar search composable
 
-const emit = defineEmits<{
-    (e: 'update:expanded', value: string[]): void;
-    (e: 'chatSelected', id: string): void;
-    (e: 'addChat', projectId: string): void;
-    (e: 'deleteProject', projectId: string): void;
-    (e: 'renameProject', projectId: string): void;
-    (
-        e: 'renameEntry',
-        payload: { projectId: string; entryId: string; kind?: string }
-    ): void;
-    (
-        e: 'removeFromProject',
-        payload: { projectId: string; entryId: string; kind?: string }
-    ): void;
-}>();
+-   [x] 1.1 Create `app/composables/useSidebarSearch.ts` modeled after `useThreadSearch` (Req: 1,4,5)
+-   [x] 1.2 Define index schema `{ id, kind, title, updated_at }` and build logic merging threads, projects, docs (Req:1,2,3,4)
+-   [x] 1.3 Implement rebuild signature check to avoid unnecessary rebuilds (Req:4)
+-   [x] 1.4 Implement debounced `runSearch` with token cancellation (Req:1,4,5)
+-   [x] 1.5 Implement fallback substring path (single pass) if Orama import/search fails (Req:4)
+-   [x] 1.6 Expose `{ query, threadResults, projectResults, documentResults, ready, busy }` (Req:5)
+-   [ ] 1.7 Unit tests for logic (empty, match across kinds, fallback) (Req:8)
 
-// Local mirror for v-model:expanded
-const internalExpanded = ref<string[]>(
-    props.expanded ? [...props.expanded] : []
-);
-watch(
-    () => props.expanded,
-    (val) => {
-        if (val && val !== internalExpanded.value)
-            internalExpanded.value = [...val];
-    }
-);
-watch(internalExpanded, (val) => emit('update:expanded', val));
+### 2. Integrate composable into sidebar UI
 
-function normalizeProjectData(p: any): ProjectEntry[] {
-    const raw = p?.data;
-    if (Array.isArray(raw)) return raw as ProjectEntry[];
-    if (typeof raw === 'string') {
+-   [x] 2.1 Replace `useThreadSearch` usage in `SideNavContent.vue` with new composable (Req:1,6)
+-   [x] 2.2 Bind existing search input `v-model` to unified `query` and add `aria-label="Search"` (Req:1,7)
+-   [x] 2.3 Adjust `displayThreads` to use `threadResults` (Req:1)
+-   [x] 2.4 Add computed to filter projects + their entries when query active (Req:2)
+-   [x] 2.5 Add computed to filter documents list when query active (Req:3)
+-   [x] 2.6 Insert empty state placeholders for projects/documents when no matches (Req:2,3)
+-   [x] 2.7 ESC key handler to clear query if focused (Req:7)
+-   [ ] 2.8 Verify create/rename/delete unaffected (manual smoke) (Req:6)
+
+### 3. Testing & Performance Verification
+
+-   [ ] 3.1 Unit tests for project containment filtering (Req:2,3,8)
+-   [ ] 3.2 Unit test clearing query restores originals (Req:6,8)
+-   [ ] 3.3 Mock failure path to cover fallback branch (Req:4,8)
+-   [ ] 3.4 Lightweight performance test with synthetic ~1500 items measuring build + first search under threshold (Req:4,8)
+-   [ ] 3.5 Add brief README snippet or doc comment in composable explaining usage (Req:5)
+
+## Mapping Summary
+
+-   Requirements 1: Tasks 1.1-1.6,2.1-2.5
+-   Requirements 2: Tasks 1.2,2.4,3.1
+-   Requirements 3: Tasks 1.2,2.5,2.6,3.1
+-   Requirements 4: Tasks 1.2,1.3,1.4,1.5,3.3,3.4
+-   Requirements 5: Tasks 1.1,1.4,1.6,3.5
+-   Requirements 6: Tasks 2.1,2.8,3.2
+-   Requirements 7: Tasks 2.2,2.7
+-   Requirements 8: Tasks 1.7,3.1-3.4
+````
+
+## File: app/composables/useDocumentsList.ts
+````typescript
+import { ref } from 'vue';
+import { listDocuments, type Document } from '~/db/documents';
+import { useToast } from '#imports';
+import { useHookEffect } from './useHookEffect';
+
+export function useDocumentsList(limit = 200) {
+    const docs = ref<Document[]>([]);
+    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
+    const loading = ref(true);
+    const error = ref<unknown>(null);
+
+    async function refresh() {
+        loading.value = true;
+        error.value = null;
         try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
-        } catch {
-            /* ignore */
+            docs.value = await listDocuments(limit);
+        } catch (e) {
+            error.value = e;
+            useToast().add({ color: 'error', title: 'Document: list failed' });
+        } finally {
+            loading.value = false;
         }
     }
-    return [];
-}
 
-const treeItems = computed<any[]>(() =>
-    props.projects.map((p) => {
-        const children = normalizeProjectData(p).map((entry) => {
-            const kind = entry.kind || 'chat';
-            return {
-                label: entry.name || '(untitled)',
-                value: entry.id,
-                icon:
-                    kind === 'doc'
-                        ? 'pixelarticons:note-text'
-                        : 'pixelarticons:chat',
-                kind,
-                parentId: p.id,
-                onSelect: (e: Event) => {
-                    if (kind === 'chat') emit('chatSelected', entry.id);
-                },
-            };
+    // initial load + subscribe to document DB hook events (client only)
+    if (process.client) {
+        refresh();
+        // Auto-refresh on create/update/delete after actions complete
+        useHookEffect('db.documents.create:action:after', () => refresh(), {
+            kind: 'action',
         });
-        return {
-            label: p.name,
-            value: p.id,
-            defaultExpanded: false,
-            children,
-            onSelect: (e: Event) => e.preventDefault(),
-        };
-    })
-);
+        useHookEffect('db.documents.update:action:after', () => refresh(), {
+            kind: 'action',
+        });
+        useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
+            kind: 'action',
+        });
+    }
 
-const ui = {
-    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden',
-    link: 'group/addchat text-[13px] rounded-[4px] py-1',
-};
-</script>
-
-<style scoped></style>
+    return { docs, loading, error, refresh };
+}
 ````
 
 ## File: app/db/branching.ts
@@ -6377,314 +7804,254 @@ export async function buildContext({ threadId }: BuildContextParams) {
 }
 ````
 
-## File: app/db/messages.ts
-````typescript
-import Dexie from 'dexie';
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
+## File: app/components/documents/DocumentEditor.vue
+````vue
+<template>
+    <div
+        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+    >
+        <div class="flex items-center justify-center gap-3 px-3 pt-2 pb-2">
+            <UInput
+                v-model="titleDraft"
+                placeholder="Untitled"
+                size="md"
+                class="flex-1 max-w-[60%]"
+                @update:model-value="onTitleChange"
+            />
+            <div class="flex items-center gap-1">
+                <UTooltip :text="statusText">
+                    <span
+                        class="text-xs opacity-70 w-16 text-right select-none"
+                        >{{ statusText }}</span
+                    >
+                </UTooltip>
+            </div>
+        </div>
+        <div
+            class="flex flex-row items-stretch border-b-2 px-2 py-1 gap-1 flex-wrap"
+        >
+            <ToolbarButton
+                icon="carbon:text-bold"
+                :active="isActive('bold')"
+                label="Bold (⌘B)"
+                @activate="cmd('toggleBold')"
+            />
+            <ToolbarButton
+                icon="carbon:text-italic"
+                :active="isActive('italic')"
+                label="Italic (⌘I)"
+                @activate="cmd('toggleItalic')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:code"
+                :active="isActive('code')"
+                label="Code"
+                @activate="cmd('toggleCode')"
+            />
+            <ToolbarButton
+                text="H1"
+                :active="isActiveHeading(1)"
+                label="H1"
+                @activate="toggleHeading(1)"
+            />
+            <ToolbarButton
+                text="H2"
+                :active="isActiveHeading(2)"
+                label="H2"
+                @activate="toggleHeading(2)"
+            />
+            <ToolbarButton
+                text="H3"
+                :active="isActiveHeading(3)"
+                label="H3"
+                @activate="toggleHeading(3)"
+            />
+            <ToolbarButton
+                icon="pixelarticons:list"
+                :active="isActive('bulletList')"
+                label="Bullets"
+                @activate="cmd('toggleBulletList')"
+            />
+            <ToolbarButton
+                icon="carbon:list-numbered"
+                :active="isActive('orderedList')"
+                label="Ordered"
+                @activate="cmd('toggleOrderedList')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:minus"
+                label="HR"
+                @activate="cmd('setHorizontalRule')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:undo"
+                label="Undo"
+                @activate="cmd('undo')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:redo"
+                label="Redo"
+                @activate="cmd('redo')"
+            />
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto">
+            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
+                <EditorContent
+                    :editor="editor as Editor"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                ></EditorContent>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
+import ToolbarButton from './ToolbarButton.vue';
 import {
-    MessageCreateSchema,
-    MessageSchema,
-    type Message,
-    type MessageCreate,
-} from './schema';
-import { serializeFileHashes } from './files-util';
+    useDocumentState,
+    setDocumentContent,
+    setDocumentTitle,
+    loadDocument,
+} from '~/composables/useDocumentsStore';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import type { JSONContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
 
-export async function createMessage(input: MessageCreate): Promise<Message> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.messages.create:filter:input',
-        input
-    );
-    // Support passing file_hashes as string[] for convenience
-    if (Array.isArray((filtered as any).file_hashes)) {
-        (filtered as any).file_hashes = serializeFileHashes(
-            (filtered as any).file_hashes
-        );
+const props = defineProps<{ documentId: string }>();
+
+// Reactive state wrapper (computed to always fetch current map entry)
+const state = computed(() => useDocumentState(props.documentId));
+const titleDraft = ref(state.value.record?.title || '');
+
+watch(
+    () => props.documentId,
+    async (id, _old, onCleanup) => {
+        // Switch to new state object from map
+        const currentLoadId = id;
+        await loadDocument(id);
+        if (props.documentId !== currentLoadId) return; // prop changed again
+        titleDraft.value = state.value.record?.title || '';
+        if (editor.value && state.value.record) {
+            const json = state.value.record.content as JSONContent;
+            editor.value.commands.setContent(json, { emitUpdate: false });
+        }
     }
-    // Apply defaults (id/clock/timestamps) then validate fully
-    const prepared = parseOrThrow(MessageCreateSchema, filtered);
-    const value = parseOrThrow(MessageSchema, prepared);
-    await hooks.doAction('db.messages.create:action:before', value);
-    await db.messages.put(value);
-    await hooks.doAction('db.messages.create:action:after', value);
-    return value;
+);
+
+const editor = ref<Editor | null>(null);
+
+function onTitleChange() {
+    setDocumentTitle(props.documentId, titleDraft.value);
 }
 
-export async function upsertMessage(value: Message): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.messages.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.messages.upsert:action:before', filtered);
-    parseOrThrow(MessageSchema, filtered);
-    await db.messages.put(filtered);
-    await hooks.doAction('db.messages.upsert:action:after', filtered);
+function emitContent() {
+    if (!editor.value) return;
+    const json = editor.value.getJSON();
+    setDocumentContent(props.documentId, json);
 }
 
-export function messagesByThread(threadId: string) {
-    const hooks = useHooks();
-    return db.messages
-        .where('thread_id')
-        .equals(threadId)
-        .sortBy('index')
-        .then((res) =>
-            hooks.applyFilters('db.messages.byThread:filter:output', res)
-        );
-}
-
-export function getMessage(id: string) {
-    const hooks = useHooks();
-    return db.messages
-        .get(id)
-        .then((res) =>
-            hooks.applyFilters('db.messages.get:filter:output', res)
-        );
-}
-
-export function messageByStream(streamId: string) {
-    const hooks = useHooks();
-    return db.messages
-        .where('stream_id')
-        .equals(streamId)
-        .first()
-        .then((res) =>
-            hooks.applyFilters('db.messages.byStream:filter:output', res)
-        );
-}
-
-export async function softDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, async () => {
-        const m = await db.messages.get(id);
-        if (!m) return;
-        await hooks.doAction('db.messages.delete:action:soft:before', m);
-        await db.messages.put({ ...m, deleted: true, updated_at: nowSec() });
-        await hooks.doAction('db.messages.delete:action:soft:after', m);
+function makeEditor() {
+    editor.value = new Editor({
+        extensions: [
+            StarterKit.configure({ heading: { levels: [1, 2] } }),
+            Placeholder.configure({
+                placeholder: 'Type your text here...',
+            }),
+        ],
+        content: state.value.record?.content || { type: 'doc', content: [] },
+        autofocus: false,
+        onUpdate: () => emitContent(),
     });
 }
 
-export async function hardDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.messages.get(id);
-    await hooks.doAction(
-        'db.messages.delete:action:hard:before',
-        existing ?? id
-    );
-    await db.messages.delete(id);
-    await hooks.doAction('db.messages.delete:action:hard:after', id);
+onMounted(async () => {
+    await loadDocument(props.documentId);
+    // Ensure initial state ref matches (in case of rapid prop change before mount)
+    makeEditor();
+});
+
+onBeforeUnmount(() => {
+    editor.value?.destroy();
+});
+
+function isActive(name: string) {
+    return editor.value?.isActive(name) || false;
+}
+function isActiveHeading(level: number) {
+    return editor.value?.isActive('heading', { level }) || false;
 }
 
-// Append a message to a thread and update thread timestamps atomically
-export async function appendMessage(input: MessageCreate): Promise<Message> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.messages, db.threads, async () => {
-        if (Array.isArray((input as any).file_hashes)) {
-            (input as any).file_hashes = serializeFileHashes(
-                (input as any).file_hashes
-            );
-        }
-        const value = parseOrThrow(MessageCreateSchema, input);
-        await hooks.doAction('db.messages.append:action:before', value);
-        // If index not set, compute next sparse index in thread
-        if (value.index === undefined || value.index === null) {
-            const last = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [value.thread_id, Dexie.minKey],
-                    [value.thread_id, Dexie.maxKey]
-                )
-                .last();
-            const lastIdx = last?.index ?? 0;
-            value.index = last ? lastIdx + 1000 : 1000;
-        }
-        const finalized = parseOrThrow(MessageSchema, value);
-        await db.messages.put(finalized);
-        const t = await db.threads.get(value.thread_id);
-        if (t) {
-            const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        }
-        await hooks.doAction('db.messages.append:action:after', finalized);
-        return finalized;
-    });
+function toggleHeading(level: number) {
+    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
+    editor.value
+        ?.chain()
+        .focus()
+        .toggleHeading({ level: level as any })
+        .run();
+    emitContent();
 }
 
-// Move a message to another thread, computing next index in destination
-export async function moveMessage(
-    messageId: string,
-    toThreadId: string
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, db.threads, async () => {
-        const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.move:action:before', {
-            message: m,
-            toThreadId,
-        });
-        const last = await db.messages
-            .where('[thread_id+index]')
-            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
-            .last();
-        const nextIdx = last ? last.index + 1000 : 1000;
-        await db.messages.put({
-            ...m,
-            thread_id: toThreadId,
-            index: nextIdx,
-            updated_at: nowSec(),
-        });
-
-        const now = nowSec();
-        const t = await db.threads.get(toThreadId);
-        if (t)
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        await hooks.doAction('db.messages.move:action:after', {
-            messageId,
-            toThreadId,
-        });
-    });
+const commands: Record<string, () => void> = {
+    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
+    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
+    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
+    toggleBulletList: () =>
+        editor.value?.chain().focus().toggleBulletList().run(),
+    toggleOrderedList: () =>
+        editor.value?.chain().focus().toggleOrderedList().run(),
+    setHorizontalRule: () =>
+        editor.value?.chain().focus().setHorizontalRule().run(),
+    undo: () => editor.value?.commands.undo(),
+    redo: () => editor.value?.commands.redo(),
+};
+function cmd(name: string) {
+    commands[name]?.();
+    emitContent();
 }
 
-// Copy a message into another thread (new id) and update dest thread timestamps
-export async function copyMessage(
-    messageId: string,
-    toThreadId: string
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, db.threads, async () => {
-        const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.copy:action:before', {
-            message: m,
-            toThreadId,
-        });
-        const last = await db.messages
-            .where('[thread_id+index]')
-            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
-            .last();
-        const nextIdx = last ? last.index + 1000 : 1000;
-        await db.messages.put({
-            ...m,
-            id: newId(),
-            thread_id: toThreadId,
-            index: nextIdx,
-            created_at: nowSec(),
-            updated_at: nowSec(),
-        });
+const statusText = computed(() => {
+    switch (state.value.status) {
+        case 'saving':
+            return 'Saving…';
+        case 'saved':
+            return 'Saved';
+        case 'error':
+            return 'Error';
+        default:
+            return 'Ready';
+    }
+});
+</script>
 
-        const now = nowSec();
-        const t = await db.threads.get(toThreadId);
-        if (t)
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        await hooks.doAction('db.messages.copy:action:after', {
-            from: messageId,
-            toThreadId,
-        });
-    });
+<style scoped>
+.prose :where(h1, h2) {
+    font-family: 'Press Start 2P', monospace;
 }
 
-// Insert a message right after a given message id, adjusting index using sparse spacing
-export async function insertMessageAfter(
-    afterMessageId: string,
-    input: Omit<MessageCreate, 'index'>
-): Promise<Message> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.messages, db.threads, async () => {
-        const after = await db.messages.get(afterMessageId);
-        if (!after) throw new Error('after message not found');
-        const next = await db.messages
-            .where('[thread_id+index]')
-            .above([after.thread_id, after.index])
-            .first();
-        let newIndex: number;
-        if (!next) {
-            newIndex = after.index + 1000;
-        } else if (next.index - after.index > 1) {
-            newIndex = after.index + Math.floor((next.index - after.index) / 2);
-        } else {
-            // No gap, normalize thread then place after
-            await normalizeThreadIndexes(after.thread_id);
-            newIndex = after.index + 1000;
-        }
-        if (Array.isArray((input as any).file_hashes)) {
-            (input as any).file_hashes = serializeFileHashes(
-                (input as any).file_hashes
-            );
-        }
-        const value = parseOrThrow(MessageCreateSchema, {
-            ...input,
-            index: newIndex,
-            thread_id: after.thread_id,
-        });
-        await hooks.doAction('db.messages.insertAfter:action:before', {
-            after,
-            value,
-        });
-        const finalized = parseOrThrow(MessageSchema, value);
-        await db.messages.put(finalized);
-        const t = await db.threads.get(after.thread_id);
-        if (t) {
-            const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        }
-        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
-        return finalized;
-    });
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
 }
 
-// Compact / normalize indexes for a thread to 1000, 2000, 3000...
-export async function normalizeThreadIndexes(
-    threadId: string,
-    start = 1000,
-    step = 1000
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, async () => {
-        await hooks.doAction('db.messages.normalize:action:before', {
-            threadId,
-            start,
-            step,
-        });
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
-            .toArray();
-        msgs.sort((a, b) => a.index - b.index);
-        let idx = start;
-        for (const m of msgs) {
-            if (m.index !== idx) {
-                await db.messages.put({
-                    ...m,
-                    index: idx,
-                    updated_at: nowSec(),
-                });
-            }
-            idx += step;
-        }
-        await hooks.doAction('db.messages.normalize:action:after', {
-            threadId,
-        });
-    });
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85; /* increase for dark background readability */
+    font-weight: normal;
 }
+</style>
 ````
 
 ## File: app/db/client.ts
@@ -6828,6 +8195,637 @@ export class Or3DB extends Dexie {
 }
 
 export const db = new Or3DB();
+````
+
+## File: app/assets/css/main.css
+````css
+/* Tailwind v4: single import includes preflight + utilities */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Nuxt UI base styles (load first so we can override its tokens below) */
+@import "@nuxt/ui";
+
+/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
+	so classes used in Nuxt UI theme overrides are generated. */
+@source "../../../app.config.ts";
+
+
+/* Your Material theme variable files (scoped: .light, .dark, etc.) */
+@import "./theme.css";
+
+/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
+@import "~/assets/css/nuxt-ui-map.css";
+
+/* Font setup: body uses VT323, headings use Press Start 2P */
+:root {
+	/* Tailwind v4 token vars (optional for font utilities) */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+    --ui-radius: 3px;
+}
+
+html, body {
+	font-family: var(--font-sans) !important;
+    font-size: 20px; 
+}
+
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+	font-family: var(--font-heading) !important;
+}
+
+.retro-btn { 
+	display: inline-flex;
+	line-height: 1; /* avoid extra vertical space from font metrics */
+	position: relative;
+	border-radius: 3px;                               /* default */
+	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
+.retro-btn.aspect-square {
+	padding: 0; /* our button variant already sets px-0, this enforces it */
+	place-items: center;
+}
+
+/* Physical press: move button into its shadow and add subtle inner bevel */
+.retro-btn:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+.active-element {
+		box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Keyboard accessibility: preserve pixel look while focused */
+.retro-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Global thin colored scrollbars (WebKit + Firefox) */
+/* Firefox */
+html {
+	scrollbar-width: thin;
+	/* thumb color, then track color */
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit (Chromium, Safari) */
+/* Apply to all scrollable elements */
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+	border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--md-primary);
+	border-radius: 9999px;
+	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern-flipped {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    rotate: 180deg;
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
+.dark .prose strong,
+.dark .prosemirror-host :where(.ProseMirror) strong {
+	color: var(--md-on-surface);
+}
+````
+
+## File: app/components/sidebar/SidebarProjectTree.vue
+````vue
+<template>
+    <div v-if="projects.length" class="space-y-1">
+        <h4 class="text-xs uppercase tracking-wide opacity-70 px-1 select-none">
+            Projects
+        </h4>
+        <UTree
+            v-model:expanded="internalExpanded"
+            :items="treeItems"
+            color="neutral"
+            size="sm"
+            :ui="ui"
+        >
+            <template #item-trailing="{ item, level }">
+                <div class="flex items-center gap-1">
+                    <!-- Root-level quick add buttons (appear on hover) -->
+                    <template v-if="level === 0">
+                        <button
+                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addChat', item.value)"
+                            aria-label="Add chat to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:message-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                        <button
+                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addDocument', item.value)"
+                            aria-label="Add document to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:note-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                    </template>
+                    <UPopover
+                        :content="{
+                            side: 'right',
+                            align: 'start',
+                            sideOffset: 6,
+                        }"
+                    >
+                        <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop
+                            :aria-label="
+                                level === 0
+                                    ? 'Project actions'
+                                    : 'Entry actions'
+                            "
+                        >
+                            <UIcon
+                                name="pixelarticons:more-vertical"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </span>
+                        <template #content>
+                            <div class="p-1 w-48 space-y-1">
+                                <template v-if="level === 0">
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-pencil"
+                                        @click.stop.prevent="
+                                            emit('renameProject', item.value)
+                                        "
+                                        >Rename Project</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-trash-2"
+                                        @click.stop.prevent="
+                                            emit('deleteProject', item.value)
+                                        "
+                                        >Delete Project</UButton
+                                    >
+                                </template>
+                                <template v-else>
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-pencil"
+                                        @click.stop.prevent="
+                                            emit('renameEntry', {
+                                                projectId: item.parentId,
+                                                entryId: item.value,
+                                                kind: item.kind,
+                                            })
+                                        "
+                                        >Rename</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-x"
+                                        @click.stop.prevent="
+                                            emit('removeFromProject', {
+                                                projectId: item.parentId,
+                                                entryId: item.value,
+                                                kind: item.kind,
+                                            })
+                                        "
+                                        >Remove from Project</UButton
+                                    >
+                                </template>
+                            </div>
+                        </template>
+                    </UPopover>
+                </div>
+            </template>
+        </UTree>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed, watch, ref } from 'vue';
+
+interface ProjectEntry {
+    id: string;
+    name?: string;
+    kind?: string;
+}
+interface ProjectRow {
+    id: string;
+    name: string;
+    data?: any;
+}
+
+const props = defineProps<{
+    projects: ProjectRow[];
+    expanded?: string[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'update:expanded', value: string[]): void;
+    (e: 'chatSelected', id: string): void;
+    (e: 'documentSelected', id: string): void;
+    (e: 'addChat', projectId: string): void;
+    (e: 'addDocument', projectId: string): void;
+    (e: 'deleteProject', projectId: string): void;
+    (e: 'renameProject', projectId: string): void;
+    (
+        e: 'renameEntry',
+        payload: { projectId: string; entryId: string; kind?: string }
+    ): void;
+    (
+        e: 'removeFromProject',
+        payload: { projectId: string; entryId: string; kind?: string }
+    ): void;
+}>();
+
+// Local mirror for v-model:expanded
+const internalExpanded = ref<string[]>(
+    props.expanded ? [...props.expanded] : []
+);
+watch(
+    () => props.expanded,
+    (val) => {
+        if (val && val !== internalExpanded.value)
+            internalExpanded.value = [...val];
+    }
+);
+watch(internalExpanded, (val) => emit('update:expanded', val));
+
+function normalizeProjectData(p: any): ProjectEntry[] {
+    const raw = p?.data;
+    if (Array.isArray(raw)) return raw as ProjectEntry[];
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
+        } catch {
+            /* ignore */
+        }
+    }
+    return [];
+}
+
+const treeItems = computed<any[]>(() =>
+    props.projects.map((p) => {
+        const children = normalizeProjectData(p).map((entry) => {
+            const kind = entry.kind || 'chat';
+            return {
+                label: entry.name || '(untitled)',
+                value: entry.id,
+                icon:
+                    kind === 'doc'
+                        ? 'pixelarticons:note'
+                        : 'pixelarticons:chat',
+                kind,
+                parentId: p.id,
+                onSelect: (e: Event) => {
+                    if (kind === 'chat') emit('chatSelected', entry.id);
+                    else if (kind === 'doc') emit('documentSelected', entry.id);
+                },
+            };
+        });
+        return {
+            label: p.name,
+            value: p.id,
+            defaultExpanded: false,
+            children,
+            onSelect: (e: Event) => e.preventDefault(),
+        };
+    })
+);
+
+const ui = {
+    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden',
+    link: 'group/addchat text-[13px] rounded-[4px] py-1',
+};
+</script>
+
+<style scoped></style>
+````
+
+## File: app/components/sidebar/SideBottomNav.vue
+````vue
+<template>
+    <div
+        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)]"
+    >
+        <!-- Removed previously added extra div; using pseudo-element for top pattern -->
+        <div
+            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] border-2 border-[var(--md-outline-variant)]"
+        >
+            <div class="h-[10px] top-10 header-pattern-flipped"></div>
+            <div
+                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
+            >
+                <!-- MY INFO -->
+                <UPopover>
+                    <button
+                        type="button"
+                        aria-label="My Info"
+                        class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                    >
+                        <div
+                            class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                        >
+                            <UIcon
+                                name="pixelarticons:user"
+                                class="h-5 w-5"
+                            ></UIcon>
+                        </div>
+                        <div
+                            class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                        >
+                            <div
+                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                            >
+                                INFO
+                            </div>
+                            <div
+                                class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                            >
+                                <div class="h-[2px] bg-current"></div>
+                                <div class="h-[2px] bg-current"></div>
+                            </div>
+                        </div>
+                    </button>
+                    <template #content>
+                        <div class="flex flex-col items-start w-[140px]">
+                            <button
+                                class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToActivity"
+                            >
+                                <UIcon
+                                    name="pixelarticons:human-run"
+                                    class="mr-1.5"
+                                />
+                                Activity
+                            </button>
+                            <button
+                                class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToCredits"
+                            >
+                                <UIcon
+                                    name="pixelarticons:coin"
+                                    class="mr-1.5"
+                                />
+                                Credits
+                            </button>
+                        </div>
+                    </template>
+                </UPopover>
+
+                <!-- Connect -->
+                <button
+                    label="Open"
+                    @click="onConnectButtonClick"
+                    type="button"
+                    aria-label="Connect"
+                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                >
+                    <div
+                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                    >
+                        <svg
+                            class="w-4 h-4"
+                            viewBox="0 0 512 512"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="currentColor"
+                            stroke="currentColor"
+                        >
+                            <g clip-path="url(#clip0_205_3)">
+                                <path
+                                    d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
+                                />
+                                <path
+                                    d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
+                                />
+                            </g>
+                        </svg>
+                    </div>
+                    <div
+                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                    >
+                        <div
+                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                        >
+                            {{ orIsConnected ? 'Disconnect' : 'Connect' }}
+                        </div>
+                        <div
+                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                        >
+                            <div
+                                :class="{
+                                    'bg-green-600': orIsConnected,
+                                    'bg-error': !orIsConnected,
+                                }"
+                                class="h-[2px]"
+                            ></div>
+                            <div
+                                :class="{
+                                    'bg-success': orIsConnected,
+                                    'bg-error': !orIsConnected,
+                                }"
+                                class="h-[2px]"
+                            ></div>
+                        </div>
+                    </div>
+                </button>
+
+                <!-- HELP -->
+                <button
+                    @click="showSettingsModal = true"
+                    type="button"
+                    aria-label="Help"
+                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                >
+                    <div
+                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                    >
+                        <UIcon
+                            class="w-5 h-5"
+                            name="pixelarticons:sliders-2"
+                        ></UIcon>
+                    </div>
+                    <div
+                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                    >
+                        <div
+                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                        >
+                            HELP
+                        </div>
+                        <div
+                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                        >
+                            <div class="h-[2px] bg-current"></div>
+                            <div class="h-[2px] bg-current"></div>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div class="h-[10px] top-10"></div>
+        </div>
+    </div>
+    <modal-settings-modal v-model:showModal="showSettingsModal" />
+</template>
+
+<script lang="ts" setup>
+import { state } from '~/state/global';
+
+const openrouter = useOpenRouterAuth();
+const orIsConnected = computed(() => state.value.openrouterKey);
+const showSettingsModal = ref(false);
+
+function onConnectButtonClick() {
+    if (orIsConnected.value) {
+        console.log(orIsConnected);
+        // Logic to disconnect
+        state.value.openrouterKey = null;
+        openrouter.logoutOpenRouter();
+    } else {
+        // Logic to connect
+        openrouter.startLogin();
+    }
+}
+
+function navigateToActivity() {
+    window.open('https://openrouter.ai/activity', '_blank');
+}
+
+function navigateToCredits() {
+    window.open('https://openrouter.ai/settings/credits', '_blank');
+}
+</script>
+
+<style scoped>
+/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
+.retro-bar {
+    position: relative;
+    isolation: isolate; /* contain blend */
+}
+.retro-bar::before {
+    /* Chrome gloss + bevel hint */
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* render under content */
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.18),
+        rgba(255, 255, 255, 0.06) 28%,
+        rgba(0, 0, 0, 0) 40%,
+        rgba(0, 0, 0, 0.1) 100%
+    );
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+.retro-bar::after {
+    /* Scanlines + speckle noise, extremely subtle */
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* render under content */
+    background-image: repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.045) 0px,
+            rgba(255, 255, 255, 0.045) 1px,
+            rgba(0, 0, 0, 0) 1px,
+            rgba(0, 0, 0, 0) 3px
+        ),
+        radial-gradient(
+            1px 1px at 12% 18%,
+            rgba(255, 255, 255, 0.04),
+            transparent 100%
+        ),
+        radial-gradient(
+            1px 1px at 64% 62%,
+            rgba(0, 0, 0, 0.04),
+            transparent 100%
+        );
+    opacity: 0.25;
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+</style>
 ````
 
 ## File: app/composables/useModelStore.ts
@@ -7133,985 +9131,6 @@ export function useModelStore() {
         lastLoadedAt,
     };
 }
-````
-
-## File: app/components/sidebar/SideBottomNav.vue
-````vue
-<template>
-    <div
-        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)]"
-    >
-        <!-- Removed previously added extra div; using pseudo-element for top pattern -->
-        <div
-            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] border-2 border-[var(--md-outline-variant)]"
-        >
-            <div class="h-[10px] top-10 header-pattern-flipped"></div>
-            <div
-                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
-            >
-                <!-- MY INFO -->
-                <UPopover>
-                    <button
-                        type="button"
-                        aria-label="My Info"
-                        class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                    >
-                        <div
-                            class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                        >
-                            <UIcon
-                                name="pixelarticons:user"
-                                class="h-5 w-5"
-                            ></UIcon>
-                        </div>
-                        <div
-                            class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                        >
-                            <div
-                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                            >
-                                INFO
-                            </div>
-                            <div
-                                class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                            >
-                                <div class="h-[2px] bg-current"></div>
-                                <div class="h-[2px] bg-current"></div>
-                            </div>
-                        </div>
-                    </button>
-                    <template #content>
-                        <div class="flex flex-col items-start w-[140px]">
-                            <button
-                                class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
-                                @click="navigateToActivity"
-                            >
-                                <UIcon
-                                    name="pixelarticons:human-run"
-                                    class="mr-1.5"
-                                />
-                                Activity
-                            </button>
-                            <button
-                                class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
-                                @click="navigateToCredits"
-                            >
-                                <UIcon
-                                    name="pixelarticons:coin"
-                                    class="mr-1.5"
-                                />
-                                Credits
-                            </button>
-                        </div>
-                    </template>
-                </UPopover>
-
-                <!-- Connect -->
-                <button
-                    label="Open"
-                    @click="onConnectButtonClick"
-                    type="button"
-                    aria-label="Connect"
-                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                >
-                    <div
-                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                    >
-                        <svg
-                            class="w-4 h-4"
-                            viewBox="0 0 512 512"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="currentColor"
-                            stroke="currentColor"
-                        >
-                            <g clip-path="url(#clip0_205_3)">
-                                <path
-                                    d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
-                                    stroke-width="90"
-                                />
-                                <path
-                                    d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
-                                />
-                                <path
-                                    d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
-                                    stroke-width="90"
-                                />
-                                <path
-                                    d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
-                                />
-                            </g>
-                        </svg>
-                    </div>
-                    <div
-                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                    >
-                        <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                        >
-                            {{ orIsConnected ? 'Disconnect' : 'Connect' }}
-                        </div>
-                        <div
-                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                        >
-                            <div
-                                :class="{
-                                    'bg-green-600': orIsConnected,
-                                    'bg-error': !orIsConnected,
-                                }"
-                                class="h-[2px]"
-                            ></div>
-                            <div
-                                :class="{
-                                    'bg-success': orIsConnected,
-                                    'bg-error': !orIsConnected,
-                                }"
-                                class="h-[2px]"
-                            ></div>
-                        </div>
-                    </div>
-                </button>
-
-                <!-- HELP -->
-                <button
-                    @click="showSettingsModal = true"
-                    type="button"
-                    aria-label="Help"
-                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                >
-                    <div
-                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                    >
-                        <UIcon
-                            class="w-5 h-5"
-                            name="pixelarticons:sliders-2"
-                        ></UIcon>
-                    </div>
-                    <div
-                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                    >
-                        <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                        >
-                            HELP
-                        </div>
-                        <div
-                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                        >
-                            <div class="h-[2px] bg-current"></div>
-                            <div class="h-[2px] bg-current"></div>
-                        </div>
-                    </div>
-                </button>
-            </div>
-            <div class="h-[10px] top-10"></div>
-        </div>
-    </div>
-    <modal-settings-modal v-model:showModal="showSettingsModal" />
-</template>
-
-<script lang="ts" setup>
-import { state } from '~/state/global';
-
-const openrouter = useOpenRouterAuth();
-const orIsConnected = computed(() => state.value.openrouterKey);
-const showSettingsModal = ref(false);
-
-function onConnectButtonClick() {
-    if (orIsConnected.value) {
-        console.log(orIsConnected);
-        // Logic to disconnect
-        state.value.openrouterKey = null;
-        openrouter.logoutOpenRouter();
-    } else {
-        // Logic to connect
-        openrouter.startLogin();
-    }
-}
-
-function navigateToActivity() {
-    window.open('https://openrouter.ai/activity', '_blank');
-}
-
-function navigateToCredits() {
-    window.open('https://openrouter.ai/settings/credits', '_blank');
-}
-</script>
-
-<style scoped>
-/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
-.retro-bar {
-    position: relative;
-    isolation: isolate; /* contain blend */
-}
-.retro-bar::before {
-    /* Chrome gloss + bevel hint */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background: linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.18),
-        rgba(255, 255, 255, 0.06) 28%,
-        rgba(0, 0, 0, 0) 40%,
-        rgba(0, 0, 0, 0.1) 100%
-    );
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-.retro-bar::after {
-    /* Scanlines + speckle noise, extremely subtle */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background-image: repeating-linear-gradient(
-            0deg,
-            rgba(255, 255, 255, 0.045) 0px,
-            rgba(255, 255, 255, 0.045) 1px,
-            rgba(0, 0, 0, 0) 1px,
-            rgba(0, 0, 0, 0) 3px
-        ),
-        radial-gradient(
-            1px 1px at 12% 18%,
-            rgba(255, 255, 255, 0.04),
-            transparent 100%
-        ),
-        radial-gradient(
-            1px 1px at 64% 62%,
-            rgba(0, 0, 0, 0.04),
-            transparent 100%
-        );
-    opacity: 0.25;
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-</style>
-````
-
-## File: package.json
-````json
-{
-    "name": "nuxt-app",
-    "type": "module",
-    "private": true,
-    "scripts": {
-        "build": "nuxt build",
-        "dev": "nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare"
-    },
-    "dependencies": {
-        "@nuxt/ui": "^3.3.2",
-        "@openrouter/ai-sdk-provider": "^1.1.2",
-        "@orama/orama": "^3.1.11",
-        "@tiptap/pm": "^3.3.0",
-        "@tiptap/starter-kit": "^3.3.0",
-        "@tiptap/vue-3": "^3.3.0",
-        "@types/spark-md5": "^3.0.5",
-        "ai": "^5.0.17",
-        "dexie": "^4.0.11",
-        "gpt-tokenizer": "^3.0.1",
-        "highlight.js": "^11.11.1",
-        "marked-highlight": "^2.2.2",
-        "nuxt": "^4.0.3",
-        "orama": "^2.0.6",
-        "spark-md5": "^3.0.2",
-        "tiptap-markdown": "^0.8.10",
-        "turndown": "^7.2.1",
-        "typescript": "^5.6.3",
-        "virtua": "^0.41.5",
-        "vue": "^3.5.18",
-        "vue-router": "^4.5.1",
-        "zod": "^4.0.17"
-    },
-    "devDependencies": {
-        "@tailwindcss/typography": "^0.5.16"
-    }
-}
-````
-
-## File: task.md
-````markdown
-# Chat stabilization tasks
-
-A concise, checkable plan to make chat behavior correct, reactive, and performant. I’ll check items off as we complete them.
-
-Legend: [ ] todo, [x] done, [~] optional
-
-## 0) Current progress snapshot
-
--   [x] ChatContainer re-initializes useChat when threadId changes (watch + shallowRef)
-    -   File: `app/components/chat/ChatContainer.vue`
-    -   Status: Implemented
--   [ ] All other tasks pending
-
----
-
-## 1) Fix thread selection event mismatch (critical)
-
-Goal: Ensure clicking a thread in the sidebar updates the page `threadId`.
-
--   Files:
-    -   `app/pages/chat.vue`
-    -   `app/components/sidebar/SideNavContent.vue`
-
-Tasks:
-
--   [ ] Standardize the event name between child and parent.
-    -   Minimal fix: In `chat.vue`, listen to the existing camelCase event.
-        -   Change: `<sidebar-side-nav-content @chatSelected="onChatSelected" />`
-    -   [x] Minimal fix applied: `chat.vue` now listens for `@chatSelected`.
-    -   [~] Alternative: Switch to kebab-case consistently (child emits `'chat-selected'`, parent listens `@chat-selected`). Choose one and apply to both files.
-
-Acceptance:
-
--   [x] Clicking a sidebar item calls `onChatSelected` and sets `threadId`.
-
----
-
-## 2) Keep ChatContainer messages in sync on thread and history changes
-
-Goal: No stale/empty messages after switching threads or after async history load.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [x] Also react to `props.messageHistory` changes (implemented):
-    -   Used the direct-assignment approach in `ChatContainer.vue`:
-        -   `chat.value.messages.value = [...(props.messageHistory || [])]`
-    -   (Alternative re-init approach is still valid if you prefer.)
--   [ ] Remove reliance on parent `:key` remount (optional) once the above sync is in place.
-
-Acceptance:
-
--   [x] Switching threads updates the list immediately.
--   [x] Messages do not flicker or show stale content.
-
----
-
-## 3) Propagate new thread id created on first send
-
-Goal: When sending a first message without a selected thread, a new thread is created and the page learns its id.
-
--   Files:
-    -   `app/composables/useAi.ts`
-    -   `app/components/chat/ChatContainer.vue`
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [x] In `useAi.ts`, make `threadId` reactive:
-    -   Use `const threadIdRef = ref(threadId)`; update `threadIdRef.value` when creating a thread.
-    -   Return `threadId: threadIdRef` from `useChat`.
--   [x] In `ChatContainer.vue`:
-    -   Watch the returned `chat.value.threadId` and emit upward when it transitions from falsy to a real id, e.g., `emit('thread-selected', id)`.
--   [x] In `chat.vue`:
-    -   Listen for `@thread-selected` from `ChatContainer` and set page-level `threadId`.
-
-Acceptance:
-
--   [x] Sending the first message when no thread is selected creates a thread and binds the UI to it.
-
----
-
-## 4) Use stable keys for message rendering
-
-Goal: Avoid DOM reuse glitches and ensure predictable rendering.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [ ] Update `v-for` key to a stable identifier:
-    -   Prefer DB `message.id`.
-    -   Fallback: `message.stream_id` for streaming assistant placeholders.
-    -   As a last resort: a composite key such as `${index}-${message.role}` only if no ids exist yet (not ideal for long-term).
-
-Acceptance:
-
--   [ ] No warning about duplicate/unstable keys; UI remains stable during updates and streaming.
-
----
-
-## 5) Improve Dexie query performance and ordering
-
-Goal: Efficiently fetch ordered messages per thread without client-side resort.
-
--   Files:
-    -   `app/db/client.ts` (Dexie schema; add an index)
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [x] Add a compound index to messages: `[thread_id+index]`.
--   [x] Query ordered messages via the compound index:
-    -   Replace `.where('thread_id').equals(id).sortBy('index')` with
-        `.where('[thread_id+index]').between([id, Dexie.minKey], [id, Dexie.maxKey]).toArray()`.
--   [x] Remove extra JS sorting when possible.
-
-Acceptance:
-
--   [x] Message fetch is ordered and fast on large datasets.
-
----
-
-## 6) Wire up "New Chat" button
-
-Goal: Create a new thread and select it immediately.
-
--   Files:
-    -   `app/components/sidebar/SideNavContent.vue`
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [ ] Implement click handler on New Chat:
-    -   Create a thread via `create.thread({ title: 'New Thread', ... })`.
-    -   Emit upward the new id (`emit('chatSelected', newId)` or kebab-case version).
--   [ ] Parent `chat.vue` sets `threadId` in `onChatSelected` and fetches messages.
-
-Acceptance:
-
--   [ ] Clicking New Chat opens an empty conversation bound to the new thread id.
-
----
-
-## 7) Streaming write optimization (optional but recommended)
-
-Goal: Reduce write amplification during assistant streaming while remaining correct.
-
--   File: `app/composables/useAi.ts`
-
-Tasks:
-
--   [x] Throttle `upsert.message` during streaming (e.g., 50–150ms) and ensure a final upsert at end.
--   [x] Keep hooks (`ai.chat.stream:action:delta`) intact.
-
-Acceptance:
-
--   [x] Noticeably fewer writes during long responses without losing final content.
-
----
-
-## 8) Loading UX and input state
-
-Goal: Visual feedback and prevent duplicate sends while streaming.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [x] Bind `loading` to disable send UI or show a subtle spinner/typing indicator.
--   [x] Guard `onSend` to no-op while `loading` is true.
-
-Acceptance:
-
--   [x] Input disabled/indicates streaming; no duplicate sends mid-stream.
-
----
-
-## 9) Delete semantics consistency (soft vs hard)
-
-Goal: Predictable UX for delete vs trash.
-
--   Files:
-    -   `app/components/sidebar/SideNavContent.vue`
-    -   `app/db/index.ts` (only if changing which API is used)
-
-Tasks:
-
--   [ ] Choose a policy:
-    -   Soft delete: Use `del.soft.thread(id)` and filter out `deleted` in lists (current UI already filters).
-    -   Hard delete: Keep current hard delete but adjust copy to warn it’s permanent and ensure no other code expects soft-deleted items.
--   [ ] Apply consistently in menu actions and list queries.
-
-Acceptance:
-
--   [ ] Delete behavior matches the chosen policy across UI and data layer.
-
----
-
-## 10) Minor schema and docs polish (optional)
-
-Goal: Align expectations and reduce surprises.
-
--   Files:
-    -   `app/composables/useAi.ts` (model default consistency with docs)
-    -   `app/db/schema.ts` (only if relaxing URL constraints for attachments)
-
-Tasks:
-
--   [~] Align default model id with docs or update docs to reflect `'openai/gpt-oss-120b'`.
--   [~] If needed, relax `AttachmentSchema.url` to allow `blob:`/`data:`/relative URLs, or validate upstream.
-
-Acceptance:
-
--   [ ] Docs and defaults align; attachment storage behavior is intentional.
-
----
-
-## File-by-file quick reference
-
--   `app/pages/chat.vue`
-
-    -   [ ] Fix event listener name (`@chatSelected` or kebab-case strategy)
-    -   [ ] Optional: remove `:key` remount after child sync is robust
-    -   [ ] Switch to compound-index query once available
-
--   `app/components/sidebar/SideNavContent.vue`
-
-    -   [ ] Event name consistency with parent
-    -   [ ] Implement New Chat creation and emit id
-    -   [ ] Decide and apply delete policy (soft vs hard)
-
--   `app/components/chat/ChatContainer.vue`
-
-    -   [x] Re-init `useChat` on `threadId` change (done)
-    -   [ ] Sync messages on `messageHistory` change
-    -   [ ] Stable `v-for` keys (prefer `message.id`)
-    -   [ ] Use `loading` to disable input / show indicator
-    -   [ ] Emit upward when thread id is created by `useChat`
-
--   `app/composables/useAi.ts`
-
-    -   [ ] Return reactive `threadId` (ref)
-    -   [ ] Throttle streaming upserts (optional)
-    -   [~] Model default/docs alignment
-
--   `app/db/client.ts`
-
-    -   [ ] Add `[thread_id+index]` index for messages
-
--   `app/db/index.ts`
-
-    -   [ ] No code change required unless delete policy changes (then switch to soft/hard helpers accordingly)
-
--   `app/db/schema.ts`
-    -   [~] Optional: relax `AttachmentSchema.url` if non-absolute URLs are used
-
----
-
-## Acceptance checklist (end-to-end)
-
--   [ ] Clicking a thread selects it and loads messages quickly
--   [ ] New Chat creates and selects a new thread with empty history
--   [ ] Switching threads shows the correct messages without flicker
--   [ ] First send without a thread creates one and binds the UI to it
--   [ ] Streaming is smooth; input disabled; minimal DB writes
--   [ ] Delete behavior matches chosen policy consistently
--   [ ] No console errors; keys stable; queries efficient
-
----
-
-Notes:
-
--   Prefer minimal-diff fixes first (event name, message sync) to restore core functionality, then ship performance and UX improvements.
--   If you want me to start executing, I’ll begin with Section 1 and 2 and validate the flow live.
-````
-
-## File: app/assets/css/main.css
-````css
-/* Tailwind v4: single import includes preflight + utilities */
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-
-/* Nuxt UI base styles (load first so we can override its tokens below) */
-@import "@nuxt/ui";
-
-/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
-	so classes used in Nuxt UI theme overrides are generated. */
-@source "../../../app.config.ts";
-
-
-/* Your Material theme variable files (scoped: .light, .dark, etc.) */
-@import "./theme.css";
-
-/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
-@import "~/assets/css/nuxt-ui-map.css";
-
-/* Font setup: body uses VT323, headings use Press Start 2P */
-:root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
-    --ui-radius: 3px;
-}
-
-html, body {
-	font-family: var(--font-sans) !important;
-    font-size: 20px; 
-}
-
-/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
-.scrollbars {
-	scrollbar-width: thin;
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
-.scrollbar-hidden {
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE/Edge legacy */
-}
-.scrollbar-hidden::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
-
-h1, h2, h3, h4, h5, h6, .font-heading {
-	font-family: var(--font-heading) !important;
-}
-
-.retro-btn { 
-	display: inline-flex;
-	line-height: 1; /* avoid extra vertical space from font metrics */
-	position: relative;
-	border-radius: 3px;                               /* default */
-	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-
-/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
-.retro-btn.aspect-square {
-	padding: 0; /* our button variant already sets px-0, this enforces it */
-	place-items: center;
-}
-
-/* Physical press: move button into its shadow and add subtle inner bevel */
-.retro-btn:active {
-	transform: translate(2px, 2px);
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-.active-element {
-		box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-/* Keyboard accessibility: preserve pixel look while focused */
-.retro-btn:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-/* Global thin colored scrollbars (WebKit + Firefox) */
-/* Firefox */
-html {
-	scrollbar-width: thin;
-	/* thumb color, then track color */
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit (Chromium, Safari) */
-/* Apply to all scrollable elements */
-*::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
-}
-*::-webkit-scrollbar-track {
-	background: transparent;
-	border-radius: 9999px;
-}
-*::-webkit-scrollbar-thumb {
-	background: var(--md-primary);
-	border-radius: 9999px;
-	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
-	background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-*::-webkit-scrollbar-corner { background: transparent; }
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern-flipped {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    rotate: 180deg;
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-````
-
-## File: app/components/modal/SettingsModal.vue
-````vue
-<template>
-    <UModal
-        v-model:open="open"
-        title="Rename thread"
-        :ui="{
-            footer: 'justify-end border-t-2',
-            header: 'border-b-2  border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0!',
-        }"
-        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
-    >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    Settings
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="xs"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-        </template>
-        <template #body>
-            <div class="flex flex-col h-full">
-                <div
-                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
-                >
-                    <div class="relative w-full max-w-md">
-                        <UInput
-                            v-model="searchQuery"
-                            icon="pixelarticons:search"
-                            placeholder="Search models (id, name, description, modality)"
-                            size="sm"
-                            class="w-full pr-8"
-                            :ui="{ base: 'w-full' }"
-                            autofocus
-                        />
-                        <button
-                            v-if="searchQuery"
-                            type="button"
-                            aria-label="Clear search"
-                            class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                            @click="searchQuery = ''"
-                        >
-                            <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
-                    Indexing models…
-                </div>
-                <div v-else class="flex-1 min-h-0">
-                    <VList
-                        :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 70vh"
-                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
-                        :overscan="4"
-                        #default="{ item: row }"
-                    >
-                        <div
-                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
-                            :class="gridColsClass"
-                        >
-                            <div
-                                v-for="m in row"
-                                :key="m.id"
-                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
-                            >
-                                <div
-                                    class="flex items-start justify-between gap-2"
-                                >
-                                    <div class="flex flex-col min-w-0">
-                                        <div
-                                            class="font-medium text-sm truncate"
-                                            :title="m.canonical_slug"
-                                        >
-                                            {{ m.canonical_slug }}
-                                        </div>
-                                        <div
-                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
-                                        >
-                                            CTX {{ m.context_length }}
-                                        </div>
-                                    </div>
-                                    <button
-                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
-                                        :aria-pressed="isFavorite(m)"
-                                        @click.stop="toggleFavorite(m)"
-                                        :title="
-                                            isFavorite(m)
-                                                ? 'Unfavorite'
-                                                : 'Favorite'
-                                        "
-                                    >
-                                        <span v-if="isFavorite(m)">★</span>
-                                        <span v-else>☆</span>
-                                    </button>
-                                </div>
-                                <div
-                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
-                                >
-                                    <div class="flex flex-col">
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Input</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.prompt,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="flex flex-col items-end text-right"
-                                    >
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Output</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.completion,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                </div>
-                                <div
-                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
-                                >
-                                    <span>{{
-                                        m.architecture?.modality || 'text'
-                                    }}</span>
-                                    <span class="opacity-60">/1M tokens</span>
-                                </div>
-                                <div
-                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
-                                />
-                            </div>
-                        </div>
-                    </VList>
-                    <div
-                        v-if="!chunkedModels.length && searchQuery"
-                        class="px-6 pb-6 text-xs text-neutral-500"
-                    >
-                        No models match "{{ searchQuery }}".
-                    </div>
-                </div>
-            </div>
-        </template>
-        <template #footer> </template>
-    </UModal>
-</template>
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import { useModelSearch } from '~/composables/useModelSearch';
-import type { OpenRouterModel } from '~/utils/models-service';
-import { useModelStore } from '~/composables/useModelStore';
-
-const props = defineProps<{
-    showModal: boolean;
-}>();
-const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
-
-// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
-
-const modelCatalog = ref<OpenRouterModel[]>([]);
-// Search state (Orama index built client-side)
-const {
-    query: searchQuery,
-    results: searchResults,
-    ready: searchReady,
-} = useModelSearch(modelCatalog);
-
-// Fixed 3-column layout for consistent rows
-const COLS = 2;
-const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
-
-const chunkedModels = computed(() => {
-    const source = searchQuery.value.trim()
-        ? searchResults.value
-        : modelCatalog.value;
-    const cols = COLS;
-    const rows: OpenRouterModel[][] = [];
-    for (let i = 0; i < source.length; i += cols) {
-        rows.push(source.slice(i, i + cols));
-    }
-    return rows;
-});
-
-const {
-    favoriteModels,
-    getFavoriteModels,
-    catalog,
-    fetchModels,
-    addFavoriteModel,
-    removeFavoriteModel,
-} = useModelStore();
-
-onMounted(() => {
-    fetchModels().then(() => {
-        modelCatalog.value = catalog.value;
-    });
-
-    getFavoriteModels().then((models) => {
-        favoriteModels.value = models;
-    });
-});
-
-function isFavorite(m: OpenRouterModel) {
-    return favoriteModels.value.some((f) => f.id === m.id);
-}
-
-function toggleFavorite(m: OpenRouterModel) {
-    if (isFavorite(m)) {
-        removeFavoriteModel(m);
-    } else {
-        addFavoriteModel(m);
-    }
-}
-
-/**
- * Format a per-token price into a "per 1,000,000 tokens" currency string.
- * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
- */
-function formatPerMillion(raw: unknown, currency = 'USD') {
-    const perToken = Number(raw ?? 0);
-    const perMillion = perToken * 1_000_000;
-    try {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 2,
-        }).format(perMillion);
-    } catch (e) {
-        // Fallback: simple fixed formatting
-        return `$${perMillion.toFixed(2)}`;
-    }
-}
-</script>
 ````
 
 ## File: app/db/schema.ts
@@ -8805,122 +9824,696 @@ useHookEffect('ai.chat.retry:action:after', (info) => {
 ```
 ````
 
-## File: app/app.config.ts
-````typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--tw-border-style)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--tw-border-style)] ',
-                header: 'border-0',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
+## File: package.json
+````json
+{
+    "name": "nuxt-app",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "build": "nuxt build",
+        "dev": "nuxt dev",
+        "generate": "nuxt generate",
+        "preview": "nuxt preview",
+        "postinstall": "nuxt prepare"
     },
+    "dependencies": {
+        "@nuxt/ui": "^3.3.2",
+        "@openrouter/ai-sdk-provider": "^1.1.2",
+        "@orama/orama": "^3.1.11",
+        "@tiptap/extension-placeholder": "^3.3.0",
+        "@tiptap/pm": "^3.3.0",
+        "@tiptap/starter-kit": "^3.3.0",
+        "@tiptap/vue-3": "^3.3.0",
+        "@types/spark-md5": "^3.0.5",
+        "ai": "^5.0.17",
+        "dexie": "^4.0.11",
+        "gpt-tokenizer": "^3.0.1",
+        "highlight.js": "^11.11.1",
+        "marked-highlight": "^2.2.2",
+        "nuxt": "^4.0.3",
+        "orama": "^2.0.6",
+        "spark-md5": "^3.0.2",
+        "tiptap-markdown": "^0.8.10",
+        "turndown": "^7.2.1",
+        "typescript": "^5.6.3",
+        "virtua": "^0.41.5",
+        "vue": "^3.5.18",
+        "vue-router": "^4.5.1",
+        "zod": "^4.0.17"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.16"
+    }
+}
+````
+
+## File: app/components/sidebar/SidebarDocumentsList.vue
+````vue
+<template>
+    <div class="mt-4">
+        <div class="flex items-center justify-between px-1 mb-1">
+            <h4 class="text-xs uppercase tracking-wide opacity-70 select-none">
+                Docs
+            </h4>
+            <UTooltip text="New Document" :delay-duration="0">
+                <UButton
+                    icon="pixelarticons:note-plus"
+                    size="xs"
+                    variant="subtle"
+                    @click="$emit('new-document')"
+                />
+            </UTooltip>
+        </div>
+        <div v-if="loading" class="text-xs opacity-60 px-1 py-2">Loading…</div>
+        <div
+            v-else-if="effectiveDocs.length === 0"
+            class="text-xs opacity-60 px-1 py-2"
+        >
+            No documents
+        </div>
+        <div v-else class="space-y-2">
+            <RetroGlassBtn
+                v-for="d in effectiveDocs"
+                :key="d.id"
+                class="w-full flex items-center justify-between text-left"
+                :class="{
+                    'active-element bg-primary/25': d.id === activeDocument,
+                }"
+                @click="$emit('select', d.id)"
+            >
+                <span class="truncate flex-1 min-w-0" :title="d.title">{{
+                    d.title
+                }}</span>
+                <!-- Actions popover (mirrors thread list) -->
+                <UPopover
+                    :content="{ side: 'right', align: 'start', sideOffset: 6 }"
+                >
+                    <span
+                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                        @click.stop
+                    >
+                        <UIcon
+                            name="pixelarticons:more-vertical"
+                            class="w-4 h-4 opacity-70"
+                        />
+                    </span>
+                    <template #content>
+                        <div class="p-1 w-44 space-y-1">
+                            <UButton
+                                color="neutral"
+                                variant="ghost"
+                                size="sm"
+                                class="w-full justify-start"
+                                icon="i-lucide-pencil"
+                                @click="$emit('rename-document', d)"
+                                >Rename</UButton
+                            >
+                            <UButton
+                                color="neutral"
+                                variant="ghost"
+                                size="sm"
+                                class="w-full justify-start"
+                                icon="pixelarticons:folder-plus"
+                                @click="$emit('add-to-project', d)"
+                                >Add to project</UButton
+                            >
+                            <UButton
+                                color="error"
+                                variant="ghost"
+                                size="sm"
+                                class="w-full justify-start"
+                                icon="i-lucide-trash-2"
+                                @click="$emit('delete-document', d)"
+                                >Delete</UButton
+                            >
+                        </div>
+                    </template>
+                </UPopover>
+            </RetroGlassBtn>
+        </div>
+    </div>
+</template>
+<script setup lang="ts">
+import { useDocumentsList } from '~/composables/useDocumentsList';
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+const props = defineProps<{ activeDocument?: string; externalDocs?: any[] }>();
+const emit = defineEmits<{
+    (e: 'select', id: string): void;
+    (e: 'new-document'): void;
+    (e: 'add-to-project', doc: any): void;
+    (e: 'delete-document', doc: any): void;
+    (e: 'rename-document', doc: any): void;
+}>();
+const { docs, loading } = useDocumentsList(200);
+const effectiveDocs = computed(() =>
+    Array.isArray(props.externalDocs) ? props.externalDocs : docs.value
+);
+function formatTime(ts: number) {
+    const d = new Date(ts * 1000);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+</script>
+````
+
+## File: task.md
+````markdown
+# Chat stabilization tasks
+
+A concise, checkable plan to make chat behavior correct, reactive, and performant. I’ll check items off as we complete them.
+
+Legend: [ ] todo, [x] done, [~] optional
+
+## 0) Current progress snapshot
+
+-   [x] ChatContainer re-initializes useChat when threadId changes (watch + shallowRef)
+    -   File: `app/components/chat/ChatContainer.vue`
+    -   Status: Implemented
+-   [ ] All other tasks pending
+
+---
+
+## 1) Fix thread selection event mismatch (critical)
+
+Goal: Ensure clicking a thread in the sidebar updates the page `threadId`.
+
+-   Files:
+    -   `app/pages/chat.vue`
+    -   `app/components/sidebar/SideNavContent.vue`
+
+Tasks:
+
+-   [ ] Standardize the event name between child and parent.
+    -   Minimal fix: In `chat.vue`, listen to the existing camelCase event.
+        -   Change: `<sidebar-side-nav-content @chatSelected="onChatSelected" />`
+    -   [x] Minimal fix applied: `chat.vue` now listens for `@chatSelected`.
+    -   [~] Alternative: Switch to kebab-case consistently (child emits `'chat-selected'`, parent listens `@chat-selected`). Choose one and apply to both files.
+
+Acceptance:
+
+-   [x] Clicking a sidebar item calls `onChatSelected` and sets `threadId`.
+
+---
+
+## 2) Keep ChatContainer messages in sync on thread and history changes
+
+Goal: No stale/empty messages after switching threads or after async history load.
+
+-   File: `app/components/chat/ChatContainer.vue`
+
+Tasks:
+
+-   [x] Also react to `props.messageHistory` changes (implemented):
+    -   Used the direct-assignment approach in `ChatContainer.vue`:
+        -   `chat.value.messages.value = [...(props.messageHistory || [])]`
+    -   (Alternative re-init approach is still valid if you prefer.)
+-   [ ] Remove reliance on parent `:key` remount (optional) once the above sync is in place.
+
+Acceptance:
+
+-   [x] Switching threads updates the list immediately.
+-   [x] Messages do not flicker or show stale content.
+
+---
+
+## 3) Propagate new thread id created on first send
+
+Goal: When sending a first message without a selected thread, a new thread is created and the page learns its id.
+
+-   Files:
+    -   `app/composables/useAi.ts`
+    -   `app/components/chat/ChatContainer.vue`
+    -   `app/pages/chat.vue`
+
+Tasks:
+
+-   [x] In `useAi.ts`, make `threadId` reactive:
+    -   Use `const threadIdRef = ref(threadId)`; update `threadIdRef.value` when creating a thread.
+    -   Return `threadId: threadIdRef` from `useChat`.
+-   [x] In `ChatContainer.vue`:
+    -   Watch the returned `chat.value.threadId` and emit upward when it transitions from falsy to a real id, e.g., `emit('thread-selected', id)`.
+-   [x] In `chat.vue`:
+    -   Listen for `@thread-selected` from `ChatContainer` and set page-level `threadId`.
+
+Acceptance:
+
+-   [x] Sending the first message when no thread is selected creates a thread and binds the UI to it.
+
+---
+
+## 4) Use stable keys for message rendering
+
+Goal: Avoid DOM reuse glitches and ensure predictable rendering.
+
+-   File: `app/components/chat/ChatContainer.vue`
+
+Tasks:
+
+-   [ ] Update `v-for` key to a stable identifier:
+    -   Prefer DB `message.id`.
+    -   Fallback: `message.stream_id` for streaming assistant placeholders.
+    -   As a last resort: a composite key such as `${index}-${message.role}` only if no ids exist yet (not ideal for long-term).
+
+Acceptance:
+
+-   [ ] No warning about duplicate/unstable keys; UI remains stable during updates and streaming.
+
+---
+
+## 5) Improve Dexie query performance and ordering
+
+Goal: Efficiently fetch ordered messages per thread without client-side resort.
+
+-   Files:
+    -   `app/db/client.ts` (Dexie schema; add an index)
+    -   `app/pages/chat.vue`
+
+Tasks:
+
+-   [x] Add a compound index to messages: `[thread_id+index]`.
+-   [x] Query ordered messages via the compound index:
+    -   Replace `.where('thread_id').equals(id).sortBy('index')` with
+        `.where('[thread_id+index]').between([id, Dexie.minKey], [id, Dexie.maxKey]).toArray()`.
+-   [x] Remove extra JS sorting when possible.
+
+Acceptance:
+
+-   [x] Message fetch is ordered and fast on large datasets.
+
+---
+
+## 6) Wire up "New Chat" button
+
+Goal: Create a new thread and select it immediately.
+
+-   Files:
+    -   `app/components/sidebar/SideNavContent.vue`
+    -   `app/pages/chat.vue`
+
+Tasks:
+
+-   [ ] Implement click handler on New Chat:
+    -   Create a thread via `create.thread({ title: 'New Thread', ... })`.
+    -   Emit upward the new id (`emit('chatSelected', newId)` or kebab-case version).
+-   [ ] Parent `chat.vue` sets `threadId` in `onChatSelected` and fetches messages.
+
+Acceptance:
+
+-   [ ] Clicking New Chat opens an empty conversation bound to the new thread id.
+
+---
+
+## 7) Streaming write optimization (optional but recommended)
+
+Goal: Reduce write amplification during assistant streaming while remaining correct.
+
+-   File: `app/composables/useAi.ts`
+
+Tasks:
+
+-   [x] Throttle `upsert.message` during streaming (e.g., 50–150ms) and ensure a final upsert at end.
+-   [x] Keep hooks (`ai.chat.stream:action:delta`) intact.
+
+Acceptance:
+
+-   [x] Noticeably fewer writes during long responses without losing final content.
+
+---
+
+## 8) Loading UX and input state
+
+Goal: Visual feedback and prevent duplicate sends while streaming.
+
+-   File: `app/components/chat/ChatContainer.vue`
+
+Tasks:
+
+-   [x] Bind `loading` to disable send UI or show a subtle spinner/typing indicator.
+-   [x] Guard `onSend` to no-op while `loading` is true.
+
+Acceptance:
+
+-   [x] Input disabled/indicates streaming; no duplicate sends mid-stream.
+
+---
+
+## 9) Delete semantics consistency (soft vs hard)
+
+Goal: Predictable UX for delete vs trash.
+
+-   Files:
+    -   `app/components/sidebar/SideNavContent.vue`
+    -   `app/db/index.ts` (only if changing which API is used)
+
+Tasks:
+
+-   [ ] Choose a policy:
+    -   Soft delete: Use `del.soft.thread(id)` and filter out `deleted` in lists (current UI already filters).
+    -   Hard delete: Keep current hard delete but adjust copy to warn it’s permanent and ensure no other code expects soft-deleted items.
+-   [ ] Apply consistently in menu actions and list queries.
+
+Acceptance:
+
+-   [ ] Delete behavior matches the chosen policy across UI and data layer.
+
+---
+
+## 10) Minor schema and docs polish (optional)
+
+Goal: Align expectations and reduce surprises.
+
+-   Files:
+    -   `app/composables/useAi.ts` (model default consistency with docs)
+    -   `app/db/schema.ts` (only if relaxing URL constraints for attachments)
+
+Tasks:
+
+-   [~] Align default model id with docs or update docs to reflect `'openai/gpt-oss-120b'`.
+-   [~] If needed, relax `AttachmentSchema.url` to allow `blob:`/`data:`/relative URLs, or validate upstream.
+
+Acceptance:
+
+-   [ ] Docs and defaults align; attachment storage behavior is intentional.
+
+---
+
+## File-by-file quick reference
+
+-   `app/pages/chat.vue`
+
+    -   [ ] Fix event listener name (`@chatSelected` or kebab-case strategy)
+    -   [ ] Optional: remove `:key` remount after child sync is robust
+    -   [ ] Switch to compound-index query once available
+
+-   `app/components/sidebar/SideNavContent.vue`
+
+    -   [ ] Event name consistency with parent
+    -   [ ] Implement New Chat creation and emit id
+    -   [ ] Decide and apply delete policy (soft vs hard)
+
+-   `app/components/chat/ChatContainer.vue`
+
+    -   [x] Re-init `useChat` on `threadId` change (done)
+    -   [ ] Sync messages on `messageHistory` change
+    -   [ ] Stable `v-for` keys (prefer `message.id`)
+    -   [ ] Use `loading` to disable input / show indicator
+    -   [ ] Emit upward when thread id is created by `useChat`
+
+-   `app/composables/useAi.ts`
+
+    -   [ ] Return reactive `threadId` (ref)
+    -   [ ] Throttle streaming upserts (optional)
+    -   [~] Model default/docs alignment
+
+-   `app/db/client.ts`
+
+    -   [ ] Add `[thread_id+index]` index for messages
+
+-   `app/db/index.ts`
+
+    -   [ ] No code change required unless delete policy changes (then switch to soft/hard helpers accordingly)
+
+-   `app/db/schema.ts`
+    -   [~] Optional: relax `AttachmentSchema.url` if non-absolute URLs are used
+
+---
+
+## Acceptance checklist (end-to-end)
+
+-   [ ] Clicking a thread selects it and loads messages quickly
+-   [ ] New Chat creates and selects a new thread with empty history
+-   [ ] Switching threads shows the correct messages without flicker
+-   [ ] First send without a thread creates one and binds the UI to it
+-   [ ] Streaming is smooth; input disabled; minimal DB writes
+-   [ ] Delete behavior matches chosen policy consistently
+-   [ ] No console errors; keys stable; queries efficient
+
+---
+
+Notes:
+
+-   Prefer minimal-diff fixes first (event name, message sync) to restore core functionality, then ship performance and UX improvements.
+-   If you want me to start executing, I’ll begin with Section 1 and 2 and validate the flow live.
+````
+
+## File: app/components/modal/SettingsModal.vue
+````vue
+<template>
+    <UModal
+        v-model:open="open"
+        title="Rename thread"
+        :ui="{
+            footer: 'justify-end border-t-2',
+            header: 'border-b-2  border-black bg-primary p-0 min-h-[50px] text-white',
+            body: 'p-0!',
+        }"
+        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
+    >
+        <template #header>
+            <div class="flex w-full items-center justify-between pr-2">
+                <h3 class="font-semibold text-sm pl-2 dark:text-black">
+                    Settings
+                </h3>
+                <UButton
+                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
+                    :square="true"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-heroicons-x-mark"
+                    @click="open = false"
+                />
+            </div>
+        </template>
+        <template #body>
+            <div class="flex flex-col h-full">
+                <div
+                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                >
+                    <div class="relative w-full max-w-md">
+                        <UInput
+                            v-model="searchQuery"
+                            icon="pixelarticons:search"
+                            placeholder="Search models (id, name, description, modality)"
+                            size="sm"
+                            class="w-full pr-8"
+                            :ui="{ base: 'w-full' }"
+                            autofocus
+                        />
+                        <button
+                            v-if="searchQuery"
+                            type="button"
+                            aria-label="Clear search"
+                            class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                            @click="searchQuery = ''"
+                        >
+                            <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
+                    Indexing models…
+                </div>
+                <div v-else class="flex-1 min-h-0">
+                    <VList
+                        :data="chunkedModels as OpenRouterModel[][]"
+                        style="height: 70vh"
+                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
+                        :overscan="4"
+                        #default="{ item: row }"
+                    >
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
+                            :class="gridColsClass"
+                        >
+                            <div
+                                v-for="m in row"
+                                :key="m.id"
+                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                            >
+                                <div
+                                    class="flex items-start justify-between gap-2"
+                                >
+                                    <div class="flex flex-col min-w-0">
+                                        <div
+                                            class="font-medium text-sm truncate"
+                                            :title="m.canonical_slug"
+                                        >
+                                            {{ m.canonical_slug }}
+                                        </div>
+                                        <div
+                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+                                        >
+                                            CTX {{ m.context_length }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
+                                        :aria-pressed="isFavorite(m)"
+                                        @click.stop="toggleFavorite(m)"
+                                        :title="
+                                            isFavorite(m)
+                                                ? 'Unfavorite'
+                                                : 'Favorite'
+                                        "
+                                    >
+                                        <span v-if="isFavorite(m)">★</span>
+                                        <span v-else>☆</span>
+                                    </button>
+                                </div>
+                                <div
+                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
+                                >
+                                    <div class="flex flex-col">
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Input</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.prompt,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-col items-end text-right"
+                                    >
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Output</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.completion,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </div>
+                                <div
+                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    <span>{{
+                                        m.architecture?.modality || 'text'
+                                    }}</span>
+                                    <span class="opacity-60">/1M tokens</span>
+                                </div>
+                                <div
+                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
+                                />
+                            </div>
+                        </div>
+                    </VList>
+                    <div
+                        v-if="!chunkedModels.length && searchQuery"
+                        class="px-6 pb-6 text-xs text-neutral-500"
+                    >
+                        No models match "{{ searchQuery }}".
+                    </div>
+                </div>
+            </div>
+        </template>
+        <template #footer> </template>
+    </UModal>
+</template>
+<script setup lang="ts">
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import { useModelSearch } from '~/composables/useModelSearch';
+import type { OpenRouterModel } from '~/utils/models-service';
+import { useModelStore } from '~/composables/useModelStore';
+
+const props = defineProps<{
+    showModal: boolean;
+}>();
+const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
+
+// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
 });
+
+const modelCatalog = ref<OpenRouterModel[]>([]);
+// Search state (Orama index built client-side)
+const {
+    query: searchQuery,
+    results: searchResults,
+    ready: searchReady,
+} = useModelSearch(modelCatalog);
+
+// Fixed 3-column layout for consistent rows
+const COLS = 2;
+const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
+
+const chunkedModels = computed(() => {
+    const source = searchQuery.value.trim()
+        ? searchResults.value
+        : modelCatalog.value;
+    const cols = COLS;
+    const rows: OpenRouterModel[][] = [];
+    for (let i = 0; i < source.length; i += cols) {
+        rows.push(source.slice(i, i + cols));
+    }
+    return rows;
+});
+
+const {
+    favoriteModels,
+    getFavoriteModels,
+    catalog,
+    fetchModels,
+    addFavoriteModel,
+    removeFavoriteModel,
+} = useModelStore();
+
+onMounted(() => {
+    fetchModels().then(() => {
+        modelCatalog.value = catalog.value;
+    });
+
+    getFavoriteModels().then((models) => {
+        favoriteModels.value = models;
+    });
+});
+
+function isFavorite(m: OpenRouterModel) {
+    return favoriteModels.value.some((f) => f.id === m.id);
+}
+
+function toggleFavorite(m: OpenRouterModel) {
+    if (isFavorite(m)) {
+        removeFavoriteModel(m);
+    } else {
+        addFavoriteModel(m);
+    }
+}
+
+/**
+ * Format a per-token price into a "per 1,000,000 tokens" currency string.
+ * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
+ */
+function formatPerMillion(raw: unknown, currency = 'USD') {
+    const perToken = Number(raw ?? 0);
+    const perMillion = perToken * 1_000_000;
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 2,
+        }).format(perMillion);
+    } catch (e) {
+        // Fallback: simple fixed formatting
+        return `$${perMillion.toFixed(2)}`;
+    }
+}
+</script>
 ````
 
 ## File: app/components/ResizableSidebarLayout.vue
@@ -9344,552 +10937,6 @@ aside > *:not(.resize-handle-layer) {
 </style>
 ````
 
-## File: app/components/chat/ChatPageShell.vue
-````vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <sidebar-side-nav-content
-                :active-thread="threadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <SidebarSideNavContentCollapsed
-                :active-thread="threadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
-            />
-        </template>
-        <div class="flex-1 h-screen w-full relative">
-            <div
-                id="top-nav"
-                :class="{
-                    'border-[var(--tw-border)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
-                        panes.length > 1 || isMobile,
-                }"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
-            >
-                <!-- New Window Button -->
-                <div
-                    v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
-                >
-                    <UTooltip :delay-duration="0" text="Open sidebar">
-                        <UButton
-                            label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            aria-label="Open sidebar"
-                            title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
-                            @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div
-                    class="h-full items-center justify-center px-4 hidden md:flex"
-                >
-                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :disabled="!canAddPane"
-                            :class="
-                                'retro-btn pointer-events-auto mr-2 ' +
-                                (!canAddPane
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
-                            aria-label="New window"
-                            title="New window"
-                            @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <!-- Theme Toggle Button -->
-                <div class="h-full flex items-center justify-center px-4">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <!-- Panes Container -->
-            <div
-                :class="[
-                    showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--tw-border)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                    @keydown.left.prevent="focusPrev(i)"
-                    @keydown.right.prevent="focusNext(i)"
-                >
-                    <!-- Close button (only if >1 pane) -->
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
-
-                    <ChatContainer
-                        class="flex-1 min-h-0"
-                        :message-history="pane.messages"
-                        :thread-id="pane.threadId"
-                        @thread-selected="
-                            (id) => onInternalThreadCreated(id, i)
-                        "
-                    />
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script setup lang="ts">
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import Dexie from 'dexie';
-import { db } from '~/db';
-// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
-
-/**
- * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
- * Props:
- *  - initialThreadId: optional id to load immediately (deep link)
- *  - validateInitial: if true, ensure the initial thread exists else redirect + toast
- *  - routeSync: keep URL in sync with active thread id (default true)
- */
-const props = withDefaults(
-    defineProps<{
-        initialThreadId?: string;
-        validateInitial?: boolean;
-        routeSync?: boolean;
-    }>(),
-    {
-        validateInitial: false,
-        routeSync: true,
-    }
-);
-
-const router = useRouter();
-const toast = useToast();
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-    id?: string;
-    stream_id?: string;
-};
-
-// ---------------- Multi-pane (phase 1: internal refactor) ----------------
-// PaneState holds per-pane chat state. For Task 1 we still render a single pane; template
-// continues to use computed aliases `threadId` & `messageHistory` pointing at pane[0].
-interface PaneState {
-    id: string; // local pane id (not thread id)
-    threadId: string; // current thread id ('' if new chat)
-    messages: ChatMessage[]; // loaded messages for the thread
-    validating: boolean; // reserved for potential per-pane validation
-}
-
-function createEmptyPane(initialThreadId = ''): PaneState {
-    const genId = () =>
-        typeof crypto !== 'undefined' && crypto.randomUUID
-            ? crypto.randomUUID()
-            : 'pane-' + Math.random().toString(36).slice(2);
-    return {
-        id: genId(),
-        threadId: initialThreadId,
-        messages: [],
-        validating: false,
-    };
-}
-
-// Primary state: array of panes (currently single until Task 2 UI changes)
-const panes = ref<PaneState[]>([createEmptyPane(props.initialThreadId || '')]);
-// Active pane index (for future multi-pane interactions)
-const activePaneIndex = ref(0);
-
-// Backward compatible aliases used by existing template (will be removed in Task 2 step 2.1)
-const threadId = computed<string>({
-    get: () => panes.value[0]?.threadId || '',
-    set: (v) => {
-        if (panes.value[0]) panes.value[0].threadId = v;
-    },
-});
-const messageHistory = computed<ChatMessage[]>(
-    () => panes.value[0]?.messages || []
-);
-// Legacy validating handling mapped to pane[0]
-const validating = computed<boolean>({
-    get: () => panes.value[0]?.validating || false,
-    set: (v) => {
-        if (panes.value[0]) panes.value[0].validating = v;
-    },
-});
-let validateToken = 0; // reused for initial validation, scoped now to pane[0]
-
-// Extracted loader now returns messages for a thread id (Task 1.3)
-async function loadMessagesFor(id: string): Promise<ChatMessage[]> {
-    if (!id) return [];
-    try {
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([id, Dexie.minKey], [id, Dexie.maxKey])
-            .filter((m: any) => !m.deleted)
-            .toArray();
-        return (msgs || []).map((msg: any) => {
-            const data = msg.data as unknown;
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
-            return {
-                role: msg.role as 'user' | 'assistant',
-                content,
-                file_hashes: msg.file_hashes,
-                id: msg.id,
-                stream_id: msg.stream_id,
-            } as ChatMessage;
-        });
-    } catch (e) {
-        // Fail soft; log once if desired (kept silent for now per simplicity)
-        return [];
-    }
-}
-
-// Helper to set a pane's thread & load messages (Task 1.4)
-async function setPaneThread(index: number, id: string) {
-    const pane = panes.value[index];
-    if (!pane) return;
-    pane.threadId = id;
-    pane.messages = await loadMessagesFor(id);
-}
-
-// Activate pane (Task 1.5; not yet wired in template until Task 2)
-function setActive(i: number) {
-    if (i >= 0 && i < panes.value.length) activePaneIndex.value = i;
-}
-
-// ---------------- Task 2: UI / interaction helpers ----------------
-const canAddPane = computed(() => panes.value.length < 3);
-const newWindowTooltip = computed(() =>
-    canAddPane.value ? 'New window' : 'Max 3 windows'
-);
-
-function addPane() {
-    // Guard (Task 3.1): never exceed 3 panes even if called externally
-    if (panes.value.length >= 3) return;
-    panes.value.push(createEmptyPane());
-    setActive(panes.value.length - 1);
-}
-
-function closePane(i: number) {
-    if (panes.value.length <= 1) return; // never close last
-    const wasActive = i === activePaneIndex.value;
-    panes.value.splice(i, 1);
-    if (!panes.value.length) {
-        // Safety: recreate a blank pane (should not normally happen)
-        panes.value.push(createEmptyPane());
-        activePaneIndex.value = 0;
-        return;
-    }
-    if (wasActive) {
-        // Task 3.2: ensure logical new active (nearest existing)
-        const newIndex = Math.min(i, panes.value.length - 1);
-        setActive(newIndex);
-        const activeThread = panes.value[newIndex]?.threadId;
-        updateUrlThread(activeThread || undefined);
-    } else if (i < activePaneIndex.value) {
-        // shift active index left because array shrank before it
-        activePaneIndex.value -= 1;
-    }
-}
-
-function focusPrev(current: number) {
-    if (panes.value.length < 2) return;
-    const target = current - 1;
-    if (target >= 0) setActive(target);
-}
-function focusNext(current: number) {
-    if (panes.value.length < 2) return;
-    const target = current + 1;
-    if (target < panes.value.length) setActive(target);
-}
-
-async function ensureDbOpen() {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-}
-
-async function validateThread(id: string): Promise<boolean> {
-    await ensureDbOpen();
-    const ATTEMPTS = 5;
-    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        try {
-            const t = await db.threads.get(id);
-            if (t) return !t.deleted;
-        } catch {}
-        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-function redirectNotFound() {
-    router.replace('/chat');
-    toast.add({
-        title: 'Not found',
-        description: 'This chat does not exist.',
-        color: 'error',
-    });
-}
-
-async function initInitialThread() {
-    if (!process.client) return;
-    if (!props.initialThreadId) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.validateInitial) {
-        pane.validating = true;
-        const token = ++validateToken;
-        const ok = await validateThread(props.initialThreadId);
-        if (token !== validateToken) return; // superseded
-        if (!ok) {
-            redirectNotFound();
-            return;
-        }
-    }
-    await setPaneThread(0, props.initialThreadId);
-    pane.validating = false;
-}
-
-// Theme toggle (SSR safe)
-const nuxtApp = useNuxtApp();
-const getThemeSafe = () => {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client) {
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-        }
-    } catch {}
-    return 'light';
-};
-const themeName = ref<string>(getThemeSafe());
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    const api = nuxtApp.$theme as any;
-    if (api?.toggle) api.toggle();
-    // After toggle, re-read
-    syncTheme();
-}
-if (process.client) {
-    const root = document.documentElement;
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => observer.disconnect());
-    } else {
-        onUnmounted(() => observer.disconnect());
-    }
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// Mobile detection to keep padding on small screens
-import { isMobile } from '~/state/global';
-
-if (process.client) {
-    onMounted(() => {
-        const mq = window.matchMedia('(max-width: 640px)');
-        const apply = () => (isMobile.value = mq.matches);
-        apply();
-        mq.addEventListener('change', apply);
-        if (import.meta.hot) {
-            import.meta.hot.dispose(() =>
-                mq.removeEventListener('change', apply)
-            );
-        } else {
-            onUnmounted(() => mq.removeEventListener('change', apply));
-        }
-    });
-}
-
-// Only offset content when multi-pane OR on mobile (toolbar overlap avoidance)
-const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
-
-onMounted(() => {
-    initInitialThread();
-    syncTheme();
-    // Safety: ensure at least one pane exists (Task 3.5 defensive)
-    if (!panes.value.length) panes.value.push(createEmptyPane());
-});
-
-// Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
-
-function updateUrlThread(id?: string) {
-    if (!process.client || !props.routeSync) return;
-    const newPath = id ? `/chat/${id}` : '/chat';
-    if (window.location.pathname === newPath) return; // no-op
-    // Preserve existing history.state so back button stack stays intact
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-// Sidebar selection
-function onSidebarSelected(id: string) {
-    if (!id) return;
-    const target = activePaneIndex.value;
-    setPaneThread(target, id);
-    if (target === activePaneIndex.value) updateUrlThread(id);
-}
-
-// ChatContainer emitted new thread (first user send)
-function onInternalThreadCreated(id: string, paneIndex?: number) {
-    if (!id) return;
-    const idx =
-        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
-    const pane = panes.value[idx];
-    if (!pane) return;
-    if (pane.threadId !== id) setPaneThread(idx, id);
-    if (idx === activePaneIndex.value) updateUrlThread(id);
-}
-
-function onNewChat() {
-    const pane = panes.value[activePaneIndex.value];
-    if (pane) {
-        pane.messages = [];
-        pane.threadId = '';
-    }
-    updateUrlThread(undefined);
-}
-
-// Mobile sidebar control
-function openMobileSidebar() {
-    // call exposed method on layout to force open
-    (layoutRef.value as any)?.openSidebar?.();
-}
-
-// Exposed to collapsed sidebar search button via emit
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    // Defer focus to next tick so sidebar DOM present if previously collapsed
-    requestAnimationFrame(() => {
-        const input = document.querySelector(
-            'aside input[placeholder="Search threads..."]'
-        ) as HTMLInputElement | null;
-        if (input) input.focus();
-    });
-}
-</script>
-
-<style scoped>
-body {
-    overflow-y: hidden;
-}
-
-/* Active pane visual indicator (retro glow using primary color) */
-.pane-active {
-    position: relative;
-    /* Smooth color / shadow transition when switching panes */
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0; /* cover full pane */
-    border: 1px solid var(--md-primary);
-
-    /* Layered shadows for a subtle glow while still retro / crisp */
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
-````
-
 ## File: app/composables/useAi.ts
 ````typescript
 import { ref, computed } from 'vue';
@@ -10308,6 +11355,785 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         threadId: threadIdRef,
     };
 }
+````
+
+## File: app/app.config.ts
+````typescript
+export default defineAppConfig({
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
+        },
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--tw-border-style)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--tw-border-style)] ',
+                header: 'border-0',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
+    },
+});
+````
+
+## File: app/components/chat/ChatPageShell.vue
+````vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <sidebar-side-nav-content
+                :active-thread="threadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <SidebarSideNavContentCollapsed
+                :active-thread="threadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--tw-border)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <!-- New Window Button -->
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <!-- Theme Toggle Button -->
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <!-- Panes Container -->
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--tw-border)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <!-- Close button (only if >1 pane) -->
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            @thread-selected="
+                                (id) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <DocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        />
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import DocumentEditor from '~/components/documents/DocumentEditor.vue';
+import Dexie from 'dexie';
+import { db } from '~/db';
+// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
+
+/**
+ * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
+ * Props:
+ *  - initialThreadId: optional id to load immediately (deep link)
+ *  - validateInitial: if true, ensure the initial thread exists else redirect + toast
+ *  - routeSync: keep URL in sync with active thread id (default true)
+ */
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        validateInitial?: boolean;
+        routeSync?: boolean;
+    }>(),
+    {
+        validateInitial: false,
+        routeSync: true,
+    }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+    id?: string;
+    stream_id?: string;
+};
+
+// ---------------- Multi-pane (phase 1: internal refactor) ----------------
+// PaneState holds per-pane chat state. For Task 1 we still render a single pane; template
+// continues to use computed aliases `threadId` & `messageHistory` pointing at pane[0].
+interface PaneState {
+    id: string; // local pane id (not thread id)
+    mode: 'chat' | 'doc';
+    threadId: string; // current thread id ('' if new chat) when mode==='chat'
+    documentId?: string; // active document when mode==='doc'
+    messages: ChatMessage[]; // loaded messages for the thread
+    validating: boolean; // reserved for potential per-pane validation
+}
+
+function createEmptyPane(initialThreadId = ''): PaneState {
+    const genId = () =>
+        typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : 'pane-' + Math.random().toString(36).slice(2);
+    return {
+        id: genId(),
+        mode: 'chat',
+        threadId: initialThreadId,
+        messages: [],
+        validating: false,
+    };
+}
+
+// Primary state: array of panes (currently single until Task 2 UI changes)
+const panes = ref<PaneState[]>([createEmptyPane(props.initialThreadId || '')]);
+// Active pane index (for future multi-pane interactions)
+const activePaneIndex = ref(0);
+
+// Backward compatible aliases used by existing template (will be removed in Task 2 step 2.1)
+const threadId = computed<string>({
+    get: () => panes.value[0]?.threadId || '',
+    set: (v) => {
+        if (panes.value[0]) panes.value[0].threadId = v;
+    },
+});
+const messageHistory = computed<ChatMessage[]>(
+    () => panes.value[0]?.messages || []
+);
+// Legacy validating handling mapped to pane[0]
+const validating = computed<boolean>({
+    get: () => panes.value[0]?.validating || false,
+    set: (v) => {
+        if (panes.value[0]) panes.value[0].validating = v;
+    },
+});
+let validateToken = 0; // reused for initial validation, scoped now to pane[0]
+
+// Extracted loader now returns messages for a thread id (Task 1.3)
+async function loadMessagesFor(id: string): Promise<ChatMessage[]> {
+    if (!id) return [];
+    try {
+        const msgs = await db.messages
+            .where('[thread_id+index]')
+            .between([id, Dexie.minKey], [id, Dexie.maxKey])
+            .filter((m: any) => !m.deleted)
+            .toArray();
+        return (msgs || []).map((msg: any) => {
+            const data = msg.data as unknown;
+            const content =
+                typeof data === 'object' && data !== null && 'content' in data
+                    ? String((data as any).content ?? '')
+                    : String((msg.content as any) ?? '');
+            return {
+                role: msg.role as 'user' | 'assistant',
+                content,
+                file_hashes: msg.file_hashes,
+                id: msg.id,
+                stream_id: msg.stream_id,
+            } as ChatMessage;
+        });
+    } catch (e) {
+        // Fail soft; log once if desired (kept silent for now per simplicity)
+        return [];
+    }
+}
+
+// Helper to set a pane's thread & load messages (Task 1.4)
+async function setPaneThread(index: number, id: string) {
+    const pane = panes.value[index];
+    if (!pane) return;
+    pane.threadId = id;
+    pane.messages = await loadMessagesFor(id);
+}
+
+// Activate pane (Task 1.5; not yet wired in template until Task 2)
+function setActive(i: number) {
+    if (i >= 0 && i < panes.value.length) activePaneIndex.value = i;
+}
+
+// ---------------- Task 2: UI / interaction helpers ----------------
+const canAddPane = computed(() => panes.value.length < 3);
+const newWindowTooltip = computed(() =>
+    canAddPane.value ? 'New window' : 'Max 3 windows'
+);
+
+function addPane() {
+    // Guard (Task 3.1): never exceed 3 panes even if called externally
+    if (panes.value.length >= 3) return;
+    panes.value.push(createEmptyPane());
+    setActive(panes.value.length - 1);
+}
+
+function closePane(i: number) {
+    if (panes.value.length <= 1) return; // never close last
+    const wasActive = i === activePaneIndex.value;
+    // Flush document if closing a doc pane
+    const closing = panes.value[i];
+    if (closing?.mode === 'doc' && closing.documentId) {
+        flushDocument(closing.documentId);
+    }
+    panes.value.splice(i, 1);
+    if (!panes.value.length) {
+        // Safety: recreate a blank pane (should not normally happen)
+        panes.value.push(createEmptyPane());
+        activePaneIndex.value = 0;
+        return;
+    }
+    if (wasActive) {
+        // Task 3.2: ensure logical new active (nearest existing)
+        const newIndex = Math.min(i, panes.value.length - 1);
+        setActive(newIndex);
+        const newPane = panes.value[newIndex];
+        if (!newPane) return; // safety guard
+        if (newPane.mode === 'chat') {
+            updateUrlThread(newPane.threadId || undefined);
+        } else {
+            // Clear URL if previously a chat (remain at /chat)
+            updateUrlThread(undefined);
+        }
+    } else if (i < activePaneIndex.value) {
+        // shift active index left because array shrank before it
+        activePaneIndex.value -= 1;
+    }
+}
+
+function focusPrev(current: number) {
+    if (panes.value.length < 2) return;
+    const target = current - 1;
+    if (target >= 0) setActive(target);
+}
+function focusNext(current: number) {
+    if (panes.value.length < 2) return;
+    const target = current + 1;
+    if (target < panes.value.length) setActive(target);
+}
+
+async function ensureDbOpen() {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+}
+
+async function validateThread(id: string): Promise<boolean> {
+    await ensureDbOpen();
+    const ATTEMPTS = 5;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t) return !t.deleted;
+        } catch {}
+        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+function redirectNotFound() {
+    router.replace('/chat');
+    toast.add({
+        title: 'Not found',
+        description: 'This chat does not exist.',
+        color: 'error',
+    });
+}
+
+async function initInitialThread() {
+    if (!process.client) return;
+    if (!props.initialThreadId) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.validateInitial) {
+        pane.validating = true;
+        const token = ++validateToken;
+        const ok = await validateThread(props.initialThreadId);
+        if (token !== validateToken) return; // superseded
+        if (!ok) {
+            redirectNotFound();
+            return;
+        }
+    }
+    await setPaneThread(0, props.initialThreadId);
+    pane.validating = false;
+}
+
+// Theme toggle (SSR safe)
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    const api = nuxtApp.$theme as any;
+    if (api?.toggle) api.toggle();
+    // After toggle, re-read
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// Mobile detection to keep padding on small screens
+import { isMobile } from '~/state/global';
+
+if (process.client) {
+    onMounted(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        const apply = () => (isMobile.value = mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() =>
+                mq.removeEventListener('change', apply)
+            );
+        } else {
+            onUnmounted(() => mq.removeEventListener('change', apply));
+        }
+    });
+}
+
+// Only offset content when multi-pane OR on mobile (toolbar overlap avoidance)
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+
+onMounted(() => {
+    initInitialThread();
+    syncTheme();
+    // Safety: ensure at least one pane exists (Task 3.5 defensive)
+    if (!panes.value.length) panes.value.push(createEmptyPane());
+});
+
+// Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
+
+function updateUrlThread(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/chat/${id}` : '/chat';
+    if (window.location.pathname === newPath) return; // no-op
+    // Preserve existing history.state so back button stack stays intact
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+// Sidebar selection
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrlThread(id);
+}
+
+// ChatContainer emitted new thread (first user send)
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrlThread(id);
+}
+
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrlThread(undefined);
+}
+
+// --------------- Documents Integration (minimal) ---------------
+import {
+    newDocument as createNewDoc,
+    flush as flushDocument,
+} from '~/composables/useDocumentsStore';
+
+async function onNewDocument(initial?: { title?: string }) {
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    try {
+        // Flush existing doc if switching from another document
+        if (pane.mode === 'doc' && pane.documentId) {
+            await flushDocument(pane.documentId);
+        }
+        const doc = await createNewDoc(initial);
+        pane.mode = 'doc';
+        pane.documentId = doc.id;
+        // Clear chat-specific state
+        pane.threadId = '';
+        pane.messages = [];
+        // Do NOT route sync for documents (out of scope)
+    } catch {}
+}
+
+function onDocumentSelected(id: string) {
+    if (!id) return;
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    // Flush any current doc before switching
+    if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
+        flushDocument(pane.documentId);
+    }
+    pane.mode = 'doc';
+    pane.documentId = id;
+    pane.threadId = '';
+    pane.messages = [];
+}
+
+// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document in active pane
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            // Ignore if focused in input/textarea/contentEditable
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+
+// Mobile sidebar control
+function openMobileSidebar() {
+    // call exposed method on layout to force open
+    (layoutRef.value as any)?.openSidebar?.();
+}
+
+// Exposed to collapsed sidebar search button via emit
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    // Defer focus to next tick so sidebar DOM present if previously collapsed
+    requestAnimationFrame(() => {
+        const input = document.querySelector(
+            'aside input[placeholder="Search threads..."]'
+        ) as HTMLInputElement | null;
+        if (input) input.focus();
+    });
+}
+</script>
+
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+
+/* Active pane visual indicator (retro glow using primary color) */
+.pane-active {
+    position: relative;
+    /* Smooth color / shadow transition when switching panes */
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0; /* cover full pane */
+    border: 1px solid var(--md-primary);
+
+    /* Layered shadows for a subtle glow while still retro / crisp */
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
 ````
 
 ## File: app/components/chat/ChatMessage.vue
@@ -11359,1041 +13185,6 @@ textarea::-webkit-scrollbar-thumb:hover {
 </style>
 ````
 
-## File: app/components/sidebar/SideNavContent.vue
-````vue
-<template>
-    <div class="flex flex-col h-full relative">
-        <div class="px-2 pt-2 flex flex-col space-y-2">
-            <div class="flex">
-                <UButton
-                    @click="onNewChat"
-                    class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
-                    >New Chat</UButton
-                >
-                <UTooltip :delay-duration="0" text="Create project">
-                    <UButton
-                        color="secondary"
-                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                        icon="pixelarticons:folder-plus"
-                        :ui="{
-                            leadingIcon: 'w-5 h-5',
-                        }"
-                        @click="openCreateProject"
-                    />
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Create document">
-                    <UButton
-                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                        icon="pixelarticons:note-plus"
-                        :ui="{
-                            base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                            leadingIcon: 'w-5 h-5',
-                        }"
-                    />
-                </UTooltip>
-            </div>
-            <div
-                class="relative w-full ml-[1px] border-b-3 border-primary/50 pb-3"
-            >
-                <UInput
-                    v-model="threadSearchQuery"
-                    icon="pixelarticons:search"
-                    size="md"
-                    :ui="{
-                        leadingIcon: 'h-[20px] w-[20px]',
-                    }"
-                    variant="outline"
-                    placeholder="Search threads..."
-                    class="w-full"
-                >
-                    <template v-if="threadSearchQuery.length > 0" #trailing>
-                        <UButton
-                            color="neutral"
-                            variant="subtle"
-                            size="xs"
-                            class="flex items-center justify-center p-0"
-                            icon="pixelarticons:close-box"
-                            aria-label="Clear input"
-                            @click="threadSearchQuery = ''"
-                        /> </template
-                ></UInput>
-            </div>
-        </div>
-        <!-- Scrollable content: projects + (virtualized) threads -->
-        <div
-            ref="scrollAreaRef"
-            class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 pt-2 space-y-3 scrollbar-hidden"
-            :style="{ paddingBottom: bottomPad + 'px' }"
-        >
-            <SidebarProjectTree
-                :projects="projects"
-                v-model:expanded="expandedProjects"
-                @chatSelected="(id: string) => emit('chatSelected', id)"
-                @addChat="handleAddChatToProject"
-                @deleteProject="handleDeleteProject"
-                @renameProject="openRenameProject"
-                @renameEntry="openRename"
-                @removeFromProject="handleRemoveFromProject"
-            />
-            <div>
-                <h4
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
-                >
-                    Chats
-                </h4>
-                <!-- Conditional virtualization: only mount VList when large -->
-                <component
-                    v-if="useVirtualization && VListComp"
-                    :is="VListComp"
-                    :data="displayThreads as any[]"
-                    :overscan="8"
-                    class="mt-2"
-                    #default="{ item }"
-                >
-                    <div class="mb-2" :key="item.id">
-                        <RetroGlassBtn
-                            :class="{
-                                'active-element bg-primary/25':
-                                    item.id === props.activeThread,
-                            }"
-                            class="w-full flex items-center justify-between text-left"
-                            @click="() => emit('chatSelected', item.id)"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
-                            >
-                                <UIcon
-                                    v-if="item.forked"
-                                    name="pixelarticons:git-branch"
-                                    class="shrink-0"
-                                ></UIcon>
-                                <span
-                                    class="block flex-1 min-w-0 truncate"
-                                    :title="item.title || 'New Thread'"
-                                >
-                                    {{ item.title || 'New Thread' }}
-                                </span>
-                            </div>
-                            <UPopover
-                                :content="{
-                                    side: 'right',
-                                    align: 'start',
-                                    sideOffset: 6,
-                                }"
-                            >
-                                <span
-                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                                    @click.stop
-                                >
-                                    <UIcon
-                                        name="pixelarticons:more-vertical"
-                                        class="w-4 h-4 opacity-70"
-                                    />
-                                </span>
-                                <template #content>
-                                    <div class="p-1 w-44 space-y-1">
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-pencil"
-                                            @click="openRename(item)"
-                                            >Rename</UButton
-                                        >
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="pixelarticons:folder-plus"
-                                            @click="openAddToProject(item)"
-                                            >Add to project</UButton
-                                        >
-                                        <UButton
-                                            color="error"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-trash-2"
-                                            @click="confirmDelete(item)"
-                                            >Delete</UButton
-                                        >
-                                    </div>
-                                </template>
-                            </UPopover>
-                        </RetroGlassBtn>
-                    </div>
-                </component>
-                <!-- Fallback simple list when virtualization not needed -->
-                <div v-else class="mt-2">
-                    <div
-                        v-for="item in displayThreads"
-                        :key="item.id"
-                        class="mb-2"
-                    >
-                        <RetroGlassBtn
-                            :class="{
-                                'active-element bg-primary/25':
-                                    item.id === props.activeThread,
-                            }"
-                            class="w-full flex items-center justify-between text-left"
-                            @click="() => emit('chatSelected', item.id)"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
-                            >
-                                <UIcon
-                                    v-if="item.forked"
-                                    name="pixelarticons:git-branch"
-                                    class="shrink-0"
-                                ></UIcon>
-                                <span
-                                    class="block flex-1 min-w-0 truncate"
-                                    :title="item.title || 'New Thread'"
-                                >
-                                    {{ item.title || 'New Thread' }}
-                                </span>
-                            </div>
-                            <UPopover
-                                :content="{
-                                    side: 'right',
-                                    align: 'start',
-                                    sideOffset: 6,
-                                }"
-                            >
-                                <span
-                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                                    @click.stop
-                                >
-                                    <UIcon
-                                        name="pixelarticons:more-vertical"
-                                        class="w-4 h-4 opacity-70"
-                                    />
-                                </span>
-                                <template #content>
-                                    <div class="p-1 w-44 space-y-1">
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-pencil"
-                                            @click="openRename(item)"
-                                            >Rename</UButton
-                                        >
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="pixelarticons:folder-plus"
-                                            @click="openAddToProject(item)"
-                                            >Add to project</UButton
-                                        >
-                                        <UButton
-                                            color="error"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-trash-2"
-                                            @click="confirmDelete(item)"
-                                            >Delete</UButton
-                                        >
-                                    </div>
-                                </template>
-                            </UPopover>
-                        </RetroGlassBtn>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div ref="bottomNavRef" class="shrink-0">
-            <sidebar-side-bottom-nav />
-        </div>
-
-        <!-- Rename modal -->
-        <UModal
-            v-model:open="showRenameModal"
-            title="Rename thread"
-            :ui="{
-                footer: 'justify-end ',
-            }"
-        >
-            <template #header> <h3>Rename thread?</h3> </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameTitle"
-                        placeholder="Thread title"
-                        icon="pixelarticons:edit"
-                        @keyup.enter="saveRename"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="primary" @click="saveRename">Save</UButton>
-            </template>
-        </UModal>
-
-        <!-- Rename Project Modal -->
-        <UModal
-            v-model:open="showRenameProjectModal"
-            title="Rename project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header><h3>Rename project?</h3></template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameProjectName"
-                        placeholder="Project name"
-                        icon="pixelarticons:folder"
-                        @keyup.enter="saveRenameProject"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameProjectModal = false"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="!renameProjectName.trim()"
-                    @click="saveRenameProject"
-                    >Save</UButton
-                >
-            </template>
-        </UModal>
-
-        <!-- Delete confirm modal -->
-        <UModal
-            v-model:open="showDeleteModal"
-            title="Delete thread?"
-            :ui="{ footer: 'justify-end' }"
-            class="border-2"
-        >
-            <template #header> <h3>Delete thread?</h3> </template>
-            <template #body>
-                <p class="text-sm opacity-70">
-                    This will permanently remove the thread and its messages.
-                </p>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showDeleteModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="error" @click="deleteThread">Delete</UButton>
-            </template>
-        </UModal>
-
-        <!-- Create Project Modal -->
-        <UModal
-            v-model:open="showCreateProjectModal"
-            title="New Project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Create project</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UForm
-                        :state="createProjectState"
-                        @submit.prevent="submitCreateProject"
-                    >
-                        <div class="flex flex-col space-y-3">
-                            <UFormField
-                                label="Title"
-                                name="name"
-                                :error="createProjectErrors.name"
-                            >
-                                <UInput
-                                    v-model="createProjectState.name"
-                                    required
-                                    placeholder="Project title"
-                                    icon="pixelarticons:folder"
-                                    class="w-full"
-                                    @keyup.enter="submitCreateProject"
-                                />
-                            </UFormField>
-                            <UFormField label="Description" name="description">
-                                <UTextarea
-                                    class="w-full border-2 rounded-[6px]"
-                                    v-model="createProjectState.description"
-                                    :rows="3"
-                                    placeholder="Optional description"
-                                />
-                            </UFormField>
-                        </div>
-                    </UForm>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeCreateProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    :disabled="
-                        !createProjectState.name.trim() || creatingProject
-                    "
-                    color="primary"
-                    @click="submitCreateProject"
-                >
-                    <span v-if="!creatingProject">Create</span>
-                    <span v-else class="inline-flex items-center gap-1">
-                        <UIcon name="i-lucide-loader" class="animate-spin" />
-                        Creating
-                    </span>
-                </UButton>
-            </template>
-        </UModal>
-
-        <!-- Add To Project Modal -->
-        <UModal
-            v-model:open="showAddToProjectModal"
-            title="Add to project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Add thread to project</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <div class="flex gap-2 text-xs font-mono">
-                        <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
-                            :class="
-                                addMode === 'select'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'select'"
-                        >
-                            Select Existing
-                        </button>
-                        <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
-                            :class="
-                                addMode === 'create'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'create'"
-                        >
-                            Create New
-                        </button>
-                    </div>
-                    <div v-if="addMode === 'select'" class="space-y-3">
-                        <UFormField label="Project" name="project">
-                            <USelectMenu
-                                v-model="selectedProjectId"
-                                :items="projectSelectOptions"
-                                :value-key="'value'"
-                                searchable
-                                placeholder="Select project"
-                                class="w-full"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                    <div v-else class="space-y-3">
-                        <UFormField label="Project Title" name="newProjectName">
-                            <UInput
-                                v-model="newProjectName"
-                                placeholder="Project name"
-                                icon="pixelarticons:folder"
-                                class="w-full"
-                            />
-                        </UFormField>
-                        <UFormField
-                            label="Description"
-                            name="newProjectDescription"
-                        >
-                            <UTextarea
-                                v-model="newProjectDescription"
-                                :rows="3"
-                                placeholder="Optional description"
-                                class="w-full border-2 rounded-[6px]"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeAddToProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="
-                        addingToProject ||
-                        (addMode === 'select'
-                            ? !selectedProjectId
-                            : !newProjectName.trim())
-                    "
-                    @click="submitAddToProject"
-                >
-                    <span v-if="!addingToProject">Add</span>
-                    <span v-else class="inline-flex items-center gap-1"
-                        ><UIcon
-                            name="i-lucide-loader"
-                            class="animate-spin"
-                        />Adding</span
-                    >
-                </UButton>
-            </template>
-        </UModal>
-    </div>
-</template>
-<script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
-import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
-import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpers
-// NOTE: Only load virtua when we actually need virtualization (perf + less layout jank)
-import { shallowRef } from 'vue';
-const VListComp = shallowRef<any | null>(null);
-
-const props = defineProps<{
-    activeThread?: string;
-}>();
-
-const items = ref<any[]>([]);
-const projects = ref<any[]>([]);
-const expandedProjects = ref<string[]>([]);
-const scrollAreaRef = ref<HTMLElement | null>(null);
-const bottomNavRef = ref<HTMLElement | null>(null);
-// Dynamic bottom padding to avoid content hidden under absolute bottom nav
-const bottomPad = ref(140); // fallback
-import { useThreadSearch } from '~/composables/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
-const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
-);
-let sub: { unsubscribe: () => void } | null = null;
-let subProjects: { unsubscribe: () => void } | null = null;
-
-// Virtualization threshold (tune): above this many threads we mount VList
-const VIRTUALIZE_THRESHOLD = 250;
-const useVirtualization = computed(
-    () => displayThreads.value.length > VIRTUALIZE_THRESHOLD
-);
-
-onMounted(async () => {
-    const measure = () => {
-        const navEl = bottomNavRef.value?.querySelector(
-            '.hud'
-        ) as HTMLElement | null;
-        const h = navEl?.offsetHeight || 0;
-        bottomPad.value = h + 12; // small breathing room
-    };
-    await nextTick();
-    measure();
-    window.addEventListener('resize', measure);
-    (onUnmounted as any)._measureHandler = measure;
-    // Threads subscription (sorted by last opened, excluding deleted)
-    sub = liveQuery(() =>
-        db.threads
-            .orderBy('updated_at')
-            .reverse()
-            .filter((t) => !t.deleted)
-            .toArray()
-    ).subscribe({
-        next: (results) => (items.value = results),
-        error: (err) => console.error('liveQuery error', err),
-    });
-    // Projects subscription (most recently updated first)
-    subProjects = liveQuery(() =>
-        db.projects
-            .orderBy('updated_at')
-            .reverse()
-            .filter((p: any) => !p.deleted)
-            .toArray()
-    ).subscribe({
-        next: (res) => {
-            // Normalize data field (ensure array)
-            projects.value = res.map((p: any) => ({
-                ...p,
-                data: Array.isArray(p.data)
-                    ? p.data
-                    : typeof p.data === 'string'
-                    ? (() => {
-                          try {
-                              const parsed = JSON.parse(p.data);
-                              return Array.isArray(parsed) ? parsed : [];
-                          } catch {
-                              return [];
-                          }
-                      })()
-                    : [],
-            }));
-        },
-        error: (err) => console.error('projects liveQuery error', err),
-    });
-    // Lazy import virtua only if needed initially
-    if (useVirtualization.value) {
-        const mod = await import('virtua/vue');
-        VListComp.value = mod.VList;
-    }
-});
-
-// Watch for crossing threshold (both directions)
-watch(useVirtualization, async (val) => {
-    if (val && !VListComp.value) {
-        const mod = await import('virtua/vue');
-        VListComp.value = mod.VList;
-    }
-});
-
-// Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
-watch([projects, expandedProjects], () => {
-    nextTick(() => {
-        const navEl = bottomNavRef.value?.querySelector(
-            '.hud'
-        ) as HTMLElement | null;
-        const h = navEl?.offsetHeight || 0;
-        bottomPad.value = h + 12;
-    });
-});
-
-// (Removed verbose debug watcher)
-
-onUnmounted(() => {
-    sub?.unsubscribe();
-    subProjects?.unsubscribe();
-    const mh = (onUnmounted as any)._measureHandler;
-    if (mh) window.removeEventListener('resize', mh);
-});
-
-const emit = defineEmits(['chatSelected', 'newChat']);
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-
-const showDeleteModal = ref(false);
-const deleteId = ref<string | null>(null);
-
-async function openRename(target: any) {
-    // Case 1: payload from project tree: { projectId, entryId, kind }
-    if (target && typeof target === 'object' && 'entryId' in target) {
-        const { entryId, kind } = target as {
-            projectId: string;
-            entryId: string;
-            kind?: string;
-        };
-        if (kind === 'chat') {
-            const t = await db.threads.get(entryId);
-            renameId.value = entryId;
-            renameTitle.value = t?.title || 'New Thread';
-            showRenameModal.value = true;
-        } else {
-            // Non-chat entries (e.g., docs) could be handled here later
-            console.warn('Rename for non-chat entry not implemented');
-        }
-        return;
-    }
-    // Case 2: direct thread object from thread list
-    if (target && typeof target === 'object' && 'id' in target) {
-        renameId.value = (target as any).id;
-        renameTitle.value = (target as any).title ?? '';
-        showRenameModal.value = true;
-    }
-}
-
-async function saveRename() {
-    if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
-    const now = Math.floor(Date.now() / 1000);
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    // Sync title inside any project entries containing this thread
-    try {
-        const allProjects = await db.projects.toArray();
-        const updates: any[] = [];
-        for (const p of allProjects) {
-            if (!p.data) continue;
-            const arr = Array.isArray(p.data)
-                ? p.data
-                : typeof p.data === 'string'
-                ? (() => {
-                      try {
-                          return JSON.parse(p.data);
-                      } catch {
-                          return [];
-                      }
-                  })()
-                : [];
-            let changed = false;
-            for (const entry of arr) {
-                if (entry.id === t.id && entry.name !== renameTitle.value) {
-                    entry.name = renameTitle.value;
-                    changed = true;
-                }
-            }
-            if (changed) {
-                updates.push({ ...p, data: arr, updated_at: now });
-            }
-        }
-        if (updates.length) {
-            await db.projects.bulkPut(updates);
-        }
-    } catch (e) {
-        console.error('project title sync failed', e);
-    }
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-}
-
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
-    showDeleteModal.value = true;
-}
-
-async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
-    showDeleteModal.value = false;
-    deleteId.value = null;
-}
-
-function onNewChat() {
-    emit('newChat');
-    console.log('New chat requested');
-}
-
-// ---- Project Tree Handlers ----
-async function handleAddChatToProject(projectId: string) {
-    // Create a new chat thread and insert into project data array
-    try {
-        const now = Math.floor(Date.now() / 1000);
-        const threadId = crypto.randomUUID();
-        await create.thread({
-            id: threadId,
-            title: 'New Thread',
-            forked: false,
-            created_at: now,
-            updated_at: now,
-            deleted: false,
-            clock: 0,
-            meta: null,
-        } as any);
-        const project = await db.projects.get(projectId);
-        if (project) {
-            const dataArr = Array.isArray(project.data)
-                ? project.data
-                : typeof project.data === 'string'
-                ? (() => {
-                      try {
-                          const parsed = JSON.parse(project.data);
-                          return Array.isArray(parsed) ? parsed : [];
-                      } catch {
-                          return [];
-                      }
-                  })()
-                : [];
-            dataArr.push({ id: threadId, name: 'New Thread', kind: 'chat' });
-            await upsert.project({
-                ...project,
-                data: dataArr,
-                updated_at: now,
-            });
-            if (!expandedProjects.value.includes(projectId))
-                expandedProjects.value.push(projectId);
-            emit('chatSelected', threadId);
-        }
-    } catch (e) {
-        console.error('add chat to project failed', e);
-    }
-}
-
-async function handleDeleteProject(projectId: string) {
-    try {
-        await dbDel.soft.project(projectId); // soft delete for recoverability
-    } catch (e) {
-        console.error('delete project failed', e);
-    }
-}
-
-// ---- Project Rename Modal Logic ----
-const showRenameProjectModal = ref(false);
-const renameProjectId = ref<string | null>(null);
-const renameProjectName = ref('');
-
-async function openRenameProject(projectId: string) {
-    const project = await db.projects.get(projectId);
-    if (!project) return;
-    renameProjectId.value = projectId;
-    renameProjectName.value = project.name || '';
-    showRenameProjectModal.value = true;
-}
-
-async function saveRenameProject() {
-    if (!renameProjectId.value) return;
-    const name = renameProjectName.value.trim();
-    if (!name) return;
-    const project = await db.projects.get(renameProjectId.value);
-    if (!project) return;
-    try {
-        await upsert.project({
-            ...project,
-            name,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        showRenameProjectModal.value = false;
-        renameProjectId.value = null;
-        renameProjectName.value = '';
-    } catch (e) {
-        console.error('rename project failed', e);
-    }
-}
-
-async function handleRenameEntry(payload: {
-    projectId: string;
-    entryId: string;
-    kind?: string;
-}) {
-    try {
-        const project = await db.projects.get(payload.projectId);
-        if (!project) return;
-        const dataArr = Array.isArray(project.data)
-            ? project.data
-            : typeof project.data === 'string'
-            ? (() => {
-                  try {
-                      const parsed = JSON.parse(project.data);
-                      return Array.isArray(parsed) ? parsed : [];
-                  } catch {
-                      return [];
-                  }
-              })()
-            : [];
-        const entry = dataArr.find((d: any) => d.id === payload.entryId);
-        if (!entry) return;
-        const newName = prompt('Rename entry', entry.name || '');
-        if (newName == null) return;
-        const name = newName.trim();
-        if (!name) return;
-        entry.name = name;
-        await upsert.project({
-            ...project,
-            data: dataArr,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        if (payload.kind === 'chat') {
-            // sync thread title too
-            const t = await db.threads.get(payload.entryId);
-            if (t && t.title !== name) {
-                await upsert.thread({
-                    ...t,
-                    title: name,
-                    updated_at: Math.floor(Date.now() / 1000),
-                });
-            }
-        }
-    } catch (e) {
-        console.error('rename entry failed', e);
-    }
-}
-
-async function handleRemoveFromProject(payload: {
-    projectId: string;
-    entryId: string;
-    kind?: string;
-}) {
-    try {
-        const project = await db.projects.get(payload.projectId);
-        if (!project) return;
-        const dataArr = Array.isArray(project.data)
-            ? project.data
-            : typeof project.data === 'string'
-            ? (() => {
-                  try {
-                      const parsed = JSON.parse(project.data);
-                      return Array.isArray(parsed) ? parsed : [];
-                  } catch {
-                      return [];
-                  }
-              })()
-            : [];
-        const idx = dataArr.findIndex((d: any) => d.id === payload.entryId);
-        if (idx === -1) return;
-        dataArr.splice(idx, 1);
-        await upsert.project({
-            ...project,
-            data: dataArr,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-    } catch (e) {
-        console.error('remove from project failed', e);
-    }
-}
-
-// ---- Project Creation ----
-const showCreateProjectModal = ref(false);
-const creatingProject = ref(false);
-const createProjectState = ref<{ name: string; description: string }>({
-    name: '',
-    description: '',
-});
-const createProjectErrors = ref<{ name?: string }>({});
-
-function openCreateProject() {
-    showCreateProjectModal.value = true;
-    createProjectState.value = { name: '', description: '' };
-    createProjectErrors.value = {};
-}
-function closeCreateProject() {
-    showCreateProjectModal.value = false;
-}
-
-async function submitCreateProject() {
-    if (creatingProject.value) return;
-    const name = createProjectState.value.name.trim();
-    if (!name) {
-        createProjectErrors.value.name = 'Title required';
-        return;
-    }
-    creatingProject.value = true;
-    try {
-        const now = Math.floor(Date.now() / 1000);
-        // data holds ordered list of entities (chat/doc) we include kind now per request
-        const newId = crypto.randomUUID();
-        await create.project({
-            id: newId,
-            name,
-            description: createProjectState.value.description?.trim() || null,
-            data: [], // store as array; schema allows any
-            created_at: now,
-            updated_at: now,
-            deleted: false,
-            clock: 0,
-        } as any);
-        // Auto expand the new project
-        if (!expandedProjects.value.includes(newId))
-            expandedProjects.value.push(newId);
-        closeCreateProject();
-    } catch (e) {
-        console.error('Failed to create project', e);
-    } finally {
-        creatingProject.value = false;
-    }
-}
-
-// (Project tree logic moved to SidebarProjectTree component)
-
-// ---- Add To Project Flow ----
-const showAddToProjectModal = ref(false);
-const addToProjectThreadId = ref<string | null>(null);
-const addMode = ref<'select' | 'create'>('select');
-const selectedProjectId = ref<string | null>(null);
-const newProjectName = ref('');
-const newProjectDescription = ref('');
-const addingToProject = ref(false);
-const addToProjectError = ref<string | null>(null);
-
-const projectSelectOptions = computed(() =>
-    projects.value.map((p) => ({ label: p.name, value: p.id }))
-);
-
-function openAddToProject(thread: any) {
-    addToProjectThreadId.value = thread.id;
-    addMode.value = 'select';
-    selectedProjectId.value = null;
-    newProjectName.value = '';
-    newProjectDescription.value = '';
-    addToProjectError.value = null;
-    showAddToProjectModal.value = true;
-}
-function closeAddToProject() {
-    showAddToProjectModal.value = false;
-    addToProjectThreadId.value = null;
-}
-
-async function submitAddToProject() {
-    if (addingToProject.value || !addToProjectThreadId.value) return;
-    addToProjectError.value = null;
-    addingToProject.value = true;
-    try {
-        const thread = await db.threads.get(addToProjectThreadId.value);
-        if (!thread) throw new Error('Thread not found');
-        const entry = {
-            id: thread.id,
-            name: thread.title || 'New Thread',
-            kind: 'chat',
-        };
-        const now = Math.floor(Date.now() / 1000);
-        let projectId: string | null = null;
-        if (addMode.value === 'create') {
-            const pid = crypto.randomUUID();
-            await create.project({
-                id: pid,
-                name: newProjectName.value.trim(),
-                description: newProjectDescription.value.trim() || null,
-                data: [entry],
-                created_at: now,
-                updated_at: now,
-                deleted: false,
-                clock: 0,
-            } as any);
-            projectId = pid;
-            if (!expandedProjects.value.includes(pid))
-                expandedProjects.value.push(pid);
-        } else {
-            if (!selectedProjectId.value) {
-                addToProjectError.value = 'Select a project';
-                return;
-            }
-            projectId = selectedProjectId.value;
-            const project = await db.projects.get(projectId);
-            if (!project) throw new Error('Project not found');
-            const dataArr = Array.isArray(project.data)
-                ? project.data
-                : typeof project.data === 'string'
-                ? (() => {
-                      try {
-                          const parsed = JSON.parse(project.data);
-                          return Array.isArray(parsed) ? parsed : [];
-                      } catch {
-                          return [];
-                      }
-                  })()
-                : [];
-            const existing = dataArr.find((d) => d.id === entry.id);
-            if (!existing) {
-                dataArr.push(entry);
-            } else {
-                existing.name = entry.name; // update name if changed
-            }
-            await upsert.project({
-                ...project,
-                data: dataArr,
-                updated_at: now,
-            });
-        }
-        closeAddToProject();
-    } catch (e: any) {
-        console.error('add to project failed', e);
-        addToProjectError.value = e?.message || 'Failed to add';
-    } finally {
-        addingToProject.value = false;
-    }
-}
-</script>
-````
-
 ## File: app/components/chat/ChatContainer.vue
 ````vue
 <template>
@@ -12954,4 +13745,1398 @@ function onEdited(payload: { id: string; content: string }) {
 <style>
 /* Optional custom styles placeholder */
 </style>
+````
+
+## File: app/components/sidebar/SideNavContent.vue
+````vue
+<template>
+    <div class="flex flex-col h-full relative">
+        <div class="px-2 pt-2 flex flex-col space-y-2">
+            <div class="flex">
+                <UButton
+                    @click="onNewChat"
+                    class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
+                    >New Chat</UButton
+                >
+                <UTooltip :delay-duration="0" text="Create project">
+                    <UButton
+                        color="inverse-primary"
+                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                        icon="pixelarticons:folder-plus"
+                        :ui="{
+                            leadingIcon: 'w-5 h-5',
+                        }"
+                        @click="openCreateProject"
+                    />
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Create document">
+                    <UButton
+                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                        icon="pixelarticons:note-plus"
+                        :ui="{
+                            base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                            leadingIcon: 'w-5 h-5',
+                        }"
+                        @click="openCreateDocumentModal"
+                    />
+                </UTooltip>
+            </div>
+            <div class="relative w-full ml-[1px]">
+                <UInput
+                    v-model="sidebarQuery"
+                    icon="pixelarticons:search"
+                    size="md"
+                    :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
+                    variant="outline"
+                    placeholder="Search..."
+                    aria-label="Search"
+                    class="w-full"
+                    @keydown.escape.prevent.stop="onEscapeClear"
+                >
+                    <template v-if="sidebarQuery.length > 0" #trailing>
+                        <UButton
+                            color="neutral"
+                            variant="subtle"
+                            size="xs"
+                            class="flex items-center justify-center p-0"
+                            icon="pixelarticons:close-box"
+                            aria-label="Clear input"
+                            @click="sidebarQuery = ''"
+                        />
+                    </template>
+                </UInput>
+            </div>
+
+            <div
+                class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
+                role="group"
+                aria-label="Sidebar sections"
+            >
+                <UButton
+                    v-for="seg in sectionToggles"
+                    :key="seg.value"
+                    size="sm"
+                    :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
+                    :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
+                    class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
+                    :class="
+                        activeSections[seg.value]
+                            ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
+                            : 'opacity-70 hover:bg-primary/15'
+                    "
+                    :aria-pressed="activeSections[seg.value]"
+                    @click="toggleSection(seg.value)"
+                >
+                    {{ seg.label }}
+                </UButton>
+            </div>
+        </div>
+        <!-- Scrollable content: projects + (virtualized) threads -->
+        <div
+            ref="scrollAreaRef"
+            class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 pt-2 space-y-3 scrollbar-hidden"
+            :style="{ paddingBottom: bottomPad + 'px' }"
+        >
+            <SidebarProjectTree
+                v-if="activeSections.projects"
+                :projects="displayProjects"
+                v-model:expanded="expandedProjects"
+                @chatSelected="(id: string) => emit('chatSelected', id)"
+                @documentSelected="(id: string) => emit('documentSelected', id)"
+                @addChat="handleAddChatToProject"
+                @addDocument="handleAddDocumentToProject"
+                @deleteProject="handleDeleteProject"
+                @renameProject="openRenameProject"
+                @renameEntry="openRename"
+                @removeFromProject="handleRemoveFromProject"
+            />
+            <div v-if="activeSections.chats && displayThreads.length > 0">
+                <h4
+                    class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
+                >
+                    Chats
+                </h4>
+                <!-- Conditional virtualization: only mount VList when large -->
+                <component
+                    v-if="useVirtualization && VListComp"
+                    :is="VListComp"
+                    :data="displayThreads as any[]"
+                    :overscan="8"
+                    class="mt-2"
+                    #default="{ item }"
+                >
+                    <div class="mb-2" :key="item.id">
+                        <RetroGlassBtn
+                            :class="{
+                                'active-element bg-primary/25':
+                                    item.id === props.activeThread,
+                            }"
+                            class="w-full flex items-center justify-between text-left"
+                            @click="() => emit('chatSelected', item.id)"
+                        >
+                            <div
+                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
+                            >
+                                <UIcon
+                                    v-if="item.forked"
+                                    name="pixelarticons:git-branch"
+                                    class="shrink-0"
+                                ></UIcon>
+                                <span
+                                    class="block flex-1 min-w-0 truncate"
+                                    :title="item.title || 'New Thread'"
+                                >
+                                    {{ item.title || 'New Thread' }}
+                                </span>
+                            </div>
+                            <UPopover
+                                :content="{
+                                    side: 'right',
+                                    align: 'start',
+                                    sideOffset: 6,
+                                }"
+                            >
+                                <span
+                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                                    @click.stop
+                                >
+                                    <UIcon
+                                        name="pixelarticons:more-vertical"
+                                        class="w-4 h-4 opacity-70"
+                                    />
+                                </span>
+                                <template #content>
+                                    <div class="p-1 w-44 space-y-1">
+                                        <UButton
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            icon="i-lucide-pencil"
+                                            @click="openRename(item)"
+                                            >Rename</UButton
+                                        >
+                                        <UButton
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            icon="pixelarticons:folder-plus"
+                                            @click="openAddToProject(item)"
+                                            >Add to project</UButton
+                                        >
+                                        <UButton
+                                            color="error"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            icon="i-lucide-trash-2"
+                                            @click="confirmDelete(item)"
+                                            >Delete</UButton
+                                        >
+                                    </div>
+                                </template>
+                            </UPopover>
+                        </RetroGlassBtn>
+                    </div>
+                </component>
+                <!-- Fallback simple list when virtualization not needed -->
+                <div v-else class="mt-2">
+                    <div
+                        v-for="item in displayThreads"
+                        :key="item.id"
+                        class="mb-2"
+                    >
+                        <RetroGlassBtn
+                            :class="{
+                                'active-element bg-primary/25':
+                                    item.id === props.activeThread,
+                            }"
+                            class="w-full flex items-center justify-between text-left"
+                            @click="() => emit('chatSelected', item.id)"
+                        >
+                            <div
+                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
+                            >
+                                <UIcon
+                                    v-if="item.forked"
+                                    name="pixelarticons:git-branch"
+                                    class="shrink-0"
+                                ></UIcon>
+                                <span
+                                    class="block flex-1 min-w-0 truncate"
+                                    :title="item.title || 'New Thread'"
+                                >
+                                    {{ item.title || 'New Thread' }}
+                                </span>
+                            </div>
+                            <UPopover
+                                :content="{
+                                    side: 'right',
+                                    align: 'start',
+                                    sideOffset: 6,
+                                }"
+                            >
+                                <span
+                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                                    @click.stop
+                                >
+                                    <UIcon
+                                        name="pixelarticons:more-vertical"
+                                        class="w-4 h-4 opacity-70"
+                                    />
+                                </span>
+                                <template #content>
+                                    <div class="p-1 w-44 space-y-1">
+                                        <UButton
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            icon="i-lucide-pencil"
+                                            @click="openRename(item)"
+                                            >Rename</UButton
+                                        >
+                                        <UButton
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            icon="pixelarticons:folder-plus"
+                                            @click="openAddToProject(item)"
+                                            >Add to project</UButton
+                                        >
+                                        <UButton
+                                            color="error"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            icon="i-lucide-trash-2"
+                                            @click="confirmDelete(item)"
+                                            >Delete</UButton
+                                        >
+                                    </div>
+                                </template>
+                            </UPopover>
+                        </RetroGlassBtn>
+                    </div>
+                </div>
+            </div>
+            <!-- Documents list -->
+            <SidebarDocumentsList
+                v-if="activeSections.docs"
+                class="mt-4"
+                :external-docs="displayDocuments"
+                @select="(id:string) => emit('documentSelected', id)"
+                @new-document="openCreateDocumentModal"
+                @add-to-project="(d:any) => openAddDocumentToProject(d)"
+                @delete-document="(d:any) => confirmDeleteDocument(d)"
+                @rename-document="(d:any) => openRename({ docId: d.id })"
+            />
+        </div>
+        <div ref="bottomNavRef" class="shrink-0">
+            <sidebar-side-bottom-nav />
+        </div>
+
+        <!-- Rename modal -->
+        <UModal
+            v-model:open="showRenameModal"
+            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
+            :ui="{
+                footer: 'justify-end ',
+            }"
+        >
+            <template #header>
+                <h3>
+                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
+                </h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameTitle"
+                        :placeholder="
+                            isRenamingDoc ? 'Document title' : 'Thread title'
+                        "
+                        icon="pixelarticons:edit"
+                        @keyup.enter="saveRename"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="primary" @click="saveRename">Save</UButton>
+            </template>
+        </UModal>
+
+        <!-- Rename Project Modal -->
+        <UModal
+            v-model:open="showRenameProjectModal"
+            title="Rename project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header><h3>Rename project?</h3></template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameProjectName"
+                        placeholder="Project name"
+                        icon="pixelarticons:folder"
+                        @keyup.enter="saveRenameProject"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameProjectModal = false"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="!renameProjectName.trim()"
+                    @click="saveRenameProject"
+                    >Save</UButton
+                >
+            </template>
+        </UModal>
+
+        <!-- Delete confirm modal -->
+        <UModal
+            v-model:open="showDeleteModal"
+            title="Delete thread?"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Delete thread?</h3> </template>
+            <template #body>
+                <p class="text-sm opacity-70">
+                    This will permanently remove the thread and its messages.
+                </p>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showDeleteModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="error" @click="deleteThread">Delete</UButton>
+            </template>
+        </UModal>
+
+        <!-- Delete document confirm modal -->
+        <UModal
+            v-model:open="showDeleteDocumentModal"
+            title="Delete document?"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Delete document?</h3> </template>
+            <template #body>
+                <p class="text-sm opacity-70">
+                    This will permanently remove the document.
+                </p>
+            </template>
+            <template #footer>
+                <UButton
+                    variant="ghost"
+                    @click="showDeleteDocumentModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="error" @click="deleteDocument">Delete</UButton>
+            </template>
+        </UModal>
+
+        <!-- Create Project Modal -->
+        <UModal
+            v-model:open="showCreateProjectModal"
+            title="New Project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Create project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="createProjectState"
+                        @submit.prevent="submitCreateProject"
+                    >
+                        <div class="flex flex-col space-y-3">
+                            <UFormField
+                                label="Title"
+                                name="name"
+                                :error="createProjectErrors.name"
+                            >
+                                <UInput
+                                    v-model="createProjectState.name"
+                                    required
+                                    placeholder="Project title"
+                                    icon="pixelarticons:folder"
+                                    class="w-full"
+                                    @keyup.enter="submitCreateProject"
+                                />
+                            </UFormField>
+                            <UFormField label="Description" name="description">
+                                <UTextarea
+                                    class="w-full border-2 rounded-[6px]"
+                                    v-model="createProjectState.description"
+                                    :rows="3"
+                                    placeholder="Optional description"
+                                />
+                            </UFormField>
+                        </div>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    :disabled="
+                        !createProjectState.name.trim() || creatingProject
+                    "
+                    color="primary"
+                    @click="submitCreateProject"
+                >
+                    <span v-if="!creatingProject">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+
+        <!-- Add To Project Modal -->
+        <UModal
+            v-model:open="showAddToProjectModal"
+            title="Add to project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Add thread to project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <div class="flex gap-2 text-xs font-mono">
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'select'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'select'"
+                        >
+                            Select Existing
+                        </button>
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'create'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'create'"
+                        >
+                            Create New
+                        </button>
+                    </div>
+                    <div v-if="addMode === 'select'" class="space-y-3">
+                        <UFormField label="Project" name="project">
+                            <USelectMenu
+                                v-model="selectedProjectId"
+                                :items="projectSelectOptions"
+                                :value-key="'value'"
+                                searchable
+                                placeholder="Select project"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                    <div v-else class="space-y-3">
+                        <UFormField label="Project Title" name="newProjectName">
+                            <UInput
+                                v-model="newProjectName"
+                                placeholder="Project name"
+                                icon="pixelarticons:folder"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <UFormField
+                            label="Description"
+                            name="newProjectDescription"
+                        >
+                            <UTextarea
+                                v-model="newProjectDescription"
+                                :rows="3"
+                                placeholder="Optional description"
+                                class="w-full border-2 rounded-[6px]"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeAddToProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        addingToProject ||
+                        (addMode === 'select'
+                            ? !selectedProjectId
+                            : !newProjectName.trim())
+                    "
+                    @click="submitAddToProject"
+                >
+                    <span v-if="!addingToProject">Add</span>
+                    <span v-else class="inline-flex items-center gap-1"
+                        ><UIcon
+                            name="i-lucide-loader"
+                            class="animate-spin"
+                        />Adding</span
+                    >
+                </UButton>
+            </template>
+        </UModal>
+        <!-- New Document Naming Modal -->
+        <UModal
+            v-model:open="showCreateDocumentModal"
+            title="New Document"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Name new document</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="newDocumentState"
+                        @submit.prevent="submitCreateDocument"
+                    >
+                        <UFormField
+                            label="Title"
+                            name="title"
+                            :error="newDocumentErrors.title"
+                        >
+                            <UInput
+                                v-model="newDocumentState.title"
+                                required
+                                placeholder="Document title"
+                                icon="pixelarticons:note"
+                                class="w-full"
+                                @keyup.enter="submitCreateDocument"
+                            />
+                        </UFormField>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateDocumentModal"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        creatingDocument || !newDocumentState.title.trim()
+                    "
+                    @click="submitCreateDocument"
+                >
+                    <span v-if="!creatingDocument">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+    </div>
+</template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
+import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+import { liveQuery } from 'dexie';
+import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpers
+// NOTE: Only load virtua when we actually need virtualization (perf + less layout jank)
+import { shallowRef } from 'vue';
+const VListComp = shallowRef<any | null>(null);
+
+// Section visibility (multi-select) defaults to all on
+const activeSections = ref<{
+    projects: boolean;
+    chats: boolean;
+    docs: boolean;
+}>({ projects: true, chats: true, docs: true });
+const sectionToggles = [
+    { label: 'Proj', value: 'projects' as const },
+    { label: 'Chats', value: 'chats' as const },
+    { label: 'Docs', value: 'docs' as const },
+];
+function toggleSection(v: 'projects' | 'chats' | 'docs') {
+    const next = { ...activeSections.value, [v]: !activeSections.value[v] };
+    activeSections.value = next;
+}
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
+
+const items = ref<any[]>([]);
+const projects = ref<any[]>([]);
+const expandedProjects = ref<string[]>([]);
+const scrollAreaRef = ref<HTMLElement | null>(null);
+const bottomNavRef = ref<HTMLElement | null>(null);
+// Dynamic bottom padding to avoid content hidden under absolute bottom nav
+const bottomPad = ref(140); // fallback
+import { useSidebarSearch } from '~/composables/useSidebarSearch';
+// Documents live query (docs only) to feed search
+const docs = ref<any[]>([]);
+let subDocs: { unsubscribe: () => void } | null = null;
+
+const {
+    query: sidebarQuery,
+    threadResults,
+    projectResults,
+    documentResults,
+} = useSidebarSearch(items as any, projects as any, docs as any);
+
+const displayThreads = computed(() =>
+    sidebarQuery.value.trim() ? threadResults.value : items.value
+);
+// Filter projects + entries when query active
+const displayProjects = computed(() => {
+    if (!sidebarQuery.value.trim()) return projects.value;
+    const threadSet = new Set(threadResults.value.map((t: any) => t.id));
+    const docSet = new Set(documentResults.value.map((d: any) => d.id));
+    const directProjectSet = new Set(
+        projectResults.value.map((p: any) => p.id)
+    );
+    return projects.value
+        .map((p: any) => {
+            const filteredEntries = (p.data || []).filter(
+                (e: any) => e && (threadSet.has(e.id) || docSet.has(e.id))
+            );
+            const include =
+                directProjectSet.has(p.id) || filteredEntries.length > 0;
+            if (!include) return null;
+            return { ...p, data: filteredEntries };
+        })
+        .filter(Boolean);
+});
+const displayDocuments = computed(() =>
+    sidebarQuery.value.trim() ? documentResults.value : undefined
+);
+function onEscapeClear() {
+    if (sidebarQuery.value) sidebarQuery.value = '';
+}
+let sub: { unsubscribe: () => void } | null = null;
+let subProjects: { unsubscribe: () => void } | null = null;
+
+// Virtualization threshold (tune): above this many threads we mount VList
+const VIRTUALIZE_THRESHOLD = 250;
+const useVirtualization = computed(
+    () => displayThreads.value.length > VIRTUALIZE_THRESHOLD
+);
+
+onMounted(async () => {
+    const measure = () => {
+        const navEl = bottomNavRef.value?.querySelector(
+            '.hud'
+        ) as HTMLElement | null;
+        const h = navEl?.offsetHeight || 0;
+        bottomPad.value = h + 12; // small breathing room
+    };
+    await nextTick();
+    measure();
+    window.addEventListener('resize', measure);
+    (onUnmounted as any)._measureHandler = measure;
+    // Threads subscription (sorted by last opened, excluding deleted)
+    sub = liveQuery(() =>
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
+    ).subscribe({
+        next: (results) => (items.value = results),
+        error: (err) => console.error('liveQuery error', err),
+    });
+    // Projects subscription (most recently updated first)
+    subProjects = liveQuery(() =>
+        db.projects
+            .orderBy('updated_at')
+            .reverse()
+            .filter((p: any) => !p.deleted)
+            .toArray()
+    ).subscribe({
+        next: (res) => {
+            // Normalize data field (ensure array)
+            projects.value = res.map((p: any) => ({
+                ...p,
+                data: Array.isArray(p.data)
+                    ? p.data
+                    : typeof p.data === 'string'
+                    ? (() => {
+                          try {
+                              const parsed = JSON.parse(p.data);
+                              return Array.isArray(parsed) ? parsed : [];
+                          } catch {
+                              return [];
+                          }
+                      })()
+                    : [],
+            }));
+        },
+        error: (err) => console.error('projects liveQuery error', err),
+    });
+    // Documents subscription (docs only, excluding deleted)
+    subDocs = liveQuery(() =>
+        db.posts
+            .where('postType')
+            .equals('doc')
+            .and((r) => !(r as any).deleted)
+            .toArray()
+    ).subscribe({
+        next: (res) => {
+            docs.value = res.map((d: any) => ({ ...d }));
+        },
+        error: (err) => console.error('documents liveQuery error', err),
+    });
+    // Lazy import virtua only if needed initially
+    if (useVirtualization.value) {
+        const mod = await import('virtua/vue');
+        VListComp.value = mod.VList;
+    }
+});
+
+// Watch for crossing threshold (both directions)
+watch(useVirtualization, async (val) => {
+    if (val && !VListComp.value) {
+        const mod = await import('virtua/vue');
+        VListComp.value = mod.VList;
+    }
+});
+
+// Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
+watch([projects, expandedProjects], () => {
+    nextTick(() => {
+        const navEl = bottomNavRef.value?.querySelector(
+            '.hud'
+        ) as HTMLElement | null;
+        const h = navEl?.offsetHeight || 0;
+        bottomPad.value = h + 12;
+    });
+});
+
+// (Removed verbose debug watcher)
+
+onUnmounted(() => {
+    sub?.unsubscribe();
+    subProjects?.unsubscribe();
+    subDocs?.unsubscribe();
+    const mh = (onUnmounted as any)._measureHandler;
+    if (mh) window.removeEventListener('resize', mh);
+});
+
+const emit = defineEmits<{
+    (e: 'chatSelected', id: string): void;
+    (e: 'newChat'): void;
+    (e: 'newDocument', initial?: { title?: string }): void;
+    (e: 'documentSelected', id: string): void;
+}>();
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+const renameMetaKind = ref<'chat' | 'doc' | null>(null);
+const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
+
+const showDeleteModal = ref(false);
+const deleteId = ref<string | null>(null);
+// Document delete state
+const showDeleteDocumentModal = ref(false);
+const deleteDocumentId = ref<string | null>(null);
+
+async function openRename(target: any) {
+    // Case 1: payload from project tree: { projectId, entryId, kind }
+    if (target && typeof target === 'object' && 'entryId' in target) {
+        const { entryId, kind } = target as {
+            projectId: string;
+            entryId: string;
+            kind?: string;
+        };
+        if (kind === 'chat') {
+            const t = await db.threads.get(entryId);
+            renameId.value = entryId;
+            renameTitle.value = t?.title || 'New Thread';
+            showRenameModal.value = true;
+            renameMetaKind.value = 'chat';
+        } else if (kind === 'doc') {
+            const doc = await db.posts.get(entryId);
+            if (doc && (doc as any).postType === 'doc') {
+                renameId.value = entryId;
+                renameTitle.value = (doc as any).title || 'Untitled';
+                showRenameModal.value = true;
+                renameMetaKind.value = 'doc';
+            }
+        }
+        return;
+    }
+    // Case 1b: direct doc rename trigger { docId }
+    if (target && typeof target === 'object' && 'docId' in target) {
+        const doc = await db.posts.get(target.docId as string);
+        if (doc && (doc as any).postType === 'doc') {
+            renameId.value = target.docId as string;
+            renameTitle.value = (doc as any).title || 'Untitled';
+            showRenameModal.value = true;
+            renameMetaKind.value = 'doc';
+            return;
+        }
+    }
+    // Case 2: direct thread object from thread list
+    if (target && typeof target === 'object' && 'id' in target) {
+        renameId.value = (target as any).id;
+        renameTitle.value = (target as any).title ?? '';
+        showRenameModal.value = true;
+        renameMetaKind.value = 'chat';
+    }
+}
+
+async function saveRename() {
+    if (!renameId.value) return;
+    // Determine if it's a thread or document by checking posts table first
+    const maybeDoc = await db.posts.get(renameId.value);
+    const now = Math.floor(Date.now() / 1000);
+    if (maybeDoc && (maybeDoc as any).postType === 'doc') {
+        // Update doc title
+        await upsert.post({
+            ...(maybeDoc as any),
+            title: renameTitle.value,
+            updated_at: now,
+        });
+        // Sync inside projects
+        try {
+            const allProjects = await db.projects.toArray();
+            const updates: any[] = [];
+            for (const p of allProjects) {
+                if (!p.data) continue;
+                const arr = Array.isArray(p.data)
+                    ? p.data
+                    : typeof p.data === 'string'
+                    ? (() => {
+                          try {
+                              return JSON.parse(p.data);
+                          } catch {
+                              return [];
+                          }
+                      })()
+                    : [];
+                let changed = false;
+                for (const entry of arr) {
+                    if (
+                        entry.id === maybeDoc.id &&
+                        entry.name !== renameTitle.value
+                    ) {
+                        entry.name = renameTitle.value;
+                        changed = true;
+                    }
+                }
+                if (changed) updates.push({ ...p, data: arr, updated_at: now });
+            }
+            if (updates.length) await db.projects.bulkPut(updates);
+        } catch (e) {
+            console.error('project doc title sync failed', e);
+        }
+    } else {
+        const t = await db.threads.get(renameId.value);
+        if (!t) return;
+        await upsert.thread({
+            ...t,
+            title: renameTitle.value,
+            updated_at: now,
+        });
+        // Sync title inside any project entries containing this thread
+        try {
+            const allProjects = await db.projects.toArray();
+            const updates: any[] = [];
+            for (const p of allProjects) {
+                if (!p.data) continue;
+                const arr = Array.isArray(p.data)
+                    ? p.data
+                    : typeof p.data === 'string'
+                    ? (() => {
+                          try {
+                              return JSON.parse(p.data);
+                          } catch {
+                              return [];
+                          }
+                      })()
+                    : [];
+                let changed = false;
+                for (const entry of arr) {
+                    if (entry.id === t.id && entry.name !== renameTitle.value) {
+                        entry.name = renameTitle.value;
+                        changed = true;
+                    }
+                }
+                if (changed) updates.push({ ...p, data: arr, updated_at: now });
+            }
+            if (updates.length) await db.projects.bulkPut(updates);
+        } catch (e) {
+            console.error('project title sync failed', e);
+        }
+    }
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+    renameMetaKind.value = null;
+}
+
+function confirmDelete(thread: any) {
+    deleteId.value = thread.id as string;
+    showDeleteModal.value = true;
+}
+
+async function deleteThread() {
+    if (!deleteId.value) return;
+    await dbDel.hard.thread(deleteId.value);
+    showDeleteModal.value = false;
+    deleteId.value = null;
+}
+
+// Document delete handling
+function confirmDeleteDocument(doc: any) {
+    deleteDocumentId.value = doc.id as string;
+    showDeleteDocumentModal.value = true;
+}
+async function deleteDocument() {
+    if (!deleteDocumentId.value) return;
+    await dbDel.hard.document(deleteDocumentId.value);
+    showDeleteDocumentModal.value = false;
+    deleteDocumentId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+    console.log('New chat requested');
+}
+
+// ---- Project Tree Handlers ----
+async function handleAddChatToProject(projectId: string) {
+    // Create a new chat thread and insert into project data array
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        const threadId = crypto.randomUUID();
+        await create.thread({
+            id: threadId,
+            title: 'New Thread',
+            forked: false,
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+            meta: null,
+        } as any);
+        const project = await db.projects.get(projectId);
+        if (project) {
+            const dataArr = Array.isArray(project.data)
+                ? project.data
+                : typeof project.data === 'string'
+                ? (() => {
+                      try {
+                          const parsed = JSON.parse(project.data);
+                          return Array.isArray(parsed) ? parsed : [];
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : [];
+            dataArr.push({ id: threadId, name: 'New Thread', kind: 'chat' });
+            await upsert.project({
+                ...project,
+                data: dataArr,
+                updated_at: now,
+            });
+            if (!expandedProjects.value.includes(projectId))
+                expandedProjects.value.push(projectId);
+            emit('chatSelected', threadId);
+        }
+    } catch (e) {
+        console.error('add chat to project failed', e);
+    }
+}
+
+async function handleAddDocumentToProject(projectId: string) {
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        // Create document (minimal title)
+        const doc = await create.document({ title: 'Untitled' });
+        const project = await db.projects.get(projectId);
+        if (project) {
+            const dataArr = Array.isArray(project.data)
+                ? project.data
+                : typeof project.data === 'string'
+                ? (() => {
+                      try {
+                          const parsed = JSON.parse(project.data);
+                          return Array.isArray(parsed) ? parsed : [];
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : [];
+            dataArr.push({ id: doc.id, name: doc.title, kind: 'doc' });
+            await upsert.project({
+                ...project,
+                data: dataArr,
+                updated_at: now,
+            });
+            if (!expandedProjects.value.includes(projectId))
+                expandedProjects.value.push(projectId);
+            emit('documentSelected', doc.id);
+        }
+    } catch (e) {
+        console.error('add document to project failed', e);
+    }
+}
+
+async function handleDeleteProject(projectId: string) {
+    try {
+        await dbDel.soft.project(projectId); // soft delete for recoverability
+    } catch (e) {
+        console.error('delete project failed', e);
+    }
+}
+
+// ---- Project Rename Modal Logic ----
+const showRenameProjectModal = ref(false);
+const renameProjectId = ref<string | null>(null);
+const renameProjectName = ref('');
+
+async function openRenameProject(projectId: string) {
+    const project = await db.projects.get(projectId);
+    if (!project) return;
+    renameProjectId.value = projectId;
+    renameProjectName.value = project.name || '';
+    showRenameProjectModal.value = true;
+}
+
+async function saveRenameProject() {
+    if (!renameProjectId.value) return;
+    const name = renameProjectName.value.trim();
+    if (!name) return;
+    const project = await db.projects.get(renameProjectId.value);
+    if (!project) return;
+    try {
+        await upsert.project({
+            ...project,
+            name,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        showRenameProjectModal.value = false;
+        renameProjectId.value = null;
+        renameProjectName.value = '';
+    } catch (e) {
+        console.error('rename project failed', e);
+    }
+}
+
+async function handleRenameEntry(payload: {
+    projectId: string;
+    entryId: string;
+    kind?: string;
+}) {
+    try {
+        const project = await db.projects.get(payload.projectId);
+        if (!project) return;
+        const dataArr = Array.isArray(project.data)
+            ? project.data
+            : typeof project.data === 'string'
+            ? (() => {
+                  try {
+                      const parsed = JSON.parse(project.data);
+                      return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                      return [];
+                  }
+              })()
+            : [];
+        const entry = dataArr.find((d: any) => d.id === payload.entryId);
+        if (!entry) return;
+        const newName = prompt('Rename entry', entry.name || '');
+        if (newName == null) return;
+        const name = newName.trim();
+        if (!name) return;
+        entry.name = name;
+        await upsert.project({
+            ...project,
+            data: dataArr,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        if (payload.kind === 'chat') {
+            // sync thread title too
+            const t = await db.threads.get(payload.entryId);
+            if (t && t.title !== name) {
+                await upsert.thread({
+                    ...t,
+                    title: name,
+                    updated_at: Math.floor(Date.now() / 1000),
+                });
+            }
+        }
+    } catch (e) {
+        console.error('rename entry failed', e);
+    }
+}
+
+async function handleRemoveFromProject(payload: {
+    projectId: string;
+    entryId: string;
+    kind?: string;
+}) {
+    try {
+        const project = await db.projects.get(payload.projectId);
+        if (!project) return;
+        const dataArr = Array.isArray(project.data)
+            ? project.data
+            : typeof project.data === 'string'
+            ? (() => {
+                  try {
+                      const parsed = JSON.parse(project.data);
+                      return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                      return [];
+                  }
+              })()
+            : [];
+        const idx = dataArr.findIndex((d: any) => d.id === payload.entryId);
+        if (idx === -1) return;
+        dataArr.splice(idx, 1);
+        await upsert.project({
+            ...project,
+            data: dataArr,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+    } catch (e) {
+        console.error('remove from project failed', e);
+    }
+}
+
+// ---- Project Creation ----
+const showCreateProjectModal = ref(false);
+const creatingProject = ref(false);
+const createProjectState = ref<{ name: string; description: string }>({
+    name: '',
+    description: '',
+});
+const createProjectErrors = ref<{ name?: string }>({});
+
+function openCreateProject() {
+    showCreateProjectModal.value = true;
+    createProjectState.value = { name: '', description: '' };
+    createProjectErrors.value = {};
+}
+function closeCreateProject() {
+    showCreateProjectModal.value = false;
+}
+
+async function submitCreateProject() {
+    if (creatingProject.value) return;
+    const name = createProjectState.value.name.trim();
+    if (!name) {
+        createProjectErrors.value.name = 'Title required';
+        return;
+    }
+    creatingProject.value = true;
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        // data holds ordered list of entities (chat/doc) we include kind now per request
+        const newId = crypto.randomUUID();
+        await create.project({
+            id: newId,
+            name,
+            description: createProjectState.value.description?.trim() || null,
+            data: [], // store as array; schema allows any
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+        } as any);
+        // Auto expand the new project
+        if (!expandedProjects.value.includes(newId))
+            expandedProjects.value.push(newId);
+        closeCreateProject();
+    } catch (e) {
+        console.error('Failed to create project', e);
+    } finally {
+        creatingProject.value = false;
+    }
+}
+
+// (Project tree logic moved to SidebarProjectTree component)
+
+// ---- Add To Project Flow ----
+const showAddToProjectModal = ref(false);
+const addToProjectThreadId = ref<string | null>(null);
+// Support documents
+const addToProjectDocumentId = ref<string | null>(null);
+const addMode = ref<'select' | 'create'>('select');
+const selectedProjectId = ref<string | null>(null);
+const newProjectName = ref('');
+const newProjectDescription = ref('');
+const addingToProject = ref(false);
+const addToProjectError = ref<string | null>(null);
+
+const projectSelectOptions = computed(() =>
+    projects.value.map((p) => ({ label: p.name, value: p.id }))
+);
+
+function openAddToProject(thread: any) {
+    addToProjectThreadId.value = thread.id;
+    addToProjectDocumentId.value = null;
+    addMode.value = 'select';
+    selectedProjectId.value = null;
+    newProjectName.value = '';
+    newProjectDescription.value = '';
+    addToProjectError.value = null;
+    showAddToProjectModal.value = true;
+}
+function openAddDocumentToProject(doc: any) {
+    addToProjectDocumentId.value = doc.id;
+    addToProjectThreadId.value = null;
+    addMode.value = 'select';
+    selectedProjectId.value = null;
+    newProjectName.value = '';
+    newProjectDescription.value = '';
+    addToProjectError.value = null;
+    showAddToProjectModal.value = true;
+}
+function closeAddToProject() {
+    showAddToProjectModal.value = false;
+    addToProjectThreadId.value = null;
+    addToProjectDocumentId.value = null;
+}
+
+async function submitAddToProject() {
+    if (addingToProject.value) return;
+    if (!addToProjectThreadId.value && !addToProjectDocumentId.value) return;
+    addToProjectError.value = null;
+    addingToProject.value = true;
+    try {
+        let entry: any | null = null;
+        if (addToProjectThreadId.value) {
+            const thread = await db.threads.get(addToProjectThreadId.value);
+            if (!thread) throw new Error('Thread not found');
+            entry = {
+                id: thread.id,
+                name: thread.title || 'New Thread',
+                kind: 'chat',
+            };
+        } else if (addToProjectDocumentId.value) {
+            const doc = await db.posts.get(addToProjectDocumentId.value);
+            if (!doc || (doc as any).postType !== 'doc')
+                throw new Error('Document not found');
+            entry = {
+                id: doc.id,
+                name: (doc as any).title || 'Untitled',
+                kind: 'doc',
+            };
+        }
+        if (!entry) throw new Error('Nothing to add');
+        const now = Math.floor(Date.now() / 1000);
+        let projectId: string | null = null;
+        if (addMode.value === 'create') {
+            const pid = crypto.randomUUID();
+            await create.project({
+                id: pid,
+                name: newProjectName.value.trim(),
+                description: newProjectDescription.value.trim() || null,
+                data: [entry],
+                created_at: now,
+                updated_at: now,
+                deleted: false,
+                clock: 0,
+            } as any);
+            projectId = pid;
+            if (!expandedProjects.value.includes(pid))
+                expandedProjects.value.push(pid);
+        } else {
+            if (!selectedProjectId.value) {
+                addToProjectError.value = 'Select a project';
+                return;
+            }
+            projectId = selectedProjectId.value;
+            const project = await db.projects.get(projectId);
+            if (!project) throw new Error('Project not found');
+            const dataArr = Array.isArray(project.data)
+                ? project.data
+                : typeof project.data === 'string'
+                ? (() => {
+                      try {
+                          const parsed = JSON.parse(project.data);
+                          return Array.isArray(parsed) ? parsed : [];
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : [];
+            const existing = dataArr.find(
+                (d: any) => d.id === entry.id && d.kind === entry.kind
+            );
+            if (!existing) dataArr.push(entry);
+            else existing.name = entry.name;
+            await upsert.project({
+                ...project,
+                data: dataArr,
+                updated_at: now,
+            });
+        }
+        closeAddToProject();
+    } catch (e: any) {
+        console.error('add to project failed', e);
+        addToProjectError.value = e?.message || 'Failed to add';
+    } finally {
+        addingToProject.value = false;
+    }
+}
+
+// ---- New Document Flow (naming modal) ----
+const showCreateDocumentModal = ref(false);
+const creatingDocument = ref(false);
+const newDocumentState = ref<{ title: string }>({ title: '' });
+const newDocumentErrors = ref<{ title?: string }>({});
+
+function openCreateDocumentModal() {
+    showCreateDocumentModal.value = true;
+    newDocumentState.value = { title: '' };
+    newDocumentErrors.value = {};
+}
+function closeCreateDocumentModal() {
+    showCreateDocumentModal.value = false;
+}
+async function submitCreateDocument() {
+    if (creatingDocument.value) return;
+    const title = newDocumentState.value.title.trim();
+    if (!title) {
+        newDocumentErrors.value.title = 'Title required';
+        return;
+    }
+    creatingDocument.value = true;
+    try {
+        emit('newDocument', { title });
+        closeCreateDocumentModal();
+    } finally {
+        creatingDocument.value = false;
+    }
+}
+</script>
 ````
