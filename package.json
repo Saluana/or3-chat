@@ -7,7 +7,9 @@
         "dev": "nuxt dev",
         "generate": "nuxt generate",
         "preview": "nuxt preview",
-        "postinstall": "nuxt prepare"
+        "postinstall": "nuxt prepare",
+        "test": "vitest run",
+        "test:watch": "vitest"
     },
     "dependencies": {
         "@nuxt/ui": "^3.3.2",
@@ -18,6 +20,7 @@
         "@tiptap/starter-kit": "^3.3.0",
         "@tiptap/vue-3": "^3.3.0",
         "@types/spark-md5": "^3.0.5",
+        "@vueuse/core": "^13.7.0",
         "ai": "^5.0.17",
         "dexie": "^4.0.11",
         "gpt-tokenizer": "^3.0.1",
@@ -35,6 +38,9 @@
         "zod": "^4.0.17"
     },
     "devDependencies": {
-        "@tailwindcss/typography": "^0.5.16"
+        "@tailwindcss/typography": "^0.5.16",
+        "vitest": "^2.1.2",
+        "@vitest/ui": "^2.1.2",
+        "jsdom": "^25.0.0"
     }
 }

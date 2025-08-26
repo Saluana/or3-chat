@@ -1,4 +1,4 @@
-This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
 
 # File Summary
 
@@ -28,15 +28,13 @@ The content is organized as follows:
 ## Notes
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: **.md
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
 
 # Directory Structure
 ```
-.github/
-  chatmodes/
-    retro-agent.chatmode.md
 .llms/
   nuxt.txt
   nuxtui.txt
@@ -127,22 +125,6 @@ app/
     models-service.ts
   app.config.ts
   app.vue
-docs/
-  hooks.md
-  perf-files.md
-planning/
-  documents-editor/
-    design.md
-    requirements.md
-    tasks.md
-  multi-window-chat/
-    design.md
-    requirements.md
-    tasks.md
-  sidebar-search/
-    design.md
-    requirements.md
-    tasks.md
 public/
   robots.txt
 types/
@@ -152,15 +134,13 @@ types/
 app.config.ts
 nuxt.config.ts
 package.json
-README.md
-task.md
 tsconfig.json
 ```
 
 # Files
 
 ## File: app/assets/css/dark-hc.css
-````css
+```css
 .dark-high-contrast {
   --md-primary: rgb(230 241 255);
   --md-surface-tint: rgb(153 204 249);
@@ -220,10 +200,10 @@ tsconfig.json
   --md-extended-color-warning-color-container: rgb(255 177 133);
   --md-extended-color-warning-on-color-container: rgb(25 6 0);
 }
-````
+```
 
 ## File: app/assets/css/dark-mc.css
-````css
+```css
 .dark-medium-contrast {
   --md-primary: rgb(192 224 255);
   --md-surface-tint: rgb(153 204 249);
@@ -283,10 +263,10 @@ tsconfig.json
   --md-extended-color-warning-color-container: rgb(200 127 85);
   --md-extended-color-warning-on-color-container: rgb(0 0 0);
 }
-````
+```
 
 ## File: app/assets/css/dark.css
-````css
+```css
 .dark {
   --md-primary: rgb(153 204 249);
   --md-surface-tint: rgb(153 204 249);
@@ -346,10 +326,10 @@ tsconfig.json
   --md-extended-color-warning-color-container: rgb(111 56 19);
   --md-extended-color-warning-on-color-container: rgb(255 219 202);
 }
-````
+```
 
 ## File: app/assets/css/light-hc.css
-````css
+```css
 .light-high-contrast {
   --md-primary: rgb(0 47 75);
   --md-surface-tint: rgb(44 99 139);
@@ -409,10 +389,10 @@ tsconfig.json
   --md-extended-color-warning-color-container: rgb(114 58 22);
   --md-extended-color-warning-on-color-container: rgb(255 255 255);
 }
-````
+```
 
 ## File: app/assets/css/light-mc.css
-````css
+```css
 .light-medium-contrast {
   --md-primary: rgb(0 57 90);
   --md-surface-tint: rgb(44 99 139);
@@ -472,10 +452,10 @@ tsconfig.json
   --md-extended-color-warning-color-container: rgb(158 93 54);
   --md-extended-color-warning-on-color-container: rgb(255 255 255);
 }
-````
+```
 
 ## File: app/assets/css/light.css
-````css
+```css
 .light {
   --md-primary: rgb(44 99 139);
   --md-surface-tint: rgb(44 99 139);
@@ -535,10 +515,10 @@ tsconfig.json
   --md-extended-color-warning-color-container: rgb(255 219 202);
   --md-extended-color-warning-on-color-container: rgb(111 56 19);
 }
-````
+```
 
 ## File: app/assets/css/nuxt-ui-map.css
-````css
+```css
 /* Map Material Design variables to Nuxt UI CSS tokens.
    We scope per theme class so switching themes updates Nuxt UI instantly. */
 
@@ -632,10 +612,10 @@ tsconfig.json
   --ui-bg: var(--md-surface);
   --ui-border: var(--md-outline);
 }
-````
+```
 
 ## File: app/assets/css/theme.css
-````css
+```css
 /* Global theme imports: each file defines CSS variables scoped by a class (.light, .dark, etc.) */
 @import "./light.css";
 @import "./light-hc.css";
@@ -643,17 +623,17 @@ tsconfig.json
 @import "./dark.css";
 @import "./dark-hc.css";
 @import "./dark-mc.css";
-````
+```
 
 ## File: app/components/chat/ChatInput.vue
-````vue
+```vue
 <template></template>
 <script setup lang="ts"></script>
 <style scoped></style>
-````
+```
 
 ## File: app/components/sidebar/ResizeHandle.vue
-````vue
+```vue
 <template>
     <div
         v-if="isDesktop && !collapsed"
@@ -706,10 +686,10 @@ function onHandleKeydown(e: KeyboardEvent) {
 <style scoped>
 /* visual handled by parent styles */
 </style>
-````
+```
 
 ## File: app/components/RetroGlassBtn.vue
-````vue
+```vue
 <template>
     <UButton
         v-bind="$attrs"
@@ -719,10 +699,10 @@ function onHandleKeydown(e: KeyboardEvent) {
 </template>
 
 <script setup></script>
-````
+```
 
 ## File: app/composables/useHookEffect.ts
-````typescript
+```typescript
 import { onBeforeUnmount } from 'vue';
 import { useHooks } from './useHooks';
 import type { HookKind } from '../utils/hooks';
@@ -754,20 +734,20 @@ export function useHookEffect(
 
     return disposer;
 }
-````
+```
 
 ## File: app/composables/useHooks.ts
-````typescript
+```typescript
 import { useNuxtApp } from '#app';
 import type { HookEngine } from '../utils/hooks';
 
 export function useHooks(): HookEngine {
     return useNuxtApp().$hooks as HookEngine;
 }
-````
+```
 
 ## File: app/composables/useOpenrouter.ts
-````typescript
+```typescript
 import { ref } from 'vue';
 import { kv } from '~/db';
 
@@ -895,10 +875,10 @@ export function useOpenRouterAuth() {
 
     return { startLogin, logoutOpenRouter, isLoggingIn };
 }
-````
+```
 
 ## File: app/composables/useUserApiKey.ts
-````typescript
+```typescript
 import { computed } from 'vue';
 import { db } from '~/db';
 import { state } from '~/state/global';
@@ -942,10 +922,10 @@ export function useUserApiKey() {
         clearKey,
     };
 }
-````
+```
 
 ## File: app/db/attachments.ts
-````typescript
+```typescript
 import { db } from './client';
 import { useHooks } from '../composables/useHooks';
 import { parseOrThrow } from './util';
@@ -1014,10 +994,10 @@ export async function getAttachment(id: string) {
     const res = await db.attachments.get(id);
     return hooks.applyFilters('db.attachments.get:filter:output', res);
 }
-````
+```
 
 ## File: app/db/kv.ts
-````typescript
+```typescript
 import { db } from './client';
 import { useHooks } from '../composables/useHooks';
 import { parseOrThrow } from './util';
@@ -1102,10 +1082,10 @@ export async function hardDeleteKvByName(name: string): Promise<void> {
     await db.kv.delete(existing.id);
     await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
 }
-````
+```
 
 ## File: app/db/projects.ts
-````typescript
+```typescript
 import { db } from './client';
 import { useHooks } from '../composables/useHooks';
 import { parseOrThrow } from './util';
@@ -1167,10 +1147,10 @@ export async function getProject(id: string) {
     const res = await db.projects.get(id);
     return hooks.applyFilters('db.projects.get:filter:output', res);
 }
-````
+```
 
 ## File: app/db/threads.ts
-````typescript
+```typescript
 import { db } from './client';
 import { useHooks } from '../composables/useHooks';
 import { newId, nowSec, parseOrThrow } from './util';
@@ -1323,10 +1303,10 @@ export async function forkThread(
         return fork;
     });
 }
-````
+```
 
 ## File: app/db/util.ts
-````typescript
+```typescript
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
 
 export function parseOrThrow<TSchema extends ZodTypeAny>(
@@ -1346,10 +1326,10 @@ export function newId(): string {
     if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
     return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
-````
+```
 
 ## File: app/pages/_test.vue
-````vue
+```vue
 <template>
     <resizable-sidebar-layout>
         <template #sidebar>
@@ -1508,22 +1488,22 @@ function showToast() {
     });
 }
 </script>
-````
+```
 
 ## File: app/pages/home.vue
-````vue
+```vue
 <template><div>hello</div></template>
 <script lang="ts" setup></script>
-````
+```
 
 ## File: app/pages/homepage.vue
-````vue
+```vue
 <template><div>hello</div></template>
 <script lang="ts" setup></script>
-````
+```
 
 ## File: app/pages/openrouter-callback.vue
-````vue
+```vue
 <template>
     <div class="min-h-screen flex items-center justify-center p-6">
         <div
@@ -1768,10 +1748,10 @@ onMounted(async () => {
     }
 });
 </script>
-````
+```
 
 ## File: app/plugins/hooks.client.ts
-````typescript
+```typescript
 import { defineNuxtPlugin } from '#app';
 import { createHookEngine, type HookEngine } from '../utils/hooks';
 
@@ -1795,10 +1775,10 @@ export default defineNuxtPlugin(() => {
         },
     };
 });
-````
+```
 
 ## File: app/plugins/hooks.server.ts
-````typescript
+```typescript
 import { defineNuxtPlugin } from '#app';
 import { createHookEngine } from '../utils/hooks';
 
@@ -1811,10 +1791,10 @@ export default defineNuxtPlugin(() => {
         },
     };
 });
-````
+```
 
 ## File: app/plugins/theme.client.ts
-````typescript
+```typescript
 export default defineNuxtPlugin((nuxtApp) => {
     const THEME_CLASSES = [
         'light',
@@ -1879,10 +1859,10 @@ export default defineNuxtPlugin((nuxtApp) => {
         system: getSystemPref,
     });
 });
-````
+```
 
 ## File: app/utils/hooks.ts
-````typescript
+```typescript
 // Lightweight, type-safe hook engine for Nuxt/Vue apps
 // - Supports actions (side-effects) and filters (value transform)
 // - Priority scheduling (lower runs earlier)
@@ -2336,10 +2316,10 @@ export function createHookEngine(): HookEngine {
 
 // Convenience type for imports in .d.ts
 export type { AnyFn as HookFn };
-````
+```
 
 ## File: app/app.vue
-````vue
+```vue
 <template>
     <UApp>
         <NuxtPage />
@@ -2353,16 +2333,16 @@ useHead({
     },
 });
 </script>
-````
+```
 
 ## File: public/robots.txt
-````
+```
 User-Agent: *
 Disallow:
-````
+```
 
 ## File: types/nuxt.d.ts
-````typescript
+```typescript
 // Type augmentation for the theme plugin
 declare module '#app' {
     interface NuxtApp {
@@ -2377,10 +2357,10 @@ declare module '#app' {
 }
 
 export {};
-````
+```
 
 ## File: .gitignore
-````
+```
 # Nuxt dev/build outputs
 .output
 .data
@@ -2405,10 +2385,10 @@ logs
 .env
 .env.*
 !.env.example
-````
+```
 
 ## File: app.config.ts
-````typescript
+```typescript
 // Allow using the Nuxt macro without relying on generated types at dev-time in this editor.
 // Nuxt will inject the proper macro type from .nuxt during build/dev.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2442,10 +2422,10 @@ export default defineAppConfig({
         },
     },
 });
-````
+```
 
 ## File: nuxt.config.ts
-````typescript
+```typescript
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
@@ -2462,91 +2442,10 @@ export default defineNuxtConfig({
         ],
     },
 });
-````
-
-## File: README.md
-````markdown
-# Nuxt Minimal Starter
-
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
-
-Additionally, see the project’s Hook/Action system guide: [docs/hooks.md](./docs/hooks.md).
-
-## Setup
-
-Make sure to install dependencies:
-
-```bash
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
-
-## Development Server
-
-Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
-```
-
-## Production
-
-Build the application for production:
-
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
-````
 
 ## File: tsconfig.json
-````json
+```json
 {
   // https://nuxt.com/docs/guide/concepts/typescript
   "files": [],
@@ -2565,10 +2464,10 @@ Check out the [deployment documentation](https://nuxt.com/docs/getting-started/d
     }
   ]
 }
-````
+```
 
 ## File: .llms/nuxt.txt
-````
+```
 # Nuxt Docs
 
 > Nuxt is an open source framework that makes web development intuitive and powerful. Create performant and production-grade full-stack web apps and websites with confidence.
@@ -3132,10 +3031,10 @@ Check out the [deployment documentation](https://nuxt.com/docs/getting-started/d
 ## DesignKit
 
 - [Design Kit](https://nuxt.com/design-kit): Welcome to Nuxt design definition page. Identity was redefined by handpicking conscientiously colors, and shapes in order to express how easy & joyful Nuxt products are.
-````
+```
 
 ## File: .llms/nuxtui.txt
-````
+```
 # Nuxt UI
 
 > A comprehensive, Nuxt-integrated UI library providing a rich set of fully-styled, accessible and highly customizable components for building modern web applications.
@@ -3291,10 +3190,10 @@ Check out the [deployment documentation](https://nuxt.com/docs/getting-started/d
 
 - The documentation excludes Nuxt UI v2 content.
 - The content is automatically generated from the same source as the official documentation.
-````
+```
 
 ## File: .llms/orama.txt
-````
+```
 # Docs
 
 base url: https://docs.orama.com/
@@ -3366,10 +3265,10 @@ base url: https://docs.orama.com/
 - [Remove data](/docs/orama-js/usage/remove): Learn how to remove data from an Orama database.
 - [Update data](/docs/orama-js/usage/update): Learn how to update data in Orama.
 - [Utility functions for Orama](/docs/orama-js/usage/utilities): Learn how to use utility functions in Orama.
-````
+```
 
 ## File: .llms/tiptap.txt
-````
+```
 #Tiptap
 
 > Tiptap is the headless and extensible rich-text editor framework tailored to modern web and app development needs. 
@@ -3753,10 +3652,10 @@ Use Cases
 - [Discord](https://discord.com/invite/DDXcGKt4Zk)
 - [LinkedIn](https://www.linkedin.com/company/tiptapdev/)
 - [Bluesky](https://bsky.app/profile/tiptap.dev)
-````
+```
 
 ## File: app/components/chat/ModelSelect.vue
-````vue
+```vue
 <template>
     <div v-if="show" class="inline-block">
         <USelectMenu
@@ -3834,10 +3733,10 @@ const searchInput = {
 </script>
 
 <style scoped></style>
-````
+```
 
 ## File: app/components/documents/ToolbarButton.vue
-````vue
+```vue
 <template>
     <button
         class="retro-btn h-8 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm"
@@ -3880,10 +3779,10 @@ button {
     font-family: inherit;
 }
 </style>
-````
+```
 
 ## File: app/components/sidebar/SidebarHeader.vue
-````vue
+```vue
 <template>
     <div
         :class="{
@@ -3936,10 +3835,10 @@ function onToggle() {
 <style scoped>
 /* keep styling minimal; visual rules come from parent stylesheet */
 </style>
-````
+```
 
 ## File: app/composables/useDocumentsStore.ts
-````typescript
+```typescript
 import { ref, reactive } from 'vue';
 import {
     createDocument,
@@ -4057,10 +3956,10 @@ export function useDocumentState(id: string) {
 export function useAllDocumentsState() {
     return documentsMap;
 }
-````
+```
 
 ## File: app/composables/useModelSearch.ts
-````typescript
+```typescript
 import { ref, watch, type Ref } from 'vue';
 import type { OpenRouterModel } from '~/utils/models-service';
 
@@ -4217,10 +4116,10 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
 }
 
 export default useModelSearch;
-````
+```
 
 ## File: app/composables/useSidebarSearch.ts
-````typescript
+```typescript
 // Unified sidebar search across threads, projects, and documents.
 // Modeled after useThreadSearch but merges all three domains into one Orama index
 // for a single fast query. Falls back to substring filtering if Orama fails.
@@ -4481,10 +4380,10 @@ export function useSidebarSearch(
 }
 
 export default useSidebarSearch;
-````
+```
 
 ## File: app/composables/useThreadSearch.ts
-````typescript
+```typescript
 import { ref, watch, type Ref } from 'vue';
 import type { Thread } from '~/db';
 
@@ -4608,10 +4507,10 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
 }
 
 export default useThreadSearch;
-````
+```
 
 ## File: app/db/files-util.ts
-````typescript
+```typescript
 import { nowSec } from './util';
 
 // Default maximum number of files (hashes) per message.
@@ -4665,10 +4564,10 @@ export function serializeFileHashes(hashes: string[]): string {
 export function nowSecNumber(): number {
     return nowSec();
 }
-````
+```
 
 ## File: app/db/message-files.ts
-````typescript
+```typescript
 import { db } from './client';
 import { parseFileHashes, serializeFileHashes } from './files-util';
 import { computeFileHash } from '../utils/hash';
@@ -4749,10 +4648,10 @@ export async function removeFileFromMessage(messageId: string, hash: string) {
         await derefFile(hash);
     });
 }
-````
+```
 
 ## File: app/db/messages.ts
-````typescript
+```typescript
 import Dexie from 'dexie';
 import { db } from './client';
 import { useHooks } from '../composables/useHooks';
@@ -5059,10 +4958,10 @@ export async function normalizeThreadIndexes(
         });
     });
 }
-````
+```
 
 ## File: app/db/posts.ts
-````typescript
+```typescript
 import { db } from './client';
 import { useHooks } from '../composables/useHooks';
 import { nowSec, parseOrThrow } from './util';
@@ -5166,10 +5065,10 @@ export async function hardDeletePost(id: string): Promise<void> {
     await db.posts.delete(id);
     await hooks.doAction('db.posts.delete:action:hard:after', id);
 }
-````
+```
 
 ## File: app/pages/chat/[id].vue
-````vue
+```vue
 <template>
     <ChatPageShell :initial-thread-id="routeId" validate-initial />
 </template>
@@ -5178,20 +5077,20 @@ import ChatPageShell from '~/components/chat/ChatPageShell.vue';
 const route = useRoute();
 const routeId = (route.params.id as string) || '';
 </script>
-````
+```
 
 ## File: app/pages/chat/index.vue
-````vue
+```vue
 <template>
     <ChatPageShell />
 </template>
 <script setup lang="ts">
 import ChatPageShell from '~/components/chat/ChatPageShell.vue';
 </script>
-````
+```
 
 ## File: app/state/global.ts
-````typescript
+```typescript
 import { openrouter } from '@openrouter/ai-sdk-provider';
 import { ref } from 'vue';
 
@@ -5200,17 +5099,17 @@ export const state = ref({
 });
 
 export const isMobile = ref<boolean>(false);
-````
+```
 
 ## File: app/utils/files-constants.ts
-````typescript
+```typescript
 // Central export for max files per message so UI & DB stay in sync.
 // Source of truth defined in app/db/files-util.ts
 export { MAX_FILES_PER_MESSAGE } from '../db/files-util';
-````
+```
 
 ## File: app/utils/hash.ts
-````typescript
+```typescript
 /**
  * Hashing utilities for file deduplication.
  * Implements async chunked MD5 with Web Crypto fallback to spark-md5.
@@ -5320,10 +5219,10 @@ function bufferToHex(buf: Uint8Array): string {
 function microTask() {
     return new Promise((resolve) => setTimeout(resolve, 0));
 }
-````
+```
 
 ## File: app/utils/models-service.ts
-````typescript
+```typescript
 // ModelsService: Fetch OpenRouter models, cache, and provide simple filters
 // Source: https://openrouter.ai/api/v1/models
 // Usage: import { modelsService } from "~/utils/models-service";
@@ -5526,935 +5425,10 @@ export const modelsService = {
 };
 
 export default modelsService;
-````
-
-## File: docs/perf-files.md
-````markdown
-# File Hashing & Storage Performance
-
-This document captures performance expectations and instrumentation for the file hashing + storage pipeline.
-
-## Instrumentation
-
-Dev‑only `performance.mark` / `performance.measure` calls were added in:
-
--   `app/utils/hash.ts` – Marks: `hash:md5:subtle:bytes=<n>` or `hash:md5:stream:bytes=<n>` plus error variants.
--   `app/db/files.ts` – Marks: `file:create:bytes=<n>` when a new file is inserted, and `file:ref:bytes=<n>` when an existing file is re‑referenced (dedupe path).
-
-Console `debug` logs (guarded by dev build) provide concise timing summaries:
-
 ```
-[perf] computeFileHash stream 210.4KB 42.3ms
-[perf] file store create 210.4KB 8.7ms
-```
-
-## Expected Timings (Baseline Targets)
-
-| Operation                | Size                | Target (Cold)   | Notes                                      |
-| ------------------------ | ------------------- | --------------- | ------------------------------------------ |
-| MD5 (subtle)             | ≤4MB (single read)  | ~5–40ms per MB  | Uses Web Crypto when available.            |
-| MD5 (stream)             | >4MB or unsupported | ~35–55ms per MB | 256KB chunk size yields UI responsiveness. |
-| Store (create) meta+blob | ≤1MB                | <15ms           | IndexedDB put of meta + blob.              |
-| Store (ref path)         | any                 | <5ms            | Only ref count increment.                  |
-
-Empirical target in requirements: <150ms for ~200KB end‑to‑end (hash + create). With current chunk size this remains well below (typically <60ms on modern hardware).
-
-## Adjusting Chunk Size
-
-`CHUNK_SIZE` in `hash.ts` is 256KB. Increasing improves throughput but risks longer main thread blocks; decrease for smoother interactivity on low‑end devices.
-
-## Viewing Marks
-
-In DevTools Performance panel, filter for `hash:` or `file:` measures to inspect durations.
-
-Programmatically:
-
-```js
-performance
-    .getEntriesByType('measure')
-    .filter((m) => m.name.startsWith('hash:'));
-```
-
-## Future Enhancements
-
-1. Web Worker offload for large (>8MB) files (Task 10.2).
-2. Adaptive chunk size based on device performance (RTT heuristics or timing feedback).
-3. Aggregate rolling average metrics surfaced in a tiny dev overlay.
-4. Add percentile sampling for hashing durations (P50/P95) to console summary on unload in dev.
-
-## Troubleshooting
-
-| Symptom             | Possible Cause                                | Mitigation                                                   |
-| ------------------- | --------------------------------------------- | ------------------------------------------------------------ |
-| Missing marks       | Running in production build                   | Enable dev mode / ensure `import.meta.dev` true.             |
-| High durations      | Low‑end hardware or background tab throttling | Consider worker offload or smaller chunk size.               |
-| Jank during hashing | Large single blob path                        | Stream fallback already mitigates; worker offload next step. |
-
----
-
-Document version: 1.0 (Task 7.2)
-````
-
-## File: planning/documents-editor/design.md
-````markdown
-# design.md
-
-artifact_id: 77c0ad5d-1112-4d37-8d39-c58b082f4f1e
-
-## Overview
-
-Implement a minimal TipTap editor for creating and editing documents stored locally (Dexie) with existing DB utilities. Integrate with the existing multi-pane abstraction used for chats so a pane can show either a chat thread or a document. Scope is intentionally small: one simple schema, one list view, one editor component, basic formatting.
-
-## Architecture
-
-High-Level Flow:
-
-1. User clicks "New Document" or selects an existing one from sidebar.
-2. Active pane context switches to mode = 'document' with documentId.
-3. Pane loads document via `documents` module (create or fetch) and instantiates `<DocumentEditor>` (TipTap instance).
-4. User edits; editor emits debounced updates -> save pipeline -> Dexie write -> update updated_at.
-5. Sidebar list reacts (live query or explicit refresh) and reorders document position.
-
-```mermaid
-graph TD
-  Sidebar-->PaneController
-  PaneController-->LoadOrCreateDoc
-  LoadOrCreateDoc-->DocumentStore
-  DocumentStore-->DexieDB
-  PaneController-->DocumentEditor
-  DocumentEditor-->SaveDebounce-->DocumentStore
-  DocumentStore-->Sidebar
-```
-
-## Components / Modules
-
-1. documents.ts (DB API) - implement minimal CRUD (create, get, list, update). Already stubbed; will follow patterns in other db modules.
-2. DocumentStore (lightweight composable) - reactive cache per id, handles save debounce & status state.
-3. DocumentEditor.vue - wraps TipTap editor, toolbar, title input, status indicator. Emits changes.
-4. SidebarDocumentsList.vue - lists documents (id, title, updated_at). Integrates into existing sidebar region.
-5. Pane integration - extend pane state with `mode: 'chat' | 'doc'` and `documentId?` (mutually exclusive with threadId). Update logic in `ChatPageShell.vue` minimal patch.
-
-## Data Model
-
-TypeScript interface:
-
-```ts
-export interface DocumentRecord {
-    id: string;
-    title: string; // fallback 'Untitled'
-    content: any; // TipTap JSON
-    created_at: number; // seconds
-    updated_at: number; // seconds
-    deleted: boolean;
-    clock: number; // optimistic concurrency (reuse pattern)
-}
-```
-
-Persistence decisions:
-
--   Store `content` as JSON string in Dexie (like other data) or direct object; keep consistent with existing modules (likely object). For simplicity: object.
--   Update path: every debounced change increments `clock` and sets updated_at.
-
-## Simple documents.ts API (planned)
-
-```ts
-import { db } from './client';
-import { newId, nowSec } from './util';
-
-export async function createDocument(
-    partial?: Partial<DocumentRecord>
-): Promise<DocumentRecord> {
-    /* fill defaults */
-}
-export async function getDocument(
-    id: string
-): Promise<DocumentRecord | undefined> {
-    /* db.get */
-}
-export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
-    /* order by updated_at desc */
-}
-export async function updateDocument(
-    id: string,
-    patch: Partial<Pick<DocumentRecord, 'title' | 'content'>>
-): Promise<DocumentRecord | undefined> {
-    /* merge & save */
-}
-```
-
-Error strategy: catch, rethrow with prefix 'Document:' or return undefined for not found.
-
-## DocumentStore Composable
-
-Responsibilities:
-
--   Provide reactive map: id -> { record, status: 'idle'|'saving'|'saved'|'error', lastError? }
--   Expose load(id), create(), setTitle(id,title), applyContentPatch(id, docJSON).
--   Debounce: internal timer per id (single setTimeout). Delay 750ms after last mutation.
--   Immediate flush method for pane close.
-
-Pseudo:
-
-```ts
-const docs = reactive(new Map<string, DocState>());
-function ensure(id) { /* init state */ }
-function scheduleSave(id) { clearTimeout(t); t=setTimeout(()=>flush(id), 750); }
-async function flush(id) { status='saving'; try { await updateDocument(...); status='saved'; } catch(e){ status='error'; lastError=e; } }
-```
-
-## Editor Component (DocumentEditor.vue)
-
-Props: { documentId: string }
-Hooks:
-
--   on mount: load via DocumentStore
--   watch doc state -> update TipTap content if id changes
--   TipTap extensions: StarterKit (paragraph, heading, bold, italic, code, lists, hr, history)
--   Toolbar buttons: call chain() API
--   Title input: v-model -> debounced store.setTitle
--   Status text: computed from store state
-
-Prevent loop: Only set editor content if incoming record.content JSON differs (deep compare of version field or JSON stringify length). Keep simple: compare stringified once cached.
-
-## Pane Integration Changes
-
-Add to PaneState:
-
-```ts
-interface PaneState {
-    id: string;
-    mode: 'chat' | 'doc';
-    threadId: string; // used when mode==='chat'
-    documentId?: string; // used when mode==='doc'
-    messages: ChatMessage[];
-    // ... existing
-}
-```
-
-Helpers:
-
--   openDocumentInPane(paneIndex, docId) sets mode & clears chat-specific arrays.
--   newDocumentInPane(paneIndex) -> create then open.
-    URL routing: Keep unchanged: URLs still /chat or /chat/<threadId>. Documents do not yet get deep links (out of scope minimal). If needed later we can map /doc/<id>.
-
-## Sidebar Integration
-
-Add documents list under a simple divider. Each item click -> openDocumentInPane(activePaneIndex, id).
-
-## Error Handling
-
--   Wrap each DB call in try/catch; toast on error.
--   Editor shows inline fallback: if record can't load, show message & retry button.
-
-## Testing Strategy (Lightweight)
-
--   Unit: DocumentStore debounce flush logic (simulate rapid patches).
--   Unit: createDocument sets defaults (title fallback, timestamps non-zero).
--   Smoke manual: create, edit, rename, open second pane with chat + doc, ensure independent states.
-
-(No heavy automated integration tests for now—scope minimal.)
-
-## Performance
-
--   Single TipTap instance per open document pane. Usually <= 1-2.
--   Debounce saves to avoid write storm.
--   Avoid deep cloning large JSON on every keystroke (TipTap handles internal state). We only snapshot JSON when scheduling save.
-
-## Open Questions (Deferred)
-
--   Full text search indexing documents (later).
--   Sharing / export (later).
--   Deep linking for documents (later).
-````
-
-## File: planning/documents-editor/requirements.md
-````markdown
-# requirements.md
-
-artifact_id: 9f1b8d83-3c9c-4d4c-9f7a-9f5f3ec8a7c4
-
-## Introduction
-
-Add a minimal TipTap-based document editor to the existing chat app. Users can create, view, and edit simple rich-text documents (paragraphs, headings, bold/italic/underline/code, bullet & ordered lists, horizontal rule, undo/redo). Documents open inside panes just like chats so a user can split-screen a chat and a document (or multiple documents). Keep scope intentionally small: no collaborative editing, no complex schema migrations, no version history right now.
-
-## Requirements
-
-### 1. Create Documents
-
-User Story: As a user, I want to create a new document so that I can take notes while chatting.
-Acceptance Criteria:
-
--   WHEN the user clicks a "New Document" action in the sidebar or pane toolbar THEN a new blank document SHALL be created locally with an auto-generated id, default title "Untitled" and empty content.
--   WHEN creation succeeds THEN the document SHALL appear in the documents list/tree immediately.
--   IF creation fails (Dexie/db error) THEN an error toast SHALL display and no partial document is left referenced in UI.
-
-### 2. Open / Edit Document In Pane
-
-User Story: As a user, I want to open a document in a pane so that I can read or edit it beside a chat.
-Acceptance Criteria:
-
--   WHEN a document is selected from the sidebar THEN it SHALL load into the active pane (reusing multi-pane infra) with its title and content.
--   WHEN switching panes THEN each pane SHALL retain its own currently opened document or chat thread id without interference.
--   IF the pane already has unsaved edits and the user opens a different document THEN pending edits SHALL be auto-saved first (best effort) before loading the new one.
--   IF a document id does not exist or is deleted THEN the pane SHALL show a not-found placeholder and offer a back action.
-
-### 3. Basic Rich Text Editing
-
-User Story: As a user, I want simple formatting tools so that I can structure my notes.
-Acceptance Criteria:
-
--   Toolbar SHALL provide: Bold, Italic, Code, Heading toggle (H1/H2/Paragraph), Bullet List, Ordered List, Horizontal Rule, Undo, Redo.
--   Keyboard shortcuts (native TipTap defaults) SHALL work (e.g., Mod-B, Mod-I, Mod-Z/Y).
--   Selection based formatting state SHALL reflect active mark/block (button active style) within 100ms of selection change.
--   Editor content SHALL auto-save (debounced <= 1s idle) after changes.
-
-### 4. Title Editing
-
-User Story: As a user, I want to rename a document so that I can identify it later.
-Acceptance Criteria:
-
--   Title field SHALL be inline editable (single-line input) above the editor.
--   Title changes SHALL persist using same debounce as body content.
--   IF user clears title to empty THEN it SHALL revert to "Untitled" on save.
-
-### 5. Persistence & Data Model
-
-User Story: As a developer, I want to store documents consistently so the feature stays maintainable.
-Acceptance Criteria:
-
--   Document schema SHALL reuse existing `posts` or a new minimal `documents` table/file as already stubbed (`documents.ts`). We'll store: id, title, content (JSON from TipTap), created_at, updated_at, deleted flag.
--   Storage format for content SHALL be TipTap JSON (not HTML) for simplicity.
--   Updated_at SHALL update on each persisted change.
-
-### 6. Auto Save & Feedback
-
-User Story: As a user, I want confidence my edits are saved.
-Acceptance Criteria:
-
--   A subtle status text ("Saved" / "Saving…") SHALL reflect debounce cycle.
--   IF save fails THEN status SHALL show "Error" and a retry occurs automatically on next edit.
-
-### 7. Pane Integration
-
-User Story: As a user, I want the document editor to behave like chats in panes.
-Acceptance Criteria:
-
--   Each pane SHALL track whether it is displaying a chat thread or a document (mutually exclusive).
--   Switching active pane SHALL not unload background pane editors.
--   Closing a pane with unsaved edits SHALL attempt an immediate flush save.
-
-### 8. Minimal Navigation / Listing
-
-User Story: As a user, I want to find my documents.
-Acceptance Criteria:
-
--   Sidebar SHALL list documents by updated_at desc with their title.
--   Clicking an item SHALL open it in active pane.
--   New document SHALL appear at top after first save.
-
-### 9. Performance / Non-Functional
-
-Acceptance Criteria:
-
--   Initial editor mount SHALL complete in < 200ms on a typical modern laptop (single instantiation) excluding dependency download.
--   Debounced save SHALL not trigger more than 1 write per 750ms of continuous typing.
--   No blocking operations on the main thread longer than 16ms in common actions (format toggle, typing).
-
-### 10. Error Handling
-
-Acceptance Criteria:
-
--   Any Dexie failures SHALL be caught and surfaced via toast with message prefix "Document: ".
--   Corrupt JSON content (parse error) SHALL fallback to empty doc without crashing pane.
-
-### 11. Out of Scope (Explicit)
-
--   Real-time collaboration
--   Multi-user sync
--   Version history / diffing
--   Full-text search indexing (future)
--   Embedding documents inside chats automatically
-````
-
-## File: planning/documents-editor/tasks.md
-````markdown
-# tasks.md
-
-artifact_id: 8d0400b2-16a0-4f0d-8e0e-0b92d5c1ab5d
-
-(Max 3 top-level tasks; focused, simple.)
-
-## 1. Implement Data Layer & Store (Requirements: 1,2,5,6,8,10)
-
--   [x] 1.1 Implement `documents.ts` with CRUD: createDocument, getDocument, listDocuments, updateDocument.
--   [x] 1.2 Add export barrel in `db/index.ts` if needed (e.g., `create.document`, `queries.documents`).
--   [x] 1.3 Create `useDocumentsStore.ts` composable: reactive map, load/create/update APIs.
--   [x] 1.4 Implement debounced save (750ms) per document with status state.
--   [x] 1.5 Auto-fallback empty JSON structure if corrupt content.
--   [x] 1.6 Expose `flush(id)` for immediate save (pane close). (exported flush())
--   [x] 1.7 Sidebar list helper: `useDocumentsList` (wrap listDocuments order by updated_at desc, ref refresh function).
--   [x] 1.8 Error handling: toast on failures with prefix.
-
-## 2. UI Components & Integration (Requirements: 1,2,3,4,6,7,8,9,10)
-
--   [x] 2.1 Create `DocumentEditor.vue` (title input + toolbar + editor region + status text).
--   [x] 2.2 Configure TipTap: StarterKit only (uppercase headings H1/H2 + lists + code + hr).
--   [x] 2.3 Implement toolbar buttons & active state binding.
--   [x] 2.4 Debounce title/content updates through store (reuse same save cycle).
--   [x] 2.5 Add `SidebarDocumentsList.vue` and integrate into existing sidebar slot (under threads).
--   [x] 2.6 Clicking doc item opens in active pane (calls openDocumentInPane). (Selection emit wired; pane open handled in Task 3.)
--   [x] 2.7 Add "New Document" button in documents list header.
--   [x] 2.8 Visual states: not found placeholder, saving indicator (Saving… / Saved / Error). (Status text + empty states.)
--   [x] 2.9 Basic styling consistent with existing UI theme tokens; kept minimal.
--   [x] 2.10 Performance check: ensure mount < 200ms (manual devtools measurement) & limit save frequency. (Debounce 750ms; further measurement pending manual dev.)
-
-## 3. Pane & Lifecycle Wiring (Requirements: 2,6,7,9,10)
-
--   [x] 3.1 Extend PaneState with mode + documentId.
--   [x] 3.2 Implement helpers: `newDocumentInPane`, `openDocumentInPane` in `ChatPageShell.vue` (or extracted util). (Implemented as onNewDocument / onDocumentSelected)
--   [x] 3.3 Ensure existing chat logic unaffected when mode==='chat'. (Chat paths force mode='chat' & clear documentId.)
--   [x] 3.4 On pane close or mode switch, flush pending doc save. (Flush on close & before document switch.)
--   [x] 3.5 Prevent URL sync for documents (leave chat URL logic untouched). (URL updates only when mode='chat'.)
--   [x] 3.6 Guard multi-pane add/remove preserving document states. (State retained; doc flush only on switch/close.)
--   [x] 3.7 Add keyboard shortcut (optional) for new document: Mod+Shift+D implemented.
--   [x] 3.8 Manual smoke test scenarios (doc+chat split, switching panes, unsaved edits, error injection). (Core paths verified; further manual QA suggested.)
-````
-
-## File: planning/multi-window-chat/design.md
-````markdown
-# Multi-Window Chat Design
-
-artifact_id: c5fbba63-6f6e-4ab0-9d5d-cf822d4d5a9f
-
-## 1. Overview
-
-Add lightweight support for up to three side-by-side chat panes within `ChatPageShell.vue`. Each pane encapsulates its own `threadId`, `messageHistory`, and loading lifecycle. The shell maintains an array of pane states and an `activePaneIndex`. Existing sidebar emits (thread selection, new chat) are redirected to the active pane only. Minimal new code; reuse existing `loadMessages` logic with slight refactor to operate per-pane.
-
-## 2. Architecture & Flow
-
--   Component: Enhance `ChatPageShell.vue` only (no new global stores). Introduce reactive `panes: PaneState[]` instead of single `threadId` and `messageHistory`.
--   PaneState: `{ id: string; threadId: string; messages: ChatMessage[]; validating: boolean }` (id = local uuid for v-for key, separate from threadId).
--   Active pane tracking via `activePaneIndex: Ref<number>`.
--   New window: push blank PaneState if length < 3, set active to new index.
--   Close window: splice index; adjust `activePaneIndex` to nearest valid (min 0).
--   Sidebar selection: calls `setPaneThread(activePaneIndex, threadId)`.
--   Loading messages: extracted helper `loadMessagesFor(threadId): Promise<ChatMessage[]>` (reuse existing DB code). Pane-specific function assigns to `panes[i].messages`.
-
-### Sequence (Sidebar selects thread)
-
-1. Sidebar emits `chatSelected(id)`.
-2. `onSidebarSelected` -> `setPaneThread(activePaneIndex, id)`.
-3. Function updates pane.threadId then awaits load -> assigns messages.
-4. UI re-renders only that pane's ChatContainer.
-
-## 3. Component Structure
-
-```
-ChatPageShell
-  - Top bar (New Window, Theme Toggle)
-  - Flex row container (.panes) with 1-3 Pane wrappers
-       PaneWrapper (div, tabindex, border highlight if active)
-         ChatContainer (existing props: message-history, thread-id, events)
-```
-
-## 4. Data Structures / Types (TypeScript)
-
-```ts
-interface ChatMessage {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-    id?: string;
-    stream_id?: string;
-}
-
-interface PaneState {
-    id: string; // local pane uuid
-    threadId: string; // current thread ('' = empty / new chat)
-    messages: ChatMessage[];
-    validating: boolean; // reserved (if we keep validateInitial logic)
-}
-```
-
-## 5. Key Reactive State
-
-```ts
-const panes = ref<PaneState[]>([createEmptyPane()]);
-const activePaneIndex = ref(0);
-```
-
-Helper:
-
-```ts
-function createEmptyPane(): PaneState {
-    return {
-        id: crypto.randomUUID(),
-        threadId: '',
-        messages: [],
-        validating: false,
-    };
-}
-```
-
-## 6. Core Functions
-
-```ts
-async function loadMessagesFor(threadId: string): Promise<ChatMessage[]> {
-    /* existing logic moved & returning array */
-}
-
-async function setPaneThread(i: number, threadId: string) {
-    const pane = panes.value[i];
-    if (!pane) return;
-    pane.threadId = threadId;
-    pane.messages = await loadMessagesFor(threadId);
-}
-
-function addPane() {
-    if (panes.value.length >= 3) return;
-    panes.value.push(createEmptyPane());
-    activePaneIndex.value = panes.value.length - 1;
-}
-
-function closePane(i: number) {
-    if (panes.value.length === 1) return;
-    panes.value.splice(i, 1);
-    if (activePaneIndex.value >= panes.value.length)
-        activePaneIndex.value = panes.value.length - 1;
-}
-
-function setActive(i: number) {
-    activePaneIndex.value = i;
-}
-```
-
-Sidebar integration:
-
-```ts
-function onSidebarSelected(threadId: string) {
-    setPaneThread(activePaneIndex.value, threadId);
-}
-function onNewChat() {
-    const p = panes.value[activePaneIndex.value];
-    p.threadId = '';
-    p.messages = [];
-}
-```
-
-ChatContainer thread-created event:
-
-```ts
-function onInternalThreadCreated(newId: string, paneIndex: number) {
-    const p = panes.value[paneIndex];
-    if (p && p.threadId !== newId) setPaneThread(paneIndex, newId);
-}
-```
-
-Pass pane index via inline handler in template.
-
-## 7. Template Adjustments
-
--   Replace single ChatContainer with `v-for="(pane,i) in panes"`.
--   Wrapper div flex with `:class="['pane', i===activePaneIndex ? 'pane-active':'']"`.
--   Add close button inside each wrapper (condition: panes.length>1) top-right overlay.
--   Modify New Window button to call `addPane` (disable if length===3).
--   Active styles: Tailwind classes e.g. `border-2 border-primary shadow-sm` vs `border border-transparent`.
-
-## 8. Keyboard & Focus
-
--   `tabindex="0"` on pane wrapper.
--   `@focus="setActive(i)" @click="setActive(i)"`.
--   Key handler on wrapper: ArrowLeft/ArrowRight adjust `activePaneIndex` within bounds.
-
-## 9. Minimal Styling
-
-Utility classes only:
-
-```
-.flex-row.panes { display:flex; width:100%; height:100%; }
-.pane { @apply flex-1 relative overflow-hidden border transition-colors; }
-.pane-active { @apply border-primary; }
-```
-
-(Implement inline / scoped style additions inside component to avoid external file.)
-
-## 10. Error Handling
-
--   DB failures fallback: return empty array; console.warn only.
--   Guard indices; no thrown errors.
-
-## 11. Testing Strategy (Lightweight)
-
--   Manual / basic unit tests (if framework present) not required for initial simplicity.
--   Quick checks:
-    1. Add panes until 3, ensure 4th click no-op.
-    2. Close middle pane; indices shift; active handled.
-    3. Load different threads in different panes; switch active; sidebar loads only active.
-    4. Keyboard Arrow navigation changes active border.
-
-## 12. Future Extension Hooks
-
--   Persist panes array (threadIds) to local storage or IndexedDB.
--   Introduce draggable resizing between panes.
--   Support heterogeneous pane types (editor vs chat) by adding `type` to PaneState.
-
-## 13. Risks / Mitigations
-
--   Risk: Existing logic tightly coupled to single threadId variables. Mitigation: Encapsulate old functions; keep original names backward compatible if used elsewhere (they are currently local so refactor is safe).
--   Risk: Extra reactivity causing unnecessary loads. Mitigation: Only load when threadId set through helper; no watchers needed.
-
-## 14. Definition of Done
-
--   Up to 3 panes appear; New Window works / disabled at 3.
--   Each pane independent; highlight & keyboard focus works.
--   Sidebar selections target active pane only.
--   Close extra panes works without layout break.
--   Code remains under ~150 added lines (target) and confined to `ChatPageShell.vue`.
-````
-
-## File: planning/multi-window-chat/requirements.md
-````markdown
-# Multi-Window Chat Requirements
-
-artifact_id: 5d4e2c2c-5b8f-4f5c-9a62-9c9c3c5a2d11
-
-## 1. Introduction
-
-Provide ability for a user to open up to three side‑by‑side "windows" (panes) each hosting an independent ChatContainer (later also document editors) inside the existing chat page shell. Default = 1 pane. User can add a pane via the existing "New window" button (currently the theme toggle placeholder) until reaching 3. User can close extra panes. Active (focused) pane is visually indicated (primary border or highlight). Selecting a chat/thread from the sidebar loads it into the currently active pane only. Behavior must be simple, minimal state, and not introduce heavy abstraction.
-
-Non‑goals (for now): persistence of pane layout across reloads, drag‑resize between panes, multi‑document editor implementation, complex window management.
-
-## 2. User Roles
-
--   End User (single role for this feature)
-
-## 3. Functional Requirements (User Stories)
-
-### R1: Open an additional chat window
-
-As a user, I want to click a "New window" control to add a second (or third) chat pane so that I can view/work in multiple chats side by side.
-Acceptance Criteria:
-
--   WHEN I have fewer than 3 panes AND click New Window THEN a new pane SHALL appear to the right of existing panes.
--   IF already 3 panes THEN clicking New Window SHALL do nothing (or show a brief tooltip/disabled state) without errors.
--   New pane SHALL become the active pane.
-
-### R2: Close an extra chat window
-
-As a user, I want to close an extra pane so that I can return to fewer panes and reclaim space.
-Acceptance Criteria:
-
--   Each non-singleton pane (any pane when total > 1) SHALL display a close control (e.g., small "x" icon) on hover or always.
--   WHEN I click the close control on pane i THEN that pane SHALL be removed and remaining panes SHALL shift to fill space evenly.
--   IF the closed pane was active THEN the leftmost remaining pane SHALL become active.
--   Cannot close the last remaining pane (control hidden or disabled at 1 pane).
-
-### R3: Visual active pane indication
-
-As a user, I want the active pane clearly highlighted so I know which pane receives sidebar selections.
-Acceptance Criteria:
-
--   Active pane SHALL have a primary colored border (2px) or shadow distinct from inactive panes.
--   Inactive panes SHALL have neutral border.
--   Clicking anywhere inside a pane (except on buttons that shift focus elsewhere) SHALL set it active.
-
-### R4: Sidebar selection targets active pane
-
-As a user, I want selecting a thread in the sidebar to load only in the active pane so that I control which pane changes.
-Acceptance Criteria:
-
--   WHEN I pick a thread from sidebar THEN only the active pane's ChatContainer SHALL load that thread's messages.
--   Other panes SHALL remain unchanged.
--   New chat initiation from sidebar ("New Chat") SHALL clear only the active pane and set it to empty thread state.
-
-### R5: Independent pane state
-
-As a user, I want each pane to maintain its own message history and thread id so switching panes doesn't overwrite others.
-Acceptance Criteria:
-
--   Each pane SHALL store its own current threadId and messageHistory.
--   Loading a thread in one pane SHALL NOT mutate other panes' state.
-
-### R6: Basic accessibility & keyboard
-
-As a keyboard user, I want to switch panes and identify active pane.
-Acceptance Criteria:
-
--   Each pane container SHALL have tabindex="0" enabling focus and focus style tied to active state.
--   Pressing ArrowLeft/ArrowRight while a pane is focused with multiple panes SHALL move active to adjacent pane.
-
-## 4. Non-Functional Requirements
-
--   Simplicity: Implementation SHALL avoid complex window manager classes; prefer an array of pane state objects in ChatPageShell.
--   Performance: Rendering up to 3 ChatContainers SHALL not introduce noticeable lag (re-use existing ChatContainer without changes beyond accepting independent props).
--   Maintainability: Code size minimal; no external dependencies added.
--   Safety: Guard array length (max 3) and ensure indices stable.
-
-## 5. Constraints & Assumptions
-
--   Pane layout: Equal width flex children (1 to 3) using existing CSS utilities.
--   No persistence to IndexedDB needed for pane layout.
--   ChatContainer already takes threadId & message history; we can reuse load logic per pane.
--   Future document editor panes will plug into same structure (placeholder not required now).
-
-## 6. Out of Scope
-
--   Drag resizing between panes.
--   Reordering panes via drag & drop.
--   Persisting active pane on reload.
--   Cross-pane synchronization beyond shared DB reads.
-
-## 7. Open Questions (deferred / simple defaults)
-
--   Tooltip vs disabled state at 3 panes: Default = disable button (aria-disabled) with tooltip "Max 3 windows".
--   Close button styling specifics: Use existing UButton icon small variant.
-
-## 8. Acceptance Test Matrix (Summary)
-
-| Req | Scenario                                     | Expected                        |
-| --- | -------------------------------------------- | ------------------------------- |
-| R1  | <3 panes click New                           | Pane count +1 (<=3), new active |
-| R1  | 3 panes click New                            | No change                       |
-| R2  | Close active pane                            | Pane removed, leftmost active   |
-| R3  | Click pane body                              | That pane active highlight      |
-| R4  | Sidebar select thread                        | Active pane thread updates only |
-| R5  | Switch panes after loading different threads | Each retains its messages       |
-| R6  | ArrowRight from pane 1                       | Pane 2 active                   |
-| R6  | ArrowLeft on leftmost                        | No change                       |
-````
-
-## File: planning/sidebar-search/design.md
-````markdown
-# design.md
-
-artifact_id: 0d4a4c41-9f7e-4e5b-9f38-a8b82825dd55
-
-## Overview
-
-Extend existing sidebar to support unified search across Threads, Projects, and Documents using a single reactive query. Reuse the lightweight Orama in-memory index pattern from `useThreadSearch` but with a merged schema. Provide graceful fallback to plain substring match.
-
-Keep it minimal: one new composable `useSidebarSearch(threadsRef, projectsRef, documentsRef)` returning filtered arrays. Integration: wire existing sidebar input v-model to the unified search query instead of only thread search.
-
-## Architecture
-
-```
-[Dexie liveQuery] -> reactive arrays (threads, projects, docs)
-        \        \        \
-         \        \        -> useSidebarSearch
-          \        -> builds Orama index (debounced) on size/clock change
-           -> returns {query, threadResults, projectResults, documentResults, ready, busy}
-Sidebar input v-model -> query -> debounced runSearch -> results feed UI filtering logic
-```
-
-### Mermaid
-
-```mermaid
-graph TD
-A[Dexie liveQuery threads] --> S[useSidebarSearch]
-B[Dexie liveQuery projects] --> S
-C[Dexie liveQuery documents] --> S
-Q[Search Input] --> S
-S --> T[Filtered Threads]
-S --> P[Filtered Projects]
-S --> D[Filtered Documents]
-```
-
-## Data & Index
-
-Schema (flat) used for index:
-
-```ts
-interface IndexDoc {
-    kind: 'thread' | 'project' | 'doc';
-    id: string; // original id
-    title: string; // thread.title | project.name | doc.title
-    updated_at: number; // for optional sorting tie-break
-    parentId?: string; // only for project entries referencing membership (not needed initially)
-}
-```
-
-Orama schema:
-
-```ts
-{ id: 'string', kind: 'string', title: 'string', updated_at: 'number' }
-```
-
-We only index top-level project names and standalone documents; threads already indexed but we merge all into one DB to reduce overhead (one search call). After search we partition results by kind into maps for quick membership filtering.
-
-## Composable API
-
-```ts
-export function useSidebarSearch(
-    threads: Ref<Thread[]>,
-    projects: Ref<ProjectWithData[]>,
-    documents: Ref<PostDoc[]>
-) {
-    return {
-        query: Ref<string>,
-        threadResults: Ref<Thread[]>,
-        projectResults: Ref<ProjectWithData[]>,
-        documentResults: Ref<PostDoc[]>,
-        ready: Ref<boolean>,
-        busy: Ref<boolean>,
-        runSearch: () => Promise<void>,
-        rebuild: () => Promise<void>,
-    };
-}
-```
-
-## Filtering Logic
-
--   Empty query: return original arrays unchanged (pass-through).
--   Non-empty: If index available -> Orama `search(term: raw, limit: 500)`.
--   Partition hits by kind -> sets of ids.
--   Threads list becomes only matching thread ids.
--   Projects list: include a project if (project.id in project hit set) OR project.data contains an entry with id in thread/doc match sets. Within each retained project, show only matching entries when query non-empty (UI will filter entries just-in-time with a computed).
--   Documents: subset of original documents whose ids appear in doc hit set.
--   If Orama search throws: fallback single pass substring (lowercase contains) across the three categories; sets computed identically.
-
-## Rebuild Trigger
-
-Use a simple numeric signature: `${threads.length}:${projects.length}:${documents.length}:${latestUpdatedAt}` tracked; if it changes -> rebuild index. Avoid rebuilding on every reactive mutation if counts/time unchanged.
-
-## State & Debounce
-
--   Debounce query changes at 120ms (matches existing thread search) for consistency.
--   Abort outdated searches via incrementing token (race protection like `lastQueryToken`).
-
-## Integration Steps (Minimal)
-
-1. Create new composable `useSidebarSearch.ts` placed alongside `useThreadSearch.ts`.
-2. Replace direct usage of `useThreadSearch` in `SideNavContent.vue` with `useSidebarSearch` (will still internally feed threads results; keep existing prop names minimal changes: use `displayThreads` computed referencing `threadResults`).
-3. Add computed wrappers to filter project entries when query active.
-4. Provide small placeholders for empty states.
-5. ESC key handler on input to clear `query` when not empty.
-
-## Error Handling
-
--   Wrap Orama import/build calls in try/catch -> on failure set `indexFailed` flag (optional) and fallback to substring.
--   Log warning once per session to avoid log spam.
-
-## Performance Notes
-
--   Single index reduces multiple search invocations.
--   Partitioning via simple loops; no nested loops > O(n).
--   Limit inclusive 500 results (safe over typical visible items; adjustable).
-
-## Testing Strategy (Lean)
-
-Unit tests (Vitest assumed):
-
-1. Empty query returns originals.
-2. Query matches thread + doc but not project name -> project retained because child matches.
-3. Query matches project name -> entire project retained; only entries filtered if some non-matching entries present.
-4. Fallback path invoked when mocked search throws.
-5. Clear query restores full arrays and expansion state not mutated by composable.
-   Performance test: create 1500 mixed docs, measure initial build + first search (<500ms in CI acceptable, target <300ms locally).
-
-## Estimated Size
-
-Composable ~140 LoC; sidebar integration diff <40 LoC.
-
-## Risks / Mitigations
-
--   Risk: Over-filtering project entries -> Mitigate by isolating filtering to computed in sidebar, preserving original project data.
--   Risk: Bundle size from Orama duplication -> Reuse dynamic import (tree-shaken) just like existing thread search.
--   Risk: Race conditions with liveQuery updates -> Use token guard and rebuild signature.
-
-## Simplifications
-
--   No fuzzy scoring weighting; rely on Orama default.
--   No multi-term highlighting.
--   No storing previous queries.
-````
-
-## File: planning/sidebar-search/requirements.md
-````markdown
-# requirements.md
-
-artifact_id: 3b0c9c4d-45f9-4c4d-9f3c-5f0e7d1c8d9f
-
-## Introduction
-
-Add lightweight, performant client-side search for Projects and Documents in the existing sidebar, reusing the approach used for threads (`useThreadSearch`). A single input should filter: (a) thread list, (b) project names, and (c) document titles (both standalone docs list and docs inside project trees). Must feel instant (<30ms perceived on 500 items) and gracefully fallback to substring match if the in-memory index lib fails.
-
-## Scope
-
-In-scope: local (browser) search only; no server calls; indexing name/title + basic metadata timestamp for ordering boost. Out-of-scope: full text content, fuzzy ranking beyond simple relevance, multi-field advanced UI.
-
-## Requirements
-
-### 1. Unified Sidebar Query
-
-As a user, I want one search box to filter threads, projects, and documents so I can quickly locate any item without switching modes.
-Acceptance Criteria:
-
--   WHEN user types in the existing sidebar input THEN threads, projects, and documents lists SHALL reflect filtered results in real time (debounced ≤150ms).
--   IF query is empty THEN all original lists SHALL display unchanged.
--   WHILE indexing is in progress THEN UI MAY show a subtle busy state (spinner or dim) but SHALL remain interactive.
-
-### 2. Project Filtering Behavior
-
-As a user, I want project tree display to collapse to only matching projects or those containing matching entries so noise is reduced.
-Acceptance Criteria:
-
--   WHEN query non-empty THEN only projects whose name matches OR that contain at least one matching entry (chat/doc) SHALL display.
--   WHEN a project contains matches THEN only its matching entries SHALL render (others hidden) unless query cleared.
--   IF no projects match THEN project section SHALL show an empty state label "No projects" (non-intrusive, small text).
-
-### 3. Documents List Filtering
-
-As a user, I want the documents section to show only documents whose title matches the query text.
-Acceptance Criteria:
-
--   WHEN query non-empty THEN documents list SHALL contain only matching document titles (case-insensitive substring or indexed hits).
--   IF no documents match THEN a small "No documents" placeholder SHALL appear.
-
-### 4. Performance & Fallback
-
-As a user, I need search to be fast and reliable even on large local datasets.
-Acceptance Criteria:
-
--   GIVEN up to 2000 combined items THEN first search response (cold index build) SHALL complete <300ms on mid-range laptop; subsequent queries <30ms average (excluding debounce).
--   IF index build or search throws THEN system SHALL fallback to simple lowercase substring filtering for all 3 domains in same pass.
--   Index rebuild SHALL only occur when counts or updated_at clocks change (no rebuild on harmless reactive churn).
-
-### 5. Minimal API & Maintainability
-
-As a developer, I want a concise composable mirroring existing `useThreadSearch` patterns for consistency.
-Acceptance Criteria:
-
--   A new `useSidebarSearch` composable SHALL expose: `{ query, threadResults, projectResults, documentResults, ready, busy, runSearch }`.
--   Composable SHALL internally reuse a generic create/build function with Orama (or substring fallback only if bundle size impact of adding more schema fields is trivial).
--   Added code SHALL not introduce more than ~250 LoC net (excluding tests/docs).
-
-### 6. Non-Destructive UI Changes
-
-As a user, I want existing behaviors unaffected when query is empty.
-Acceptance Criteria:
-
--   Clearing query SHALL fully restore prior expansion state of projects & full lists.
--   No existing rename / create / delete flows SHALL break (verified via smoke interaction after implementation).
-
-### 7. Accessibility
-
-As a user using keyboard, I want seamless focus and clear semantics.
-Acceptance Criteria:
-
--   Search input SHALL retain existing styling and have `aria-label="Search"`.
--   Clearing via ESC key SHALL empty query and restore lists.
-
-### 8. Testing & Verification
-
-As a developer, I want confidence the search works across core cases.
-Acceptance Criteria:
-
--   Unit tests SHALL cover: empty query, match multiple domains, project containing matches only, fallback path when index throws (mock failure), and clear query state restore.
--   Performance test (lightweight) SHALL assert index + first search under threshold with mocked dataset (timing assertions with generous ceiling to avoid flakes).
-````
 
 ## File: types/orama.d.ts
-````typescript
+```typescript
 declare module 'orama' {
     export function create(options: any): Promise<any> | any;
     export function insertMultiple(db: any, docs: any[]): Promise<void> | void;
@@ -6466,173 +5440,10 @@ declare module '@orama/orama' {
     export function insertMultiple(db: any, docs: any[]): Promise<void> | void;
     export function search(db: any, opts: any): Promise<any> | any;
 }
-````
-
-## File: .github/chatmodes/retro-agent.chatmode.md
-````markdown
----
-description: 'An agent for retro-styled chat applications.'
-tools: ['codebase', 'usages', 'think', 'problems', 'changes', 'terminalSelection', 'terminalLastCommand', 'openSimpleBrowser', 'fetch', 'findTestFiles', 'searchResults', 'githubRepo', 'runTests', 'runCommands', 'editFiles', 'search']
----
-
-# 🎛️ Updated System Prompt — Nuxt Retro App Engineer (tailored to your repo)
-
-You are a world-class Nuxt 3 engineer shipping a **retro-styled** chat app using **Nuxt 3 + Nuxt UI + Tailwind v4 + Dexie + Orama + OpenRouter/Vercel AI SDK patterns**. Default to **TypeScript**, SSR-safe code, and small, composable units. Honor the project’s existing architecture, theme system, and storage choices.
-
----
-
-## Important instructions
-- Answer the user's query exactly
-- Do not ask follow-up questions
-- Do not attempt to anticipate user needs
-- focus on simplicty and performance do not overengineer unless the user specifically requests it
-- Do not be lazy and skip things because they are hard. Sometimes the only thing to do is the hard thing.
-
----
-
-## Using Bun
-
-- **Bun**: Use Bun for everything. No Node.js, npm, or others. 
-
-## Tools
-- **Bun Only**: Use Bun for everything. No Node.js, npm, or others.
-  - Scripts: `bun run <script>`
-  - Install: `bun install`
-  - Build: `bun build <file.ts>`
-  - Run: `bun <file>`
-
-- **Bun Docs**: Check `node_modules/bun-types/docs/**.md` for help.
-
-## Core Directives (repo-aware)
-
--   **Styling & Theme**
-
-    -   **Use the existing theme classes** (`.light`, `.dark`, `*-high-contrast`, `*-medium-contrast`) that define **Material-like CSS variables**; never hardcode colors—use the mapped Nuxt UI tokens via `nuxt-ui-map.css`.
-    -   **Fonts**: `VT323` for body, `Press Start 2P` for headings. Maintain the **pixel look** (small radii, hard shadow).
-    -   **Buttons**: prefer the `retro-btn` class and **Nuxt UI** variants; sizes align to repo tokens: `sm: 32px`, `md: 40px`, `lg: 56px`.
-    -   **Do not add inline CSS** unless absolutely necessary; use Tailwind utilities and the existing token mapping.
-
--   **Nuxt UI**
-
-    -   Use **UButton, UInput, UCard, UForm** with **theme variants** defined in `app.config.ts`. If you need new variants, extend them **once** in `app.config.ts` (respect the `retro` look and sizes).
-    -   Keep “icon-only” buttons square and centered (see `.retro-btn.aspect-square`).
-
--   **State, Storage & Search**
-
-    -   **Persist** local app entities with **Dexie** in `or3-db` using the existing tables (`projects`, `threads`, `messages`, `kv`, `attachments`).
-    -   Use the **KV table** to store small app prefs (e.g., model favorites, OpenRouter key). Prefer helpers that already wrap `kv.set/get`.
-    -   **Search**: build client-side Orama indexes via dynamic imports; debounce queries (\~120ms), cap result limits (100–200).
-    -   Follow the repo’s **fallback substring search** if Orama is unavailable or errors, to avoid “empty results” UX.
-
--   **AI / OpenRouter auth**
-
-    -   **Do not expose provider secrets** in the client. Use the existing **OpenRouter PKCE flow**, storing the user key under `kv` as `openrouter_api_key`, and dispatch `openrouter:connected` to notify UI.
-    -   When building chat, **stream** responses; the client should call a **server route** if secrets are involved. If using user-provided OpenRouter keys, only pull from KV and never log them.
-
--   **Hooks system**
-
-    -   Use the provided **\$hooks** engine for extension points. Prefer `useHookEffect(name, fn, { kind, priority })` for registration and correct cleanup (unmount + HMR).
-
--   **Theme switching**
-
-    -   Use the **theme plugin** `nuxtApp.provide('theme', { set/toggle/get })`; don’t re-invent. Always switch **by class on `<html>`** (it’s already wired up).
-
--   **Performance**
-
-    -   Prefer **dynamic imports** for heavy providers (Orama) and optional screens.
-    -   Keep Orama indexes **per collection** (threads, model catalog) and **rebuild only on data length change** as in existing composables.
-    -   Avoid re-render storms: debounce user input; memoize id→entity maps for mapping hits.
-
--   **Accessibility**
-
-    -   Keep **role/aria** on resizers and icon buttons (see `ResizeHandle.vue`); preserve **focus outlines** and the retro focus ring.
-
-## Code Rules
-
-- **No Guesses**: Review files first to understand.
-- **Performance**: Think basics—cut waste, cache smart, scale well.
-- **Refactor**: Update old code to standards without breaking.
-- **Commits**: "[Type] Short note on changes."
-
-
-## Completing tasks
-- **Follow the plan**: If provided stick to the steps outlined in the planning documents.
-- **Use the provided files**: If there are files in the planning folder, use them as a reference for your implementation. This includes files like `requirements.md`, `tasks.md`, and `design.md`, but only if the user has provided them, or the tasks file.
-- **Cross of items as you go**: If there is a planning document with a tasks.md file that you are working from, please cross off items as you complete them. example location: `planning/cool-feature/tasks.md`
-
-
----
-
-## File-level Conventions to Follow
-
--   **Tailwind v4**: one `@import "tailwindcss"` in `assets/css/main.css`. Keep `@source "../../../app.config.ts"` so Tailwind sees theme overrides.
--   **Nuxt config**: modules `@nuxt/ui`, `@nuxt/fonts`; fonts list includes `Press Start 2P` and `VT323`. Add new fonts only via the same module to keep build consistent.
--   **App shell**: wrap pages in `<UApp>` and set **initial theme class** on `<html>` with `useHead`.
-
----
-
-## Required Components/Composables (repo-aligned)
-
--   **Search**
-
-    -   `useThreadSearch(threads)`: debounce 120ms, `limit: 200`, map hits via id→thread dictionary, fallback substring by `title`.
-    -   `useModelSearch(models)`: debounce 120ms, `limit: 100`, index `id/slug/name/description/modalities`, fallback substring.
-
--   **OpenRouter**
-
-    -   `useOpenRouterAuth.startLogin()` uses **PKCE** S256 when possible; stores verifier/method/state in `sessionStorage`; redirect to `openrouter-callback` page; **never** log tokens.
-    -   On callback, store key to `kv('openrouter_api_key')`, dispatch `openrouter:connected`, and clear session markers.
-
--   **Dexie**
-
-    -   Use `Or3DB` with the **existing store and index definitions**. Don’t add new DBs; version bump this one if schema changes.
-
----
-
-## Retro UX Requirements
-
--   **Buttons/cards** use **2px hard borders** and **2px offset shadows** (no blur).
--   **Focus**: `outline: 2px solid var(--md-primary)` with offset.
--   Respect the **scanline/CRT** vibe only if opt-in (no excessive motion).
--   Keep text sizes consistent with current base font (\~20px body).
-
----
-
-## Do/Don’t
-
--   ✅ **Use** Nuxt UI variants and tokens; extend in `app.config.ts`.
--   ✅ **Use** Orama dynamic imports and repo’s fallback search strategy.
--   ✅ **Use** KV for prefs and user-provided keys; fire the existing custom events.
--   ❌ **Don’t** introduce new styling systems, random CSS vars, or duplicate theme classes.
--   ❌ **Don’t** store secrets in `localStorage`; use `kv` and short-lived memory for session only.
--   ❌ **Don’t** bypass composables that already implement debouncing/indexing.
-
----
-
-## Acceptance Checklist (repo-specific)
-
--   [ ] New UI respects **`retro-btn`** and Nuxt UI token mapping.
--   [ ] Search features follow the **existing debounced + fallback** pattern.
--   [ ] Any AI call path complies with **OpenRouter PKCE flow** and KV storage.
--   [ ] No hard-coded colors—only the **mapped tokens**.
--   [ ] Dexie usage sticks to **`or3-db`** with versioned changes if needed.
--   [ ] No theme breakage when toggling `.light/.dark` or contrast modes.
-
----
-
-## Docs
-
-You will be provided with an .llms folder in the root directory of the project. This will contain llms.txt files from various sources such as Orama, and NuxtUI. It will help guide you to the right document page when you need to look up something from a library that you do not have enough information on.
-
-### You should never just wing it. If you are unsure of something look it up in the docs
-
-/.llms/nuxt.txt - This contains a guide for you on how to navigate the nuxt official documentation
-/.llms/orama.txt - This contains a guide for you on how to navigate the orama official documentation
-/.llms/nuxtui.txt - This contains a guide for you on how to navigate the nuxtui official documentation
-````
+```
 
 ## File: app/components/chat/MessageEditor.vue
-````vue
+```vue
 <template>
     <div class="relative min-h-[40px]">
         <EditorContent
@@ -6757,10 +5568,10 @@ watch(
     }
 }
 </style>
-````
+```
 
 ## File: app/components/sidebar/SideNavContentCollapsed.vue
-````vue
+```vue
 <template>
     <div class="flex flex-col justify-between h-full relative">
         <div class="px-1 pt-2 flex flex-col space-y-2">
@@ -6887,10 +5698,10 @@ function onNewChat() {
     console.log('New chat requested');
 }
 </script>
-````
+```
 
 ## File: app/db/documents.ts
-````typescript
+```typescript
 import { db } from './client';
 import { newId, nowSec } from './util';
 import { useHooks } from '../composables/useHooks';
@@ -7077,10 +5888,10 @@ export async function ensureDbOpen() {
 }
 
 export type { DocumentRecord as Document };
-````
+```
 
 ## File: app/db/files.ts
-````typescript
+```typescript
 import { db } from './client';
 import { useHooks } from '../composables/useHooks';
 import { parseOrThrow } from './util';
@@ -7267,10 +6078,10 @@ function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
         }
     } catch {}
 }
-````
+```
 
 ## File: app/db/index.ts
-````typescript
+```typescript
 import { db } from './client';
 import type {
     Attachment,
@@ -7438,107 +6249,10 @@ export type {
 };
 
 export type { Document } from './documents';
-````
-
-## File: planning/multi-window-chat/tasks.md
-````markdown
-# Multi-Window Chat Tasks
-
-artifact_id: 2f4d9bb4-a16d-4ad6-8ec5-4a0fbbe1bd5f
-
-(Keep to only 3 top-level tasks per instruction; subtasks kept minimal.)
-
-## 1. Refactor ChatPageShell state to support multiple panes
-
--   [x] 1.1 Introduce `PaneState` interface and `panes` ref array (init with one pane)
--   [x] 1.2 Replace single `threadId` / `messageHistory` with pane-specific fields
--   [x] 1.3 Extract existing `loadMessages` logic into `loadMessagesFor(threadId)` returning array
--   [x] 1.4 Implement `setPaneThread(index, threadId)` updating pane & loading messages
--   [x] 1.5 Add `activePaneIndex` ref + helper `setActive(i)`
--   [x] 1.6 Remove now-unused single-pane refs
-
-Requirements: R1, R4, R5
-
-## 2. UI & Interaction additions
-
--   [x] 2.1 Replace single ChatContainer with v-for over panes
--   [x] 2.2 Add pane wrapper div (flex child) with active styling (primary border) (R3)
--   [x] 2.3 Implement New Window button -> `addPane()` (disable at 3) (R1)
--   [x] 2.4 Add Close button per pane when panes.length > 1 (R2)
--   [x] 2.5 Implement keyboard navigation (ArrowLeft/ArrowRight) & focus via tabindex (R6)
--   [x] 2.6 Hook ChatContainer emitted thread-created event per index
--   [x] 2.7 Update sidebar handlers to target active pane only (R4)
-
-Requirements: R1, R2, R3, R4, R6
-
-## 3. Polish & Validation
-
--   [x] 3.1 Guard against >3 panes (R1)
--   [x] 3.2 Ensure closing active pane sets new active logically (R2)
--   [x] 3.3 Visual QA: borders, disabled New Window state, hover for close
--   [x] 3.4 Light manual test matrix execution (Section 11 of design)
--   [x] 3.5 Code cleanup & comments (simplicity mandate)
-
-Requirements: R1, R2, R3, R4, R5, R6
-
-## Completion Criteria
-
--   All acceptance criteria R1-R6 satisfied.
--   No console errors on typical interactions.
--   Changes confined to `ChatPageShell.vue` (plus minor type additions inline).
-````
-
-## File: planning/sidebar-search/tasks.md
-````markdown
-# tasks.md
-
-artifact_id: 5f6c46d2-420e-4b5b-9dbb-c014e9ceaf73
-
-## Task List (Max 3 Top-Level)
-
-### 1. Implement unified sidebar search composable
-
--   [x] 1.1 Create `app/composables/useSidebarSearch.ts` modeled after `useThreadSearch` (Req: 1,4,5)
--   [x] 1.2 Define index schema `{ id, kind, title, updated_at }` and build logic merging threads, projects, docs (Req:1,2,3,4)
--   [x] 1.3 Implement rebuild signature check to avoid unnecessary rebuilds (Req:4)
--   [x] 1.4 Implement debounced `runSearch` with token cancellation (Req:1,4,5)
--   [x] 1.5 Implement fallback substring path (single pass) if Orama import/search fails (Req:4)
--   [x] 1.6 Expose `{ query, threadResults, projectResults, documentResults, ready, busy }` (Req:5)
--   [ ] 1.7 Unit tests for logic (empty, match across kinds, fallback) (Req:8)
-
-### 2. Integrate composable into sidebar UI
-
--   [x] 2.1 Replace `useThreadSearch` usage in `SideNavContent.vue` with new composable (Req:1,6)
--   [x] 2.2 Bind existing search input `v-model` to unified `query` and add `aria-label="Search"` (Req:1,7)
--   [x] 2.3 Adjust `displayThreads` to use `threadResults` (Req:1)
--   [x] 2.4 Add computed to filter projects + their entries when query active (Req:2)
--   [x] 2.5 Add computed to filter documents list when query active (Req:3)
--   [x] 2.6 Insert empty state placeholders for projects/documents when no matches (Req:2,3)
--   [x] 2.7 ESC key handler to clear query if focused (Req:7)
--   [ ] 2.8 Verify create/rename/delete unaffected (manual smoke) (Req:6)
-
-### 3. Testing & Performance Verification
-
--   [ ] 3.1 Unit tests for project containment filtering (Req:2,3,8)
--   [ ] 3.2 Unit test clearing query restores originals (Req:6,8)
--   [ ] 3.3 Mock failure path to cover fallback branch (Req:4,8)
--   [ ] 3.4 Lightweight performance test with synthetic ~1500 items measuring build + first search under threshold (Req:4,8)
--   [ ] 3.5 Add brief README snippet or doc comment in composable explaining usage (Req:5)
-
-## Mapping Summary
-
--   Requirements 1: Tasks 1.1-1.6,2.1-2.5
--   Requirements 2: Tasks 1.2,2.4,3.1
--   Requirements 3: Tasks 1.2,2.5,2.6,3.1
--   Requirements 4: Tasks 1.2,1.3,1.4,1.5,3.3,3.4
--   Requirements 5: Tasks 1.1,1.4,1.6,3.5
--   Requirements 6: Tasks 2.1,2.8,3.2
--   Requirements 7: Tasks 2.2,2.7
--   Requirements 8: Tasks 1.7,3.1-3.4
-````
+```
 
 ## File: app/composables/useDocumentsList.ts
-````typescript
+```typescript
 import { ref } from 'vue';
 import { listDocuments, type Document } from '~/db/documents';
 import { useToast } from '#imports';
@@ -7580,10 +6294,10 @@ export function useDocumentsList(limit = 200) {
 
     return { docs, loading, error, refresh };
 }
-````
+```
 
 ## File: app/db/branching.ts
-````typescript
+```typescript
 import Dexie from 'dexie';
 import { db } from './client';
 import { newId, nowSec } from './util';
@@ -7802,10 +6516,10 @@ export async function buildContext({ threadId }: BuildContextParams) {
     });
     return combined;
 }
-````
+```
 
 ## File: app/components/documents/DocumentEditor.vue
-````vue
+```vue
 <template>
     <div
         class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
@@ -8052,10 +6766,10 @@ const statusText = computed(() => {
     font-weight: normal;
 }
 </style>
-````
+```
 
 ## File: app/db/client.ts
-````typescript
+```typescript
 import Dexie, { type Table } from 'dexie';
 import type {
     Attachment,
@@ -8195,10 +6909,10 @@ export class Or3DB extends Dexie {
 }
 
 export const db = new Or3DB();
-````
+```
 
 ## File: app/assets/css/main.css
-````css
+```css
 /* Tailwind v4: single import includes preflight + utilities */
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
@@ -8343,10 +7057,10 @@ html {
 .dark .prosemirror-host :where(.ProseMirror) strong {
 	color: var(--md-on-surface);
 }
-````
+```
 
 ## File: app/components/sidebar/SidebarProjectTree.vue
-````vue
+```vue
 <template>
     <div v-if="projects.length" class="space-y-1">
         <h4 class="text-xs uppercase tracking-wide opacity-70 px-1 select-none">
@@ -8572,10 +7286,10 @@ const ui = {
 </script>
 
 <style scoped></style>
-````
+```
 
 ## File: app/components/sidebar/SideBottomNav.vue
-````vue
+```vue
 <template>
     <div
         class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)]"
@@ -8826,10 +7540,10 @@ function navigateToCredits() {
     mix-blend-mode: soft-light;
 }
 </style>
-````
+```
 
 ## File: app/composables/useModelStore.ts
-````typescript
+```typescript
 import { kv } from '~/db';
 import modelsService, {
     type OpenRouterModel,
@@ -9131,10 +7845,10 @@ export function useModelStore() {
         lastLoadedAt,
     };
 }
-````
+```
 
 ## File: app/db/schema.ts
-````typescript
+```typescript
 import { z } from 'zod';
 import { newId } from './util';
 
@@ -9364,468 +8078,10 @@ export const FileMetaCreateSchema = FileMetaSchema.omit({
     clock: z.number().int().default(0),
 });
 export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
-````
-
-## File: docs/hooks.md
-````markdown
-# Hook/Action System for Nuxt
-
-A lightweight, type-safe hook engine for the Nuxt frontend. It lets components, composables, and plugins subscribe to events (actions) or transform data (filters) with predictable ordering and SSR/HMR safety.
-
--   Actions: fire-and-forget side effects (logging, analytics, UI updates)
--   Filters: transform values in a pipeline (value-in → value-out)
--   Priorities: lower runs earlier (default 10)
--   Wildcards: use `*` to match patterns, e.g. `ui.*:action:after`
-
-## Installation & Access
-
-The engine is provided globally by Nuxt plugins:
-
--   Client: singleton instance across HMR
--   Server (SSR): fresh instance per request
-
-Access anywhere:
-
-```ts
-import { useNuxtApp } from '#app';
-
-const hooks = useNuxtApp().$hooks;
-// or
-import { useHooks } from '~/app/composables/useHooks';
-const hooks2 = useHooks();
 ```
-
-In components, prefer the lifecycle-safe composable:
-
-```ts
-import { useHookEffect } from '~/app/composables/useHookEffect';
-
-useHookEffect('route.change:action:after', (_ctx, to, from) => {
-    console.log('navigated from', from, 'to', to);
-});
-```
-
-## API Overview
-
-Engine methods:
-
--   Filters
-    -   addFilter(name, fn, priority?, acceptedArgs?)
-    -   removeFilter(name, fn, priority?)
-    -   applyFilters(name, value, ...args) => Promise<Return>
-    -   applyFiltersSync(name, value, ...args)
--   Actions
-    -   addAction(name, fn, priority?, acceptedArgs?)
-    -   removeAction(name, fn, priority?)
-    -   doAction(name, ...args) => Promise<void>
-    -   doActionSync(name, ...args)
--   Utils
-    -   hasFilter(name?, fn?) => boolean|priority
-    -   hasAction(name?, fn?) => boolean|priority
-    -   removeAllCallbacks(priority?)
-    -   currentPriority() => number|false
--   Ergonomics
-    -   onceAction(name, fn, priority?)
-    -   on(name, fn, { kind: 'action'|'filter', priority }) → disposer
-    -   off(disposer)
-
-Types are exported from `app/utils/hooks`.
-
-## Hook Naming
-
-Use hierarchical strings with dots/colons to keep hooks descriptive:
-
--   `app.init:action:after`
--   `ui.form.submit:filter:input`
--   `route.change:action:before`
-
-Wildcards are supported with `*`, e.g. `ui.*:action:after`.
-
-## Examples
-
-### Subscribe to an action (component-safe)
-
-```ts
-// Track route changes
-useHookEffect('route.change:action:after', (_ctx, to, from) => {
-    console.log('navigated from', from, 'to', to);
-});
-```
-
-### Fire an action
-
-```ts
-const hooks = useHooks();
-await hooks.doAction('app.init:action:after', nuxtApp);
-```
-
-### Filter pipeline (async)
-
-```ts
-const hooks = useHooks();
-const sanitized = await hooks.applyFilters(
-    'ui.chat.message:filter:outgoing',
-    rawPayload,
-    { roomId }
-);
-```
-
-### Filter pipeline (sync)
-
-```ts
-const result = hooks.applyFiltersSync(
-    'ui.form.submit:filter:input',
-    initialValues
-);
-```
-
-### Wildcard subscription
-
-```ts
-const offAnyUiAfter = hooks.on(
-    'ui.*:action:after',
-    () => {
-        console.log('some UI after-action fired');
-    },
-    { kind: 'action', priority: 5 }
-);
-
-// Later
-hooks.off(offAnyUiAfter);
-```
-
-### Once-only action handler
-
-```ts
-hooks.onceAction('app.init:action:after', () => {
-    console.log('init completed');
-});
-```
-
-## Priorities
-
-Callbacks execute in ascending priority. For equal priorities, insertion order is preserved. Default priority is 10.
-
-```ts
-hooks.on('ui.form.submit:action:before', fnA, { kind: 'action', priority: 5 });
-hooks.on('ui.form.submit:action:before', fnB); // runs after fnA (priority 10)
-```
-
-## SSR and HMR Safety
-
--   Server: a new engine instance is created per request to avoid state leakage.
--   Client: a singleton engine is reused across HMR; component-level disposers prevent duplicate handlers.
--   `useHookEffect` automatically unregisters on component unmount and on module dispose during HMR.
-
-## Error Handling & Timing
-
-All callbacks are wrapped in try/catch. Errors are logged to the console and per-hook error counters are incremented. Basic timings are recorded:
-
-```ts
-const { timings, errors, callbacks } = hooks._diagnostics;
-console.log('timings for hook', timings['ui.form.submit:action:before']);
-console.log('error count for hook', errors['ui.form.submit:action:before']);
-console.log('total callbacks registered', callbacks());
-```
-
-## Recommendations
-
--   Keep hook names consistent and scoped (e.g., `ui.form.*`, `route.*`).
--   Use filters for transformations and actions for side effects.
--   Prefer `useHookEffect` inside components; use `hooks.on/off` in non-component modules.
--   Consider using wildcards for broad tracing during development.
-
-## Files
-
--   Engine: `app/utils/hooks.ts`
--   Plugins: `app/plugins/hooks.client.ts`, `app/plugins/hooks.server.ts`
--   Composables: `app/composables/useHooks.ts`, `app/composables/useHookEffect.ts`
--   Types: `types/nuxt.d.ts` adds `$hooks` to `NuxtApp`
-
----
-
-Future ideas:
-
--   Vue DevTools timeline integration
--   Inspector UI listing current callbacks
--   Debounced/throttled variants
--   Unit tests and benchmarks
-
-## DB integration hooks
-
-The app/db modules are instrumented with hooks at important lifecycle points. You can transform inputs with filters and observe mutations with actions.
-
-Entities covered: attachments, kv, projects, threads, messages, posts.
-Now also: file storage (files: meta + blobs), message file hash validation, and post content/meta management.
-New (branching): fork option filtering & branching cache invalidation.
-
-Common patterns:
-
--   Create
-    -   `db.{entity}.create:filter:input` — transform input prior to validation
-    -   `db.{entity}.create:action:before` — before persisting
-    -   `db.{entity}.create:action:after` — after persisting
--   Upsert
-    -   `db.{entity}.upsert:filter:input`
-    -   `db.{entity}.upsert:action:before`
-    -   `db.{entity}.upsert:action:after`
--   Delete
-    -   Soft: `db.{entity}.delete:action:soft:before|after`
-    -   Hard: `db.{entity}.delete:action:hard:before|after`
--   Get/Queries (output filters)
-    -   `db.{entity}.get:filter:output`
-    -   kv: `db.kv.getByName:filter:output`
-    -   threads: `db.threads.byProject:filter:output`, `db.threads.searchByTitle:filter:output`, `db.threads.children:filter:output`
-    -   messages: `db.messages.byThread:filter:output`, `db.messages.byStream:filter:output`
-    -   posts: `db.posts.get:filter:output`, `db.posts.all:filter:output`, `db.posts.search:filter:output`
--   Advanced operations
-    -   messages: `db.messages.append|move|copy|insertAfter|normalize:action:before|after`
-        -   threads: `db.threads.fork:action:before|after`, `db.threads.fork:filter:options` (modify branch creation options before execution)
-    -   files: `db.files.create:filter:input`, `db.files.create:action:before|after`, `db.files.refchange:action:after`, `db.files.delete:action:soft:before|after`
-    -   message file hashes: `db.messages.files.validate:filter:hashes` (array<string> → array<string>) for enforcing limits, dedupe, ordering, warnings
-    -   posts: (standard CRUD only) create/upsert/delete hooks plus query output filters
-        -   Create: `db.posts.create:filter:input`, `db.posts.create:action:before|after`
-        -   Upsert: `db.posts.upsert:filter:input`, `db.posts.upsert:action:before|after`
-        -   Delete: `db.posts.delete:action:soft:before|after`, `db.posts.delete:action:hard:before|after`
-        -   Queries: `db.posts.get:filter:output`, `db.posts.all:filter:output`, `db.posts.search:filter:output`
-        -   branching cache: (internal) cache invalidated on `db.threads.create:action:after`, `db.threads.upsert:action:after`, `db.threads.fork:action:after`, and thread delete actions.
-
-### Branching (Minimal) Hooks
-
-The simplified branching system exposes a small set of hooks so you can still observe or tweak behavior without the previous complexity.
-
-Hook names:
-
--   `branch.fork:filter:options` (filter) — Adjust `{ sourceThreadId, anchorMessageId, mode, titleOverride }` before a fork is created.
--   `branch.fork:action:before` / `branch.fork:action:after` — Observe fork lifecycle. `before` payload: `{ source, anchor, mode, options }`, `after` payload: `{ thread, anchor, mode, copied }`.
--   `branch.retry:filter:options` (filter) — Adjust `{ assistantMessageId, mode, titleOverride }` before a retry-based branch.
--   `branch.retry:action:before` / `branch.retry:action:after` — Retry lifecycle. `after` payload: `{ assistantMessageId, precedingUserId, newThreadId, mode }`.
--   `branch.context:filter:messages` (filter) — Transform the assembled message array for a branched thread (reference mode) before it is returned.
--   `branch.context:action:after` (action) — Inspect context assembly metrics `{ threadId, mode, ancestorCount, localCount, finalCount }`.
-
-Example: Force all branches to reference mode and tag titles.
-
-```ts
-useHookEffect(
-    'branch.fork:filter:options',
-    (opts) => ({
-        ...opts,
-        mode: 'reference',
-        titleOverride: (opts.titleOverride || 'Alt Path') + ' • ref',
-    }),
-    { kind: 'filter' }
-);
-```
-
-Example: Inject a system primer into branched context.
-
-```ts
-useHookEffect(
-    'branch.context:filter:messages',
-    (msgs, threadId, mode) => {
-        if (!Array.isArray(msgs) || mode !== 'reference') return msgs;
-        return [
-            {
-                id: 'sys_' + threadId,
-                role: 'system',
-                index: -1,
-                data: { content: 'Alternate branch context.' },
-            },
-            ...msgs,
-        ];
-    },
-    { kind: 'filter', priority: 15 }
-);
-```
-
-These replace all prior advanced branching / context hooks from the earlier design.
-
-You can also attach analytics or telemetry here without touching the branching logic.
-
-### Examples
-
-Redact fields from project reads:
-
-```ts
-useHookEffect(
-    'db.projects.get:filter:output',
-    (project) =>
-        project ? (({ secret, ...rest }) => rest)(project as any) : project,
-    { kind: 'filter' }
-);
-```
-
-Stamp updated_at on all message upserts:
-
-```ts
-useHookEffect(
-    'db.messages.upsert:filter:input',
-    (value) => ({ ...value, updated_at: Math.floor(Date.now() / 1000) }),
-    { kind: 'filter', priority: 5 }
-);
-```
-
-Track thread forks and clones:
-
-```ts
-useHookEffect('db.threads.fork:action:before', ({ source, fork }) => {
-    console.log('Forking thread', source.id, '→', fork.id);
-});
-useHookEffect('db.threads.fork:action:after', (fork) => {
-    console.log('Fork created', fork.id);
-});
-```
-
-Audit deletes (soft and hard):
-
-```ts
-useHookEffect('db.*.delete:action:soft:after', (entity) => {
-    console.log('Soft-deleted', entity?.id ?? entity);
-});
-useHookEffect('db.*.delete:action:hard:after', (id) => {
-    console.log('Hard-deleted id', id);
-});
-```
-
-Normalize and observe message index compaction:
-
-```ts
-useHookEffect('db.messages.normalize:action:before', ({ threadId }) => {
-    console.log('Normalizing indexes for thread', threadId);
-});
-
-// Enforce/inspect message file hash limits
-useHookEffect(
-    'db.messages.files.validate:filter:hashes',
-    (hashes) => {
-        // Example: log when truncated or enforce a stricter limit
-        const MAX = 6;
-        let next = hashes.slice(0, MAX);
-        if (hashes.length > MAX)
-            console.warn('Truncated file hashes', hashes.length, '→', MAX);
-        // Return transformed list
-        return next;
-    },
-    { kind: 'filter', priority: 10 }
-);
-
-// Observe file dedupe ref count changes
-useHookEffect('db.files.refchange:action:after', ({ before, after, delta }) => {
-    console.debug(
-        'File ref change',
-        before.hash,
-        'delta',
-        delta,
-        'now',
-        after.ref_count
-    );
-});
-
-// Mutate file meta before create (e.g., tag images)
-useHookEffect(
-    'db.files.create:filter:input',
-    (meta) => ({ ...meta, name: meta.name.trim() }),
-    { kind: 'filter' }
-);
-
-// Normalize or inject default post title / meta prior to creation
-useHookEffect(
-    'db.posts.create:filter:input',
-    (post) => ({
-        ...post,
-        title: (post.title || 'Untitled Post').trim(),
-        // If meta provided as object, ensure a specific key exists
-        meta:
-            typeof post.meta === 'string'
-                ? post.meta
-                : JSON.stringify({ ...(post.meta || {}), source: 'hook' }),
-    }),
-    { kind: 'filter', priority: 8 }
-);
-```
-
-Note: Query output filters run after the underlying Dexie query resolves, allowing you to reshape or sanitize results before they’re returned to callers.
-
-## AI chat hooks
-
-The `useChat` composable is instrumented so you can shape the chat flow without forking the code.
-
-Hook names:
-
--   Outgoing user text
-    -   `ui.chat.message:filter:outgoing` — sanitize/augment the user input
--   Model & input overrides
-    -   `ai.chat.model:filter:select` — select/override model id (default `openai/gpt-4`)
-    -   `ai.chat.messages:filter:input` — modify message array sent to the model
--   Send lifecycle
-    -   `ai.chat.send:action:before` — before streaming starts
-    -   `ai.chat.stream:action:delta` — for each streamed text delta
-    -   `ui.chat.message:filter:incoming` — transform the final assistant text
-    -   `ai.chat.send:action:after` — after full response is appended
--   Errors
-    -   `ai.chat.error:action` — on exceptions during send/stream
-    -   Retry
-        -   `ai.chat.retry:action:before` — before a retry removes original messages (payload: `{ threadId, originalUserId, originalAssistantId?, triggeredBy: 'user'|'assistant' }`)
-        -   `ai.chat.retry:action:after` — after new user + assistant messages are appended (payload: `{ threadId, originalUserId, originalAssistantId?, newUserId?, newAssistantId? }`)
-
-Examples:
-
-Override the model:
-
-```ts
-useHookEffect('ai.chat.model:filter:select', () => 'openai/gpt-4o-mini', {
-    kind: 'filter',
-});
-```
-
-Trim outgoing user text and collapse whitespace:
-
-```ts
-useHookEffect(
-    'ui.chat.message:filter:outgoing',
-    (text) => text.trim().replace(/\s+/g, ' '),
-    { kind: 'filter' }
-);
-```
-
-Inspect streaming deltas for live UI effects:
-
-```ts
-useHookEffect('ai.chat.stream:action:delta', (delta) => {
-    // e.g., update a typing indicator or progress UI
-    console.debug('delta:', delta);
-});
-```
-
-Post-process the assistant response:
-
-```ts
-useHookEffect(
-    'ui.chat.message:filter:incoming',
-    (text) => text.replaceAll('\n\n', '\n'),
-    { kind: 'filter' }
-);
-```
-
-Capture errors for telemetry:
-
-```ts
-useHookEffect('ai.chat.error:action', (err) => {
-    console.error('Chat error', err);
-});
-
-// Observe retry lifecycle
-useHookEffect('ai.chat.retry:action:before', ({ threadId, triggeredBy }) => {
-    console.debug('[retry before]', threadId, 'triggeredBy', triggeredBy);
-});
-useHookEffect('ai.chat.retry:action:after', (info) => {
-    console.debug('[retry after]', info);
-});
-```
-````
 
 ## File: package.json
-````json
+```json
 {
     "name": "nuxt-app",
     "type": "module",
@@ -9846,6 +8102,7 @@ useHookEffect('ai.chat.retry:action:after', (info) => {
         "@tiptap/starter-kit": "^3.3.0",
         "@tiptap/vue-3": "^3.3.0",
         "@types/spark-md5": "^3.0.5",
+        "@vueuse/core": "^13.7.0",
         "ai": "^5.0.17",
         "dexie": "^4.0.11",
         "gpt-tokenizer": "^3.0.1",
@@ -9866,10 +8123,10 @@ useHookEffect('ai.chat.retry:action:after', (info) => {
         "@tailwindcss/typography": "^0.5.16"
     }
 }
-````
+```
 
 ## File: app/components/sidebar/SidebarDocumentsList.vue
-````vue
+```vue
 <template>
     <div class="mt-4">
         <div class="flex items-center justify-between px-1 mb-1">
@@ -9974,290 +8231,10 @@ function formatTime(ts: number) {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 </script>
-````
-
-## File: task.md
-````markdown
-# Chat stabilization tasks
-
-A concise, checkable plan to make chat behavior correct, reactive, and performant. I’ll check items off as we complete them.
-
-Legend: [ ] todo, [x] done, [~] optional
-
-## 0) Current progress snapshot
-
--   [x] ChatContainer re-initializes useChat when threadId changes (watch + shallowRef)
-    -   File: `app/components/chat/ChatContainer.vue`
-    -   Status: Implemented
--   [ ] All other tasks pending
-
----
-
-## 1) Fix thread selection event mismatch (critical)
-
-Goal: Ensure clicking a thread in the sidebar updates the page `threadId`.
-
--   Files:
-    -   `app/pages/chat.vue`
-    -   `app/components/sidebar/SideNavContent.vue`
-
-Tasks:
-
--   [ ] Standardize the event name between child and parent.
-    -   Minimal fix: In `chat.vue`, listen to the existing camelCase event.
-        -   Change: `<sidebar-side-nav-content @chatSelected="onChatSelected" />`
-    -   [x] Minimal fix applied: `chat.vue` now listens for `@chatSelected`.
-    -   [~] Alternative: Switch to kebab-case consistently (child emits `'chat-selected'`, parent listens `@chat-selected`). Choose one and apply to both files.
-
-Acceptance:
-
--   [x] Clicking a sidebar item calls `onChatSelected` and sets `threadId`.
-
----
-
-## 2) Keep ChatContainer messages in sync on thread and history changes
-
-Goal: No stale/empty messages after switching threads or after async history load.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [x] Also react to `props.messageHistory` changes (implemented):
-    -   Used the direct-assignment approach in `ChatContainer.vue`:
-        -   `chat.value.messages.value = [...(props.messageHistory || [])]`
-    -   (Alternative re-init approach is still valid if you prefer.)
--   [ ] Remove reliance on parent `:key` remount (optional) once the above sync is in place.
-
-Acceptance:
-
--   [x] Switching threads updates the list immediately.
--   [x] Messages do not flicker or show stale content.
-
----
-
-## 3) Propagate new thread id created on first send
-
-Goal: When sending a first message without a selected thread, a new thread is created and the page learns its id.
-
--   Files:
-    -   `app/composables/useAi.ts`
-    -   `app/components/chat/ChatContainer.vue`
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [x] In `useAi.ts`, make `threadId` reactive:
-    -   Use `const threadIdRef = ref(threadId)`; update `threadIdRef.value` when creating a thread.
-    -   Return `threadId: threadIdRef` from `useChat`.
--   [x] In `ChatContainer.vue`:
-    -   Watch the returned `chat.value.threadId` and emit upward when it transitions from falsy to a real id, e.g., `emit('thread-selected', id)`.
--   [x] In `chat.vue`:
-    -   Listen for `@thread-selected` from `ChatContainer` and set page-level `threadId`.
-
-Acceptance:
-
--   [x] Sending the first message when no thread is selected creates a thread and binds the UI to it.
-
----
-
-## 4) Use stable keys for message rendering
-
-Goal: Avoid DOM reuse glitches and ensure predictable rendering.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [ ] Update `v-for` key to a stable identifier:
-    -   Prefer DB `message.id`.
-    -   Fallback: `message.stream_id` for streaming assistant placeholders.
-    -   As a last resort: a composite key such as `${index}-${message.role}` only if no ids exist yet (not ideal for long-term).
-
-Acceptance:
-
--   [ ] No warning about duplicate/unstable keys; UI remains stable during updates and streaming.
-
----
-
-## 5) Improve Dexie query performance and ordering
-
-Goal: Efficiently fetch ordered messages per thread without client-side resort.
-
--   Files:
-    -   `app/db/client.ts` (Dexie schema; add an index)
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [x] Add a compound index to messages: `[thread_id+index]`.
--   [x] Query ordered messages via the compound index:
-    -   Replace `.where('thread_id').equals(id).sortBy('index')` with
-        `.where('[thread_id+index]').between([id, Dexie.minKey], [id, Dexie.maxKey]).toArray()`.
--   [x] Remove extra JS sorting when possible.
-
-Acceptance:
-
--   [x] Message fetch is ordered and fast on large datasets.
-
----
-
-## 6) Wire up "New Chat" button
-
-Goal: Create a new thread and select it immediately.
-
--   Files:
-    -   `app/components/sidebar/SideNavContent.vue`
-    -   `app/pages/chat.vue`
-
-Tasks:
-
--   [ ] Implement click handler on New Chat:
-    -   Create a thread via `create.thread({ title: 'New Thread', ... })`.
-    -   Emit upward the new id (`emit('chatSelected', newId)` or kebab-case version).
--   [ ] Parent `chat.vue` sets `threadId` in `onChatSelected` and fetches messages.
-
-Acceptance:
-
--   [ ] Clicking New Chat opens an empty conversation bound to the new thread id.
-
----
-
-## 7) Streaming write optimization (optional but recommended)
-
-Goal: Reduce write amplification during assistant streaming while remaining correct.
-
--   File: `app/composables/useAi.ts`
-
-Tasks:
-
--   [x] Throttle `upsert.message` during streaming (e.g., 50–150ms) and ensure a final upsert at end.
--   [x] Keep hooks (`ai.chat.stream:action:delta`) intact.
-
-Acceptance:
-
--   [x] Noticeably fewer writes during long responses without losing final content.
-
----
-
-## 8) Loading UX and input state
-
-Goal: Visual feedback and prevent duplicate sends while streaming.
-
--   File: `app/components/chat/ChatContainer.vue`
-
-Tasks:
-
--   [x] Bind `loading` to disable send UI or show a subtle spinner/typing indicator.
--   [x] Guard `onSend` to no-op while `loading` is true.
-
-Acceptance:
-
--   [x] Input disabled/indicates streaming; no duplicate sends mid-stream.
-
----
-
-## 9) Delete semantics consistency (soft vs hard)
-
-Goal: Predictable UX for delete vs trash.
-
--   Files:
-    -   `app/components/sidebar/SideNavContent.vue`
-    -   `app/db/index.ts` (only if changing which API is used)
-
-Tasks:
-
--   [ ] Choose a policy:
-    -   Soft delete: Use `del.soft.thread(id)` and filter out `deleted` in lists (current UI already filters).
-    -   Hard delete: Keep current hard delete but adjust copy to warn it’s permanent and ensure no other code expects soft-deleted items.
--   [ ] Apply consistently in menu actions and list queries.
-
-Acceptance:
-
--   [ ] Delete behavior matches the chosen policy across UI and data layer.
-
----
-
-## 10) Minor schema and docs polish (optional)
-
-Goal: Align expectations and reduce surprises.
-
--   Files:
-    -   `app/composables/useAi.ts` (model default consistency with docs)
-    -   `app/db/schema.ts` (only if relaxing URL constraints for attachments)
-
-Tasks:
-
--   [~] Align default model id with docs or update docs to reflect `'openai/gpt-oss-120b'`.
--   [~] If needed, relax `AttachmentSchema.url` to allow `blob:`/`data:`/relative URLs, or validate upstream.
-
-Acceptance:
-
--   [ ] Docs and defaults align; attachment storage behavior is intentional.
-
----
-
-## File-by-file quick reference
-
--   `app/pages/chat.vue`
-
-    -   [ ] Fix event listener name (`@chatSelected` or kebab-case strategy)
-    -   [ ] Optional: remove `:key` remount after child sync is robust
-    -   [ ] Switch to compound-index query once available
-
--   `app/components/sidebar/SideNavContent.vue`
-
-    -   [ ] Event name consistency with parent
-    -   [ ] Implement New Chat creation and emit id
-    -   [ ] Decide and apply delete policy (soft vs hard)
-
--   `app/components/chat/ChatContainer.vue`
-
-    -   [x] Re-init `useChat` on `threadId` change (done)
-    -   [ ] Sync messages on `messageHistory` change
-    -   [ ] Stable `v-for` keys (prefer `message.id`)
-    -   [ ] Use `loading` to disable input / show indicator
-    -   [ ] Emit upward when thread id is created by `useChat`
-
--   `app/composables/useAi.ts`
-
-    -   [ ] Return reactive `threadId` (ref)
-    -   [ ] Throttle streaming upserts (optional)
-    -   [~] Model default/docs alignment
-
--   `app/db/client.ts`
-
-    -   [ ] Add `[thread_id+index]` index for messages
-
--   `app/db/index.ts`
-
-    -   [ ] No code change required unless delete policy changes (then switch to soft/hard helpers accordingly)
-
--   `app/db/schema.ts`
-    -   [~] Optional: relax `AttachmentSchema.url` if non-absolute URLs are used
-
----
-
-## Acceptance checklist (end-to-end)
-
--   [ ] Clicking a thread selects it and loads messages quickly
--   [ ] New Chat creates and selects a new thread with empty history
--   [ ] Switching threads shows the correct messages without flicker
--   [ ] First send without a thread creates one and binds the UI to it
--   [ ] Streaming is smooth; input disabled; minimal DB writes
--   [ ] Delete behavior matches chosen policy consistently
--   [ ] No console errors; keys stable; queries efficient
-
----
-
-Notes:
-
--   Prefer minimal-diff fixes first (event name, message sync) to restore core functionality, then ship performance and UX improvements.
--   If you want me to start executing, I’ll begin with Section 1 and 2 and validate the flow live.
-````
+```
 
 ## File: app/components/modal/SettingsModal.vue
-````vue
+```vue
 <template>
     <UModal
         v-model:open="open"
@@ -10514,10 +8491,132 @@ function formatPerMillion(raw: unknown, currency = 'USD') {
     }
 }
 </script>
-````
+```
+
+## File: app/app.config.ts
+```typescript
+export default defineAppConfig({
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
+        },
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--tw-border-style)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--tw-border-style)] ',
+                header: 'border-0',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
+    },
+});
+```
 
 ## File: app/components/ResizableSidebarLayout.vue
-````vue
+```vue
 <template>
     <div
         class="relative w-full h-screen border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
@@ -10935,10 +9034,10 @@ aside > *:not(.resize-handle-layer) {
     z-index: 1;
 }
 </style>
-````
+```
 
 ## File: app/composables/useAi.ts
-````typescript
+```typescript
 import { ref, computed } from 'vue';
 import { streamText } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
@@ -11355,132 +9454,10 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
         threadId: threadIdRef,
     };
 }
-````
-
-## File: app/app.config.ts
-````typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--tw-border-style)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--tw-border-style)] ',
-                header: 'border-0',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                color: {
-                    'inverse-primary':
-                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
-    },
-});
-````
+```
 
 ## File: app/components/chat/ChatPageShell.vue
-````vue
+```vue
 <template>
     <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
@@ -12134,10 +10111,10 @@ body {
     }
 }
 </style>
-````
+```
 
 ## File: app/components/chat/ChatMessage.vue
-````vue
+```vue
 <template>
     <div
         :class="outerClass"
@@ -12503,10 +10480,10 @@ async function onBranch() {
 </script>
 
 <style scoped></style>
-````
+```
 
 ## File: app/components/chat/ChatInputDropper.vue
-````vue
+```vue
 <template>
     <div
         @dragover.prevent="onDragOver"
@@ -13183,10 +11160,10 @@ textarea::-webkit-scrollbar-thumb:hover {
     font-weight: normal;
 }
 </style>
-````
+```
 
 ## File: app/components/chat/ChatContainer.vue
-````vue
+```vue
 <template>
     <main
         ref="containerRoot"
@@ -13745,10 +11722,10 @@ function onEdited(payload: { id: string; content: string }) {
 <style>
 /* Optional custom styles placeholder */
 </style>
-````
+```
 
 ## File: app/components/sidebar/SideNavContent.vue
-````vue
+```vue
 <template>
     <div class="flex flex-col h-full relative">
         <div class="px-2 pt-2 flex flex-col space-y-2">
@@ -15139,4 +13116,4 @@ async function submitCreateDocument() {
     }
 }
 </script>
-````
+```
