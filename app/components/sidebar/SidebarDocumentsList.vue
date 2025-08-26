@@ -14,12 +14,15 @@
             </UTooltip>
         </div>
         <div v-if="loading" class="text-xs opacity-60 px-1 py-2">Loading…</div>
-        <div v-else-if="docs.length === 0" class="text-xs opacity-60 px-1 py-2">
+        <div
+            v-else-if="effectiveDocs.length === 0"
+            class="text-xs opacity-60 px-1 py-2"
+        >
             No documents
         </div>
         <div v-else class="space-y-2">
             <RetroGlassBtn
-                v-for="d in docs"
+                v-for="d in effectiveDocs"
                 :key="d.id"
                 class="w-full flex items-center justify-between text-left"
                 :class="{
@@ -82,7 +85,7 @@
 <script setup lang="ts">
 import { useDocumentsList } from '~/composables/useDocumentsList';
 import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-const props = defineProps<{ activeDocument?: string }>();
+const props = defineProps<{ activeDocument?: string; externalDocs?: any[] }>();
 const emit = defineEmits<{
     (e: 'select', id: string): void;
     (e: 'new-document'): void;
@@ -91,6 +94,9 @@ const emit = defineEmits<{
     (e: 'rename-document', doc: any): void;
 }>();
 const { docs, loading } = useDocumentsList(200);
+const effectiveDocs = computed(() =>
+    Array.isArray(props.externalDocs) ? props.externalDocs : docs.value
+);
 function formatTime(ts: number) {
     const d = new Date(ts * 1000);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });

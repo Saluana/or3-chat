@@ -32,17 +32,17 @@
             </div>
             <div class="relative w-full ml-[1px]">
                 <UInput
-                    v-model="threadSearchQuery"
+                    v-model="sidebarQuery"
                     icon="pixelarticons:search"
                     size="md"
-                    :ui="{
-                        leadingIcon: 'h-[20px] w-[20px]',
-                    }"
+                    :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
                     variant="outline"
-                    placeholder="Search threads..."
+                    placeholder="Search..."
+                    aria-label="Search"
                     class="w-full"
+                    @keydown.escape.prevent.stop="onEscapeClear"
                 >
-                    <template v-if="threadSearchQuery.length > 0" #trailing>
+                    <template v-if="sidebarQuery.length > 0" #trailing>
                         <UButton
                             color="neutral"
                             variant="subtle"
@@ -50,9 +50,10 @@
                             class="flex items-center justify-center p-0"
                             icon="pixelarticons:close-box"
                             aria-label="Clear input"
-                            @click="threadSearchQuery = ''"
-                        /> </template
-                ></UInput>
+                            @click="sidebarQuery = ''"
+                        />
+                    </template>
+                </UInput>
             </div>
 
             <div
@@ -87,7 +88,7 @@
         >
             <SidebarProjectTree
                 v-if="activeSections.projects"
-                :projects="projects"
+                :projects="displayProjects"
                 v-model:expanded="expandedProjects"
                 @chatSelected="(id: string) => emit('chatSelected', id)"
                 @documentSelected="(id: string) => emit('documentSelected', id)"
@@ -274,6 +275,7 @@
             <SidebarDocumentsList
                 v-if="activeSections.docs"
                 class="mt-4"
+                :external-docs="displayDocuments"
                 @select="(id:string) => emit('documentSelected', id)"
                 @new-document="openCreateDocumentModal"
                 @add-to-project="(d:any) => openAddDocumentToProject(d)"
@@ -643,12 +645,47 @@ const scrollAreaRef = ref<HTMLElement | null>(null);
 const bottomNavRef = ref<HTMLElement | null>(null);
 // Dynamic bottom padding to avoid content hidden under absolute bottom nav
 const bottomPad = ref(140); // fallback
-import { useThreadSearch } from '~/composables/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
+import { useSidebarSearch } from '~/composables/useSidebarSearch';
+// Documents live query (docs only) to feed search
+const docs = ref<any[]>([]);
+let subDocs: { unsubscribe: () => void } | null = null;
+
+const {
+    query: sidebarQuery,
+    threadResults,
+    projectResults,
+    documentResults,
+} = useSidebarSearch(items as any, projects as any, docs as any);
+
 const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+    sidebarQuery.value.trim() ? threadResults.value : items.value
 );
+// Filter projects + entries when query active
+const displayProjects = computed(() => {
+    if (!sidebarQuery.value.trim()) return projects.value;
+    const threadSet = new Set(threadResults.value.map((t: any) => t.id));
+    const docSet = new Set(documentResults.value.map((d: any) => d.id));
+    const directProjectSet = new Set(
+        projectResults.value.map((p: any) => p.id)
+    );
+    return projects.value
+        .map((p: any) => {
+            const filteredEntries = (p.data || []).filter(
+                (e: any) => e && (threadSet.has(e.id) || docSet.has(e.id))
+            );
+            const include =
+                directProjectSet.has(p.id) || filteredEntries.length > 0;
+            if (!include) return null;
+            return { ...p, data: filteredEntries };
+        })
+        .filter(Boolean);
+});
+const displayDocuments = computed(() =>
+    sidebarQuery.value.trim() ? documentResults.value : undefined
+);
+function onEscapeClear() {
+    if (sidebarQuery.value) sidebarQuery.value = '';
+}
 let sub: { unsubscribe: () => void } | null = null;
 let subProjects: { unsubscribe: () => void } | null = null;
 
@@ -709,6 +746,19 @@ onMounted(async () => {
         },
         error: (err) => console.error('projects liveQuery error', err),
     });
+    // Documents subscription (docs only, excluding deleted)
+    subDocs = liveQuery(() =>
+        db.posts
+            .where('postType')
+            .equals('doc')
+            .and((r) => !(r as any).deleted)
+            .toArray()
+    ).subscribe({
+        next: (res) => {
+            docs.value = res.map((d: any) => ({ ...d }));
+        },
+        error: (err) => console.error('documents liveQuery error', err),
+    });
     // Lazy import virtua only if needed initially
     if (useVirtualization.value) {
         const mod = await import('virtua/vue');
@@ -740,6 +790,7 @@ watch([projects, expandedProjects], () => {
 onUnmounted(() => {
     sub?.unsubscribe();
     subProjects?.unsubscribe();
+    subDocs?.unsubscribe();
     const mh = (onUnmounted as any)._measureHandler;
     if (mh) window.removeEventListener('resize', mh);
 });
