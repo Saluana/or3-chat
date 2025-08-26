@@ -9,7 +9,7 @@
                 >
                 <UTooltip :delay-duration="0" text="Create project">
                     <UButton
-                        color="secondary"
+                        color="inverse-primary"
                         class="ml-2 flex items-center justify-center backdrop-blur-2xl"
                         icon="pixelarticons:folder-plus"
                         :ui="{
@@ -30,9 +30,7 @@
                     />
                 </UTooltip>
             </div>
-            <div
-                class="relative w-full ml-[1px] border-b-3 border-primary/50 pb-3"
-            >
+            <div class="relative w-full ml-[1px]">
                 <UInput
                     v-model="threadSearchQuery"
                     icon="pixelarticons:search"
@@ -56,6 +54,30 @@
                         /> </template
                 ></UInput>
             </div>
+
+            <div
+                class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
+                role="group"
+                aria-label="Sidebar sections"
+            >
+                <UButton
+                    v-for="seg in sectionToggles"
+                    :key="seg.value"
+                    size="sm"
+                    :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
+                    :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
+                    class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
+                    :class="
+                        activeSections[seg.value]
+                            ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
+                            : 'opacity-70 hover:bg-primary/15'
+                    "
+                    :aria-pressed="activeSections[seg.value]"
+                    @click="toggleSection(seg.value)"
+                >
+                    {{ seg.label }}
+                </UButton>
+            </div>
         </div>
         <!-- Scrollable content: projects + (virtualized) threads -->
         <div
@@ -64,6 +86,7 @@
             :style="{ paddingBottom: bottomPad + 'px' }"
         >
             <SidebarProjectTree
+                v-if="activeSections.projects"
                 :projects="projects"
                 v-model:expanded="expandedProjects"
                 @chatSelected="(id: string) => emit('chatSelected', id)"
@@ -74,7 +97,7 @@
                 @renameEntry="openRename"
                 @removeFromProject="handleRemoveFromProject"
             />
-            <div v-if="displayThreads.length > 0">
+            <div v-if="activeSections.chats && displayThreads.length > 0">
                 <h4
                     class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
                 >
@@ -248,6 +271,7 @@
             </div>
             <!-- Documents list -->
             <SidebarDocumentsList
+                v-if="activeSections.docs"
                 class="mt-4"
                 @select="(id:string) => emit('documentSelected', id)"
                 @new-document="openCreateDocumentModal"
@@ -583,6 +607,22 @@ import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpe
 // NOTE: Only load virtua when we actually need virtualization (perf + less layout jank)
 import { shallowRef } from 'vue';
 const VListComp = shallowRef<any | null>(null);
+
+// Section visibility (multi-select) defaults to all on
+const activeSections = ref<{
+    projects: boolean;
+    chats: boolean;
+    docs: boolean;
+}>({ projects: true, chats: true, docs: true });
+const sectionToggles = [
+    { label: 'Proj', value: 'projects' as const },
+    { label: 'Chats', value: 'chats' as const },
+    { label: 'Docs', value: 'docs' as const },
+];
+function toggleSection(v: 'projects' | 'chats' | 'docs') {
+    const next = { ...activeSections.value, [v]: !activeSections.value[v] };
+    activeSections.value = next;
+}
 
 const props = defineProps<{
     activeThread?: string;

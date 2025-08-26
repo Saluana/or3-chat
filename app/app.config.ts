@@ -33,6 +33,10 @@ export default defineAppConfig({
                 variant: {
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
                 },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                },
                 // Override size variant so padding wins over defaults
                 size: {
                     xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
