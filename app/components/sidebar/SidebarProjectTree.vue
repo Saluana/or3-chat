@@ -11,82 +11,113 @@
             :ui="ui"
         >
             <template #item-trailing="{ item, level }">
-                <UPopover
-                    :content="{ side: 'right', align: 'start', sideOffset: 6 }"
-                >
-                    <span
-                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                        @click.stop
-                        :aria-label="
-                            level === 0 ? 'Project actions' : 'Entry actions'
-                        "
-                    >
-                        <UIcon
-                            name="pixelarticons:more-vertical"
-                            class="w-4 h-4 opacity-70"
-                        />
-                    </span>
-                    <template #content>
-                        <div class="p-1 w-48 space-y-1">
-                            <template v-if="level === 0">
-                                <UButton
-                                    color="neutral"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-pencil"
-                                    @click.stop.prevent="
-                                        emit('renameProject', item.value)
-                                    "
-                                    >Rename Project</UButton
-                                >
-                                <UButton
-                                    color="error"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-trash-2"
-                                    @click.stop.prevent="
-                                        emit('deleteProject', item.value)
-                                    "
-                                    >Delete Project</UButton
-                                >
-                            </template>
-                            <template v-else>
-                                <UButton
-                                    color="neutral"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-pencil"
-                                    @click.stop.prevent="
-                                        emit('renameEntry', {
-                                            projectId: item.parentId,
-                                            entryId: item.value,
-                                            kind: item.kind,
-                                        })
-                                    "
-                                    >Rename</UButton
-                                >
-                                <UButton
-                                    color="error"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full justify-start"
-                                    icon="i-lucide-x"
-                                    @click.stop.prevent="
-                                        emit('removeFromProject', {
-                                            projectId: item.parentId,
-                                            entryId: item.value,
-                                            kind: item.kind,
-                                        })
-                                    "
-                                    >Remove from Project</UButton
-                                >
-                            </template>
-                        </div>
+                <div class="flex items-center gap-1">
+                    <!-- Root-level quick add buttons (appear on hover) -->
+                    <template v-if="level === 0">
+                        <button
+                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addChat', item.value)"
+                            aria-label="Add chat to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:message-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                        <button
+                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addDocument', item.value)"
+                            aria-label="Add document to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:note-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
                     </template>
-                </UPopover>
+                    <UPopover
+                        :content="{
+                            side: 'right',
+                            align: 'start',
+                            sideOffset: 6,
+                        }"
+                    >
+                        <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop
+                            :aria-label="
+                                level === 0
+                                    ? 'Project actions'
+                                    : 'Entry actions'
+                            "
+                        >
+                            <UIcon
+                                name="pixelarticons:more-vertical"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </span>
+                        <template #content>
+                            <div class="p-1 w-48 space-y-1">
+                                <template v-if="level === 0">
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-pencil"
+                                        @click.stop.prevent="
+                                            emit('renameProject', item.value)
+                                        "
+                                        >Rename Project</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-trash-2"
+                                        @click.stop.prevent="
+                                            emit('deleteProject', item.value)
+                                        "
+                                        >Delete Project</UButton
+                                    >
+                                </template>
+                                <template v-else>
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-pencil"
+                                        @click.stop.prevent="
+                                            emit('renameEntry', {
+                                                projectId: item.parentId,
+                                                entryId: item.value,
+                                                kind: item.kind,
+                                            })
+                                        "
+                                        >Rename</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="i-lucide-x"
+                                        @click.stop.prevent="
+                                            emit('removeFromProject', {
+                                                projectId: item.parentId,
+                                                entryId: item.value,
+                                                kind: item.kind,
+                                            })
+                                        "
+                                        >Remove from Project</UButton
+                                    >
+                                </template>
+                            </div>
+                        </template>
+                    </UPopover>
+                </div>
             </template>
         </UTree>
     </div>
@@ -116,6 +147,7 @@ const emit = defineEmits<{
     (e: 'chatSelected', id: string): void;
     (e: 'documentSelected', id: string): void;
     (e: 'addChat', projectId: string): void;
+    (e: 'addDocument', projectId: string): void;
     (e: 'deleteProject', projectId: string): void;
     (e: 'renameProject', projectId: string): void;
     (

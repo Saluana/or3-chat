@@ -92,6 +92,7 @@
                 @chatSelected="(id: string) => emit('chatSelected', id)"
                 @documentSelected="(id: string) => emit('documentSelected', id)"
                 @addChat="handleAddChatToProject"
+                @addDocument="handleAddDocumentToProject"
                 @deleteProject="handleDeleteProject"
                 @renameProject="openRenameProject"
                 @renameEntry="openRename"
@@ -969,6 +970,40 @@ async function handleAddChatToProject(projectId: string) {
         }
     } catch (e) {
         console.error('add chat to project failed', e);
+    }
+}
+
+async function handleAddDocumentToProject(projectId: string) {
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        // Create document (minimal title)
+        const doc = await create.document({ title: 'Untitled' });
+        const project = await db.projects.get(projectId);
+        if (project) {
+            const dataArr = Array.isArray(project.data)
+                ? project.data
+                : typeof project.data === 'string'
+                ? (() => {
+                      try {
+                          const parsed = JSON.parse(project.data);
+                          return Array.isArray(parsed) ? parsed : [];
+                      } catch {
+                          return [];
+                      }
+                  })()
+                : [];
+            dataArr.push({ id: doc.id, name: doc.title, kind: 'doc' });
+            await upsert.project({
+                ...project,
+                data: dataArr,
+                updated_at: now,
+            });
+            if (!expandedProjects.value.includes(projectId))
+                expandedProjects.value.push(projectId);
+            emit('documentSelected', doc.id);
+        }
+    } catch (e) {
+        console.error('add document to project failed', e);
     }
 }
 
