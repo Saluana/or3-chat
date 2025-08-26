@@ -41,6 +41,9 @@
         "@tailwindcss/typography": "^0.5.16",
         "vitest": "^2.1.2",
         "@vitest/ui": "^2.1.2",
-        "jsdom": "^25.0.0"
+        "jsdom": "^25.0.0",
+        "@vue/test-utils": "^2.4.6",
+        "@vitejs/plugin-vue": "^5.1.4",
+        "vite": "^5.4.8"
     }
 }

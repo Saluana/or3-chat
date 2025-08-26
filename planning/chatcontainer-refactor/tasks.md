@@ -4,28 +4,28 @@ artifact_id: 0f0d1c5a-6b1b-4f5c-9df9-7e8f1d5a2b2f
 
 ## 1. Implement Core Composables (VueUse Integrated)
 
--   [ ] 1.1 Create `useTailStream.ts` using `useIntervalFn` for flush scheduling (Req 3.2, 3.11)
--   [ ] 1.2 Add JSDoc + usage example to `useTailStream` (Req 4 Documentation)
--   [ ] 1.3 Create `useAutoScroll.ts` using `useEventListener` for scroll binding (Req 3.3, 3.11)
--   [ ] 1.4 Replace planned custom resize composable with direct `useElementSize` adoption; add thin wrapper only if naming consistency needed (Req 3.4, 3.11)
--   [ ] 1.5 Create `useChatSend.ts` (Req 3.5)
--   [ ] 1.6 Export composables via barrel if pattern used (Req 4 Reusability)
--   [ ] 1.7 Unit tests for each new composable (Req 3.7)
--   [ ] 1.8 (Optional) Evaluate using `useThrottleFn` / `useDebounceFn` for any bursty handlers (Req 3.11)
+-   [x] 1.1 Create `useTailStream.ts` using `useIntervalFn` for flush scheduling (Req 3.2, 3.11)
+-   [x] 1.2 Add JSDoc + usage example to `useTailStream` (Req 4 Documentation)
+-   [x] 1.3 Create `useAutoScroll.ts` using `useEventListener` for scroll binding (Req 3.3, 3.11)
+-   [x] 1.4 Replace planned custom resize composable with direct `useElementSize` adoption; add thin wrapper only if naming consistency needed (Req 3.4, 3.11)
+-   [x] 1.5 Create `useChatSend.ts` (Req 3.5)
+-   [x] 1.6 Export composables via barrel if pattern used (Req 4 Reusability)
+-   [x] 1.7 Unit tests for each new composable (Req 3.7)
+-   [x] 1.8 (Optional) Evaluate using `useThrottleFn` / `useDebounceFn` for any bursty handlers (Req 3.11)
 
 ## 2. Virtualization Wrapper
 
--   [ ] 2.1 Add `VirtualMessageList.vue` wrapping library (Req 3.1)
--   [ ] 2.2 Accept props: `messages`, `itemSizeEstimation?`, `overscan?` (Req 3.1)
--   [ ] 2.3 Emit events: `visible-range-change`, `reached-top`, `reached-bottom` (Req 3.1)
--   [ ] 2.4 Add internal perf notes & JSDoc (Req 4 Documentation)
--   [ ] 2.5 Unit test minimal mount & event emission with mock sizes (Req 3.7)
+-   [x] 2.1 Add `VirtualMessageList.vue` wrapping library (Req 3.1)
+-   [x] 2.2 Accept props: `messages`, `itemSizeEstimation?`, `overscan?` (Req 3.1)
+-   [x] 2.3 Emit events: `visible-range-change`, `reached-top`, `reached-bottom` (Req 3.1)
+-   [x] 2.4 Add internal perf notes & JSDoc (Req 4 Documentation)
+-   [x] 2.5 Unit test minimal mount & event emission with mock sizes (Req 3.7)
 
 ## 3. Tail Stream UI Component (Optional but Cleaner)
 
--   [ ] 3.1 Create `TailStream.vue` consuming `useTailStream` (Req 3.2)
--   [ ] 3.2 Prop for `active: boolean` & slot / default text container (Req 3.2)
--   [ ] 3.3 Add finalization animation hook (non-blocking, optional) (Req 3.2)
+-   [x] 3.1 Create `TailStream.vue` consuming `useTailStream` (Req 3.2)
+-   [x] 3.2 Prop for `active: boolean` & slot / default text container (Req 3.2)
+-   [x] 3.3 Add finalization animation hook (non-blocking, optional) (Req 3.2)
 
 ## 4. Refactor ChatContainer
 
