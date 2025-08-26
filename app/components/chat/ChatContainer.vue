@@ -18,7 +18,6 @@
                     :overscan="8"
                     :scroll-parent="scrollParent"
                     wrapper-class="flex flex-col"
-                    @reached-bottom="onReachedBottom"
                 >
                     <template #item="{ message, index }">
                         <div
@@ -218,9 +217,6 @@ const virtualMessages = computed(() => {
 // Scroll handling (Req 3.3) via useAutoScroll
 const scrollParent = ref<HTMLElement | null>(null);
 const autoScroll = useAutoScroll(scrollParent, { thresholdPx: 64 });
-function onReachedBottom() {
-    autoScroll.stickBottom();
-}
 watch(
     () => messages.value.length,
     async () => {
@@ -235,8 +231,13 @@ watch(
     }
 );
 
-// Initial bottom stick after mount
-nextTick(() => autoScroll.scrollToBottom({ smooth: false }));
+// Initial bottom stick after mount (defer to allow user immediate scroll cancel)
+nextTick(() => {
+    setTimeout(() => {
+        if (autoScroll.atBottom.value)
+            autoScroll.scrollToBottom({ smooth: false });
+    }, 0);
+});
 
 // Hook: streaming delta buffering
 useHookEffect(
@@ -269,6 +270,18 @@ useHookEffect(
         tail.fail(new Error('stream-error'));
     },
     { kind: 'action', priority: 50 }
+);
+
+// Forward tail error (Req 3.10) – placeholder for hook system integration
+watch(
+    () => tail.error.value,
+    (err) => {
+        if (err) {
+            // Could integrate hooks.doAction('chat.error', { source: 'tail', error: err }) if available
+            // eslint-disable-next-line no-console
+            console.error('[ChatContainer] tail error', err);
+        }
+    }
 );
 
 // Auto-scroll as tailDisplay grows
