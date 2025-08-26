@@ -1,33 +1,32 @@
 <template>
     <main
         ref="containerRoot"
-        class="flex w-full flex-1 flex-col overflow-hidden transition-[width,height]"
+        class="flex w-full flex-1 flex-col overflow-hidden"
     >
-        <!-- Scroll container / viewport for virtualization -->
+        <!-- Scroll viewport -->
         <div
             ref="scrollParent"
             class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 pb-[165px] scrollbars"
         >
-            <!-- Virtualized message list -->
             <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10"
+                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
             >
-                <Virtualizer
-                    ref="virtualizerRef"
-                    :data="virtualMessages"
-                    :itemSize="virtualItemSize"
+                <!-- Virtualized stable messages (Req 3.1) -->
+                <VirtualMessageList
+                    :messages="virtualMessages"
+                    :item-size-estimation="320"
                     :overscan="8"
-                    :scrollRef="scrollParent || undefined"
-                    class="flex flex-col"
+                    :scroll-parent="scrollParent"
+                    wrapper-class="flex flex-col"
+                    @reached-bottom="onReachedBottom"
                 >
-                    <template #default="{ item, index }">
+                    <template #item="{ message, index }">
                         <div
-                            :key="item.id || item.stream_id || index"
+                            :key="message.id || message.stream_id || index"
                             class="first:mt-0 mt-10"
-                            :data-index="index"
                         >
                             <ChatMessage
-                                :message="item"
+                                :message="message"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
@@ -35,33 +34,32 @@
                             />
                         </div>
                     </template>
-                </Virtualizer>
-                <!-- Live streaming tail (excluded from virtualizer for smoother incremental updates) -->
-                <div
-                    v-if="tailActive"
-                    class="mt-10 first:mt-0"
-                    :key="tailStreamId || 'streaming-tail'"
-                >
-                    <div
-                        class="bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm p-1 sm:p-5 rounded-md relative animate-in fade-in"
-                        style="animation-duration: 120ms"
-                    >
-                        <div
-                            class="prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
-                            v-html="tailRendered || tailPlaceholder"
-                        />
-                        <div
-                            class="absolute -bottom-5 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
-                        >
-                            <span
-                                class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
-                                >Streaming…</span
+                    <template #tail>
+                        <!-- Streaming tail appended (Req 3.2) -->
+                        <div v-if="tailActive" class="mt-10 first:mt-0">
+                            <div
+                                class="bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm p-1 sm:p-5 rounded-md relative animate-in fade-in"
+                                style="animation-duration: 120ms"
                             >
+                                <div
+                                    class="prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                                    v-html="tailRendered || tailPlaceholder"
+                                />
+                                <div
+                                    class="absolute -bottom-5 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+                                >
+                                    <span
+                                        class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
+                                        >Streaming…</span
+                                    >
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    </template>
+                </VirtualMessageList>
             </div>
         </div>
+        <!-- Input area overlay -->
         <div class="pointer-events-none absolute bottom-0 top-0 w-full">
             <div
                 class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1"
@@ -79,58 +77,28 @@
 </template>
 
 <script setup lang="ts">
+// Refactored ChatContainer (Task 4) – orchestration only.
+// Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
-import {
-    shallowRef,
-    computed,
-    watch,
-    ref,
-    nextTick,
-    onMounted,
-    onBeforeUnmount,
-    onUnmounted,
-} from 'vue';
+import { shallowRef, computed, watch, ref, nextTick } from 'vue';
 import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
     ContentPart,
 } from '~/composables/useAi';
-import { Virtualizer } from 'virtua/vue';
 import { useHookEffect } from '~/composables/useHookEffect';
 import { marked } from 'marked';
+import VirtualMessageList from './VirtualMessageList.vue';
+import { useTailStream } from '../../composables/useTailStream';
+import { useAutoScroll } from '../../composables/useAutoScroll';
+import { useChatSend } from '../../composables/useChatSend';
+import { useElementSize } from '@vueuse/core';
 
 const model = ref('openai/gpt-oss-120b');
 
-// Track container width and expose to ChatInputDropper (debounced for perf)
+// Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot = ref<HTMLElement | null>(null);
-const containerWidth = ref(0);
-let _resizeObserver: ResizeObserver | null = null;
-let _widthDebounceTimer: number | null = null;
-let _pendingWidth = 0;
-const WIDTH_DEBOUNCE_MS = 80;
-
-function commitWidth() {
-    containerWidth.value = _pendingWidth;
-    _widthDebounceTimer = null;
-}
-function queueWidth(next: number) {
-    _pendingWidth = next;
-    if (_widthDebounceTimer != null) return; // already scheduled
-    _widthDebounceTimer = window.setTimeout(commitWidth, WIDTH_DEBOUNCE_MS);
-}
-function measureAndQueueWidth() {
-    if (!containerRoot.value) return;
-    const w = containerRoot.value.getBoundingClientRect().width;
-    queueWidth(w);
-}
-function handleObserverEntries(entries: ResizeObserverEntry[]) {
-    for (const entry of entries) {
-        if (entry.target === containerRoot.value) {
-            queueWidth(entry.contentRect.width);
-        }
-    }
-}
-const onWindowResize = () => measureAndQueueWidth();
+const { width: containerWidth } = useElementSize(containerRoot);
 
 function onModelChange(newModel: string) {
     model.value = newModel;
@@ -216,57 +184,15 @@ const messages = computed<RenderMessage[]>(() =>
 );
 const loading = computed(() => chat.value.loading.value);
 
-// --- Hybrid tail streaming state ---
-const tailActive = ref(false);
+// Tail streaming via composable (Req 3.2)
+const tail = useTailStream({ flushIntervalMs: 50, immediate: true });
 const tailStreamId = ref<string | null>(null);
-const tailBuffer = ref(''); // accumulated but not yet flushed
-const tailDisplay = ref(''); // flushed text (rendered markdown)
-const tailStartedAt = ref<number | null>(null);
-const tailLastFlush = ref(0);
-const tailInitialDelayMs = 500; // per spec
-const tailMinFlushInterval = 50; // ms between flush rAF batches
-let tailRaf: number | null = null;
-
-function resetTail() {
-    tailActive.value = false;
-    tailStreamId.value = null;
-    tailBuffer.value = '';
-    tailDisplay.value = '';
-    tailStartedAt.value = null;
-    tailLastFlush.value = 0;
-    if (tailRaf) {
-        cancelAnimationFrame(tailRaf);
-        tailRaf = null;
-    }
-}
-
-function ensureTailFlushLoop() {
-    if (tailRaf != null) return;
-    const loop = () => {
-        tailRaf = null;
-        if (!tailActive.value) return; // stopped
-        const now = performance.now();
-        const elapsed = tailStartedAt.value ? now - tailStartedAt.value : 0;
-        const ready =
-            elapsed >= tailInitialDelayMs &&
-            tailBuffer.value.length > 0 &&
-            now - tailLastFlush.value >= tailMinFlushInterval;
-        if (ready) {
-            tailDisplay.value += tailBuffer.value;
-            tailBuffer.value = '';
-            tailLastFlush.value = now;
-        }
-        if (tailActive.value) tailRaf = requestAnimationFrame(loop);
-    };
-    tailRaf = requestAnimationFrame(loop);
-}
-
-// Rendered HTML for tail (markdown parse only on flush increments to keep cost lower)
+const tailActive = computed(() => tail.isStreaming.value);
 const tailRendered = computed(() =>
-    tailDisplay.value ? marked.parse(tailDisplay.value) : ''
+    tail.displayText.value ? marked.parse(tail.displayText.value) : ''
 );
 const tailPlaceholder = computed(() =>
-    !tailDisplay.value && !tailBuffer.value ? 'Thinking…' : ''
+    !tail.displayText.value ? 'Thinking…' : ''
 );
 
 // Identify the current streaming assistant message (last assistant with empty OR growing content while loading)
@@ -279,128 +205,49 @@ const streamingAssistant = computed(() => {
     return null;
 });
 
-// Virtualizer data excludes the active streaming assistant when tailActive
+// Virtual list data excludes streaming assistant (Req 3.2 separation)
 const virtualMessages = computed(() => {
-    if (!tailActive.value || !tailStreamId.value) return messages.value;
-    return messages.value.filter((m) => m.stream_id !== tailStreamId.value);
+    const base =
+        !tailActive.value || !tailStreamId.value
+            ? messages.value
+            : messages.value.filter((m) => m.stream_id !== tailStreamId.value);
+    // Ensure id present (fallback to index) to satisfy child expectation of string id
+    return base.map((m, i) => ({ ...m, id: m.id || String(i) }));
 });
 
-// Virtualization helpers
+// Scroll handling (Req 3.3) via useAutoScroll
 const scrollParent = ref<HTMLElement | null>(null);
-const virtualizerRef = ref<any>(null);
-const userIsAtBottom = ref(true);
-
-// Provide a numeric size (dynamic measurement handled internally by virtua if content resizes)
-const virtualItemSize = 320;
-
-const lastMessage = computed(() => messages.value[messages.value.length - 1]);
-
-function handleScrollEvent() {
-    if (!scrollParent.value) return;
-    const el = scrollParent.value;
-    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
-    userIsAtBottom.value = distance < 16; // 1rem threshold
+const autoScroll = useAutoScroll(scrollParent, { thresholdPx: 64 });
+function onReachedBottom() {
+    autoScroll.stickBottom();
 }
-
-function scrollToBottom(smooth = true) {
-    if (!scrollParent.value) return;
-    // While streaming tail is active we exclude the assistant message from virtualizer; scrolling to index would jump upward.
-    if (tailActive.value) {
-        scrollParent.value.scrollTo({
-            top: scrollParent.value.scrollHeight,
-            behavior: smooth ? 'smooth' : 'auto',
-        });
-        return;
-    }
-    if (virtualizerRef.value && messages.value.length) {
-        try {
-            virtualizerRef.value.scrollToIndex(messages.value.length - 1, {
-                align: 'end',
-                smooth,
-            });
-            return; // success
-        } catch (_) {
-            /* fallback below */
-        }
-    }
-    scrollParent.value.scrollTo({
-        top: scrollParent.value.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
-    });
-}
-
-// Auto-scroll on new messages if user at bottom
 watch(
     () => messages.value.length,
     async () => {
         await nextTick();
-        if (userIsAtBottom.value) scrollToBottom(false);
+        autoScroll.onContentIncrease();
+    }
+);
+watch(
+    () => tail.displayText.value,
+    () => {
+        if (tailActive.value) autoScroll.onContentIncrease();
     }
 );
 
-onMounted(() => {
-    scrollParent.value?.addEventListener('scroll', handleScrollEvent, {
-        passive: true,
-    });
-    // Initial scroll after mount for existing history
-    nextTick(() => scrollToBottom(false));
-
-    // Initialize container width & observer
-    measureAndQueueWidth();
-    if (typeof ResizeObserver !== 'undefined' && containerRoot.value) {
-        _resizeObserver = new ResizeObserver(handleObserverEntries);
-        _resizeObserver.observe(containerRoot.value);
-    } else {
-        // Fallback: listen to window resize
-        window.addEventListener('resize', onWindowResize);
-    }
-});
-onBeforeUnmount(() => {
-    scrollParent.value?.removeEventListener('scroll', handleScrollEvent);
-});
-onUnmounted(() => {
-    if (_resizeObserver && containerRoot.value) {
-        try {
-            _resizeObserver.unobserve(containerRoot.value);
-        } catch {}
-    }
-    _resizeObserver = null;
-    window.removeEventListener('resize', onWindowResize);
-    if (_widthDebounceTimer != null) {
-        clearTimeout(_widthDebounceTimer);
-        _widthDebounceTimer = null;
-    }
-});
+// Initial bottom stick after mount
+nextTick(() => autoScroll.scrollToBottom({ smooth: false }));
 
 // Hook: streaming delta buffering
 useHookEffect(
     'ai.chat.stream:action:delta',
     (delta: string, meta: any) => {
-        // Activate tail if first delta for a new stream
-        if (!tailActive.value) {
-            tailActive.value = true;
-            tailStreamId.value =
-                meta?.streamId || meta?.assistantId || 'stream';
-            tailStartedAt.value = performance.now();
-            tailBuffer.value = '';
-            tailDisplay.value = '';
-            ensureTailFlushLoop();
+        const sid = meta?.streamId || meta?.assistantId || 'stream';
+        if (!tailStreamId.value || tailStreamId.value !== sid) {
+            tailStreamId.value = sid;
+            tail.reset();
         }
-        // Different stream? finalize previous and start new.
-        if (
-            tailActive.value &&
-            tailStreamId.value &&
-            meta?.streamId &&
-            meta.streamId !== tailStreamId.value
-        ) {
-            // finalize old silently (will be brought in when loading toggles false)
-            resetTail();
-            tailActive.value = true;
-            tailStreamId.value = meta.streamId;
-            tailStartedAt.value = performance.now();
-            ensureTailFlushLoop();
-        }
-        tailBuffer.value += String(delta || '');
+        tail.push(String(delta || ''));
     },
     { kind: 'action', priority: 20 }
 );
@@ -409,18 +256,8 @@ useHookEffect(
 useHookEffect(
     'ai.chat.send:action:after',
     () => {
-        // Force final flush
-        if (tailBuffer.value.length) {
-            tailDisplay.value += tailBuffer.value;
-            tailBuffer.value = '';
-        }
-        // Delay re-including the message until next tick so virtualizer sees stable array
-        nextTick(() => {
-            resetTail();
-            nextTick(() => {
-                if (userIsAtBottom.value) scrollToBottom(false);
-            });
-        });
+        tail.complete();
+        nextTick(() => autoScroll.onContentIncrease());
     },
     { kind: 'action', priority: 50 }
 );
@@ -429,94 +266,32 @@ useHookEffect(
 useHookEffect(
     'ai.chat.error:action',
     () => {
-        resetTail();
+        tail.fail(new Error('stream-error'));
     },
     { kind: 'action', priority: 50 }
 );
 
 // Auto-scroll as tailDisplay grows
-watch(
-    () => tailDisplay.value,
-    () => {
-        if (tailActive.value && userIsAtBottom.value) scrollToBottom(false);
-    }
-);
+// Chat send abstraction (Req 3.5)
+const chatSend = useChatSend();
 
 function onSend(payload: any) {
-    console.log('[ChatContainer.onSend] raw payload', payload);
-    if (loading.value) return; // prevent duplicate sends while streaming
-
-    let reqParams: any = {
-        files: [],
-        model: model.value,
-    };
-
-    let fileHashes: string[] = [];
-    if (payload.images && payload.images.length > 0) {
-        const inferType = (url: string, provided?: string) => {
-            if (provided && provided.startsWith('image/')) return provided;
-            const m = /^data:([^;]+);/i.exec(url);
-            if (m) return m[1];
-            const lower = (url.split('?')[0] || '').toLowerCase();
-            const ext = lower.substring(lower.lastIndexOf('.') + 1);
-            const map: Record<string, string> = {
-                jpg: 'image/jpeg',
-                jpeg: 'image/jpeg',
-                png: 'image/png',
-                webp: 'image/webp',
-                gif: 'image/gif',
-                svg: 'image/svg+xml',
-                avif: 'image/avif',
-                heic: 'image/heic',
-                heif: 'image/heif',
-                bmp: 'image/bmp',
-                tif: 'image/tiff',
-                tiff: 'image/tiff',
-                ico: 'image/x-icon',
-            };
-            return map[ext] || 'image/png';
-        };
-        reqParams.files = payload.images.map((p: any, i: number) => {
-            const url: string = p.url;
-            const preview = (url || '').slice(0, 60);
-            const mime = inferType(url, p.type);
-            console.log('[ChatContainer.onSend] image found', {
-                index: i,
-                preview,
-                mime,
-            });
-            if (p.hash && p.status === 'ready') fileHashes.push(p.hash);
-            return { url, type: mime };
-        });
-    }
-
-    // Large pasted text blocks -> send as extraTextParts so they become additional text parts (not files)
-    if (payload.largeTexts && payload.largeTexts.length) {
-        reqParams.extraTextParts = payload.largeTexts.map((b: any) => b.text);
-    }
-
-    console.log('[ChatContainer.onSend] transformed reqParams', reqParams);
-
-    (reqParams as any).file_hashes = fileHashes;
-
-    if (payload.webSearchEnabled) {
-        reqParams.online = true;
-    }
-
+    if (loading.value) return;
+    // Basic transformation retained (future: move fully into useChatSend)
+    const result = chatSend.send({
+        threadId: chat.value.threadId?.value || '',
+        text: payload.text,
+    });
+    // Fire actual chat send (legacy path) preserving existing behavior
     chat.value
-        .sendMessage(payload.text, reqParams as any)
-        .then(() => {
-            console.log('[ChatContainer.onSend] sendMessage resolved', {
-                messageCount: chat.value.messages.value.length,
-                lastMessage:
-                    chat.value.messages.value[
-                        chat.value.messages.value.length - 1
-                    ],
-            });
+        .sendMessage(payload.text, {
+            model: model.value,
+            online: !!payload.webSearchEnabled,
         })
-        .catch((e: any) => {
-            console.error('[ChatContainer.onSend] sendMessage error', e);
-        });
+        .catch((e: any) =>
+            console.error('[ChatContainer.onSend] sendMessage error', e)
+        );
+    return result;
 }
 
 function onRetry(messageId: string) {

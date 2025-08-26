@@ -29,13 +29,13 @@ artifact_id: 0f0d1c5a-6b1b-4f5c-9df9-7e8f1d5a2b2f
 
 ## 4. Refactor ChatContainer
 
--   [ ] 4.1 Inject new composables sequentially: replace streaming logic (Req 3.2, 3.11)
--   [ ] 4.2 Replace inline resize observer code with `useElementSize` (Req 3.4, 3.11)
--   [ ] 4.3 Replace scroll handling with `useAutoScroll` (Req 3.3, 3.11)
--   [ ] 4.4 Replace send logic with `useChatSend` (Req 3.5)
--   [ ] 4.5 Replace virtualization area with `VirtualMessageList` (Req 3.1)
--   [ ] 4.6 Append `TailStream` after virtual list (Req 3.2)
--   [ ] 4.7 Remove dead code & confirm imports minimal (Req 3.6)
+-   [x] 4.1 Inject new composables sequentially: replace streaming logic (Req 3.2, 3.11)
+-   [x] 4.2 Replace inline resize observer code with `useElementSize` (Req 3.4, 3.11)
+-   [x] 4.3 Replace scroll handling with `useAutoScroll` (Req 3.3, 3.11)
+-   [x] 4.4 Replace send logic with `useChatSend` (Req 3.5) (partial: further payload move TBD)
+-   [x] 4.5 Replace virtualization area with `VirtualMessageList` (Req 3.1)
+-   [x] 4.6 Append `TailStream` after virtual list (Req 3.2)
+-   [x] 4.7 Remove dead code & confirm imports minimal (Req 3.6)
 -   [ ] 4.8 Measure new line count & compute reduction >=50% (Req 3.6)
 -   [ ] 4.9 Integrate error forwarding via hook system (Req 3.10)
 -   [ ] 4.10 Manual QA to ensure no behavior regression (Req 3.9)

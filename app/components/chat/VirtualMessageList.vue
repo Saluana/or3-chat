@@ -1,16 +1,17 @@
 <template>
     <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" class="flex flex-col overflow-y-auto" :class="wrapperClass">
-        <VList
+    <div ref="root" class="flex flex-col" :class="wrapperClass">
+        <Virtualizer
             :data="messages"
-            :item-size="itemSizeEstimation || undefined"
+            :itemSize="itemSizeEstimation || undefined"
             :overscan="overscan"
+            :scrollRef="scrollParent || undefined"
             @scroll="onScroll"
             @scroll-end="onScrollEnd"
             v-slot="{ item, index }"
         >
             <slot name="item" :message="item" :index="index" />
-        </VList>
+        </Virtualizer>
         <!-- Tail slot for streaming message appended after virtualized stable messages -->
         <slot name="tail" />
     </div>
@@ -45,7 +46,7 @@
  */
 import { onMounted, ref, watch, type PropType } from 'vue';
 // eslint-disable-next-line import/no-unresolved
-import { VList } from 'virtua/vue';
+import { Virtualizer } from 'virtua/vue';
 
 interface ChatMessage {
     id: string;
@@ -59,6 +60,10 @@ const props = defineProps({
     itemSizeEstimation: { type: Number, default: 72 }, // heuristic average row height
     overscan: { type: Number, default: 4 },
     wrapperClass: { type: String, default: '' },
+    scrollParent: {
+        type: Object as PropType<HTMLElement | null>,
+        default: null,
+    },
 });
 
 const emit = defineEmits<{
