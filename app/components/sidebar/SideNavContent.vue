@@ -277,6 +277,7 @@
                 @new-document="openCreateDocumentModal"
                 @add-to-project="(d:any) => openAddDocumentToProject(d)"
                 @delete-document="(d:any) => confirmDeleteDocument(d)"
+                @rename-document="(d:any) => openRename({ docId: d.id })"
             />
         </div>
         <div ref="bottomNavRef" class="shrink-0">
@@ -286,17 +287,23 @@
         <!-- Rename modal -->
         <UModal
             v-model:open="showRenameModal"
-            title="Rename thread"
+            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
             :ui="{
                 footer: 'justify-end ',
             }"
         >
-            <template #header> <h3>Rename thread?</h3> </template>
+            <template #header>
+                <h3>
+                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
+                </h3>
+            </template>
             <template #body>
                 <div class="space-y-4">
                     <UInput
                         v-model="renameTitle"
-                        placeholder="Thread title"
+                        :placeholder="
+                            isRenamingDoc ? 'Document title' : 'Thread title'
+                        "
                         icon="pixelarticons:edit"
                         @keyup.enter="saveRename"
                     />
@@ -747,6 +754,8 @@ const emit = defineEmits<{
 const showRenameModal = ref(false);
 const renameId = ref<string | null>(null);
 const renameTitle = ref('');
+const renameMetaKind = ref<'chat' | 'doc' | null>(null);
+const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
 
 const showDeleteModal = ref(false);
 const deleteId = ref<string | null>(null);
@@ -767,63 +776,126 @@ async function openRename(target: any) {
             renameId.value = entryId;
             renameTitle.value = t?.title || 'New Thread';
             showRenameModal.value = true;
-        } else {
-            // Non-chat entries (e.g., docs) could be handled here later
-            console.warn('Rename for non-chat entry not implemented');
+            renameMetaKind.value = 'chat';
+        } else if (kind === 'doc') {
+            const doc = await db.posts.get(entryId);
+            if (doc && (doc as any).postType === 'doc') {
+                renameId.value = entryId;
+                renameTitle.value = (doc as any).title || 'Untitled';
+                showRenameModal.value = true;
+                renameMetaKind.value = 'doc';
+            }
         }
         return;
+    }
+    // Case 1b: direct doc rename trigger { docId }
+    if (target && typeof target === 'object' && 'docId' in target) {
+        const doc = await db.posts.get(target.docId as string);
+        if (doc && (doc as any).postType === 'doc') {
+            renameId.value = target.docId as string;
+            renameTitle.value = (doc as any).title || 'Untitled';
+            showRenameModal.value = true;
+            renameMetaKind.value = 'doc';
+            return;
+        }
     }
     // Case 2: direct thread object from thread list
     if (target && typeof target === 'object' && 'id' in target) {
         renameId.value = (target as any).id;
         renameTitle.value = (target as any).title ?? '';
         showRenameModal.value = true;
+        renameMetaKind.value = 'chat';
     }
 }
 
 async function saveRename() {
     if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
+    // Determine if it's a thread or document by checking posts table first
+    const maybeDoc = await db.posts.get(renameId.value);
     const now = Math.floor(Date.now() / 1000);
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    // Sync title inside any project entries containing this thread
-    try {
-        const allProjects = await db.projects.toArray();
-        const updates: any[] = [];
-        for (const p of allProjects) {
-            if (!p.data) continue;
-            const arr = Array.isArray(p.data)
-                ? p.data
-                : typeof p.data === 'string'
-                ? (() => {
-                      try {
-                          return JSON.parse(p.data);
-                      } catch {
-                          return [];
-                      }
-                  })()
-                : [];
-            let changed = false;
-            for (const entry of arr) {
-                if (entry.id === t.id && entry.name !== renameTitle.value) {
-                    entry.name = renameTitle.value;
-                    changed = true;
+    if (maybeDoc && (maybeDoc as any).postType === 'doc') {
+        // Update doc title
+        await upsert.post({
+            ...(maybeDoc as any),
+            title: renameTitle.value,
+            updated_at: now,
+        });
+        // Sync inside projects
+        try {
+            const allProjects = await db.projects.toArray();
+            const updates: any[] = [];
+            for (const p of allProjects) {
+                if (!p.data) continue;
+                const arr = Array.isArray(p.data)
+                    ? p.data
+                    : typeof p.data === 'string'
+                    ? (() => {
+                          try {
+                              return JSON.parse(p.data);
+                          } catch {
+                              return [];
+                          }
+                      })()
+                    : [];
+                let changed = false;
+                for (const entry of arr) {
+                    if (
+                        entry.id === maybeDoc.id &&
+                        entry.name !== renameTitle.value
+                    ) {
+                        entry.name = renameTitle.value;
+                        changed = true;
+                    }
                 }
+                if (changed) updates.push({ ...p, data: arr, updated_at: now });
             }
-            if (changed) {
-                updates.push({ ...p, data: arr, updated_at: now });
+            if (updates.length) await db.projects.bulkPut(updates);
+        } catch (e) {
+            console.error('project doc title sync failed', e);
+        }
+    } else {
+        const t = await db.threads.get(renameId.value);
+        if (!t) return;
+        await upsert.thread({
+            ...t,
+            title: renameTitle.value,
+            updated_at: now,
+        });
+        // Sync title inside any project entries containing this thread
+        try {
+            const allProjects = await db.projects.toArray();
+            const updates: any[] = [];
+            for (const p of allProjects) {
+                if (!p.data) continue;
+                const arr = Array.isArray(p.data)
+                    ? p.data
+                    : typeof p.data === 'string'
+                    ? (() => {
+                          try {
+                              return JSON.parse(p.data);
+                          } catch {
+                              return [];
+                          }
+                      })()
+                    : [];
+                let changed = false;
+                for (const entry of arr) {
+                    if (entry.id === t.id && entry.name !== renameTitle.value) {
+                        entry.name = renameTitle.value;
+                        changed = true;
+                    }
+                }
+                if (changed) updates.push({ ...p, data: arr, updated_at: now });
             }
+            if (updates.length) await db.projects.bulkPut(updates);
+        } catch (e) {
+            console.error('project title sync failed', e);
         }
-        if (updates.length) {
-            await db.projects.bulkPut(updates);
-        }
-    } catch (e) {
-        console.error('project title sync failed', e);
     }
     showRenameModal.value = false;
     renameId.value = null;
     renameTitle.value = '';
+    renameMetaKind.value = null;
 }
 
 function confirmDelete(thread: any) {

@@ -5,7 +5,8 @@ import { useHookEffect } from './useHookEffect';
 
 export function useDocumentsList(limit = 200) {
     const docs = ref<Document[]>([]);
-    const loading = ref(false);
+    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
+    const loading = ref(true);
     const error = ref<unknown>(null);
 
     async function refresh() {

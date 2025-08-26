@@ -27,10 +27,54 @@
                 }"
                 @click="$emit('select', d.id)"
             >
-                <span class="truncate" :title="d.title">{{ d.title }}</span>
-                <span class="text-[10px] opacity-50 ml-2">{{
-                    formatTime(d.updated_at)
+                <span class="truncate flex-1 min-w-0" :title="d.title">{{
+                    d.title
                 }}</span>
+                <!-- Actions popover (mirrors thread list) -->
+                <UPopover
+                    :content="{ side: 'right', align: 'start', sideOffset: 6 }"
+                >
+                    <span
+                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                        @click.stop
+                    >
+                        <UIcon
+                            name="pixelarticons:more-vertical"
+                            class="w-4 h-4 opacity-70"
+                        />
+                    </span>
+                    <template #content>
+                        <div class="p-1 w-44 space-y-1">
+                            <UButton
+                                color="neutral"
+                                variant="ghost"
+                                size="sm"
+                                class="w-full justify-start"
+                                icon="i-lucide-pencil"
+                                @click="$emit('rename-document', d)"
+                                >Rename</UButton
+                            >
+                            <UButton
+                                color="neutral"
+                                variant="ghost"
+                                size="sm"
+                                class="w-full justify-start"
+                                icon="pixelarticons:folder-plus"
+                                @click="$emit('add-to-project', d)"
+                                >Add to project</UButton
+                            >
+                            <UButton
+                                color="error"
+                                variant="ghost"
+                                size="sm"
+                                class="w-full justify-start"
+                                icon="i-lucide-trash-2"
+                                @click="$emit('delete-document', d)"
+                                >Delete</UButton
+                            >
+                        </div>
+                    </template>
+                </UPopover>
             </RetroGlassBtn>
         </div>
     </div>
@@ -42,6 +86,9 @@ const props = defineProps<{ activeDocument?: string }>();
 const emit = defineEmits<{
     (e: 'select', id: string): void;
     (e: 'new-document'): void;
+    (e: 'add-to-project', doc: any): void;
+    (e: 'delete-document', doc: any): void;
+    (e: 'rename-document', doc: any): void;
 }>();
 const { docs, loading } = useDocumentsList(200);
 function formatTime(ts: number) {

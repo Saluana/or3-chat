@@ -113,16 +113,20 @@ import { Placeholder } from '@tiptap/extensions';
 
 const props = defineProps<{ documentId: string }>();
 
-const state = useDocumentState(props.documentId);
-const titleDraft = ref(state.record?.title || '');
+// Reactive state wrapper (computed to always fetch current map entry)
+const state = computed(() => useDocumentState(props.documentId));
+const titleDraft = ref(state.value.record?.title || '');
 
 watch(
     () => props.documentId,
-    async (id) => {
+    async (id, _old, onCleanup) => {
+        // Switch to new state object from map
+        const currentLoadId = id;
         await loadDocument(id);
-        titleDraft.value = state.record?.title || '';
-        if (editor.value && state.record) {
-            const json = state.record.content as JSONContent;
+        if (props.documentId !== currentLoadId) return; // prop changed again
+        titleDraft.value = state.value.record?.title || '';
+        if (editor.value && state.value.record) {
+            const json = state.value.record.content as JSONContent;
             editor.value.commands.setContent(json, { emitUpdate: false });
         }
     }
@@ -148,7 +152,7 @@ function makeEditor() {
                 placeholder: 'Type your text here...',
             }),
         ],
-        content: state.record?.content || { type: 'doc', content: [] },
+        content: state.value.record?.content || { type: 'doc', content: [] },
         autofocus: false,
         onUpdate: () => emitContent(),
     });
@@ -156,6 +160,7 @@ function makeEditor() {
 
 onMounted(async () => {
     await loadDocument(props.documentId);
+    // Ensure initial state ref matches (in case of rapid prop change before mount)
     makeEditor();
 });
 
@@ -199,7 +204,7 @@ function cmd(name: string) {
 }
 
 const statusText = computed(() => {
-    switch (state.status) {
+    switch (state.value.status) {
         case 'saving':
             return 'Saving…';
         case 'saved':
