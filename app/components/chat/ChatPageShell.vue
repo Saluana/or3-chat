@@ -440,37 +440,22 @@ function onNewChat() {
 
 // --------------- Documents Integration (minimal) ---------------
 import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+// Document operations abstracted
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
 
 async function onNewDocument(initial?: { title?: string }) {
-    const pane = panes.value[activePaneIndex.value];
-    if (!pane) return;
-    try {
-        // Flush existing doc if switching from another document
-        if (pane.mode === 'doc' && pane.documentId) {
-            await flushDocument(pane.documentId);
-        }
-        const doc = await createNewDoc(initial);
-        pane.mode = 'doc';
-        pane.documentId = doc.id;
-        // Clear chat-specific state
-        pane.threadId = '';
-        pane.messages = [];
-        // Do NOT route sync for documents (out of scope)
-    } catch {}
+    await newDocumentInActive(initial);
 }
 
-function onDocumentSelected(id: string) {
-    if (!id) return;
-    const pane = panes.value[activePaneIndex.value];
-    if (!pane) return;
-    // Flush any current doc before switching
-    if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
-        flushDocument(pane.documentId);
-    }
-    pane.mode = 'doc';
-    pane.documentId = id;
-    pane.threadId = '';
-    pane.messages = [];
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
 }
 
 // Keyboard shortcut: Cmd/Ctrl + Shift + D => new document in active pane
