@@ -47,12 +47,10 @@
         <div v-if="!editing" :class="innerClass" v-html="rendered"></div>
         <!-- Editing surface -->
         <div v-else class="w-full">
-            <LazyChatMessageEditor
-                hydrate-on-visible
+            <MessageEditor
                 v-model="draft"
                 :autofocus="true"
                 :focus-delay="120"
-                @ready="focusRequested = true"
             />
             <div class="flex w-full justify-end gap-2 mt-2">
                 <UButton
@@ -74,43 +72,11 @@
         </div>
 
         <!-- Expanded grid -->
-        <div
+        <MessageAttachmentsGallery
             v-if="hashList.length && expanded"
-            class="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"
-        >
-            <div
-                v-for="h in hashList"
-                :key="h"
-                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
-            >
-                <template v-if="thumbnails[h]?.status === 'ready'">
-                    <img
-                        :src="thumbnails[h].url"
-                        :alt="'file ' + h.slice(0, 8)"
-                        class="object-cover w-full h-full"
-                        draggable="false"
-                    />
-                </template>
-                <template v-else-if="thumbnails[h]?.status === 'error'">
-                    <div class="text-[10px] text-center px-1 text-error">
-                        failed
-                    </div>
-                </template>
-                <template v-else>
-                    <div class="animate-pulse text-[10px] opacity-70">
-                        loading
-                    </div>
-                </template>
-            </div>
-            <button
-                class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
-                type="button"
-                @click="toggleExpanded"
-                aria-label="Hide attachments"
-            >
-                Hide attachments
-            </button>
-        </div>
+            :hashes="hashList"
+            @collapse="toggleExpanded"
+        />
 
         <!-- Action buttons: overlap bubble border half outside -->
         <div
@@ -173,10 +139,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
-import { getFileBlob } from '~/db/files';
 import { marked } from 'marked';
-import { upsert } from '~/db';
-import { nowSec } from '~/db/util';
+import MessageEditor from './MessageEditor.vue';
+import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
+import { useMessageEditing } from '~/composables/useMessageEditing';
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -210,55 +176,20 @@ const innerClass = computed(() => ({
 
 const rendered = computed(() => marked.parse(props.message.content));
 
-// Editing state -------------------------------------------------
-const editing = ref(false);
-const draft = ref('');
-const original = ref('');
-const saving = ref(false);
-const focusRequested = ref(false);
-
-function beginEdit() {
-    if (editing.value) return;
-    original.value = props.message.content;
-    draft.value = props.message.content;
-    editing.value = true;
-}
-function cancelEdit() {
-    if (saving.value) return;
-    editing.value = false;
-    draft.value = '';
-    original.value = '';
-}
+// Editing (extracted)
+const {
+    editing,
+    draft,
+    saving,
+    beginEdit,
+    cancelEdit,
+    saveEdit: internalSaveEdit,
+} = useMessageEditing(props.message);
 async function saveEdit() {
-    if (saving.value) return;
-    const id = (props.message as any).id;
-    if (!id) return;
-    const trimmed = draft.value.trim();
-    if (!trimmed) {
-        // Empty -> cancel (could also allow deletion later)
-        cancelEdit();
-        return;
-    }
-    try {
-        saving.value = true;
-        // Upsert message with new content (plain text). (DB schema stores data.content.)
-        const existing: any = await (
-            await import('~/db/client')
-        ).db.messages.get(id);
-        if (!existing) throw new Error('Message not found');
-        await upsert.message({
-            ...existing,
-            data: { ...(existing.data || {}), content: trimmed },
-            updated_at: nowSec(),
-        });
-        // Reflect in local props.message (parent reactive array will normally pick up via watcher; update eagerly)
-        (props.message as any).content = trimmed;
-        emit('edited', { id, content: trimmed });
-        editing.value = false;
-    } catch (e) {
-        console.error('[ChatMessage.saveEdit] failed', e);
-    } finally {
-        saving.value = false;
+    await internalSaveEdit();
+    if (!editing.value) {
+        const id = (props.message as any).id;
+        if (id) emit('edited', { id, content: draft.value });
     }
 }
 
@@ -271,16 +202,20 @@ const hashList = computed<string[]>(() => {
     return [];
 });
 
+// Compact thumb preview support (attachments gallery handles full grid). Reuse global caches.
 interface ThumbState {
     status: 'loading' | 'ready' | 'error';
-    url?: string; // object URL
+    url?: string;
 }
-
-// Global (module-level) caches to avoid reloading blobs when virtualization recycles DOM nodes.
-const thumbCache = new Map<string, ThumbState>();
-const thumbLoadPromises = new Map<string, Promise<void>>();
-
 const thumbnails = reactive<Record<string, ThumbState>>({});
+const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
+    string,
+    ThumbState
+>());
+const thumbLoadPromises = ((globalThis as any).__or3ThumbInflight ||= new Map<
+    string,
+    Promise<void>
+>());
 
 // Per-message persistent UI state stored directly on the message object to
 // survive virtualization recycling without external maps.
@@ -295,15 +230,12 @@ function toggleExpanded() {
 }
 
 async function ensureThumb(h: string) {
-    // Return immediately if cached in reactive local state
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
-    // Reuse global cache if available
     const cached = thumbCache.get(h);
     if (cached) {
         thumbnails[h] = cached;
         return;
     }
-    // Deduplicate concurrent loads
     if (thumbLoadPromises.has(h)) {
         await thumbLoadPromises.get(h);
         const after = thumbCache.get(h);
@@ -313,13 +245,13 @@ async function ensureThumb(h: string) {
     thumbnails[h] = { status: 'loading' };
     const p = (async () => {
         try {
-            const blob = await getFileBlob(h);
+            const blob = await (await import('~/db/files')).getFileBlob(h);
             if (!blob) throw new Error('missing');
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };
             thumbCache.set(h, ready);
             thumbnails[h] = ready;
-        } catch (e) {
+        } catch {
             const err: ThumbState = { status: 'error' };
             thumbCache.set(h, err);
             thumbnails[h] = err;

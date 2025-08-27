@@ -1,0 +1,106 @@
+<template>
+    <div v-if="hashes.length" class="mt-3">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            <div
+                v-for="h in hashes"
+                :key="h"
+                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
+            >
+                <template v-if="thumbs[h]?.status === 'ready'">
+                    <img
+                        :src="thumbs[h].url"
+                        :alt="'file ' + h.slice(0, 8)"
+                        class="object-cover w-full h-full"
+                        draggable="false"
+                    />
+                </template>
+                <template v-else-if="thumbs[h]?.status === 'error'">
+                    <div class="text-[10px] text-center px-1 text-error">
+                        failed
+                    </div>
+                </template>
+                <template v-else>
+                    <div class="animate-pulse text-[10px] opacity-70">
+                        loading
+                    </div>
+                </template>
+            </div>
+        </div>
+        <button
+            class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
+            type="button"
+            @click="$emit('collapse')"
+            aria-label="Hide attachments"
+        >
+            Hide attachments
+        </button>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { reactive, watch } from 'vue';
+import { getFileBlob } from '~/db/files';
+
+interface ThumbState {
+    status: 'loading' | 'ready' | 'error';
+    url?: string;
+}
+const props = defineProps<{ hashes: string[] }>();
+defineEmits<{ (e: 'collapse'): void }>();
+
+// Reuse global caches so virtualization doesn't thrash
+const cache = ((globalThis as any).__or3ThumbCache ||= new Map<
+    string,
+    ThumbState
+>());
+const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
+    string,
+    Promise<void>
+>());
+const thumbs = reactive<Record<string, ThumbState>>({});
+
+async function ensure(h: string) {
+    if (thumbs[h] && thumbs[h].status === 'ready') return;
+    const cached = cache.get(h);
+    if (cached) {
+        thumbs[h] = cached;
+        return;
+    }
+    if (inflight.has(h)) {
+        await inflight.get(h);
+        const after = cache.get(h);
+        if (after) thumbs[h] = after;
+        return;
+    }
+    thumbs[h] = { status: 'loading' };
+    const p = (async () => {
+        try {
+            const blob = await getFileBlob(h);
+            if (!blob) throw new Error('missing');
+            const url = URL.createObjectURL(blob);
+            const ready: ThumbState = { status: 'ready', url };
+            cache.set(h, ready);
+            thumbs[h] = ready;
+        } catch {
+            const err: ThumbState = { status: 'error' };
+            cache.set(h, err);
+            thumbs[h] = err;
+        } finally {
+            inflight.delete(h);
+        }
+    })();
+    inflight.set(h, p);
+    await p;
+}
+
+watch(
+    () => props.hashes,
+    (list) => {
+        list.forEach(ensure);
+    },
+    { immediate: true }
+);
+defineExpose({ thumbs });
+</script>
+
+<style scoped></style>
