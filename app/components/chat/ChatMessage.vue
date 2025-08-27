@@ -216,6 +216,31 @@ const thumbLoadPromises = ((globalThis as any).__or3ThumbInflight ||= new Map<
     string,
     Promise<void>
 >());
+// Reference counts per file hash so we can safely revoke object URLs when unused.
+const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
+    string,
+    number
+>());
+
+function retainThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    thumbRefCounts.set(hash, prev + 1);
+}
+function releaseThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    if (prev <= 1) {
+        thumbRefCounts.delete(hash);
+        const state = thumbCache.get(hash);
+        if (state?.url) {
+            try {
+                URL.revokeObjectURL(state.url);
+            } catch {}
+        }
+        thumbCache.delete(hash);
+    } else {
+        thumbRefCounts.set(hash, prev - 1);
+    }
+}
 
 // Per-message persistent UI state stored directly on the message object to
 // survive virtualization recycling without external maps.
@@ -263,19 +288,38 @@ async function ensureThumb(h: string) {
     await p;
 }
 
-// Load new hashes when list changes (avoid generic watchEffect re-trigger churn)
+// Track current hashes used by this message for ref counting.
+const currentHashes = new Set<string>();
+// Load new hashes when list changes with diffing for retain/release.
 watch(
     hashList,
-    (list) => {
-        for (const h of list) ensureThumb(h);
+    async (list) => {
+        const nextSet = new Set(list);
+        // Additions
+        for (const h of nextSet) {
+            if (!currentHashes.has(h)) {
+                await ensureThumb(h);
+                // Only retain if loaded and ready
+                const state = thumbCache.get(h);
+                if (state?.status === 'ready') retainThumb(h);
+                currentHashes.add(h);
+            }
+        }
+        // Removals
+        for (const h of Array.from(currentHashes)) {
+            if (!nextSet.has(h)) {
+                currentHashes.delete(h);
+                releaseThumb(h);
+            }
+        }
     },
     { immediate: true }
 );
 
-// Cleanup: revoke object URLs only if not cached elsewhere (we keep cache for performance).
-// Optional: Could implement LRU eviction later.
+// Cleanup: release all thumbs used by this message.
 onBeforeUnmount(() => {
-    // No action: retaining cache avoids flicker if user scrolls away and back.
+    for (const h of currentHashes) releaseThumb(h);
+    currentHashes.clear();
 });
 import { useToast } from '#imports';
 function copyMessage() {
