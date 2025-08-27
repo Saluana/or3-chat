@@ -159,11 +159,11 @@
                         />
                     </template>
                     <template v-else-if="pane.mode === 'doc'">
-                        <DocumentEditor
+                        <LazyDocumentsDocumentEditor
                             v-if="pane.documentId"
                             :document-id="pane.documentId"
                             class="flex-1 min-h-0"
-                        />
+                        ></LazyDocumentsDocumentEditor>
                         <div
                             v-else
                             class="flex-1 flex items-center justify-center text-sm opacity-70"
@@ -179,7 +179,6 @@
 
 <script setup lang="ts">
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import DocumentEditor from '~/components/documents/DocumentEditor.vue';
 import { useMultiPane } from '~/composables/useMultiPane';
 import { db } from '~/db';
 // No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
