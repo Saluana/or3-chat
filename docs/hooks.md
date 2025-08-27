@@ -515,3 +515,28 @@ useHookEffect('ui.chat.new:action:after', () => {
     console.debug('[new chat created request]');
 });
 ```
+
+## App init hook
+
+The framework now emits a one-time `app.init:action:after` on the client after the Nuxt app has fully mounted. Use this to run plugin initialization that depends on the DOM being ready (analytics boot, theming adjustments, late dynamic imports, etc.).
+
+Hook name:
+
+-   `app.init:action:after` — Args: `(nuxtApp)`
+
+Example:
+
+```ts
+useHookEffect('app.init:action:after', (_ctx, nuxtApp) => {
+    console.debug(
+        '[app init]',
+        nuxtApp.payload.serverRendered ? 'SSR+Hydrate' : 'Client only'
+    );
+});
+```
+
+Guarantees:
+
+-   Fired exactly once per full page load (guarded against HMR duplicates).
+-   Only on the client (not during SSR render phase).
+-   Runs after `app:mounted`, so component tree is mounted.
