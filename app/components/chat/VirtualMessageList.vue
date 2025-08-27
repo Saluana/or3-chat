@@ -10,7 +10,9 @@
             @scroll-end="onScrollEnd"
             v-slot="{ item, index }"
         >
-            <slot name="item" :message="item" :index="index" />
+            <div :key="item.id || index">
+                <slot name="item" :message="item" :index="index" />
+            </div>
         </Virtualizer>
         <!-- Tail slot for streaming message appended after virtualized stable messages -->
         <slot name="tail" />

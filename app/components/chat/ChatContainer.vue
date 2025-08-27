@@ -290,15 +290,42 @@ const chatSend = useChatSend();
 
 function onSend(payload: any) {
     if (loading.value) return;
+    const readyImages = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'ready')
+        : [];
+    const pendingCount = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'pending')
+              .length
+        : 0;
+    if (pendingCount > 0 && readyImages.length === 0) {
+        // Defer sending until at least one image hashed (user can click again shortly)
+        console.warn(
+            '[ChatContainer.onSend] images still hashing; delaying send'
+        );
+        return;
+    }
+    const files = readyImages.map((img: any) => ({
+        type: img.file?.type || 'image/png',
+        url: img.url,
+    }));
+    const file_hashes = readyImages
+        .map((img: any) => img.hash)
+        .filter((h: any) => typeof h === 'string');
+    const extraTextParts = Array.isArray(payload.largeTexts)
+        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
+        : [];
+
     // Basic transformation retained (future: move fully into useChatSend)
     const result = chatSend.send({
         threadId: chat.value.threadId?.value || '',
         text: payload.text,
     });
-    // Fire actual chat send (legacy path) preserving existing behavior
     chat.value
         .sendMessage(payload.text, {
             model: model.value,
+            files,
+            file_hashes,
+            extraTextParts,
             online: !!payload.webSearchEnabled,
         })
         .catch((e: any) =>

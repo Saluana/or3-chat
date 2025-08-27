@@ -171,7 +171,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watchEffect, ref } from 'vue';
+import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
 import { getFileBlob } from '~/db/files';
 import { marked } from 'marked';
@@ -276,28 +276,74 @@ interface ThumbState {
     url?: string; // object URL
 }
 
+// Global (module-level) caches to avoid reloading blobs when virtualization recycles DOM nodes.
+const thumbCache = new Map<string, ThumbState>();
+const thumbLoadPromises = new Map<string, Promise<void>>();
+
 const thumbnails = reactive<Record<string, ThumbState>>({});
 
-const expanded = ref(false);
+// Per-message persistent UI state stored directly on the message object to
+// survive virtualization recycling without external maps.
+const expanded = ref<boolean>(
+    (props.message as any)._expanded === true || false
+);
+watch(expanded, (v) => ((props.message as any)._expanded = v));
 const firstThumb = computed(() => hashList.value[0]);
 function toggleExpanded() {
     if (!hashList.value.length) return;
     expanded.value = !expanded.value;
 }
 
-watchEffect(async () => {
-    for (const h of hashList.value) {
-        if (thumbnails[h]) continue; // already loading/loaded
-        thumbnails[h] = { status: 'loading' };
+async function ensureThumb(h: string) {
+    // Return immediately if cached in reactive local state
+    if (thumbnails[h] && thumbnails[h].status === 'ready') return;
+    // Reuse global cache if available
+    const cached = thumbCache.get(h);
+    if (cached) {
+        thumbnails[h] = cached;
+        return;
+    }
+    // Deduplicate concurrent loads
+    if (thumbLoadPromises.has(h)) {
+        await thumbLoadPromises.get(h);
+        const after = thumbCache.get(h);
+        if (after) thumbnails[h] = after;
+        return;
+    }
+    thumbnails[h] = { status: 'loading' };
+    const p = (async () => {
         try {
             const blob = await getFileBlob(h);
             if (!blob) throw new Error('missing');
             const url = URL.createObjectURL(blob);
-            thumbnails[h] = { status: 'ready', url };
+            const ready: ThumbState = { status: 'ready', url };
+            thumbCache.set(h, ready);
+            thumbnails[h] = ready;
         } catch (e) {
-            thumbnails[h] = { status: 'error' };
+            const err: ThumbState = { status: 'error' };
+            thumbCache.set(h, err);
+            thumbnails[h] = err;
+        } finally {
+            thumbLoadPromises.delete(h);
         }
-    }
+    })();
+    thumbLoadPromises.set(h, p);
+    await p;
+}
+
+// Load new hashes when list changes (avoid generic watchEffect re-trigger churn)
+watch(
+    hashList,
+    (list) => {
+        for (const h of list) ensureThumb(h);
+    },
+    { immediate: true }
+);
+
+// Cleanup: revoke object URLs only if not cached elsewhere (we keep cache for performance).
+// Optional: Could implement LRU eviction later.
+onBeforeUnmount(() => {
+    // No action: retaining cache avoids flicker if user scrolls away and back.
 });
 import { useToast } from '#imports';
 function copyMessage() {
