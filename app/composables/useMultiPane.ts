@@ -4,7 +4,8 @@
 import Dexie from 'dexie';
 import { db } from '~/db';
 
-export type ChatMessage = {
+// Narrow pane message representation (always flattened string content)
+export type MultiPaneMessage = {
     role: 'user' | 'assistant';
     content: string;
     file_hashes?: string | null;
@@ -17,7 +18,7 @@ export interface PaneState {
     mode: 'chat' | 'doc';
     threadId: string; // '' indicates unsaved/new chat
     documentId?: string;
-    messages: ChatMessage[];
+    messages: MultiPaneMessage[];
     validating: boolean;
 }
 
@@ -25,7 +26,7 @@ export interface UseMultiPaneOptions {
     initialThreadId?: string;
     maxPanes?: number; // default 3
     onFlushDocument?: (id: string) => void | Promise<void>;
-    loadMessagesFor?: (id: string) => Promise<ChatMessage[]>; // override for tests
+    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
 }
 
 export interface UseMultiPaneApi {
@@ -39,7 +40,7 @@ export interface UseMultiPaneApi {
     focusPrev: (current: number) => void;
     focusNext: (current: number) => void;
     setPaneThread: (index: number, threadId: string) => Promise<void>;
-    loadMessagesFor: (id: string) => Promise<ChatMessage[]>;
+    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;
     ensureAtLeastOne: () => void;
 }
 
@@ -63,7 +64,7 @@ function createEmptyPane(initialThreadId = ''): PaneState {
     };
 }
 
-async function defaultLoadMessagesFor(id: string): Promise<ChatMessage[]> {
+async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
     if (!id) return [];
     try {
         const msgs = await db.messages
@@ -83,7 +84,7 @@ async function defaultLoadMessagesFor(id: string): Promise<ChatMessage[]> {
                 file_hashes: msg.file_hashes,
                 id: msg.id,
                 stream_id: msg.stream_id,
-            } as ChatMessage;
+            } as MultiPaneMessage;
         });
     } catch (e) {
         return [];
