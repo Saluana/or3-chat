@@ -2,7 +2,7 @@
     <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
             <sidebar-side-nav-content
-                :active-thread="threadId"
+                :active-thread="panes[0]?.threadId || ''"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
                 @newDocument="onNewDocument"
@@ -11,7 +11,7 @@
         </template>
         <template #sidebar-collapsed>
             <SidebarSideNavContentCollapsed
-                :active-thread="threadId"
+                :active-thread="panes[0]?.threadId || ''"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
                 @focusSearch="focusSidebarSearch"
@@ -236,24 +236,8 @@ const {
     onFlushDocument: (id) => flushDocument(id),
 });
 
-// Backward compatible aliases used by existing template (will be removed in Task 2 step 2.1)
-const threadId = computed<string>({
-    get: () => panes.value[0]?.threadId || '',
-    set: (v) => {
-        if (panes.value[0]) panes.value[0].threadId = v;
-    },
-});
-const messageHistory = computed<ChatMessage[]>(
-    () => panes.value[0]?.messages || []
-);
-// Legacy validating handling mapped to pane[0]
-const validating = computed<boolean>({
-    get: () => panes.value[0]?.validating || false,
-    set: (v) => {
-        if (panes.value[0]) panes.value[0].validating = v;
-    },
-});
-let validateToken = 0; // reused for initial validation, scoped now to pane[0]
+// Removed legacy aliases (threadId/messageHistory/validating); use pane[0] directly where needed
+let validateToken = 0; // token for initial validation
 
 // Watch pane add/remove to sync URL for active pane type
 watch(
@@ -265,15 +249,6 @@ watch(
         else updateUrlThread(undefined);
     }
 );
-
-async function closePaneWithUrl(i: number) {
-    const wasChat = panes.value[i]?.mode === 'chat';
-    await closePane(i);
-    const pane = panes.value[activePaneIndex.value];
-    if (!pane) return;
-    if (pane.mode === 'chat') updateUrlThread(pane.threadId || undefined);
-    else if (wasChat) updateUrlThread(undefined);
-}
 
 async function ensureDbOpen() {
     try {
