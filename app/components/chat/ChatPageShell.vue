@@ -21,7 +21,7 @@
             <div
                 id="top-nav"
                 :class="{
-                    'border-[var(--tw-border)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
                         panes.length > 1 || isMobile,
                 }"
                 class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
@@ -112,7 +112,7 @@
                     :class="[
                         i === activePaneIndex && panes.length > 1
                             ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--tw-border)]',
+                            : 'border-[var(--md-inverse-surface)]',
                         'transition-colors',
                     ]"
                     tabindex="0"

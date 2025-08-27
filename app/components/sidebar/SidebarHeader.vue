@@ -4,7 +4,7 @@
             'px-0 justify-center': collapsed,
             'px-3 justify-between': !collapsed,
         }"
-        class="flex items-center header-pattern py-2 border-b-2 border-[var(--tw-border-style)]"
+        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)]"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">

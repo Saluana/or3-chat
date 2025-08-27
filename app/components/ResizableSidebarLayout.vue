@@ -19,7 +19,7 @@
         <!-- Sidebar -->
         <aside
             :class="[
-                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-black dark:border-[var(--tw-border-style)] flex flex-col',
+                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-[var(--md-inverse-surface)] flex flex-col',
                 // width transition on desktop
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'

@@ -29,25 +29,55 @@
                 <div
                     class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
                 >
-                    <div class="relative w-full max-w-md">
-                        <UInput
-                            v-model="searchQuery"
-                            icon="pixelarticons:search"
-                            placeholder="Search models (id, name, description, modality)"
+                    <div class="flex items-center gap-3 w-full">
+                        <div class="relative w-full max-w-md">
+                            <UInput
+                                v-model="searchQuery"
+                                icon="pixelarticons:search"
+                                placeholder="Search models (id, name, description, modality)"
+                                size="sm"
+                                class="w-full pr-8"
+                                :ui="{ base: 'w-full' }"
+                                autofocus
+                            />
+                            <button
+                                v-if="searchQuery"
+                                type="button"
+                                aria-label="Clear search"
+                                class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                                @click="searchQuery = ''"
+                            >
+                                <UIcon
+                                    name="i-heroicons-x-mark"
+                                    class="h-4 w-4"
+                                />
+                            </button>
+                        </div>
+                        <UButton
+                            :disabled="refreshing"
                             size="sm"
-                            class="w-full pr-8"
-                            :ui="{ base: 'w-full' }"
-                            autofocus
-                        />
-                        <button
-                            v-if="searchQuery"
-                            type="button"
-                            aria-label="Clear search"
-                            class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                            @click="searchQuery = ''"
+                            variant="ghost"
+                            :square="true"
+                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
+                            aria-label="Refresh model catalog"
+                            :title="
+                                refreshing
+                                    ? 'Refreshing…'
+                                    : 'Force refresh models (bypass cache)'
+                            "
+                            @click="doRefresh"
                         >
-                            <UIcon name="i-heroicons-x-mark" class="h-4 w-4" />
-                        </button>
+                            <UIcon
+                                v-if="!refreshing"
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4"
+                            />
+                            <UIcon
+                                v-else
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4 animate-spin"
+                            />
+                        </UButton>
                     </div>
                 </div>
                 <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
@@ -209,9 +239,26 @@ const {
     getFavoriteModels,
     catalog,
     fetchModels,
+    refreshModels,
     addFavoriteModel,
     removeFavoriteModel,
 } = useModelStore();
+
+// Refresh state
+const refreshing = ref(false);
+
+async function doRefresh() {
+    if (refreshing.value) return;
+    refreshing.value = true;
+    try {
+        await refreshModels();
+        modelCatalog.value = catalog.value.slice();
+    } catch (e) {
+        console.warn('[SettingsModal] model refresh failed', e);
+    } finally {
+        refreshing.value = false;
+    }
+}
 
 onMounted(() => {
     fetchModels().then(() => {

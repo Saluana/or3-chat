@@ -10,8 +10,8 @@ export default defineAppConfig({
         modal: {
             slots: {
                 content:
-                    'fixed border-2 border-[var(--tw-border-style)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--tw-border-style)] ',
+                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
                 header: 'border-0',
             },
         },
