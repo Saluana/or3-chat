@@ -180,7 +180,7 @@
 <script setup lang="ts">
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import DocumentEditor from '~/components/documents/DocumentEditor.vue';
-import Dexie from 'dexie';
+import { useMultiPane } from '~/composables/useMultiPane';
 import { db } from '~/db';
 // No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
 
@@ -215,36 +215,26 @@ type ChatMessage = {
     stream_id?: string;
 };
 
-// ---------------- Multi-pane (phase 1: internal refactor) ----------------
-// PaneState holds per-pane chat state. For Task 1 we still render a single pane; template
-// continues to use computed aliases `threadId` & `messageHistory` pointing at pane[0].
-interface PaneState {
-    id: string; // local pane id (not thread id)
-    mode: 'chat' | 'doc';
-    threadId: string; // current thread id ('' if new chat) when mode==='chat'
-    documentId?: string; // active document when mode==='doc'
-    messages: ChatMessage[]; // loaded messages for the thread
-    validating: boolean; // reserved for potential per-pane validation
-}
-
-function createEmptyPane(initialThreadId = ''): PaneState {
-    const genId = () =>
-        typeof crypto !== 'undefined' && crypto.randomUUID
-            ? crypto.randomUUID()
-            : 'pane-' + Math.random().toString(36).slice(2);
-    return {
-        id: genId(),
-        mode: 'chat',
-        threadId: initialThreadId,
-        messages: [],
-        validating: false,
-    };
-}
-
-// Primary state: array of panes (currently single until Task 2 UI changes)
-const panes = ref<PaneState[]>([createEmptyPane(props.initialThreadId || '')]);
-// Active pane index (for future multi-pane interactions)
-const activePaneIndex = ref(0);
+// ---------------- Multi-pane via composable ----------------
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
 
 // Backward compatible aliases used by existing template (will be removed in Task 2 step 2.1)
 const threadId = computed<string>({
@@ -265,103 +255,24 @@ const validating = computed<boolean>({
 });
 let validateToken = 0; // reused for initial validation, scoped now to pane[0]
 
-// Extracted loader now returns messages for a thread id (Task 1.3)
-async function loadMessagesFor(id: string): Promise<ChatMessage[]> {
-    if (!id) return [];
-    try {
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([id, Dexie.minKey], [id, Dexie.maxKey])
-            .filter((m: any) => !m.deleted)
-            .toArray();
-        return (msgs || []).map((msg: any) => {
-            const data = msg.data as unknown;
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
-            return {
-                role: msg.role as 'user' | 'assistant',
-                content,
-                file_hashes: msg.file_hashes,
-                id: msg.id,
-                stream_id: msg.stream_id,
-            } as ChatMessage;
-        });
-    } catch (e) {
-        // Fail soft; log once if desired (kept silent for now per simplicity)
-        return [];
+// Watch pane add/remove to sync URL for active pane type
+watch(
+    () => panes.value.map((p) => p.id).join(','),
+    () => {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        if (pane.mode === 'chat') updateUrlThread(pane.threadId || undefined);
+        else updateUrlThread(undefined);
     }
-}
-
-// Helper to set a pane's thread & load messages (Task 1.4)
-async function setPaneThread(index: number, id: string) {
-    const pane = panes.value[index];
-    if (!pane) return;
-    pane.threadId = id;
-    pane.messages = await loadMessagesFor(id);
-}
-
-// Activate pane (Task 1.5; not yet wired in template until Task 2)
-function setActive(i: number) {
-    if (i >= 0 && i < panes.value.length) activePaneIndex.value = i;
-}
-
-// ---------------- Task 2: UI / interaction helpers ----------------
-const canAddPane = computed(() => panes.value.length < 3);
-const newWindowTooltip = computed(() =>
-    canAddPane.value ? 'New window' : 'Max 3 windows'
 );
 
-function addPane() {
-    // Guard (Task 3.1): never exceed 3 panes even if called externally
-    if (panes.value.length >= 3) return;
-    panes.value.push(createEmptyPane());
-    setActive(panes.value.length - 1);
-}
-
-function closePane(i: number) {
-    if (panes.value.length <= 1) return; // never close last
-    const wasActive = i === activePaneIndex.value;
-    // Flush document if closing a doc pane
-    const closing = panes.value[i];
-    if (closing?.mode === 'doc' && closing.documentId) {
-        flushDocument(closing.documentId);
-    }
-    panes.value.splice(i, 1);
-    if (!panes.value.length) {
-        // Safety: recreate a blank pane (should not normally happen)
-        panes.value.push(createEmptyPane());
-        activePaneIndex.value = 0;
-        return;
-    }
-    if (wasActive) {
-        // Task 3.2: ensure logical new active (nearest existing)
-        const newIndex = Math.min(i, panes.value.length - 1);
-        setActive(newIndex);
-        const newPane = panes.value[newIndex];
-        if (!newPane) return; // safety guard
-        if (newPane.mode === 'chat') {
-            updateUrlThread(newPane.threadId || undefined);
-        } else {
-            // Clear URL if previously a chat (remain at /chat)
-            updateUrlThread(undefined);
-        }
-    } else if (i < activePaneIndex.value) {
-        // shift active index left because array shrank before it
-        activePaneIndex.value -= 1;
-    }
-}
-
-function focusPrev(current: number) {
-    if (panes.value.length < 2) return;
-    const target = current - 1;
-    if (target >= 0) setActive(target);
-}
-function focusNext(current: number) {
-    if (panes.value.length < 2) return;
-    const target = current + 1;
-    if (target < panes.value.length) setActive(target);
+async function closePaneWithUrl(i: number) {
+    const wasChat = panes.value[i]?.mode === 'chat';
+    await closePane(i);
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    if (pane.mode === 'chat') updateUrlThread(pane.threadId || undefined);
+    else if (wasChat) updateUrlThread(undefined);
 }
 
 async function ensureDbOpen() {
@@ -477,8 +388,7 @@ const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
 onMounted(() => {
     initInitialThread();
     syncTheme();
-    // Safety: ensure at least one pane exists (Task 3.5 defensive)
-    if (!panes.value.length) panes.value.push(createEmptyPane());
+    ensureAtLeastOne();
 });
 
 // Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
@@ -529,10 +439,7 @@ function onNewChat() {
 }
 
 // --------------- Documents Integration (minimal) ---------------
-import {
-    newDocument as createNewDoc,
-    flush as flushDocument,
-} from '~/composables/useDocumentsStore';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
 
 async function onNewDocument(initial?: { title?: string }) {
     const pane = panes.value[activePaneIndex.value];
