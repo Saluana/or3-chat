@@ -90,8 +90,8 @@
                 v-if="activeSections.projects"
                 :projects="displayProjects"
                 v-model:expanded="expandedProjects"
-                @chatSelected="(id: string) => emit('chatSelected', id)"
-                @documentSelected="(id: string) => emit('documentSelected', id)"
+                @chatSelected="onProjectChatSelected"
+                @documentSelected="onProjectDocumentSelected"
                 @addChat="handleAddChatToProject"
                 @addDocument="handleAddDocumentToProject"
                 @deleteProject="handleDeleteProject"
@@ -121,7 +121,7 @@
                                     item.id === props.activeThread,
                             }"
                             class="w-full flex items-center justify-between text-left"
-                            @click="() => emit('chatSelected', item.id)"
+                            @click="() => selectChat(item.id)"
                         >
                             <div
                                 class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
@@ -202,7 +202,7 @@
                                     item.id === props.activeThread,
                             }"
                             class="w-full flex items-center justify-between text-left"
-                            @click="() => emit('chatSelected', item.id)"
+                            @click="() => selectChat(item.id)"
                         >
                             <div
                                 class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
@@ -276,7 +276,7 @@
                 v-if="activeSections.docs"
                 class="mt-4"
                 :external-docs="displayDocuments"
-                @select="(id:string) => emit('documentSelected', id)"
+                @select="(id:string) => selectDocument(id)"
                 @new-document="openCreateDocumentModal"
                 @add-to-project="(d:any) => openAddDocumentToProject(d)"
                 @delete-document="(d:any) => confirmDeleteDocument(d)"
@@ -611,6 +611,7 @@
 </template>
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
+import { useHooks } from '~/composables/useHooks';
 import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpers
@@ -801,6 +802,7 @@ const emit = defineEmits<{
     (e: 'newDocument', initial?: { title?: string }): void;
     (e: 'documentSelected', id: string): void;
 }>();
+const hooks = useHooks();
 
 // ----- Actions: menu, rename, delete -----
 const showRenameModal = ref(false);
@@ -974,9 +976,35 @@ async function deleteDocument() {
     deleteDocumentId.value = null;
 }
 
-function onNewChat() {
+async function onNewChat() {
     emit('newChat');
-    console.log('New chat requested');
+    await hooks.doAction('ui.chat.new:action:after');
+}
+
+async function selectChat(id: string) {
+    await hooks.doAction('ui.sidebar.select:action:before', {
+        kind: 'chat',
+        id,
+    });
+    emit('chatSelected', id);
+    await hooks.doAction('ui.sidebar.select:action:after', {
+        kind: 'chat',
+        id,
+    });
+}
+async function selectDocument(id: string) {
+    await hooks.doAction('ui.sidebar.select:action:before', {
+        kind: 'doc',
+        id,
+    });
+    emit('documentSelected', id);
+    await hooks.doAction('ui.sidebar.select:action:after', { kind: 'doc', id });
+}
+async function onProjectChatSelected(id: string) {
+    await selectChat(id);
+}
+async function onProjectDocumentSelected(id: string) {
+    await selectDocument(id);
 }
 
 // ---- Project Tree Handlers ----

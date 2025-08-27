@@ -3,6 +3,7 @@
 
 import Dexie from 'dexie';
 import { db } from '~/db';
+import { useHooks } from './useHooks';
 
 // Narrow pane message representation (always flattened string content)
 export type MultiPaneMessage = {
@@ -98,6 +99,7 @@ export function useMultiPane(
 
     const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
     const activePaneIndex = ref(0);
+    const hooks = useHooks();
 
     const canAddPane = computed(() => panes.value.length < maxPanes);
     const newWindowTooltip = computed(() =>
@@ -114,18 +116,32 @@ export function useMultiPane(
     }
 
     function setActive(i: number) {
-        if (i >= 0 && i < panes.value.length) activePaneIndex.value = i;
+        if (i >= 0 && i < panes.value.length) {
+            if (i !== activePaneIndex.value) {
+                activePaneIndex.value = i;
+                // Emit switch action with new pane state
+                hooks.doAction('ui.pane.switch:action', panes.value[i], i);
+            }
+        }
     }
 
     function addPane() {
         if (!canAddPane.value) return;
-        panes.value.push(createEmptyPane());
+        const pane = createEmptyPane();
+        panes.value.push(pane);
         setActive(panes.value.length - 1);
+        hooks.doAction(
+            'ui.pane.open:action:after',
+            pane,
+            panes.value.length - 1
+        );
     }
 
     async function closePane(i: number) {
         if (panes.value.length <= 1) return; // never close last
         const closing = panes.value[i];
+        // Pre-close hook
+        hooks.doAction('ui.pane.close:action:before', closing, i);
         if (
             closing?.mode === 'doc' &&
             closing.documentId &&

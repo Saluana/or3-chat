@@ -452,3 +452,66 @@ useHookEffect('ai.chat.retry:action:after', (info) => {
     console.debug('[retry after]', info);
 });
 ```
+
+## Pane lifecycle hooks
+
+Multi-pane chat/document UI emits actions so extensions can react to pane changes.
+
+Hook names:
+
+-   `ui.pane.open:action:after` — after a new pane is created and set active. - Args: `(pane: PaneState, index: number)`
+-   `ui.pane.close:action:before` — before a pane is removed (after any pending doc flush attempt). - Args: `(pane: PaneState, index: number)`
+-   `ui.pane.switch:action` — when the active pane index changes. - Args: `(pane: PaneState, index: number)`
+
+Notes:
+
+-   `PaneState` shape: `{ id, mode: 'chat'|'doc', threadId, documentId?, messages[], validating }`.
+-   `ui.pane.close:action:before` will not fire for the very last remaining pane (it refuses to close).
+-   Use `useHookEffect` for safe subscription inside components.
+
+Example: track pane usage metrics
+
+```ts
+useHookEffect('ui.pane.open:action:after', (_ctx, pane, i) => {
+    console.debug('[pane open]', pane.id, 'at', i, pane.mode);
+});
+
+useHookEffect('ui.pane.switch:action', (_ctx, pane, i) => {
+    console.debug('[pane switch] active ->', i, pane.id);
+});
+
+useHookEffect('ui.pane.close:action:before', (_ctx, pane, i) => {
+    console.debug('[pane close]', pane.id, 'from', i);
+});
+```
+
+## Sidebar navigation hooks
+
+User navigation in the sidebar (thread/doc selection & new chat creation) exposes hooks for plugins.
+
+Hook names:
+
+-   `ui.sidebar.select:action:before` — before emitting selection. Args: `{ kind: 'chat'|'doc', id: string }`.
+-   `ui.sidebar.select:action:after` — after selection event is emitted.
+-   `ui.chat.new:action:after` — after a new chat request (pane/thread creation handled by parent component logic).
+
+Notes:
+
+-   `:before` runs even if the same id is re-selected (idempotency left to handlers).
+-   Handlers can show confirmations or track analytics. To cancel selection you can still emit a different selection from inside your handler (no native cancel today).
+
+Example: analytics + confirmation
+
+```ts
+useHookEffect('ui.sidebar.select:action:before', (_ctx, info) => {
+    console.debug('[select before]', info.kind, info.id);
+});
+
+useHookEffect('ui.sidebar.select:action:after', (_ctx, info) => {
+    console.debug('[select after]', info.kind, info.id);
+});
+
+useHookEffect('ui.chat.new:action:after', () => {
+    console.debug('[new chat created request]');
+});
+```
