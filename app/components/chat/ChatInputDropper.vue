@@ -459,8 +459,10 @@ const handlePaste = async (event: ClipboardEvent) => {
     if (!text) return; // allow normal behavior
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
     if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
+        // Prevent the heavy text from entering the rich-text editor (lag source)
         event.preventDefault();
-        // Create a block instead of inserting raw text
+        event.stopPropagation();
+        const prev = editor.value ? editor.value.getText() : '';
         const previewFull = text.slice(0, 800).trim();
         const preview =
             previewFull.split(/\s+/).slice(0, 12).join(' ') +
@@ -471,6 +473,16 @@ const handlePaste = async (event: ClipboardEvent) => {
             wordCount,
             preview,
             previewFull,
+        });
+        // TipTap may still stage an insertion despite preventDefault in some edge cases;
+        // restore previous content on next tick to be safe.
+        nextTick(() => {
+            try {
+                if (editor.value)
+                    editor.value.commands.setContent(prev, {
+                        emitUpdate: false,
+                    });
+            } catch {}
         });
     }
 };
