@@ -1,5 +1,5 @@
 <template>
-    <div class="mt-4">
+    <div v-if="effectiveDocs.length > 0" class="mt-4">
         <div class="flex items-center justify-between px-1 mb-1">
             <h4 class="text-xs uppercase tracking-wide opacity-70 select-none">
                 Docs
