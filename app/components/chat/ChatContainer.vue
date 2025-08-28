@@ -6,7 +6,8 @@
         <!-- Scroll viewport -->
         <div
             ref="scrollParent"
-            class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 pb-[165px] scrollbars"
+            class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            :style="{ paddingBottom: bottomPad + 'px' }"
         >
             <div
                 class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
@@ -64,6 +65,7 @@
                 class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1"
             >
                 <chat-input-dropper
+                    ref="chatInputEl"
                     :loading="loading"
                     :container-width="containerWidth"
                     @send="onSend"
@@ -100,6 +102,14 @@ const model = ref('openai/gpt-oss-120b');
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot = ref<HTMLElement | null>(null);
 const { width: containerWidth } = useElementSize(containerRoot);
+// Dynamic chat input height to compute scroll padding
+const chatInputEl = ref<HTMLElement | null>(null);
+const { height: chatInputHeight } = useElementSize(chatInputEl);
+const bottomPad = computed(() => {
+    // Add extra breathing space so last message sits above input slightly
+    const h = chatInputHeight.value || 140; // fallback similar to prior fixed 165
+    return Math.round(h + 36); // 36px buffer
+});
 
 function onModelChange(newModel: string) {
     model.value = newModel;
@@ -336,6 +346,17 @@ watch(currentThreadId, () => {
     tail.reset();
     tailStreamId.value = null;
 });
+
+// When input height changes and user was at bottom, keep them pinned
+watch(
+    () => chatInputHeight.value,
+    async () => {
+        await nextTick();
+        if (autoScroll.atBottom.value) {
+            autoScroll.scrollToBottom({ smooth: false });
+        }
+    }
+);
 
 // Auto-scroll as tailDisplay grows
 // Chat send abstraction (Req 3.5)
