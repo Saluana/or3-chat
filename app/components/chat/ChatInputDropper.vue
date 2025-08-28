@@ -286,10 +286,21 @@ const props = defineProps<{ loading?: boolean; containerWidth?: number }>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
 const webSearchEnabled = ref<boolean>(false);
+const LAST_MODEL_KEY = 'last_selected_model';
 
 onMounted(async () => {
     const fave = await getFavoriteModels();
     console.log('Favorite models:', fave);
+    if (process.client) {
+        try {
+            const stored = localStorage.getItem(LAST_MODEL_KEY);
+            if (stored && typeof stored === 'string') {
+                selectedModel.value = stored;
+            }
+        } catch (e) {
+            console.warn('[ChatInputDropper] restore last model failed', e);
+        }
+    }
 });
 
 onMounted(() => {
@@ -415,6 +426,13 @@ const showSettingsDropdown = ref(false);
 
 watch(selectedModel, (newModel) => {
     emit('model-change', newModel);
+    if (process.client) {
+        try {
+            localStorage.setItem(LAST_MODEL_KEY, newModel);
+        } catch (e) {
+            console.warn('[ChatInputDropper] persist last model failed', e);
+        }
+    }
 });
 
 const autoResize = async () => {

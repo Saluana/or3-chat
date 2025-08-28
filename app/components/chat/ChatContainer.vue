@@ -80,6 +80,8 @@
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
 import { shallowRef, computed, watch, ref, nextTick } from 'vue';
+import { parseFileHashes } from '~/db/files-util';
+import { db } from '~/db';
 import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
@@ -154,24 +156,63 @@ type RenderMessage = {
     stream_id?: string;
     file_hashes?: string | null; // serialized JSON array (from DB/user memory)
 };
+function escapeAttr(v: string) {
+    return v
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
 const messages = computed<RenderMessage[]>(() =>
     (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
-        let contentStr: string;
-        if (typeof m.content === 'string') contentStr = m.content;
-        else if (Array.isArray(m.content)) {
-            contentStr = (m.content as ContentPart[])
-                .map((p) => {
-                    if (p.type === 'text') return p.text;
-                    if (p.type === 'image') return '';
-                    if (p.type === 'file')
-                        return `**[file:${
-                            (p as any).name ?? (p as any).mediaType ?? 'file'
-                        }]**`;
-                    return '';
-                })
-                .filter(Boolean)
-                .join('\n\n');
-        } else contentStr = String((m as any).content ?? '');
+        let contentStr = '';
+        if (typeof m.content === 'string') {
+            contentStr = m.content;
+        } else if (Array.isArray(m.content)) {
+            const segs: string[] = [];
+            for (const p of m.content as ContentPart[]) {
+                if (p.type === 'text') {
+                    segs.push(p.text);
+                } else if (p.type === 'image') {
+                    const src = typeof p.image === 'string' ? p.image : '';
+                    if (src.startsWith('data:image/')) {
+                        segs.push(
+                            `<div class=\"my-3\"><img src=\"${escapeAttr(
+                                src
+                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
+                        );
+                    } else if (src) {
+                        segs.push(
+                            `<div class=\"my-3\"><img src=\"${escapeAttr(
+                                src
+                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
+                        );
+                    }
+                } else if (p.type === 'file') {
+                    const label = (p as any).name || p.mediaType || 'file';
+                    segs.push(`**[file:${escapeAttr(label)}]**`);
+                }
+            }
+            contentStr = segs.join('\n\n');
+        } else {
+            contentStr = String((m as any).content ?? '');
+        }
+        // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
+        const hasImgTag = /<img\s/i.test(contentStr);
+        if (!hasImgTag && (m as any).file_hashes) {
+            const hashes = parseFileHashes((m as any).file_hashes);
+            if (hashes.length) {
+                const gallery = hashes
+                    .map(
+                        (h) =>
+                            `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
+                                h
+                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
+                    )
+                    .join('');
+                contentStr += (contentStr ? '\n\n' : '') + gallery;
+            }
+        }
         return {
             role: m.role,
             content: contentStr,

@@ -11,7 +11,7 @@
     >
         <!-- Compact thumb (collapsed state) -->
         <button
-            v-if="hashList.length && !expanded"
+            v-if="props.message.role === 'user' && hashList.length && !expanded"
             class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
@@ -44,7 +44,12 @@
             >
         </button>
 
-        <div v-if="!editing" :class="innerClass" v-html="rendered"></div>
+        <div
+            v-if="!editing"
+            :class="innerClass"
+            ref="contentEl"
+            v-html="rendered"
+        ></div>
         <!-- Editing surface -->
         <div v-else class="w-full">
             <MessageEditor
@@ -137,7 +142,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
+import {
+    computed,
+    reactive,
+    ref,
+    watch,
+    onBeforeUnmount,
+    nextTick,
+    onMounted,
+} from 'vue';
 import { parseFileHashes } from '~/db/files-util';
 import { marked } from 'marked';
 import MessageEditor from './MessageEditor.vue';
@@ -174,7 +187,36 @@ const innerClass = computed(() => ({
         props.message.role === 'assistant',
 }));
 
-const rendered = computed(() => marked.parse(props.message.content));
+// Extract hash list (serialized JSON string or array already?)
+const hashList = computed<string[]>(() => {
+    const raw = (props.message as any).file_hashes;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string') return parseFileHashes(raw);
+    return [];
+});
+
+// Render markdown/text. For assistant messages keep existing inline images during live stream.
+// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
+const rendered = computed(() => {
+    const raw = props.message.content || '';
+    const parsed = (marked.parse(raw) as string) || '';
+    if (props.message.role === 'user') {
+        return parsed.replace(/<img\b[^>]*>/gi, '');
+    }
+    const hasAnyImg = /<img\b/i.test(parsed);
+    if (hasAnyImg) return parsed; // live streaming case retains inline imgs
+    if (hashList.value.length) {
+        const placeholders = hashList.value
+            .map(
+                (h) =>
+                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
+            )
+            .join('');
+        return parsed + placeholders;
+    }
+    return parsed;
+});
 
 // Editing (extracted)
 const {
@@ -193,14 +235,7 @@ async function saveEdit() {
     }
 }
 
-// Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => {
-    const raw = (props.message as any).file_hashes;
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as string[];
-    if (typeof raw === 'string') return parseFileHashes(raw);
-    return [];
-});
+// (hashList defined earlier)
 
 // Compact thumb preview support (attachments gallery handles full grid). Reuse global caches.
 interface ThumbState {
@@ -321,6 +356,40 @@ onBeforeUnmount(() => {
     for (const h of currentHashes) releaseThumb(h);
     currentHashes.clear();
 });
+// Inline image hydration: replace <img data-file-hash> with object URL once ready
+const contentEl = ref<HTMLElement | null>(null);
+async function hydrateInlineImages() {
+    // Only hydrate assistant messages (users have inline images stripped).
+    if (props.message.role !== 'assistant') return;
+    await nextTick();
+    const root = contentEl.value;
+    if (!root) return;
+    const imgs = root.querySelectorAll(
+        'img[data-file-hash]:not([data-hydrated])'
+    );
+    imgs.forEach((imgEl) => {
+        const hash = imgEl.getAttribute('data-file-hash') || '';
+        if (!hash) return;
+        const state = thumbCache.get(hash) || thumbnails[hash];
+        if (state && state.status === 'ready' && state.url) {
+            (imgEl as HTMLImageElement).src = state.url;
+            imgEl.setAttribute('data-hydrated', 'true');
+            imgEl.classList.remove('opacity-60');
+        }
+    });
+}
+// Re-run hydration when rendered HTML changes or thumbnails update
+watch(rendered, () => hydrateInlineImages());
+watch(hashList, () => hydrateInlineImages());
+onMounted(() => hydrateInlineImages());
+watch(
+    () =>
+        Object.keys(thumbnails).map((h) => {
+            const t = thumbnails[h]!; // state always initialized before use
+            return t.status + ':' + (t.url || '');
+        }),
+    () => hydrateInlineImages()
+);
 import { useToast } from '#imports';
 function copyMessage() {
     navigator.clipboard.writeText(props.message.content);
