@@ -12,7 +12,7 @@
         <!-- Compact thumb (collapsed state) -->
         <button
             v-if="hashList.length && !expanded"
-            class="absolute -top-2 -right-2 border-2 border-black retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
             aria-label="Show attachments"
@@ -163,9 +163,9 @@ const emit = defineEmits<{
 }>();
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-black retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
         props.message.role === 'user',
-    'bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm':
+    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
         props.message.role === 'assistant',
 }));
 

@@ -1,14 +1,14 @@
 <template>
     <div
-        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)]"
+        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
     >
         <!-- Removed previously added extra div; using pseudo-element for top pattern -->
         <div
-            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] border-2 border-[var(--md-outline-variant)]"
+            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container)] border-2 border-[var(--md-outline-variant)]"
         >
             <div class="h-[10px] top-10 header-pattern-flipped"></div>
             <div
-                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
+                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] dark:bg-[var(--md-surface-container-low)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
             >
                 <!-- MY INFO -->
                 <UPopover>

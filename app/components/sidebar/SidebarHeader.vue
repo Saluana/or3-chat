@@ -4,7 +4,7 @@
             'px-0 justify-center': collapsed,
             'px-3 justify-between': !collapsed,
         }"
-        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)]"
+        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
@@ -48,5 +48,15 @@ function onToggle() {
 </script>
 
 <style scoped>
-/* keep styling minimal; visual rules come from parent stylesheet */
+/* Gradient already supplied by global pattern image; we just ensure better dark base */
+.header-pattern {
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+.dark .header-pattern {
+    /* Elevated surface tone for dark mode header to distinguish from main background */
+    background-color: var(--md-surface-container-high) !important;
+}
 </style>
