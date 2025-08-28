@@ -86,7 +86,7 @@ import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
     ContentPart,
-} from '~/composables/useAi';
+} from '~/utils/chat/types';
 import { useHookEffect } from '~/composables/useHookEffect';
 import { marked } from 'marked';
 import VirtualMessageList from './VirtualMessageList.vue';

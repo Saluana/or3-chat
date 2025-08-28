@@ -163,7 +163,7 @@ type ChatMessage = {
     file_hashes?: string | null; // serialized array
 };
 
-import type { ChatMessage as ChatMessageType } from '~/composables/useAi';
+import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 
 // Local UI message expects content to be a string (rendered markdown/html)
 type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
