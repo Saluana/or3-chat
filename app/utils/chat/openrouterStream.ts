@@ -34,6 +34,27 @@ export async function* openRouterStream(params: {
     const decoder = new TextDecoder();
     let buffer = '';
     const emittedImages = new Set<string>();
+    const rawPackets: any[] = [];
+
+    function emitImageCandidate(
+        url: string | undefined | null,
+        indexRef: { v: number },
+        final = false
+    ) {
+        if (!url) return;
+        if (emittedImages.has(url)) return;
+        emittedImages.add(url);
+        const idx = indexRef.v++;
+        // Yield image event
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        (async () => {
+            /* placeholder for async transforms if needed */
+        })();
+        imageQueue.push({ type: 'image', url, final, index: idx });
+    }
+
+    // Queue to preserve ordering between text and image parts inside a single chunk
+    const imageQueue: ORStreamEvent[] = [];
 
     while (true) {
         const { done, value } = await reader.read();
@@ -54,6 +75,7 @@ export async function* openRouterStream(params: {
             }
             try {
                 const parsed = JSON.parse(data);
+                rawPackets.push(parsed);
                 const choices = parsed.choices || [];
                 for (const choice of choices) {
                     const delta = choice.delta || {};
@@ -73,34 +95,104 @@ export async function* openRouterStream(params: {
                         yield { type: 'text', text: delta.content };
                     }
 
-                    // Streaming images
+                    // Streaming images (legacy / OpenAI style delta.images array)
                     if (Array.isArray(delta.images)) {
-                        let ix = 0;
+                        let ixRef = { v: 0 };
                         for (const img of delta.images) {
                             const url = img?.image_url?.url || img?.url;
-                            if (url && !emittedImages.has(url)) {
-                                emittedImages.add(url);
-                                yield { type: 'image', url, index: ix++ };
+                            emitImageCandidate(url, ixRef, false);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
+                    if (Array.isArray(delta.content)) {
+                        let ixRef = { v: 0 };
+                        for (const part of delta.content) {
+                            if (part && typeof part === 'object') {
+                                if (
+                                    part.type === 'image' &&
+                                    (part.url || part.image)
+                                ) {
+                                    emitImageCandidate(
+                                        part.url || part.image,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'image_url' &&
+                                    part.image_url?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.image_url.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'media' &&
+                                    part.media?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.media.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (part.inline_data?.data) {
+                                    // Gemini style inline base64 data
+                                    const mime =
+                                        part.inline_data.mimeType ||
+                                        'image/png';
+                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                    emitImageCandidate(dataUrl, ixRef, false);
+                                }
                             }
                         }
+                        while (imageQueue.length) yield imageQueue.shift()!;
                     }
 
                     // Final message images
+                    // Final images may be in message.images array
                     const finalImages = choice.message?.images;
                     if (Array.isArray(finalImages)) {
-                        let fIx = 0;
+                        let fIxRef = { v: 0 };
                         for (const img of finalImages) {
                             const url = img?.image_url?.url || img?.url;
-                            if (url && !emittedImages.has(url)) {
-                                emittedImages.add(url);
-                                yield {
-                                    type: 'image',
-                                    url,
-                                    final: true,
-                                    index: fIx++,
-                                };
+                            emitImageCandidate(url, fIxRef, true);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Or inside message.content array (Gemini style)
+                    const finalContent = choice.message?.content;
+                    if (Array.isArray(finalContent)) {
+                        let fIxRef2 = { v: 0 };
+                        for (const part of finalContent) {
+                            if (
+                                part?.type === 'image' &&
+                                (part.url || part.image)
+                            ) {
+                                emitImageCandidate(
+                                    part.url || part.image,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (
+                                part?.type === 'image_url' &&
+                                part.image_url?.url
+                            ) {
+                                emitImageCandidate(
+                                    part.image_url.url,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (part?.inline_data?.data) {
+                                const mime =
+                                    part.inline_data.mimeType || 'image/png';
+                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                emitImageCandidate(dataUrl, fIxRef2, true);
                             }
                         }
+                        while (imageQueue.length) yield imageQueue.shift()!;
                     }
                 }
             } catch {
@@ -108,6 +200,15 @@ export async function* openRouterStream(params: {
             }
         }
     }
+
+    try {
+        // eslint-disable-next-line no-console
+        console.log('[openRouterStream] complete raw response packets', {
+            model,
+            packetCount: rawPackets.length,
+            packets: rawPackets,
+        });
+    } catch {}
 
     yield { type: 'done' };
 }

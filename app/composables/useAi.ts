@@ -166,7 +166,21 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             );
 
             trimOrMessagesImages(orMessages, 5);
-            const modalities = ['text', 'image'];
+            // Dynamically decide modalities: include image only if we have image inputs
+            // or the model name suggests image generation capability.
+            const hasImageInput = (modelInputMessages as any[]).some((m) =>
+                Array.isArray(m.content)
+                    ? (m.content as any[]).some(
+                          (p) =>
+                              p?.type === 'image_url' ||
+                              p?.type === 'image' ||
+                              p?.mediaType?.startsWith('image/')
+                      )
+                    : false
+            );
+            const modelImageHint = /image|vision|flash/i.test(modelId);
+            const modalities =
+                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
 
             // Prepare assistant placeholder (with stream id)
             const streamId = newId();
@@ -353,6 +367,17 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
             await upsert.message(finalized);
 
             const endedAt = Date.now();
+            // Log full finalized assistant response (100% complete)
+            try {
+                // Provide both DB record and in-memory content state
+                // Avoid leaking API key etc (not present here)
+                // eslint-disable-next-line no-console
+                console.log('[useChat] assistant response complete', {
+                    threadId: threadIdRef.value,
+                    assistant: finalized,
+                    uiMessage: current,
+                });
+            } catch {}
             await hooks.doAction('ai.chat.send:action:after', {
                 threadId: threadIdRef.value,
                 request: { modelId, userId: userDbMsg.id },
