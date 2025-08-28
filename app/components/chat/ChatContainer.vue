@@ -41,7 +41,7 @@
                                 style="animation-duration: 120ms"
                             >
                                 <div
-                                    class="prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                                    class="prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] text-[var(--md-on-surface)] dark:text-[var(--md-on-surface)]"
                                     v-html="tailRendered || tailPlaceholder"
                                 />
                                 <div
@@ -227,6 +227,8 @@ const loading = computed(() => chat.value.loading.value);
 // Tail streaming via composable (Req 3.2)
 const tail = useTailStream({ flushIntervalMs: 50, immediate: true });
 const tailStreamId = ref<string | null>(null);
+// Current thread id for this container (reactive)
+const currentThreadId = computed(() => chat.value.threadId?.value);
 const tailActive = computed(() => tail.isStreaming.value);
 const tailRendered = computed(() =>
     tail.displayText.value ? marked.parse(tail.displayText.value) : ''
@@ -284,6 +286,8 @@ nextTick(() => {
 useHookEffect(
     'ai.chat.stream:action:delta',
     (delta: string, meta: any) => {
+        // Filter: only react if this delta belongs to this pane's thread
+        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
         const sid = meta?.streamId || meta?.assistantId || 'stream';
         if (!tailStreamId.value || tailStreamId.value !== sid) {
             tailStreamId.value = sid;
@@ -297,7 +301,8 @@ useHookEffect(
 // Hook: after send (finalize)
 useHookEffect(
     'ai.chat.send:action:after',
-    () => {
+    (meta?: any) => {
+        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
         tail.complete();
         nextTick(() => autoScroll.onContentIncrease());
     },
@@ -307,7 +312,8 @@ useHookEffect(
 // Hook: error path
 useHookEffect(
     'ai.chat.error:action',
-    () => {
+    (meta?: any) => {
+        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
         tail.fail(new Error('stream-error'));
     },
     { kind: 'action', priority: 50 }
@@ -324,6 +330,12 @@ watch(
         }
     }
 );
+
+// Reset tail state when switching threads to prevent ghost streaming across panes
+watch(currentThreadId, () => {
+    tail.reset();
+    tailStreamId.value = null;
+});
 
 // Auto-scroll as tailDisplay grows
 // Chat send abstraction (Req 3.5)
