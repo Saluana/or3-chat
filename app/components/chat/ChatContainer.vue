@@ -38,15 +38,16 @@
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div v-if="tailActive" class="mt-10 first:mt-0">
                             <div
-                                class="bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm p-1 sm:p-5 rounded-md relative animate-in fade-in"
+                                class="bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm p-2 min-w-[140px] rounded-md relative animate-in fade-in"
                                 style="animation-duration: 120ms"
                             >
+                                <!-- Inner content wrapper mirrors assistant ChatMessage innerClass -->
                                 <div
-                                    class="prose max-w-none w-full leading-[1.5] dark:prose-headings:text-white/95! prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] text-[var(--md-on-surface)] dark:text-[var(--md-on-surface)]"
+                                    class="prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5"
                                     v-html="tailRendered || tailPlaceholder"
                                 />
                                 <div
-                                    class="absolute -bottom-5 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+                                    class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
                                 >
                                     <span
                                         class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
