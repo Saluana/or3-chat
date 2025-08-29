@@ -2,11 +2,11 @@
     <UModal
         v-model:open="open"
         :ui="{
-            footer: 'justify-end border-t-2',
+            footer: 'justify-end border-none',
             header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0!',
+            body: 'p-0! border-b-0! overflow-hidden',
         }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] overflow-hidden"
+        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] max-h-[80vh] overflow-hidden"
     >
         <template #header>
             <div class="flex w-full items-center justify-between pr-2">
@@ -87,15 +87,16 @@
                                     <div class="flex items-center gap-2 mb-1">
                                         <h4
                                             class="font-medium text-gray-900 dark:text-white truncate"
+                                            :class="{
+                                                'italic opacity-60':
+                                                    !prompt.title,
+                                            }"
                                         >
-                                            {{ prompt.title }}
+                                            {{
+                                                prompt.title ||
+                                                'Untitled Prompt'
+                                            }}
                                         </h4>
-                                        <span
-                                            v-if="prompt.id === activePromptId"
-                                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200"
-                                        >
-                                            Active
-                                        </span>
                                     </div>
                                     <p
                                         class="text-sm text-gray-500 dark:text-gray-400"
@@ -135,8 +136,9 @@
                                             size="sm"
                                             variant="outline"
                                             color="neutral"
+                                            class="flex items-center justify-center"
                                             :square="true"
-                                            icon="i-heroicons-ellipsis-vertical"
+                                            icon="pixelarticons:more-vertical"
                                             aria-label="More actions"
                                         />
                                         <template #content>
@@ -147,7 +149,7 @@
                                                     @click="
                                                         startEditing(prompt.id)
                                                     "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2"
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
                                                 >
                                                     <UIcon
                                                         name="pixelarticons:edit"
@@ -159,7 +161,7 @@
                                                     @click="
                                                         deletePrompt(prompt.id)
                                                     "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2"
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
                                                 >
                                                     <UIcon
                                                         name="pixelarticons:trash"
@@ -176,35 +178,17 @@
                     </div>
 
                     <!-- Editor View -->
-                    <div v-else class="h-full">
-                        <div
-                            class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700"
-                        >
-                            <h3
-                                class="text-md font-medium text-gray-900 dark:text-white"
-                            >
-                                Editing: {{ editingPrompt.title }}
-                            </h3>
-                            <UButton
-                                @click="stopEditing"
-                                size="sm"
-                                color="neutral"
-                                variant="outline"
-                            >
-                                Back to List
-                            </UButton>
-                        </div>
-                        <div class="flex-1 p-4 overflow-auto">
-                            <DocumentEditor
-                                :document-id="editingPrompt.id"
-                                @close="stopEditing"
+                    <div v-else class="h-full overflow-hidden flex flex-col">
+                        <div class="flex-1 p-4 overflow-hidden">
+                            <PromptEditor
+                                :prompt-id="editingPrompt.id"
+                                @back="stopEditing"
                             />
                         </div>
                     </div>
                 </div>
             </div>
         </template>
-        <template #footer></template>
     </UModal>
 </template>
 
@@ -217,7 +201,7 @@ import {
     type PromptRecord,
 } from '~/db/prompts';
 import { useActivePrompt } from '~/composables/useActivePrompt';
-import DocumentEditor from '~/components/documents/DocumentEditor.vue';
+import PromptEditor from '~/components/prompts/PromptEditor.vue';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{ showModal: boolean }>();

@@ -31,9 +31,17 @@ function emptyPromptJSON() {
     return { type: 'doc', content: [] };
 }
 
-function normalizeTitle(title?: string | null): string {
-    const t = (title ?? '').trim();
-    return t.length ? t : 'Untitled Prompt';
+function normalizeTitle(
+    title?: string | null,
+    {
+        fallback = 'Untitled Prompt',
+        allowEmpty = true,
+    }: { fallback?: string; allowEmpty?: boolean } = {}
+): string {
+    const raw = title ?? '';
+    const trimmed = raw.trim();
+    if (!trimmed && !allowEmpty) return fallback;
+    return trimmed; // may be '' when allowEmpty true
 }
 
 function parseContent(raw: string | null | undefined): any {
@@ -70,7 +78,7 @@ export async function createPrompt(
     const hooks = useHooks();
     const prepared: PromptRow = {
         id: newId(),
-        title: normalizeTitle(input.title),
+        title: normalizeTitle(input.title, { allowEmpty: false }),
         content: JSON.stringify(input.content ?? emptyPromptJSON()),
         postType: 'prompt',
         created_at: nowSec(),
@@ -131,7 +139,10 @@ export async function updatePrompt(
     if (!existing || (existing as any).postType !== 'prompt') return undefined;
     const updated: PromptRow = {
         id: existing.id,
-        title: patch.title ? normalizeTitle(patch.title) : existing.title,
+        title:
+            patch.title !== undefined
+                ? normalizeTitle(patch.title, { allowEmpty: true })
+                : existing.title,
         content: patch.content
             ? JSON.stringify(patch.content)
             : (existing as any).content,
