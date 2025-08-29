@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { useToast } from '#imports';
 import { nowSec, newId } from '~/db/util';
 
 import { useUserApiKey } from './useUserApiKey';
@@ -419,12 +420,49 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 },
             });
         } catch (err) {
+            // Dispatch error hook first
             await hooks.doAction('ai.chat.error:action', {
                 threadId: threadIdRef.value,
                 stage: 'stream',
                 error: err,
             });
-            throw err;
+            try {
+                // Remove any trailing pending assistant placeholder
+                const last = messages.value[messages.value.length - 1];
+                if (
+                    last &&
+                    last.role === 'assistant' &&
+                    (last as any).pending
+                ) {
+                    messages.value.pop();
+                }
+            } catch {}
+            // Present toast with retry option (if last user message exists)
+            try {
+                const lastUser = [...messages.value]
+                    .reverse()
+                    .find((m) => m.role === 'user');
+                const toast = useToast();
+                toast.add({
+                    title: 'Message failed',
+                    description: (err as any)?.message || 'Request failed',
+                    color: 'error',
+                    actions: lastUser
+                        ? [
+                              {
+                                  label: 'Retry',
+                                  onClick: () => {
+                                      if (lastUser?.id)
+                                          retryMessage(lastUser.id as any);
+                                  },
+                              },
+                          ]
+                        : undefined,
+                    duration: 6000,
+                });
+            } catch {}
+            // Swallow error so caller doesn't need try/catch; UI already handled
+            return;
         } finally {
             loading.value = false;
         }
