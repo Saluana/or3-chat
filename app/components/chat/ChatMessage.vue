@@ -44,12 +44,17 @@
             >
         </button>
 
-        <div
-            v-if="!editing"
-            :class="innerClass"
-            ref="contentEl"
-            v-html="rendered"
-        ></div>
+        <div v-if="!editing" :class="innerClass" ref="contentEl">
+            <!-- Minimal retro loader: shown while assistant message pending and empty -->
+            <div
+                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent"
+                class="retro-bar animate-in"
+                aria-hidden="true"
+            >
+                <span class="retro-bar-text">Generating…</span>
+            </div>
+            <div v-else v-html="rendered"></div>
+        </div>
         <!-- Editing surface -->
         <div v-else class="w-full">
             <MessageEditor
@@ -166,7 +171,10 @@ type ChatMessage = {
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 
 // Local UI message expects content to be a string (rendered markdown/html)
-type UIMessage = Omit<ChatMessageType, 'content'> & { content: string };
+type UIMessage = Omit<ChatMessageType, 'content'> & {
+    content: string;
+    pending?: boolean;
+};
 
 const props = defineProps<{ message: UIMessage; threadId?: string }>();
 const emit = defineEmits<{
@@ -186,6 +194,15 @@ const innerClass = computed(() => ({
     'prose max-w-none dark:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
         props.message.role === 'assistant',
 }));
+
+// Detect if assistant message currently has any textual content yet
+const hasContent = computed(() => {
+    const c: any = props.message.content;
+    if (typeof c === 'string') return c.trim().length > 0;
+    if (Array.isArray(c))
+        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
+    return false;
+});
 
 // Extract hash list (serialized JSON string or array already?)
 const hashList = computed<string[]>(() => {
@@ -453,4 +470,60 @@ async function onBranch() {
 }
 </script>
 
-<style scoped></style>
+<style scoped>
+.retro-bar {
+    height: 1.25em;
+    border-radius: 4px;
+    background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.05) 0%,
+            rgba(255, 255, 255, 0.12) 40%,
+            rgba(255, 255, 255, 0.05) 80%
+        ),
+        repeating-linear-gradient(
+            -45deg,
+            rgba(80, 200, 255, 0.35) 0 6px,
+            rgba(80, 200, 255, 0.1) 6px 12px
+        );
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 500;
+}
+.retro-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.55) 50%,
+        transparent 100%
+    );
+    animation: sheen 1.2s linear infinite;
+}
+.retro-bar-text {
+    position: relative;
+    z-index: 1;
+    mix-blend-mode: plus-lighter;
+}
+@keyframes sheen {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .retro-bar::after {
+        animation: none;
+        opacity: 0.4;
+    }
+}
+</style>

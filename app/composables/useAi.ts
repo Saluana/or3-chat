@@ -216,7 +216,8 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                     content: '',
                     id: (assistantDbMsg as any).id,
                     stream_id: streamId,
-                }) - 1;
+                    pending: true,
+                } as any) - 1;
             const current = messages.value[idx]!;
             let chunkIndex = 0;
             const WRITE_INTERVAL_MS = 100;
@@ -226,6 +227,8 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
 
             for await (const ev of stream) {
                 if (ev.type === 'text') {
+                    if ((current as any).pending)
+                        (current as any).pending = false;
                     const delta = ev.text;
                     await hooks.doAction('ai.chat.stream:action:delta', delta, {
                         threadId: threadIdRef.value,
@@ -254,6 +257,8 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                             });
                     }
                 } else if (ev.type === 'image') {
+                    if ((current as any).pending)
+                        (current as any).pending = false;
                     // Add image to assistant message content
                     if (typeof current.content === 'string') {
                         current.content = [
@@ -338,6 +343,9 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 fullText,
                 threadIdRef.value
             );
+
+            // Ensure pending cleared even if no chunks (empty response edge case)
+            if ((current as any).pending) (current as any).pending = false;
 
             if (typeof current.content === 'string') {
                 current.content = incoming as string;
