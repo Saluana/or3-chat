@@ -24,7 +24,7 @@
             </div>
         </template>
         <template #body>
-            <div class="flex flex-col h-full">
+            <div class="flex flex-col h-full" @keydown="handleKeydown">
                 <div
                     class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
                 >
@@ -47,12 +47,19 @@
                             Clear Active
                         </UButton>
                     </div>
+                    <UInput
+                        v-model="searchQuery"
+                        placeholder="Search prompts..."
+                        size="sm"
+                        class="max-w-xs"
+                        icon="i-heroicons-magnifying-glass"
+                    />
                 </div>
                 <div class="flex-1 overflow-hidden">
                     <!-- List View -->
                     <div v-if="!editingPrompt" class="h-full overflow-y-auto">
                         <div
-                            v-if="prompts.length === 0"
+                            v-if="filteredPrompts.length === 0"
                             class="flex flex-col items-center justify-center h-full text-center p-8"
                         >
                             <UIcon
@@ -75,7 +82,7 @@
 
                         <div v-else class="p-4 space-y-3">
                             <div
-                                v-for="prompt in prompts"
+                                v-for="prompt in filteredPrompts"
                                 :key="prompt.id"
                                 class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
                                 :class="{
@@ -230,6 +237,14 @@ const prompts = ref<PromptRecord[]>([]);
 const editingPrompt = ref<PromptRecord | null>(null);
 const showDeleteConfirm = ref<string | null>(null);
 
+const searchQuery = ref('');
+const filteredPrompts = computed(() => {
+    if (!searchQuery.value) return prompts.value;
+    return prompts.value.filter((p) =>
+        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+});
+
 // (Events moved above with prop bridging)
 
 const loadPrompts = async () => {
@@ -287,6 +302,21 @@ const deletePrompt = async (id: string) => {
 
 const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (editingPrompt.value) return;
+    const key = event.key;
+    if (key >= '1' && key <= '9') {
+        const index = parseInt(key) - 1;
+        if (index < filteredPrompts.value.length) {
+            const prompt = filteredPrompts.value[index];
+            if (prompt) {
+                selectPrompt(prompt.id);
+                event.preventDefault();
+            }
+        }
+    }
 };
 
 onMounted(() => {
