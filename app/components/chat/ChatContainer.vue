@@ -16,7 +16,7 @@
                 <VirtualMessageList
                     :messages="virtualMessages"
                     :item-size-estimation="320"
-                    :overscan="8"
+                    :overscan="5"
                     :scroll-parent="scrollParent"
                     wrapper-class="flex flex-col"
                 >
