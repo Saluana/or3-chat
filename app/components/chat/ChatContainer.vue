@@ -15,7 +15,7 @@
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
                     :messages="virtualMessages"
-                    :item-size-estimation="320"
+                    :item-size-estimation="520"
                     :overscan="5"
                     :scroll-parent="scrollParent"
                     wrapper-class="flex flex-col"
