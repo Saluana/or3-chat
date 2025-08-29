@@ -3,6 +3,7 @@ import { nowSec, newId } from '~/db/util';
 
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
+import { useActivePrompt } from './useActivePrompt';
 import { create, db, tx, upsert } from '~/db';
 import { createOrRefFile } from '~/db/files';
 import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
@@ -22,6 +23,7 @@ import {
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
+import { promptJsonToString } from '~/utils/prompt-utils';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
@@ -30,6 +32,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
     const loading = ref(false);
     const { apiKey } = useUserApiKey();
     const hooks = useHooks();
+    const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
     const historyLoadedFor = ref<string | null>(null);
 
@@ -128,9 +131,25 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 'ai.chat.model:filter:select',
                 model
             );
+
+            // Inject system message if active prompt exists
+            let messagesWithSystem = [...messages.value];
+            if (activePromptContent.value) {
+                const systemText = promptJsonToString(
+                    activePromptContent.value
+                );
+                if (systemText.trim()) {
+                    messagesWithSystem.unshift({
+                        role: 'system',
+                        content: systemText,
+                        id: `system-${newId()}`,
+                    });
+                }
+            }
+
             const effectiveMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:input',
-                messages.value
+                messagesWithSystem
             );
 
             // Build OpenRouter message objects (images included)

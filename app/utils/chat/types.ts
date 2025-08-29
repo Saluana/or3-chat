@@ -16,7 +16,7 @@ export type FilePart = {
 export type ContentPart = TextPart | ImagePart | FilePart;
 
 export interface ChatMessage {
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system';
     content: string | ContentPart[];
     id?: string;
     stream_id?: string;

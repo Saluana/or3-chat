@@ -117,24 +117,16 @@
                                             class="w-4 h-4"
                                         />
                                     </div>
-                                    <UModal>
-                                        <button
-                                            class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
-                                        >
-                                            <span class="px-1"
-                                                >System prompts</span
-                                            >
-                                            <UIcon
-                                                name="pixelarticons:script-text"
-                                                class="w-4 h-4"
-                                            />
-                                        </button>
-                                        <template #content>
-                                            <div
-                                                class="w-[50vw] h-[80vh]"
-                                            ></div>
-                                        </template>
-                                    </UModal>
+                                    <button
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
+                                        @click="showSystemPrompts = true"
+                                    >
+                                        <span class="px-1">System prompts</span>
+                                        <UIcon
+                                            name="pixelarticons:script-text"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
                                     <button
                                         @click="showModelCatalog = true"
                                         class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
@@ -260,6 +252,11 @@
             </div>
         </div>
         <modal-settings-modal v-model:showModal="showModelCatalog" />
+        <SystemPromptsModal
+            v-model:showModal="showSystemPrompts"
+            @selected="handlePromptSelected"
+            @closed="handlePromptModalClosed"
+        />
     </div>
 </template>
 
@@ -281,6 +278,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
 import ModelSelect from './ModelSelect.vue';
+import SystemPromptsModal from './SystemPromptsModal.vue';
 import { isMobile } from '~/state/global';
 const props = defineProps<{ loading?: boolean; containerWidth?: number }>();
 
@@ -369,6 +367,7 @@ interface ImageSettings {
 }
 
 const showModelCatalog = ref(false);
+const showSystemPrompts = ref(false);
 
 const emit = defineEmits<{
     (
@@ -639,6 +638,16 @@ const handleSend = () => {
         largeTextBlocks.value = [];
         autoResize();
     }
+};
+
+const handlePromptSelected = (id: string) => {
+    // Handle prompt selection - could emit to parent or handle locally
+    console.log('Prompt selected:', id);
+};
+
+const handlePromptModalClosed = () => {
+    // Handle modal close if needed
+    console.log('Prompt modal closed');
 };
 </script>
 
