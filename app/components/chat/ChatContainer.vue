@@ -42,7 +42,7 @@
                                 style="animation-duration: 120ms"
                             >
                                 <div
-                                    class="prose max-w-none w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] text-[var(--md-on-surface)] dark:text-[var(--md-on-surface)]"
+                                    class="prose max-w-none w-full leading-[1.5] dark:prose-headings:text-white/95! prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] text-[var(--md-on-surface)] dark:text-[var(--md-on-surface)]"
                                     v-html="tailRendered || tailPlaceholder"
                                 />
                                 <div

@@ -48,10 +48,18 @@
             <!-- Minimal retro loader: shown while assistant message pending and empty -->
             <div
                 v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent"
-                class="retro-bar animate-in"
+                class="retro-loader animate-in"
                 aria-hidden="true"
             >
-                <span class="retro-bar-text">Generating…</span>
+                <span class="rl-glow"></span>
+                <span class="rl-scan"></span>
+                <span class="rl-stripes"></span>
+                <span class="rl-bar"></span>
+                <span class="rl-text"
+                    >GENERATING<span class="rl-dots"
+                        ><span>.</span><span>.</span><span>.</span></span
+                    ></span
+                >
             </div>
             <div v-else v-html="rendered"></div>
         </div>
@@ -191,7 +199,7 @@ const outerClass = computed(() => ({
 }));
 
 const innerClass = computed(() => ({
-    'prose max-w-none dark:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
         props.message.role === 'assistant',
 }));
 
@@ -471,59 +479,182 @@ async function onBranch() {
 </script>
 
 <style scoped>
-.retro-bar {
-    height: 1.25em;
-    border-radius: 4px;
-    background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0.05) 0%,
-            rgba(255, 255, 255, 0.12) 40%,
-            rgba(255, 255, 255, 0.05) 80%
-        ),
-        repeating-linear-gradient(
-            -45deg,
-            rgba(80, 200, 255, 0.35) 0 6px,
-            rgba(80, 200, 255, 0.1) 6px 12px
-        );
+/* THEMED RETRO LOADER */
+.retro-loader {
+    /* Leverage theme tokens */
+    --rl-bg-a: var(--md-surface-container-low);
+    --rl-bg-b: var(--md-surface-container-high);
+    --rl-border: var(--md-inverse-surface);
+    --rl-accent: var(--md-inverse-primary);
+    --rl-accent-soft: color-mix(in srgb, var(--rl-accent) 55%, transparent);
+    --rl-text: var(--md-inverse-on-surface);
     position: relative;
+    width: 100%;
+    min-height: 58px;
+    margin: 2px 0 6px;
+    border: 2px solid var(--rl-border);
+    border-radius: 6px;
+    background: linear-gradient(180deg, var(--rl-bg-b) 0%, var(--rl-bg-a) 100%);
+    box-shadow: 0 0 0 1px #000 inset, 0 0 6px -1px var(--rl-accent-soft),
+        0 0 22px -8px var(--rl-accent);
     overflow: hidden;
+    font-family: 'VT323', 'IBM Plex Mono', monospace;
     display: flex;
     align-items: center;
-    padding: 0 8px;
-    font-size: 12px;
-    letter-spacing: 0.5px;
-    color: rgba(255, 255, 255, 0.75);
-    font-weight: 500;
+    justify-content: center;
+    isolation: isolate;
 }
-.retro-bar::after {
+.retro-loader::before,
+.retro-loader::after {
     content: '';
     position: absolute;
     inset: 0;
+    pointer-events: none;
+}
+/* inner pixel frame */
+.retro-loader::before {
+    border: 1px solid var(--rl-border);
+    border-radius: 4px;
+    mix-blend-mode: overlay;
+}
+/* CRT vignette */
+.retro-loader::after {
+    background: radial-gradient(
+        circle at 50% 55%,
+        rgba(255, 255, 255, 0.12),
+        transparent 65%
+    );
+    opacity: 0.7;
+}
+
+/* moving scan line layer */
+.rl-scan {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.08) 0 2px,
+        transparent 2px 4px
+    );
+    animation: rl-scan 5s linear infinite;
+    opacity: 0.55;
+    mix-blend-mode: overlay;
+}
+/* diagonal faint stripes */
+.rl-stripes {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.06) 0 8px,
+        transparent 8px 16px
+    );
+    opacity: 0.35;
+}
+/* pulsing radial glow behind bar */
+.rl-glow {
+    position: absolute;
+    width: 160%;
+    height: 160%;
+    background: radial-gradient(
+        circle at 50% 50%,
+        var(--rl-accent-soft),
+        transparent 70%
+    );
+    filter: blur(18px);
+    animation: rl-glow 3.2s ease-in-out infinite;
+    opacity: 0.55;
+}
+/* progress bar shimmer (loops) */
+.rl-bar {
+    position: absolute;
+    left: -40%;
+    top: 0;
+    bottom: 0;
+    width: 40%;
     background: linear-gradient(
         90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.55) 50%,
-        transparent 100%
+        transparent,
+        var(--rl-accent),
+        transparent
     );
-    animation: sheen 1.2s linear infinite;
+    filter: blur(1px) saturate(1.4);
+    animation: rl-bar 1.35s cubic-bezier(0.65, 0.15, 0.35, 0.85) infinite;
+    mix-blend-mode: screen;
 }
-.retro-bar-text {
+
+.rl-text {
     position: relative;
-    z-index: 1;
-    mix-blend-mode: plus-lighter;
+    z-index: 2;
+    color: var(--rl-text);
+    font-size: 15px;
+    letter-spacing: 2px;
+    font-weight: 600;
+    text-shadow: 0 0 4px var(--rl-accent-soft), 0 0 1px #fff;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
-@keyframes sheen {
+.rl-dots {
+    display: inline-flex;
+    margin-left: 4px;
+}
+.rl-dots span {
+    animation: rl-dots 1.2s infinite ease-in-out;
+    display: inline-block;
+    width: 6px;
+}
+.rl-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+.rl-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes rl-bar {
     0% {
-        transform: translateX(-100%);
+        transform: translateX(0);
     }
     100% {
-        transform: translateX(100%);
+        transform: translateX(250%);
     }
 }
+@keyframes rl-scan {
+    0% {
+        background-position-y: 0;
+    }
+    100% {
+        background-position-y: 8px;
+    }
+}
+@keyframes rl-glow {
+    0%,
+    100% {
+        opacity: 0.35;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.05);
+    }
+}
+@keyframes rl-dots {
+    0%,
+    80%,
+    100% {
+        opacity: 0.15;
+    }
+    40% {
+        opacity: 1;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .retro-bar::after {
+    .rl-scan,
+    .rl-bar,
+    .rl-glow,
+    .rl-dots span {
         animation: none;
-        opacity: 0.4;
     }
 }
 </style>
