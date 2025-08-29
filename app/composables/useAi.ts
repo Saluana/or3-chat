@@ -432,15 +432,9 @@ export function useChat(
 
             const endedAt = Date.now();
             // Log full finalized assistant response (100% complete)
+            // Removed verbose success console.log to reduce noise/memory retention.
             try {
-                // Provide both DB record and in-memory content state
-                // Avoid leaking API key etc (not present here)
-                // eslint-disable-next-line no-console
-                console.log('[useChat] assistant response complete', {
-                    threadId: threadIdRef.value,
-                    assistant: finalized,
-                    uiMessage: current,
-                });
+                // (Intentionally left blank for potential lightweight analytics hook)
             } catch {}
             await hooks.doAction('ai.chat.send:action:after', {
                 threadId: threadIdRef.value,

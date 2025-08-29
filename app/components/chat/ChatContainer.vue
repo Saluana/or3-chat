@@ -116,7 +116,7 @@ const bottomPad = computed(() => {
 
 function onModelChange(newModel: string) {
     model.value = newModel;
-    console.log('Model changed to:', newModel);
+    // Silenced model change log.
 }
 
 const props = defineProps<{

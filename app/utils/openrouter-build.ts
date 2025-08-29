@@ -134,13 +134,7 @@ export async function buildOpenRouterMessages(
     } = opts;
 
     if (debug) {
-        console.log('[or-build] begin', {
-            messages: messages.length,
-            maxImageInputs,
-            dedupeImages,
-            imageInclusionPolicy,
-            recentWindow,
-        });
+        // Debug logging suppressed (begin)
     }
 
     // Determine candidate messages for image inclusion under policy.
@@ -204,16 +198,7 @@ export async function buildOpenRouterMessages(
     }
 
     if (debug) {
-        console.log('[or-build] candidates', {
-            total: hashCandidates.length,
-            sample: hashCandidates.slice(0, 10).map((c) => ({
-                role: c.role,
-                i: c.messageIndex,
-                ref: c.hash.startsWith('data:image/')
-                    ? 'data:' + c.hash.slice(11, 30) + '…'
-                    : c.hash,
-            })),
-        });
+        // Debug logging suppressed (candidates)
     }
 
     // Optional external filter
@@ -236,16 +221,7 @@ export async function buildOpenRouterMessages(
     }
 
     if (debug) {
-        console.log('[or-build] selected', {
-            total: selected.length,
-            list: selected.map((s) => ({
-                role: s.role,
-                i: s.messageIndex,
-                ref: s.hash.startsWith('data:image/')
-                    ? 'data:' + s.hash.slice(11, 26) + '…'
-                    : s.hash,
-            })),
-        });
+        // Debug logging suppressed (selected)
     }
 
     // Group selected hashes by message index for convenient inclusion
@@ -302,16 +278,7 @@ export async function buildOpenRouterMessages(
     }
 
     if (debug) {
-        const imgTotals = orMessages.map((m, i) => ({
-            i,
-            role: m.role,
-            imgs: m.content.filter((p) => p.type === 'image_url').length,
-        }));
-        console.log('[or-build] done', {
-            messages: orMessages.length,
-            totalImages: imgTotals.reduce((a, b) => a + b.imgs, 0),
-            imgTotals,
-        });
+        // Debug logging suppressed (done)
     }
 
     return orMessages;

@@ -71,8 +71,8 @@ onMounted(() => {
 
 watch(
     () => items.value,
-    (newItems) => {
-        console.log('Items updated:', newItems);
+    () => {
+        /* silent: removed Items updated log */
     }
 );
 
@@ -121,6 +121,5 @@ async function deleteThread() {
 
 function onNewChat() {
     emit('newChat');
-    console.log('New chat requested');
 }
 </script>

@@ -293,7 +293,7 @@ const LAST_MODEL_KEY = 'last_selected_model';
 
 onMounted(async () => {
     const fave = await getFavoriteModels();
-    console.log('Favorite models:', fave);
+    // Favorite models loaded (log removed)
     if (process.client) {
         try {
             const stored = localStorage.getItem(LAST_MODEL_KEY);
@@ -647,16 +647,11 @@ const handleSend = () => {
 };
 
 const handlePromptSelected = (id: string) => {
-    // Handle prompt selection - emit to parent if no thread yet
-    if (!props.threadId) {
-        emit('pending-prompt-selected', id);
-    }
-    console.log('Prompt selected:', id);
+    if (!props.threadId) emit('pending-prompt-selected', id);
 };
 
 const handlePromptModalClosed = () => {
-    // Handle modal close if needed
-    console.log('Prompt modal closed');
+    /* modal closed */
 };
 </script>
 

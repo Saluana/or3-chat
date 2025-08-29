@@ -34,7 +34,9 @@ export async function* openRouterStream(params: {
     const decoder = new TextDecoder();
     let buffer = '';
     const emittedImages = new Set<string>();
-    const rawPackets: any[] = [];
+    // Removed rawPackets accumulation to avoid unbounded memory growth on long streams.
+    // If debugging of raw packets is needed, consider adding a bounded ring buffer
+    // or an opt-in flag that logs selectively.
 
     function emitImageCandidate(
         url: string | undefined | null,
@@ -75,7 +77,6 @@ export async function* openRouterStream(params: {
             }
             try {
                 const parsed = JSON.parse(data);
-                rawPackets.push(parsed);
                 const choices = parsed.choices || [];
                 for (const choice of choices) {
                     const delta = choice.delta || {};
@@ -201,14 +202,7 @@ export async function* openRouterStream(params: {
         }
     }
 
-    try {
-        // eslint-disable-next-line no-console
-        console.log('[openRouterStream] complete raw response packets', {
-            model,
-            packetCount: rawPackets.length,
-            packets: rawPackets,
-        });
-    } catch {}
+    // Removed verbose final packet dump to prevent large memory retention.
 
     yield { type: 'done' };
 }

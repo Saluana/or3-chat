@@ -79,10 +79,7 @@ export function useModelStore() {
                         count: parsed.length,
                     }
                 );
-                console.log('[models-cache] pulled models from dexie', {
-                    source: 'dexie',
-                    count: parsed.length,
-                });
+                // Removed dexie source console.log
                 return parsed;
             } catch (e) {
                 console.warn(
@@ -144,10 +141,7 @@ export function useModelStore() {
                     count: catalog.value.length,
                 }
             );
-            console.log('[models-cache] pulled models from memory', {
-                source: 'memory',
-                count: catalog.value.length,
-            });
+            // Removed memory source console.log
             return catalog.value;
         }
 
@@ -172,10 +166,7 @@ export function useModelStore() {
                 console.info(
                     '[models-cache] network fetch successful — updated memory, persisting to Dexie'
                 );
-                console.log('[models-cache] pulled models from network', {
-                    source: 'network',
-                    count: list.length,
-                });
+                // Removed network source console.log
                 // persist async (don't block response)
                 saveToDexie(list).catch(() => {});
                 return list;
@@ -194,13 +185,7 @@ export function useModelStore() {
                                         '[models-cache] network failed; serving stale cached models',
                                         { count: parsed.length }
                                     );
-                                    console.log(
-                                        '[models-cache] pulled models from stale dexie after network failure',
-                                        {
-                                            source: 'stale-dexie',
-                                            count: parsed.length,
-                                        }
-                                    );
+                                    // Removed stale dexie fallback console.log
                                     return parsed;
                                 }
                             } catch (e) {

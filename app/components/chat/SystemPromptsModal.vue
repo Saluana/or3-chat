@@ -127,27 +127,37 @@
                                         :delay-duration="0"
                                         :text="
                                             prompt.id === defaultPromptId
-                                                ? 'Default prompt'
-                                                : 'Set as default'
+                                                ? 'Remove default prompt'
+                                                : 'Set as default prompt'
                                         "
                                     >
                                         <UButton
                                             size="sm"
-                                            variant="ghost"
-                                            color="neutral"
-                                            :square="true"
-                                            :ui="{ base: 'retro-btn' }"
-                                            class="retro-btn"
-                                            :icon="
+                                            :variant="
                                                 prompt.id === defaultPromptId
-                                                    ? 'pixelarticons:star'
-                                                    : 'pixelarticons:star-outline'
+                                                    ? 'solid'
+                                                    : 'outline'
                                             "
+                                            :color="
+                                                prompt.id === defaultPromptId
+                                                    ? 'primary'
+                                                    : 'neutral'
+                                            "
+                                            :square="true"
+                                            :ui="{
+                                                base: 'retro-btn px-1! text-nowrap',
+                                            }"
+                                            class="retro-btn"
                                             aria-label="Toggle default prompt"
                                             @click.stop="
                                                 toggleDefault(prompt.id)
                                             "
-                                        />
+                                            >{{
+                                                prompt.id === defaultPromptId
+                                                    ? 'default'
+                                                    : 'set default'
+                                            }}</UButton
+                                        >
                                     </UTooltip>
                                     <UButton
                                         @click="selectPrompt(prompt.id)"
