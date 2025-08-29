@@ -68,8 +68,10 @@
                     ref="chatInputEl"
                     :loading="loading"
                     :container-width="containerWidth"
+                    :thread-id="currentThreadId"
                     @send="onSend"
                     @model-change="onModelChange"
+                    @pending-prompt-selected="onPendingPromptSelected"
                     class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
                 />
             </div>
@@ -98,6 +100,7 @@ import { useChatSend } from '../../composables/useChatSend';
 import { useElementSize } from '@vueuse/core';
 
 const model = ref('openai/gpt-oss-120b');
+const pendingPromptId = ref<string | null>(null);
 
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot = ref<HTMLElement | null>(null);
@@ -126,7 +129,13 @@ const emit = defineEmits<{
 }>();
 
 // Initialize chat composable and make it refresh when threadId changes
-const chat = shallowRef(useChat(props.messageHistory, props.threadId));
+const chat = shallowRef(
+    useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    )
+);
 
 watch(
     () => props.threadId,
@@ -134,7 +143,11 @@ watch(
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) return;
-        chat.value = useChat(props.messageHistory, newId);
+        chat.value = useChat(
+            props.messageHistory,
+            newId,
+            pendingPromptId.value || undefined
+        );
     }
 );
 
@@ -154,7 +167,11 @@ watch(
 watch(
     () => chat.value?.threadId?.value,
     (id, prev) => {
-        if (!prev && id) emit('thread-selected', id);
+        if (!prev && id) {
+            emit('thread-selected', id);
+            // Clear pending prompt since it's now applied to the thread
+            pendingPromptId.value = null;
+        }
     }
 );
 
@@ -441,6 +458,16 @@ function onEdited(payload: { id: string; content: string }) {
     }
     // Trigger reactivity for computed messages mapping
     chat.value.messages.value = [...arr];
+}
+
+function onPendingPromptSelected(promptId: string | null) {
+    pendingPromptId.value = promptId;
+    // Reinitialize chat with the pending prompt
+    chat.value = useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    );
 }
 </script>
 

@@ -33,6 +33,7 @@ export const ThreadSchema = z.object({
     clock: z.number().int(),
     forked: z.boolean().default(false),
     project_id: z.string().nullable().optional(),
+    system_prompt_id: z.string().nullable().optional(),
 });
 export type Thread = z.infer<typeof ThreadSchema>;
 
@@ -48,6 +49,7 @@ export const ThreadCreateSchema = ThreadSchema.partial({
     pinned: true,
     forked: true,
     project_id: true,
+    system_prompt_id: true,
 })
     // We'll re-add with defaults/derived values
     .omit({ created_at: true, updated_at: true, id: true, clock: true })

@@ -8,6 +8,8 @@ import { useActivePrompt } from './useActivePrompt';
 import { create, db, tx, upsert } from '~/db';
 import { createOrRefFile } from '~/db/files';
 import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
+import { getThreadSystemPrompt } from '~/db/threads';
+import { getPrompt } from '~/db/prompts';
 
 import type {
     ContentPart,
@@ -28,7 +30,11 @@ import { promptJsonToString } from '~/utils/prompt-utils';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
-export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
+export function useChat(
+    msgs: ChatMessage[] = [],
+    initialThreadId?: string,
+    pendingPromptId?: string
+) {
     const messages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
     const { apiKey } = useUserApiKey();
@@ -36,6 +42,29 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
     const historyLoadedFor = ref<string | null>(null);
+
+    // Helper to get system prompt content for current thread
+    async function getSystemPromptContent(): Promise<string | null> {
+        if (!threadIdRef.value) return null;
+
+        try {
+            const promptId = await getThreadSystemPrompt(threadIdRef.value);
+            if (promptId) {
+                // Get the prompt content from the database
+                const prompt = await getPrompt(promptId);
+                if (prompt) {
+                    return promptJsonToString(prompt.content);
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to load thread system prompt:', error);
+        }
+
+        // Fallback to global active prompt
+        return activePromptContent.value
+            ? promptJsonToString(activePromptContent.value)
+            : null;
+    }
 
     async function sendMessage(
         content: string,
@@ -53,6 +82,7 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
                 title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
                 last_message_at: nowSec(),
                 parent_thread_id: null,
+                system_prompt_id: pendingPromptId || null,
             });
             threadIdRef.value = newThread.id;
         }
@@ -135,17 +165,13 @@ export function useChat(msgs: ChatMessage[] = [], initialThreadId?: string) {
 
             // Inject system message if active prompt exists
             let messagesWithSystem = [...messages.value];
-            if (activePromptContent.value) {
-                const systemText = promptJsonToString(
-                    activePromptContent.value
-                );
-                if (systemText.trim()) {
-                    messagesWithSystem.unshift({
-                        role: 'system',
-                        content: systemText,
-                        id: `system-${newId()}`,
-                    });
-                }
+            const systemText = await getSystemPromptContent();
+            if (systemText && systemText.trim()) {
+                messagesWithSystem.unshift({
+                    role: 'system',
+                    content: systemText,
+                    id: `system-${newId()}`,
+                });
             }
 
             const effectiveMessages = await hooks.applyFilters(

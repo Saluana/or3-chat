@@ -133,6 +133,40 @@ export class Or3DB extends Dexie {
             .upgrade(async () => {
                 // No backfill needed; posts are new.
             });
+
+        // v5: add system_prompt_id to threads for per-thread system prompt persistence
+        this.version(5)
+            .stores({
+                projects: 'id, name, clock, created_at, updated_at',
+                threads:
+                    'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+                messages:
+                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+                kv: 'id, &name, clock, created_at, updated_at',
+                attachments: 'id, type, name, clock, created_at, updated_at',
+                file_meta:
+                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+                file_blobs: 'hash',
+                posts: 'id, title, postType, deleted, created_at, updated_at',
+            })
+            .upgrade(async (tx) => {
+                // Backfill: ensure existing thread rows have system_prompt_id set to null
+                try {
+                    const t = tx.table('threads');
+                    const rows: any[] = await t.toArray();
+                    for (const row of rows) {
+                        if (!('system_prompt_id' in row)) {
+                            (row as any).system_prompt_id = null;
+                            await t.put(row);
+                        }
+                    }
+                } catch (err) {
+                    console.warn(
+                        '[or3-db] migration v5 system_prompt_id backfill failed',
+                        err
+                    );
+                }
+            });
     }
 }
 

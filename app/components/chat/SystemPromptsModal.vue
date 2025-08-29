@@ -38,7 +38,7 @@
                             New Prompt
                         </UButton>
                         <UButton
-                            v-if="activePromptId"
+                            v-if="currentActivePromptId"
                             @click="clearActivePrompt"
                             size="sm"
                             color="neutral"
@@ -87,7 +87,7 @@
                                 class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
                                 :class="{
                                     'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
-                                        prompt.id === activePromptId,
+                                        prompt.id === currentActivePromptId,
                                 }"
                             >
                                 <div class="flex-1 min-w-0">
@@ -120,18 +120,18 @@
                                         @click="selectPrompt(prompt.id)"
                                         size="sm"
                                         :color="
-                                            prompt.id === activePromptId
+                                            prompt.id === currentActivePromptId
                                                 ? 'primary'
                                                 : 'neutral'
                                         "
                                         :variant="
-                                            prompt.id === activePromptId
+                                            prompt.id === currentActivePromptId
                                                 ? 'solid'
                                                 : 'outline'
                                         "
                                     >
                                         {{
-                                            prompt.id === activePromptId
+                                            prompt.id === currentActivePromptId
                                                 ? 'Selected'
                                                 : 'Select'
                                         }}
@@ -209,13 +209,18 @@ import {
 } from '~/db/prompts';
 import { useActivePrompt } from '~/composables/useActivePrompt';
 import PromptEditor from '~/components/prompts/PromptEditor.vue';
+import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 
 // Props & modal open bridging (like SettingsModal pattern)
-const props = defineProps<{ showModal: boolean }>();
+const props = defineProps<{
+    showModal: boolean;
+    threadId?: string;
+}>();
 const emit = defineEmits({
     'update:showModal': (value: boolean) => typeof value === 'boolean',
     selected: (id: string) => typeof id === 'string',
     closed: () => true,
+    threadCreated: (threadId: string, promptId: string | null) => true,
 });
 
 const open = computed({
@@ -230,8 +235,11 @@ watch(
     }
 );
 
-const { activePromptId, setActivePrompt, clearActivePrompt } =
-    useActivePrompt();
+const {
+    activePromptId,
+    setActivePrompt,
+    clearActivePrompt: clearGlobalActivePrompt,
+} = useActivePrompt();
 
 const prompts = ref<PromptRecord[]>([]);
 const editingPrompt = ref<PromptRecord | null>(null);
@@ -245,6 +253,18 @@ const filteredPrompts = computed(() => {
     );
 });
 
+// Thread-specific system prompt handling
+const threadSystemPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
+
+// Computed for current active prompt (thread-specific or global)
+const currentActivePromptId = computed(() => {
+    if (props.threadId) {
+        return threadSystemPromptId.value;
+    }
+    return activePromptId.value;
+});
+
 // (Events moved above with prop bridging)
 
 const loadPrompts = async () => {
@@ -252,6 +272,21 @@ const loadPrompts = async () => {
         prompts.value = await listPrompts();
     } catch (error) {
         console.error('Failed to load prompts:', error);
+    }
+};
+
+const loadThreadSystemPrompt = async () => {
+    if (props.threadId) {
+        try {
+            threadSystemPromptId.value = await getThreadSystemPrompt(
+                props.threadId
+            );
+        } catch (error) {
+            console.error('Failed to load thread system prompt:', error);
+            threadSystemPromptId.value = null;
+        }
+    } else {
+        threadSystemPromptId.value = null;
     }
 };
 
@@ -267,10 +302,35 @@ const createNewPrompt = async () => {
 
 const selectPrompt = async (id: string) => {
     try {
-        await setActivePrompt(id);
+        if (props.threadId) {
+            // Update thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, id);
+            threadSystemPromptId.value = id;
+        } else {
+            // Store as pending for when thread is created
+            pendingPromptId.value = id;
+            // Also update global for immediate feedback
+            await setActivePrompt(id);
+        }
         emit('selected', id);
     } catch (error) {
         console.error('Failed to select prompt:', error);
+    }
+};
+
+const clearActivePrompt = async () => {
+    try {
+        if (props.threadId) {
+            // Clear thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadSystemPromptId.value = null;
+        } else {
+            // Clear pending and global active prompt
+            pendingPromptId.value = null;
+            await clearGlobalActivePrompt();
+        }
+    } catch (error) {
+        console.error('Failed to clear active prompt:', error);
     }
 };
 
@@ -284,6 +344,18 @@ const startEditing = (id: string) => {
 const stopEditing = () => {
     editingPrompt.value = null;
     loadPrompts(); // Refresh list in case of changes
+};
+
+const applyPendingPromptToThread = async (threadId: string) => {
+    if (pendingPromptId.value) {
+        try {
+            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
+            emit('threadCreated', threadId, pendingPromptId.value);
+            pendingPromptId.value = null;
+        } catch (error) {
+            console.error('Failed to apply pending prompt to thread:', error);
+        }
+    }
 };
 
 const deletePrompt = async (id: string) => {
@@ -321,7 +393,16 @@ const handleKeydown = (event: KeyboardEvent) => {
 
 onMounted(() => {
     loadPrompts();
+    loadThreadSystemPrompt();
 });
+
+// Watch for threadId changes to reload thread-specific prompt
+watch(
+    () => props.threadId,
+    () => {
+        loadThreadSystemPrompt();
+    }
+);
 </script>
 
 <style scoped>

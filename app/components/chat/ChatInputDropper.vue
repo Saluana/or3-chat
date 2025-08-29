@@ -254,6 +254,7 @@
         <modal-settings-modal v-model:showModal="showModelCatalog" />
         <LazyChatSystemPromptsModal
             v-model:showModal="showSystemPrompts"
+            :thread-id="props.threadId"
             @selected="handlePromptSelected"
             @closed="handlePromptModalClosed"
         />
@@ -280,7 +281,11 @@ import { computed } from 'vue';
 import ModelSelect from './ModelSelect.vue';
 import SystemPromptsModal from './SystemPromptsModal.vue';
 import { isMobile } from '~/state/global';
-const props = defineProps<{ loading?: boolean; containerWidth?: number }>();
+const props = defineProps<{
+    loading?: boolean;
+    containerWidth?: number;
+    threadId?: string;
+}>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
 const webSearchEnabled = ref<boolean>(false);
@@ -387,6 +392,7 @@ const emit = defineEmits<{
     (e: 'model-change', model: string): void;
     (e: 'settings-change', settings: ImageSettings): void;
     (e: 'trigger-file-input'): void;
+    (e: 'pending-prompt-selected', promptId: string | null): void;
 }>();
 
 const promptText = ref('');
@@ -641,7 +647,10 @@ const handleSend = () => {
 };
 
 const handlePromptSelected = (id: string) => {
-    // Handle prompt selection - could emit to parent or handle locally
+    // Handle prompt selection - emit to parent if no thread yet
+    if (!props.threadId) {
+        emit('pending-prompt-selected', id);
+    }
     console.log('Prompt selected:', id);
 };
 

@@ -150,3 +150,40 @@ export async function forkThread(
         return fork;
     });
 }
+
+export async function updateThreadSystemPrompt(
+    threadId: string,
+    promptId: string | null
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.threads, async () => {
+        const thread = await db.threads.get(threadId);
+        if (!thread) return;
+        const updated = {
+            ...thread,
+            system_prompt_id: promptId,
+            updated_at: nowSec(),
+        };
+        await hooks.doAction('db.threads.updateSystemPrompt:action:before', {
+            thread,
+            promptId,
+        });
+        await db.threads.put(updated);
+        await hooks.doAction('db.threads.updateSystemPrompt:action:after', {
+            thread: updated,
+            promptId,
+        });
+    });
+}
+
+export async function getThreadSystemPrompt(
+    threadId: string
+): Promise<string | null> {
+    const hooks = useHooks();
+    const thread = await db.threads.get(threadId);
+    const result = thread?.system_prompt_id ?? null;
+    return hooks.applyFilters(
+        'db.threads.getSystemPrompt:filter:output',
+        result
+    );
+}
