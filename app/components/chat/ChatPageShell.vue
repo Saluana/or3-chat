@@ -181,6 +181,7 @@
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import { useMultiPane } from '~/composables/useMultiPane';
 import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
 // No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
 
 /**
@@ -482,6 +483,61 @@ function focusSidebarSearch() {
         if (input) input.focus();
     });
 }
+
+// ---------------- Auto-reset pane when active thread or document is deleted ----------------
+// If the currently loaded thread/doc is deleted (soft or hard), switch that pane to a blank chat.
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    // If this pane is the active one, update URL to /chat (blank)
+    if (paneIndex === activePaneIndex.value) updateUrlThread(undefined);
+}
+
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) {
+            resetPaneToBlank(i);
+        }
+    });
+}
+
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) {
+            resetPaneToBlank(i);
+        }
+    });
+}
+
+// Register hook listeners (both soft + hard delete events)
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
 </script>
 
 <style scoped>
