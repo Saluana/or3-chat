@@ -6,7 +6,7 @@
             header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
             body: 'p-0!',
         }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[540px] overflow-hidden"
+        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] overflow-hidden"
     >
         <template #header>
             <div class="flex w-full items-center justify-between pr-2">
@@ -128,30 +128,48 @@
                                                 : 'Select'
                                         }}
                                     </UButton>
-                                    <UButton
-                                        @click="startEditing(prompt.id)"
-                                        size="sm"
-                                        color="neutral"
-                                        variant="outline"
+                                    <UPopover
+                                        :popper="{ placement: 'bottom-end' }"
                                     >
-                                        Edit
-                                    </UButton>
-                                    <UButton
-                                        @click="renamePrompt(prompt)"
-                                        size="sm"
-                                        color="neutral"
-                                        variant="outline"
-                                    >
-                                        Rename
-                                    </UButton>
-                                    <UButton
-                                        @click="deletePrompt(prompt.id)"
-                                        size="sm"
-                                        color="error"
-                                        variant="outline"
-                                    >
-                                        Delete
-                                    </UButton>
+                                        <UButton
+                                            size="sm"
+                                            variant="outline"
+                                            color="neutral"
+                                            :square="true"
+                                            icon="i-heroicons-ellipsis-vertical"
+                                            aria-label="More actions"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex flex-col py-1 w-36 text-sm"
+                                            >
+                                                <button
+                                                    @click="
+                                                        startEditing(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:edit"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button
+                                                    @click="
+                                                        deletePrompt(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:trash"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
                                 </div>
                             </div>
                         </div>
@@ -196,7 +214,6 @@ import {
     listPrompts,
     createPrompt,
     softDeletePrompt,
-    updatePrompt,
     type PromptRecord,
 } from '~/db/prompts';
 import { useActivePrompt } from '~/composables/useActivePrompt';
@@ -268,19 +285,6 @@ const startEditing = (id: string) => {
 const stopEditing = () => {
     editingPrompt.value = null;
     loadPrompts(); // Refresh list in case of changes
-};
-
-const renamePrompt = async (prompt: PromptRecord) => {
-    const newTitle = prompt.title; // For now, just keep the existing title
-    // TODO: Implement proper inline rename with input field
-    if (newTitle && newTitle !== prompt.title) {
-        try {
-            await updatePrompt(prompt.id, { title: newTitle });
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to rename prompt:', error);
-        }
-    }
 };
 
 const deletePrompt = async (id: string) => {
