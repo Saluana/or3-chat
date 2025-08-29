@@ -6,7 +6,7 @@
             header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
             body: 'p-0!',
         }"
-        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
+        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[540px] overflow-hidden"
     >
         <template #header>
             <div class="flex w-full items-center justify-between pr-2">
@@ -17,7 +17,7 @@
                     class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
                     :square="true"
                     variant="ghost"
-                    size="xs"
+                    size="sm"
                     icon="i-heroicons-x-mark"
                     @click="open = false"
                 />
@@ -26,24 +26,25 @@
         <template #body>
             <div class="flex flex-col h-full">
                 <div
-                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between"
+                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
                 >
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <UButton
+                            @click="createNewPrompt"
+                            size="sm"
+                            color="primary"
+                            class="retro-btn"
+                        >
+                            New Prompt
+                        </UButton>
                         <UButton
                             v-if="activePromptId"
                             @click="clearActivePrompt"
-                            size="xs"
+                            size="sm"
                             color="neutral"
                             variant="outline"
                         >
                             Clear Active
-                        </UButton>
-                        <UButton
-                            @click="createNewPrompt"
-                            size="xs"
-                            color="primary"
-                        >
-                            New Prompt
                         </UButton>
                     </div>
                 </div>
@@ -72,11 +73,11 @@
                             </UButton>
                         </div>
 
-                        <div v-else class="p-4 space-y-2">
+                        <div v-else class="p-4 space-y-3">
                             <div
                                 v-for="prompt in prompts"
                                 :key="prompt.id"
-                                class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
                                 :class="{
                                     'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
                                         prompt.id === activePromptId,
@@ -104,10 +105,12 @@
                                     </p>
                                 </div>
 
-                                <div class="flex items-center gap-1 ml-4">
+                                <div
+                                    class="flex items-center gap-2 ml-4 shrink-0"
+                                >
                                     <UButton
                                         @click="selectPrompt(prompt.id)"
-                                        size="xs"
+                                        size="sm"
                                         :color="
                                             prompt.id === activePromptId
                                                 ? 'primary'
@@ -127,7 +130,7 @@
                                     </UButton>
                                     <UButton
                                         @click="startEditing(prompt.id)"
-                                        size="xs"
+                                        size="sm"
                                         color="neutral"
                                         variant="outline"
                                     >
@@ -135,7 +138,7 @@
                                     </UButton>
                                     <UButton
                                         @click="renamePrompt(prompt)"
-                                        size="xs"
+                                        size="sm"
                                         color="neutral"
                                         variant="outline"
                                     >
@@ -143,7 +146,7 @@
                                     </UButton>
                                     <UButton
                                         @click="deletePrompt(prompt.id)"
-                                        size="xs"
+                                        size="sm"
                                         color="error"
                                         variant="outline"
                                     >
@@ -166,14 +169,14 @@
                             </h3>
                             <UButton
                                 @click="stopEditing"
-                                size="xs"
+                                size="sm"
                                 color="neutral"
                                 variant="outline"
                             >
                                 Back to List
                             </UButton>
                         </div>
-                        <div class="flex-1 p-4">
+                        <div class="flex-1 p-4 overflow-auto">
                             <DocumentEditor
                                 :document-id="editingPrompt.id"
                                 @close="stopEditing"
@@ -302,3 +305,25 @@ onMounted(() => {
     loadPrompts();
 });
 </script>
+
+<style scoped>
+/* Mobile full-screen adjustments */
+@media (max-width: 640px) {
+    .sp-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-width: 0 !important;
+    }
+}
+
+/* Smooth scrolling area */
+.sp-modal :deep(.n-modal-body),
+.sp-modal :deep(.n-card__content) {
+    /* ensure body grows */
+    height: 100%;
+}
+</style>
