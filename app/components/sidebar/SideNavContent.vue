@@ -32,6 +32,7 @@
             </div>
             <div class="relative w-full ml-[1px]">
                 <UInput
+                    ref="searchInputWrapper"
                     v-model="sidebarQuery"
                     icon="pixelarticons:search"
                     size="md"
@@ -650,6 +651,17 @@ import { useSidebarSearch } from '~/composables/useSidebarSearch';
 // Documents live query (docs only) to feed search
 const docs = ref<any[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
+// Direct focus support for external callers
+const searchInputWrapper = ref<any | null>(null);
+function focusSearchInput() {
+    // Access underlying input inside UInput component
+    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
+        searchInputWrapper.value) as HTMLElement | null;
+    if (!root) return;
+    const input = root.querySelector('input');
+    if (input) (input as HTMLInputElement).focus();
+}
+defineExpose({ focusSearchInput });
 
 const {
     query: sidebarQuery,
@@ -662,14 +674,42 @@ const displayThreads = computed(() =>
     sidebarQuery.value.trim() ? threadResults.value : items.value
 );
 // Filter projects + entries when query active
+// Remove references to deleted threads/docs from project data live
+const existingThreadIds = computed(
+    () => new Set(items.value.map((t: any) => t.id))
+);
+const existingDocIds = computed(
+    () => new Set(docs.value.map((d: any) => d.id))
+);
+const projectsFilteredByExistence = computed(() =>
+    projects.value.map((p: any) => {
+        const dataArr = Array.isArray(p.data) ? p.data : [];
+        const filteredEntries = dataArr.filter((e: any) => {
+            if (!e) return false;
+            const id = e.id;
+            if (!id) return false;
+            const type = e.type || e.kind || 'thread';
+            if (type === 'thread' || type === 'chat')
+                return existingThreadIds.value.has(id);
+            if (type === 'doc' || type === 'document')
+                return existingDocIds.value.has(id);
+            return true;
+        });
+        // If filtering removed entries, return shallow copy to avoid mutating original p (reactivity safe)
+        return filteredEntries.length === dataArr.length
+            ? p
+            : { ...p, data: filteredEntries };
+    })
+);
+
 const displayProjects = computed(() => {
-    if (!sidebarQuery.value.trim()) return projects.value;
+    if (!sidebarQuery.value.trim()) return projectsFilteredByExistence.value;
     const threadSet = new Set(threadResults.value.map((t: any) => t.id));
     const docSet = new Set(documentResults.value.map((d: any) => d.id));
     const directProjectSet = new Set(
         projectResults.value.map((p: any) => p.id)
     );
-    return projects.value
+    return projectsFilteredByExistence.value
         .map((p: any) => {
             const filteredEntries = (p.data || []).filter(
                 (e: any) => e && (threadSet.has(e.id) || docSet.has(e.id))

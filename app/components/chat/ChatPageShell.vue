@@ -2,6 +2,7 @@
     <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
             <sidebar-side-nav-content
+                ref="sideNavExpandedRef"
                 :active-thread="panes[0]?.threadId || ''"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
@@ -206,6 +207,7 @@ const props = withDefaults(
 const router = useRouter();
 const toast = useToast();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -475,12 +477,9 @@ function openMobileSidebar() {
 function focusSidebarSearch() {
     const layout: any = layoutRef.value;
     if (layout?.expand) layout.expand();
-    // Defer focus to next tick so sidebar DOM present if previously collapsed
+    // Focus via exposed method on SideNavContent
     requestAnimationFrame(() => {
-        const input = document.querySelector(
-            'aside input[placeholder="Search threads..."]'
-        ) as HTMLInputElement | null;
-        if (input) input.focus();
+        sideNavExpandedRef.value?.focusSearchInput?.();
     });
 }
 
