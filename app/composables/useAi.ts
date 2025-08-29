@@ -5,6 +5,7 @@ import { nowSec, newId } from '~/db/util';
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
 import { useActivePrompt } from './useActivePrompt';
+import { getDefaultPromptId } from './useDefaultPrompt';
 import { create, db, tx, upsert } from '~/db';
 import { createOrRefFile } from '~/db/files';
 import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
@@ -78,11 +79,20 @@ export function useChat(
         if (!apiKey.value) return;
 
         if (!threadIdRef.value) {
+            // Resolve system prompt for new thread: pending > default > null
+            let effectivePromptId: string | null = pendingPromptId || null;
+            if (!effectivePromptId) {
+                try {
+                    effectivePromptId = await getDefaultPromptId();
+                } catch {
+                    /* noop */
+                }
+            }
             const newThread = await create.thread({
                 title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
                 last_message_at: nowSec(),
                 parent_thread_id: null,
-                system_prompt_id: pendingPromptId || null,
+                system_prompt_id: effectivePromptId || null,
             });
             threadIdRef.value = newThread.id;
         }

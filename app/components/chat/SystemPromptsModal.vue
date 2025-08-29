@@ -87,7 +87,8 @@
                                 class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
                                 :class="{
                                     'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
-                                        prompt.id === currentActivePromptId,
+                                        prompt.id === currentActivePromptId ||
+                                        prompt.id === defaultPromptId,
                                 }"
                             >
                                 <div class="flex-1 min-w-0">
@@ -104,21 +105,50 @@
                                                 'Untitled Prompt'
                                             }}
                                         </h4>
+                                        <span
+                                            v-if="prompt.id === defaultPromptId"
+                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            >Default</span
+                                        >
                                     </div>
                                     <p
                                         class="text-sm text-gray-500 dark:text-gray-400"
                                     >
                                         Updated
-                                        {{ formatDate(prompt.updated_at) }}
-                                        •
-                                        {{ tokenCounts[prompt.id] || 0 }}
-                                        tokens
+                                        {{ formatDate(prompt.updated_at) }} •
+                                        {{ tokenCounts[prompt.id] || 0 }} tokens
                                     </p>
                                 </div>
 
                                 <div
                                     class="flex items-center gap-2 ml-4 shrink-0"
                                 >
+                                    <UTooltip
+                                        :delay-duration="0"
+                                        :text="
+                                            prompt.id === defaultPromptId
+                                                ? 'Default prompt'
+                                                : 'Set as default'
+                                        "
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            variant="ghost"
+                                            color="neutral"
+                                            :square="true"
+                                            :ui="{ base: 'retro-btn' }"
+                                            class="retro-btn"
+                                            :icon="
+                                                prompt.id === defaultPromptId
+                                                    ? 'pixelarticons:star'
+                                                    : 'pixelarticons:star-outline'
+                                            "
+                                            aria-label="Toggle default prompt"
+                                            @click.stop="
+                                                toggleDefault(prompt.id)
+                                            "
+                                        />
+                                    </UTooltip>
                                     <UButton
                                         @click="selectPrompt(prompt.id)"
                                         size="sm"
@@ -214,6 +244,7 @@ import { useActivePrompt } from '~/composables/useActivePrompt';
 import PromptEditor from '~/components/prompts/PromptEditor.vue';
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 import { encode } from 'gpt-tokenizer';
+import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{
@@ -246,6 +277,8 @@ const {
 } = useActivePrompt();
 
 const prompts = ref<PromptRecord[]>([]);
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
 const editingPrompt = ref<PromptRecord | null>(null);
 const showDeleteConfirm = ref<string | null>(null);
 
@@ -342,6 +375,12 @@ const filteredTokens = computed(() =>
 const loadPrompts = async () => {
     try {
         prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.find((p) => p.id === defaultPromptId.value)
+        ) {
+            await clearDefaultPrompt();
+        }
     } catch (error) {
         console.error('Failed to load prompts:', error);
     }
@@ -437,6 +476,9 @@ const deletePrompt = async (id: string) => {
             if (activePromptId.value === id) {
                 clearActivePrompt();
             }
+            if (defaultPromptId.value === id) {
+                await clearDefaultPrompt();
+            }
             loadPrompts();
         } catch (error) {
             console.error('Failed to delete prompt:', error);
@@ -475,6 +517,14 @@ watch(
         loadThreadSystemPrompt();
     }
 );
+
+function toggleDefault(id: string) {
+    if (defaultPromptId.value === id) {
+        clearDefaultPrompt();
+    } else {
+        setDefaultPrompt(id);
+    }
+}
 </script>
 
 <style scoped>
