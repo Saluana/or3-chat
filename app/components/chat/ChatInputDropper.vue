@@ -252,7 +252,7 @@
             </div>
         </div>
         <modal-settings-modal v-model:showModal="showModelCatalog" />
-        <SystemPromptsModal
+        <LazyChatSystemPromptsModal
             v-model:showModal="showSystemPrompts"
             @selected="handlePromptSelected"
             @closed="handlePromptModalClosed"

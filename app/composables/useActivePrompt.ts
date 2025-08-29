@@ -7,31 +7,33 @@ export interface ActivePromptState {
     activePromptContent: any | null;
 }
 
+// NOTE: Must be module-singleton so different composables/components share state.
+// Previously each invocation created new refs, so selection in modal was not
+// visible to chat sending logic. We lift refs to module scope.
+const _activePromptId = ref<string | null>(null);
+const _activePromptContent = ref<any | null>(null);
+
 export function useActivePrompt() {
-    const activePromptId = ref<string | null>(null);
-    const activePromptContent = ref<any | null>(null);
     const hooks = useHooks();
 
     async function setActivePrompt(id: string | null): Promise<void> {
         if (!id) {
-            activePromptId.value = null;
-            activePromptContent.value = null;
+            _activePromptId.value = null;
+            _activePromptContent.value = null;
             return;
         }
 
         const prompt = await getPrompt(id);
         if (prompt) {
-            activePromptId.value = prompt.id;
-            activePromptContent.value = prompt.content;
-
+            _activePromptId.value = prompt.id;
+            _activePromptContent.value = prompt.content;
             await hooks.doAction('chat.systemPrompt.select:action:after', {
                 id: prompt.id,
                 content: prompt.content,
             });
         } else {
-            // Prompt was deleted or not found, clear state
-            activePromptId.value = null;
-            activePromptContent.value = null;
+            _activePromptId.value = null;
+            _activePromptContent.value = null;
         }
     }
 
@@ -40,12 +42,12 @@ export function useActivePrompt() {
     }
 
     function getActivePromptContent(): any | null {
-        return activePromptContent.value;
+        return _activePromptContent.value;
     }
 
     return {
-        activePromptId: readonly(activePromptId),
-        activePromptContent: readonly(activePromptContent),
+        activePromptId: readonly(_activePromptId),
+        activePromptContent: readonly(_activePromptContent),
         setActivePrompt,
         clearActivePrompt,
         getActivePromptContent,

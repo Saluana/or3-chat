@@ -180,7 +180,7 @@
                     <!-- Editor View -->
                     <div v-else class="h-full overflow-hidden flex flex-col">
                         <div class="flex-1 p-4 overflow-hidden">
-                            <PromptEditor
+                            <LazyPromptsPromptEditor
                                 :prompt-id="editingPrompt.id"
                                 @back="stopEditing"
                             />
