@@ -2,11 +2,13 @@
     <div
         class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
-        <div class="flex items-center gap-3 px-3 pt-2 pb-2">
+        <div
+            class="flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
+        >
             <UButton
                 @click="emit('back')"
                 variant="outline"
-                class="flex items-center justify-center h-[40px] w-[40px]"
+                class="flex items-center justify-center h-[40px] w-[40px] mr-3"
                 color="neutral"
                 icon="pixelarticons:arrow-left"
                 aria-label="Back to list"

@@ -110,6 +110,9 @@
                                     >
                                         Updated
                                         {{ formatDate(prompt.updated_at) }}
+                                        •
+                                        {{ tokenCounts[prompt.id] || 0 }}
+                                        tokens
                                     </p>
                                 </div>
 
@@ -210,6 +213,7 @@ import {
 import { useActivePrompt } from '~/composables/useActivePrompt';
 import PromptEditor from '~/components/prompts/PromptEditor.vue';
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
+import { encode } from 'gpt-tokenizer';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{
@@ -264,6 +268,74 @@ const currentActivePromptId = computed(() => {
     }
     return activePromptId.value;
 });
+
+// Extract plain text from TipTap JSON recursively
+function extractText(node: any): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    const type = node.type;
+    let acc = '';
+    if (type === 'text') {
+        acc += node.text || '';
+    }
+    if (node.content && Array.isArray(node.content)) {
+        const inner = node.content.map(extractText).join('');
+        acc += inner;
+    }
+    // Block separators to avoid word merging
+    if (
+        [
+            'paragraph',
+            'heading',
+            'bulletList',
+            'orderedList',
+            'listItem',
+        ].includes(type)
+    ) {
+        acc += '\n';
+    }
+    return acc;
+}
+
+function contentToText(content: any): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    // TipTap root usually { type: 'doc', content: [...] }
+    if (content.type === 'doc' && Array.isArray(content.content)) {
+        return extractText(content)
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+    }
+    if (Array.isArray(content.content)) return extractText(content).trim();
+    return '';
+}
+
+// Cached token counts per prompt id (recomputed when prompts list changes)
+const tokenCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of prompts.value) {
+        try {
+            const text = contentToText(p.content);
+            map[p.id] = text ? encode(text).length : 0;
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token encode failed', e);
+            map[p.id] = 0;
+        }
+    }
+    return map;
+});
+
+// Totals derived from cached counts
+const totalTokens = computed(() =>
+    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
+);
+const filteredTokens = computed(() =>
+    filteredPrompts.value.reduce(
+        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
+        0
+    )
+);
 
 // (Events moved above with prop bridging)
 
