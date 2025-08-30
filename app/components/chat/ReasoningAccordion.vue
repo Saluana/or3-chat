@@ -20,16 +20,12 @@
             </span>
             <span v-else>Thinking…</span>
             <span
-                v-if="!expanded && content"
+                v-if="!expanded && content && !streaming"
                 class="count text-xs opacity-70 ml-2"
             >
                 ({{ charCount }} chars)
             </span>
-            <span
-                v-if="streaming && !content && pending"
-                class="pulse ml-2"
-                aria-hidden="true"
-            ></span>
+            <span v-if="streaming" class="pulse ml-2" aria-hidden="true"></span>
         </button>
         <transition name="fade">
             <pre

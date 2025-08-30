@@ -37,11 +37,33 @@
                     <template #tail>
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div v-if="tailActive" class="mt-10 first:mt-0">
+                            <ChatMessage
+                                :message="{
+                                    role: 'assistant',
+                                    content: tailRendered || tailPlaceholder,
+                                    stream_id: tailStreamId,
+                                    pending: true,
+                                    reasoning_text: null,
+                                }"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                            />
+                            <!-- Streaming reasoning (Req 3.11) -->
+                            <!--
+                            <ReasoningAccordion
+                                :content="null"
+                                :streaming="true"
+                                :pending="true"
+                            />
+                            -->
+                            <!--
                             <div
                                 class="bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm p-2 min-w-[140px] rounded-md relative animate-in fade-in"
                                 style="animation-duration: 120ms"
                             >
-                                <!-- Inner content wrapper mirrors assistant ChatMessage innerClass -->
+                     
                                 <div
                                     class="prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5"
                                     v-html="tailRendered || tailPlaceholder"
@@ -55,6 +77,7 @@
                                     >
                                 </div>
                             </div>
+                            -->
                         </div>
                     </template>
                 </VirtualMessageList>
@@ -269,16 +292,6 @@ const tailRendered = computed(() =>
 const tailPlaceholder = computed(() =>
     !tail.displayText.value ? 'Thinking…' : ''
 );
-
-// Identify the current streaming assistant message (last assistant with empty OR growing content while loading)
-const streamingAssistant = computed(() => {
-    if (!loading.value) return null;
-    const arr = messages.value;
-    if (!arr.length) return null;
-    const last = arr[arr.length - 1];
-    if (last && last.role === 'assistant') return last;
-    return null;
-});
 
 // Virtual list data excludes streaming assistant (Req 3.2 separation)
 const virtualMessages = computed(() => {

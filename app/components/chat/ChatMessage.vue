@@ -82,7 +82,7 @@
             >
                 <ReasoningAccordion
                     :content="props.message.reasoning_text"
-                    :streaming="(props.message as any).streaming"
+                    :streaming="isStreamingReasoning"
                     :pending="(props.message as any).pending"
                 />
             </div>
@@ -217,6 +217,10 @@ const emit = defineEmits<{
     (e: 'branch', id: string): void;
     (e: 'edited', payload: { id: string; content: string }): void;
 }>();
+
+const isStreamingReasoning = computed(() => {
+    return props.message.reasoning_text && !hasContent.value;
+});
 
 const outerClass = computed(() => ({
     'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
