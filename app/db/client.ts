@@ -27,146 +27,26 @@ export class Or3DB extends Dexie {
 
     constructor() {
         super('or3-db');
-
-        this.version(1).stores({
+        // Simplified schema: collapse historical migrations into a single
+        // version to avoid full-table upgrade passes (which previously
+        // loaded entire tables into memory via toArray()). Since there are
+        // no external users / all data already upgraded, we can safely
+        // define only the latest structure.
+        // NOTE: Keep version number at 5 so existing local DBs at v5 open
+        // without triggering a downgrade. Future schema changes should bump.
+        this.version(5).stores({
             projects: 'id, name, clock, created_at, updated_at',
             threads:
-                'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
             messages:
                 'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
             kv: 'id, &name, clock, created_at, updated_at',
             attachments: 'id, type, name, clock, created_at, updated_at',
-            posts: 'id, title, content, postType, created_at, updated_at',
+            file_meta:
+                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+            file_blobs: 'hash',
+            posts: 'id, title, postType, deleted, created_at, updated_at',
         });
-
-        this.version(2)
-            .stores({
-                projects: 'id, name, clock, created_at, updated_at',
-                threads:
-                    'id, project_id, [project_id+updated_at], parent_thread_id, status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-                messages:
-                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-                kv: 'id, &name, clock, created_at, updated_at',
-                attachments: 'id, type, name, clock, created_at, updated_at',
-                file_meta:
-                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-                file_blobs: 'hash',
-            })
-            .upgrade(async (tx) => {
-                // Backfill file_hashes field for existing messages (if missing)
-                const table = tx.table('messages');
-                try {
-                    const all = await table.toArray();
-                    for (const m of all) {
-                        if (!('file_hashes' in m)) {
-                            (m as any).file_hashes = '[]';
-                            await table.put(m);
-                        }
-                    }
-                } catch (err) {
-                    console.warn(
-                        '[or3-db] migration v2 file_hashes backfill failed',
-                        err
-                    );
-                }
-            });
-
-        // v3: minimal branching fields added to threads (anchor_message_id, anchor_index, branch_mode)
-        this.version(3)
-            .stores({
-                projects: 'id, name, clock, created_at, updated_at',
-                // Added optional composite index for future ancestor queries (not required but cheap now)
-                threads:
-                    'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-                messages:
-                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-                kv: 'id, &name, clock, created_at, updated_at',
-                attachments: 'id, type, name, clock, created_at, updated_at',
-                file_meta:
-                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-                file_blobs: 'hash',
-            })
-            .upgrade(async (tx) => {
-                // Backfill: ensure existing thread rows have explicit nulls for new fields (optional but keeps shape consistent)
-                try {
-                    const t = tx.table('threads');
-                    const rows: any[] = await t.toArray();
-                    for (const row of rows) {
-                        let changed = false;
-                        if (!('anchor_message_id' in row)) {
-                            (row as any).anchor_message_id = null;
-                            changed = true;
-                        }
-                        if (!('anchor_index' in row)) {
-                            (row as any).anchor_index = null;
-                            changed = true;
-                        }
-                        if (!('branch_mode' in row)) {
-                            (row as any).branch_mode = null;
-                            changed = true;
-                        }
-                        if (changed) await t.put(row);
-                    }
-                } catch (err) {
-                    console.warn(
-                        '[or3-db] migration v3 branching backfill failed',
-                        err
-                    );
-                }
-            });
-
-        // v4: introduce posts table with basic indexes
-        this.version(4)
-            .stores({
-                projects: 'id, name, clock, created_at, updated_at',
-                threads:
-                    'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-                messages:
-                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-                kv: 'id, &name, clock, created_at, updated_at',
-                attachments: 'id, type, name, clock, created_at, updated_at',
-                file_meta:
-                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-                file_blobs: 'hash',
-                posts: 'id, title, postType, deleted, created_at, updated_at',
-            })
-            .upgrade(async () => {
-                // No backfill needed; posts are new.
-            });
-
-        // v5: add system_prompt_id to threads for per-thread system prompt persistence
-        this.version(5)
-            .stores({
-                projects: 'id, name, clock, created_at, updated_at',
-                threads:
-                    'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-                messages:
-                    'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-                kv: 'id, &name, clock, created_at, updated_at',
-                attachments: 'id, type, name, clock, created_at, updated_at',
-                file_meta:
-                    'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-                file_blobs: 'hash',
-                posts: 'id, title, postType, deleted, created_at, updated_at',
-            })
-            .upgrade(async (tx) => {
-                // Backfill: ensure existing thread rows have system_prompt_id set to null
-                try {
-                    const t = tx.table('threads');
-                    const rows: any[] = await t.toArray();
-                    for (const row of rows) {
-                        if (!('system_prompt_id' in row)) {
-                            (row as any).system_prompt_id = null;
-                            await t.put(row);
-                        }
-                    }
-                } catch (err) {
-                    console.warn(
-                        '[or3-db] migration v5 system_prompt_id backfill failed',
-                        err
-                    );
-                }
-            });
     }
 }
 
