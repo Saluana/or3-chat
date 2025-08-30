@@ -254,15 +254,77 @@ export async function buildOpenRouterMessages(
             // Add files (PDFs etc) directly
             const fileParts = m.content.filter((p: any) => p.type === 'file');
             for (const fp of fileParts) {
-                if (fp.data && fp.mediaType) {
-                    const filename =
-                        fp.mediaType === 'application/pdf'
-                            ? 'document.pdf'
-                            : 'file';
+                if (!fp.data) continue;
+                const mediaType =
+                    fp.mediaType || fp.mime || 'application/octet-stream';
+                const isPdf = mediaType === 'application/pdf';
+                const filename =
+                    fp.filename || (isPdf ? 'document.pdf' : 'file');
+                let fileData: string | null | undefined = fp.data;
+
+                // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
+                if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
+                    try {
+                        const { getFileBlob, getFileMeta } = await import(
+                            '~/db/files'
+                        );
+                        const blob = await getFileBlob(String(fileData));
+                        if (blob) {
+                            const mime = blob.type || mediaType;
+                            const dataUrl = await blobToDataUrl(blob);
+                            fileData = dataUrl.replace(
+                                /^data:[^;]+;/,
+                                `data:${mime};`
+                            );
+                        } else {
+                            const hydrated = await hydrateHashToDataUrl(
+                                String(fileData)
+                            );
+                            if (hydrated) fileData = hydrated;
+                        }
+                        if (!fileData) {
+                            const remote = await remoteRefToDataUrl(
+                                String(fileData)
+                            );
+                            if (remote) fileData = remote;
+                        }
+                    } catch {
+                        fileData = null;
+                    }
+                }
+
+                // If still not a usable scheme and it's a blob: URL, we can't send blob: (server can't fetch) -> skip
+                if (fileData && /^blob:/i.test(String(fileData))) {
+                    if (debug)
+                        console.warn(
+                            '[or-build] skipping blob: URL (inaccessible server-side)',
+                            { filename }
+                        );
+                    fileData = null;
+                }
+                if (
+                    fileData &&
+                    isPdf &&
+                    !fileData.startsWith('data:application/pdf')
+                ) {
+                    // Normalize pdf data URL mime prefix if possible
+                    if (fileData.startsWith('data:')) {
+                        fileData = fileData.replace(
+                            /^data:[^;]+/,
+                            'data:application/pdf'
+                        );
+                    }
+                }
+                if (fileData && /^data:|^https?:/i.test(String(fileData))) {
                     parts.push({
                         type: 'file',
-                        file: { filename, file_data: fp.data },
+                        file: { filename, file_data: String(fileData) },
                     });
+                } else if (debug) {
+                    console.warn(
+                        '[or-build] skipping file part, could not hydrate',
+                        { ref: fp.data, filename, messageIndex: i }
+                    );
                 }
             }
         } else if (typeof m.content === 'string') {
@@ -271,27 +333,55 @@ export async function buildOpenRouterMessages(
         if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
         parts.push({ type: 'text', text });
 
-        // Add images associated with this message index
+        // Add images associated with this message index (only if truly images)
         const imgs = byMessageIndex.get(i) || [];
         for (const img of imgs) {
+            // Quick allow path: already a data image URL
             if (img.hash.startsWith('data:image/')) {
                 parts.push({ type: 'image_url', image_url: { url: img.hash } });
-            } else {
-                // Try: (1) treat as stored hash; (2) treat as remote/blob ref
-                let dataUrl = await hydrateHashToDataUrl(img.hash);
-                if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
-                if (dataUrl) {
-                    parts.push({
-                        type: 'image_url',
-                        image_url: { url: dataUrl },
-                    });
-                } else if (debug) {
-                    console.warn('[or-build] hydrate-fail', {
-                        ref: img.hash,
-                        role: img.role,
-                        messageIndex: img.messageIndex,
-                    });
-                }
+                continue;
+            }
+            // Remote URL that looks like an image (basic heuristic)
+            if (
+                /^https?:/i.test(img.hash) &&
+                /(\.png|\.jpe?g|\.gif|\.webp|\.avif|\?)/i.test(img.hash)
+            ) {
+                parts.push({ type: 'image_url', image_url: { url: img.hash } });
+                continue;
+            }
+            // If it's a local hash (not http/data/blob) inspect metadata to confirm mime starts with image/
+            const looksLocal = !/^https?:|^data:|^blob:/i.test(img.hash);
+            let isImage = false;
+            if (looksLocal) {
+                try {
+                    const { getFileMeta } = await import('~/db/files');
+                    const meta: any = await getFileMeta(img.hash).catch(
+                        () => null
+                    );
+                    if (
+                        meta &&
+                        typeof meta.mime === 'string' &&
+                        meta.mime.startsWith('image/')
+                    ) {
+                        isImage = true;
+                    }
+                } catch {}
+            }
+            if (!isImage && looksLocal) {
+                // Not an image (likely a PDF or other file) -> skip to avoid triggering image-capable endpoint routing
+                continue;
+            }
+            // At this point either it's declared an image or remote unknown -> attempt hydration
+            let dataUrl = await hydrateHashToDataUrl(img.hash);
+            if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
+            if (dataUrl && dataUrl.startsWith('data:image/')) {
+                parts.push({ type: 'image_url', image_url: { url: dataUrl } });
+            } else if (debug) {
+                console.warn('[or-build] hydrate-fail-or-non-image', {
+                    ref: img.hash,
+                    role: img.role,
+                    messageIndex: img.messageIndex,
+                });
             }
         }
 

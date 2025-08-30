@@ -15,6 +15,7 @@ export async function* openRouterStream(params: {
         modalities,
         stream: true,
     } as any;
+
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -24,9 +25,47 @@ export async function* openRouterStream(params: {
         body: JSON.stringify(body),
         signal,
     });
+
     if (!resp.ok || !resp.body) {
+        // Read response text for diagnostics
+        let respText = '<no-body>';
+        try {
+            respText = await resp.text();
+        } catch (e) {
+            respText = `<error-reading-body:${(e as any)?.message || 'err'}>`;
+        }
+
+        // Produce a truncated preview of the outgoing body to help debug (truncate long strings)
+        let bodyPreview = '<preview-failed>';
+        try {
+            bodyPreview = JSON.stringify(
+                body,
+                (_key, value) => {
+                    if (typeof value === 'string') {
+                        if (value.length > 300)
+                            return value.slice(0, 300) + `...(${value.length})`;
+                    }
+                    return value;
+                },
+                2
+            );
+        } catch (e) {
+            bodyPreview = `<stringify-error:${(e as any)?.message || 'err'}>`;
+        }
+
+        console.warn('[openrouterStream] OpenRouter request failed', {
+            status: resp.status,
+            statusText: resp.statusText,
+            responseSnippet: respText?.slice
+                ? respText.slice(0, 2000)
+                : String(respText),
+            bodyPreview,
+        });
+
         throw new Error(
-            `OpenRouter request failed ${resp.status} ${resp.statusText}`
+            `OpenRouter request failed ${resp.status} ${resp.statusText}: ${
+                respText?.slice ? respText.slice(0, 300) : String(respText)
+            }`
         );
     }
 
