@@ -1,7 +1,7 @@
 <template>
     <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
-            <sidebar-side-nav-content
+            <lazy-sidebar-side-nav-content
                 ref="sideNavExpandedRef"
                 :active-thread="panes[0]?.threadId || ''"
                 @new-chat="onNewChat"
@@ -11,7 +11,7 @@
             />
         </template>
         <template #sidebar-collapsed>
-            <SidebarSideNavContentCollapsed
+            <lazy-sidebar-side-nav-content-collapsed
                 :active-thread="panes[0]?.threadId || ''"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"

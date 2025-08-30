@@ -109,23 +109,33 @@
                         <div
                             class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
                         >
-                            {{ orIsConnected ? 'Disconnect' : 'Connect' }}
+                            <!-- Hydration guard: render stable 'Connect' on SSR & first client paint -->
+                            <template v-if="hydrated">
+                                {{ orIsConnected ? 'Disconnect' : 'Connect' }}
+                            </template>
+                            <template v-else>Connect</template>
                         </div>
                         <div
                             class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
                         >
                             <div
-                                :class="{
-                                    'bg-green-600': orIsConnected,
-                                    'bg-error': !orIsConnected,
-                                }"
+                                :class="
+                                    hydrated
+                                        ? orIsConnected
+                                            ? 'bg-green-600'
+                                            : 'bg-error'
+                                        : 'bg-error'
+                                "
                                 class="h-[2px]"
                             ></div>
                             <div
-                                :class="{
-                                    'bg-success': orIsConnected,
-                                    'bg-error': !orIsConnected,
-                                }"
+                                :class="
+                                    hydrated
+                                        ? orIsConnected
+                                            ? 'bg-success'
+                                            : 'bg-error'
+                                        : 'bg-error'
+                                "
                                 class="h-[2px]"
                             ></div>
                         </div>
@@ -178,6 +188,11 @@ import { state } from '~/state/global';
 
 const openrouter = useOpenRouterAuth();
 const orIsConnected = computed(() => state.value.openrouterKey);
+// Hydration mismatch fix: only show dynamic connection state after client mounted
+const hydrated = ref(false);
+onMounted(() => {
+    hydrated.value = true;
+});
 const showSettingsModal = ref(false);
 
 function onConnectButtonClick() {

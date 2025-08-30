@@ -273,7 +273,8 @@
                 </div>
             </div>
             <!-- Documents list -->
-            <SidebarDocumentsList
+            <LazySidebarDocumentsList
+                hydrate-on-idle
                 v-if="activeSections.docs"
                 class="mt-4"
                 :external-docs="displayDocuments"
