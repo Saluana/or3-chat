@@ -28,15 +28,18 @@
             </span>
             <span v-if="streaming" class="pulse ml-2" aria-hidden="true"></span>
         </button>
-        <transition name="fade">
-            <pre
-                v-show="expanded"
-                :id="`reasoning-${id}`"
-                class="reasoning-box text-black dark:text-white font-[inherit] text-wrap max-h-[300px] overflow-x-hidden overflow-y-auto bg-[var(--md-surface-container-low)] border-2 border-[var(--md-inverse-surface)] mt-2"
-                tabindex="0"
-                v-text="content"
-            ></pre>
-        </transition>
+        <pre
+            :id="`reasoning-${id}`"
+            :class="[
+                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden bg-[var(--md-surface-container-low)] border-2 border-[var(--md-inverse-surface)] rounded-sm',
+                'transition-all duration-200 ease-in-out',
+                expanded
+                    ? 'opacity-100 max-h-72 mt-2 overflow-y-auto px-3'
+                    : 'opacity-0 max-h-0 p-0 -mt-0 overflow-hidden pointer-events-none',
+            ]"
+            tabindex="0"
+            v-text="content"
+        ></pre>
         <slot name="footer" />
     </div>
 </template>
@@ -118,20 +121,5 @@ const charCount = computed(() => (props.content || '').length);
     }
 }
 
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.3s ease, max-height 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
-    max-height: 0;
-}
-
-.fade-enter-to,
-.fade-leave-from {
-    opacity: 1;
-    max-height: 300px;
-}
+/* Vue transition classes removed in favor of Tailwind utility transitions */
 </style>
