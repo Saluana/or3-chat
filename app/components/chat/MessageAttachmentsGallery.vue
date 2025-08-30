@@ -6,7 +6,23 @@
                 :key="h"
                 class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
             >
-                <template v-if="thumbs[h]?.status === 'ready'">
+                <!-- PDF Placeholder if mime/kind indicates pdf -->
+                <template v-if="meta[h]?.kind === 'pdf'">
+                    <div
+                        class="w-full h-full flex flex-col items-center justify-center gap-1 bg-[var(--md-surface-container-low)] text-center p-1"
+                    >
+                        <span
+                            class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded"
+                            >PDF</span
+                        >
+                        <span
+                            class="text-[9px] leading-snug line-clamp-3 break-words px-1"
+                            :title="fileNames[h] || h.slice(0, 8)"
+                            >{{ fileNames[h] || 'document.pdf' }}</span
+                        >
+                    </div>
+                </template>
+                <template v-else-if="thumbs[h]?.status === 'ready'">
                     <img
                         :src="thumbs[h].url"
                         :alt="'file ' + h.slice(0, 8)"
@@ -39,7 +55,7 @@
 
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
-import { getFileBlob } from '~/db/files';
+import { getFileBlob, getFileMeta } from '~/db/files';
 
 interface ThumbState {
     status: 'loading' | 'ready' | 'error';
@@ -58,6 +74,8 @@ const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
     Promise<void>
 >());
 const thumbs = reactive<Record<string, ThumbState>>({});
+const meta = reactive<Record<string, any>>({});
+const fileNames = reactive<Record<string, string>>({});
 
 async function ensure(h: string) {
     if (thumbs[h] && thumbs[h].status === 'ready') return;
@@ -75,7 +93,14 @@ async function ensure(h: string) {
     thumbs[h] = { status: 'loading' };
     const p = (async () => {
         try {
-            const blob = await getFileBlob(h);
+            const [blob, m] = await Promise.all([
+                getFileBlob(h),
+                getFileMeta(h).catch(() => undefined),
+            ]);
+            if (m) {
+                meta[h] = m;
+                if (m.name) fileNames[h] = m.name;
+            }
             if (!blob) throw new Error('missing');
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };

@@ -17,8 +17,21 @@
             type="button"
             aria-label="Show attachments"
         >
+            <template v-if="firstThumb && pdfMeta[firstThumb]">
+                <div class="pdf-thumb w-full h-full">
+                    <div
+                        class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
+                    >
+                        {{ pdfDisplayName }}
+                    </div>
+
+                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
+                </div>
+            </template>
             <template
-                v-if="firstThumb && thumbnails[firstThumb]?.status === 'ready'"
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'ready'
+                "
             >
                 <img
                     :src="thumbnails[firstThumb!]?.url"
@@ -165,6 +178,7 @@ import {
     onMounted,
 } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
+import { getFileMeta } from '~/db/files';
 import { marked } from 'marked';
 import MessageEditor from './MessageEditor.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
@@ -268,6 +282,28 @@ interface ThumbState {
     url?: string;
 }
 const thumbnails = reactive<Record<string, ThumbState>>({});
+// PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
+const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
+const safePdfName = computed(() => {
+    const h = firstThumb.value;
+    if (!h) return 'document.pdf';
+    const m = pdfMeta[h];
+    return (m && m.name) || 'document.pdf';
+});
+// Short display (keep extension, truncate middle if long)
+const pdfDisplayName = computed(() => {
+    const name = safePdfName.value;
+    const max = 18;
+    if (name.length <= max) return name;
+    const dot = name.lastIndexOf('.');
+    const ext = dot > 0 ? name.slice(dot) : '';
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    const keep = max - ext.length - 3; // 3 for ellipsis
+    if (keep <= 4) return base.slice(0, max - 3) + '...';
+    const head = Math.ceil(keep / 2);
+    const tail = Math.floor(keep / 2);
+    return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
+});
 const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
     string,
     ThumbState
@@ -315,6 +351,8 @@ function toggleExpanded() {
 }
 
 async function ensureThumb(h: string) {
+    // If we already know it's a PDF just ensure meta exists.
+    if (pdfMeta[h]) return;
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
     const cached = thumbCache.get(h);
     if (cached) {
@@ -330,8 +368,22 @@ async function ensureThumb(h: string) {
     thumbnails[h] = { status: 'loading' };
     const p = (async () => {
         try {
-            const blob = await (await import('~/db/files')).getFileBlob(h);
+            const [blob, meta] = await Promise.all([
+                (await import('~/db/files')).getFileBlob(h),
+                getFileMeta(h).catch(() => undefined),
+            ]);
+            if (meta && meta.kind === 'pdf') {
+                pdfMeta[h] = { name: meta.name, kind: meta.kind };
+                // Remove the temporary loading state since we won't have an image thumb
+                delete thumbnails[h];
+                return;
+            }
             if (!blob) throw new Error('missing');
+            if (blob.type === 'application/pdf') {
+                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
+                delete thumbnails[h];
+                return;
+            }
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };
             thumbCache.set(h, ready);
@@ -656,5 +708,76 @@ async function onBranch() {
     .rl-dots span {
         animation: none;
     }
+}
+
+/* PDF compact thumb */
+.pdf-thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    background: linear-gradient(
+        180deg,
+        var(--md-surface-container-lowest) 0%,
+        var(--md-surface-container-low) 100%
+    );
+    width: 100%;
+    height: 100%;
+    padding: 2px 2px 3px;
+    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
+        2px 2px 0 0 var(--md-inverse-surface);
+    font-family: 'VT323', monospace;
+}
+.pdf-thumb__icon {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--md-inverse-surface);
+    width: 100%;
+}
+.pdf-thumb__name {
+    font-size: 8px;
+    line-height: 1.05;
+    font-weight: 600;
+    text-align: center;
+    max-height: 3.2em;
+    overflow: hidden;
+    display: -webkit-box;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    margin-top: 1px;
+    padding: 0 1px;
+    text-shadow: 0 1px 0 #000;
+    color: var(--md-inverse-on-surface);
+}
+.pdf-thumb__ext {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--md-inverse-surface);
+    color: var(--md-inverse-on-surface);
+    font-size: 7px;
+    font-weight: 700;
+    padding: 1px 3px;
+    letter-spacing: 0.5px;
+    box-shadow: 1px 1px 0 0 #000;
+}
+.pdf-thumb::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background: linear-gradient(
+        135deg,
+        var(--md-surface-container-low) 0%,
+        var(--md-surface-container-high) 100%
+    );
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
 }
 </style>
