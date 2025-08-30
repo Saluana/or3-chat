@@ -12,9 +12,36 @@ export default defineNuxtPlugin(() => {
         async handler({ message }) {
             console.log('Create document action invoked', message);
 
+            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
+            async function markdownToTipTapDoc(md: string) {
+                const markdown = (md || '').trim();
+                if (!markdown) return { type: 'doc', content: [] };
+                try {
+                    const [{ Editor }] = await Promise.all([
+                        import('@tiptap/core'),
+                    ]);
+                    const StarterKit = (await import('@tiptap/starter-kit'))
+                        .default;
+                    // tiptap-markdown exports markdownToProseMirror function
+                    const { Markdown } = await import('tiptap-markdown');
+
+                    const editor = new Editor({
+                        extensions: [StarterKit, Markdown],
+                        content: '',
+                    });
+
+                    editor.commands.setContent(markdown);
+                    return editor.getJSON();
+                } catch (e) {
+                    alert('error!!!');
+                }
+            }
+
+            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
+
             const doc = await newDocument({
                 title: (message as any).title || 'Untitled',
-                content: message.content || '',
+                content: tiptapDoc,
             });
 
             console.log('Created document record', doc);
