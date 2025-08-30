@@ -251,7 +251,6 @@ import {
     type PromptRecord,
 } from '~/db/prompts';
 import { useActivePrompt } from '~/composables/useActivePrompt';
-import PromptEditor from '~/components/prompts/PromptEditor.vue';
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 import { encode } from 'gpt-tokenizer';
 import { useDefaultPrompt } from '~/composables/useDefaultPrompt';

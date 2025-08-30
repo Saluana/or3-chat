@@ -80,7 +80,8 @@
                                     <div
                                         class="flex justify-between w-full items-center py-1 px-2"
                                     >
-                                        <ModelSelect
+                                        <LazyChatModelSelect
+                                            hydrate-on-interaction="focus"
                                             v-if="
                                                 containerWidth &&
                                                 containerWidth < 400
@@ -144,7 +145,8 @@
                 </div>
 
                 <!-- Model Selector extracted -->
-                <ModelSelect
+                <LazyChatModelSelect
+                    hydrate-on-interaction="focus"
                     v-if="!isMobile && containerWidth && containerWidth > 400"
                     v-model:model="selectedModel"
                     :loading="loading"
@@ -324,8 +326,6 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
-import ModelSelect from './ModelSelect.vue';
-import SystemPromptsModal from './SystemPromptsModal.vue';
 import { isMobile } from '~/state/global';
 const props = defineProps<{
     loading?: boolean;
@@ -449,12 +449,7 @@ const emit = defineEmits<{
 const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
-// Future TipTap editor container & instance refs (Task 2 structure only)
-const editorContainerRef = ref<HTMLElement | null>(null);
 const editor = ref<Editor | null>(null);
-const editorIsEmpty = computed(() => {
-    return editor.value ? editor.value.isEmpty : true;
-});
 
 const attachments = ref<UploadedImage[]>([]);
 // Backward compatibility: expose as uploadedImages for template

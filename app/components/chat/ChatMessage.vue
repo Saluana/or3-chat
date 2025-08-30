@@ -69,7 +69,8 @@
                     props.message.reasoning_text
                 "
             >
-                <ReasoningAccordion
+                <LazyChatReasoningAccordion
+                    hydrate-on-visible
                     :content="props.message.reasoning_text"
                     :streaming="isStreamingReasoning as boolean"
                     :pending="(props.message as any).pending"
@@ -183,7 +184,6 @@ import LoadingGenerating from './LoadingGenerating.vue';
 import { parseFileHashes } from '~/db/files-util';
 import { getFileMeta } from '~/db/files';
 import { marked } from 'marked';
-import MessageEditor from './MessageEditor.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
 
@@ -494,7 +494,6 @@ function onRetry() {
 }
 
 import { forkThread, retryBranch } from '~/db/branching';
-import ReasoningAccordion from './ReasoningAccordion.vue';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
