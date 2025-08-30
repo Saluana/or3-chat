@@ -41,6 +41,21 @@
                                 class="bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm p-2 min-w-[140px] rounded-md relative animate-in fade-in"
                                 style="animation-duration: 120ms"
                             >
+                                <!-- Streaming reasoning accordion (mirrors ChatMessage) -->
+                                <UAccordion
+                                    v-if="streamingReasoning"
+                                    v-model="streamingReasoningValue"
+                                    :items="streamingReasoningItems"
+                                    :unmount-on-hide="false"
+                                    class="mb-3 reasoning-accordion"
+                                >
+                                    <template #content="{ item }">
+                                        <pre
+                                            class="reasoning-box flex text-black dark:text-white text-wrap border-2 border-[var(--md-inverse-surface)] rounded-[3px] h-[220px] overflow-x-hidden overflow-y-scroll bg-[var(--md-surface-container)] p-2 text-xs leading-snug whitespace-pre-wrap"
+                                            v-text="item.content"
+                                        />
+                                    </template>
+                                </UAccordion>
                                 <!-- Inner content wrapper mirrors assistant ChatMessage innerClass -->
                                 <div
                                     class="prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5"
@@ -186,6 +201,8 @@ type RenderMessage = {
     stream_id?: string;
     file_hashes?: string | null; // serialized JSON array (from DB/user memory)
     pending?: boolean; // UI-only flag for skeleton loader
+    // Pass through original data (reasoning_content, attachments, etc.) so ChatMessage can render reasoning accordion
+    data?: any;
 };
 function escapeAttr(v: string) {
     return v
@@ -251,6 +268,7 @@ const messages = computed<RenderMessage[]>(() =>
             stream_id: m.stream_id,
             file_hashes: (m as any).file_hashes,
             pending: (m as any).pending,
+            data: (m as any).data, // include data for reasoning
         } as RenderMessage;
     })
 );
@@ -268,6 +286,31 @@ const tailRendered = computed(() =>
 const tailPlaceholder = computed(() =>
     !tail.displayText.value ? 'Thinking…' : ''
 );
+
+// Streaming reasoning (from the live assistant message's data)
+const streamingReasoning = computed(() => {
+    const last = streamingAssistant.value as any;
+    const d = last?.data;
+    const txt = d?.reasoning_content;
+    return typeof txt === 'string' && txt.trim() ? txt : '';
+});
+const streamingReasoningExpanded = ref(true); // default open while streaming
+const streamingReasoningValue = computed<string | undefined>({
+    get: () => (streamingReasoningExpanded.value ? 'reasoning' : undefined),
+    set: (v) => (streamingReasoningExpanded.value = v === 'reasoning'),
+});
+const streamingReasoningItems = computed(() => [
+    {
+        label: `Reasoning (${streamingReasoning.value.length} chars)`,
+        value: 'reasoning',
+        content: streamingReasoning.value,
+        ui: {
+            trigger:
+                'reasoning-trigger font-mono text-[13px] py-2 px-2 border-2 border-[var(--md-inverse-surface)] rounded-[4px] bg-[var(--md-surface-container-high)] dark:bg-[var(--md-surface-container-high)] shadow-none data-[state=open]:rounded-b-none data-[state=open]:border-b-0',
+            content: 'pt-2',
+        },
+    },
+]);
 
 // Identify the current streaming assistant message (last assistant with empty OR growing content while loading)
 const streamingAssistant = computed(() => {

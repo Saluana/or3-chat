@@ -167,16 +167,18 @@ export function useChat(
         } as any);
 
         loading.value = true;
+        aborted.value = false;
+        abortController.value = new AbortController();
 
+        const startedAt = Date.now();
+        let modelId = model;
         try {
-            const startedAt = Date.now();
-
-            const modelId = await hooks.applyFilters(
+            modelId = await hooks.applyFilters(
                 'ai.chat.model:filter:select',
                 model
             );
 
-            // Inject system message if active prompt exists
+            // Inject system prompt
             let messagesWithSystem = [...messages.value];
             const systemText = await getSystemPromptContent();
             if (systemText && systemText.trim()) {
@@ -186,25 +188,18 @@ export function useChat(
                     id: `system-${newId()}`,
                 });
             }
-
             const effectiveMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:input',
                 messagesWithSystem
             );
-
-            // Build OpenRouter message objects (images included)
             const { buildOpenRouterMessages } = await import(
                 '~/utils/openrouter-build'
             );
-
-            // Ensure history still loaded (in case of concurrent changes)
             await ensureThreadHistoryLoaded(
                 threadIdRef,
                 historyLoadedFor,
                 messages
             );
-
-            // Remove assistant file_hashes we just migrated so builder prefers user-role images
             const modelInputMessages: any[] = (effectiveMessages as any[]).map(
                 (m: any) => ({ ...m })
             );
@@ -214,7 +209,6 @@ export function useChat(
                 );
                 if (target) target.file_hashes = null;
             }
-
             const orMessages = await buildOpenRouterMessages(
                 modelInputMessages as any,
                 {
@@ -223,10 +217,7 @@ export function useChat(
                     debug: false,
                 }
             );
-
             trimOrMessagesImages(orMessages, 5);
-            // Dynamically decide modalities: include image only if we have image inputs
-            // or the model name suggests image generation capability.
             const hasImageInput = (modelInputMessages as any[]).some((m) =>
                 Array.isArray(m.content)
                     ? (m.content as any[]).some(
@@ -241,7 +232,6 @@ export function useChat(
             const modalities =
                 hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
 
-            // Prepare assistant placeholder (with stream id)
             const streamId = newId();
             const assistantDbMsg = await tx.appendMessage({
                 thread_id: threadIdRef.value!,
@@ -249,7 +239,6 @@ export function useChat(
                 stream_id: streamId,
                 data: { content: '', attachments: [] },
             });
-
             await hooks.doAction('ai.chat.send:action:before', {
                 threadId: threadIdRef.value,
                 modelId,
@@ -260,9 +249,6 @@ export function useChat(
                     : undefined,
             });
 
-            // Stream (setup abort controller)
-            aborted.value = false;
-            abortController.value = new AbortController();
             const stream = openRouterStream({
                 apiKey: apiKey.value!,
                 model: modelId,
@@ -270,8 +256,6 @@ export function useChat(
                 modalities,
                 signal: abortController.value.signal,
             });
-
-            // Assistant placeholder in UI
             const idx =
                 messages.value.push({
                     role: 'assistant',
@@ -279,16 +263,24 @@ export function useChat(
                     id: (assistantDbMsg as any).id,
                     stream_id: streamId,
                     pending: true,
+                    data: { content: '' },
                 } as any) - 1;
             const current = messages.value[idx]!;
             let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 100;
-            let lastPersistAt = 0;
-
             const assistantFileHashes: string[] = [];
+            let accumulatedReasoning = '';
 
             for await (const ev of stream) {
-                if (ev.type === 'text') {
+                if (ev.type === 'reasoning') {
+                    accumulatedReasoning += ev.text;
+                    try {
+                        (current as any).data ||= { content: '' };
+                        const prev =
+                            (current as any).data.reasoning_content || '';
+                        (current as any).data.reasoning_content =
+                            prev + ev.text;
+                    } catch {}
+                } else if (ev.type === 'text') {
                     if ((current as any).pending)
                         (current as any).pending = false;
                     const delta = ev.text;
@@ -302,7 +294,6 @@ export function useChat(
                             String(delta ?? '').length,
                         chunkIndex: chunkIndex++,
                     });
-
                     if (typeof current.content === 'string') {
                         current.content = (current.content as string) + delta;
                     } else if (Array.isArray(current.content)) {
@@ -321,7 +312,6 @@ export function useChat(
                 } else if (ev.type === 'image') {
                     if ((current as any).pending)
                         (current as any).pending = false;
-                    // Add image to assistant message content
                     if (typeof current.content === 'string') {
                         current.content = [
                             { type: 'text', text: current.content as string },
@@ -338,8 +328,6 @@ export function useChat(
                             mediaType: 'image/png',
                         });
                     }
-
-                    // Persist generated image file (data URL preferred; remote URLs best-effort)
                     if (assistantFileHashes.length < 6) {
                         let blob: Blob | null = null;
                         if (ev.url.startsWith('data:image/'))
@@ -348,9 +336,7 @@ export function useChat(
                             try {
                                 const r = await fetch(ev.url);
                                 if (r.ok) blob = await r.blob();
-                            } catch {
-                                /* ignore CORS/network issues */
-                            }
+                            } catch {}
                         }
                         if (blob) {
                             try {
@@ -359,59 +345,25 @@ export function useChat(
                                     'gen-image'
                                 );
                                 assistantFileHashes.push(meta.hash);
-                                const serialized =
+                            } catch {}
+                            if (assistantFileHashes.length)
+                                (current as any).file_hashes =
                                     serializeFileHashes(assistantFileHashes);
-                                const updatedMsg = {
-                                    ...assistantDbMsg,
-                                    file_hashes: serialized,
-                                    updated_at: nowSec(),
-                                } as any;
-                                await upsert.message(updatedMsg);
-                                (current as any).file_hashes = serialized;
-                            } catch {
-                                /* ignore persistence errors */
-                            }
                         }
                     }
                 }
-
-                const now = Date.now();
-                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent =
-                        getTextFromContent(current.content) || '';
-                    const updated = {
-                        ...assistantDbMsg,
-                        data: {
-                            ...((assistantDbMsg as any).data || {}),
-                            content: textContent,
-                        },
-                        file_hashes: assistantFileHashes.length
-                            ? serializeFileHashes(assistantFileHashes)
-                            : (assistantDbMsg as any).file_hashes,
-                        updated_at: nowSec(),
-                    } as any;
-                    await upsert.message(updated);
-                    if (assistantFileHashes.length)
-                        (current as any).file_hashes =
-                            serializeFileHashes(assistantFileHashes);
-                    lastPersistAt = now;
-                }
             }
 
-            // Final post-process
             const fullText = getTextFromContent(current.content) || '';
             const incoming = await hooks.applyFilters(
                 'ui.chat.message:filter:incoming',
                 fullText,
                 threadIdRef.value
             );
-
-            // Ensure pending cleared even if no chunks (empty response edge case)
             if ((current as any).pending) (current as any).pending = false;
-
-            if (typeof current.content === 'string') {
+            if (typeof current.content === 'string')
                 current.content = incoming as string;
-            } else {
+            else {
                 const firstText = (current.content as ContentPart[]).find(
                     (p) => p.type === 'text'
                 ) as TextPart | undefined;
@@ -422,12 +374,14 @@ export function useChat(
                         text: incoming as string,
                     });
             }
-
             const finalized = {
                 ...assistantDbMsg,
                 data: {
                     ...((assistantDbMsg as any).data || {}),
                     content: incoming,
+                    ...(accumulatedReasoning
+                        ? { reasoning_content: accumulatedReasoning }
+                        : {}),
                 },
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)
@@ -435,13 +389,7 @@ export function useChat(
                 updated_at: nowSec(),
             } as any;
             await upsert.message(finalized);
-
             const endedAt = Date.now();
-            // Log full finalized assistant response (100% complete)
-            // Removed verbose success console.log to reduce noise/memory retention.
-            try {
-                // (Intentionally left blank for potential lightweight analytics hook)
-            } catch {}
             await hooks.doAction('ai.chat.send:action:after', {
                 threadId: threadIdRef.value,
                 request: { modelId, userId: userDbMsg.id },
@@ -458,40 +406,34 @@ export function useChat(
             });
         } catch (err) {
             if (aborted.value) {
-                // Graceful abort: keep partial content, clear pending, fire after hook with aborted flag
                 try {
                     const last = messages.value[messages.value.length - 1];
                     if (
                         last &&
                         last.role === 'assistant' &&
                         (last as any).pending
-                    ) {
+                    )
                         (last as any).pending = false;
-                    }
                 } catch {}
                 await hooks.doAction('ai.chat.send:action:after', {
                     threadId: threadIdRef.value,
                     aborted: true,
                 });
             } else {
-                // Dispatch error hook first
                 await hooks.doAction('ai.chat.error:action', {
                     threadId: threadIdRef.value,
                     stage: 'stream',
                     error: err,
                 });
                 try {
-                    // Remove any trailing pending assistant placeholder
                     const last = messages.value[messages.value.length - 1];
                     if (
                         last &&
                         last.role === 'assistant' &&
                         (last as any).pending
-                    ) {
+                    )
                         messages.value.pop();
-                    }
                 } catch {}
-                // Present toast with retry option (if last user message exists)
                 try {
                     const lastUser = [...messages.value]
                         .reverse()
@@ -506,8 +448,9 @@ export function useChat(
                                   {
                                       label: 'Retry',
                                       onClick: () => {
-                                          if (lastUser?.id)
+                                          if (lastUser?.id) {
                                               retryMessage(lastUser.id as any);
+                                          }
                                       },
                                   },
                               ]
@@ -515,7 +458,6 @@ export function useChat(
                         duration: 6000,
                     });
                 } catch {}
-                // Swallow error so caller doesn't need try/catch; UI already handled
                 return;
             }
         } finally {

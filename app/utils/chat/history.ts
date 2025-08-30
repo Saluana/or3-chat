@@ -25,13 +25,15 @@ export async function ensureThreadHistoryLoaded(
         const existingIds = new Set(messages.value.map((m) => m.id));
         for (const m of all) {
             if (existingIds.has(m.id)) continue;
-            messages.value.push({
+            const messageData = {
                 role: m.role,
                 content: (m as any)?.data?.content || '',
                 id: m.id,
                 stream_id: (m as any).stream_id,
                 file_hashes: (m as any).file_hashes,
-            } as any);
+                data: (m as any).data, // Include the full data object to preserve reasoning_content
+            } as any;
+            messages.value.push(messageData);
         }
         historyLoadedFor.value = threadIdRef.value;
     } catch (e) {

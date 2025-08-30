@@ -58,6 +58,26 @@
         </button>
 
         <div v-if="!editing" :class="innerClass" ref="contentEl">
+            <!-- Reasoning Accordion (Nuxt UI) -->
+            <UAccordion
+                v-if="reasoningContent"
+                v-model="reasoningActiveValue"
+                :items="reasoningItems"
+                :unmount-on-hide="false"
+                :ui="{
+                    content: 'pt-0! ',
+                }"
+                class="mb-3 reasoning-accordion"
+            >
+                <template #content="{ item }">
+                    <pre
+                        class="reasoning-box flex text-black dark:text-white text-wrap border-x-2 border-b-2 border-[var(--md-inverse-surface)] rounded-[3px] h-[320px] overflow-x-hidden overflow-y-scroll bg-[var(--md-surface-container)] text-xs leading-snug whitespace-pre-wrap py-3 px-2"
+                        :id="'reasoning-' + (props.message as any).id"
+                        v-text="item.content"
+                    />
+                </template>
+            </UAccordion>
+
             <!-- Minimal retro loader: shown while assistant message pending and empty -->
             <div
                 v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent"
@@ -257,6 +277,19 @@ const rendered = computed(() => {
     return parsed;
 });
 
+// Extract reasoning content from message data (with fallback for legacy top-level)
+const reasoningContent = computed(() => {
+    if (props.message.role !== 'assistant') return '';
+    const d: any = (props.message as any).data;
+    let txt: any = d && typeof d === 'object' ? d.reasoning_content : undefined;
+    if (!txt && (props.message as any).reasoning_content) {
+        // Fallback: some mapped objects may have had data stripped previously
+        txt = (props.message as any).reasoning_content;
+    }
+    if (typeof txt === 'string' && txt.trim()) return txt;
+    return '';
+});
+
 // Editing (extracted)
 const {
     editing,
@@ -344,11 +377,38 @@ const expanded = ref<boolean>(
     (props.message as any)._expanded === true || false
 );
 watch(expanded, (v) => ((props.message as any)._expanded = v));
+// Reasoning accordion state via UAccordion (persist on message object)
+const reasoningExpanded = ref<boolean>(
+    (props.message as any)._reasoningExpanded === true || false
+);
+watch(
+    reasoningExpanded,
+    (v) => ((props.message as any)._reasoningExpanded = v)
+);
+// Bind boolean to accordion's expected string value model
+const reasoningActiveValue = computed<string | undefined>({
+    get: () => (reasoningExpanded.value ? 'reasoning' : undefined),
+    set: (v) => (reasoningExpanded.value = v === 'reasoning'),
+});
+const reasoningItems = computed(() => [
+    {
+        label: `Reasoning (${reasoningContent.value.length} chars)`,
+        value: 'reasoning',
+        content: reasoningContent.value,
+        // Provide retro styling hooks
+        ui: {
+            trigger:
+                'reasoning-trigger font-mono text-[13px] py-2 px-2 border-2 border-[var(--md-inverse-surface)] rounded-[4px] bg-[var(--md-surface-container-high)] dark:bg-[var(--md-surface-container-high)] shadow-none data-[state=open]:rounded-b-none data-[state=open]:border-b-0',
+            content: 'pt-2',
+        },
+    },
+]);
 const firstThumb = computed(() => hashList.value[0]);
 function toggleExpanded() {
     if (!hashList.value.length) return;
     expanded.value = !expanded.value;
 }
+// (toggleReasoning no longer needed; state managed by UAccordion)
 
 async function ensureThumb(h: string) {
     // If we already know it's a PDF just ensure meta exists.
@@ -779,5 +839,62 @@ async function onBranch() {
     );
     clip-path: polygon(0 0, 100% 0, 100% 100%);
     box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
+}
+
+/* Reasoning Accordion */
+.reasoning-toggle {
+    font-family: 'VT323', 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    padding: 4px 8px;
+    border: 2px solid var(--md-inverse-surface);
+    background: linear-gradient(
+        180deg,
+        var(--md-surface-container-high) 0%,
+        var(--md-surface-container-low) 100%
+    );
+    border-radius: 4px;
+    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+.reasoning-toggle:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 0 var(--md-inverse-surface);
+}
+.reasoning-toggle:focus {
+    outline: 2px solid var(--md-inverse-primary);
+    outline-offset: 2px;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+
+/* Connected reasoning accordion styling */
+.reasoning-accordion :deep(.reasoning-trigger) {
+    position: relative;
+    z-index: 2;
+}
+.reasoning-accordion :deep(.reasoning-box) {
+    margin-top: 0; /* eliminate visual gap */
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+.reasoning-accordion :deep([data-state='open'] .reasoning-trigger) {
+    /* ensure trigger sits flush with content */
+    margin-bottom: 0;
+}
+.reasoning-accordion :deep(.reasoning-trigger[data-state='open']) {
+    /* defensive: if library applies data-state on trigger */
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
 }
 </style>

@@ -190,6 +190,29 @@ export function filterByPriceBucket(
     });
 }
 
+export function extractReasoning(rawMsg: any): {
+    reasoning_content?: string;
+    reasoning_details?: any[];
+} {
+    if (!rawMsg) return {};
+    const details = rawMsg.reasoning_details;
+    if (Array.isArray(details) && details.length) {
+        const parts: string[] = [];
+        for (const r of details) {
+            if (r && typeof r === 'object') {
+                if (typeof r.summary === 'string') parts.push(r.summary);
+                if (typeof r.text === 'string') parts.push(r.text);
+            }
+        }
+        const reasoning_content = parts.join('\n\n').trim();
+        return { reasoning_content, reasoning_details: details };
+    }
+    const str = rawMsg.reasoning;
+    if (typeof str === 'string' && str.trim())
+        return { reasoning_content: str.trim() };
+    return {};
+}
+
 export const modelsService = {
     fetchModels,
     filterByText,
@@ -197,6 +220,7 @@ export const modelsService = {
     filterByContextLength,
     filterByParameters,
     filterByPriceBucket,
+    extractReasoning,
 };
 
 export default modelsService;

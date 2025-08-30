@@ -120,6 +120,14 @@ export async function* openRouterStream(params: {
                 for (const choice of choices) {
                     const delta = choice.delta || {};
 
+                    // Handle reasoning tokens
+                    if (
+                        typeof delta.reasoning === 'string' &&
+                        delta.reasoning
+                    ) {
+                        yield { type: 'reasoning', text: delta.reasoning };
+                    }
+
                     // Text variants
                     if (Array.isArray(delta.content)) {
                         for (const part of delta.content) {
