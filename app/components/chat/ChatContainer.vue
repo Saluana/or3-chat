@@ -184,8 +184,8 @@ type RenderMessage = {
     content: string;
     id?: string;
     stream_id?: string;
-    file_hashes?: string | null; // serialized JSON array (from DB/user memory)
-    pending?: boolean; // UI-only flag for skeleton loader
+    file_hashes?: string | null;
+    pending?: boolean;
 };
 function escapeAttr(v: string) {
     return v
