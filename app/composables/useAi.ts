@@ -247,7 +247,7 @@ export function useChat(
                 thread_id: threadIdRef.value!,
                 role: 'assistant',
                 stream_id: streamId,
-                data: { content: '', attachments: [] },
+                data: { content: '', attachments: [], reasoning_text: null },
             });
 
             await hooks.doAction('ai.chat.send:action:before', {
@@ -279,6 +279,7 @@ export function useChat(
                     id: (assistantDbMsg as any).id,
                     stream_id: streamId,
                     pending: true,
+                    reasoning_text: null,
                 } as any) - 1;
             const current = messages.value[idx]!;
             let chunkIndex = 0;
@@ -286,10 +287,29 @@ export function useChat(
             let lastPersistAt = 0;
 
             const assistantFileHashes: string[] = [];
+            // Reasoning persistence state (always persist now)
+            // (Kept minimal; could reintroduce throttling if needed.)
 
             for await (const ev of stream) {
                 if (ev.type === 'reasoning') {
-                    console.log('Received reasoning chunk useAi.ts:', ev.text);
+                    // Accumulate reasoning (chain-of-thought style content)
+                    if (current.reasoning_text === null)
+                        current.reasoning_text = ev.text;
+                    else current.reasoning_text += ev.text;
+                    // Fire a dedicated hook so UI/extensions can surface or log reasoning separately
+                    try {
+                        await hooks.doAction(
+                            'ai.chat.stream:action:reasoning',
+                            ev.text,
+                            {
+                                threadId: threadIdRef.value,
+                                assistantId: assistantDbMsg.id,
+                                streamId,
+                                reasoningLength:
+                                    current.reasoning_text?.length || 0,
+                            }
+                        );
+                    } catch {}
                 } else if (ev.type === 'text') {
                     if ((current as any).pending)
                         (current as any).pending = false;
@@ -365,6 +385,12 @@ export function useChat(
                                     serializeFileHashes(assistantFileHashes);
                                 const updatedMsg = {
                                     ...assistantDbMsg,
+                                    data: {
+                                        ...((assistantDbMsg as any).data || {}),
+                                        // Only include reasoning_text if we've got some (avoid bloating empty rows)
+                                        reasoning_text:
+                                            current.reasoning_text ?? null,
+                                    },
                                     file_hashes: serialized,
                                     updated_at: nowSec(),
                                 } as any;
@@ -381,11 +407,13 @@ export function useChat(
                 if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
                     const textContent =
                         getTextFromContent(current.content) || '';
+                    const reasoningToPersist = current.reasoning_text ?? null;
                     const updated = {
                         ...assistantDbMsg,
                         data: {
                             ...((assistantDbMsg as any).data || {}),
                             content: textContent,
+                            reasoning_text: reasoningToPersist,
                         },
                         file_hashes: assistantFileHashes.length
                             ? serializeFileHashes(assistantFileHashes)
@@ -430,6 +458,7 @@ export function useChat(
                 data: {
                     ...((assistantDbMsg as any).data || {}),
                     content: incoming,
+                    reasoning_text: current.reasoning_text ?? null,
                 },
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)

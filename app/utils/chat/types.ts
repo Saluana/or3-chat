@@ -21,6 +21,7 @@ export interface ChatMessage {
     id?: string;
     stream_id?: string;
     file_hashes?: string | null;
+    reasoning_text?: string | null;
 }
 
 export interface SendMessageParams {
