@@ -71,7 +71,7 @@
             >
                 <ReasoningAccordion
                     :content="props.message.reasoning_text"
-                    :streaming="isStreamingReasoning"
+                    :streaming="isStreamingReasoning as boolean"
                     :pending="(props.message as any).pending"
                 />
             </div>
@@ -79,7 +79,8 @@
         </div>
         <!-- Editing surface -->
         <div v-else class="w-full">
-            <MessageEditor
+            <LazyChatMessageEditor
+                hydrate-on-interaction="focus"
                 v-model="draft"
                 :autofocus="true"
                 :focus-delay="120"

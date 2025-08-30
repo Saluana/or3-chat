@@ -296,8 +296,9 @@
                 </p>
             </div>
         </div>
-        <modal-settings-modal v-model:showModal="showModelCatalog" />
+        <lazy-modal-settings-modal v-model:showModal="showModelCatalog" />
         <LazyChatSystemPromptsModal
+            hydrate-on-visible
             v-model:showModal="showSystemPrompts"
             :thread-id="props.threadId"
             @selected="handlePromptSelected"

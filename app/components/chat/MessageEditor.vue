@@ -14,6 +14,7 @@ import { StarterKit } from '@tiptap/starter-kit';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 // If you still want markdown extension keep it; otherwise remove these two lines:
 import { Markdown } from 'tiptap-markdown';
+import { useDebounceFn } from '@vueuse/core';
 
 const props = defineProps<{
     modelValue: string;
@@ -31,6 +32,10 @@ let destroy: (() => void) | null = null;
 let internalUpdate = false;
 let lastEmitted = '';
 
+const emitModelValue = useDebounceFn((val: string): void => {
+    emit('update:modelValue', val);
+}, 200);
+
 async function init() {
     const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
 
@@ -38,18 +43,8 @@ async function init() {
         extensions,
         content: props.modelValue,
         onUpdate: ({ editor: e }) => {
-            // Access markdown storage; fall back gracefully
-            const md: string | undefined =
-                // @ts-expect-error
-                e?.storage?.markdown?.getMarkdown?.();
-            const nextVal = md ?? e.getText();
-            if (nextVal === lastEmitted) return;
-            internalUpdate = true;
-            lastEmitted = nextVal;
-            emit('update:modelValue', nextVal);
-            queueMicrotask(() => {
-                internalUpdate = false;
-            });
+            // @ts-ignore
+            emitModelValue(e?.storage?.markdown?.getMarkdown());
         },
     });
 
@@ -82,15 +77,7 @@ watch(
     () => props.modelValue,
     (val) => {
         if (!editor.value) return;
-        if (internalUpdate) return; // skip updates we originated
-        // Determine current markdown representation (markdown storage optional)
-        const currentMd: string | undefined =
-            editor.value?.storage?.markdown?.getMarkdown?.();
-        const current = currentMd ?? editor.value.getText();
-        if (val === current) return;
-        // Update editor without firing transactions that cause flicker (emitUpdate: false not available; use setContent with emitUpdate false param)
-        editor.value.commands.setContent(val || '', false);
-        lastEmitted = val || '';
+        if (internalUpdate) return;
     }
 );
 </script>

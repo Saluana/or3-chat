@@ -167,7 +167,10 @@
             <div class="h-[10px] top-10"></div>
         </div>
     </div>
-    <modal-settings-modal v-model:showModal="showSettingsModal" />
+    <lazy-modal-settings-modal
+        hydrate-on-visible
+        v-model:showModal="showSettingsModal"
+    />
 </template>
 
 <script lang="ts" setup>
