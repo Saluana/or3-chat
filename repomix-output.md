@@ -5159,116 +5159,6 @@ describe('VirtualMessageList', () => {
 });
 ```
 
-## File: app/components/chat/MessageAttachmentsGallery.vue
-```vue
-<template>
-    <div v-if="hashes.length" class="mt-3">
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            <div
-                v-for="h in hashes"
-                :key="h"
-                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
-            >
-                <template v-if="thumbs[h]?.status === 'ready'">
-                    <img
-                        :src="thumbs[h].url"
-                        :alt="'file ' + h.slice(0, 8)"
-                        class="object-cover w-full h-full"
-                        draggable="false"
-                    />
-                </template>
-                <template v-else-if="thumbs[h]?.status === 'error'">
-                    <div class="text-[10px] text-center px-1 text-error">
-                        failed
-                    </div>
-                </template>
-                <template v-else>
-                    <div class="animate-pulse text-[10px] opacity-70">
-                        loading
-                    </div>
-                </template>
-            </div>
-        </div>
-        <button
-            class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
-            type="button"
-            @click="$emit('collapse')"
-            aria-label="Hide attachments"
-        >
-            Hide attachments
-        </button>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { reactive, watch } from 'vue';
-import { getFileBlob } from '~/db/files';
-
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string;
-}
-const props = defineProps<{ hashes: string[] }>();
-defineEmits<{ (e: 'collapse'): void }>();
-
-// Reuse global caches so virtualization doesn't thrash
-const cache = ((globalThis as any).__or3ThumbCache ||= new Map<
-    string,
-    ThumbState
->());
-const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
-    string,
-    Promise<void>
->());
-const thumbs = reactive<Record<string, ThumbState>>({});
-
-async function ensure(h: string) {
-    if (thumbs[h] && thumbs[h].status === 'ready') return;
-    const cached = cache.get(h);
-    if (cached) {
-        thumbs[h] = cached;
-        return;
-    }
-    if (inflight.has(h)) {
-        await inflight.get(h);
-        const after = cache.get(h);
-        if (after) thumbs[h] = after;
-        return;
-    }
-    thumbs[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
-            const blob = await getFileBlob(h);
-            if (!blob) throw new Error('missing');
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            cache.set(h, ready);
-            thumbs[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            cache.set(h, err);
-            thumbs[h] = err;
-        } finally {
-            inflight.delete(h);
-        }
-    })();
-    inflight.set(h, p);
-    await p;
-}
-
-watch(
-    () => props.hashes,
-    (list) => {
-        list.forEach(ensure);
-    },
-    { immediate: true }
-);
-defineExpose({ thumbs });
-</script>
-
-<style scoped></style>
-```
-
 ## File: app/components/chat/ModelSelect.vue
 ```vue
 <template>
@@ -5977,6 +5867,296 @@ export function useMessageEditing(message: any) {
         beginEdit,
         cancelEdit,
         saveEdit,
+    };
+}
+```
+
+## File: app/composables/useModelStore.ts
+```typescript
+import { kv } from '~/db';
+import modelsService, {
+    type OpenRouterModel,
+    type PriceBucket,
+} from '~/utils/models-service';
+
+// Module-level in-flight promise for deduping parallel fetches across composable instances
+let inFlight: Promise<OpenRouterModel[]> | null = null;
+
+export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
+export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function canUseDexie() {
+    try {
+        return (
+            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
+        );
+    } catch {
+        return false;
+    }
+}
+
+// --- Singleton reactive state (shared across all composable callers) ---
+// These are intentionally hoisted so that different components (e.g. SettingsModal
+// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
+// useModelStore() created new refs, so favoriting a model in the modal did not
+// propagate to the chat input until a full reload re-hydrated from KV.
+const favoriteModels = ref<OpenRouterModel[]>([]);
+const catalog = ref<OpenRouterModel[]>([]);
+const searchQuery = ref('');
+const filters = ref<{
+    input?: string[];
+    output?: string[];
+    minContext?: number;
+    parameters?: string[];
+    price?: PriceBucket;
+}>({});
+// Reactive timestamp (ms) of when catalog was last loaded into memory
+const lastLoadedAt = ref<number | undefined>(undefined);
+
+export function useModelStore() {
+    function isFresh(ts: number | undefined, ttl: number) {
+        if (!ts) return false;
+        return Date.now() - ts < ttl;
+    }
+
+    async function loadFromDexie(
+        ttl: number
+    ): Promise<OpenRouterModel[] | null> {
+        if (!canUseDexie()) return null;
+        try {
+            const rec: any = await kv.get(MODELS_CACHE_KEY);
+            if (!rec) return null;
+            // rec.updated_at is seconds in Kv schema; convert to ms
+            const updatedAtMs = rec.updated_at
+                ? rec.updated_at * 1000
+                : undefined;
+            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
+                console.debug(
+                    '[models-cache] dexie record stale or missing timestamp',
+                    {
+                        updatedAtMs,
+                        ttl,
+                    }
+                );
+                return null;
+            }
+            const raw = rec?.value;
+            if (!raw || typeof raw !== 'string') return null;
+            try {
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) return null;
+                catalog.value = parsed;
+                lastLoadedAt.value = updatedAtMs;
+                console.debug(
+                    '[models-cache] dexie hit — hydrated catalog from cache',
+                    {
+                        updatedAtMs,
+                        count: parsed.length,
+                    }
+                );
+                // Removed dexie source console.log
+                return parsed;
+            } catch (e) {
+                console.warn(
+                    '[models-cache] JSON parse failed; deleting corrupt record',
+                    e
+                );
+                // best-effort cleanup
+                try {
+                    await kv.delete(MODELS_CACHE_KEY);
+                } catch {}
+                return null;
+            }
+        } catch (e) {
+            console.warn('[models-cache] Dexie load failed', e);
+            return null;
+        }
+    }
+
+    async function saveToDexie(list: OpenRouterModel[]) {
+        if (!canUseDexie()) return;
+        try {
+            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
+            console.debug('[models-cache] saved catalog to Dexie', {
+                count: list.length,
+            });
+        } catch (e) {
+            console.warn('[models-cache] Dexie save failed', e);
+        }
+    }
+
+    async function invalidate() {
+        console.info(
+            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
+        );
+        catalog.value = [];
+        lastLoadedAt.value = undefined;
+        if (!canUseDexie()) return;
+        try {
+            await kv.delete(MODELS_CACHE_KEY);
+            console.debug('[models-cache] Dexie record deleted');
+        } catch (e) {
+            console.warn('[models-cache] Dexie delete failed', e);
+        }
+    }
+
+    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
+        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
+
+        // Memory fast-path
+        if (
+            !opts?.force &&
+            catalog.value.length &&
+            isFresh(lastLoadedAt.value, ttl)
+        ) {
+            console.debug(
+                '[models-cache] memory hit — returning in-memory catalog',
+                {
+                    lastLoadedAt: lastLoadedAt.value,
+                    count: catalog.value.length,
+                }
+            );
+            // Removed memory source console.log
+            return catalog.value;
+        }
+
+        // Try Dexie if available and not forced
+        if (!opts?.force) {
+            const dexieHit = await loadFromDexie(ttl);
+            if (dexieHit) return dexieHit;
+            console.debug(
+                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
+            );
+        }
+
+        // Dedupe in-flight network requests
+        if (inFlight && !opts?.force) return inFlight;
+
+        const fetchPromise = (async () => {
+            console.info('[models-cache] fetching models from network');
+            try {
+                const list = await modelsService.fetchModels(opts);
+                catalog.value = list;
+                lastLoadedAt.value = Date.now();
+                console.info(
+                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
+                );
+                // Removed network source console.log
+                // persist async (don't block response)
+                saveToDexie(list).catch(() => {});
+                return list;
+            } catch (err) {
+                console.warn('[models-cache] network fetch failed', err);
+                // On network failure, attempt to serve stale Dexie record (even if expired)
+                if (canUseDexie()) {
+                    try {
+                        const rec: any = await kv.get(MODELS_CACHE_KEY);
+                        const raw = rec?.value;
+                        if (raw && typeof raw === 'string') {
+                            try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length) {
+                                    console.warn(
+                                        '[models-cache] network failed; serving stale cached models',
+                                        { count: parsed.length }
+                                    );
+                                    // Removed stale dexie fallback console.log
+                                    return parsed;
+                                }
+                            } catch (e) {
+                                // corrupted; best-effort delete
+                                try {
+                                    await kv.delete(MODELS_CACHE_KEY);
+                                } catch {}
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(
+                            '[models-cache] Dexie read during network failure failed',
+                            e
+                        );
+                    }
+                }
+                throw err;
+            }
+        })();
+
+        if (!opts?.force) {
+            inFlight = fetchPromise.finally(() => {
+                inFlight = null;
+            });
+        }
+
+        return fetchPromise;
+    }
+
+    async function persist() {
+        try {
+            await kv.set(
+                'favorite_models',
+                JSON.stringify(favoriteModels.value)
+            );
+        } catch (e) {
+            console.warn('[useModelStore] persist favorites failed', e);
+        }
+    }
+
+    async function addFavoriteModel(model: OpenRouterModel) {
+        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
+        favoriteModels.value.push(model);
+        await persist();
+    }
+
+    async function removeFavoriteModel(model: OpenRouterModel) {
+        favoriteModels.value = favoriteModels.value.filter(
+            (m) => m.id !== model.id
+        );
+        await persist();
+    }
+
+    async function clearFavoriteModels() {
+        favoriteModels.value = [];
+        await persist();
+    }
+
+    async function getFavoriteModels() {
+        try {
+            const record: any = await kv.get('favorite_models');
+            const raw = record?.value;
+            if (raw && typeof raw === 'string') {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    favoriteModels.value = parsed;
+                } else {
+                    favoriteModels.value = [];
+                }
+            } else {
+                favoriteModels.value = [];
+            }
+        } catch {
+            favoriteModels.value = [];
+        }
+        return favoriteModels.value;
+    }
+
+    // Convenience wrapper to force network refresh
+    async function refreshModels() {
+        return fetchModels({ force: true });
+    }
+
+    return {
+        favoriteModels,
+        catalog,
+        searchQuery,
+        filters,
+        fetchModels,
+        refreshModels,
+        invalidate,
+        getFavoriteModels,
+        addFavoriteModel,
+        removeFavoriteModel,
+        clearFavoriteModels,
+        lastLoadedAt,
     };
 }
 ```
@@ -7143,6 +7323,141 @@ html {
 .dark .prosemirror-host :where(.ProseMirror) strong {
 	color: var(--md-on-surface);
 }
+```
+
+## File: app/components/chat/MessageAttachmentsGallery.vue
+```vue
+<template>
+    <div v-if="hashes.length" class="mt-3">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            <div
+                v-for="h in hashes"
+                :key="h"
+                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
+            >
+                <!-- PDF Placeholder if mime/kind indicates pdf -->
+                <template v-if="meta[h]?.kind === 'pdf'">
+                    <div
+                        class="w-full h-full flex flex-col items-center justify-center gap-1 bg-[var(--md-surface-container-low)] text-center p-1"
+                    >
+                        <span
+                            class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded"
+                            >PDF</span
+                        >
+                        <span
+                            class="text-[9px] leading-snug line-clamp-3 break-words px-1"
+                            :title="fileNames[h] || h.slice(0, 8)"
+                            >{{ fileNames[h] || 'document.pdf' }}</span
+                        >
+                    </div>
+                </template>
+                <template v-else-if="thumbs[h]?.status === 'ready'">
+                    <img
+                        :src="thumbs[h].url"
+                        :alt="'file ' + h.slice(0, 8)"
+                        class="object-cover w-full h-full"
+                        draggable="false"
+                    />
+                </template>
+                <template v-else-if="thumbs[h]?.status === 'error'">
+                    <div class="text-[10px] text-center px-1 text-error">
+                        failed
+                    </div>
+                </template>
+                <template v-else>
+                    <div class="animate-pulse text-[10px] opacity-70">
+                        loading
+                    </div>
+                </template>
+            </div>
+        </div>
+        <button
+            class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
+            type="button"
+            @click="$emit('collapse')"
+            aria-label="Hide attachments"
+        >
+            Hide attachments
+        </button>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { reactive, watch } from 'vue';
+import { getFileBlob, getFileMeta } from '~/db/files';
+
+interface ThumbState {
+    status: 'loading' | 'ready' | 'error';
+    url?: string;
+}
+const props = defineProps<{ hashes: string[] }>();
+defineEmits<{ (e: 'collapse'): void }>();
+
+// Reuse global caches so virtualization doesn't thrash
+const cache = ((globalThis as any).__or3ThumbCache ||= new Map<
+    string,
+    ThumbState
+>());
+const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
+    string,
+    Promise<void>
+>());
+const thumbs = reactive<Record<string, ThumbState>>({});
+const meta = reactive<Record<string, any>>({});
+const fileNames = reactive<Record<string, string>>({});
+
+async function ensure(h: string) {
+    if (thumbs[h] && thumbs[h].status === 'ready') return;
+    const cached = cache.get(h);
+    if (cached) {
+        thumbs[h] = cached;
+        return;
+    }
+    if (inflight.has(h)) {
+        await inflight.get(h);
+        const after = cache.get(h);
+        if (after) thumbs[h] = after;
+        return;
+    }
+    thumbs[h] = { status: 'loading' };
+    const p = (async () => {
+        try {
+            const [blob, m] = await Promise.all([
+                getFileBlob(h),
+                getFileMeta(h).catch(() => undefined),
+            ]);
+            if (m) {
+                meta[h] = m;
+                if (m.name) fileNames[h] = m.name;
+            }
+            if (!blob) throw new Error('missing');
+            const url = URL.createObjectURL(blob);
+            const ready: ThumbState = { status: 'ready', url };
+            cache.set(h, ready);
+            thumbs[h] = ready;
+        } catch {
+            const err: ThumbState = { status: 'error' };
+            cache.set(h, err);
+            thumbs[h] = err;
+        } finally {
+            inflight.delete(h);
+        }
+    })();
+    inflight.set(h, p);
+    await p;
+}
+
+watch(
+    () => props.hashes,
+    (list) => {
+        list.forEach(ensure);
+    },
+    { immediate: true }
+);
+defineExpose({ thumbs });
+</script>
+
+<style scoped></style>
 ```
 
 ## File: app/components/modal/SettingsModal.vue
@@ -8324,314 +8639,6 @@ export type ORStreamEvent =
     | { type: 'done' };
 ```
 
-## File: app/utils/openrouter-build.ts
-```typescript
-// Utility helpers to build OpenRouter payload messages including historical images.
-// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
-// produce OpenAI-compatible content arrays.
-
-import { parseFileHashes } from '~/db/files-util';
-
-export interface BuildImageCandidate {
-    hash: string;
-    role: 'user' | 'assistant';
-    messageIndex: number; // chronological index in original messages array
-}
-
-export interface ORContentPartText {
-    type: 'text';
-    text: string;
-}
-export interface ORContentPartImageUrl {
-    type: 'image_url';
-    image_url: { url: string };
-}
-export type ORContentPart = ORContentPartText | ORContentPartImageUrl;
-
-export interface ORMessage {
-    role: 'user' | 'assistant' | 'system';
-    content: ORContentPart[];
-}
-
-// Caches on global scope to avoid repeated blob -> base64 conversions.
-const dataUrlCache: Map<string, string> = ((
-    globalThis as any
-).__or3ImageDataUrlCache ||= new Map());
-const inflight: Map<string, Promise<string | null>> = ((
-    globalThis as any
-).__or3ImageHydrateInflight ||= new Map());
-
-// Remote / blob URL hydration cache shares same map (keyed by original ref string)
-// We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
-// because a content hash would never start with http/blob.
-async function remoteRefToDataUrl(ref: string): Promise<string | null> {
-    if (ref.startsWith('data:image/')) return ref; // already data URL
-    if (!/^https?:|^blob:/.test(ref)) return null;
-    if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
-    if (inflight.has(ref)) return inflight.get(ref)!;
-    const p = (async () => {
-        try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 8000); // 8s safety timeout
-            const resp = await fetch(ref, { signal: ctrl.signal });
-            clearTimeout(t);
-            if (!resp.ok) throw new Error('fetch-failed:' + resp.status);
-            const blob = await resp.blob();
-            // Basic guardrail: cap at ~5MB to avoid huge token usage
-            if (blob.size > 5 * 1024 * 1024) return null;
-            const dataUrl = await blobToDataUrl(blob);
-            dataUrlCache.set(ref, dataUrl);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(ref);
-        }
-    })();
-    inflight.set(ref, p);
-    return p;
-}
-
-async function blobToDataUrl(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(fr.error);
-        fr.onload = () => resolve(fr.result as string);
-        fr.readAsDataURL(blob);
-    });
-}
-
-async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
-    if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
-    if (inflight.has(hash)) return inflight.get(hash)!;
-    const p = (async () => {
-        try {
-            const { getFileBlob } = await import('~/db/files');
-            const blob = await getFileBlob(hash);
-            if (!blob) throw new Error('blob-missing');
-            const dataUrl = await blobToDataUrl(blob);
-            dataUrlCache.set(hash, dataUrl);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(hash);
-        }
-    })();
-    inflight.set(hash, p);
-    return p;
-}
-
-export interface BuildOptions {
-    maxImageInputs?: number; // total images across history
-    dedupeImages?: boolean; // skip duplicate hashes
-    imageInclusionPolicy?:
-        | 'all'
-        | 'recent'
-        | 'recent-user'
-        | 'recent-assistant';
-    recentWindow?: number; // number of most recent messages to scan when policy is recent*
-    // Hook like filter: (candidates) => filteredCandidates
-    filterIncludeImages?: (
-        candidates: BuildImageCandidate[]
-    ) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
-    debug?: boolean; // verbose logging
-}
-
-// Default heuristics constants
-const DEFAULT_MAX_IMAGE_INPUTS = 8;
-
-interface ChatMessageLike {
-    role: 'user' | 'assistant' | 'system';
-    content: any; // string | parts[]
-    file_hashes?: string | null;
-}
-
-// Build OpenRouter messages with hydrated images.
-export async function buildOpenRouterMessages(
-    messages: ChatMessageLike[],
-    opts: BuildOptions = {}
-): Promise<ORMessage[]> {
-    const {
-        maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS,
-        dedupeImages = true,
-        imageInclusionPolicy = 'all',
-        recentWindow = 12,
-        filterIncludeImages,
-        debug = false,
-    } = opts;
-
-    if (debug) {
-        // Debug logging suppressed (begin)
-    }
-
-    // Determine candidate messages for image inclusion under policy.
-    let candidateMessages: number[] = [];
-    if (imageInclusionPolicy === 'all') {
-        candidateMessages = messages.map((_, i) => i);
-    } else if (imageInclusionPolicy.startsWith('recent')) {
-        const start = Math.max(0, messages.length - recentWindow);
-        candidateMessages = [];
-        for (let i = start; i < messages.length; i++) candidateMessages.push(i);
-    }
-
-    // Collect hash candidates
-    const hashCandidates: BuildImageCandidate[] = [];
-    for (const idx of candidateMessages) {
-        const m = messages[idx];
-        if (!m) continue;
-        if (m.file_hashes) {
-            try {
-                const hashes = parseFileHashes(m.file_hashes) || [];
-                for (const h of hashes) {
-                    if (!h) continue;
-                    if (
-                        imageInclusionPolicy === 'recent-user' &&
-                        m.role !== 'user'
-                    )
-                        continue;
-                    if (
-                        imageInclusionPolicy === 'recent-assistant' &&
-                        m.role !== 'assistant'
-                    )
-                        continue;
-                    if (m.role === 'user' || m.role === 'assistant') {
-                        hashCandidates.push({
-                            hash: h,
-                            role: m.role,
-                            messageIndex: idx,
-                        });
-                    }
-                }
-            } catch {}
-        }
-        // Also inspect inline parts if array form
-        if (Array.isArray(m.content)) {
-            for (const p of m.content) {
-                if (p?.type === 'image' && typeof p.image === 'string') {
-                    if (
-                        p.image.startsWith('data:image/') ||
-                        /^https?:/i.test(p.image) ||
-                        /^blob:/i.test(p.image)
-                    ) {
-                        hashCandidates.push({
-                            hash: p.image,
-                            role: m.role as any,
-                            messageIndex: idx,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    if (debug) {
-        // Debug logging suppressed (candidates)
-    }
-
-    // Optional external filter
-    let filtered = hashCandidates;
-    if (filterIncludeImages) {
-        try {
-            const res = await filterIncludeImages(hashCandidates);
-            if (Array.isArray(res)) filtered = res;
-        } catch {}
-    }
-
-    // Enforce max & dedupe
-    const seen = new Set<string>();
-    const selected: BuildImageCandidate[] = [];
-    for (const c of filtered) {
-        if (selected.length >= maxImageInputs) break;
-        if (dedupeImages && seen.has(c.hash)) continue;
-        seen.add(c.hash);
-        selected.push(c);
-    }
-
-    if (debug) {
-        // Debug logging suppressed (selected)
-    }
-
-    // Group selected hashes by message index for convenient inclusion
-    const byMessageIndex = new Map<number, BuildImageCandidate[]>();
-    for (const s of selected) {
-        const list = byMessageIndex.get(s.messageIndex) || [];
-        list.push(s);
-        byMessageIndex.set(s.messageIndex, list);
-    }
-
-    // Build ORMessage array preserving original order
-    const orMessages: ORMessage[] = [];
-    for (let i = 0; i < messages.length; i++) {
-        const m = messages[i];
-        if (!m) continue;
-        const parts: ORContentPart[] = [];
-        // Extract textual content
-        let text = '';
-        if (Array.isArray(m.content)) {
-            const textParts = m.content.filter((p: any) => p.type === 'text');
-            if (textParts.length)
-                text = textParts.map((p: any) => p.text || '').join('');
-        } else if (typeof m.content === 'string') {
-            text = m.content;
-        }
-        if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
-        parts.push({ type: 'text', text });
-
-        // Add images associated with this message index
-        const imgs = byMessageIndex.get(i) || [];
-        for (const img of imgs) {
-            if (img.hash.startsWith('data:image/')) {
-                parts.push({ type: 'image_url', image_url: { url: img.hash } });
-            } else {
-                // Try: (1) treat as stored hash; (2) treat as remote/blob ref
-                let dataUrl = await hydrateHashToDataUrl(img.hash);
-                if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
-                if (dataUrl) {
-                    parts.push({
-                        type: 'image_url',
-                        image_url: { url: dataUrl },
-                    });
-                } else if (debug) {
-                    console.warn('[or-build] hydrate-fail', {
-                        ref: img.hash,
-                        role: img.role,
-                        messageIndex: img.messageIndex,
-                    });
-                }
-            }
-        }
-
-        orMessages.push({ role: m.role, content: parts });
-    }
-
-    if (debug) {
-        // Debug logging suppressed (done)
-    }
-
-    return orMessages;
-}
-
-// Decide modalities based on prepared ORMessages + heuristic prompt.
-export function decideModalities(
-    orMessages: ORMessage[],
-    requestedModel?: string
-): string[] {
-    const hasImageInput = orMessages.some((m) =>
-        m.content.some((p) => p.type === 'image_url')
-    );
-    const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
-    const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
-    const imageIntent =
-        /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
-            prompt
-        );
-    const modalities = ['text'];
-    if (hasImageInput || imageIntent) modalities.push('image');
-    return modalities;
-}
-```
-
 ## File: app/utils/prompt-utils.ts
 ```typescript
 /**
@@ -9070,296 +9077,6 @@ export function useDocumentsList(limit = 200) {
 }
 ```
 
-## File: app/composables/useModelStore.ts
-```typescript
-import { kv } from '~/db';
-import modelsService, {
-    type OpenRouterModel,
-    type PriceBucket,
-} from '~/utils/models-service';
-
-// Module-level in-flight promise for deduping parallel fetches across composable instances
-let inFlight: Promise<OpenRouterModel[]> | null = null;
-
-export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
-export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
-
-function canUseDexie() {
-    try {
-        return (
-            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
-        );
-    } catch {
-        return false;
-    }
-}
-
-// --- Singleton reactive state (shared across all composable callers) ---
-// These are intentionally hoisted so that different components (e.g. SettingsModal
-// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
-// useModelStore() created new refs, so favoriting a model in the modal did not
-// propagate to the chat input until a full reload re-hydrated from KV.
-const favoriteModels = ref<OpenRouterModel[]>([]);
-const catalog = ref<OpenRouterModel[]>([]);
-const searchQuery = ref('');
-const filters = ref<{
-    input?: string[];
-    output?: string[];
-    minContext?: number;
-    parameters?: string[];
-    price?: PriceBucket;
-}>({});
-// Reactive timestamp (ms) of when catalog was last loaded into memory
-const lastLoadedAt = ref<number | undefined>(undefined);
-
-export function useModelStore() {
-    function isFresh(ts: number | undefined, ttl: number) {
-        if (!ts) return false;
-        return Date.now() - ts < ttl;
-    }
-
-    async function loadFromDexie(
-        ttl: number
-    ): Promise<OpenRouterModel[] | null> {
-        if (!canUseDexie()) return null;
-        try {
-            const rec: any = await kv.get(MODELS_CACHE_KEY);
-            if (!rec) return null;
-            // rec.updated_at is seconds in Kv schema; convert to ms
-            const updatedAtMs = rec.updated_at
-                ? rec.updated_at * 1000
-                : undefined;
-            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
-                console.debug(
-                    '[models-cache] dexie record stale or missing timestamp',
-                    {
-                        updatedAtMs,
-                        ttl,
-                    }
-                );
-                return null;
-            }
-            const raw = rec?.value;
-            if (!raw || typeof raw !== 'string') return null;
-            try {
-                const parsed = JSON.parse(raw);
-                if (!Array.isArray(parsed)) return null;
-                catalog.value = parsed;
-                lastLoadedAt.value = updatedAtMs;
-                console.debug(
-                    '[models-cache] dexie hit — hydrated catalog from cache',
-                    {
-                        updatedAtMs,
-                        count: parsed.length,
-                    }
-                );
-                // Removed dexie source console.log
-                return parsed;
-            } catch (e) {
-                console.warn(
-                    '[models-cache] JSON parse failed; deleting corrupt record',
-                    e
-                );
-                // best-effort cleanup
-                try {
-                    await kv.delete(MODELS_CACHE_KEY);
-                } catch {}
-                return null;
-            }
-        } catch (e) {
-            console.warn('[models-cache] Dexie load failed', e);
-            return null;
-        }
-    }
-
-    async function saveToDexie(list: OpenRouterModel[]) {
-        if (!canUseDexie()) return;
-        try {
-            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
-            console.debug('[models-cache] saved catalog to Dexie', {
-                count: list.length,
-            });
-        } catch (e) {
-            console.warn('[models-cache] Dexie save failed', e);
-        }
-    }
-
-    async function invalidate() {
-        console.info(
-            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
-        );
-        catalog.value = [];
-        lastLoadedAt.value = undefined;
-        if (!canUseDexie()) return;
-        try {
-            await kv.delete(MODELS_CACHE_KEY);
-            console.debug('[models-cache] Dexie record deleted');
-        } catch (e) {
-            console.warn('[models-cache] Dexie delete failed', e);
-        }
-    }
-
-    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
-        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
-
-        // Memory fast-path
-        if (
-            !opts?.force &&
-            catalog.value.length &&
-            isFresh(lastLoadedAt.value, ttl)
-        ) {
-            console.debug(
-                '[models-cache] memory hit — returning in-memory catalog',
-                {
-                    lastLoadedAt: lastLoadedAt.value,
-                    count: catalog.value.length,
-                }
-            );
-            // Removed memory source console.log
-            return catalog.value;
-        }
-
-        // Try Dexie if available and not forced
-        if (!opts?.force) {
-            const dexieHit = await loadFromDexie(ttl);
-            if (dexieHit) return dexieHit;
-            console.debug(
-                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
-            );
-        }
-
-        // Dedupe in-flight network requests
-        if (inFlight && !opts?.force) return inFlight;
-
-        const fetchPromise = (async () => {
-            console.info('[models-cache] fetching models from network');
-            try {
-                const list = await modelsService.fetchModels(opts);
-                catalog.value = list;
-                lastLoadedAt.value = Date.now();
-                console.info(
-                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
-                );
-                // Removed network source console.log
-                // persist async (don't block response)
-                saveToDexie(list).catch(() => {});
-                return list;
-            } catch (err) {
-                console.warn('[models-cache] network fetch failed', err);
-                // On network failure, attempt to serve stale Dexie record (even if expired)
-                if (canUseDexie()) {
-                    try {
-                        const rec: any = await kv.get(MODELS_CACHE_KEY);
-                        const raw = rec?.value;
-                        if (raw && typeof raw === 'string') {
-                            try {
-                                const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length) {
-                                    console.warn(
-                                        '[models-cache] network failed; serving stale cached models',
-                                        { count: parsed.length }
-                                    );
-                                    // Removed stale dexie fallback console.log
-                                    return parsed;
-                                }
-                            } catch (e) {
-                                // corrupted; best-effort delete
-                                try {
-                                    await kv.delete(MODELS_CACHE_KEY);
-                                } catch {}
-                            }
-                        }
-                    } catch (e) {
-                        console.warn(
-                            '[models-cache] Dexie read during network failure failed',
-                            e
-                        );
-                    }
-                }
-                throw err;
-            }
-        })();
-
-        if (!opts?.force) {
-            inFlight = fetchPromise.finally(() => {
-                inFlight = null;
-            });
-        }
-
-        return fetchPromise;
-    }
-
-    async function persist() {
-        try {
-            await kv.set(
-                'favorite_models',
-                JSON.stringify(favoriteModels.value)
-            );
-        } catch (e) {
-            console.warn('[useModelStore] persist favorites failed', e);
-        }
-    }
-
-    async function addFavoriteModel(model: OpenRouterModel) {
-        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
-        favoriteModels.value.push(model);
-        await persist();
-    }
-
-    async function removeFavoriteModel(model: OpenRouterModel) {
-        favoriteModels.value = favoriteModels.value.filter(
-            (m) => m.id !== model.id
-        );
-        await persist();
-    }
-
-    async function clearFavoriteModels() {
-        favoriteModels.value = [];
-        await persist();
-    }
-
-    async function getFavoriteModels() {
-        try {
-            const record: any = await kv.get('favorite_models');
-            const raw = record?.value;
-            if (raw && typeof raw === 'string') {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    favoriteModels.value = parsed;
-                } else {
-                    favoriteModels.value = [];
-                }
-            } else {
-                favoriteModels.value = [];
-            }
-        } catch {
-            favoriteModels.value = [];
-        }
-        return favoriteModels.value;
-    }
-
-    // Convenience wrapper to force network refresh
-    async function refreshModels() {
-        return fetchModels({ force: true });
-    }
-
-    return {
-        favoriteModels,
-        catalog,
-        searchQuery,
-        filters,
-        fetchModels,
-        refreshModels,
-        invalidate,
-        getFavoriteModels,
-        addFavoriteModel,
-        removeFavoriteModel,
-        clearFavoriteModels,
-        lastLoadedAt,
-    };
-}
-```
-
 ## File: app/composables/useMultiPane.ts
 ```typescript
 // Multi-pane state management composable for chat & documents
@@ -9742,218 +9459,6 @@ export class Or3DB extends Dexie {
 }
 
 export const db = new Or3DB();
-```
-
-## File: app/utils/chat/openrouterStream.ts
-```typescript
-import type { ORStreamEvent } from './types';
-
-export async function* openRouterStream(params: {
-    apiKey: string;
-    model: string;
-    orMessages: any[];
-    modalities: string[];
-    signal?: AbortSignal;
-}): AsyncGenerator<ORStreamEvent, void, unknown> {
-    const { apiKey, model, orMessages, modalities, signal } = params;
-
-    const body = {
-        model,
-        messages: orMessages,
-        modalities,
-        stream: true,
-    } as any;
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal,
-    });
-    if (!resp.ok || !resp.body) {
-        throw new Error(
-            `OpenRouter request failed ${resp.status} ${resp.statusText}`
-        );
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const emittedImages = new Set<string>();
-    // Removed rawPackets accumulation to avoid unbounded memory growth on long streams.
-    // If debugging of raw packets is needed, consider adding a bounded ring buffer
-    // or an opt-in flag that logs selectively.
-
-    function emitImageCandidate(
-        url: string | undefined | null,
-        indexRef: { v: number },
-        final = false
-    ) {
-        if (!url) return;
-        if (emittedImages.has(url)) return;
-        emittedImages.add(url);
-        const idx = indexRef.v++;
-        // Yield image event
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        (async () => {
-            /* placeholder for async transforms if needed */
-        })();
-        imageQueue.push({ type: 'image', url, final, index: idx });
-    }
-
-    // Queue to preserve ordering between text and image parts inside a single chunk
-    const imageQueue: ORStreamEvent[] = [];
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const raw of lines) {
-            const line = raw.trim();
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            if (!data) continue;
-            if (data === '[DONE]') {
-                yield { type: 'done' };
-                continue;
-            }
-            try {
-                const parsed = JSON.parse(data);
-                const choices = parsed.choices || [];
-                for (const choice of choices) {
-                    const delta = choice.delta || {};
-
-                    // Text variants
-                    if (Array.isArray(delta.content)) {
-                        for (const part of delta.content) {
-                            if (part?.type === 'text' && part.text) {
-                                yield { type: 'text', text: part.text };
-                            }
-                        }
-                    }
-                    if (typeof delta.text === 'string') {
-                        yield { type: 'text', text: delta.text };
-                    }
-                    if (typeof delta.content === 'string') {
-                        yield { type: 'text', text: delta.content };
-                    }
-
-                    // Streaming images (legacy / OpenAI style delta.images array)
-                    if (Array.isArray(delta.images)) {
-                        let ixRef = { v: 0 };
-                        for (const img of delta.images) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, ixRef, false);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
-                    if (Array.isArray(delta.content)) {
-                        let ixRef = { v: 0 };
-                        for (const part of delta.content) {
-                            if (part && typeof part === 'object') {
-                                if (
-                                    part.type === 'image' &&
-                                    (part.url || part.image)
-                                ) {
-                                    emitImageCandidate(
-                                        part.url || part.image,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'image_url' &&
-                                    part.image_url?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.image_url.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'media' &&
-                                    part.media?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.media.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (part.inline_data?.data) {
-                                    // Gemini style inline base64 data
-                                    const mime =
-                                        part.inline_data.mimeType ||
-                                        'image/png';
-                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                    emitImageCandidate(dataUrl, ixRef, false);
-                                }
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Final message images
-                    // Final images may be in message.images array
-                    const finalImages = choice.message?.images;
-                    if (Array.isArray(finalImages)) {
-                        let fIxRef = { v: 0 };
-                        for (const img of finalImages) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, fIxRef, true);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Or inside message.content array (Gemini style)
-                    const finalContent = choice.message?.content;
-                    if (Array.isArray(finalContent)) {
-                        let fIxRef2 = { v: 0 };
-                        for (const part of finalContent) {
-                            if (
-                                part?.type === 'image' &&
-                                (part.url || part.image)
-                            ) {
-                                emitImageCandidate(
-                                    part.url || part.image,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (
-                                part?.type === 'image_url' &&
-                                part.image_url?.url
-                            ) {
-                                emitImageCandidate(
-                                    part.image_url.url,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (part?.inline_data?.data) {
-                                const mime =
-                                    part.inline_data.mimeType || 'image/png';
-                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                emitImageCandidate(dataUrl, fIxRef2, true);
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-                }
-            } catch {
-                // ignore invalid json segments
-            }
-        }
-    }
-
-    // Removed verbose final packet dump to prevent large memory retention.
-
-    yield { type: 'done' };
-}
 ```
 
 ## File: package.json
@@ -10746,6 +10251,676 @@ export const FileMetaCreateSchema = FileMetaSchema.omit({
     clock: z.number().int().default(0),
 });
 export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
+```
+
+## File: app/utils/chat/openrouterStream.ts
+```typescript
+import type { ORStreamEvent } from './types';
+
+export async function* openRouterStream(params: {
+    apiKey: string;
+    model: string;
+    orMessages: any[];
+    modalities: string[];
+    signal?: AbortSignal;
+}): AsyncGenerator<ORStreamEvent, void, unknown> {
+    const { apiKey, model, orMessages, modalities, signal } = params;
+
+    const body = {
+        model,
+        messages: orMessages,
+        modalities,
+        stream: true,
+    } as any;
+
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal,
+    });
+
+    if (!resp.ok || !resp.body) {
+        // Read response text for diagnostics
+        let respText = '<no-body>';
+        try {
+            respText = await resp.text();
+        } catch (e) {
+            respText = `<error-reading-body:${(e as any)?.message || 'err'}>`;
+        }
+
+        // Produce a truncated preview of the outgoing body to help debug (truncate long strings)
+        let bodyPreview = '<preview-failed>';
+        try {
+            bodyPreview = JSON.stringify(
+                body,
+                (_key, value) => {
+                    if (typeof value === 'string') {
+                        if (value.length > 300)
+                            return value.slice(0, 300) + `...(${value.length})`;
+                    }
+                    return value;
+                },
+                2
+            );
+        } catch (e) {
+            bodyPreview = `<stringify-error:${(e as any)?.message || 'err'}>`;
+        }
+
+        console.warn('[openrouterStream] OpenRouter request failed', {
+            status: resp.status,
+            statusText: resp.statusText,
+            responseSnippet: respText?.slice
+                ? respText.slice(0, 2000)
+                : String(respText),
+            bodyPreview,
+        });
+
+        throw new Error(
+            `OpenRouter request failed ${resp.status} ${resp.statusText}: ${
+                respText?.slice ? respText.slice(0, 300) : String(respText)
+            }`
+        );
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const emittedImages = new Set<string>();
+    // Removed rawPackets accumulation to avoid unbounded memory growth on long streams.
+    // If debugging of raw packets is needed, consider adding a bounded ring buffer
+    // or an opt-in flag that logs selectively.
+
+    function emitImageCandidate(
+        url: string | undefined | null,
+        indexRef: { v: number },
+        final = false
+    ) {
+        if (!url) return;
+        if (emittedImages.has(url)) return;
+        emittedImages.add(url);
+        const idx = indexRef.v++;
+        // Yield image event
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        (async () => {
+            /* placeholder for async transforms if needed */
+        })();
+        imageQueue.push({ type: 'image', url, final, index: idx });
+    }
+
+    // Queue to preserve ordering between text and image parts inside a single chunk
+    const imageQueue: ORStreamEvent[] = [];
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const raw of lines) {
+            const line = raw.trim();
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data) continue;
+            if (data === '[DONE]') {
+                yield { type: 'done' };
+                continue;
+            }
+            try {
+                const parsed = JSON.parse(data);
+                const choices = parsed.choices || [];
+                for (const choice of choices) {
+                    const delta = choice.delta || {};
+
+                    // Text variants
+                    if (Array.isArray(delta.content)) {
+                        for (const part of delta.content) {
+                            if (part?.type === 'text' && part.text) {
+                                yield { type: 'text', text: part.text };
+                            }
+                        }
+                    }
+                    if (typeof delta.text === 'string') {
+                        yield { type: 'text', text: delta.text };
+                    }
+                    if (typeof delta.content === 'string') {
+                        yield { type: 'text', text: delta.content };
+                    }
+
+                    // Streaming images (legacy / OpenAI style delta.images array)
+                    if (Array.isArray(delta.images)) {
+                        let ixRef = { v: 0 };
+                        for (const img of delta.images) {
+                            const url = img?.image_url?.url || img?.url;
+                            emitImageCandidate(url, ixRef, false);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
+                    if (Array.isArray(delta.content)) {
+                        let ixRef = { v: 0 };
+                        for (const part of delta.content) {
+                            if (part && typeof part === 'object') {
+                                if (
+                                    part.type === 'image' &&
+                                    (part.url || part.image)
+                                ) {
+                                    emitImageCandidate(
+                                        part.url || part.image,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'image_url' &&
+                                    part.image_url?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.image_url.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'media' &&
+                                    part.media?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.media.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (part.inline_data?.data) {
+                                    // Gemini style inline base64 data
+                                    const mime =
+                                        part.inline_data.mimeType ||
+                                        'image/png';
+                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                    emitImageCandidate(dataUrl, ixRef, false);
+                                }
+                            }
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Final message images
+                    // Final images may be in message.images array
+                    const finalImages = choice.message?.images;
+                    if (Array.isArray(finalImages)) {
+                        let fIxRef = { v: 0 };
+                        for (const img of finalImages) {
+                            const url = img?.image_url?.url || img?.url;
+                            emitImageCandidate(url, fIxRef, true);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Or inside message.content array (Gemini style)
+                    const finalContent = choice.message?.content;
+                    if (Array.isArray(finalContent)) {
+                        let fIxRef2 = { v: 0 };
+                        for (const part of finalContent) {
+                            if (
+                                part?.type === 'image' &&
+                                (part.url || part.image)
+                            ) {
+                                emitImageCandidate(
+                                    part.url || part.image,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (
+                                part?.type === 'image_url' &&
+                                part.image_url?.url
+                            ) {
+                                emitImageCandidate(
+                                    part.image_url.url,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (part?.inline_data?.data) {
+                                const mime =
+                                    part.inline_data.mimeType || 'image/png';
+                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                emitImageCandidate(dataUrl, fIxRef2, true);
+                            }
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+                }
+            } catch {
+                // ignore invalid json segments
+            }
+        }
+    }
+
+    // Removed verbose final packet dump to prevent large memory retention.
+
+    yield { type: 'done' };
+}
+```
+
+## File: app/utils/openrouter-build.ts
+```typescript
+// Utility helpers to build OpenRouter payload messages including historical images.
+// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
+// produce OpenAI-compatible content arrays.
+
+import { parseFileHashes } from '~/db/files-util';
+
+export interface BuildImageCandidate {
+    hash: string;
+    role: 'user' | 'assistant';
+    messageIndex: number; // chronological index in original messages array
+}
+
+export interface ORContentPartText {
+    type: 'text';
+    text: string;
+}
+export interface ORContentPartImageUrl {
+    type: 'image_url';
+    image_url: { url: string };
+}
+export interface ORContentPartFile {
+    type: 'file';
+    file: { filename: string; file_data: string };
+}
+export type ORContentPart =
+    | ORContentPartText
+    | ORContentPartImageUrl
+    | ORContentPartFile;
+
+export interface ORMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: ORContentPart[];
+}
+
+// Caches on global scope to avoid repeated blob -> base64 conversions.
+const dataUrlCache: Map<string, string> = ((
+    globalThis as any
+).__or3ImageDataUrlCache ||= new Map());
+const inflight: Map<string, Promise<string | null>> = ((
+    globalThis as any
+).__or3ImageHydrateInflight ||= new Map());
+
+// Remote / blob URL hydration cache shares same map (keyed by original ref string)
+// We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
+// because a content hash would never start with http/blob.
+async function remoteRefToDataUrl(ref: string): Promise<string | null> {
+    if (ref.startsWith('data:image/')) return ref; // already data URL
+    if (!/^https?:|^blob:/.test(ref)) return null;
+    if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
+    if (inflight.has(ref)) return inflight.get(ref)!;
+    const p = (async () => {
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 8000); // 8s safety timeout
+            const resp = await fetch(ref, { signal: ctrl.signal });
+            clearTimeout(t);
+            if (!resp.ok) throw new Error('fetch-failed:' + resp.status);
+            const blob = await resp.blob();
+            // Basic guardrail: cap at ~5MB to avoid huge token usage
+            if (blob.size > 5 * 1024 * 1024) return null;
+            const dataUrl = await blobToDataUrl(blob);
+            dataUrlCache.set(ref, dataUrl);
+            return dataUrl;
+        } catch {
+            return null;
+        } finally {
+            inflight.delete(ref);
+        }
+    })();
+    inflight.set(ref, p);
+    return p;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(fr.error);
+        fr.onload = () => resolve(fr.result as string);
+        fr.readAsDataURL(blob);
+    });
+}
+
+async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
+    if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
+    if (inflight.has(hash)) return inflight.get(hash)!;
+    const p = (async () => {
+        try {
+            const { getFileBlob } = await import('~/db/files');
+            const blob = await getFileBlob(hash);
+            if (!blob) throw new Error('blob-missing');
+            const dataUrl = await blobToDataUrl(blob);
+            dataUrlCache.set(hash, dataUrl);
+            return dataUrl;
+        } catch {
+            return null;
+        } finally {
+            inflight.delete(hash);
+        }
+    })();
+    inflight.set(hash, p);
+    return p;
+}
+
+export interface BuildOptions {
+    maxImageInputs?: number; // total images across history
+    dedupeImages?: boolean; // skip duplicate hashes
+    imageInclusionPolicy?:
+        | 'all'
+        | 'recent'
+        | 'recent-user'
+        | 'recent-assistant';
+    recentWindow?: number; // number of most recent messages to scan when policy is recent*
+    // Hook like filter: (candidates) => filteredCandidates
+    filterIncludeImages?: (
+        candidates: BuildImageCandidate[]
+    ) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
+    debug?: boolean; // verbose logging
+}
+
+// Default heuristics constants
+const DEFAULT_MAX_IMAGE_INPUTS = 8;
+
+interface ChatMessageLike {
+    role: 'user' | 'assistant' | 'system';
+    content: any; // string | parts[]
+    file_hashes?: string | null;
+}
+
+// Build OpenRouter messages with hydrated images.
+export async function buildOpenRouterMessages(
+    messages: ChatMessageLike[],
+    opts: BuildOptions = {}
+): Promise<ORMessage[]> {
+    const {
+        maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS,
+        dedupeImages = true,
+        imageInclusionPolicy = 'all',
+        recentWindow = 12,
+        filterIncludeImages,
+        debug = false,
+    } = opts;
+
+    if (debug) {
+        // Debug logging suppressed (begin)
+    }
+
+    // Determine candidate messages for image inclusion under policy.
+    let candidateMessages: number[] = [];
+    if (imageInclusionPolicy === 'all') {
+        candidateMessages = messages.map((_, i) => i);
+    } else if (imageInclusionPolicy.startsWith('recent')) {
+        const start = Math.max(0, messages.length - recentWindow);
+        candidateMessages = [];
+        for (let i = start; i < messages.length; i++) candidateMessages.push(i);
+    }
+
+    // Collect hash candidates
+    const hashCandidates: BuildImageCandidate[] = [];
+    for (const idx of candidateMessages) {
+        const m = messages[idx];
+        if (!m) continue;
+        if (m.file_hashes) {
+            try {
+                const hashes = parseFileHashes(m.file_hashes) || [];
+                for (const h of hashes) {
+                    if (!h) continue;
+                    if (
+                        imageInclusionPolicy === 'recent-user' &&
+                        m.role !== 'user'
+                    )
+                        continue;
+                    if (
+                        imageInclusionPolicy === 'recent-assistant' &&
+                        m.role !== 'assistant'
+                    )
+                        continue;
+                    if (m.role === 'user' || m.role === 'assistant') {
+                        hashCandidates.push({
+                            hash: h,
+                            role: m.role,
+                            messageIndex: idx,
+                        });
+                    }
+                }
+            } catch {}
+        }
+        // Also inspect inline parts if array form
+        if (Array.isArray(m.content)) {
+            for (const p of m.content) {
+                if (p?.type === 'image' && typeof p.image === 'string') {
+                    if (
+                        p.image.startsWith('data:image/') ||
+                        /^https?:/i.test(p.image) ||
+                        /^blob:/i.test(p.image)
+                    ) {
+                        hashCandidates.push({
+                            hash: p.image,
+                            role: m.role as any,
+                            messageIndex: idx,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if (debug) {
+        // Debug logging suppressed (candidates)
+    }
+
+    // Optional external filter
+    let filtered = hashCandidates;
+    if (filterIncludeImages) {
+        try {
+            const res = await filterIncludeImages(hashCandidates);
+            if (Array.isArray(res)) filtered = res;
+        } catch {}
+    }
+
+    // Enforce max & dedupe
+    const seen = new Set<string>();
+    const selected: BuildImageCandidate[] = [];
+    for (const c of filtered) {
+        if (selected.length >= maxImageInputs) break;
+        if (dedupeImages && seen.has(c.hash)) continue;
+        seen.add(c.hash);
+        selected.push(c);
+    }
+
+    if (debug) {
+        // Debug logging suppressed (selected)
+    }
+
+    // Group selected hashes by message index for convenient inclusion
+    const byMessageIndex = new Map<number, BuildImageCandidate[]>();
+    for (const s of selected) {
+        const list = byMessageIndex.get(s.messageIndex) || [];
+        list.push(s);
+        byMessageIndex.set(s.messageIndex, list);
+    }
+
+    // Build ORMessage array preserving original order
+    const orMessages: ORMessage[] = [];
+    for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        if (!m) continue;
+        const parts: ORContentPart[] = [];
+        // Extract textual content
+        let text = '';
+        if (Array.isArray(m.content)) {
+            const textParts = m.content.filter((p: any) => p.type === 'text');
+            if (textParts.length)
+                text = textParts.map((p: any) => p.text || '').join('');
+            // Add files (PDFs etc) directly
+            const fileParts = m.content.filter((p: any) => p.type === 'file');
+            for (const fp of fileParts) {
+                if (!fp.data) continue;
+                const mediaType =
+                    fp.mediaType || fp.mime || 'application/octet-stream';
+                const isPdf = mediaType === 'application/pdf';
+                const filename =
+                    fp.filename || (isPdf ? 'document.pdf' : 'file');
+                let fileData: string | null | undefined = fp.data;
+
+                // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
+                if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
+                    try {
+                        const { getFileBlob, getFileMeta } = await import(
+                            '~/db/files'
+                        );
+                        const blob = await getFileBlob(String(fileData));
+                        if (blob) {
+                            const mime = blob.type || mediaType;
+                            const dataUrl = await blobToDataUrl(blob);
+                            fileData = dataUrl.replace(
+                                /^data:[^;]+;/,
+                                `data:${mime};`
+                            );
+                        } else {
+                            const hydrated = await hydrateHashToDataUrl(
+                                String(fileData)
+                            );
+                            if (hydrated) fileData = hydrated;
+                        }
+                        if (!fileData) {
+                            const remote = await remoteRefToDataUrl(
+                                String(fileData)
+                            );
+                            if (remote) fileData = remote;
+                        }
+                    } catch {
+                        fileData = null;
+                    }
+                }
+
+                // If still not a usable scheme and it's a blob: URL, we can't send blob: (server can't fetch) -> skip
+                if (fileData && /^blob:/i.test(String(fileData))) {
+                    if (debug)
+                        console.warn(
+                            '[or-build] skipping blob: URL (inaccessible server-side)',
+                            { filename }
+                        );
+                    fileData = null;
+                }
+                if (
+                    fileData &&
+                    isPdf &&
+                    !fileData.startsWith('data:application/pdf')
+                ) {
+                    // Normalize pdf data URL mime prefix if possible
+                    if (fileData.startsWith('data:')) {
+                        fileData = fileData.replace(
+                            /^data:[^;]+/,
+                            'data:application/pdf'
+                        );
+                    }
+                }
+                if (fileData && /^data:|^https?:/i.test(String(fileData))) {
+                    parts.push({
+                        type: 'file',
+                        file: { filename, file_data: String(fileData) },
+                    });
+                } else if (debug) {
+                    console.warn(
+                        '[or-build] skipping file part, could not hydrate',
+                        { ref: fp.data, filename, messageIndex: i }
+                    );
+                }
+            }
+        } else if (typeof m.content === 'string') {
+            text = m.content;
+        }
+        if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
+        parts.push({ type: 'text', text });
+
+        // Add images associated with this message index (only if truly images)
+        const imgs = byMessageIndex.get(i) || [];
+        for (const img of imgs) {
+            // Quick allow path: already a data image URL
+            if (img.hash.startsWith('data:image/')) {
+                parts.push({ type: 'image_url', image_url: { url: img.hash } });
+                continue;
+            }
+            // Remote URL that looks like an image (basic heuristic)
+            if (
+                /^https?:/i.test(img.hash) &&
+                /(\.png|\.jpe?g|\.gif|\.webp|\.avif|\?)/i.test(img.hash)
+            ) {
+                parts.push({ type: 'image_url', image_url: { url: img.hash } });
+                continue;
+            }
+            // If it's a local hash (not http/data/blob) inspect metadata to confirm mime starts with image/
+            const looksLocal = !/^https?:|^data:|^blob:/i.test(img.hash);
+            let isImage = false;
+            if (looksLocal) {
+                try {
+                    const { getFileMeta } = await import('~/db/files');
+                    const meta: any = await getFileMeta(img.hash).catch(
+                        () => null
+                    );
+                    if (
+                        meta &&
+                        typeof meta.mime === 'string' &&
+                        meta.mime.startsWith('image/')
+                    ) {
+                        isImage = true;
+                    }
+                } catch {}
+            }
+            if (!isImage && looksLocal) {
+                // Not an image (likely a PDF or other file) -> skip to avoid triggering image-capable endpoint routing
+                continue;
+            }
+            // At this point either it's declared an image or remote unknown -> attempt hydration
+            let dataUrl = await hydrateHashToDataUrl(img.hash);
+            if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
+            if (dataUrl && dataUrl.startsWith('data:image/')) {
+                parts.push({ type: 'image_url', image_url: { url: dataUrl } });
+            } else if (debug) {
+                console.warn('[or-build] hydrate-fail-or-non-image', {
+                    ref: img.hash,
+                    role: img.role,
+                    messageIndex: img.messageIndex,
+                });
+            }
+        }
+
+        orMessages.push({ role: m.role, content: parts });
+    }
+
+    if (debug) {
+        // Debug logging suppressed (done)
+    }
+
+    return orMessages;
+}
+
+// Decide modalities based on prepared ORMessages + heuristic prompt.
+export function decideModalities(
+    orMessages: ORMessage[],
+    requestedModel?: string
+): string[] {
+    const hasImageInput = orMessages.some((m) =>
+        m.content.some((p) => p.type === 'image_url')
+    );
+    const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
+    const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
+    const imageIntent =
+        /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
+            prompt
+        );
+    const modalities = ['text'];
+    if (hasImageInput || imageIntent) modalities.push('image');
+    return modalities;
+}
 ```
 
 ## File: app/components/sidebar/SidebarProjectTree.vue
@@ -11649,8 +11824,21 @@ export default defineAppConfig({
             type="button"
             aria-label="Show attachments"
         >
+            <template v-if="firstThumb && pdfMeta[firstThumb]">
+                <div class="pdf-thumb w-full h-full">
+                    <div
+                        class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
+                    >
+                        {{ pdfDisplayName }}
+                    </div>
+
+                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
+                </div>
+            </template>
             <template
-                v-if="firstThumb && thumbnails[firstThumb]?.status === 'ready'"
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'ready'
+                "
             >
                 <img
                     :src="thumbnails[firstThumb!]?.url"
@@ -11797,6 +11985,7 @@ import {
     onMounted,
 } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
+import { getFileMeta } from '~/db/files';
 import { marked } from 'marked';
 import MessageEditor from './MessageEditor.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
@@ -11900,6 +12089,28 @@ interface ThumbState {
     url?: string;
 }
 const thumbnails = reactive<Record<string, ThumbState>>({});
+// PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
+const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
+const safePdfName = computed(() => {
+    const h = firstThumb.value;
+    if (!h) return 'document.pdf';
+    const m = pdfMeta[h];
+    return (m && m.name) || 'document.pdf';
+});
+// Short display (keep extension, truncate middle if long)
+const pdfDisplayName = computed(() => {
+    const name = safePdfName.value;
+    const max = 18;
+    if (name.length <= max) return name;
+    const dot = name.lastIndexOf('.');
+    const ext = dot > 0 ? name.slice(dot) : '';
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    const keep = max - ext.length - 3; // 3 for ellipsis
+    if (keep <= 4) return base.slice(0, max - 3) + '...';
+    const head = Math.ceil(keep / 2);
+    const tail = Math.floor(keep / 2);
+    return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
+});
 const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
     string,
     ThumbState
@@ -11947,6 +12158,8 @@ function toggleExpanded() {
 }
 
 async function ensureThumb(h: string) {
+    // If we already know it's a PDF just ensure meta exists.
+    if (pdfMeta[h]) return;
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
     const cached = thumbCache.get(h);
     if (cached) {
@@ -11962,8 +12175,22 @@ async function ensureThumb(h: string) {
     thumbnails[h] = { status: 'loading' };
     const p = (async () => {
         try {
-            const blob = await (await import('~/db/files')).getFileBlob(h);
+            const [blob, meta] = await Promise.all([
+                (await import('~/db/files')).getFileBlob(h),
+                getFileMeta(h).catch(() => undefined),
+            ]);
+            if (meta && meta.kind === 'pdf') {
+                pdfMeta[h] = { name: meta.name, kind: meta.kind };
+                // Remove the temporary loading state since we won't have an image thumb
+                delete thumbnails[h];
+                return;
+            }
             if (!blob) throw new Error('missing');
+            if (blob.type === 'application/pdf') {
+                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
+                delete thumbnails[h];
+                return;
+            }
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };
             thumbCache.set(h, ready);
@@ -12288,6 +12515,77 @@ async function onBranch() {
     .rl-dots span {
         animation: none;
     }
+}
+
+/* PDF compact thumb */
+.pdf-thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    background: linear-gradient(
+        180deg,
+        var(--md-surface-container-lowest) 0%,
+        var(--md-surface-container-low) 100%
+    );
+    width: 100%;
+    height: 100%;
+    padding: 2px 2px 3px;
+    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
+        2px 2px 0 0 var(--md-inverse-surface);
+    font-family: 'VT323', monospace;
+}
+.pdf-thumb__icon {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--md-inverse-surface);
+    width: 100%;
+}
+.pdf-thumb__name {
+    font-size: 8px;
+    line-height: 1.05;
+    font-weight: 600;
+    text-align: center;
+    max-height: 3.2em;
+    overflow: hidden;
+    display: -webkit-box;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    margin-top: 1px;
+    padding: 0 1px;
+    text-shadow: 0 1px 0 #000;
+    color: var(--md-inverse-on-surface);
+}
+.pdf-thumb__ext {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--md-inverse-surface);
+    color: var(--md-inverse-on-surface);
+    font-size: 7px;
+    font-weight: 700;
+    padding: 1px 3px;
+    letter-spacing: 0.5px;
+    box-shadow: 1px 1px 0 0 #000;
+}
+.pdf-thumb::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background: linear-gradient(
+        135deg,
+        var(--md-surface-container-low) 0%,
+        var(--md-surface-container-high) 100%
+    );
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
 }
 </style>
 ```
@@ -13681,7 +13979,9 @@ export function useChat(
         >
             <!-- Images -->
             <div
-                v-for="(image, index) in uploadedImages"
+                v-for="(image, index) in uploadedImages.filter(
+                    (att) => att.kind === 'image'
+                )"
                 :key="'img-' + index"
                 class="relative group aspect-square"
             >
@@ -13691,7 +13991,7 @@ export function useChat(
                     class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 />
                 <button
-                    @click="removeImage(index)"
+                    @click="() => removeImage(uploadedImages.indexOf(image))"
                     class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
@@ -13703,6 +14003,36 @@ export function useChat(
                 >
                     {{ image.name }}
                 </div>
+            </div>
+            <!-- PDFs -->
+            <div
+                v-for="(pdf, index) in uploadedImages.filter(
+                    (att) => att.kind === 'pdf'
+                )"
+                :key="'pdf-' + index"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >PDF</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="pdf.name"
+                        >{{ pdf.name }}</span
+                    >
+                </div>
+                <button
+                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove PDF"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
             </div>
             <!-- Large Text Blocks -->
             <div
@@ -13866,6 +14196,8 @@ interface UploadedImage {
     status: 'pending' | 'ready' | 'error';
     error?: string;
     meta?: FileMeta;
+    mime: string;
+    kind: 'image' | 'pdf';
 }
 
 interface ImageSettings {
@@ -13882,7 +14214,8 @@ const emit = defineEmits<{
         e: 'send',
         payload: {
             text: string;
-            images: UploadedImage[]; // may include pending or error statuses
+            images: UploadedImage[]; // backward compatibility
+            attachments: UploadedImage[]; // new unified field
             largeTexts: LargeTextBlock[];
             model: string;
             settings: ImageSettings;
@@ -13909,7 +14242,9 @@ const editorIsEmpty = computed(() => {
     return editor.value ? editor.value.isEmpty : true;
 });
 
-const uploadedImages = ref<UploadedImage[]>([]);
+const attachments = ref<UploadedImage[]>([]);
+// Backward compatibility: expose as uploadedImages for template
+const uploadedImages = computed(() => attachments.value);
 // Large pasted text blocks (> threshold)
 interface LargeTextBlock {
     id: string;
@@ -13961,25 +14296,30 @@ const handlePromptInput = () => {
 const handlePaste = async (event: ClipboardEvent) => {
     const cd = event.clipboardData;
     if (!cd) return;
-    // 1. Handle images first (current behavior)
+    // 1. Handle images and PDFs first (extended behavior)
     const items = cd.items;
     let handled = false;
     for (let i = 0; i < items.length; i++) {
         const it = items[i];
         if (!it) continue;
         const mime = it.type || '';
-        if (mime.startsWith('image/')) {
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
             event.preventDefault();
             handled = true;
             const file = it.getAsFile();
             if (!file) continue;
-            await processFile(
+            await processAttachment(
                 file,
-                file.name || `pasted-image-${Date.now()}.png`
+                file.name ||
+                    `pasted-${
+                        mime.startsWith('image/') ? 'image' : 'pdf'
+                    }-${Date.now()}.${
+                        mime === 'application/pdf' ? 'pdf' : 'png'
+                    }`
             );
         }
     }
-    if (handled) return; // skip text path if image already captured
+    if (handled) return; // skip text path if attachment already captured
 
     // 2. Large text detection
     const text = cd.getData('text/plain');
@@ -14033,9 +14373,14 @@ const triggerFileInput = () => {
 
 const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
 
-async function processFile(file: File, name?: string) {
+async function processAttachment(file: File, name?: string) {
     const mime = file.type || '';
-    if (!mime.startsWith('image/')) return;
+    const kind = mime.startsWith('image/')
+        ? 'image'
+        : mime === 'application/pdf'
+        ? 'pdf'
+        : null;
+    if (!kind) return; // only images and PDFs
     // Fast preview first
     const dataUrl: string = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -14048,34 +14393,36 @@ async function processFile(file: File, name?: string) {
         reader.onerror = () => reject(new Error('read failed'));
         reader.readAsDataURL(file);
     });
-    if (uploadedImages.value.length >= MAX_IMAGES) return;
-    const image: UploadedImage = {
+    if (attachments.value.length >= MAX_IMAGES) return;
+    const attachment: UploadedImage = {
         file,
         url: dataUrl,
         name: name || file.name,
         status: 'pending',
+        mime,
+        kind,
     };
-    uploadedImages.value.push(image);
-    emit('image-add', image);
+    attachments.value.push(attachment);
+    emit('image-add', attachment);
     try {
-        const meta = await createOrRefFile(file, image.name);
-        image.hash = meta.hash;
-        image.meta = meta;
-        image.status = 'ready';
+        const meta = await createOrRefFile(file, attachment.name);
+        attachment.hash = meta.hash;
+        attachment.meta = meta;
+        attachment.status = 'ready';
     } catch (err: any) {
-        image.status = 'error';
-        image.error = err?.message || 'failed';
-        console.warn('[ChatInputDropper] pipeline error', image.name, err);
+        attachment.status = 'error';
+        attachment.error = err?.message || 'failed';
+        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
     }
 }
 
 const processFiles = async (files: FileList | null) => {
     if (!files) return;
     for (let i = 0; i < files.length; i++) {
-        if (uploadedImages.value.length >= MAX_IMAGES) break;
+        if (attachments.value.length >= MAX_IMAGES) break;
         const file = files[i];
         if (!file) continue;
-        await processFile(file);
+        await processAttachment(file);
     }
 };
 
@@ -14097,7 +14444,7 @@ const onDragOver = (event: DragEvent) => {
         const item = items[i];
         if (!item) continue;
         const mime = item.type || '';
-        if (mime.startsWith('image/')) {
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
             isDragging.value = true;
             return;
         }
@@ -14114,7 +14461,7 @@ const onDragLeave = (event: DragEvent) => {
 };
 
 const removeImage = (index: number) => {
-    uploadedImages.value.splice(index, 1);
+    attachments.value.splice(index, 1);
     emit('image-remove', index);
 };
 
@@ -14131,7 +14478,8 @@ const handleSend = () => {
     ) {
         emit('send', {
             text: promptText.value,
-            images: uploadedImages.value,
+            images: attachments.value, // backward compatibility
+            attachments: attachments.value, // new unified field
             largeTexts: largeTextBlocks.value,
             model: selectedModel.value,
             settings: imageSettings.value,
@@ -14144,7 +14492,7 @@ const handleSend = () => {
         } catch (e) {
             // noop
         }
-        uploadedImages.value = [];
+        attachments.value = [];
         largeTextBlocks.value = [];
         autoResize();
     }
