@@ -193,7 +193,7 @@
             <!-- Images -->
             <div
                 v-for="(image, index) in uploadedImages.filter(
-                    (att) => att.kind === 'image'
+                    (att: any) => att.kind === 'image'
                 )"
                 :key="'img-' + index"
                 class="relative group aspect-square"
@@ -220,7 +220,7 @@
             <!-- PDFs -->
             <div
                 v-for="(pdf, index) in uploadedImages.filter(
-                    (att) => att.kind === 'pdf'
+                    (att: any) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
                 class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
