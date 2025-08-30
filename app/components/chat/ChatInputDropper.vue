@@ -28,7 +28,7 @@
                         class="absolute top-1 right-1 flex items-center gap-2"
                     >
                         <UIcon
-                            name="i-lucide:loader-2"
+                            name="pixelarticons:loader"
                             class="w-4 h-4 animate-spin opacity-70"
                         />
                     </div>
