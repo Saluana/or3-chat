@@ -60,7 +60,7 @@
         <div v-if="!editing" :class="innerClass" ref="contentEl">
             <!-- Minimal retro loader: shown while assistant message pending and empty -->
             <div
-                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent"
+                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
                 class="retro-loader animate-in"
                 aria-hidden="true"
             >

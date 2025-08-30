@@ -40,11 +40,11 @@
                             <ChatMessage
                                 :message="{
                                     role: 'assistant',
-                                    content: tailRendered || tailPlaceholder,
+                                    content: tailContent,
                                     stream_id: tailStreamId,
                                     pending: true,
-                                    reasoning_text: '',
-                                }"
+                                    reasoning_text: tailReasoning || '',
+                                } as any"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
@@ -252,27 +252,29 @@ const messages = computed<RenderMessage[]>(() =>
 );
 const loading = computed(() => chat.value.loading.value);
 
-// Tail streaming via composable (Req 3.2)
+// Tail streaming via composable (kept for perf) + lightweight reasoning buffer
 const tail = useTailStream({ flushIntervalMs: 50, immediate: true });
 const tailStreamId = ref<string | null>(null);
+const tailReasoning = ref('');
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value.threadId?.value);
-const tailActive = computed(() => tail.isStreaming.value);
-const tailRendered = computed(() =>
-    tail.displayText.value ? marked.parse(tail.displayText.value) : ''
+const tailActive = computed(
+    () => tail.isStreaming.value || !!tailReasoning.value
 );
-const tailPlaceholder = computed(() =>
-    !tail.displayText.value ? 'Thinking…' : ''
-);
+// Single content computed for tail ChatMessage
+const tailContent = computed(() => {
+    if (tail.displayText.value) return marked.parse(tail.displayText.value);
+    return tailReasoning.value ? '' : 'Thinking…';
+});
 
 // Virtual list data excludes streaming assistant (Req 3.2 separation)
 const virtualMessages = computed(() => {
-    const base =
-        !tailActive.value || !tailStreamId.value
-            ? messages.value
-            : messages.value.filter((m) => m.stream_id !== tailStreamId.value);
-    // Ensure id present (fallback to index) to satisfy child expectation of string id
-    return base.map((m, i) => ({ ...m, id: m.id || String(i) }));
+    if (!tailActive.value || !tailStreamId.value) {
+        return messages.value.map((m, i) => ({ ...m, id: m.id || String(i) }));
+    }
+    return messages.value
+        .filter((m) => m.stream_id !== tailStreamId.value)
+        .map((m, i) => ({ ...m, id: m.id || String(i) }));
 });
 
 // Scroll handling (Req 3.3) via useAutoScroll
@@ -285,12 +287,17 @@ watch(
         autoScroll.onContentIncrease();
     }
 );
-watch(
-    () => tail.displayText.value,
-    () => {
-        if (tailActive.value) autoScroll.onContentIncrease();
-    }
-);
+// Unified scroll scheduling for tail updates
+let scrollScheduled = false;
+function scheduleScrollIfAtBottom() {
+    if (!autoScroll.atBottom.value) return;
+    if (scrollScheduled) return;
+    scrollScheduled = true;
+    requestAnimationFrame(() => {
+        scrollScheduled = false;
+        nextTick(() => autoScroll.onContentIncrease());
+    });
+}
 
 // Initial bottom stick after mount (defer to allow user immediate scroll cancel)
 nextTick(() => {
@@ -304,16 +311,33 @@ nextTick(() => {
 useHookEffect(
     'ai.chat.stream:action:delta',
     (delta: string, meta: any) => {
-        // Filter: only react if this delta belongs to this pane's thread
         if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
         const sid = meta?.streamId || meta?.assistantId || 'stream';
         if (!tailStreamId.value || tailStreamId.value !== sid) {
             tailStreamId.value = sid;
             tail.reset();
+            tailReasoning.value = '';
         }
         tail.push(String(delta || ''));
+        scheduleScrollIfAtBottom();
     },
     { kind: 'action', priority: 20 }
+);
+
+// Reasoning hook: accumulate reasoning_text continuously
+useHookEffect(
+    'ai.chat.stream:action:reasoning',
+    (chunk: string, meta: any) => {
+        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
+        const sid = meta?.streamId || meta?.assistantId || 'stream';
+        if (!tailStreamId.value || tailStreamId.value !== sid) {
+            tailStreamId.value = sid;
+            // Do not reset tail text; reasoning can start before text
+        }
+        tailReasoning.value += chunk || '';
+        scheduleScrollIfAtBottom();
+    },
+    { kind: 'action', priority: 25 }
 );
 
 // Hook: after send (finalize)
@@ -322,7 +346,14 @@ useHookEffect(
     (meta?: any) => {
         if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
         tail.complete();
-        nextTick(() => autoScroll.onContentIncrease());
+        // Allow final assistant message to replace tail; clear stream id after a tick
+        nextTick(() => {
+            autoScroll.onContentIncrease();
+            setTimeout(() => {
+                tailStreamId.value = null;
+                tailReasoning.value = '';
+            }, 0);
+        });
     },
     { kind: 'action', priority: 50 }
 );
@@ -333,26 +364,26 @@ useHookEffect(
     (meta?: any) => {
         if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
         tail.fail(new Error('stream-error'));
+        setTimeout(() => {
+            tailStreamId.value = null;
+            tailReasoning.value = '';
+        }, 0);
     },
     { kind: 'action', priority: 50 }
 );
 
 // Forward tail error (Req 3.10) – placeholder for hook system integration
+// (Optional) Tail error logging retained (simplified)
 watch(
     () => tail.error.value,
-    (err) => {
-        if (err) {
-            // Could integrate hooks.doAction('chat.error', { source: 'tail', error: err }) if available
-            // eslint-disable-next-line no-console
-            console.error('[ChatContainer] tail error', err);
-        }
-    }
+    (err) => err && console.error('[ChatContainer] tail error', err)
 );
 
 // Reset tail state when switching threads to prevent ghost streaming across panes
 watch(currentThreadId, () => {
     tail.reset();
     tailStreamId.value = null;
+    tailReasoning.value = '';
 });
 
 // When input height changes and user was at bottom, keep them pinned
