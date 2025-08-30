@@ -94,7 +94,6 @@ import { marked } from 'marked';
 import VirtualMessageList from './VirtualMessageList.vue';
 import { useTailStream } from '../../composables/useTailStream';
 import { useAutoScroll } from '../../composables/useAutoScroll';
-import { useChatSend } from '../../composables/useChatSend';
 import { useElementSize } from '@vueuse/core';
 
 const model = ref('openai/gpt-oss-120b');
@@ -407,7 +406,6 @@ watch(
 
 // Auto-scroll as tailDisplay grows
 // Chat send abstraction (Req 3.5)
-const chatSend = useChatSend();
 
 function onSend(payload: any) {
     if (loading.value) return;
@@ -436,11 +434,7 @@ function onSend(payload: any) {
         ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
         : [];
 
-    // Basic transformation retained (future: move fully into useChatSend)
-    const result = chatSend.send({
-        threadId: chat.value.threadId?.value || '',
-        text: payload.text,
-    });
+    // Send message via useChat composable
     chat.value
         .sendMessage(payload.text, {
             model: model.value,
@@ -452,7 +446,6 @@ function onSend(payload: any) {
         .catch((e: any) =>
             console.error('[ChatContainer.onSend] sendMessage error', e)
         );
-    return result;
 }
 
 function onRetry(messageId: string) {
