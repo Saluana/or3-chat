@@ -18,7 +18,14 @@ export interface ORContentPartImageUrl {
     type: 'image_url';
     image_url: { url: string };
 }
-export type ORContentPart = ORContentPartText | ORContentPartImageUrl;
+export interface ORContentPartFile {
+    type: 'file';
+    file: { filename: string; file_data: string };
+}
+export type ORContentPart =
+    | ORContentPartText
+    | ORContentPartImageUrl
+    | ORContentPartFile;
 
 export interface ORMessage {
     role: 'user' | 'assistant' | 'system';
@@ -244,6 +251,20 @@ export async function buildOpenRouterMessages(
             const textParts = m.content.filter((p: any) => p.type === 'text');
             if (textParts.length)
                 text = textParts.map((p: any) => p.text || '').join('');
+            // Add files (PDFs etc) directly
+            const fileParts = m.content.filter((p: any) => p.type === 'file');
+            for (const fp of fileParts) {
+                if (fp.data && fp.mediaType) {
+                    const filename =
+                        fp.mediaType === 'application/pdf'
+                            ? 'document.pdf'
+                            : 'file';
+                    parts.push({
+                        type: 'file',
+                        file: { filename, file_data: fp.data },
+                    });
+                }
+            }
         } else if (typeof m.content === 'string') {
             text = m.content;
         }

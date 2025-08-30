@@ -192,7 +192,9 @@
         >
             <!-- Images -->
             <div
-                v-for="(image, index) in uploadedImages"
+                v-for="(image, index) in uploadedImages.filter(
+                    (att) => att.kind === 'image'
+                )"
                 :key="'img-' + index"
                 class="relative group aspect-square"
             >
@@ -202,7 +204,7 @@
                     class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 />
                 <button
-                    @click="removeImage(index)"
+                    @click="() => removeImage(uploadedImages.indexOf(image))"
                     class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
@@ -214,6 +216,36 @@
                 >
                     {{ image.name }}
                 </div>
+            </div>
+            <!-- PDFs -->
+            <div
+                v-for="(pdf, index) in uploadedImages.filter(
+                    (att) => att.kind === 'pdf'
+                )"
+                :key="'pdf-' + index"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >PDF</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="pdf.name"
+                        >{{ pdf.name }}</span
+                    >
+                </div>
+                <button
+                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove PDF"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
             </div>
             <!-- Large Text Blocks -->
             <div
@@ -377,6 +409,8 @@ interface UploadedImage {
     status: 'pending' | 'ready' | 'error';
     error?: string;
     meta?: FileMeta;
+    mime: string;
+    kind: 'image' | 'pdf';
 }
 
 interface ImageSettings {
@@ -393,7 +427,8 @@ const emit = defineEmits<{
         e: 'send',
         payload: {
             text: string;
-            images: UploadedImage[]; // may include pending or error statuses
+            images: UploadedImage[]; // backward compatibility
+            attachments: UploadedImage[]; // new unified field
             largeTexts: LargeTextBlock[];
             model: string;
             settings: ImageSettings;
@@ -420,7 +455,9 @@ const editorIsEmpty = computed(() => {
     return editor.value ? editor.value.isEmpty : true;
 });
 
-const uploadedImages = ref<UploadedImage[]>([]);
+const attachments = ref<UploadedImage[]>([]);
+// Backward compatibility: expose as uploadedImages for template
+const uploadedImages = computed(() => attachments.value);
 // Large pasted text blocks (> threshold)
 interface LargeTextBlock {
     id: string;
@@ -472,25 +509,30 @@ const handlePromptInput = () => {
 const handlePaste = async (event: ClipboardEvent) => {
     const cd = event.clipboardData;
     if (!cd) return;
-    // 1. Handle images first (current behavior)
+    // 1. Handle images and PDFs first (extended behavior)
     const items = cd.items;
     let handled = false;
     for (let i = 0; i < items.length; i++) {
         const it = items[i];
         if (!it) continue;
         const mime = it.type || '';
-        if (mime.startsWith('image/')) {
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
             event.preventDefault();
             handled = true;
             const file = it.getAsFile();
             if (!file) continue;
-            await processFile(
+            await processAttachment(
                 file,
-                file.name || `pasted-image-${Date.now()}.png`
+                file.name ||
+                    `pasted-${
+                        mime.startsWith('image/') ? 'image' : 'pdf'
+                    }-${Date.now()}.${
+                        mime === 'application/pdf' ? 'pdf' : 'png'
+                    }`
             );
         }
     }
-    if (handled) return; // skip text path if image already captured
+    if (handled) return; // skip text path if attachment already captured
 
     // 2. Large text detection
     const text = cd.getData('text/plain');
@@ -544,9 +586,14 @@ const triggerFileInput = () => {
 
 const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
 
-async function processFile(file: File, name?: string) {
+async function processAttachment(file: File, name?: string) {
     const mime = file.type || '';
-    if (!mime.startsWith('image/')) return;
+    const kind = mime.startsWith('image/')
+        ? 'image'
+        : mime === 'application/pdf'
+        ? 'pdf'
+        : null;
+    if (!kind) return; // only images and PDFs
     // Fast preview first
     const dataUrl: string = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -559,34 +606,36 @@ async function processFile(file: File, name?: string) {
         reader.onerror = () => reject(new Error('read failed'));
         reader.readAsDataURL(file);
     });
-    if (uploadedImages.value.length >= MAX_IMAGES) return;
-    const image: UploadedImage = {
+    if (attachments.value.length >= MAX_IMAGES) return;
+    const attachment: UploadedImage = {
         file,
         url: dataUrl,
         name: name || file.name,
         status: 'pending',
+        mime,
+        kind,
     };
-    uploadedImages.value.push(image);
-    emit('image-add', image);
+    attachments.value.push(attachment);
+    emit('image-add', attachment);
     try {
-        const meta = await createOrRefFile(file, image.name);
-        image.hash = meta.hash;
-        image.meta = meta;
-        image.status = 'ready';
+        const meta = await createOrRefFile(file, attachment.name);
+        attachment.hash = meta.hash;
+        attachment.meta = meta;
+        attachment.status = 'ready';
     } catch (err: any) {
-        image.status = 'error';
-        image.error = err?.message || 'failed';
-        console.warn('[ChatInputDropper] pipeline error', image.name, err);
+        attachment.status = 'error';
+        attachment.error = err?.message || 'failed';
+        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
     }
 }
 
 const processFiles = async (files: FileList | null) => {
     if (!files) return;
     for (let i = 0; i < files.length; i++) {
-        if (uploadedImages.value.length >= MAX_IMAGES) break;
+        if (attachments.value.length >= MAX_IMAGES) break;
         const file = files[i];
         if (!file) continue;
-        await processFile(file);
+        await processAttachment(file);
     }
 };
 
@@ -608,7 +657,7 @@ const onDragOver = (event: DragEvent) => {
         const item = items[i];
         if (!item) continue;
         const mime = item.type || '';
-        if (mime.startsWith('image/')) {
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
             isDragging.value = true;
             return;
         }
@@ -625,7 +674,7 @@ const onDragLeave = (event: DragEvent) => {
 };
 
 const removeImage = (index: number) => {
-    uploadedImages.value.splice(index, 1);
+    attachments.value.splice(index, 1);
     emit('image-remove', index);
 };
 
@@ -642,7 +691,8 @@ const handleSend = () => {
     ) {
         emit('send', {
             text: promptText.value,
-            images: uploadedImages.value,
+            images: attachments.value, // backward compatibility
+            attachments: attachments.value, // new unified field
             largeTexts: largeTextBlocks.value,
             model: selectedModel.value,
             settings: imageSettings.value,
@@ -655,7 +705,7 @@ const handleSend = () => {
         } catch (e) {
             // noop
         }
-        uploadedImages.value = [];
+        attachments.value = [];
         largeTextBlocks.value = [];
         autoResize();
     }
