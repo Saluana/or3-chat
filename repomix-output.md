@@ -974,6 +974,393 @@ base url: https://docs.orama.com/
 - [Utility functions for Orama](/docs/orama-js/usage/utilities): Learn how to use utility functions in Orama.
 ```
 
+## File: .llms/tiptap.txt
+```
+#Tiptap
+
+> Tiptap is the headless and extensible rich-text editor framework tailored to modern web and app development needs. 
+
+
+Core Benefits
+- Build rich text editors similar to Notion within days
+- Supports React, Next, Vue, Svelte, JavaScript and many more
+- Robust, battle-tested open source framework under the MIT license
+- With over 100 extensions highly adaptable
+
+
+Key Features
+- Collaboration: Allow your users to collaborate in real time in any document
+- Comments: Integrate threaded conversations and suggestions in your editor experience
+- Content AI: Empower your users to create and transform text, images & documents with AI
+- Import / Export: Enable easy file conversions in your documents (e.g. DOCX, PDF, JSON, Markdown)
+- Documents: Manage structured documents in our cloud database or on your premises
+- Templates: Ready-made templates to quickly create complex editors like Notion, Google Docs or Slack
+- UI Components: Drop-in React components to build your editor UI faster, without the boilerplate 
+
+
+Tailored Solutions
+- Enterprises that need a scalable editor framework with enterprise-grade security to accelerate time to market
+- Startups requiring rapid development of feature-rich applications to deliver exceptional user experiences
+
+
+Use Cases
+- Advanced WYSIWYG editors for SaaS platforms and apps
+- Real-time collaboration and team-focused editing tools
+- AI-powered content generation and editing
+
+
+## Products
+- [Tiptap Rich Text Editor](https://tiptap.dev): Headless JavaScript framework to create advanced content editing experiences.
+- [Tiptap Collaboration](https://tiptap.dev/product/collaboration): Enable real-time collaborative editing in your documents.
+- [Tiptap Comments](https://tiptap.dev/product/comments): Integrate a commenting system into your rich text editor to enhance teamwork and real-time discussions.
+- [Tiptap Content AI](https://tiptap.dev/product/content-ai): Integrate AI into your editor for enhanced content creation, allowing users to generate text, images, and more.
+- [Tiptap Documents API](https://tiptap.dev/product/documents): Manage your editor documents with our API and webhooks.
+- [Tiptap Templates](https://tiptap.dev/templates): Ready-to-use editor templates designed for quick integration, e.g. the notion-like block editor template.
+- [Tiptap for Enterprises](https://tiptap.dev/enterprise): Enterprise-grade solutions for security and scalability.
+- [Tiptap Conversion](https://tiptap.dev/product/conversion): Discover how to seamlessly import and export DOCX, ODT and more to your editor,
+- [Tiptap UI Components](https://tiptap.dev/product/ui-components): Discover ready-made and uniquely designed UI components for creating user-friendly rich editor interfaces.
+
+
+## Docs
+- [Tiptap Docs](https://tiptap.dev/docs): Tiptap provides a framework to create custom content editors with extensible features and cloud services.
+
+
+### Editor Docs
+- [Getting started](https://tiptap.dev/docs/editor/getting-started/overview): Learn how to integrate the Tiptap Editor, a customizable rich text editor framework, into your projects.
+- [Install the Editor](https://tiptap.dev/docs/editor/getting-started/install): Integrate the Tiptap editor into your project with guides for various frameworks.
+- [React Integration Guide](https://tiptap.dev/docs/editor/getting-started/install/react): Learn how to integrate the Tiptap Editor with a React app and develop your custom editor experience.
+- [Next.js Integration](https://tiptap.dev/docs/editor/getting-started/install/nextjs): Learn how to integrate Tiptap with Next.js to create a versatile and powerful rich text editor for your project.
+- [Vue 2](https://tiptap.dev/docs/editor/getting-started/install/vue2): Learn how to set up Tiptap with Vue 2 for enhanced wysiwyg editing capabilities.
+- [Vue 3](https://tiptap.dev/docs/editor/getting-started/install/vue3): Learn how to set up Tiptap with Vue 3 for enhanced rich text editing through a detailed step-by-step guide.
+- [Svelte Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/svelte): Learn how to integrate Tiptap with your SvelteKit project through a step-by-step guide.
+- [Nuxt Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/nuxt): Learn how to set up the Tiptap Editor with Nuxt.js for a dynamic wysiwyg editing experience.
+- [Alpine Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/alpine): A guide on how to integrate Tiptap with Alpine.js to create a powerful rich text editor using Vite.
+- [CDN](https://tiptap.dev/docs/editor/getting-started/install/cdn): Learn how to use Tiptap via CDN for quick and easy setup in demos or tests.
+- [PHP](https://tiptap.dev/docs/editor/getting-started/install/php): Discover how to utilize Tiptap within PHP environments, including Laravel and Livewire. Access the guide in our docs!
+- [Vanilla JavaScript](https://tiptap.dev/docs/editor/getting-started/install/vanilla-javascript): Learn how to set up the Tiptap Editor with Vanilla JavaScript, install dependencies and initialize the editor.
+- [Configure the Editor](https://tiptap.dev/docs/editor/getting-started/configure): Learn how to set up your Tiptap Editor's elements, extensions, and content settings.
+- [Styling the Editor](https://tiptap.dev/docs/editor/getting-started/style-editor): Learn how to apply custom styles to your Tiptap editor using plain HTML, custom classes, or Tailwind CSS.
+- [Custom Menu](https://tiptap.dev/docs/editor/getting-started/style-editor/custom-menus): Learn how to develop a custom bubble or floating menu in your Tiptap editor.
+- [Tiptap Concepts](https://tiptap.dev/docs/editor/core-concepts/introduction): Explore the foundational elements of Tiptap's API, designed for intricate rich text editing based on ProseMirror's architecture.
+- [Keyboard Shortcuts in Tiptap](https://tiptap.dev/docs/editor/core-concepts/keyboard-shortcuts): Discover the predefined keyboard shortcuts for Tiptap and learn how to customize these shortcuts to fit your editing needs.
+- [Nodes and Marks](https://tiptap.dev/docs/editor/core-concepts/nodes-and-marks): Discover the different types of nodes in Tiptap, like paragraphs, headings, code blocks, and more.
+- [ProseMirror](https://tiptap.dev/docs/editor/core-concepts/prosemirror): Access the ProseMirror API and functionality with the Tiptap PM package while developing your editor.
+- [Tiptap Schemas](https://tiptap.dev/docs/editor/core-concepts/schema): Learn how content is structured in TiptapÃ¢â‚¬â„¢s schema and control your nodes, marks, and more in your documents.
+- [Pro License](https://tiptap.dev/docs/resources/pro-license): Understand the licensing terms for Tiptap Pro extensions and what usage is permitted under each plan.
+- [Extensions](https://tiptap.dev/docs/editor/core-concepts/extensions): Learn how to create, customize, and integrate extensions into Tiptap to improve your text editor's functionality.
+
+
+### Editor Extensions Docs
+- [Extensions](https://tiptap.dev/docs/editor/extensions/overview): Explore numerous editor extensions to enhance your Tiptap content experience.
+- [Custom extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions): Learn how to customize and create extensions in Tiptap to enhance your editor with new features and functionalities.
+- [Create extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions/create-new): Learn how to create a new extension for your Tiptap editor and build a unique editor experience from scratch.
+- [Extend extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions/extend-existing): Learn how to extend existing extensions in Tiptap to add new features and functionalities to your editor.
+- [Node views](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views): Learn how to customize and create interactive nodes in your Tiptap editor for editable and non-editable content.
+- [Node view examples](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/examples): Review customizable node view examples and create drag handles, dynamic tables of contents, and interactive drawing tools.
+- [JavaScript node views](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/javascript): Learn how to create custom node views using Vanilla JavaScript in Tiptap, focusing on direct manipulation of node properties and interactive content.
+- [Node views with React](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/react): Learn how to use React components to create custom node views in Tiptap, enabling direct manipulation of node properties and interactive content.
+- [Node views with Vue](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/vue): Learn how to use Vue to create custom node views in Tiptap, allowing direct manipulation of node properties and interactive content.
+- [Functionality extensions](https://tiptap.dev/docs/editor/extensions/functionality): Discover Tiptap's functionality extensions that enhance the editor with collaboration tools, text editing features, and more.
+- [Integrate AI Generation into your editor](https://tiptap.dev/docs/editor/extensions/functionality/ai-generation): Learn how to integrate AI-powered editor commands and content generation in Tiptap using the AI Generation extension.
+- [Integrate AI Suggestion into your editor](https://tiptap.dev/docs/editor/extensions/functionality/ai-suggestion): Learn how to integrate AI-powered proofreading and more into your editor using the AI Suggestion extension.
+- [BubbleMenu extension](https://tiptap.dev/docs/editor/extensions/functionality/bubble-menu): Add a contextual menu that appears near text selections in your Tiptap editor to apply various text marks.
+- [CharacterCount extension](https://tiptap.dev/docs/editor/extensions/functionality/character-count): Learn how to limit and count characters in your editor using the Character Count extension.
+- [Collaboration extension](https://tiptap.dev/docs/editor/extensions/functionality/collaboration): Learn how to set up and use collaborative editing with the Collaboration extension in Tiptap.
+- [Collaboration Cursor extension](https://tiptap.dev/docs/editor/extensions/functionality/collaboration-cursor): Learn how to use the Collaboration Cursor extension in Tiptap to show other users' cursors and their names while they type.
+- [Color extension](https://tiptap.dev/docs/editor/extensions/functionality/color): Add text color support to your Tiptap editor with the Color extension. 
+- [Integrate Comments into your editor](https://tiptap.dev/docs/editor/extensions/functionality/comments): Learn how to integrate and manage comments within your editor using the Tiptap Comments extension, including creating threads and comments via REST API.
+- [Integrate AI into your editor](https://tiptap.dev/docs/editor/extensions/functionality/content-ai): Learn how to integrate AI-powered editor commands and content generation using the Content AI extension in Tiptap.
+- [Drag Handle extension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle): Enable dragging nodes around your Tiptap Editor with the Drag Handle Extension.
+- [Drag Handle React extension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle-react): Learn how to enable dragging nodes in your React-based Tiptap Editor with the Drag Handle React Extension.
+- [Drag Handle VueeExtension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle-vue): Learn how to enable dragging nodes around your Vue-based Tiptap Editor with the Drag Handle Vue extension.
+- [Dropcursor extension](https://tiptap.dev/docs/editor/extensions/functionality/dropcursor): Add a cursor when dragging items inside the editor with the Dropcursor extension.
+- [Export extension](https://tiptap.dev/docs/editor/extensions/functionality/export): Export Tiptap's editor content to various formats like docx, odt, and markdown.
+- [FileHandler extension](https://tiptap.dev/docs/editor/extensions/functionality/filehandler): Learn how to handle file drops and pastes in your Tiptap editor with the FileHandler extension.
+- [FloatingMenu extension](https://tiptap.dev/docs/editor/extensions/functionality/floatingmenu): Use the Floating Menu extension in Tiptap to add a menu that appears on empty lines. 
+- [Focus extension](https://tiptap.dev/docs/editor/extensions/functionality/focus): Learn how to use the Focus extension in Tiptap to track and highlight the cursor's position.
+- [FontFamily extension](https://tiptap.dev/docs/editor/extensions/functionality/fontfamily): Learn how to set custom font families in your Tiptap Editor using the Font Family extension.
+- [Gapcursor extension](https://tiptap.dev/docs/editor/extensions/functionality/gapcursor): Learn how to use the Gapcursor extension in Tiptap to prevent your cursor from getting stuck in areas that don't allow regular selection.
+- [Integrate Document History into your editor](https://tiptap.dev/docs/editor/extensions/functionality/history): Learn how to integrate and manage document revisions using the History extension in Tiptap, enabling tracking of changes and version control.
+- [Import extension](https://tiptap.dev/docs/editor/extensions/functionality/import): Learn how to import documents from various formats like docx, odt, and markdown into Tiptap's JSON format.
+- [InvisibleCharacters extension](https://tiptap.dev/docs/editor/extensions/functionality/invisiblecharacters): This extension allows users to see invisible characters like spaces, hard breaks, and paragraphs to enhance accessibility.
+- [List Keymap extension](https://tiptap.dev/docs/editor/extensions/functionality/listkeymap): Learn how to modify default backspace and delete behavior for lists in Tiptap with the List Keymap extension.
+- [Mathematics extension](https://tiptap.dev/docs/editor/extensions/functionality/mathematics): This extension allows users to write and visualize mathematical formulas via LaTeX. 
+- [Placeholder extension](https://tiptap.dev/docs/editor/extensions/functionality/placeholder): Configure a helpful placeholder to fill the emptiness in your Tiptap editor.
+- [Snapshot Compare extension](https://tiptap.dev/docs/editor/extensions/functionality/snapshot-compare): Visualize changes between two document versions, highlighting differences and edits made.
+- [StarterKit extension](https://tiptap.dev/docs/editor/extensions/functionality/starterkit): Discover all the popular extensions bundled in the StarterKit, perfect for getting started with Tiptap.
+- [Table of Contents extension](https://tiptap.dev/docs/editor/extensions/functionality/table-of-contents): Learn how to integrate a list of anchors into your document and manage a Table of Contents (TOC) effectively.
+- [TextAlign extension](https://tiptap.dev/docs/editor/extensions/functionality/textalign): Learn how to use the TextAlign extension to align text in various ways like left, center, right, or justify in your Tiptap editor.
+- [Typography extension](https://tiptap.dev/docs/editor/extensions/functionality/typography): Replace common text patterns with typographic characters using the typography extension in your Tiptap editor.
+- [Undo/Redo extension](https://tiptap.dev/docs/editor/extensions/functionality/undo-redo): Learn how to implement undo and redo functionality in your Tiptap Editor to easily revert or reapply edits.
+- [UniqueID extension](https://tiptap.dev/docs/editor/extensions/functionality/uniqueid): Add a unique ID to every single node and keep track of them with the UniqueID extension.
+- [Mark extensions](https://tiptap.dev/docs/editor/extensions/marks): Learn about mark extensions like bold, code, link, and more to improve your usersÃ¢â‚¬â„¢ text editor experience in Tiptap.
+- [Bold extension](https://tiptap.dev/docs/editor/extensions/marks/bold): Use the Bold extension in Tiptap to make your text bold and let it stand out.
+- [Code extension](https://tiptap.dev/docs/editor/extensions/marks/code): Learn how to use the Code extension in your Tiptap Editor to add inline code to your texts.
+- [Highlight extension](https://tiptap.dev/docs/editor/extensions/marks/highlight): Learn how to use the Highlight extension in Tiptap Editor to add colorful text highlights.
+- [Italic extension](https://tiptap.dev/docs/editor/extensions/marks/italic): Use the Italic extension in your Tiptap Editor to emphasize your text with italics.
+- [Link extension](https://tiptap.dev/docs/editor/extensions/marks/link): Learn how to use the Link extension in Tiptap to add support for <a> tags.
+- [Strike extension](https://tiptap.dev/docs/editor/extensions/marks/strike): Learn how to use the Strike extension in Tiptap to cut through the words you wrote if you're too afraid to delete it.
+- [Subscript extension](https://tiptap.dev/docs/editor/extensions/marks/subscript): Learn how to use the Subscript extension in Tiptap to write slightly below the normal line and show your unique style.
+- [Superscript extension](https://tiptap.dev/docs/editor/extensions/marks/superscript): Use the Superscript extension in Tiptap to write text above the normal line. 
+- [TextStyle extension](https://tiptap.dev/docs/editor/extensions/marks/text-style): Learn how to use the Text Style extension in Tiptap to add <span> tags with custom styles.
+- [Underline extension](https://tiptap.dev/docs/editor/extensions/marks/underline): Learn how to render text as underlined in Tiptap, including installation and usage details.
+- [Nodes extensions](https://tiptap.dev/docs/editor/extensions/nodes): Discover the different types of nodes in Tiptap, like paragraphs, headings, code blocks, and more.
+- [Blockquote extension](https://tiptap.dev/docs/editor/extensions/nodes/blockquote): Use the Blockquote extension in Tiptap to enable the quote HTML tag in the editor.
+- [BulletList extension](https://tiptap.dev/docs/editor/extensions/nodes/bullet-list): Use the Bullet list extension to enable bullet lists in your Tiptap Editor.
+- [CodeBlock extension](https://tiptap.dev/docs/editor/extensions/nodes/code-block): Learn how to use the CodeBlock extension in Tiptap to add fenced code blocks to your documents.
+- [CodeBlockLowlight extension](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight): Learn how to use the CodeBlockLowlight extension to add code blocks with syntax highlighting to your documents.
+- [Details extension](https://tiptap.dev/docs/editor/extensions/nodes/details): Learn how to use the Details extension in Tiptap to enable the <details> HTML tag for showing and hiding content.
+- [DetailsContent extension](https://tiptap.dev/docs/editor/extensions/nodes/details-content): Learn how to use the Details and DetailsContent extensions in your Tiptap Editor to show and hide content effectively.
+- [DetailsSummary extension](https://tiptap.dev/docs/editor/extensions/nodes/details-summary): Learn how to use the DetailsSummary extension to enable the `<summary>` HTML tag for your `<details>` content in Tiptap.
+- [Document extension](https://tiptap.dev/docs/editor/extensions/nodes/document): Learn about the required Document extension, which serves as the home for all nodes in Tiptap editors.
+- [Emoji extension](https://tiptap.dev/docs/editor/extensions/nodes/emoji): Use the Emoji extension in Tiptap to render emojis as inline nodes with fallback images for unsupported emojis.
+- [HardBreak extension](https://tiptap.dev/docs/editor/extensions/nodes/hard-break): Use the Hard Break extension in Tiptap to add support for the <br> HTML tag for line breaks.
+- [Heading extension](https://tiptap.dev/docs/editor/extensions/nodes/heading): Learn how to use the Heading extension in Tiptap to support headings of different levels with HTML tags.
+- [Horizontal Rule extension](https://tiptap.dev/docs/editor/extensions/nodes/horizontal-rule): Use the Horizontal Rule extension in Tiptap to render the `<hr>` HTML tag for separating content.
+- [Image extension](https://tiptap.dev/docs/editor/extensions/nodes/image): Learn how to use the Image extension in Tiptap to render <img> HTML tags for adding images to your documents.
+- [ListItem extension](https://tiptap.dev/docs/editor/extensions/nodes/list-item): Use the List Item extension in Tiptap to add support for the `<li>` tag used in bullet and ordered lists.
+- [Mention extension](https://tiptap.dev/docs/editor/extensions/nodes/mention): Learn how to use the Mention extension in Tiptap to mention other users with a suggestion popup.
+- [Ordered List extension](https://tiptap.dev/docs/editor/extensions/nodes/ordered-list): Learn how to use the Ordered List extension in Tiptap to create ordered lists rendered as <ol> HTML tags.
+- [Paragraph extension](https://tiptap.dev/docs/editor/extensions/nodes/paragraph): Use the Paragraph extension in Tiptap to add support for paragraphs with the <p> HTML tag.
+- [Table extension](https://tiptap.dev/docs/editor/extensions/nodes/table): Use the Table extension in Tiptap to add tables to your documents with a range of customization options.
+- [TableCell extension](https://tiptap.dev/docs/editor/extensions/nodes/table-cell): Use the Table Cell extension in Tiptap to add cells to your tables for proper data structure. 
+- [TableHeader extension](https://tiptap.dev/docs/editor/extensions/nodes/table-header): Improve tables with TiptapÃ¢â‚¬â„¢s TableHeader extension. 
+- [TableRow extension](https://tiptap.dev/docs/editor/extensions/nodes/table-row): Use the Table Row extension in Tiptap to add rows to your tables for a better table structure.
+- [TaskItem extension](https://tiptap.dev/docs/editor/extensions/nodes/task-item): Use the TaskItem extension to add support for task items rendered as <li data-type=\taskItem\> with checkboxes.
+- [TaskList extension](https://tiptap.dev/docs/editor/extensions/nodes/task-list): Learn how to use the Task List extension in Tiptap to create task lists rendered as <ul data-type='taskList'>.
+- [Text extension](https://tiptap.dev/docs/editor/extensions/nodes/text): Enable plain text support in your Tiptap editor with the Text extension.
+- [Youtube extension](https://tiptap.dev/docs/editor/extensions/nodes/youtube): Use the Youtube extension in Tiptap to easily embed Youtube videos in your documents.
+
+
+### Editor API Docs
+- [Editor commands](https://tiptap.dev/docs/editor/api/commands): Learn about command execution and chaining in Tiptap, and discover how to extend functionalities.
+- [Content commands](https://tiptap.dev/docs/editor/api/commands/content): Learn about the clearContent, insertContent, insertContentAt, and setContent commands to efficiently manage content in Tiptap.
+- [clearContent command](https://tiptap.dev/docs/editor/api/commands/content/clear-content): Learn how to delete all content in the editor using the clearContent command in Tiptap.
+- [Cut command](https://tiptap.dev/docs/editor/api/commands/content/cut): Learn how to use the cut command in Tiptap to cut out content from a range and place it at a specified position.
+- [insertContent command](https://tiptap.dev/docs/editor/api/commands/content/insert-content): Use the insertContent command in Tiptap to add content to the document using plain text, HTML, or JSON.
+- [insertContentAt command](https://tiptap.dev/docs/editor/api/commands/content/insert-content-at): Learn how to insert content at a specific position or range using plain text, HTML, or JSON with the insertContentAt command.
+- [setContent command](https://tiptap.dev/docs/editor/api/commands/content/set-content): Replace the document with a new one using JSON or HTML with the setContent command.
+- [forEach command](https://tiptap.dev/docs/editor/api/commands/for-each): Use the forEach command in Tiptap to loop through an array of items and insert content into the editor.
+- [List commands](https://tiptap.dev/docs/editor/api/commands/lists): Discover essential commands in Tiptap for managing lists, including creating, updating, and manipulating list structures.
+- [liftListItem command](https://tiptap.dev/docs/editor/api/commands/lists/lift-list-item): Learn how to use the liftListItem command in Tiptap to lift the list item into a wrapping parent list.
+- [sinkListItem command](https://tiptap.dev/docs/editor/api/commands/lists/sink-list-item): Learn how to use the sinkListItem command in Tiptap to sink the list item into a wrapping child list.
+- [splitListItem command](https://tiptap.dev/docs/editor/api/commands/lists/split-list-item): Learn how to use the splitListItem command in Tiptap to split one list item into two separate list items.
+- [toggleList command](https://tiptap.dev/docs/editor/api/commands/lists/toggle-list): Use the toggleList command in Tiptap to toggle between different types of lists.
+- [wrapInList command](https://tiptap.dev/docs/editor/api/commands/lists/wrap-in-list): Use the wrapInList command in Tiptap to wrap a node in the current selection in a list.
+- [Nodes and Marks commands](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks): Learn to use commands for managing nodes and marks in Tiptap, including creating, manipulating, and cleaning up nodes and marks.
+- [clearNodes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/clear-nodes): Use the clearNodes command in Tiptap to normalize all nodes in the document to the default paragraph node.
+- [createParagraphNear command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/create-paragraph-near): Learn how to use the createParagraphNear command in Tiptap to add paragraphs adjacent to the current block node selection.
+- [deleteNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/delete-node): Use the deleteNode command in Tiptap to selectively remove nodes from your document.
+- [exitCode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/exit-code): Learn how to use the exitCode command in Tiptap to exit code blocks and continue editing in a new default block.
+- [extendMarkRange command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/extend-mark-range): Use the extendMarkRange command in Tiptap to expand the current selection to include the specified mark.
+- [joinBackward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-backward): Join two nodes backwards from the current selection in your Tiptap Editor with the joinBackward command.
+- [joinDown command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-down): Learn how to use the joinDown command in Tiptap to join the selected block with the sibling below it.
+- [joinForward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-forward): Learn how to join two nodes forwards from the current selection in the Tiptap Editor with the joinForward command.
+- [joinTextblockBackward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-textblock-backward): Learn how to use the joinTextblockBackward command in Tiptap to join the current textblock to the one before it.
+- [joinTextblockForward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-textblock-forward): Use the joinTextblockForward command in Tiptap to join the current textblock to the one after it.
+- [joinUp command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-up): Use the joinUp command in Tiptap to join the selected block with the sibling above it.
+- [Lift command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/lift): Learn how to lift a node up into its parent node in your Tiptap Editor using the lift command.
+- [liftEmptyBlock command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/lift-empty-block): Learn how to lift the currently selected empty textblock in your Tiptap Editor with the liftEmptyBlock command.
+- [newlineInCode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/newline-in-code): Use the newlineInCode command in Tiptap to insert a new line in the current code block.
+- [resetAttributes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/reset-attributes): Use the resetAttributes command in Tiptap to reset a node's attributes to their default values.
+- [setMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/set-mark): Use the setMark command in Tiptap to add a new mark at the current selection
+- [setNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/set-node): Learn how to use the setNode command in Tiptap to replace a given range with a specified text block node.
+- [splitBlock command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/split-block): Use the splitBlock command in Tiptap to split the current node into two at the current NodeSelection.
+- [toggleMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-mark): Learn how to use the toggleMark command in Tiptap to toggle a specific mark on and off at the current selection.
+- [toggleNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-node): Learn how to use the toggleNode command in your Tiptap Editor to toggle one node with another.
+- [toggleWrap command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-wrap): Learn how to use the toggleWrap command in Tiptap to wrap the current node with a new node or remove a wrapping node.
+- [undoInputRule command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/undo-input-rule): Learn how to use the undoInputRule command in Tiptap to undo the most recent input rule that was triggered.
+- [unsetAllMarks command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/unset-all-marks): Use the unsetAllMarks command in Tiptap to remove all marks from the current selection.
+- [unsetMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/unset-mark): Learn how to use the unsetMark command in Tiptap to remove a specific mark from the current or across a selection.
+- [updateAttributes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/update-attributes): Learn how to use the updateAttributes command in Tiptap to set new attribute values for a node or mark.
+- [selectTextblockEnd command](https://tiptap.dev/docs/editor/api/commands/select-textblock-end): Learn how to use the selectTextblockEnd command in Tiptap to move the cursor to the end of the current textblock.
+- [selectTextblockStart command](https://tiptap.dev/docs/editor/api/commands/select-textblock-start): Use the selectTextblockStart command in Tiptap to move the cursor to the start of the current textblock.
+- [Selection commands](https://tiptap.dev/docs/editor/api/commands/selection): Discover how to manage selections and focus in Tiptap Editor with commands like blur, focus, deleteSelection, and more.
+- [Blur command](https://tiptap.dev/docs/editor/api/commands/selection/blur): Understand the functionality of the blur command in Tiptap, which removes focus from the editor.
+- [deleteRange command](https://tiptap.dev/docs/editor/api/commands/selection/delete-range): Use the deleteRange command in Tiptap to remove content within a specific range in your document.
+- [deleteSelection command](https://tiptap.dev/docs/editor/api/commands/selection/delete-selection): The deleteSelection command in Tiptap removes any nodes or content that are currently selected within the editor.
+- [Enter Command](https://tiptap.dev/docs/editor/api/commands/selection/enter): Learn how to use the enter command in Tiptap to trigger an enter key action for automated text entry and formatting.
+- [Focus Command](https://tiptap.dev/docs/editor/api/commands/selection/focus): Learn how to use the focus command in Tiptap to set the focus back to the editor at a specific position.
+- [keyboardShortcut command](https://tiptap.dev/docs/editor/api/commands/selection/keyboard-shortcut): Use the keyboardShortcut command in Tiptap to trigger a ShortcutEvent with a given name.
+- [scrollIntoView command](https://tiptap.dev/docs/editor/api/commands/selection/scroll-into-view): Use the scrollIntoView command in Tiptap to scroll the view to the current selection or cursor position.
+- [selectAll command](https://tiptap.dev/docs/editor/api/commands/selection/select-all): Use the selectAll command in your Tiptap Editor to select the whole document at once.
+- [selectNodeBackward command](https://tiptap.dev/docs/editor/api/commands/selection/select-node-backward): Learn how to use the selectNodeBackward command in Tiptap to select the node before the current textblock.
+- [selectNodeForward command](https://tiptap.dev/docs/editor/api/commands/selection/select-node-forward): Use the selectNodeForward command in Tiptap to select the node after the current textblock if the selection is empty.
+- [selectParentNode command](https://tiptap.dev/docs/editor/api/commands/selection/select-parent-node): Use the selectParentNode command in Tiptap to move the selection to the parent node.
+- [setNodeSelection command](https://tiptap.dev/docs/editor/api/commands/selection/set-node-selection): Use the setNodeSelection command in Tiptap to create a new NodeSelection at a given position.
+- [setTextSelection command](https://tiptap.dev/docs/editor/api/commands/selection/set-text-selection): Use the setTextSelection command to control and set text selection to a specified range or position.
+- [setMeta command](https://tiptap.dev/docs/editor/api/commands/set-meta): Learn how to use the setMeta command in Tiptap to store a metadata property in the current transaction.
+- [Editor Instance API](https://tiptap.dev/docs/editor/api/editor): Learn how to use the Editor instance in Tiptap, including methods, settings, and functionalities for creating a rich text editing experience.
+- [Events in Tiptap](https://tiptap.dev/docs/editor/api/events): Learn to use and handle various events in Tiptap, including creation, updates, focus, blur, and destruction.
+- [Node Positions](https://tiptap.dev/docs/editor/api/node-positions): Learn about Node Positions in Tiptap for document navigation and manipulation.
+- [Tiptap utilities](https://tiptap.dev/docs/editor/api/utilities): Discover Tiptap Utilities that enhance the Editor API, offering tools for improved interaction and content management.
+- [HTML utility](https://tiptap.dev/docs/editor/api/utilities/html): Learn how to use the HTML Utility to render JSON as HTML and convert HTML to JSON without an editor instance.
+- [Suggestion utility](https://tiptap.dev/docs/editor/api/utilities/suggestion): Customize autocomplete suggestions using nodes like Mention and Emoji.
+- [Tiptap for PHP utility](https://tiptap.dev/docs/editor/api/utilities/tiptap-for-php): A PHP package for transforming Tiptap-compatible JSON to HTML and modifying content.
+
+
+### Collaboration Docs
+- [Collaboration Overview](https://tiptap.dev/docs/collaboration/getting-started/overview): Learn how to make your text editor collaborative with Tiptap Collaboration, enabling features like real-time editing and asynchronous updates.
+- [Install Collaboration](https://tiptap.dev/docs/collaboration/getting-started/install): Set up collaborative editing in your Tiptap Editor by following this installation guide.
+- [Awareness in Collaboration](https://tiptap.dev/docs/collaboration/core-concepts/awareness): Learn how to integrate real-time user activity tracking in Tiptap Collaboration, including user presence and cursor positions.
+- [Webhooks](https://tiptap.dev/docs/collaboration/core-concepts/webhooks): Set up and understand webhook payloads, and manage settings to integrate advanced features.
+- [Documents in Collaboration](https://tiptap.dev/docs/collaboration/documents): Learn how to store, manage, and track documents using Tiptap Collaboration with REST API and webhooks for real-time updates.
+- [Inject content API](https://tiptap.dev/docs/collaboration/documents/content-injection): Manage your Collaboration documents with JSON updates using the Inject Content API.
+- [History extension](https://tiptap.dev/docs/collaboration/documents/history): Learn how to set up and use document version history for manual and automatic versioning in Tiptap.
+- [REST API | Tiptap Collaboration Docs](https://tiptap.dev/docs/collaboration/documents/rest-api): Manage your Tiptap documents programmatically with the Collaboration Management API.
+- [Semantic Search](https://tiptap.dev/docs/collaboration/documents/semantic-search): Discover how to implement AI-native search capabilities in your document library to enhance content discovery with contextual understanding.
+- [Snapshot Compare extension](https://tiptap.dev/docs/collaboration/documents/snapshot-compare): Compare snapshots of your documents to see changes made between two versions.
+- [Auth Guide](https://tiptap.dev/docs/collaboration/getting-started/authenticate): Secure and manage access in your collaborative editor with JWTs, covering setup, testing, and production integration.
+- [Runtime configuration](https://tiptap.dev/docs/collaboration/operations/configure): Learn how to dynamically adjust collaboration settings in your Tiptap app using straightforward API calls.
+- [Metrics](https://tiptap.dev/docs/collaboration/operations/metrics): Access real-time server and document statistics for your Tiptap Collaboration application.
+- [Provider events](https://tiptap.dev/docs/collaboration/provider/events): Learn how to use event listeners with Tiptap Collaboration providers to manage real-time states and changes effectively.
+- [Integrate the Collaboration provider](https://tiptap.dev/docs/collaboration/provider/integration): Set up and configure the Collaboration provider to manage real-time document synchronization across users.
+
+
+### Comments Docs
+- [Comments Overview](https://tiptap.dev/docs/comments/getting-started/overview): Learn how to integrate and manage comments in your Tiptap editor, including features like threads and REST API access.
+- [Install Comments](https://tiptap.dev/docs/comments/getting-started/install): Learn how to install the comments extension in Tiptap to enable threaded discussions in your editor.
+- [Comments editor commands](https://tiptap.dev/docs/comments/integrate/editor-commands): Learn how to use editor commands to manage comments and threads in your Tiptap Editor.
+- [Comments REST API](https://tiptap.dev/docs/comments/integrate/rest-api): Manage comment threads and comments from outside the Tiptap Editor using the REST API.
+- [Webhook in Comments](https://tiptap.dev/docs/comments/integrate/webhook): Enable and manage webhooks for Comments in Tiptap to receive notifications on thread and comment activities.
+- [Configure Comments](https://tiptap.dev/docs/comments/core-concepts/configure): Learn how to set up the TiptapCollabProvider and customize thread classes in your Tiptap editor.
+- [Manage threads](https://tiptap.dev/docs/comments/core-concepts/manage-threads): Learn how to integrate and manage discussions in Tiptap Editor using threads and comments with editor commands.
+- [Style threads](https://tiptap.dev/docs/comments/core-concepts/style-threads): Learn how to style and manage thread visibility in your Tiptap editor using CSS decoration classes for inline and block threads.
+
+
+### Content AI Docs
+- [Content AI overview](https://tiptap.dev/docs/content-ai/getting-started/overview): Integrate AI features into your editor like like ai suggestion, smart autocompletion, text generation, and more.
+- [AI Suggestion overview](https://tiptap.dev/docs/content-ai/capabilities/suggestion/overview): Overview of the AI Suggestion extension, its features, and how it integrates with your editor.
+- [Install AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/install): A setup guide for integrating the AI Suggestion extension into your application.
+- [AI Suggestion extension setup](https://tiptap.dev/docs/content-ai/capabilities/suggestion/use-with-content-ai-cloud): Learn how to configure the AI Suggestion extension with Tiptap Content AI Cloud API by providing authentication credentials.
+- [AI Suggestion extension configuration](https://tiptap.dev/docs/content-ai/capabilities/suggestion/configure): Configure the AI Suggestion extension with rules, initial suggestions, and custom styles.
+- [API reference for AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/api-reference): Detailed API reference for the Tiptap AI Suggestion extension, covering configuration options, commands, storage, and features.
+- [Custom LLM in AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/custom-llms): Integrate your own backend and LLMs with the AI Suggestion extension for custom suggestions.
+- [Apply AI Suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/apply-suggestions): Learn how to apply, reject, and highlight AI Suggestions in your Tiptap editor.
+- [Configure when to load AI suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/configure-when-to-load-suggestions): Customize when the AI Suggestion extension loads suggestions with options like loadOnStart and reloadOnUpdate.
+- [Define rules for AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/define-rules): Configure the AI Suggestion extension with a list of rules to generate suggestions.
+- [Display AI Suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/display-suggestions): Customize how AI Suggestions are displayed in the editor with custom styles and popovers.
+- [Lock content](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/lock-content): Learn how to mark specific content as 'locked' to prevent AI suggestions from modifying it.
+- [Provide LLM context](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/provide-llm-context): Learn how to provide extra context to the LLM to improve the results of the AI Suggestion extension.
+- [AI Generation overview](https://tiptap.dev/docs/content-ai/capabilities/generation/overview): Integrate AI features into your Tiptap editor, including smart autocompletion, image generation, and custom commands.
+- [Install AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/install): A guide on setting up the AI Generation extension in Tiptap, including configuring OpenAI keys and JWT authentication.
+- [Configure AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/configure): Learn how to configure the AI Generation extension in your Tiptap editor and explore various options available.
+- [Custom LLMs in AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/custom-llms): Implement custom LLMs with the Generative AI extension and override resolver functions in your editor.
+- [AI image generation editor command](https://tiptap.dev/docs/content-ai/capabilities/generation/image-generation): Use the aiImagePrompt command in Tiptap Content AI to generate images directly within the editor, customizing prompts and styles.
+-[AI Autocompletion](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/autocompletion): Set up your AI Generation extension to autocomplete and stream text when a user hits tab in your editor. 
+- [AI Generation editor commands](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/built-in-commands): Integrate AI into your Tiptap Editor to access preconfigured commands for text manipulation and image generation.
+- [Custom commands in AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/custom-commands): Extend the AI Generation extension to create a custom editor command and prompt for your Tiptap editor.
+- [AI Auto Format](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/format): Enable AI to automatically format generated content in your Tiptap editor with rich text, lists, and more.
+- [Manage AI responses](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/manage-responses): Learn how to use the Content AI storage to save, regenerate, and insert AI responses into your Tiptap editor.
+- [Provide more context to your prompts](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/provide-context): Learn how to add context in text or URL format to enhance your AI's responses in Tiptap.
+- [Stream content](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/stream): Learn how to use the low-level API to stream content directly into the Tiptap editor, supporting both appending and replacing content.
+- [Custom LLMs in content AI](https://tiptap.dev/docs/content-ai/custom-llms): Learn how to integrate Tiptap AI extensions with your custom backend and AI models.
+- [Privacy in Content AI](https://tiptap.dev/docs/content-ai/resources/privacy): Discover how Tiptap Content AI prioritizes your privacy with robust cloud integration and on-premise options.
+
+
+### Conversion Docs
+- [Tiptap Conversion overview](https://tiptap.dev/docs/conversion/getting-started/overview): Use Tiptap Conversion to import and export DOCX, ODT or Markdown documents to your editor.
+- [Install Conversion](https://tiptap.dev/docs/conversion/getting-started/install): Retrieve your credentials to authenticate your application with Tiptap's conversion service.
+- [Import & export DOCX](https://tiptap.dev/docs/conversion/import-export/docx): Learn how to manage DOCX file import and export with Tiptap, including editor integration and REST API options.
+- [Import customs marks from DOCX](https://tiptap.dev/docs/conversion/import-export/docx/custom-mark-conversion): Learn how to import custom marks from DOCX (Word) files using the Import extension.
+- [Custom nodes in DOCX](https://tiptap.dev/docs/conversion/import-export/docx/custom-node-conversion): Learn how to export custom nodes to DOCX (Word) files using the Export extension.
+- [Export DOCX](https://tiptap.dev/docs/conversion/import-export/docx/editor-export): Learn how to export Tiptap editor content to DOCX (Word) files using the Export extension.
+- [Import DOCX](https://tiptap.dev/docs/conversion/import-export/docx/editor-import): Learn how to import DOCX (Word) documents into a Tiptap editor using the Import extension in our docs.
+- [Export DOCX styles](https://tiptap.dev/docs/conversion/import-export/docx/export-styles): Learn how to export custom styles from Tiptap JSON to DOCX in our documentation.
+- [Preserve images](https://tiptap.dev/docs/conversion/import-export/docx/preserve-images): Learn how to preserve images in converted documents by providing an image upload callback URL.
+- [DOCX REST API | Tiptap Conversion](https://tiptap.dev/docs/conversion/import-export/docx/rest-api): Learn how to integrate import and export functionality via REST API for docx files in our documentation.
+- [Markdown in Tiptap Conversion](https://tiptap.dev/docs/conversion/import-export/markdown/editor-extensions): Learn how to handle Markdown files in a Tiptap editor, including in-editor import/export and REST API usage.
+- [Markdown REST API](https://tiptap.dev/docs/conversion/import-export/markdown/rest-api): Learn how to handle Markdown files in a Tiptap editor, including in-editor import/export and REST API usage.
+- [Import & export ODT files](https://tiptap.dev/docs/conversion/import-export/odt/editor-extensions): Learn how to handle ODT files (OpenDocument Text) in a Tiptap editor, including in-editor import/export and REST API usage.
+- [ODT REST API](https://tiptap.dev/docs/conversion/import-export/odt/rest-api): Learn how to handle ODT files (OpenDocument Text) in a Tiptap editor, including in-editor import/export and REST API usage.
+
+
+### UI Components Docs
+- [UI Components overview](https://tiptap.dev/docs/ui-components/getting-started/overview): Set up Tiptap UI Components using prebuilt templates or integrate individual components for customizable editing experiences.
+- [Using the CLI for UI Components](https://tiptap.dev/docs/ui-components/getting-started/cli): A command-line interface to quickly install and configure Tiptap UI components. Learn how to get started.
+- [Components Overview](https://tiptap.dev/docs/ui-components/components/overview): Discover a range of UI components and primitives to integrate into your Tiptap editor for enhanced functionality.
+- [Heading button](https://tiptap.dev/docs/ui-components/components/heading-button): Add a button that toggles through different heading levels in your Tiptap editor.
+- [Heading dropdown menu](https://tiptap.dev/docs/ui-components/components/heading-dropdown-menu): Integrate a dropdown menu from which you can select a heading in your Tiptap editor.
+- [Highlight popover](https://tiptap.dev/docs/ui-components/components/highlight-popover): Add a popover in which you can select a highlight. Add this UI component to your Tiptap Editor.
+- [Image upload button](https://tiptap.dev/docs/ui-components/components/image-upload-button): Learn how to add a button that uploads and inserts an image into your Tiptap editor.
+- [Link popover](https://tiptap.dev/docs/ui-components/components/link-popover): Select link options in a popover element with this Tiptap UI component. More in our documentation.
+- [List button](https://tiptap.dev/docs/ui-components/components/list-button): Add a button to your Tiptap editor that toggles through bullet, ordered, or task lists.
+- [List menu](https://tiptap.dev/docs/ui-components/components/list-dropdown-menu): Add a dropdown menu that helps selecting different list types in your Tiptap editor.
+- [Mark button](https://tiptap.dev/docs/ui-components/components/mark-button): Integrate a button that toggles through text marks like bold, italics and underline.
+- [Node button](https://tiptap.dev/docs/ui-components/components/node-button): Toggle through block-level nodes like code blocks and blockquotes with the node button.
+- [Text align button](https://tiptap.dev/docs/ui-components/components/text-align-button): Change the text alignment in your Tiptap editor with this button UI component.
+- [Undo redo button](https://tiptap.dev/docs/ui-components/components/undo-redo-button): Integrate a button that helps undo and redo editor actions for your Tiptap editor.
+- [Code block](https://tiptap.dev/docs/ui-components/node-components/code-block-node): Integrate a node component displaying code content in your Tiptap Editor. 
+- [Image node](https://tiptap.dev/docs/ui-components/node-components/image-node): Add an image node UI component to your Tiptap Editor.
+- [Image upload node](https://tiptap.dev/docs/ui-components/node-components/image-upload-node): Integrate a node UI component that adds an image upload in your Tiptap Editor.
+- [List node](https://tiptap.dev/docs/ui-components/node-components/list-node): Add a list node UI component into your Tiptap Editor, including styling for ordered, unordered, and task lists.
+- [Paragraph node](https://tiptap.dev/docs/ui-components/node-components/paragraph-node): Add a paragraph node UI component to your Tiptap editor with comprehensive styling for text elements.
+- [Primitives: Avatar](https://tiptap.dev/docs/ui-components/primitives/avatar): Learn how to integrate a visual representation of a user or entity into your Tiptap editor with detailed installation and usage instructions.
+- [Primitives: Button](https://tiptap.dev/docs/ui-components/primitives/button): Integrate a button in your Tiptap Editor with the Button UI Component.
+- [Primitives: Dropdown Menu](https://tiptap.dev/docs/ui-components/primitives/dropdown-menu): Add a dropdown menu into your Tiptap Editor with this UI Component. 
+- [Primitives: Popover](https://tiptap.dev/docs/ui-components/primitives/popover): Add a pop-up UI element appearing when a user clicks on a trigger element.
+- [Primitives: Separator](https://tiptap.dev/docs/ui-components/primitives/separator): Add a visual divider between content in menus, toolbars, or other UI elements.
+- [Primitives: Spacer](https://tiptap.dev/docs/ui-components/primitives/spacer): Learn how to use the spacer UI component for layout spacing in your Tiptap editor.
+- [Primitives: Toolbar](https://tiptap.dev/docs/ui-components/primitives/toolbar): Learn how to add a toolbar UI component in Tiptap to organize actions and controls in your editor.
+- [Primitives: Tooltip](https://tiptap.dev/docs/ui-components/primitives/tooltip): Add a small informational popup that appears when hovering over an element. 
+- [Simple Editor Tiptap Template](https://tiptap.dev/docs/ui-components/templates/simple-editor): A fully working setup for the Tiptap editor with commonly used open source extensions and UI components, ready to customize.
+
+
+### Examples
+- [Examples Overview](https://tiptap.dev/docs/examples): Discover a variety of code examples that demonstrate how to use Tiptap for custom content editing and integration.
+- [Clever Editor example](https://tiptap.dev/docs/examples/advanced/clever-editor): Discover how to create highly customized extensions for your text editor using Tiptap.
+- [Collaborative editing example](https://tiptap.dev/docs/examples/advanced/collaborative-editing): Learn how to create a simple collaborative text editor in Tiptap with a short code example.
+- [Drawing example](https://tiptap.dev/docs/examples/advanced/drawing): Learn how to create a text editor with drawing capabilities using Tiptap with an easy code example.
+- [Forced content structure example](https://tiptap.dev/docs/examples/advanced/forced-content-structure): Learn how to add a text editor with a forced content structure using Tiptap.
+- [Interactive React & Vue views](https://tiptap.dev/docs/examples/advanced/interactive-react-and-vue-views): Learn how to build a text editor with React or Vue support using Tiptap.
+- [Mentions example](https://tiptap.dev/docs/examples/advanced/mentions): Learn how to build a text editor with mentions in Tiptap with a quick code example.
+- [Menus example](https://tiptap.dev/docs/examples/advanced/menus): Learn how to create floating menus for your text editor in Tiptap with a short code example.
+- [React rendering performance demo](https://tiptap.dev/docs/examples/advanced/react-performance): Learn how to integrate Tiptap with React and improve the rendering performance of your editor.
+- [Retrieval-Augmented Generation (RAG)](https://tiptap.dev/docs/examples/advanced/retrieval-augmented-generation-rag): Learn how to use Tiptap Semantic Search to retrieve context for your Tiptap AI commands.
+- [Syntax Highlighting Example](https://tiptap.dev/docs/examples/advanced/syntax-highlighting): Learn how to create code blocks with syntax highlighting using Tiptap and the CodeBlockLowlight extension.
+- [Default text editor example](https://tiptap.dev/docs/examples/basics/default-text-editor): Learn how to create a super basic text editor in Tiptap with a short code example.
+- [Formatting example](https://tiptap.dev/docs/examples/basics/formatting): Learn how to create a text editor with text formatting in Tiptap with an easy code example.
+- [Images example](https://tiptap.dev/docs/examples/basics/images): Learn how to create a text editor supporting images in Tiptap with a short code example.
+- [Long texts example](https://tiptap.dev/docs/examples/basics/long-texts): Learn how to create a text editor supporting large content with Tiptap with an easy example.
+- [Markdown shortcuts example](https://tiptap.dev/docs/examples/basics/markdown-shortcuts): Learn how to create a text editor with Markdown shortcuts using Tiptap with an easy code example.
+- [Minimal setup for paragraphs & text only](https://tiptap.dev/docs/examples/basics/minimal-setup): Learn how to create a very minimal text editor in Tiptap with a short code example.
+- [Adding table support to Tiptap](https://tiptap.dev/docs/examples/basics/tables): Learn how to create a text editor supporting tables in Tiptap with a quick code example.
+- [Tasks example](https://tiptap.dev/docs/examples/basics/tasks): Learn how to create a text editor supporting task lists with Tiptap with an easy code example.
+- [Collaborative fields](https://tiptap.dev/docs/examples/experiments/collaborative-fields): Learn how to save different content on one collaboration document with Tiptap Editor.
+- [Figure Extension](https://tiptap.dev/docs/examples/experiments/figure): Learn how to use the Figure extension in Tiptap to add figure nodes to your editor content.
+- [Generic figure example](https://tiptap.dev/docs/examples/experiments/generic-figure): Learn how to create a generic figure extension for your Tiptap Editor with an easy example.
+- [iFrame Extension](https://tiptap.dev/docs/examples/experiments/iframe): Learn how to use the iFrame extension in Tiptap to embed iframes in your editor content.
+- [Linting example](https://tiptap.dev/docs/examples/experiments/linting): Learn how to add a content linter to your Tiptap Editor with a short but sweet code example.
+- [Slash Commands Extension](https://tiptap.dev/docs/examples/experiments/slash-commands): Learn how to use the Slash Commands extension in Tiptap to add a toolbar that pops up at the slash position for quick content insertion.
+- [Trailing Node Extension](https://tiptap.dev/docs/examples/experiments/trailing-node): Use the Trailing node extension in Tiptap to add a node at the end of the document.
+
+
+### Tiptap Guides
+- [Tiptap Guides Overview](https://tiptap.dev/docs/guides): Explore practical advice on configuring Tiptap editors, enhancing user experience, and ensuring accessibility.
+- [Accessibility](https://tiptap.dev/docs/guides/accessibility): Quick notes on ensuring accessibility by providing semantic markup, keyboard accessibility, and guidelines.
+- [JWT Authentication with Collaboration](https://tiptap.dev/docs/guides/authentication): Implement JWT authentication with Tiptap's collaboration and securely generate and manage JWTs server-side.
+- [Invalid Schema Handling](https://tiptap.dev/docs/guides/invalid-schema): Learn how to manage invalid schemas in Tiptap to maintain content integrity in collaborative editing environments.
+- [Name Documents](https://tiptap.dev/docs/guides/naming-documents): Learn best practices for naming and organizing documents in Tiptap Collaboration using unique identifiers and Y.js fragments.
+- [Offline Support](https://tiptap.dev/docs/guides/offline-support): Learn how to add offline functionality to your collaborative editor, enabling local data storage and automatic sync when online.
+- [Export to JSON and HTML](https://tiptap.dev/docs/guides/output-json-html): Manage content formats in Tiptap Editor and export to JSON and HTML, using Y.js for advanced features.
+- [Integration performance](https://tiptap.dev/docs/guides/performance): Learn how to integrate Tiptap Editor performantly in your app with tips to avoid re-rendering issues.
+- [Pro Extensions](https://tiptap.dev/docs/guides/pro-extensions): Learn how to install and use Tiptap Pro extensions, which enhance the Tiptap Editor with advanced features like versioning and AI-assisted content generation.
+- [Working with TypeScript](https://tiptap.dev/docs/guides/typescript): Learn how to extend and use TypeScript with the Tiptap Editor for enhanced development.
+- [Upgrade Tiptap V1 to V2](https://tiptap.dev/docs/guides/upgrade-tiptap-v1): A comprehensive guide on upgrading from Tiptap V1 to V2, covering installation, changes, and new features.
+
+
+##Optional
+- [Tiptap Changelog](https://tiptap.dev/docs/resources/changelog): Tiptap consists of more than 50 separate packages. Here is everything you need to follow changes.
+- [System Status](https://status.tiptap.dev/)
+- [Contributing to Tiptap](https://tiptap.dev/docs/resources/contributing): Step-by-step guide for those interested in contributing to Tiptap, from setting up your development environment to tips for successful pull requests and creating your own extensions.
+- [Create your account](https://cloud.tiptap.dev/register): Sign up for a Tiptap account with no credit card required.
+- [Tiptap News](https://tiptap.dev/blog)
+- [GitHub](https://github.com/ueberdosis/tiptap)
+- [Discord](https://discord.com/invite/DDXcGKt4Zk)
+- [LinkedIn](https://www.linkedin.com/company/tiptapdev/)
+- [Bluesky](https://bsky.app/profile/tiptap.dev)
+```
+
 ## File: app/assets/css/dark-hc.css
 ```css
 .dark-high-contrast {
@@ -1395,6 +1782,134 @@ base url: https://docs.orama.com/
 @import "./dark.css";
 @import "./dark-hc.css";
 @import "./dark-mc.css";
+```
+
+## File: app/components/chat/MessageEditor.vue
+```vue
+<template>
+    <div class="relative min-h-[40px]">
+        <EditorContent
+            v-if="editor"
+            :editor="editor as Editor"
+            class="tiptap-editor fade-in"
+        />
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+// If you still want markdown extension keep it; otherwise remove these two lines:
+import { Markdown } from 'tiptap-markdown';
+
+const props = defineProps<{
+    modelValue: string;
+    autofocus?: boolean;
+    focusDelay?: number;
+}>();
+const emit = defineEmits<{
+    (e: 'update:modelValue', v: string): void;
+    (e: 'ready'): void;
+}>();
+
+const editor = ref<any>(null);
+let destroy: (() => void) | null = null;
+// Prevent feedback loop when emitting updates -> watcher -> setContent -> update
+let internalUpdate = false;
+let lastEmitted = '';
+
+async function init() {
+    const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
+
+    const instance = new Editor({
+        extensions,
+        content: props.modelValue,
+        onUpdate: ({ editor: e }) => {
+            // Access markdown storage; fall back gracefully
+            const md: string | undefined =
+                // @ts-expect-error
+                e?.storage?.markdown?.getMarkdown?.();
+            const nextVal = md ?? e.getText();
+            if (nextVal === lastEmitted) return;
+            internalUpdate = true;
+            lastEmitted = nextVal;
+            emit('update:modelValue', nextVal);
+            queueMicrotask(() => {
+                internalUpdate = false;
+            });
+        },
+    });
+
+    editor.value = instance;
+    destroy = () => instance.destroy();
+
+    await nextTick();
+    if (props.autofocus) {
+        const delay =
+            typeof props.focusDelay === 'number' ? props.focusDelay : 90;
+        setTimeout(() => {
+            try {
+                instance.commands.focus('end');
+            } catch {}
+        }, delay);
+    }
+    lastEmitted = props.modelValue;
+    emit('ready');
+}
+
+onMounted(() => {
+    init();
+});
+
+onBeforeUnmount(() => {
+    destroy && destroy();
+});
+
+watch(
+    () => props.modelValue,
+    (val) => {
+        if (!editor.value) return;
+        if (internalUpdate) return; // skip updates we originated
+        // Determine current markdown representation (markdown storage optional)
+        const currentMd: string | undefined =
+            editor.value?.storage?.markdown?.getMarkdown?.();
+        const current = currentMd ?? editor.value.getText();
+        if (val === current) return;
+        // Update editor without firing transactions that cause flicker (emitUpdate: false not available; use setContent with emitUpdate false param)
+        editor.value.commands.setContent(val || '', false);
+        lastEmitted = val || '';
+    }
+);
+</script>
+
+<style scoped>
+.tiptap-editor {
+    min-height: 40px;
+    outline: none;
+    font: inherit;
+}
+.tiptap-editor :deep(p) {
+    margin: 0 0 0.5rem;
+}
+.tiptap-editor :deep(pre) {
+    background: var(--md-surface-container-lowest);
+    padding: 0.5rem;
+    border: 1px solid var(--md-outline);
+}
+.tiptap-editor :deep(.ProseMirror) {
+    outline: none;
+}
+.fade-in {
+    opacity: 0;
+    animation: fadeInEditor 0.14s ease-out forwards;
+}
+@keyframes fadeInEditor {
+    to {
+        opacity: 1;
+    }
+}
+</style>
 ```
 
 ## File: app/components/sidebar/ResizeHandle.vue
@@ -4549,393 +5064,6 @@ export default defineNuxtConfig({
 }
 ```
 
-## File: .llms/tiptap.txt
-```
-#Tiptap
-
-> Tiptap is the headless and extensible rich-text editor framework tailored to modern web and app development needs. 
-
-
-Core Benefits
-- Build rich text editors similar to Notion within days
-- Supports React, Next, Vue, Svelte, JavaScript and many more
-- Robust, battle-tested open source framework under the MIT license
-- With over 100 extensions highly adaptable
-
-
-Key Features
-- Collaboration: Allow your users to collaborate in real time in any document
-- Comments: Integrate threaded conversations and suggestions in your editor experience
-- Content AI: Empower your users to create and transform text, images & documents with AI
-- Import / Export: Enable easy file conversions in your documents (e.g. DOCX, PDF, JSON, Markdown)
-- Documents: Manage structured documents in our cloud database or on your premises
-- Templates: Ready-made templates to quickly create complex editors like Notion, Google Docs or Slack
-- UI Components: Drop-in React components to build your editor UI faster, without the boilerplate 
-
-
-Tailored Solutions
-- Enterprises that need a scalable editor framework with enterprise-grade security to accelerate time to market
-- Startups requiring rapid development of feature-rich applications to deliver exceptional user experiences
-
-
-Use Cases
-- Advanced WYSIWYG editors for SaaS platforms and apps
-- Real-time collaboration and team-focused editing tools
-- AI-powered content generation and editing
-
-
-## Products
-- [Tiptap Rich Text Editor](https://tiptap.dev): Headless JavaScript framework to create advanced content editing experiences.
-- [Tiptap Collaboration](https://tiptap.dev/product/collaboration): Enable real-time collaborative editing in your documents.
-- [Tiptap Comments](https://tiptap.dev/product/comments): Integrate a commenting system into your rich text editor to enhance teamwork and real-time discussions.
-- [Tiptap Content AI](https://tiptap.dev/product/content-ai): Integrate AI into your editor for enhanced content creation, allowing users to generate text, images, and more.
-- [Tiptap Documents API](https://tiptap.dev/product/documents): Manage your editor documents with our API and webhooks.
-- [Tiptap Templates](https://tiptap.dev/templates): Ready-to-use editor templates designed for quick integration, e.g. the notion-like block editor template.
-- [Tiptap for Enterprises](https://tiptap.dev/enterprise): Enterprise-grade solutions for security and scalability.
-- [Tiptap Conversion](https://tiptap.dev/product/conversion): Discover how to seamlessly import and export DOCX, ODT and more to your editor,
-- [Tiptap UI Components](https://tiptap.dev/product/ui-components): Discover ready-made and uniquely designed UI components for creating user-friendly rich editor interfaces.
-
-
-## Docs
-- [Tiptap Docs](https://tiptap.dev/docs): Tiptap provides a framework to create custom content editors with extensible features and cloud services.
-
-
-### Editor Docs
-- [Getting started](https://tiptap.dev/docs/editor/getting-started/overview): Learn how to integrate the Tiptap Editor, a customizable rich text editor framework, into your projects.
-- [Install the Editor](https://tiptap.dev/docs/editor/getting-started/install): Integrate the Tiptap editor into your project with guides for various frameworks.
-- [React Integration Guide](https://tiptap.dev/docs/editor/getting-started/install/react): Learn how to integrate the Tiptap Editor with a React app and develop your custom editor experience.
-- [Next.js Integration](https://tiptap.dev/docs/editor/getting-started/install/nextjs): Learn how to integrate Tiptap with Next.js to create a versatile and powerful rich text editor for your project.
-- [Vue 2](https://tiptap.dev/docs/editor/getting-started/install/vue2): Learn how to set up Tiptap with Vue 2 for enhanced wysiwyg editing capabilities.
-- [Vue 3](https://tiptap.dev/docs/editor/getting-started/install/vue3): Learn how to set up Tiptap with Vue 3 for enhanced rich text editing through a detailed step-by-step guide.
-- [Svelte Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/svelte): Learn how to integrate Tiptap with your SvelteKit project through a step-by-step guide.
-- [Nuxt Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/nuxt): Learn how to set up the Tiptap Editor with Nuxt.js for a dynamic wysiwyg editing experience.
-- [Alpine Integration with Tiptap](https://tiptap.dev/docs/editor/getting-started/install/alpine): A guide on how to integrate Tiptap with Alpine.js to create a powerful rich text editor using Vite.
-- [CDN](https://tiptap.dev/docs/editor/getting-started/install/cdn): Learn how to use Tiptap via CDN for quick and easy setup in demos or tests.
-- [PHP](https://tiptap.dev/docs/editor/getting-started/install/php): Discover how to utilize Tiptap within PHP environments, including Laravel and Livewire. Access the guide in our docs!
-- [Vanilla JavaScript](https://tiptap.dev/docs/editor/getting-started/install/vanilla-javascript): Learn how to set up the Tiptap Editor with Vanilla JavaScript, install dependencies and initialize the editor.
-- [Configure the Editor](https://tiptap.dev/docs/editor/getting-started/configure): Learn how to set up your Tiptap Editor's elements, extensions, and content settings.
-- [Styling the Editor](https://tiptap.dev/docs/editor/getting-started/style-editor): Learn how to apply custom styles to your Tiptap editor using plain HTML, custom classes, or Tailwind CSS.
-- [Custom Menu](https://tiptap.dev/docs/editor/getting-started/style-editor/custom-menus): Learn how to develop a custom bubble or floating menu in your Tiptap editor.
-- [Tiptap Concepts](https://tiptap.dev/docs/editor/core-concepts/introduction): Explore the foundational elements of Tiptap's API, designed for intricate rich text editing based on ProseMirror's architecture.
-- [Keyboard Shortcuts in Tiptap](https://tiptap.dev/docs/editor/core-concepts/keyboard-shortcuts): Discover the predefined keyboard shortcuts for Tiptap and learn how to customize these shortcuts to fit your editing needs.
-- [Nodes and Marks](https://tiptap.dev/docs/editor/core-concepts/nodes-and-marks): Discover the different types of nodes in Tiptap, like paragraphs, headings, code blocks, and more.
-- [ProseMirror](https://tiptap.dev/docs/editor/core-concepts/prosemirror): Access the ProseMirror API and functionality with the Tiptap PM package while developing your editor.
-- [Tiptap Schemas](https://tiptap.dev/docs/editor/core-concepts/schema): Learn how content is structured in TiptapÃ¢â‚¬â„¢s schema and control your nodes, marks, and more in your documents.
-- [Pro License](https://tiptap.dev/docs/resources/pro-license): Understand the licensing terms for Tiptap Pro extensions and what usage is permitted under each plan.
-- [Extensions](https://tiptap.dev/docs/editor/core-concepts/extensions): Learn how to create, customize, and integrate extensions into Tiptap to improve your text editor's functionality.
-
-
-### Editor Extensions Docs
-- [Extensions](https://tiptap.dev/docs/editor/extensions/overview): Explore numerous editor extensions to enhance your Tiptap content experience.
-- [Custom extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions): Learn how to customize and create extensions in Tiptap to enhance your editor with new features and functionalities.
-- [Create extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions/create-new): Learn how to create a new extension for your Tiptap editor and build a unique editor experience from scratch.
-- [Extend extensions](https://tiptap.dev/docs/editor/extensions/custom-extensions/extend-existing): Learn how to extend existing extensions in Tiptap to add new features and functionalities to your editor.
-- [Node views](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views): Learn how to customize and create interactive nodes in your Tiptap editor for editable and non-editable content.
-- [Node view examples](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/examples): Review customizable node view examples and create drag handles, dynamic tables of contents, and interactive drawing tools.
-- [JavaScript node views](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/javascript): Learn how to create custom node views using Vanilla JavaScript in Tiptap, focusing on direct manipulation of node properties and interactive content.
-- [Node views with React](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/react): Learn how to use React components to create custom node views in Tiptap, enabling direct manipulation of node properties and interactive content.
-- [Node views with Vue](https://tiptap.dev/docs/editor/extensions/custom-extensions/node-views/vue): Learn how to use Vue to create custom node views in Tiptap, allowing direct manipulation of node properties and interactive content.
-- [Functionality extensions](https://tiptap.dev/docs/editor/extensions/functionality): Discover Tiptap's functionality extensions that enhance the editor with collaboration tools, text editing features, and more.
-- [Integrate AI Generation into your editor](https://tiptap.dev/docs/editor/extensions/functionality/ai-generation): Learn how to integrate AI-powered editor commands and content generation in Tiptap using the AI Generation extension.
-- [Integrate AI Suggestion into your editor](https://tiptap.dev/docs/editor/extensions/functionality/ai-suggestion): Learn how to integrate AI-powered proofreading and more into your editor using the AI Suggestion extension.
-- [BubbleMenu extension](https://tiptap.dev/docs/editor/extensions/functionality/bubble-menu): Add a contextual menu that appears near text selections in your Tiptap editor to apply various text marks.
-- [CharacterCount extension](https://tiptap.dev/docs/editor/extensions/functionality/character-count): Learn how to limit and count characters in your editor using the Character Count extension.
-- [Collaboration extension](https://tiptap.dev/docs/editor/extensions/functionality/collaboration): Learn how to set up and use collaborative editing with the Collaboration extension in Tiptap.
-- [Collaboration Cursor extension](https://tiptap.dev/docs/editor/extensions/functionality/collaboration-cursor): Learn how to use the Collaboration Cursor extension in Tiptap to show other users' cursors and their names while they type.
-- [Color extension](https://tiptap.dev/docs/editor/extensions/functionality/color): Add text color support to your Tiptap editor with the Color extension. 
-- [Integrate Comments into your editor](https://tiptap.dev/docs/editor/extensions/functionality/comments): Learn how to integrate and manage comments within your editor using the Tiptap Comments extension, including creating threads and comments via REST API.
-- [Integrate AI into your editor](https://tiptap.dev/docs/editor/extensions/functionality/content-ai): Learn how to integrate AI-powered editor commands and content generation using the Content AI extension in Tiptap.
-- [Drag Handle extension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle): Enable dragging nodes around your Tiptap Editor with the Drag Handle Extension.
-- [Drag Handle React extension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle-react): Learn how to enable dragging nodes in your React-based Tiptap Editor with the Drag Handle React Extension.
-- [Drag Handle VueeExtension](https://tiptap.dev/docs/editor/extensions/functionality/drag-handle-vue): Learn how to enable dragging nodes around your Vue-based Tiptap Editor with the Drag Handle Vue extension.
-- [Dropcursor extension](https://tiptap.dev/docs/editor/extensions/functionality/dropcursor): Add a cursor when dragging items inside the editor with the Dropcursor extension.
-- [Export extension](https://tiptap.dev/docs/editor/extensions/functionality/export): Export Tiptap's editor content to various formats like docx, odt, and markdown.
-- [FileHandler extension](https://tiptap.dev/docs/editor/extensions/functionality/filehandler): Learn how to handle file drops and pastes in your Tiptap editor with the FileHandler extension.
-- [FloatingMenu extension](https://tiptap.dev/docs/editor/extensions/functionality/floatingmenu): Use the Floating Menu extension in Tiptap to add a menu that appears on empty lines. 
-- [Focus extension](https://tiptap.dev/docs/editor/extensions/functionality/focus): Learn how to use the Focus extension in Tiptap to track and highlight the cursor's position.
-- [FontFamily extension](https://tiptap.dev/docs/editor/extensions/functionality/fontfamily): Learn how to set custom font families in your Tiptap Editor using the Font Family extension.
-- [Gapcursor extension](https://tiptap.dev/docs/editor/extensions/functionality/gapcursor): Learn how to use the Gapcursor extension in Tiptap to prevent your cursor from getting stuck in areas that don't allow regular selection.
-- [Integrate Document History into your editor](https://tiptap.dev/docs/editor/extensions/functionality/history): Learn how to integrate and manage document revisions using the History extension in Tiptap, enabling tracking of changes and version control.
-- [Import extension](https://tiptap.dev/docs/editor/extensions/functionality/import): Learn how to import documents from various formats like docx, odt, and markdown into Tiptap's JSON format.
-- [InvisibleCharacters extension](https://tiptap.dev/docs/editor/extensions/functionality/invisiblecharacters): This extension allows users to see invisible characters like spaces, hard breaks, and paragraphs to enhance accessibility.
-- [List Keymap extension](https://tiptap.dev/docs/editor/extensions/functionality/listkeymap): Learn how to modify default backspace and delete behavior for lists in Tiptap with the List Keymap extension.
-- [Mathematics extension](https://tiptap.dev/docs/editor/extensions/functionality/mathematics): This extension allows users to write and visualize mathematical formulas via LaTeX. 
-- [Placeholder extension](https://tiptap.dev/docs/editor/extensions/functionality/placeholder): Configure a helpful placeholder to fill the emptiness in your Tiptap editor.
-- [Snapshot Compare extension](https://tiptap.dev/docs/editor/extensions/functionality/snapshot-compare): Visualize changes between two document versions, highlighting differences and edits made.
-- [StarterKit extension](https://tiptap.dev/docs/editor/extensions/functionality/starterkit): Discover all the popular extensions bundled in the StarterKit, perfect for getting started with Tiptap.
-- [Table of Contents extension](https://tiptap.dev/docs/editor/extensions/functionality/table-of-contents): Learn how to integrate a list of anchors into your document and manage a Table of Contents (TOC) effectively.
-- [TextAlign extension](https://tiptap.dev/docs/editor/extensions/functionality/textalign): Learn how to use the TextAlign extension to align text in various ways like left, center, right, or justify in your Tiptap editor.
-- [Typography extension](https://tiptap.dev/docs/editor/extensions/functionality/typography): Replace common text patterns with typographic characters using the typography extension in your Tiptap editor.
-- [Undo/Redo extension](https://tiptap.dev/docs/editor/extensions/functionality/undo-redo): Learn how to implement undo and redo functionality in your Tiptap Editor to easily revert or reapply edits.
-- [UniqueID extension](https://tiptap.dev/docs/editor/extensions/functionality/uniqueid): Add a unique ID to every single node and keep track of them with the UniqueID extension.
-- [Mark extensions](https://tiptap.dev/docs/editor/extensions/marks): Learn about mark extensions like bold, code, link, and more to improve your usersÃ¢â‚¬â„¢ text editor experience in Tiptap.
-- [Bold extension](https://tiptap.dev/docs/editor/extensions/marks/bold): Use the Bold extension in Tiptap to make your text bold and let it stand out.
-- [Code extension](https://tiptap.dev/docs/editor/extensions/marks/code): Learn how to use the Code extension in your Tiptap Editor to add inline code to your texts.
-- [Highlight extension](https://tiptap.dev/docs/editor/extensions/marks/highlight): Learn how to use the Highlight extension in Tiptap Editor to add colorful text highlights.
-- [Italic extension](https://tiptap.dev/docs/editor/extensions/marks/italic): Use the Italic extension in your Tiptap Editor to emphasize your text with italics.
-- [Link extension](https://tiptap.dev/docs/editor/extensions/marks/link): Learn how to use the Link extension in Tiptap to add support for <a> tags.
-- [Strike extension](https://tiptap.dev/docs/editor/extensions/marks/strike): Learn how to use the Strike extension in Tiptap to cut through the words you wrote if you're too afraid to delete it.
-- [Subscript extension](https://tiptap.dev/docs/editor/extensions/marks/subscript): Learn how to use the Subscript extension in Tiptap to write slightly below the normal line and show your unique style.
-- [Superscript extension](https://tiptap.dev/docs/editor/extensions/marks/superscript): Use the Superscript extension in Tiptap to write text above the normal line. 
-- [TextStyle extension](https://tiptap.dev/docs/editor/extensions/marks/text-style): Learn how to use the Text Style extension in Tiptap to add <span> tags with custom styles.
-- [Underline extension](https://tiptap.dev/docs/editor/extensions/marks/underline): Learn how to render text as underlined in Tiptap, including installation and usage details.
-- [Nodes extensions](https://tiptap.dev/docs/editor/extensions/nodes): Discover the different types of nodes in Tiptap, like paragraphs, headings, code blocks, and more.
-- [Blockquote extension](https://tiptap.dev/docs/editor/extensions/nodes/blockquote): Use the Blockquote extension in Tiptap to enable the quote HTML tag in the editor.
-- [BulletList extension](https://tiptap.dev/docs/editor/extensions/nodes/bullet-list): Use the Bullet list extension to enable bullet lists in your Tiptap Editor.
-- [CodeBlock extension](https://tiptap.dev/docs/editor/extensions/nodes/code-block): Learn how to use the CodeBlock extension in Tiptap to add fenced code blocks to your documents.
-- [CodeBlockLowlight extension](https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight): Learn how to use the CodeBlockLowlight extension to add code blocks with syntax highlighting to your documents.
-- [Details extension](https://tiptap.dev/docs/editor/extensions/nodes/details): Learn how to use the Details extension in Tiptap to enable the <details> HTML tag for showing and hiding content.
-- [DetailsContent extension](https://tiptap.dev/docs/editor/extensions/nodes/details-content): Learn how to use the Details and DetailsContent extensions in your Tiptap Editor to show and hide content effectively.
-- [DetailsSummary extension](https://tiptap.dev/docs/editor/extensions/nodes/details-summary): Learn how to use the DetailsSummary extension to enable the `<summary>` HTML tag for your `<details>` content in Tiptap.
-- [Document extension](https://tiptap.dev/docs/editor/extensions/nodes/document): Learn about the required Document extension, which serves as the home for all nodes in Tiptap editors.
-- [Emoji extension](https://tiptap.dev/docs/editor/extensions/nodes/emoji): Use the Emoji extension in Tiptap to render emojis as inline nodes with fallback images for unsupported emojis.
-- [HardBreak extension](https://tiptap.dev/docs/editor/extensions/nodes/hard-break): Use the Hard Break extension in Tiptap to add support for the <br> HTML tag for line breaks.
-- [Heading extension](https://tiptap.dev/docs/editor/extensions/nodes/heading): Learn how to use the Heading extension in Tiptap to support headings of different levels with HTML tags.
-- [Horizontal Rule extension](https://tiptap.dev/docs/editor/extensions/nodes/horizontal-rule): Use the Horizontal Rule extension in Tiptap to render the `<hr>` HTML tag for separating content.
-- [Image extension](https://tiptap.dev/docs/editor/extensions/nodes/image): Learn how to use the Image extension in Tiptap to render <img> HTML tags for adding images to your documents.
-- [ListItem extension](https://tiptap.dev/docs/editor/extensions/nodes/list-item): Use the List Item extension in Tiptap to add support for the `<li>` tag used in bullet and ordered lists.
-- [Mention extension](https://tiptap.dev/docs/editor/extensions/nodes/mention): Learn how to use the Mention extension in Tiptap to mention other users with a suggestion popup.
-- [Ordered List extension](https://tiptap.dev/docs/editor/extensions/nodes/ordered-list): Learn how to use the Ordered List extension in Tiptap to create ordered lists rendered as <ol> HTML tags.
-- [Paragraph extension](https://tiptap.dev/docs/editor/extensions/nodes/paragraph): Use the Paragraph extension in Tiptap to add support for paragraphs with the <p> HTML tag.
-- [Table extension](https://tiptap.dev/docs/editor/extensions/nodes/table): Use the Table extension in Tiptap to add tables to your documents with a range of customization options.
-- [TableCell extension](https://tiptap.dev/docs/editor/extensions/nodes/table-cell): Use the Table Cell extension in Tiptap to add cells to your tables for proper data structure. 
-- [TableHeader extension](https://tiptap.dev/docs/editor/extensions/nodes/table-header): Improve tables with TiptapÃ¢â‚¬â„¢s TableHeader extension. 
-- [TableRow extension](https://tiptap.dev/docs/editor/extensions/nodes/table-row): Use the Table Row extension in Tiptap to add rows to your tables for a better table structure.
-- [TaskItem extension](https://tiptap.dev/docs/editor/extensions/nodes/task-item): Use the TaskItem extension to add support for task items rendered as <li data-type=\taskItem\> with checkboxes.
-- [TaskList extension](https://tiptap.dev/docs/editor/extensions/nodes/task-list): Learn how to use the Task List extension in Tiptap to create task lists rendered as <ul data-type='taskList'>.
-- [Text extension](https://tiptap.dev/docs/editor/extensions/nodes/text): Enable plain text support in your Tiptap editor with the Text extension.
-- [Youtube extension](https://tiptap.dev/docs/editor/extensions/nodes/youtube): Use the Youtube extension in Tiptap to easily embed Youtube videos in your documents.
-
-
-### Editor API Docs
-- [Editor commands](https://tiptap.dev/docs/editor/api/commands): Learn about command execution and chaining in Tiptap, and discover how to extend functionalities.
-- [Content commands](https://tiptap.dev/docs/editor/api/commands/content): Learn about the clearContent, insertContent, insertContentAt, and setContent commands to efficiently manage content in Tiptap.
-- [clearContent command](https://tiptap.dev/docs/editor/api/commands/content/clear-content): Learn how to delete all content in the editor using the clearContent command in Tiptap.
-- [Cut command](https://tiptap.dev/docs/editor/api/commands/content/cut): Learn how to use the cut command in Tiptap to cut out content from a range and place it at a specified position.
-- [insertContent command](https://tiptap.dev/docs/editor/api/commands/content/insert-content): Use the insertContent command in Tiptap to add content to the document using plain text, HTML, or JSON.
-- [insertContentAt command](https://tiptap.dev/docs/editor/api/commands/content/insert-content-at): Learn how to insert content at a specific position or range using plain text, HTML, or JSON with the insertContentAt command.
-- [setContent command](https://tiptap.dev/docs/editor/api/commands/content/set-content): Replace the document with a new one using JSON or HTML with the setContent command.
-- [forEach command](https://tiptap.dev/docs/editor/api/commands/for-each): Use the forEach command in Tiptap to loop through an array of items and insert content into the editor.
-- [List commands](https://tiptap.dev/docs/editor/api/commands/lists): Discover essential commands in Tiptap for managing lists, including creating, updating, and manipulating list structures.
-- [liftListItem command](https://tiptap.dev/docs/editor/api/commands/lists/lift-list-item): Learn how to use the liftListItem command in Tiptap to lift the list item into a wrapping parent list.
-- [sinkListItem command](https://tiptap.dev/docs/editor/api/commands/lists/sink-list-item): Learn how to use the sinkListItem command in Tiptap to sink the list item into a wrapping child list.
-- [splitListItem command](https://tiptap.dev/docs/editor/api/commands/lists/split-list-item): Learn how to use the splitListItem command in Tiptap to split one list item into two separate list items.
-- [toggleList command](https://tiptap.dev/docs/editor/api/commands/lists/toggle-list): Use the toggleList command in Tiptap to toggle between different types of lists.
-- [wrapInList command](https://tiptap.dev/docs/editor/api/commands/lists/wrap-in-list): Use the wrapInList command in Tiptap to wrap a node in the current selection in a list.
-- [Nodes and Marks commands](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks): Learn to use commands for managing nodes and marks in Tiptap, including creating, manipulating, and cleaning up nodes and marks.
-- [clearNodes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/clear-nodes): Use the clearNodes command in Tiptap to normalize all nodes in the document to the default paragraph node.
-- [createParagraphNear command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/create-paragraph-near): Learn how to use the createParagraphNear command in Tiptap to add paragraphs adjacent to the current block node selection.
-- [deleteNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/delete-node): Use the deleteNode command in Tiptap to selectively remove nodes from your document.
-- [exitCode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/exit-code): Learn how to use the exitCode command in Tiptap to exit code blocks and continue editing in a new default block.
-- [extendMarkRange command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/extend-mark-range): Use the extendMarkRange command in Tiptap to expand the current selection to include the specified mark.
-- [joinBackward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-backward): Join two nodes backwards from the current selection in your Tiptap Editor with the joinBackward command.
-- [joinDown command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-down): Learn how to use the joinDown command in Tiptap to join the selected block with the sibling below it.
-- [joinForward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-forward): Learn how to join two nodes forwards from the current selection in the Tiptap Editor with the joinForward command.
-- [joinTextblockBackward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-textblock-backward): Learn how to use the joinTextblockBackward command in Tiptap to join the current textblock to the one before it.
-- [joinTextblockForward command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-textblock-forward): Use the joinTextblockForward command in Tiptap to join the current textblock to the one after it.
-- [joinUp command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/join-up): Use the joinUp command in Tiptap to join the selected block with the sibling above it.
-- [Lift command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/lift): Learn how to lift a node up into its parent node in your Tiptap Editor using the lift command.
-- [liftEmptyBlock command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/lift-empty-block): Learn how to lift the currently selected empty textblock in your Tiptap Editor with the liftEmptyBlock command.
-- [newlineInCode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/newline-in-code): Use the newlineInCode command in Tiptap to insert a new line in the current code block.
-- [resetAttributes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/reset-attributes): Use the resetAttributes command in Tiptap to reset a node's attributes to their default values.
-- [setMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/set-mark): Use the setMark command in Tiptap to add a new mark at the current selection
-- [setNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/set-node): Learn how to use the setNode command in Tiptap to replace a given range with a specified text block node.
-- [splitBlock command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/split-block): Use the splitBlock command in Tiptap to split the current node into two at the current NodeSelection.
-- [toggleMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-mark): Learn how to use the toggleMark command in Tiptap to toggle a specific mark on and off at the current selection.
-- [toggleNode command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-node): Learn how to use the toggleNode command in your Tiptap Editor to toggle one node with another.
-- [toggleWrap command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/toggle-wrap): Learn how to use the toggleWrap command in Tiptap to wrap the current node with a new node or remove a wrapping node.
-- [undoInputRule command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/undo-input-rule): Learn how to use the undoInputRule command in Tiptap to undo the most recent input rule that was triggered.
-- [unsetAllMarks command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/unset-all-marks): Use the unsetAllMarks command in Tiptap to remove all marks from the current selection.
-- [unsetMark command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/unset-mark): Learn how to use the unsetMark command in Tiptap to remove a specific mark from the current or across a selection.
-- [updateAttributes command](https://tiptap.dev/docs/editor/api/commands/nodes-and-marks/update-attributes): Learn how to use the updateAttributes command in Tiptap to set new attribute values for a node or mark.
-- [selectTextblockEnd command](https://tiptap.dev/docs/editor/api/commands/select-textblock-end): Learn how to use the selectTextblockEnd command in Tiptap to move the cursor to the end of the current textblock.
-- [selectTextblockStart command](https://tiptap.dev/docs/editor/api/commands/select-textblock-start): Use the selectTextblockStart command in Tiptap to move the cursor to the start of the current textblock.
-- [Selection commands](https://tiptap.dev/docs/editor/api/commands/selection): Discover how to manage selections and focus in Tiptap Editor with commands like blur, focus, deleteSelection, and more.
-- [Blur command](https://tiptap.dev/docs/editor/api/commands/selection/blur): Understand the functionality of the blur command in Tiptap, which removes focus from the editor.
-- [deleteRange command](https://tiptap.dev/docs/editor/api/commands/selection/delete-range): Use the deleteRange command in Tiptap to remove content within a specific range in your document.
-- [deleteSelection command](https://tiptap.dev/docs/editor/api/commands/selection/delete-selection): The deleteSelection command in Tiptap removes any nodes or content that are currently selected within the editor.
-- [Enter Command](https://tiptap.dev/docs/editor/api/commands/selection/enter): Learn how to use the enter command in Tiptap to trigger an enter key action for automated text entry and formatting.
-- [Focus Command](https://tiptap.dev/docs/editor/api/commands/selection/focus): Learn how to use the focus command in Tiptap to set the focus back to the editor at a specific position.
-- [keyboardShortcut command](https://tiptap.dev/docs/editor/api/commands/selection/keyboard-shortcut): Use the keyboardShortcut command in Tiptap to trigger a ShortcutEvent with a given name.
-- [scrollIntoView command](https://tiptap.dev/docs/editor/api/commands/selection/scroll-into-view): Use the scrollIntoView command in Tiptap to scroll the view to the current selection or cursor position.
-- [selectAll command](https://tiptap.dev/docs/editor/api/commands/selection/select-all): Use the selectAll command in your Tiptap Editor to select the whole document at once.
-- [selectNodeBackward command](https://tiptap.dev/docs/editor/api/commands/selection/select-node-backward): Learn how to use the selectNodeBackward command in Tiptap to select the node before the current textblock.
-- [selectNodeForward command](https://tiptap.dev/docs/editor/api/commands/selection/select-node-forward): Use the selectNodeForward command in Tiptap to select the node after the current textblock if the selection is empty.
-- [selectParentNode command](https://tiptap.dev/docs/editor/api/commands/selection/select-parent-node): Use the selectParentNode command in Tiptap to move the selection to the parent node.
-- [setNodeSelection command](https://tiptap.dev/docs/editor/api/commands/selection/set-node-selection): Use the setNodeSelection command in Tiptap to create a new NodeSelection at a given position.
-- [setTextSelection command](https://tiptap.dev/docs/editor/api/commands/selection/set-text-selection): Use the setTextSelection command to control and set text selection to a specified range or position.
-- [setMeta command](https://tiptap.dev/docs/editor/api/commands/set-meta): Learn how to use the setMeta command in Tiptap to store a metadata property in the current transaction.
-- [Editor Instance API](https://tiptap.dev/docs/editor/api/editor): Learn how to use the Editor instance in Tiptap, including methods, settings, and functionalities for creating a rich text editing experience.
-- [Events in Tiptap](https://tiptap.dev/docs/editor/api/events): Learn to use and handle various events in Tiptap, including creation, updates, focus, blur, and destruction.
-- [Node Positions](https://tiptap.dev/docs/editor/api/node-positions): Learn about Node Positions in Tiptap for document navigation and manipulation.
-- [Tiptap utilities](https://tiptap.dev/docs/editor/api/utilities): Discover Tiptap Utilities that enhance the Editor API, offering tools for improved interaction and content management.
-- [HTML utility](https://tiptap.dev/docs/editor/api/utilities/html): Learn how to use the HTML Utility to render JSON as HTML and convert HTML to JSON without an editor instance.
-- [Suggestion utility](https://tiptap.dev/docs/editor/api/utilities/suggestion): Customize autocomplete suggestions using nodes like Mention and Emoji.
-- [Tiptap for PHP utility](https://tiptap.dev/docs/editor/api/utilities/tiptap-for-php): A PHP package for transforming Tiptap-compatible JSON to HTML and modifying content.
-
-
-### Collaboration Docs
-- [Collaboration Overview](https://tiptap.dev/docs/collaboration/getting-started/overview): Learn how to make your text editor collaborative with Tiptap Collaboration, enabling features like real-time editing and asynchronous updates.
-- [Install Collaboration](https://tiptap.dev/docs/collaboration/getting-started/install): Set up collaborative editing in your Tiptap Editor by following this installation guide.
-- [Awareness in Collaboration](https://tiptap.dev/docs/collaboration/core-concepts/awareness): Learn how to integrate real-time user activity tracking in Tiptap Collaboration, including user presence and cursor positions.
-- [Webhooks](https://tiptap.dev/docs/collaboration/core-concepts/webhooks): Set up and understand webhook payloads, and manage settings to integrate advanced features.
-- [Documents in Collaboration](https://tiptap.dev/docs/collaboration/documents): Learn how to store, manage, and track documents using Tiptap Collaboration with REST API and webhooks for real-time updates.
-- [Inject content API](https://tiptap.dev/docs/collaboration/documents/content-injection): Manage your Collaboration documents with JSON updates using the Inject Content API.
-- [History extension](https://tiptap.dev/docs/collaboration/documents/history): Learn how to set up and use document version history for manual and automatic versioning in Tiptap.
-- [REST API | Tiptap Collaboration Docs](https://tiptap.dev/docs/collaboration/documents/rest-api): Manage your Tiptap documents programmatically with the Collaboration Management API.
-- [Semantic Search](https://tiptap.dev/docs/collaboration/documents/semantic-search): Discover how to implement AI-native search capabilities in your document library to enhance content discovery with contextual understanding.
-- [Snapshot Compare extension](https://tiptap.dev/docs/collaboration/documents/snapshot-compare): Compare snapshots of your documents to see changes made between two versions.
-- [Auth Guide](https://tiptap.dev/docs/collaboration/getting-started/authenticate): Secure and manage access in your collaborative editor with JWTs, covering setup, testing, and production integration.
-- [Runtime configuration](https://tiptap.dev/docs/collaboration/operations/configure): Learn how to dynamically adjust collaboration settings in your Tiptap app using straightforward API calls.
-- [Metrics](https://tiptap.dev/docs/collaboration/operations/metrics): Access real-time server and document statistics for your Tiptap Collaboration application.
-- [Provider events](https://tiptap.dev/docs/collaboration/provider/events): Learn how to use event listeners with Tiptap Collaboration providers to manage real-time states and changes effectively.
-- [Integrate the Collaboration provider](https://tiptap.dev/docs/collaboration/provider/integration): Set up and configure the Collaboration provider to manage real-time document synchronization across users.
-
-
-### Comments Docs
-- [Comments Overview](https://tiptap.dev/docs/comments/getting-started/overview): Learn how to integrate and manage comments in your Tiptap editor, including features like threads and REST API access.
-- [Install Comments](https://tiptap.dev/docs/comments/getting-started/install): Learn how to install the comments extension in Tiptap to enable threaded discussions in your editor.
-- [Comments editor commands](https://tiptap.dev/docs/comments/integrate/editor-commands): Learn how to use editor commands to manage comments and threads in your Tiptap Editor.
-- [Comments REST API](https://tiptap.dev/docs/comments/integrate/rest-api): Manage comment threads and comments from outside the Tiptap Editor using the REST API.
-- [Webhook in Comments](https://tiptap.dev/docs/comments/integrate/webhook): Enable and manage webhooks for Comments in Tiptap to receive notifications on thread and comment activities.
-- [Configure Comments](https://tiptap.dev/docs/comments/core-concepts/configure): Learn how to set up the TiptapCollabProvider and customize thread classes in your Tiptap editor.
-- [Manage threads](https://tiptap.dev/docs/comments/core-concepts/manage-threads): Learn how to integrate and manage discussions in Tiptap Editor using threads and comments with editor commands.
-- [Style threads](https://tiptap.dev/docs/comments/core-concepts/style-threads): Learn how to style and manage thread visibility in your Tiptap editor using CSS decoration classes for inline and block threads.
-
-
-### Content AI Docs
-- [Content AI overview](https://tiptap.dev/docs/content-ai/getting-started/overview): Integrate AI features into your editor like like ai suggestion, smart autocompletion, text generation, and more.
-- [AI Suggestion overview](https://tiptap.dev/docs/content-ai/capabilities/suggestion/overview): Overview of the AI Suggestion extension, its features, and how it integrates with your editor.
-- [Install AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/install): A setup guide for integrating the AI Suggestion extension into your application.
-- [AI Suggestion extension setup](https://tiptap.dev/docs/content-ai/capabilities/suggestion/use-with-content-ai-cloud): Learn how to configure the AI Suggestion extension with Tiptap Content AI Cloud API by providing authentication credentials.
-- [AI Suggestion extension configuration](https://tiptap.dev/docs/content-ai/capabilities/suggestion/configure): Configure the AI Suggestion extension with rules, initial suggestions, and custom styles.
-- [API reference for AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/api-reference): Detailed API reference for the Tiptap AI Suggestion extension, covering configuration options, commands, storage, and features.
-- [Custom LLM in AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/custom-llms): Integrate your own backend and LLMs with the AI Suggestion extension for custom suggestions.
-- [Apply AI Suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/apply-suggestions): Learn how to apply, reject, and highlight AI Suggestions in your Tiptap editor.
-- [Configure when to load AI suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/configure-when-to-load-suggestions): Customize when the AI Suggestion extension loads suggestions with options like loadOnStart and reloadOnUpdate.
-- [Define rules for AI Suggestion](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/define-rules): Configure the AI Suggestion extension with a list of rules to generate suggestions.
-- [Display AI Suggestions](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/display-suggestions): Customize how AI Suggestions are displayed in the editor with custom styles and popovers.
-- [Lock content](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/lock-content): Learn how to mark specific content as 'locked' to prevent AI suggestions from modifying it.
-- [Provide LLM context](https://tiptap.dev/docs/content-ai/capabilities/suggestion/features/provide-llm-context): Learn how to provide extra context to the LLM to improve the results of the AI Suggestion extension.
-- [AI Generation overview](https://tiptap.dev/docs/content-ai/capabilities/generation/overview): Integrate AI features into your Tiptap editor, including smart autocompletion, image generation, and custom commands.
-- [Install AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/install): A guide on setting up the AI Generation extension in Tiptap, including configuring OpenAI keys and JWT authentication.
-- [Configure AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/configure): Learn how to configure the AI Generation extension in your Tiptap editor and explore various options available.
-- [Custom LLMs in AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/custom-llms): Implement custom LLMs with the Generative AI extension and override resolver functions in your editor.
-- [AI image generation editor command](https://tiptap.dev/docs/content-ai/capabilities/generation/image-generation): Use the aiImagePrompt command in Tiptap Content AI to generate images directly within the editor, customizing prompts and styles.
--[AI Autocompletion](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/autocompletion): Set up your AI Generation extension to autocomplete and stream text when a user hits tab in your editor. 
-- [AI Generation editor commands](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/built-in-commands): Integrate AI into your Tiptap Editor to access preconfigured commands for text manipulation and image generation.
-- [Custom commands in AI Generation](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/custom-commands): Extend the AI Generation extension to create a custom editor command and prompt for your Tiptap editor.
-- [AI Auto Format](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/format): Enable AI to automatically format generated content in your Tiptap editor with rich text, lists, and more.
-- [Manage AI responses](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/manage-responses): Learn how to use the Content AI storage to save, regenerate, and insert AI responses into your Tiptap editor.
-- [Provide more context to your prompts](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/provide-context): Learn how to add context in text or URL format to enhance your AI's responses in Tiptap.
-- [Stream content](https://tiptap.dev/docs/content-ai/capabilities/generation/text-generation/stream): Learn how to use the low-level API to stream content directly into the Tiptap editor, supporting both appending and replacing content.
-- [Custom LLMs in content AI](https://tiptap.dev/docs/content-ai/custom-llms): Learn how to integrate Tiptap AI extensions with your custom backend and AI models.
-- [Privacy in Content AI](https://tiptap.dev/docs/content-ai/resources/privacy): Discover how Tiptap Content AI prioritizes your privacy with robust cloud integration and on-premise options.
-
-
-### Conversion Docs
-- [Tiptap Conversion overview](https://tiptap.dev/docs/conversion/getting-started/overview): Use Tiptap Conversion to import and export DOCX, ODT or Markdown documents to your editor.
-- [Install Conversion](https://tiptap.dev/docs/conversion/getting-started/install): Retrieve your credentials to authenticate your application with Tiptap's conversion service.
-- [Import & export DOCX](https://tiptap.dev/docs/conversion/import-export/docx): Learn how to manage DOCX file import and export with Tiptap, including editor integration and REST API options.
-- [Import customs marks from DOCX](https://tiptap.dev/docs/conversion/import-export/docx/custom-mark-conversion): Learn how to import custom marks from DOCX (Word) files using the Import extension.
-- [Custom nodes in DOCX](https://tiptap.dev/docs/conversion/import-export/docx/custom-node-conversion): Learn how to export custom nodes to DOCX (Word) files using the Export extension.
-- [Export DOCX](https://tiptap.dev/docs/conversion/import-export/docx/editor-export): Learn how to export Tiptap editor content to DOCX (Word) files using the Export extension.
-- [Import DOCX](https://tiptap.dev/docs/conversion/import-export/docx/editor-import): Learn how to import DOCX (Word) documents into a Tiptap editor using the Import extension in our docs.
-- [Export DOCX styles](https://tiptap.dev/docs/conversion/import-export/docx/export-styles): Learn how to export custom styles from Tiptap JSON to DOCX in our documentation.
-- [Preserve images](https://tiptap.dev/docs/conversion/import-export/docx/preserve-images): Learn how to preserve images in converted documents by providing an image upload callback URL.
-- [DOCX REST API | Tiptap Conversion](https://tiptap.dev/docs/conversion/import-export/docx/rest-api): Learn how to integrate import and export functionality via REST API for docx files in our documentation.
-- [Markdown in Tiptap Conversion](https://tiptap.dev/docs/conversion/import-export/markdown/editor-extensions): Learn how to handle Markdown files in a Tiptap editor, including in-editor import/export and REST API usage.
-- [Markdown REST API](https://tiptap.dev/docs/conversion/import-export/markdown/rest-api): Learn how to handle Markdown files in a Tiptap editor, including in-editor import/export and REST API usage.
-- [Import & export ODT files](https://tiptap.dev/docs/conversion/import-export/odt/editor-extensions): Learn how to handle ODT files (OpenDocument Text) in a Tiptap editor, including in-editor import/export and REST API usage.
-- [ODT REST API](https://tiptap.dev/docs/conversion/import-export/odt/rest-api): Learn how to handle ODT files (OpenDocument Text) in a Tiptap editor, including in-editor import/export and REST API usage.
-
-
-### UI Components Docs
-- [UI Components overview](https://tiptap.dev/docs/ui-components/getting-started/overview): Set up Tiptap UI Components using prebuilt templates or integrate individual components for customizable editing experiences.
-- [Using the CLI for UI Components](https://tiptap.dev/docs/ui-components/getting-started/cli): A command-line interface to quickly install and configure Tiptap UI components. Learn how to get started.
-- [Components Overview](https://tiptap.dev/docs/ui-components/components/overview): Discover a range of UI components and primitives to integrate into your Tiptap editor for enhanced functionality.
-- [Heading button](https://tiptap.dev/docs/ui-components/components/heading-button): Add a button that toggles through different heading levels in your Tiptap editor.
-- [Heading dropdown menu](https://tiptap.dev/docs/ui-components/components/heading-dropdown-menu): Integrate a dropdown menu from which you can select a heading in your Tiptap editor.
-- [Highlight popover](https://tiptap.dev/docs/ui-components/components/highlight-popover): Add a popover in which you can select a highlight. Add this UI component to your Tiptap Editor.
-- [Image upload button](https://tiptap.dev/docs/ui-components/components/image-upload-button): Learn how to add a button that uploads and inserts an image into your Tiptap editor.
-- [Link popover](https://tiptap.dev/docs/ui-components/components/link-popover): Select link options in a popover element with this Tiptap UI component. More in our documentation.
-- [List button](https://tiptap.dev/docs/ui-components/components/list-button): Add a button to your Tiptap editor that toggles through bullet, ordered, or task lists.
-- [List menu](https://tiptap.dev/docs/ui-components/components/list-dropdown-menu): Add a dropdown menu that helps selecting different list types in your Tiptap editor.
-- [Mark button](https://tiptap.dev/docs/ui-components/components/mark-button): Integrate a button that toggles through text marks like bold, italics and underline.
-- [Node button](https://tiptap.dev/docs/ui-components/components/node-button): Toggle through block-level nodes like code blocks and blockquotes with the node button.
-- [Text align button](https://tiptap.dev/docs/ui-components/components/text-align-button): Change the text alignment in your Tiptap editor with this button UI component.
-- [Undo redo button](https://tiptap.dev/docs/ui-components/components/undo-redo-button): Integrate a button that helps undo and redo editor actions for your Tiptap editor.
-- [Code block](https://tiptap.dev/docs/ui-components/node-components/code-block-node): Integrate a node component displaying code content in your Tiptap Editor. 
-- [Image node](https://tiptap.dev/docs/ui-components/node-components/image-node): Add an image node UI component to your Tiptap Editor.
-- [Image upload node](https://tiptap.dev/docs/ui-components/node-components/image-upload-node): Integrate a node UI component that adds an image upload in your Tiptap Editor.
-- [List node](https://tiptap.dev/docs/ui-components/node-components/list-node): Add a list node UI component into your Tiptap Editor, including styling for ordered, unordered, and task lists.
-- [Paragraph node](https://tiptap.dev/docs/ui-components/node-components/paragraph-node): Add a paragraph node UI component to your Tiptap editor with comprehensive styling for text elements.
-- [Primitives: Avatar](https://tiptap.dev/docs/ui-components/primitives/avatar): Learn how to integrate a visual representation of a user or entity into your Tiptap editor with detailed installation and usage instructions.
-- [Primitives: Button](https://tiptap.dev/docs/ui-components/primitives/button): Integrate a button in your Tiptap Editor with the Button UI Component.
-- [Primitives: Dropdown Menu](https://tiptap.dev/docs/ui-components/primitives/dropdown-menu): Add a dropdown menu into your Tiptap Editor with this UI Component. 
-- [Primitives: Popover](https://tiptap.dev/docs/ui-components/primitives/popover): Add a pop-up UI element appearing when a user clicks on a trigger element.
-- [Primitives: Separator](https://tiptap.dev/docs/ui-components/primitives/separator): Add a visual divider between content in menus, toolbars, or other UI elements.
-- [Primitives: Spacer](https://tiptap.dev/docs/ui-components/primitives/spacer): Learn how to use the spacer UI component for layout spacing in your Tiptap editor.
-- [Primitives: Toolbar](https://tiptap.dev/docs/ui-components/primitives/toolbar): Learn how to add a toolbar UI component in Tiptap to organize actions and controls in your editor.
-- [Primitives: Tooltip](https://tiptap.dev/docs/ui-components/primitives/tooltip): Add a small informational popup that appears when hovering over an element. 
-- [Simple Editor Tiptap Template](https://tiptap.dev/docs/ui-components/templates/simple-editor): A fully working setup for the Tiptap editor with commonly used open source extensions and UI components, ready to customize.
-
-
-### Examples
-- [Examples Overview](https://tiptap.dev/docs/examples): Discover a variety of code examples that demonstrate how to use Tiptap for custom content editing and integration.
-- [Clever Editor example](https://tiptap.dev/docs/examples/advanced/clever-editor): Discover how to create highly customized extensions for your text editor using Tiptap.
-- [Collaborative editing example](https://tiptap.dev/docs/examples/advanced/collaborative-editing): Learn how to create a simple collaborative text editor in Tiptap with a short code example.
-- [Drawing example](https://tiptap.dev/docs/examples/advanced/drawing): Learn how to create a text editor with drawing capabilities using Tiptap with an easy code example.
-- [Forced content structure example](https://tiptap.dev/docs/examples/advanced/forced-content-structure): Learn how to add a text editor with a forced content structure using Tiptap.
-- [Interactive React & Vue views](https://tiptap.dev/docs/examples/advanced/interactive-react-and-vue-views): Learn how to build a text editor with React or Vue support using Tiptap.
-- [Mentions example](https://tiptap.dev/docs/examples/advanced/mentions): Learn how to build a text editor with mentions in Tiptap with a quick code example.
-- [Menus example](https://tiptap.dev/docs/examples/advanced/menus): Learn how to create floating menus for your text editor in Tiptap with a short code example.
-- [React rendering performance demo](https://tiptap.dev/docs/examples/advanced/react-performance): Learn how to integrate Tiptap with React and improve the rendering performance of your editor.
-- [Retrieval-Augmented Generation (RAG)](https://tiptap.dev/docs/examples/advanced/retrieval-augmented-generation-rag): Learn how to use Tiptap Semantic Search to retrieve context for your Tiptap AI commands.
-- [Syntax Highlighting Example](https://tiptap.dev/docs/examples/advanced/syntax-highlighting): Learn how to create code blocks with syntax highlighting using Tiptap and the CodeBlockLowlight extension.
-- [Default text editor example](https://tiptap.dev/docs/examples/basics/default-text-editor): Learn how to create a super basic text editor in Tiptap with a short code example.
-- [Formatting example](https://tiptap.dev/docs/examples/basics/formatting): Learn how to create a text editor with text formatting in Tiptap with an easy code example.
-- [Images example](https://tiptap.dev/docs/examples/basics/images): Learn how to create a text editor supporting images in Tiptap with a short code example.
-- [Long texts example](https://tiptap.dev/docs/examples/basics/long-texts): Learn how to create a text editor supporting large content with Tiptap with an easy example.
-- [Markdown shortcuts example](https://tiptap.dev/docs/examples/basics/markdown-shortcuts): Learn how to create a text editor with Markdown shortcuts using Tiptap with an easy code example.
-- [Minimal setup for paragraphs & text only](https://tiptap.dev/docs/examples/basics/minimal-setup): Learn how to create a very minimal text editor in Tiptap with a short code example.
-- [Adding table support to Tiptap](https://tiptap.dev/docs/examples/basics/tables): Learn how to create a text editor supporting tables in Tiptap with a quick code example.
-- [Tasks example](https://tiptap.dev/docs/examples/basics/tasks): Learn how to create a text editor supporting task lists with Tiptap with an easy code example.
-- [Collaborative fields](https://tiptap.dev/docs/examples/experiments/collaborative-fields): Learn how to save different content on one collaboration document with Tiptap Editor.
-- [Figure Extension](https://tiptap.dev/docs/examples/experiments/figure): Learn how to use the Figure extension in Tiptap to add figure nodes to your editor content.
-- [Generic figure example](https://tiptap.dev/docs/examples/experiments/generic-figure): Learn how to create a generic figure extension for your Tiptap Editor with an easy example.
-- [iFrame Extension](https://tiptap.dev/docs/examples/experiments/iframe): Learn how to use the iFrame extension in Tiptap to embed iframes in your editor content.
-- [Linting example](https://tiptap.dev/docs/examples/experiments/linting): Learn how to add a content linter to your Tiptap Editor with a short but sweet code example.
-- [Slash Commands Extension](https://tiptap.dev/docs/examples/experiments/slash-commands): Learn how to use the Slash Commands extension in Tiptap to add a toolbar that pops up at the slash position for quick content insertion.
-- [Trailing Node Extension](https://tiptap.dev/docs/examples/experiments/trailing-node): Use the Trailing node extension in Tiptap to add a node at the end of the document.
-
-
-### Tiptap Guides
-- [Tiptap Guides Overview](https://tiptap.dev/docs/guides): Explore practical advice on configuring Tiptap editors, enhancing user experience, and ensuring accessibility.
-- [Accessibility](https://tiptap.dev/docs/guides/accessibility): Quick notes on ensuring accessibility by providing semantic markup, keyboard accessibility, and guidelines.
-- [JWT Authentication with Collaboration](https://tiptap.dev/docs/guides/authentication): Implement JWT authentication with Tiptap's collaboration and securely generate and manage JWTs server-side.
-- [Invalid Schema Handling](https://tiptap.dev/docs/guides/invalid-schema): Learn how to manage invalid schemas in Tiptap to maintain content integrity in collaborative editing environments.
-- [Name Documents](https://tiptap.dev/docs/guides/naming-documents): Learn best practices for naming and organizing documents in Tiptap Collaboration using unique identifiers and Y.js fragments.
-- [Offline Support](https://tiptap.dev/docs/guides/offline-support): Learn how to add offline functionality to your collaborative editor, enabling local data storage and automatic sync when online.
-- [Export to JSON and HTML](https://tiptap.dev/docs/guides/output-json-html): Manage content formats in Tiptap Editor and export to JSON and HTML, using Y.js for advanced features.
-- [Integration performance](https://tiptap.dev/docs/guides/performance): Learn how to integrate Tiptap Editor performantly in your app with tips to avoid re-rendering issues.
-- [Pro Extensions](https://tiptap.dev/docs/guides/pro-extensions): Learn how to install and use Tiptap Pro extensions, which enhance the Tiptap Editor with advanced features like versioning and AI-assisted content generation.
-- [Working with TypeScript](https://tiptap.dev/docs/guides/typescript): Learn how to extend and use TypeScript with the Tiptap Editor for enhanced development.
-- [Upgrade Tiptap V1 to V2](https://tiptap.dev/docs/guides/upgrade-tiptap-v1): A comprehensive guide on upgrading from Tiptap V1 to V2, covering installation, changes, and new features.
-
-
-##Optional
-- [Tiptap Changelog](https://tiptap.dev/docs/resources/changelog): Tiptap consists of more than 50 separate packages. Here is everything you need to follow changes.
-- [System Status](https://status.tiptap.dev/)
-- [Contributing to Tiptap](https://tiptap.dev/docs/resources/contributing): Step-by-step guide for those interested in contributing to Tiptap, from setting up your development environment to tips for successful pull requests and creating your own extensions.
-- [Create your account](https://cloud.tiptap.dev/register): Sign up for a Tiptap account with no credit card required.
-- [Tiptap News](https://tiptap.dev/blog)
-- [GitHub](https://github.com/ueberdosis/tiptap)
-- [Discord](https://discord.com/invite/DDXcGKt4Zk)
-- [LinkedIn](https://www.linkedin.com/company/tiptapdev/)
-- [Bluesky](https://bsky.app/profile/tiptap.dev)
-```
-
 ## File: app/assets/css/dark.css
 ```css
 .dark {
@@ -6804,347 +6932,6 @@ export function trimOrMessagesImages(orMessages: any[], max: number) {
 }
 ```
 
-## File: app/utils/openrouter-build.ts
-```typescript
-// Utility helpers to build OpenRouter payload messages including historical images.
-// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
-// produce OpenAI-compatible content arrays.
-
-import { parseFileHashes } from '~/db/files-util';
-
-export interface BuildImageCandidate {
-    hash: string;
-    role: 'user' | 'assistant';
-    messageIndex: number; // chronological index in original messages array
-}
-
-export interface ORContentPartText {
-    type: 'text';
-    text: string;
-}
-export interface ORContentPartImageUrl {
-    type: 'image_url';
-    image_url: { url: string };
-}
-export type ORContentPart = ORContentPartText | ORContentPartImageUrl;
-
-export interface ORMessage {
-    role: 'user' | 'assistant' | 'system';
-    content: ORContentPart[];
-}
-
-// Caches on global scope to avoid repeated blob -> base64 conversions.
-const dataUrlCache: Map<string, string> = ((
-    globalThis as any
-).__or3ImageDataUrlCache ||= new Map());
-const inflight: Map<string, Promise<string | null>> = ((
-    globalThis as any
-).__or3ImageHydrateInflight ||= new Map());
-
-// Remote / blob URL hydration cache shares same map (keyed by original ref string)
-// We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
-// because a content hash would never start with http/blob.
-async function remoteRefToDataUrl(ref: string): Promise<string | null> {
-    if (ref.startsWith('data:image/')) return ref; // already data URL
-    if (!/^https?:|^blob:/.test(ref)) return null;
-    if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
-    if (inflight.has(ref)) return inflight.get(ref)!;
-    const p = (async () => {
-        try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 8000); // 8s safety timeout
-            const resp = await fetch(ref, { signal: ctrl.signal });
-            clearTimeout(t);
-            if (!resp.ok) throw new Error('fetch-failed:' + resp.status);
-            const blob = await resp.blob();
-            // Basic guardrail: cap at ~5MB to avoid huge token usage
-            if (blob.size > 5 * 1024 * 1024) return null;
-            const dataUrl = await blobToDataUrl(blob);
-            dataUrlCache.set(ref, dataUrl);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(ref);
-        }
-    })();
-    inflight.set(ref, p);
-    return p;
-}
-
-async function blobToDataUrl(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(fr.error);
-        fr.onload = () => resolve(fr.result as string);
-        fr.readAsDataURL(blob);
-    });
-}
-
-async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
-    if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
-    if (inflight.has(hash)) return inflight.get(hash)!;
-    const p = (async () => {
-        try {
-            const { getFileBlob } = await import('~/db/files');
-            const blob = await getFileBlob(hash);
-            if (!blob) throw new Error('blob-missing');
-            const dataUrl = await blobToDataUrl(blob);
-            dataUrlCache.set(hash, dataUrl);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(hash);
-        }
-    })();
-    inflight.set(hash, p);
-    return p;
-}
-
-export interface BuildOptions {
-    maxImageInputs?: number; // total images across history
-    dedupeImages?: boolean; // skip duplicate hashes
-    imageInclusionPolicy?:
-        | 'all'
-        | 'recent'
-        | 'recent-user'
-        | 'recent-assistant';
-    recentWindow?: number; // number of most recent messages to scan when policy is recent*
-    // Hook like filter: (candidates) => filteredCandidates
-    filterIncludeImages?: (
-        candidates: BuildImageCandidate[]
-    ) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
-    debug?: boolean; // verbose logging
-}
-
-// Default heuristics constants
-const DEFAULT_MAX_IMAGE_INPUTS = 8;
-
-interface ChatMessageLike {
-    role: 'user' | 'assistant' | 'system';
-    content: any; // string | parts[]
-    file_hashes?: string | null;
-}
-
-// Build OpenRouter messages with hydrated images.
-export async function buildOpenRouterMessages(
-    messages: ChatMessageLike[],
-    opts: BuildOptions = {}
-): Promise<ORMessage[]> {
-    const {
-        maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS,
-        dedupeImages = true,
-        imageInclusionPolicy = 'all',
-        recentWindow = 12,
-        filterIncludeImages,
-        debug = false,
-    } = opts;
-
-    if (debug) {
-        console.log('[or-build] begin', {
-            messages: messages.length,
-            maxImageInputs,
-            dedupeImages,
-            imageInclusionPolicy,
-            recentWindow,
-        });
-    }
-
-    // Determine candidate messages for image inclusion under policy.
-    let candidateMessages: number[] = [];
-    if (imageInclusionPolicy === 'all') {
-        candidateMessages = messages.map((_, i) => i);
-    } else if (imageInclusionPolicy.startsWith('recent')) {
-        const start = Math.max(0, messages.length - recentWindow);
-        candidateMessages = [];
-        for (let i = start; i < messages.length; i++) candidateMessages.push(i);
-    }
-
-    // Collect hash candidates
-    const hashCandidates: BuildImageCandidate[] = [];
-    for (const idx of candidateMessages) {
-        const m = messages[idx];
-        if (!m) continue;
-        if (m.file_hashes) {
-            try {
-                const hashes = parseFileHashes(m.file_hashes) || [];
-                for (const h of hashes) {
-                    if (!h) continue;
-                    if (
-                        imageInclusionPolicy === 'recent-user' &&
-                        m.role !== 'user'
-                    )
-                        continue;
-                    if (
-                        imageInclusionPolicy === 'recent-assistant' &&
-                        m.role !== 'assistant'
-                    )
-                        continue;
-                    if (m.role === 'user' || m.role === 'assistant') {
-                        hashCandidates.push({
-                            hash: h,
-                            role: m.role,
-                            messageIndex: idx,
-                        });
-                    }
-                }
-            } catch {}
-        }
-        // Also inspect inline parts if array form
-        if (Array.isArray(m.content)) {
-            for (const p of m.content) {
-                if (p?.type === 'image' && typeof p.image === 'string') {
-                    if (
-                        p.image.startsWith('data:image/') ||
-                        /^https?:/i.test(p.image) ||
-                        /^blob:/i.test(p.image)
-                    ) {
-                        hashCandidates.push({
-                            hash: p.image,
-                            role: m.role as any,
-                            messageIndex: idx,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    if (debug) {
-        console.log('[or-build] candidates', {
-            total: hashCandidates.length,
-            sample: hashCandidates.slice(0, 10).map((c) => ({
-                role: c.role,
-                i: c.messageIndex,
-                ref: c.hash.startsWith('data:image/')
-                    ? 'data:' + c.hash.slice(11, 30) + '…'
-                    : c.hash,
-            })),
-        });
-    }
-
-    // Optional external filter
-    let filtered = hashCandidates;
-    if (filterIncludeImages) {
-        try {
-            const res = await filterIncludeImages(hashCandidates);
-            if (Array.isArray(res)) filtered = res;
-        } catch {}
-    }
-
-    // Enforce max & dedupe
-    const seen = new Set<string>();
-    const selected: BuildImageCandidate[] = [];
-    for (const c of filtered) {
-        if (selected.length >= maxImageInputs) break;
-        if (dedupeImages && seen.has(c.hash)) continue;
-        seen.add(c.hash);
-        selected.push(c);
-    }
-
-    if (debug) {
-        console.log('[or-build] selected', {
-            total: selected.length,
-            list: selected.map((s) => ({
-                role: s.role,
-                i: s.messageIndex,
-                ref: s.hash.startsWith('data:image/')
-                    ? 'data:' + s.hash.slice(11, 26) + '…'
-                    : s.hash,
-            })),
-        });
-    }
-
-    // Group selected hashes by message index for convenient inclusion
-    const byMessageIndex = new Map<number, BuildImageCandidate[]>();
-    for (const s of selected) {
-        const list = byMessageIndex.get(s.messageIndex) || [];
-        list.push(s);
-        byMessageIndex.set(s.messageIndex, list);
-    }
-
-    // Build ORMessage array preserving original order
-    const orMessages: ORMessage[] = [];
-    for (let i = 0; i < messages.length; i++) {
-        const m = messages[i];
-        if (!m) continue;
-        const parts: ORContentPart[] = [];
-        // Extract textual content
-        let text = '';
-        if (Array.isArray(m.content)) {
-            const textParts = m.content.filter((p: any) => p.type === 'text');
-            if (textParts.length)
-                text = textParts.map((p: any) => p.text || '').join('');
-        } else if (typeof m.content === 'string') {
-            text = m.content;
-        }
-        if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
-        parts.push({ type: 'text', text });
-
-        // Add images associated with this message index
-        const imgs = byMessageIndex.get(i) || [];
-        for (const img of imgs) {
-            if (img.hash.startsWith('data:image/')) {
-                parts.push({ type: 'image_url', image_url: { url: img.hash } });
-            } else {
-                // Try: (1) treat as stored hash; (2) treat as remote/blob ref
-                let dataUrl = await hydrateHashToDataUrl(img.hash);
-                if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
-                if (dataUrl) {
-                    parts.push({
-                        type: 'image_url',
-                        image_url: { url: dataUrl },
-                    });
-                } else if (debug) {
-                    console.warn('[or-build] hydrate-fail', {
-                        ref: img.hash,
-                        role: img.role,
-                        messageIndex: img.messageIndex,
-                    });
-                }
-            }
-        }
-
-        orMessages.push({ role: m.role, content: parts });
-    }
-
-    if (debug) {
-        const imgTotals = orMessages.map((m, i) => ({
-            i,
-            role: m.role,
-            imgs: m.content.filter((p) => p.type === 'image_url').length,
-        }));
-        console.log('[or-build] done', {
-            messages: orMessages.length,
-            totalImages: imgTotals.reduce((a, b) => a + b.imgs, 0),
-            imgTotals,
-        });
-    }
-
-    return orMessages;
-}
-
-// Decide modalities based on prepared ORMessages + heuristic prompt.
-export function decideModalities(
-    orMessages: ORMessage[],
-    requestedModel?: string
-): string[] {
-    const hasImageInput = orMessages.some((m) =>
-        m.content.some((p) => p.type === 'image_url')
-    );
-    const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
-    const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
-    const imageIntent =
-        /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
-            prompt
-        );
-    const modalities = ['text'];
-    if (hasImageInput || imageIntent) modalities.push('image');
-    return modalities;
-}
-```
-
 ## File: app/app.vue
 ```vue
 <template>
@@ -7210,132 +6997,152 @@ vi.mock('virtua/vue', () => {
 });
 ```
 
-## File: app/components/chat/MessageEditor.vue
-```vue
-<template>
-    <div class="relative min-h-[40px]">
-        <EditorContent
-            v-if="editor"
-            :editor="editor as Editor"
-            class="tiptap-editor fade-in"
-        />
-    </div>
-</template>
+## File: app/assets/css/main.css
+```css
+/* Tailwind v4: single import includes preflight + utilities */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
-<script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import { StarterKit } from '@tiptap/starter-kit';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-// If you still want markdown extension keep it; otherwise remove these two lines:
-import { Markdown } from 'tiptap-markdown';
+/* Nuxt UI base styles (load first so we can override its tokens below) */
+@import "@nuxt/ui";
 
-const props = defineProps<{
-    modelValue: string;
-    autofocus?: boolean;
-    focusDelay?: number;
-}>();
-const emit = defineEmits<{
-    (e: 'update:modelValue', v: string): void;
-    (e: 'ready'): void;
-}>();
+/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
+	so classes used in Nuxt UI theme overrides are generated. */
+@source "../../../app.config.ts";
 
-const editor = ref<any>(null);
-let destroy: (() => void) | null = null;
-// Prevent feedback loop when emitting updates -> watcher -> setContent -> update
-let internalUpdate = false;
-let lastEmitted = '';
 
-async function init() {
-    const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
+/* Your Material theme variable files (scoped: .light, .dark, etc.) */
+@import "./theme.css";
 
-    const instance = new Editor({
-        extensions,
-        content: props.modelValue,
-        onUpdate: ({ editor: e }) => {
-            // Access markdown storage; fall back gracefully
-            const md: string | undefined =
-                // @ts-expect-error
-                e?.storage?.markdown?.getMarkdown?.();
-            const nextVal = md ?? e.getText();
-            if (nextVal === lastEmitted) return;
-            internalUpdate = true;
-            lastEmitted = nextVal;
-            emit('update:modelValue', nextVal);
-            queueMicrotask(() => {
-                internalUpdate = false;
-            });
-        },
-    });
+/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
+@import "~/assets/css/nuxt-ui-map.css";
 
-    editor.value = instance;
-    destroy = () => instance.destroy();
-
-    await nextTick();
-    if (props.autofocus) {
-        const delay =
-            typeof props.focusDelay === 'number' ? props.focusDelay : 90;
-        setTimeout(() => {
-            try {
-                instance.commands.focus('end');
-            } catch {}
-        }, delay);
-    }
-    lastEmitted = props.modelValue;
-    emit('ready');
+/* Font setup: body uses VT323, headings use Press Start 2P */
+:root {
+	/* Tailwind v4 token vars (optional for font utilities) */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+    --ui-radius: 3px;
 }
 
-onMounted(() => {
-    init();
-});
+html, body {
+	font-family: var(--font-sans) !important;
+    font-size: 20px; 
+}
 
-onBeforeUnmount(() => {
-    destroy && destroy();
-});
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
 
-watch(
-    () => props.modelValue,
-    (val) => {
-        if (!editor.value) return;
-        if (internalUpdate) return; // skip updates we originated
-        // Determine current markdown representation (markdown storage optional)
-        const currentMd: string | undefined =
-            editor.value?.storage?.markdown?.getMarkdown?.();
-        const current = currentMd ?? editor.value.getText();
-        if (val === current) return;
-        // Update editor without firing transactions that cause flicker (emitUpdate: false not available; use setContent with emitUpdate false param)
-        editor.value.commands.setContent(val || '', false);
-        lastEmitted = val || '';
-    }
-);
-</script>
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
 
-<style scoped>
-.tiptap-editor {
-    min-height: 40px;
-    outline: none;
-    font: inherit;
+h1, h2, h3, h4, h5, h6, .font-heading {
+	font-family: var(--font-heading) !important;
 }
-.tiptap-editor :deep(p) {
-    margin: 0 0 0.5rem;
+
+.retro-btn { 
+	display: inline-flex;
+	line-height: 1; /* avoid extra vertical space from font metrics */
+	position: relative;
+	border-radius: 3px;                               /* default */
+	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
+	transition: transform 80ms ease, box-shadow 80ms ease;
 }
-.tiptap-editor :deep(pre) {
-    background: var(--md-surface-container-lowest);
-    padding: 0.5rem;
-    border: 1px solid var(--md-outline);
+
+/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
+.retro-btn.aspect-square {
+	padding: 0; /* our button variant already sets px-0, this enforces it */
+	place-items: center;
 }
-.tiptap-editor :deep(.ProseMirror) {
-    outline: none;
+
+/* Physical press: move button into its shadow and add subtle inner bevel */
+.retro-btn:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
 }
-.fade-in {
-    opacity: 0;
-    animation: fadeInEditor 0.14s ease-out forwards;
+
+.active-element {
+		box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
 }
-@keyframes fadeInEditor {
-    to {
-        opacity: 1;
-    }
+
+/* Keyboard accessibility: preserve pixel look while focused */
+.retro-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
 }
-</style>
+
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Global thin colored scrollbars (WebKit + Firefox) */
+/* Firefox */
+html {
+	scrollbar-width: thin;
+	/* thumb color, then track color */
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit (Chromium, Safari) */
+/* Apply to all scrollable elements */
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+	border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--md-primary);
+	border-radius: 9999px;
+	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern-flipped {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    rotate: 180deg;
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
+.dark .prose strong,
+.dark .prosemirror-host :where(.ProseMirror) strong {
+	color: var(--md-on-surface);
+}
 ```
 
 ## File: app/components/modal/SettingsModal.vue
@@ -7857,136 +7664,6 @@ const statusText = computed(() => {
 </style>
 ```
 
-## File: app/components/sidebar/SideNavContentCollapsed.vue
-```vue
-<template>
-    <div class="flex flex-col justify-between h-full relative">
-        <div class="px-1 pt-2 flex flex-col space-y-2">
-            <UTooltip :delay-duration="0" text="New chat">
-                <UButton
-                    @click="onNewChat"
-                    size="md"
-                    class="flex item-center justify-center"
-                    icon="pixelarticons:message-plus"
-                    :ui="{
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                ></UButton>
-                <UButton
-                    size="md"
-                    class="flex item-center justify-center"
-                    icon="pixelarticons:search"
-                    :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="emit('focusSearch')"
-                ></UButton>
-            </UTooltip>
-        </div>
-        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
-            <UButton
-                size="md"
-                class="flex item-center justify-center"
-                icon="pixelarticons:sliders-2"
-                :ui="{
-                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
-                    leadingIcon: 'w-5 h-5',
-                }"
-            ></UButton>
-        </div>
-    </div>
-</template>
-<script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
-import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
-import { VList } from 'virtua/vue';
-
-const props = defineProps<{
-    activeThread?: string;
-}>();
-
-const items = ref<any[]>([]);
-import { useThreadSearch } from '~/composables/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
-const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
-);
-let sub: { unsubscribe: () => void } | null = null;
-
-onMounted(() => {
-    // Sort by last opened using updated_at index; filter out deleted
-    sub = liveQuery(() =>
-        db.threads
-            .orderBy('updated_at')
-            .reverse()
-            .filter((t) => !t.deleted)
-            .toArray()
-    ).subscribe({
-        next: (results) => (items.value = results),
-        error: (err) => console.error('liveQuery error', err),
-    });
-});
-
-watch(
-    () => items.value,
-    (newItems) => {
-        console.log('Items updated:', newItems);
-    }
-);
-
-onUnmounted(() => {
-    sub?.unsubscribe();
-});
-
-const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-
-const showDeleteModal = ref(false);
-const deleteId = ref<string | null>(null);
-
-function openRename(thread: any) {
-    renameId.value = thread.id;
-    renameTitle.value = thread.title ?? '';
-    showRenameModal.value = true;
-}
-
-async function saveRename() {
-    if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
-    const now = Math.floor(Date.now() / 1000);
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-}
-
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
-    showDeleteModal.value = true;
-}
-
-async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
-    showDeleteModal.value = false;
-    deleteId.value = null;
-}
-
-function onNewChat() {
-    emit('newChat');
-    console.log('New chat requested');
-}
-</script>
-```
-
 ## File: app/composables/useActivePrompt.ts
 ```typescript
 import { ref, readonly } from 'vue';
@@ -8042,311 +7719,6 @@ export function useActivePrompt() {
         setActivePrompt,
         clearActivePrompt,
         getActivePromptContent,
-    };
-}
-```
-
-## File: app/composables/useModelStore.ts
-```typescript
-import { kv } from '~/db';
-import modelsService, {
-    type OpenRouterModel,
-    type PriceBucket,
-} from '~/utils/models-service';
-
-// Module-level in-flight promise for deduping parallel fetches across composable instances
-let inFlight: Promise<OpenRouterModel[]> | null = null;
-
-export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
-export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
-
-function canUseDexie() {
-    try {
-        return (
-            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
-        );
-    } catch {
-        return false;
-    }
-}
-
-// --- Singleton reactive state (shared across all composable callers) ---
-// These are intentionally hoisted so that different components (e.g. SettingsModal
-// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
-// useModelStore() created new refs, so favoriting a model in the modal did not
-// propagate to the chat input until a full reload re-hydrated from KV.
-const favoriteModels = ref<OpenRouterModel[]>([]);
-const catalog = ref<OpenRouterModel[]>([]);
-const searchQuery = ref('');
-const filters = ref<{
-    input?: string[];
-    output?: string[];
-    minContext?: number;
-    parameters?: string[];
-    price?: PriceBucket;
-}>({});
-// Reactive timestamp (ms) of when catalog was last loaded into memory
-const lastLoadedAt = ref<number | undefined>(undefined);
-
-export function useModelStore() {
-    function isFresh(ts: number | undefined, ttl: number) {
-        if (!ts) return false;
-        return Date.now() - ts < ttl;
-    }
-
-    async function loadFromDexie(
-        ttl: number
-    ): Promise<OpenRouterModel[] | null> {
-        if (!canUseDexie()) return null;
-        try {
-            const rec: any = await kv.get(MODELS_CACHE_KEY);
-            if (!rec) return null;
-            // rec.updated_at is seconds in Kv schema; convert to ms
-            const updatedAtMs = rec.updated_at
-                ? rec.updated_at * 1000
-                : undefined;
-            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
-                console.debug(
-                    '[models-cache] dexie record stale or missing timestamp',
-                    {
-                        updatedAtMs,
-                        ttl,
-                    }
-                );
-                return null;
-            }
-            const raw = rec?.value;
-            if (!raw || typeof raw !== 'string') return null;
-            try {
-                const parsed = JSON.parse(raw);
-                if (!Array.isArray(parsed)) return null;
-                catalog.value = parsed;
-                lastLoadedAt.value = updatedAtMs;
-                console.debug(
-                    '[models-cache] dexie hit — hydrated catalog from cache',
-                    {
-                        updatedAtMs,
-                        count: parsed.length,
-                    }
-                );
-                console.log('[models-cache] pulled models from dexie', {
-                    source: 'dexie',
-                    count: parsed.length,
-                });
-                return parsed;
-            } catch (e) {
-                console.warn(
-                    '[models-cache] JSON parse failed; deleting corrupt record',
-                    e
-                );
-                // best-effort cleanup
-                try {
-                    await kv.delete(MODELS_CACHE_KEY);
-                } catch {}
-                return null;
-            }
-        } catch (e) {
-            console.warn('[models-cache] Dexie load failed', e);
-            return null;
-        }
-    }
-
-    async function saveToDexie(list: OpenRouterModel[]) {
-        if (!canUseDexie()) return;
-        try {
-            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
-            console.debug('[models-cache] saved catalog to Dexie', {
-                count: list.length,
-            });
-        } catch (e) {
-            console.warn('[models-cache] Dexie save failed', e);
-        }
-    }
-
-    async function invalidate() {
-        console.info(
-            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
-        );
-        catalog.value = [];
-        lastLoadedAt.value = undefined;
-        if (!canUseDexie()) return;
-        try {
-            await kv.delete(MODELS_CACHE_KEY);
-            console.debug('[models-cache] Dexie record deleted');
-        } catch (e) {
-            console.warn('[models-cache] Dexie delete failed', e);
-        }
-    }
-
-    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
-        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
-
-        // Memory fast-path
-        if (
-            !opts?.force &&
-            catalog.value.length &&
-            isFresh(lastLoadedAt.value, ttl)
-        ) {
-            console.debug(
-                '[models-cache] memory hit — returning in-memory catalog',
-                {
-                    lastLoadedAt: lastLoadedAt.value,
-                    count: catalog.value.length,
-                }
-            );
-            console.log('[models-cache] pulled models from memory', {
-                source: 'memory',
-                count: catalog.value.length,
-            });
-            return catalog.value;
-        }
-
-        // Try Dexie if available and not forced
-        if (!opts?.force) {
-            const dexieHit = await loadFromDexie(ttl);
-            if (dexieHit) return dexieHit;
-            console.debug(
-                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
-            );
-        }
-
-        // Dedupe in-flight network requests
-        if (inFlight && !opts?.force) return inFlight;
-
-        const fetchPromise = (async () => {
-            console.info('[models-cache] fetching models from network');
-            try {
-                const list = await modelsService.fetchModels(opts);
-                catalog.value = list;
-                lastLoadedAt.value = Date.now();
-                console.info(
-                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
-                );
-                console.log('[models-cache] pulled models from network', {
-                    source: 'network',
-                    count: list.length,
-                });
-                // persist async (don't block response)
-                saveToDexie(list).catch(() => {});
-                return list;
-            } catch (err) {
-                console.warn('[models-cache] network fetch failed', err);
-                // On network failure, attempt to serve stale Dexie record (even if expired)
-                if (canUseDexie()) {
-                    try {
-                        const rec: any = await kv.get(MODELS_CACHE_KEY);
-                        const raw = rec?.value;
-                        if (raw && typeof raw === 'string') {
-                            try {
-                                const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length) {
-                                    console.warn(
-                                        '[models-cache] network failed; serving stale cached models',
-                                        { count: parsed.length }
-                                    );
-                                    console.log(
-                                        '[models-cache] pulled models from stale dexie after network failure',
-                                        {
-                                            source: 'stale-dexie',
-                                            count: parsed.length,
-                                        }
-                                    );
-                                    return parsed;
-                                }
-                            } catch (e) {
-                                // corrupted; best-effort delete
-                                try {
-                                    await kv.delete(MODELS_CACHE_KEY);
-                                } catch {}
-                            }
-                        }
-                    } catch (e) {
-                        console.warn(
-                            '[models-cache] Dexie read during network failure failed',
-                            e
-                        );
-                    }
-                }
-                throw err;
-            }
-        })();
-
-        if (!opts?.force) {
-            inFlight = fetchPromise.finally(() => {
-                inFlight = null;
-            });
-        }
-
-        return fetchPromise;
-    }
-
-    async function persist() {
-        try {
-            await kv.set(
-                'favorite_models',
-                JSON.stringify(favoriteModels.value)
-            );
-        } catch (e) {
-            console.warn('[useModelStore] persist favorites failed', e);
-        }
-    }
-
-    async function addFavoriteModel(model: OpenRouterModel) {
-        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
-        favoriteModels.value.push(model);
-        await persist();
-    }
-
-    async function removeFavoriteModel(model: OpenRouterModel) {
-        favoriteModels.value = favoriteModels.value.filter(
-            (m) => m.id !== model.id
-        );
-        await persist();
-    }
-
-    async function clearFavoriteModels() {
-        favoriteModels.value = [];
-        await persist();
-    }
-
-    async function getFavoriteModels() {
-        try {
-            const record: any = await kv.get('favorite_models');
-            const raw = record?.value;
-            if (raw && typeof raw === 'string') {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    favoriteModels.value = parsed;
-                } else {
-                    favoriteModels.value = [];
-                }
-            } else {
-                favoriteModels.value = [];
-            }
-        } catch {
-            favoriteModels.value = [];
-        }
-        return favoriteModels.value;
-    }
-
-    // Convenience wrapper to force network refresh
-    async function refreshModels() {
-        return fetchModels({ force: true });
-    }
-
-    return {
-        favoriteModels,
-        catalog,
-        searchQuery,
-        filters,
-        fetchModels,
-        refreshModels,
-        invalidate,
-        getFavoriteModels,
-        addFavoriteModel,
-        removeFavoriteModel,
-        clearFavoriteModels,
-        lastLoadedAt,
     };
 }
 ```
@@ -8911,224 +8283,6 @@ export async function ensureDbOpen() {
 export type { PromptRecord as Prompt };
 ```
 
-## File: app/utils/chat/openrouterStream.ts
-```typescript
-import type { ORStreamEvent } from './types';
-
-export async function* openRouterStream(params: {
-    apiKey: string;
-    model: string;
-    orMessages: any[];
-    modalities: string[];
-    signal?: AbortSignal;
-}): AsyncGenerator<ORStreamEvent, void, unknown> {
-    const { apiKey, model, orMessages, modalities, signal } = params;
-
-    const body = {
-        model,
-        messages: orMessages,
-        modalities,
-        stream: true,
-    } as any;
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal,
-    });
-    if (!resp.ok || !resp.body) {
-        throw new Error(
-            `OpenRouter request failed ${resp.status} ${resp.statusText}`
-        );
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const emittedImages = new Set<string>();
-    const rawPackets: any[] = [];
-
-    function emitImageCandidate(
-        url: string | undefined | null,
-        indexRef: { v: number },
-        final = false
-    ) {
-        if (!url) return;
-        if (emittedImages.has(url)) return;
-        emittedImages.add(url);
-        const idx = indexRef.v++;
-        // Yield image event
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        (async () => {
-            /* placeholder for async transforms if needed */
-        })();
-        imageQueue.push({ type: 'image', url, final, index: idx });
-    }
-
-    // Queue to preserve ordering between text and image parts inside a single chunk
-    const imageQueue: ORStreamEvent[] = [];
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const raw of lines) {
-            const line = raw.trim();
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            if (!data) continue;
-            if (data === '[DONE]') {
-                yield { type: 'done' };
-                continue;
-            }
-            try {
-                const parsed = JSON.parse(data);
-                rawPackets.push(parsed);
-                const choices = parsed.choices || [];
-                for (const choice of choices) {
-                    const delta = choice.delta || {};
-
-                    // Text variants
-                    if (Array.isArray(delta.content)) {
-                        for (const part of delta.content) {
-                            if (part?.type === 'text' && part.text) {
-                                yield { type: 'text', text: part.text };
-                            }
-                        }
-                    }
-                    if (typeof delta.text === 'string') {
-                        yield { type: 'text', text: delta.text };
-                    }
-                    if (typeof delta.content === 'string') {
-                        yield { type: 'text', text: delta.content };
-                    }
-
-                    // Streaming images (legacy / OpenAI style delta.images array)
-                    if (Array.isArray(delta.images)) {
-                        let ixRef = { v: 0 };
-                        for (const img of delta.images) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, ixRef, false);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
-                    if (Array.isArray(delta.content)) {
-                        let ixRef = { v: 0 };
-                        for (const part of delta.content) {
-                            if (part && typeof part === 'object') {
-                                if (
-                                    part.type === 'image' &&
-                                    (part.url || part.image)
-                                ) {
-                                    emitImageCandidate(
-                                        part.url || part.image,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'image_url' &&
-                                    part.image_url?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.image_url.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'media' &&
-                                    part.media?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.media.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (part.inline_data?.data) {
-                                    // Gemini style inline base64 data
-                                    const mime =
-                                        part.inline_data.mimeType ||
-                                        'image/png';
-                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                    emitImageCandidate(dataUrl, ixRef, false);
-                                }
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Final message images
-                    // Final images may be in message.images array
-                    const finalImages = choice.message?.images;
-                    if (Array.isArray(finalImages)) {
-                        let fIxRef = { v: 0 };
-                        for (const img of finalImages) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, fIxRef, true);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Or inside message.content array (Gemini style)
-                    const finalContent = choice.message?.content;
-                    if (Array.isArray(finalContent)) {
-                        let fIxRef2 = { v: 0 };
-                        for (const part of finalContent) {
-                            if (
-                                part?.type === 'image' &&
-                                (part.url || part.image)
-                            ) {
-                                emitImageCandidate(
-                                    part.url || part.image,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (
-                                part?.type === 'image_url' &&
-                                part.image_url?.url
-                            ) {
-                                emitImageCandidate(
-                                    part.image_url.url,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (part?.inline_data?.data) {
-                                const mime =
-                                    part.inline_data.mimeType || 'image/png';
-                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                emitImageCandidate(dataUrl, fIxRef2, true);
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-                }
-            } catch {
-                // ignore invalid json segments
-            }
-        }
-    }
-
-    try {
-        // eslint-disable-next-line no-console
-        console.log('[openRouterStream] complete raw response packets', {
-            model,
-            packetCount: rawPackets.length,
-            packets: rawPackets,
-        });
-    } catch {}
-
-    yield { type: 'done' };
-}
-```
-
 ## File: app/utils/chat/types.ts
 ```typescript
 export type TextPart = { type: 'text'; text: string };
@@ -9168,6 +8322,314 @@ export type ORStreamEvent =
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }
     | { type: 'done' };
+```
+
+## File: app/utils/openrouter-build.ts
+```typescript
+// Utility helpers to build OpenRouter payload messages including historical images.
+// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
+// produce OpenAI-compatible content arrays.
+
+import { parseFileHashes } from '~/db/files-util';
+
+export interface BuildImageCandidate {
+    hash: string;
+    role: 'user' | 'assistant';
+    messageIndex: number; // chronological index in original messages array
+}
+
+export interface ORContentPartText {
+    type: 'text';
+    text: string;
+}
+export interface ORContentPartImageUrl {
+    type: 'image_url';
+    image_url: { url: string };
+}
+export type ORContentPart = ORContentPartText | ORContentPartImageUrl;
+
+export interface ORMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: ORContentPart[];
+}
+
+// Caches on global scope to avoid repeated blob -> base64 conversions.
+const dataUrlCache: Map<string, string> = ((
+    globalThis as any
+).__or3ImageDataUrlCache ||= new Map());
+const inflight: Map<string, Promise<string | null>> = ((
+    globalThis as any
+).__or3ImageHydrateInflight ||= new Map());
+
+// Remote / blob URL hydration cache shares same map (keyed by original ref string)
+// We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
+// because a content hash would never start with http/blob.
+async function remoteRefToDataUrl(ref: string): Promise<string | null> {
+    if (ref.startsWith('data:image/')) return ref; // already data URL
+    if (!/^https?:|^blob:/.test(ref)) return null;
+    if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
+    if (inflight.has(ref)) return inflight.get(ref)!;
+    const p = (async () => {
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 8000); // 8s safety timeout
+            const resp = await fetch(ref, { signal: ctrl.signal });
+            clearTimeout(t);
+            if (!resp.ok) throw new Error('fetch-failed:' + resp.status);
+            const blob = await resp.blob();
+            // Basic guardrail: cap at ~5MB to avoid huge token usage
+            if (blob.size > 5 * 1024 * 1024) return null;
+            const dataUrl = await blobToDataUrl(blob);
+            dataUrlCache.set(ref, dataUrl);
+            return dataUrl;
+        } catch {
+            return null;
+        } finally {
+            inflight.delete(ref);
+        }
+    })();
+    inflight.set(ref, p);
+    return p;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(fr.error);
+        fr.onload = () => resolve(fr.result as string);
+        fr.readAsDataURL(blob);
+    });
+}
+
+async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
+    if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
+    if (inflight.has(hash)) return inflight.get(hash)!;
+    const p = (async () => {
+        try {
+            const { getFileBlob } = await import('~/db/files');
+            const blob = await getFileBlob(hash);
+            if (!blob) throw new Error('blob-missing');
+            const dataUrl = await blobToDataUrl(blob);
+            dataUrlCache.set(hash, dataUrl);
+            return dataUrl;
+        } catch {
+            return null;
+        } finally {
+            inflight.delete(hash);
+        }
+    })();
+    inflight.set(hash, p);
+    return p;
+}
+
+export interface BuildOptions {
+    maxImageInputs?: number; // total images across history
+    dedupeImages?: boolean; // skip duplicate hashes
+    imageInclusionPolicy?:
+        | 'all'
+        | 'recent'
+        | 'recent-user'
+        | 'recent-assistant';
+    recentWindow?: number; // number of most recent messages to scan when policy is recent*
+    // Hook like filter: (candidates) => filteredCandidates
+    filterIncludeImages?: (
+        candidates: BuildImageCandidate[]
+    ) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
+    debug?: boolean; // verbose logging
+}
+
+// Default heuristics constants
+const DEFAULT_MAX_IMAGE_INPUTS = 8;
+
+interface ChatMessageLike {
+    role: 'user' | 'assistant' | 'system';
+    content: any; // string | parts[]
+    file_hashes?: string | null;
+}
+
+// Build OpenRouter messages with hydrated images.
+export async function buildOpenRouterMessages(
+    messages: ChatMessageLike[],
+    opts: BuildOptions = {}
+): Promise<ORMessage[]> {
+    const {
+        maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS,
+        dedupeImages = true,
+        imageInclusionPolicy = 'all',
+        recentWindow = 12,
+        filterIncludeImages,
+        debug = false,
+    } = opts;
+
+    if (debug) {
+        // Debug logging suppressed (begin)
+    }
+
+    // Determine candidate messages for image inclusion under policy.
+    let candidateMessages: number[] = [];
+    if (imageInclusionPolicy === 'all') {
+        candidateMessages = messages.map((_, i) => i);
+    } else if (imageInclusionPolicy.startsWith('recent')) {
+        const start = Math.max(0, messages.length - recentWindow);
+        candidateMessages = [];
+        for (let i = start; i < messages.length; i++) candidateMessages.push(i);
+    }
+
+    // Collect hash candidates
+    const hashCandidates: BuildImageCandidate[] = [];
+    for (const idx of candidateMessages) {
+        const m = messages[idx];
+        if (!m) continue;
+        if (m.file_hashes) {
+            try {
+                const hashes = parseFileHashes(m.file_hashes) || [];
+                for (const h of hashes) {
+                    if (!h) continue;
+                    if (
+                        imageInclusionPolicy === 'recent-user' &&
+                        m.role !== 'user'
+                    )
+                        continue;
+                    if (
+                        imageInclusionPolicy === 'recent-assistant' &&
+                        m.role !== 'assistant'
+                    )
+                        continue;
+                    if (m.role === 'user' || m.role === 'assistant') {
+                        hashCandidates.push({
+                            hash: h,
+                            role: m.role,
+                            messageIndex: idx,
+                        });
+                    }
+                }
+            } catch {}
+        }
+        // Also inspect inline parts if array form
+        if (Array.isArray(m.content)) {
+            for (const p of m.content) {
+                if (p?.type === 'image' && typeof p.image === 'string') {
+                    if (
+                        p.image.startsWith('data:image/') ||
+                        /^https?:/i.test(p.image) ||
+                        /^blob:/i.test(p.image)
+                    ) {
+                        hashCandidates.push({
+                            hash: p.image,
+                            role: m.role as any,
+                            messageIndex: idx,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if (debug) {
+        // Debug logging suppressed (candidates)
+    }
+
+    // Optional external filter
+    let filtered = hashCandidates;
+    if (filterIncludeImages) {
+        try {
+            const res = await filterIncludeImages(hashCandidates);
+            if (Array.isArray(res)) filtered = res;
+        } catch {}
+    }
+
+    // Enforce max & dedupe
+    const seen = new Set<string>();
+    const selected: BuildImageCandidate[] = [];
+    for (const c of filtered) {
+        if (selected.length >= maxImageInputs) break;
+        if (dedupeImages && seen.has(c.hash)) continue;
+        seen.add(c.hash);
+        selected.push(c);
+    }
+
+    if (debug) {
+        // Debug logging suppressed (selected)
+    }
+
+    // Group selected hashes by message index for convenient inclusion
+    const byMessageIndex = new Map<number, BuildImageCandidate[]>();
+    for (const s of selected) {
+        const list = byMessageIndex.get(s.messageIndex) || [];
+        list.push(s);
+        byMessageIndex.set(s.messageIndex, list);
+    }
+
+    // Build ORMessage array preserving original order
+    const orMessages: ORMessage[] = [];
+    for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        if (!m) continue;
+        const parts: ORContentPart[] = [];
+        // Extract textual content
+        let text = '';
+        if (Array.isArray(m.content)) {
+            const textParts = m.content.filter((p: any) => p.type === 'text');
+            if (textParts.length)
+                text = textParts.map((p: any) => p.text || '').join('');
+        } else if (typeof m.content === 'string') {
+            text = m.content;
+        }
+        if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
+        parts.push({ type: 'text', text });
+
+        // Add images associated with this message index
+        const imgs = byMessageIndex.get(i) || [];
+        for (const img of imgs) {
+            if (img.hash.startsWith('data:image/')) {
+                parts.push({ type: 'image_url', image_url: { url: img.hash } });
+            } else {
+                // Try: (1) treat as stored hash; (2) treat as remote/blob ref
+                let dataUrl = await hydrateHashToDataUrl(img.hash);
+                if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
+                if (dataUrl) {
+                    parts.push({
+                        type: 'image_url',
+                        image_url: { url: dataUrl },
+                    });
+                } else if (debug) {
+                    console.warn('[or-build] hydrate-fail', {
+                        ref: img.hash,
+                        role: img.role,
+                        messageIndex: img.messageIndex,
+                    });
+                }
+            }
+        }
+
+        orMessages.push({ role: m.role, content: parts });
+    }
+
+    if (debug) {
+        // Debug logging suppressed (done)
+    }
+
+    return orMessages;
+}
+
+// Decide modalities based on prepared ORMessages + heuristic prompt.
+export function decideModalities(
+    orMessages: ORMessage[],
+    requestedModel?: string
+): string[] {
+    const hasImageInput = orMessages.some((m) =>
+        m.content.some((p) => p.type === 'image_url')
+    );
+    const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
+    const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
+    const imageIntent =
+        /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
+            prompt
+        );
+    const modalities = ['text'];
+    if (hasImageInput || imageIntent) modalities.push('image');
+    return modalities;
+}
 ```
 
 ## File: app/utils/prompt-utils.ts
@@ -9249,154 +8711,6 @@ export default defineConfig({
         bail: 1,
     },
 });
-```
-
-## File: app/assets/css/main.css
-```css
-/* Tailwind v4: single import includes preflight + utilities */
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-
-/* Nuxt UI base styles (load first so we can override its tokens below) */
-@import "@nuxt/ui";
-
-/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
-	so classes used in Nuxt UI theme overrides are generated. */
-@source "../../../app.config.ts";
-
-
-/* Your Material theme variable files (scoped: .light, .dark, etc.) */
-@import "./theme.css";
-
-/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
-@import "~/assets/css/nuxt-ui-map.css";
-
-/* Font setup: body uses VT323, headings use Press Start 2P */
-:root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
-    --ui-radius: 3px;
-}
-
-html, body {
-	font-family: var(--font-sans) !important;
-    font-size: 20px; 
-}
-
-/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
-.scrollbars {
-	scrollbar-width: thin;
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
-.scrollbar-hidden {
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE/Edge legacy */
-}
-.scrollbar-hidden::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
-
-h1, h2, h3, h4, h5, h6, .font-heading {
-	font-family: var(--font-heading) !important;
-}
-
-.retro-btn { 
-	display: inline-flex;
-	line-height: 1; /* avoid extra vertical space from font metrics */
-	position: relative;
-	border-radius: 3px;                               /* default */
-	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-
-/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
-.retro-btn.aspect-square {
-	padding: 0; /* our button variant already sets px-0, this enforces it */
-	place-items: center;
-}
-
-/* Physical press: move button into its shadow and add subtle inner bevel */
-.retro-btn:active {
-	transform: translate(2px, 2px);
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-.active-element {
-		box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-/* Keyboard accessibility: preserve pixel look while focused */
-.retro-btn:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-/* Global thin colored scrollbars (WebKit + Firefox) */
-/* Firefox */
-html {
-	scrollbar-width: thin;
-	/* thumb color, then track color */
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit (Chromium, Safari) */
-/* Apply to all scrollable elements */
-*::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
-}
-*::-webkit-scrollbar-track {
-	background: transparent;
-	border-radius: 9999px;
-}
-*::-webkit-scrollbar-thumb {
-	background: var(--md-primary);
-	border-radius: 9999px;
-	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
-	background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-*::-webkit-scrollbar-corner { background: transparent; }
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern-flipped {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    rotate: 180deg;
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
-.dark .prose strong,
-.dark .prosemirror-host :where(.ProseMirror) strong {
-	color: var(--md-on-surface);
-}
 ```
 
 ## File: app/components/chat/VirtualMessageList.vue
@@ -9582,6 +8896,135 @@ function onToggle() {
 </style>
 ```
 
+## File: app/components/sidebar/SideNavContentCollapsed.vue
+```vue
+<template>
+    <div class="flex flex-col justify-between h-full relative">
+        <div class="px-1 pt-2 flex flex-col space-y-2">
+            <UTooltip :delay-duration="0" text="New chat">
+                <UButton
+                    @click="onNewChat"
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:message-plus"
+                    :ui="{
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                ></UButton>
+                <UButton
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:search"
+                    :ui="{
+                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="emit('focusSearch')"
+                ></UButton>
+            </UTooltip>
+        </div>
+        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
+            <UButton
+                size="md"
+                class="flex item-center justify-center"
+                icon="pixelarticons:sliders-2"
+                :ui="{
+                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
+                    leadingIcon: 'w-5 h-5',
+                }"
+            ></UButton>
+        </div>
+    </div>
+</template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
+import { liveQuery } from 'dexie';
+import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { VList } from 'virtua/vue';
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
+
+const items = ref<any[]>([]);
+import { useThreadSearch } from '~/composables/useThreadSearch';
+const { query: threadSearchQuery, results: threadSearchResults } =
+    useThreadSearch(items as any);
+const displayThreads = computed(() =>
+    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+);
+let sub: { unsubscribe: () => void } | null = null;
+
+onMounted(() => {
+    // Sort by last opened using updated_at index; filter out deleted
+    sub = liveQuery(() =>
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
+    ).subscribe({
+        next: (results) => (items.value = results),
+        error: (err) => console.error('liveQuery error', err),
+    });
+});
+
+watch(
+    () => items.value,
+    () => {
+        /* silent: removed Items updated log */
+    }
+);
+
+onUnmounted(() => {
+    sub?.unsubscribe();
+});
+
+const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+
+const showDeleteModal = ref(false);
+const deleteId = ref<string | null>(null);
+
+function openRename(thread: any) {
+    renameId.value = thread.id;
+    renameTitle.value = thread.title ?? '';
+    showRenameModal.value = true;
+}
+
+async function saveRename() {
+    if (!renameId.value) return;
+    const t = await db.threads.get(renameId.value);
+    if (!t) return;
+    const now = Math.floor(Date.now() / 1000);
+    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+}
+
+function confirmDelete(thread: any) {
+    deleteId.value = thread.id as string;
+    showDeleteModal.value = true;
+}
+
+async function deleteThread() {
+    if (!deleteId.value) return;
+    await dbDel.hard.thread(deleteId.value);
+    showDeleteModal.value = false;
+    deleteId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+}
+</script>
+```
+
 ## File: app/composables/useDocumentsList.ts
 ```typescript
 import { ref } from 'vue';
@@ -9624,6 +9067,296 @@ export function useDocumentsList(limit = 200) {
     }
 
     return { docs, loading, error, refresh };
+}
+```
+
+## File: app/composables/useModelStore.ts
+```typescript
+import { kv } from '~/db';
+import modelsService, {
+    type OpenRouterModel,
+    type PriceBucket,
+} from '~/utils/models-service';
+
+// Module-level in-flight promise for deduping parallel fetches across composable instances
+let inFlight: Promise<OpenRouterModel[]> | null = null;
+
+export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
+export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function canUseDexie() {
+    try {
+        return (
+            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
+        );
+    } catch {
+        return false;
+    }
+}
+
+// --- Singleton reactive state (shared across all composable callers) ---
+// These are intentionally hoisted so that different components (e.g. SettingsModal
+// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
+// useModelStore() created new refs, so favoriting a model in the modal did not
+// propagate to the chat input until a full reload re-hydrated from KV.
+const favoriteModels = ref<OpenRouterModel[]>([]);
+const catalog = ref<OpenRouterModel[]>([]);
+const searchQuery = ref('');
+const filters = ref<{
+    input?: string[];
+    output?: string[];
+    minContext?: number;
+    parameters?: string[];
+    price?: PriceBucket;
+}>({});
+// Reactive timestamp (ms) of when catalog was last loaded into memory
+const lastLoadedAt = ref<number | undefined>(undefined);
+
+export function useModelStore() {
+    function isFresh(ts: number | undefined, ttl: number) {
+        if (!ts) return false;
+        return Date.now() - ts < ttl;
+    }
+
+    async function loadFromDexie(
+        ttl: number
+    ): Promise<OpenRouterModel[] | null> {
+        if (!canUseDexie()) return null;
+        try {
+            const rec: any = await kv.get(MODELS_CACHE_KEY);
+            if (!rec) return null;
+            // rec.updated_at is seconds in Kv schema; convert to ms
+            const updatedAtMs = rec.updated_at
+                ? rec.updated_at * 1000
+                : undefined;
+            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
+                console.debug(
+                    '[models-cache] dexie record stale or missing timestamp',
+                    {
+                        updatedAtMs,
+                        ttl,
+                    }
+                );
+                return null;
+            }
+            const raw = rec?.value;
+            if (!raw || typeof raw !== 'string') return null;
+            try {
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) return null;
+                catalog.value = parsed;
+                lastLoadedAt.value = updatedAtMs;
+                console.debug(
+                    '[models-cache] dexie hit — hydrated catalog from cache',
+                    {
+                        updatedAtMs,
+                        count: parsed.length,
+                    }
+                );
+                // Removed dexie source console.log
+                return parsed;
+            } catch (e) {
+                console.warn(
+                    '[models-cache] JSON parse failed; deleting corrupt record',
+                    e
+                );
+                // best-effort cleanup
+                try {
+                    await kv.delete(MODELS_CACHE_KEY);
+                } catch {}
+                return null;
+            }
+        } catch (e) {
+            console.warn('[models-cache] Dexie load failed', e);
+            return null;
+        }
+    }
+
+    async function saveToDexie(list: OpenRouterModel[]) {
+        if (!canUseDexie()) return;
+        try {
+            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
+            console.debug('[models-cache] saved catalog to Dexie', {
+                count: list.length,
+            });
+        } catch (e) {
+            console.warn('[models-cache] Dexie save failed', e);
+        }
+    }
+
+    async function invalidate() {
+        console.info(
+            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
+        );
+        catalog.value = [];
+        lastLoadedAt.value = undefined;
+        if (!canUseDexie()) return;
+        try {
+            await kv.delete(MODELS_CACHE_KEY);
+            console.debug('[models-cache] Dexie record deleted');
+        } catch (e) {
+            console.warn('[models-cache] Dexie delete failed', e);
+        }
+    }
+
+    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
+        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
+
+        // Memory fast-path
+        if (
+            !opts?.force &&
+            catalog.value.length &&
+            isFresh(lastLoadedAt.value, ttl)
+        ) {
+            console.debug(
+                '[models-cache] memory hit — returning in-memory catalog',
+                {
+                    lastLoadedAt: lastLoadedAt.value,
+                    count: catalog.value.length,
+                }
+            );
+            // Removed memory source console.log
+            return catalog.value;
+        }
+
+        // Try Dexie if available and not forced
+        if (!opts?.force) {
+            const dexieHit = await loadFromDexie(ttl);
+            if (dexieHit) return dexieHit;
+            console.debug(
+                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
+            );
+        }
+
+        // Dedupe in-flight network requests
+        if (inFlight && !opts?.force) return inFlight;
+
+        const fetchPromise = (async () => {
+            console.info('[models-cache] fetching models from network');
+            try {
+                const list = await modelsService.fetchModels(opts);
+                catalog.value = list;
+                lastLoadedAt.value = Date.now();
+                console.info(
+                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
+                );
+                // Removed network source console.log
+                // persist async (don't block response)
+                saveToDexie(list).catch(() => {});
+                return list;
+            } catch (err) {
+                console.warn('[models-cache] network fetch failed', err);
+                // On network failure, attempt to serve stale Dexie record (even if expired)
+                if (canUseDexie()) {
+                    try {
+                        const rec: any = await kv.get(MODELS_CACHE_KEY);
+                        const raw = rec?.value;
+                        if (raw && typeof raw === 'string') {
+                            try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length) {
+                                    console.warn(
+                                        '[models-cache] network failed; serving stale cached models',
+                                        { count: parsed.length }
+                                    );
+                                    // Removed stale dexie fallback console.log
+                                    return parsed;
+                                }
+                            } catch (e) {
+                                // corrupted; best-effort delete
+                                try {
+                                    await kv.delete(MODELS_CACHE_KEY);
+                                } catch {}
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(
+                            '[models-cache] Dexie read during network failure failed',
+                            e
+                        );
+                    }
+                }
+                throw err;
+            }
+        })();
+
+        if (!opts?.force) {
+            inFlight = fetchPromise.finally(() => {
+                inFlight = null;
+            });
+        }
+
+        return fetchPromise;
+    }
+
+    async function persist() {
+        try {
+            await kv.set(
+                'favorite_models',
+                JSON.stringify(favoriteModels.value)
+            );
+        } catch (e) {
+            console.warn('[useModelStore] persist favorites failed', e);
+        }
+    }
+
+    async function addFavoriteModel(model: OpenRouterModel) {
+        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
+        favoriteModels.value.push(model);
+        await persist();
+    }
+
+    async function removeFavoriteModel(model: OpenRouterModel) {
+        favoriteModels.value = favoriteModels.value.filter(
+            (m) => m.id !== model.id
+        );
+        await persist();
+    }
+
+    async function clearFavoriteModels() {
+        favoriteModels.value = [];
+        await persist();
+    }
+
+    async function getFavoriteModels() {
+        try {
+            const record: any = await kv.get('favorite_models');
+            const raw = record?.value;
+            if (raw && typeof raw === 'string') {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    favoriteModels.value = parsed;
+                } else {
+                    favoriteModels.value = [];
+                }
+            } else {
+                favoriteModels.value = [];
+            }
+        } catch {
+            favoriteModels.value = [];
+        }
+        return favoriteModels.value;
+    }
+
+    // Convenience wrapper to force network refresh
+    async function refreshModels() {
+        return fetchModels({ force: true });
+    }
+
+    return {
+        favoriteModels,
+        catalog,
+        searchQuery,
+        filters,
+        fetchModels,
+        refreshModels,
+        invalidate,
+        getFavoriteModels,
+        addFavoriteModel,
+        removeFavoriteModel,
+        clearFavoriteModels,
+        lastLoadedAt,
+    };
 }
 ```
 
@@ -10009,6 +9742,271 @@ export class Or3DB extends Dexie {
 }
 
 export const db = new Or3DB();
+```
+
+## File: app/utils/chat/openrouterStream.ts
+```typescript
+import type { ORStreamEvent } from './types';
+
+export async function* openRouterStream(params: {
+    apiKey: string;
+    model: string;
+    orMessages: any[];
+    modalities: string[];
+    signal?: AbortSignal;
+}): AsyncGenerator<ORStreamEvent, void, unknown> {
+    const { apiKey, model, orMessages, modalities, signal } = params;
+
+    const body = {
+        model,
+        messages: orMessages,
+        modalities,
+        stream: true,
+    } as any;
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal,
+    });
+    if (!resp.ok || !resp.body) {
+        throw new Error(
+            `OpenRouter request failed ${resp.status} ${resp.statusText}`
+        );
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const emittedImages = new Set<string>();
+    // Removed rawPackets accumulation to avoid unbounded memory growth on long streams.
+    // If debugging of raw packets is needed, consider adding a bounded ring buffer
+    // or an opt-in flag that logs selectively.
+
+    function emitImageCandidate(
+        url: string | undefined | null,
+        indexRef: { v: number },
+        final = false
+    ) {
+        if (!url) return;
+        if (emittedImages.has(url)) return;
+        emittedImages.add(url);
+        const idx = indexRef.v++;
+        // Yield image event
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        (async () => {
+            /* placeholder for async transforms if needed */
+        })();
+        imageQueue.push({ type: 'image', url, final, index: idx });
+    }
+
+    // Queue to preserve ordering between text and image parts inside a single chunk
+    const imageQueue: ORStreamEvent[] = [];
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const raw of lines) {
+            const line = raw.trim();
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data) continue;
+            if (data === '[DONE]') {
+                yield { type: 'done' };
+                continue;
+            }
+            try {
+                const parsed = JSON.parse(data);
+                const choices = parsed.choices || [];
+                for (const choice of choices) {
+                    const delta = choice.delta || {};
+
+                    // Text variants
+                    if (Array.isArray(delta.content)) {
+                        for (const part of delta.content) {
+                            if (part?.type === 'text' && part.text) {
+                                yield { type: 'text', text: part.text };
+                            }
+                        }
+                    }
+                    if (typeof delta.text === 'string') {
+                        yield { type: 'text', text: delta.text };
+                    }
+                    if (typeof delta.content === 'string') {
+                        yield { type: 'text', text: delta.content };
+                    }
+
+                    // Streaming images (legacy / OpenAI style delta.images array)
+                    if (Array.isArray(delta.images)) {
+                        let ixRef = { v: 0 };
+                        for (const img of delta.images) {
+                            const url = img?.image_url?.url || img?.url;
+                            emitImageCandidate(url, ixRef, false);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
+                    if (Array.isArray(delta.content)) {
+                        let ixRef = { v: 0 };
+                        for (const part of delta.content) {
+                            if (part && typeof part === 'object') {
+                                if (
+                                    part.type === 'image' &&
+                                    (part.url || part.image)
+                                ) {
+                                    emitImageCandidate(
+                                        part.url || part.image,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'image_url' &&
+                                    part.image_url?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.image_url.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'media' &&
+                                    part.media?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.media.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (part.inline_data?.data) {
+                                    // Gemini style inline base64 data
+                                    const mime =
+                                        part.inline_data.mimeType ||
+                                        'image/png';
+                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                    emitImageCandidate(dataUrl, ixRef, false);
+                                }
+                            }
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Final message images
+                    // Final images may be in message.images array
+                    const finalImages = choice.message?.images;
+                    if (Array.isArray(finalImages)) {
+                        let fIxRef = { v: 0 };
+                        for (const img of finalImages) {
+                            const url = img?.image_url?.url || img?.url;
+                            emitImageCandidate(url, fIxRef, true);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Or inside message.content array (Gemini style)
+                    const finalContent = choice.message?.content;
+                    if (Array.isArray(finalContent)) {
+                        let fIxRef2 = { v: 0 };
+                        for (const part of finalContent) {
+                            if (
+                                part?.type === 'image' &&
+                                (part.url || part.image)
+                            ) {
+                                emitImageCandidate(
+                                    part.url || part.image,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (
+                                part?.type === 'image_url' &&
+                                part.image_url?.url
+                            ) {
+                                emitImageCandidate(
+                                    part.image_url.url,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (part?.inline_data?.data) {
+                                const mime =
+                                    part.inline_data.mimeType || 'image/png';
+                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                emitImageCandidate(dataUrl, fIxRef2, true);
+                            }
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+                }
+            } catch {
+                // ignore invalid json segments
+            }
+        }
+    }
+
+    // Removed verbose final packet dump to prevent large memory retention.
+
+    yield { type: 'done' };
+}
+```
+
+## File: package.json
+```json
+{
+    "name": "nuxt-app",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "build": "nuxt build",
+        "dev": "nuxt dev",
+        "generate": "nuxt generate",
+        "preview": "nuxt preview",
+        "postinstall": "nuxt prepare",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@nuxt/ui": "^3.3.2",
+        "@openrouter/ai-sdk-provider": "^1.1.2",
+        "@orama/orama": "^3.1.11",
+        "@tiptap/extension-placeholder": "^3.3.0",
+        "@tiptap/pm": "^3.3.0",
+        "@tiptap/starter-kit": "^3.3.0",
+        "@tiptap/vue-3": "^3.3.0",
+        "@types/spark-md5": "^3.0.5",
+        "@vueuse/core": "^13.7.0",
+        "ai": "^5.0.17",
+        "dexie": "^4.0.11",
+        "gpt-tokenizer": "^3.0.1",
+        "highlight.js": "^11.11.1",
+        "marked-highlight": "^2.2.2",
+        "nuxt": "^4.0.3",
+        "orama": "^2.0.6",
+        "spark-md5": "^3.0.2",
+        "tiptap-markdown": "^0.8.10",
+        "turndown": "^7.2.1",
+        "typescript": "^5.6.3",
+        "virtua": "^0.41.5",
+        "vue": "^3.5.18",
+        "vue-router": "^4.5.1",
+        "zod": "^4.0.17"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.16",
+        "vitest": "^2.1.2",
+        "@vitest/ui": "^2.1.2",
+        "jsdom": "^25.0.0",
+        "@vue/test-utils": "^2.4.6",
+        "@vitejs/plugin-vue": "^5.1.4",
+        "vite": "^5.4.8"
+    }
+}
 ```
 
 ## File: app/components/documents/DocumentEditor.vue
@@ -10979,59 +10977,6 @@ const ui = {
 <style scoped></style>
 ```
 
-## File: package.json
-```json
-{
-    "name": "nuxt-app",
-    "type": "module",
-    "private": true,
-    "scripts": {
-        "build": "nuxt build",
-        "dev": "nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
-        "test": "vitest run",
-        "test:watch": "vitest"
-    },
-    "dependencies": {
-        "@nuxt/ui": "^3.3.2",
-        "@openrouter/ai-sdk-provider": "^1.1.2",
-        "@orama/orama": "^3.1.11",
-        "@tiptap/extension-placeholder": "^3.3.0",
-        "@tiptap/pm": "^3.3.0",
-        "@tiptap/starter-kit": "^3.3.0",
-        "@tiptap/vue-3": "^3.3.0",
-        "@types/spark-md5": "^3.0.5",
-        "@vueuse/core": "^13.7.0",
-        "ai": "^5.0.17",
-        "dexie": "^4.0.11",
-        "gpt-tokenizer": "^3.0.1",
-        "highlight.js": "^11.11.1",
-        "marked-highlight": "^2.2.2",
-        "nuxt": "^4.0.3",
-        "orama": "^2.0.6",
-        "spark-md5": "^3.0.2",
-        "tiptap-markdown": "^0.8.10",
-        "turndown": "^7.2.1",
-        "typescript": "^5.6.3",
-        "virtua": "^0.41.5",
-        "vue": "^3.5.18",
-        "vue-router": "^4.5.1",
-        "zod": "^4.0.17"
-    },
-    "devDependencies": {
-        "@tailwindcss/typography": "^0.5.16",
-        "vitest": "^2.1.2",
-        "@vitest/ui": "^2.1.2",
-        "jsdom": "^25.0.0",
-        "@vue/test-utils": "^2.4.6",
-        "@vitejs/plugin-vue": "^5.1.4",
-        "vite": "^5.4.8"
-    }
-}
-```
-
 ## File: app/components/sidebar/SidebarDocumentsList.vue
 ```vue
 <template>
@@ -11138,682 +11083,6 @@ function formatTime(ts: number) {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 </script>
-```
-
-## File: app/app.config.ts
-```typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
-                header: 'border-0',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                color: {
-                    'inverse-primary':
-                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
-    },
-});
-```
-
-## File: app/components/chat/SystemPromptsModal.vue
-```vue
-<template>
-    <UModal
-        v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-none',
-            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0! border-b-0! overflow-hidden',
-        }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] max-h-[80vh] overflow-hidden"
-    >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    System Prompts
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="sm"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-        </template>
-        <template #body>
-            <div class="flex flex-col h-full" @keydown="handleKeydown">
-                <div
-                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
-                >
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <UButton
-                            @click="createNewPrompt"
-                            size="sm"
-                            color="primary"
-                            class="retro-btn"
-                        >
-                            New Prompt
-                        </UButton>
-                        <UButton
-                            v-if="currentActivePromptId"
-                            @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
-                        >
-                            Clear Active
-                        </UButton>
-                    </div>
-                    <UInput
-                        v-model="searchQuery"
-                        placeholder="Search prompts..."
-                        size="sm"
-                        class="max-w-xs"
-                        icon="i-heroicons-magnifying-glass"
-                    />
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <!-- List View -->
-                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
-                        <div
-                            v-if="filteredPrompts.length === 0"
-                            class="flex flex-col items-center justify-center h-full text-center p-8"
-                        >
-                            <UIcon
-                                name="pixelarticons:script-text"
-                                class="w-16 h-16 text-gray-400 mb-4"
-                            />
-                            <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
-                            >
-                                No system prompts yet
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
-                                Create your first system prompt to customize AI
-                                behavior.
-                            </p>
-                            <UButton @click="createNewPrompt" color="primary">
-                                Create Your First Prompt
-                            </UButton>
-                        </div>
-
-                        <div v-else class="p-4 space-y-3">
-                            <div
-                                v-for="prompt in filteredPrompts"
-                                :key="prompt.id"
-                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
-                                :class="{
-                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
-                                        prompt.id === currentActivePromptId ||
-                                        prompt.id === defaultPromptId,
-                                }"
-                            >
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h4
-                                            class="font-medium text-gray-900 dark:text-white truncate"
-                                            :class="{
-                                                'italic opacity-60':
-                                                    !prompt.title,
-                                            }"
-                                        >
-                                            {{
-                                                prompt.title ||
-                                                'Untitled Prompt'
-                                            }}
-                                        </h4>
-                                        <span
-                                            v-if="prompt.id === defaultPromptId"
-                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
-                                            >Default</span
-                                        >
-                                    </div>
-                                    <p
-                                        class="text-sm text-gray-500 dark:text-gray-400"
-                                    >
-                                        Updated
-                                        {{ formatDate(prompt.updated_at) }} •
-                                        {{ tokenCounts[prompt.id] || 0 }} tokens
-                                    </p>
-                                </div>
-
-                                <div
-                                    class="flex items-center gap-2 ml-4 shrink-0"
-                                >
-                                    <UTooltip
-                                        :delay-duration="0"
-                                        :text="
-                                            prompt.id === defaultPromptId
-                                                ? 'Default prompt'
-                                                : 'Set as default'
-                                        "
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            variant="ghost"
-                                            color="neutral"
-                                            :square="true"
-                                            :ui="{ base: 'retro-btn' }"
-                                            class="retro-btn"
-                                            :icon="
-                                                prompt.id === defaultPromptId
-                                                    ? 'pixelarticons:star'
-                                                    : 'pixelarticons:star-outline'
-                                            "
-                                            aria-label="Toggle default prompt"
-                                            @click.stop="
-                                                toggleDefault(prompt.id)
-                                            "
-                                        />
-                                    </UTooltip>
-                                    <UButton
-                                        @click="selectPrompt(prompt.id)"
-                                        size="sm"
-                                        :color="
-                                            prompt.id === currentActivePromptId
-                                                ? 'primary'
-                                                : 'neutral'
-                                        "
-                                        :variant="
-                                            prompt.id === currentActivePromptId
-                                                ? 'solid'
-                                                : 'outline'
-                                        "
-                                    >
-                                        {{
-                                            prompt.id === currentActivePromptId
-                                                ? 'Selected'
-                                                : 'Select'
-                                        }}
-                                    </UButton>
-                                    <UPopover
-                                        :popper="{ placement: 'bottom-end' }"
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            variant="outline"
-                                            color="neutral"
-                                            class="flex items-center justify-center"
-                                            :square="true"
-                                            icon="pixelarticons:more-vertical"
-                                            aria-label="More actions"
-                                        />
-                                        <template #content>
-                                            <div
-                                                class="flex flex-col py-1 w-36 text-sm"
-                                            >
-                                                <button
-                                                    @click="
-                                                        startEditing(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:edit"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Edit</span>
-                                                </button>
-                                                <button
-                                                    @click="
-                                                        deletePrompt(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:trash"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Delete</span>
-                                                </button>
-                                            </div>
-                                        </template>
-                                    </UPopover>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Editor View -->
-                    <div v-else class="h-full overflow-hidden flex flex-col">
-                        <div class="flex-1 p-4 overflow-hidden">
-                            <LazyPromptsPromptEditor
-                                :prompt-id="editingPrompt.id"
-                                @back="stopEditing"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
-    </UModal>
-</template>
-
-<script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import {
-    listPrompts,
-    createPrompt,
-    softDeletePrompt,
-    type PromptRecord,
-} from '~/db/prompts';
-import { useActivePrompt } from '~/composables/useActivePrompt';
-import PromptEditor from '~/components/prompts/PromptEditor.vue';
-import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-import { encode } from 'gpt-tokenizer';
-import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
-
-// Props & modal open bridging (like SettingsModal pattern)
-const props = defineProps<{
-    showModal: boolean;
-    threadId?: string;
-}>();
-const emit = defineEmits({
-    'update:showModal': (value: boolean) => typeof value === 'boolean',
-    selected: (id: string) => typeof id === 'string',
-    closed: () => true,
-    threadCreated: (threadId: string, promptId: string | null) => true,
-});
-
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
-
-watch(
-    () => props.showModal,
-    (v, ov) => {
-        if (!v && ov) emit('closed');
-    }
-);
-
-const {
-    activePromptId,
-    setActivePrompt,
-    clearActivePrompt: clearGlobalActivePrompt,
-} = useActivePrompt();
-
-const prompts = ref<PromptRecord[]>([]);
-const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
-    useDefaultPrompt();
-const editingPrompt = ref<PromptRecord | null>(null);
-const showDeleteConfirm = ref<string | null>(null);
-
-const searchQuery = ref('');
-const filteredPrompts = computed(() => {
-    if (!searchQuery.value) return prompts.value;
-    return prompts.value.filter((p) =>
-        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    );
-});
-
-// Thread-specific system prompt handling
-const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
-
-// Computed for current active prompt (thread-specific or global)
-const currentActivePromptId = computed(() => {
-    if (props.threadId) {
-        return threadSystemPromptId.value;
-    }
-    return activePromptId.value;
-});
-
-// Extract plain text from TipTap JSON recursively
-function extractText(node: any): string {
-    if (!node) return '';
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    const type = node.type;
-    let acc = '';
-    if (type === 'text') {
-        acc += node.text || '';
-    }
-    if (node.content && Array.isArray(node.content)) {
-        const inner = node.content.map(extractText).join('');
-        acc += inner;
-    }
-    // Block separators to avoid word merging
-    if (
-        [
-            'paragraph',
-            'heading',
-            'bulletList',
-            'orderedList',
-            'listItem',
-        ].includes(type)
-    ) {
-        acc += '\n';
-    }
-    return acc;
-}
-
-function contentToText(content: any): string {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    // TipTap root usually { type: 'doc', content: [...] }
-    if (content.type === 'doc' && Array.isArray(content.content)) {
-        return extractText(content)
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-    }
-    if (Array.isArray(content.content)) return extractText(content).trim();
-    return '';
-}
-
-// Cached token counts per prompt id (recomputed when prompts list changes)
-const tokenCounts = computed<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const p of prompts.value) {
-        try {
-            const text = contentToText(p.content);
-            map[p.id] = text ? encode(text).length : 0;
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token encode failed', e);
-            map[p.id] = 0;
-        }
-    }
-    return map;
-});
-
-// Totals derived from cached counts
-const totalTokens = computed(() =>
-    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
-);
-const filteredTokens = computed(() =>
-    filteredPrompts.value.reduce(
-        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
-        0
-    )
-);
-
-// (Events moved above with prop bridging)
-
-const loadPrompts = async () => {
-    try {
-        prompts.value = await listPrompts();
-        if (
-            defaultPromptId.value &&
-            !prompts.value.find((p) => p.id === defaultPromptId.value)
-        ) {
-            await clearDefaultPrompt();
-        }
-    } catch (error) {
-        console.error('Failed to load prompts:', error);
-    }
-};
-
-const loadThreadSystemPrompt = async () => {
-    if (props.threadId) {
-        try {
-            threadSystemPromptId.value = await getThreadSystemPrompt(
-                props.threadId
-            );
-        } catch (error) {
-            console.error('Failed to load thread system prompt:', error);
-            threadSystemPromptId.value = null;
-        }
-    } else {
-        threadSystemPromptId.value = null;
-    }
-};
-
-const createNewPrompt = async () => {
-    try {
-        const newPrompt = await createPrompt();
-        prompts.value.unshift(newPrompt);
-        startEditing(newPrompt.id);
-    } catch (error) {
-        console.error('Failed to create prompt:', error);
-    }
-};
-
-const selectPrompt = async (id: string) => {
-    try {
-        if (props.threadId) {
-            // Update thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, id);
-            threadSystemPromptId.value = id;
-        } else {
-            // Store as pending for when thread is created
-            pendingPromptId.value = id;
-            // Also update global for immediate feedback
-            await setActivePrompt(id);
-        }
-        emit('selected', id);
-    } catch (error) {
-        console.error('Failed to select prompt:', error);
-    }
-};
-
-const clearActivePrompt = async () => {
-    try {
-        if (props.threadId) {
-            // Clear thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, null);
-            threadSystemPromptId.value = null;
-        } else {
-            // Clear pending and global active prompt
-            pendingPromptId.value = null;
-            await clearGlobalActivePrompt();
-        }
-    } catch (error) {
-        console.error('Failed to clear active prompt:', error);
-    }
-};
-
-const startEditing = (id: string) => {
-    const prompt = prompts.value.find((p) => p.id === id);
-    if (prompt) {
-        editingPrompt.value = prompt;
-    }
-};
-
-const stopEditing = () => {
-    editingPrompt.value = null;
-    loadPrompts(); // Refresh list in case of changes
-};
-
-const applyPendingPromptToThread = async (threadId: string) => {
-    if (pendingPromptId.value) {
-        try {
-            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
-            emit('threadCreated', threadId, pendingPromptId.value);
-            pendingPromptId.value = null;
-        } catch (error) {
-            console.error('Failed to apply pending prompt to thread:', error);
-        }
-    }
-};
-
-const deletePrompt = async (id: string) => {
-    if (confirm('Are you sure you want to delete this prompt?')) {
-        try {
-            await softDeletePrompt(id);
-            if (activePromptId.value === id) {
-                clearActivePrompt();
-            }
-            if (defaultPromptId.value === id) {
-                await clearDefaultPrompt();
-            }
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to delete prompt:', error);
-        }
-    }
-};
-
-const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-    if (editingPrompt.value) return;
-    const key = event.key;
-    if (key >= '1' && key <= '9') {
-        const index = parseInt(key) - 1;
-        if (index < filteredPrompts.value.length) {
-            const prompt = filteredPrompts.value[index];
-            if (prompt) {
-                selectPrompt(prompt.id);
-                event.preventDefault();
-            }
-        }
-    }
-};
-
-onMounted(() => {
-    loadPrompts();
-    loadThreadSystemPrompt();
-});
-
-// Watch for threadId changes to reload thread-specific prompt
-watch(
-    () => props.threadId,
-    () => {
-        loadThreadSystemPrompt();
-    }
-);
-
-function toggleDefault(id: string) {
-    if (defaultPromptId.value === id) {
-        clearDefaultPrompt();
-    } else {
-        setDefaultPrompt(id);
-    }
-}
-</script>
-
-<style scoped>
-/* Mobile full-screen adjustments */
-@media (max-width: 640px) {
-    .sp-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh !important;
-        max-height: 100dvh !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border-width: 0 !important;
-    }
-}
-
-/* Smooth scrolling area */
-.sp-modal :deep(.n-modal-body),
-.sp-modal :deep(.n-card__content) {
-    /* ensure body grows */
-    height: 100%;
-}
-</style>
 ```
 
 ## File: app/components/ResizableSidebarLayout.vue
@@ -12237,606 +11506,126 @@ aside > *:not(.resize-handle-layer) {
 </style>
 ```
 
-## File: app/composables/useAi.ts
+## File: app/app.config.ts
 ```typescript
-import { ref } from 'vue';
-import { useToast } from '#imports';
-import { nowSec, newId } from '~/db/util';
-
-import { useUserApiKey } from './useUserApiKey';
-import { useHooks } from './useHooks';
-import { useActivePrompt } from './useActivePrompt';
-import { getDefaultPromptId } from './useDefaultPrompt';
-import { create, db, tx, upsert } from '~/db';
-import { createOrRefFile } from '~/db/files';
-import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
-import { getThreadSystemPrompt } from '~/db/threads';
-import { getPrompt } from '~/db/prompts';
-
-import type {
-    ContentPart,
-    ChatMessage,
-    SendMessageParams,
-    TextPart,
-} from '~/utils/chat/types';
-import {
-    buildParts,
-    getTextFromContent,
-    mergeFileHashes,
-    trimOrMessagesImages,
-} from '~/utils/chat/messages';
-import { openRouterStream } from '~/utils/chat/openrouterStream';
-import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
-import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
-import { promptJsonToString } from '~/utils/prompt-utils';
-
-const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
-
-export function useChat(
-    msgs: ChatMessage[] = [],
-    initialThreadId?: string,
-    pendingPromptId?: string
-) {
-    const messages = ref<ChatMessage[]>([...msgs]);
-    const loading = ref(false);
-    const { apiKey } = useUserApiKey();
-    const hooks = useHooks();
-    const { activePromptContent } = useActivePrompt();
-    const threadIdRef = ref<string | undefined>(initialThreadId);
-    const historyLoadedFor = ref<string | null>(null);
-
-    // Helper to get system prompt content for current thread
-    async function getSystemPromptContent(): Promise<string | null> {
-        if (!threadIdRef.value) return null;
-
-        try {
-            const promptId = await getThreadSystemPrompt(threadIdRef.value);
-            if (promptId) {
-                // Get the prompt content from the database
-                const prompt = await getPrompt(promptId);
-                if (prompt) {
-                    return promptJsonToString(prompt.content);
-                }
-            }
-        } catch (error) {
-            console.warn('Failed to load thread system prompt:', error);
-        }
-
-        // Fallback to global active prompt
-        return activePromptContent.value
-            ? promptJsonToString(activePromptContent.value)
-            : null;
-    }
-
-    async function sendMessage(
-        content: string,
-        sendMessagesParams: SendMessageParams = {
-            files: [],
-            model: DEFAULT_AI_MODEL,
-            file_hashes: [],
-            online: false,
-        }
-    ) {
-        if (!apiKey.value) return;
-
-        if (!threadIdRef.value) {
-            // Resolve system prompt for new thread: pending > default > null
-            let effectivePromptId: string | null = pendingPromptId || null;
-            if (!effectivePromptId) {
-                try {
-                    effectivePromptId = await getDefaultPromptId();
-                } catch {
-                    /* noop */
-                }
-            }
-            const newThread = await create.thread({
-                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
-                last_message_at: nowSec(),
-                parent_thread_id: null,
-                system_prompt_id: effectivePromptId || null,
-            });
-            threadIdRef.value = newThread.id;
-        }
-
-        // Load full history so prior assistant images are available
-        await ensureThreadHistoryLoaded(
-            threadIdRef,
-            historyLoadedFor,
-            messages
-        );
-
-        // Merge prior assistant images (file hashes) into this outgoing user message
-        const prevAssistant = [...messages.value]
-            .reverse()
-            .find((m) => m.role === 'assistant');
-        let assistantHashes: string[] = [];
-        if (prevAssistant?.file_hashes) {
-            try {
-                assistantHashes =
-                    parseFileHashes(prevAssistant.file_hashes) || [];
-            } catch {}
-        }
-
-        // Normalize params, allow legacy images[] input
-        let { files, model, file_hashes, extraTextParts, online } =
-            sendMessagesParams as any;
-        if (
-            (!files || files.length === 0) &&
-            Array.isArray((sendMessagesParams as any)?.images)
-        ) {
-            files = (sendMessagesParams as any).images.map((img: any) => {
-                const url = typeof img === 'string' ? img : img.url;
-                const provided = typeof img === 'object' ? img.type : undefined;
-                return { type: inferMimeFromUrl(url, provided), url } as any;
-            });
-        }
-        if (!model) model = DEFAULT_AI_MODEL;
-        if (online === true) model = model + ':online';
-
-        // 1) Filter outgoing text
-        const outgoing = await hooks.applyFilters(
-            'ui.chat.message:filter:outgoing',
-            content
-        );
-
-        // 2) Persist user message (merge assistant hashes if present)
-        file_hashes = mergeFileHashes(file_hashes, assistantHashes);
-        const userDbMsg = await tx.appendMessage({
-            thread_id: threadIdRef.value!,
-            role: 'user',
-            data: { content: outgoing, attachments: files ?? [] },
-            file_hashes:
-                file_hashes && file_hashes.length
-                    ? (file_hashes as any)
-                    : undefined,
-        });
-
-        // 3) Build parts array for UI
-        const parts: ContentPart[] = buildParts(
-            outgoing,
-            files,
-            extraTextParts
-        );
-        messages.value.push({
-            role: 'user',
-            content: parts,
-            id: (userDbMsg as any).id,
-            file_hashes: userDbMsg.file_hashes,
-        } as any);
-
-        loading.value = true;
-
-        try {
-            const startedAt = Date.now();
-
-            const modelId = await hooks.applyFilters(
-                'ai.chat.model:filter:select',
-                model
-            );
-
-            // Inject system message if active prompt exists
-            let messagesWithSystem = [...messages.value];
-            const systemText = await getSystemPromptContent();
-            if (systemText && systemText.trim()) {
-                messagesWithSystem.unshift({
-                    role: 'system',
-                    content: systemText,
-                    id: `system-${newId()}`,
-                });
-            }
-
-            const effectiveMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:input',
-                messagesWithSystem
-            );
-
-            // Build OpenRouter message objects (images included)
-            const { buildOpenRouterMessages } = await import(
-                '~/utils/openrouter-build'
-            );
-
-            // Ensure history still loaded (in case of concurrent changes)
-            await ensureThreadHistoryLoaded(
-                threadIdRef,
-                historyLoadedFor,
-                messages
-            );
-
-            // Remove assistant file_hashes we just migrated so builder prefers user-role images
-            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
-                (m: any) => ({ ...m })
-            );
-            if (assistantHashes.length && prevAssistant?.id) {
-                const target = modelInputMessages.find(
-                    (m) => m.id === prevAssistant.id
-                );
-                if (target) target.file_hashes = null;
-            }
-
-            const orMessages = await buildOpenRouterMessages(
-                modelInputMessages as any,
-                {
-                    maxImageInputs: 16,
-                    imageInclusionPolicy: 'all',
-                    debug: false,
-                }
-            );
-
-            trimOrMessagesImages(orMessages, 5);
-            // Dynamically decide modalities: include image only if we have image inputs
-            // or the model name suggests image generation capability.
-            const hasImageInput = (modelInputMessages as any[]).some((m) =>
-                Array.isArray(m.content)
-                    ? (m.content as any[]).some(
-                          (p) =>
-                              p?.type === 'image_url' ||
-                              p?.type === 'image' ||
-                              p?.mediaType?.startsWith('image/')
-                      )
-                    : false
-            );
-            const modelImageHint = /image|vision|flash/i.test(modelId);
-            const modalities =
-                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
-
-            // Prepare assistant placeholder (with stream id)
-            const streamId = newId();
-            const assistantDbMsg = await tx.appendMessage({
-                thread_id: threadIdRef.value!,
-                role: 'assistant',
-                stream_id: streamId,
-                data: { content: '', attachments: [] },
-            });
-
-            await hooks.doAction('ai.chat.send:action:before', {
-                threadId: threadIdRef.value,
-                modelId,
-                user: { id: userDbMsg.id, length: outgoing.length },
-                assistant: { id: assistantDbMsg.id, streamId },
-                messagesCount: Array.isArray(effectiveMessages)
-                    ? (effectiveMessages as any[]).length
-                    : undefined,
-            });
-
-            // Stream
-            const stream = openRouterStream({
-                apiKey: apiKey.value!,
-                model: modelId,
-                orMessages,
-                modalities,
-            });
-
-            // Assistant placeholder in UI
-            const idx =
-                messages.value.push({
-                    role: 'assistant',
-                    content: '',
-                    id: (assistantDbMsg as any).id,
-                    stream_id: streamId,
-                    pending: true,
-                } as any) - 1;
-            const current = messages.value[idx]!;
-            let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 100;
-            let lastPersistAt = 0;
-
-            const assistantFileHashes: string[] = [];
-
-            for await (const ev of stream) {
-                if (ev.type === 'text') {
-                    if ((current as any).pending)
-                        (current as any).pending = false;
-                    const delta = ev.text;
-                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                        threadId: threadIdRef.value,
-                        assistantId: assistantDbMsg.id,
-                        streamId,
-                        deltaLength: String(delta ?? '').length,
-                        totalLength:
-                            getTextFromContent(current.content)!.length +
-                            String(delta ?? '').length,
-                        chunkIndex: chunkIndex++,
-                    });
-
-                    if (typeof current.content === 'string') {
-                        current.content = (current.content as string) + delta;
-                    } else if (Array.isArray(current.content)) {
-                        const firstText = (
-                            current.content as ContentPart[]
-                        ).find((p) => p.type === 'text') as
-                            | TextPart
-                            | undefined;
-                        if (firstText) firstText.text += delta;
-                        else
-                            (current.content as ContentPart[]).push({
-                                type: 'text',
-                                text: delta,
-                            });
-                    }
-                } else if (ev.type === 'image') {
-                    if ((current as any).pending)
-                        (current as any).pending = false;
-                    // Add image to assistant message content
-                    if (typeof current.content === 'string') {
-                        current.content = [
-                            { type: 'text', text: current.content as string },
-                            {
-                                type: 'image',
-                                image: ev.url,
-                                mediaType: 'image/png',
-                            },
-                        ];
-                    } else {
-                        (current.content as ContentPart[]).push({
-                            type: 'image',
-                            image: ev.url,
-                            mediaType: 'image/png',
-                        });
-                    }
-
-                    // Persist generated image file (data URL preferred; remote URLs best-effort)
-                    if (assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/'))
-                            blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            try {
-                                const r = await fetch(ev.url);
-                                if (r.ok) blob = await r.blob();
-                            } catch {
-                                /* ignore CORS/network issues */
-                            }
-                        }
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(
-                                    blob,
-                                    'gen-image'
-                                );
-                                assistantFileHashes.push(meta.hash);
-                                const serialized =
-                                    serializeFileHashes(assistantFileHashes);
-                                const updatedMsg = {
-                                    ...assistantDbMsg,
-                                    file_hashes: serialized,
-                                    updated_at: nowSec(),
-                                } as any;
-                                await upsert.message(updatedMsg);
-                                (current as any).file_hashes = serialized;
-                            } catch {
-                                /* ignore persistence errors */
-                            }
-                        }
-                    }
-                }
-
-                const now = Date.now();
-                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent =
-                        getTextFromContent(current.content) || '';
-                    const updated = {
-                        ...assistantDbMsg,
-                        data: {
-                            ...((assistantDbMsg as any).data || {}),
-                            content: textContent,
-                        },
-                        file_hashes: assistantFileHashes.length
-                            ? serializeFileHashes(assistantFileHashes)
-                            : (assistantDbMsg as any).file_hashes,
-                        updated_at: nowSec(),
-                    } as any;
-                    await upsert.message(updated);
-                    if (assistantFileHashes.length)
-                        (current as any).file_hashes =
-                            serializeFileHashes(assistantFileHashes);
-                    lastPersistAt = now;
-                }
-            }
-
-            // Final post-process
-            const fullText = getTextFromContent(current.content) || '';
-            const incoming = await hooks.applyFilters(
-                'ui.chat.message:filter:incoming',
-                fullText,
-                threadIdRef.value
-            );
-
-            // Ensure pending cleared even if no chunks (empty response edge case)
-            if ((current as any).pending) (current as any).pending = false;
-
-            if (typeof current.content === 'string') {
-                current.content = incoming as string;
-            } else {
-                const firstText = (current.content as ContentPart[]).find(
-                    (p) => p.type === 'text'
-                ) as TextPart | undefined;
-                if (firstText) firstText.text = incoming as string;
-                else
-                    (current.content as ContentPart[]).unshift({
-                        type: 'text',
-                        text: incoming as string,
-                    });
-            }
-
-            const finalized = {
-                ...assistantDbMsg,
-                data: {
-                    ...((assistantDbMsg as any).data || {}),
-                    content: incoming,
+export default defineAppConfig({
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
+        },
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
+                header: 'border-0',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
                 },
-                file_hashes: assistantFileHashes.length
-                    ? serializeFileHashes(assistantFileHashes)
-                    : (assistantDbMsg as any).file_hashes,
-                updated_at: nowSec(),
-            } as any;
-            await upsert.message(finalized);
-
-            const endedAt = Date.now();
-            // Log full finalized assistant response (100% complete)
-            try {
-                // Provide both DB record and in-memory content state
-                // Avoid leaking API key etc (not present here)
-                // eslint-disable-next-line no-console
-                console.log('[useChat] assistant response complete', {
-                    threadId: threadIdRef.value,
-                    assistant: finalized,
-                    uiMessage: current,
-                });
-            } catch {}
-            await hooks.doAction('ai.chat.send:action:after', {
-                threadId: threadIdRef.value,
-                request: { modelId, userId: userDbMsg.id },
-                response: {
-                    assistantId: assistantDbMsg.id,
-                    length: (incoming as string).length,
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
                 },
-                timings: {
-                    startedAt,
-                    endedAt,
-                    durationMs: endedAt - startedAt,
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
                 },
-            });
-        } catch (err) {
-            // Dispatch error hook first
-            await hooks.doAction('ai.chat.error:action', {
-                threadId: threadIdRef.value,
-                stage: 'stream',
-                error: err,
-            });
-            try {
-                // Remove any trailing pending assistant placeholder
-                const last = messages.value[messages.value.length - 1];
-                if (
-                    last &&
-                    last.role === 'assistant' &&
-                    (last as any).pending
-                ) {
-                    messages.value.pop();
-                }
-            } catch {}
-            // Present toast with retry option (if last user message exists)
-            try {
-                const lastUser = [...messages.value]
-                    .reverse()
-                    .find((m) => m.role === 'user');
-                const toast = useToast();
-                toast.add({
-                    title: 'Message failed',
-                    description: (err as any)?.message || 'Request failed',
-                    color: 'error',
-                    actions: lastUser
-                        ? [
-                              {
-                                  label: 'Retry',
-                                  onClick: () => {
-                                      if (lastUser?.id)
-                                          retryMessage(lastUser.id as any);
-                                  },
-                              },
-                          ]
-                        : undefined,
-                    duration: 6000,
-                });
-            } catch {}
-            // Swallow error so caller doesn't need try/catch; UI already handled
-            return;
-        } finally {
-            loading.value = false;
-        }
-    }
-
-    // Retry logic unchanged in behavior, simplified
-    async function retryMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || !threadIdRef.value) return;
-
-        try {
-            const target: any = await db.messages.get(messageId);
-            if (!target || target.thread_id !== threadIdRef.value) return;
-
-            // If assistant clicked, resolve to preceding user message
-            let userMsg: any = target.role === 'user' ? target : null;
-            if (!userMsg && target.role === 'assistant') {
-                const DexieMod = (await import('dexie')).default;
-                userMsg = await db.messages
-                    .where('[thread_id+index]')
-                    .between(
-                        [target.thread_id, DexieMod.minKey],
-                        [target.thread_id, target.index]
-                    )
-                    .filter(
-                        (m: any) =>
-                            m.role === 'user' &&
-                            !m.deleted &&
-                            m.index < target.index
-                    )
-                    .last();
-            }
-            if (!userMsg) return;
-
-            // Find assistant reply after the user (could be original target)
-            const DexieMod2 = (await import('dexie')).default;
-            const assistant = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [userMsg.thread_id, userMsg.index + 1],
-                    [userMsg.thread_id, DexieMod2.maxKey]
-                )
-                .filter((m: any) => m.role === 'assistant' && !m.deleted)
-                .first();
-
-            await hooks.doAction('ai.chat.retry:action:before', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                triggeredBy: target.role,
-            });
-
-            await db.transaction('rw', db.messages, async () => {
-                await db.messages.delete(userMsg.id);
-                if (assistant) await db.messages.delete(assistant.id);
-            });
-
-            (messages as any).value = (messages as any).value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-
-            const originalText = (userMsg.data as any)?.content || '';
-            let hashes: string[] = [];
-            if (userMsg.file_hashes) {
-                const { parseFileHashes } = await import('~/db/files-util');
-                hashes = parseFileHashes(userMsg.file_hashes);
-            }
-
-            await sendMessage(originalText, {
-                model: modelOverride || DEFAULT_AI_MODEL,
-                file_hashes: hashes,
-                files: [],
-                online: false,
-            });
-
-            const tail = (messages as any).value.slice(-2);
-            const newUser = tail.find((m: any) => m.role === 'user');
-            const newAssistant = tail.find((m: any) => m.role === 'assistant');
-            await hooks.doAction('ai.chat.retry:action:after', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                newUserId: newUser?.id,
-                newAssistantId: newAssistant?.id,
-            });
-        } catch (e) {
-            console.error('[useChat.retryMessage] failed', e);
-        }
-    }
-
-    return {
-        messages,
-        sendMessage,
-        retryMessage,
-        loading,
-        threadId: threadIdRef,
-    };
-}
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
+    },
+});
 ```
 
 ## File: app/components/chat/ChatMessage.vue
@@ -13503,6 +12292,1199 @@ async function onBranch() {
 </style>
 ```
 
+## File: app/components/chat/SystemPromptsModal.vue
+```vue
+<template>
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-none',
+            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
+            body: 'p-0! border-b-0! overflow-hidden',
+        }"
+        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] max-h-[80vh] overflow-hidden"
+    >
+        <template #header>
+            <div class="flex w-full items-center justify-between pr-2">
+                <h3 class="font-semibold text-sm pl-2 dark:text-black">
+                    System Prompts
+                </h3>
+                <UButton
+                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
+                    :square="true"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-heroicons-x-mark"
+                    @click="open = false"
+                />
+            </div>
+        </template>
+        <template #body>
+            <div class="flex flex-col h-full" @keydown="handleKeydown">
+                <div
+                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
+                >
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <UButton
+                            @click="createNewPrompt"
+                            size="sm"
+                            color="primary"
+                            class="retro-btn"
+                        >
+                            New Prompt
+                        </UButton>
+                        <UButton
+                            v-if="currentActivePromptId"
+                            @click="clearActivePrompt"
+                            size="sm"
+                            color="neutral"
+                            variant="outline"
+                        >
+                            Clear Active
+                        </UButton>
+                    </div>
+                    <UInput
+                        v-model="searchQuery"
+                        placeholder="Search prompts..."
+                        size="sm"
+                        class="max-w-xs"
+                        icon="i-heroicons-magnifying-glass"
+                    />
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <!-- List View -->
+                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
+                        <div
+                            v-if="filteredPrompts.length === 0"
+                            class="flex flex-col items-center justify-center h-full text-center p-8"
+                        >
+                            <UIcon
+                                name="pixelarticons:script-text"
+                                class="w-16 h-16 text-gray-400 mb-4"
+                            />
+                            <h3
+                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
+                            >
+                                No system prompts yet
+                            </h3>
+                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                                Create your first system prompt to customize AI
+                                behavior.
+                            </p>
+                            <UButton @click="createNewPrompt" color="primary">
+                                Create Your First Prompt
+                            </UButton>
+                        </div>
+
+                        <div v-else class="p-4 space-y-3">
+                            <div
+                                v-for="prompt in filteredPrompts"
+                                :key="prompt.id"
+                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
+                                :class="{
+                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
+                                        prompt.id === currentActivePromptId ||
+                                        prompt.id === defaultPromptId,
+                                }"
+                            >
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h4
+                                            class="font-medium text-gray-900 dark:text-white truncate"
+                                            :class="{
+                                                'italic opacity-60':
+                                                    !prompt.title,
+                                            }"
+                                        >
+                                            {{
+                                                prompt.title ||
+                                                'Untitled Prompt'
+                                            }}
+                                        </h4>
+                                        <span
+                                            v-if="prompt.id === defaultPromptId"
+                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            >Default</span
+                                        >
+                                    </div>
+                                    <p
+                                        class="text-sm text-gray-500 dark:text-gray-400"
+                                    >
+                                        Updated
+                                        {{ formatDate(prompt.updated_at) }} •
+                                        {{ tokenCounts[prompt.id] || 0 }} tokens
+                                    </p>
+                                </div>
+
+                                <div
+                                    class="flex items-center gap-2 ml-4 shrink-0"
+                                >
+                                    <UTooltip
+                                        :delay-duration="0"
+                                        :text="
+                                            prompt.id === defaultPromptId
+                                                ? 'Remove default prompt'
+                                                : 'Set as default prompt'
+                                        "
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            :variant="
+                                                prompt.id === defaultPromptId
+                                                    ? 'solid'
+                                                    : 'outline'
+                                            "
+                                            :color="
+                                                prompt.id === defaultPromptId
+                                                    ? 'primary'
+                                                    : 'neutral'
+                                            "
+                                            :square="true"
+                                            :ui="{
+                                                base: 'retro-btn px-1! text-nowrap',
+                                            }"
+                                            class="retro-btn"
+                                            aria-label="Toggle default prompt"
+                                            @click.stop="
+                                                toggleDefault(prompt.id)
+                                            "
+                                            >{{
+                                                prompt.id === defaultPromptId
+                                                    ? 'default'
+                                                    : 'set default'
+                                            }}</UButton
+                                        >
+                                    </UTooltip>
+                                    <UButton
+                                        @click="selectPrompt(prompt.id)"
+                                        size="sm"
+                                        :color="
+                                            prompt.id === currentActivePromptId
+                                                ? 'primary'
+                                                : 'neutral'
+                                        "
+                                        :variant="
+                                            prompt.id === currentActivePromptId
+                                                ? 'solid'
+                                                : 'outline'
+                                        "
+                                    >
+                                        {{
+                                            prompt.id === currentActivePromptId
+                                                ? 'Selected'
+                                                : 'Select'
+                                        }}
+                                    </UButton>
+                                    <UPopover
+                                        :popper="{ placement: 'bottom-end' }"
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            variant="outline"
+                                            color="neutral"
+                                            class="flex items-center justify-center"
+                                            :square="true"
+                                            icon="pixelarticons:more-vertical"
+                                            aria-label="More actions"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex flex-col py-1 w-36 text-sm"
+                                            >
+                                                <button
+                                                    @click="
+                                                        startEditing(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:edit"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button
+                                                    @click="
+                                                        deletePrompt(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:trash"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editor View -->
+                    <div v-else class="h-full overflow-hidden flex flex-col">
+                        <div class="flex-1 p-4 overflow-hidden">
+                            <LazyPromptsPromptEditor
+                                :prompt-id="editingPrompt.id"
+                                @back="stopEditing"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </UModal>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, computed, watch } from 'vue';
+import {
+    listPrompts,
+    createPrompt,
+    softDeletePrompt,
+    type PromptRecord,
+} from '~/db/prompts';
+import { useActivePrompt } from '~/composables/useActivePrompt';
+import PromptEditor from '~/components/prompts/PromptEditor.vue';
+import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
+import { encode } from 'gpt-tokenizer';
+import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+
+// Props & modal open bridging (like SettingsModal pattern)
+const props = defineProps<{
+    showModal: boolean;
+    threadId?: string;
+}>();
+const emit = defineEmits({
+    'update:showModal': (value: boolean) => typeof value === 'boolean',
+    selected: (id: string) => typeof id === 'string',
+    closed: () => true,
+    threadCreated: (threadId: string, promptId: string | null) => true,
+});
+
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
+});
+
+watch(
+    () => props.showModal,
+    (v, ov) => {
+        if (!v && ov) emit('closed');
+    }
+);
+
+const {
+    activePromptId,
+    setActivePrompt,
+    clearActivePrompt: clearGlobalActivePrompt,
+} = useActivePrompt();
+
+const prompts = ref<PromptRecord[]>([]);
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
+const editingPrompt = ref<PromptRecord | null>(null);
+const showDeleteConfirm = ref<string | null>(null);
+
+const searchQuery = ref('');
+const filteredPrompts = computed(() => {
+    if (!searchQuery.value) return prompts.value;
+    return prompts.value.filter((p) =>
+        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+});
+
+// Thread-specific system prompt handling
+const threadSystemPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
+
+// Computed for current active prompt (thread-specific or global)
+const currentActivePromptId = computed(() => {
+    if (props.threadId) {
+        return threadSystemPromptId.value;
+    }
+    return activePromptId.value;
+});
+
+// Extract plain text from TipTap JSON recursively
+function extractText(node: any): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    const type = node.type;
+    let acc = '';
+    if (type === 'text') {
+        acc += node.text || '';
+    }
+    if (node.content && Array.isArray(node.content)) {
+        const inner = node.content.map(extractText).join('');
+        acc += inner;
+    }
+    // Block separators to avoid word merging
+    if (
+        [
+            'paragraph',
+            'heading',
+            'bulletList',
+            'orderedList',
+            'listItem',
+        ].includes(type)
+    ) {
+        acc += '\n';
+    }
+    return acc;
+}
+
+function contentToText(content: any): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    // TipTap root usually { type: 'doc', content: [...] }
+    if (content.type === 'doc' && Array.isArray(content.content)) {
+        return extractText(content)
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+    }
+    if (Array.isArray(content.content)) return extractText(content).trim();
+    return '';
+}
+
+// Cached token counts per prompt id (recomputed when prompts list changes)
+const tokenCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of prompts.value) {
+        try {
+            const text = contentToText(p.content);
+            map[p.id] = text ? encode(text).length : 0;
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token encode failed', e);
+            map[p.id] = 0;
+        }
+    }
+    return map;
+});
+
+// Totals derived from cached counts
+const totalTokens = computed(() =>
+    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
+);
+const filteredTokens = computed(() =>
+    filteredPrompts.value.reduce(
+        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
+        0
+    )
+);
+
+// (Events moved above with prop bridging)
+
+const loadPrompts = async () => {
+    try {
+        prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.find((p) => p.id === defaultPromptId.value)
+        ) {
+            await clearDefaultPrompt();
+        }
+    } catch (error) {
+        console.error('Failed to load prompts:', error);
+    }
+};
+
+const loadThreadSystemPrompt = async () => {
+    if (props.threadId) {
+        try {
+            threadSystemPromptId.value = await getThreadSystemPrompt(
+                props.threadId
+            );
+        } catch (error) {
+            console.error('Failed to load thread system prompt:', error);
+            threadSystemPromptId.value = null;
+        }
+    } else {
+        threadSystemPromptId.value = null;
+    }
+};
+
+const createNewPrompt = async () => {
+    try {
+        const newPrompt = await createPrompt();
+        prompts.value.unshift(newPrompt);
+        startEditing(newPrompt.id);
+    } catch (error) {
+        console.error('Failed to create prompt:', error);
+    }
+};
+
+const selectPrompt = async (id: string) => {
+    try {
+        if (props.threadId) {
+            // Update thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, id);
+            threadSystemPromptId.value = id;
+        } else {
+            // Store as pending for when thread is created
+            pendingPromptId.value = id;
+            // Also update global for immediate feedback
+            await setActivePrompt(id);
+        }
+        emit('selected', id);
+    } catch (error) {
+        console.error('Failed to select prompt:', error);
+    }
+};
+
+const clearActivePrompt = async () => {
+    try {
+        if (props.threadId) {
+            // Clear thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadSystemPromptId.value = null;
+        } else {
+            // Clear pending and global active prompt
+            pendingPromptId.value = null;
+            await clearGlobalActivePrompt();
+        }
+    } catch (error) {
+        console.error('Failed to clear active prompt:', error);
+    }
+};
+
+const startEditing = (id: string) => {
+    const prompt = prompts.value.find((p) => p.id === id);
+    if (prompt) {
+        editingPrompt.value = prompt;
+    }
+};
+
+const stopEditing = () => {
+    editingPrompt.value = null;
+    loadPrompts(); // Refresh list in case of changes
+};
+
+const applyPendingPromptToThread = async (threadId: string) => {
+    if (pendingPromptId.value) {
+        try {
+            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
+            emit('threadCreated', threadId, pendingPromptId.value);
+            pendingPromptId.value = null;
+        } catch (error) {
+            console.error('Failed to apply pending prompt to thread:', error);
+        }
+    }
+};
+
+const deletePrompt = async (id: string) => {
+    if (confirm('Are you sure you want to delete this prompt?')) {
+        try {
+            await softDeletePrompt(id);
+            if (activePromptId.value === id) {
+                clearActivePrompt();
+            }
+            if (defaultPromptId.value === id) {
+                await clearDefaultPrompt();
+            }
+            loadPrompts();
+        } catch (error) {
+            console.error('Failed to delete prompt:', error);
+        }
+    }
+};
+
+const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (editingPrompt.value) return;
+    const key = event.key;
+    if (key >= '1' && key <= '9') {
+        const index = parseInt(key) - 1;
+        if (index < filteredPrompts.value.length) {
+            const prompt = filteredPrompts.value[index];
+            if (prompt) {
+                selectPrompt(prompt.id);
+                event.preventDefault();
+            }
+        }
+    }
+};
+
+onMounted(() => {
+    loadPrompts();
+    loadThreadSystemPrompt();
+});
+
+// Watch for threadId changes to reload thread-specific prompt
+watch(
+    () => props.threadId,
+    () => {
+        loadThreadSystemPrompt();
+    }
+);
+
+function toggleDefault(id: string) {
+    if (defaultPromptId.value === id) {
+        clearDefaultPrompt();
+    } else {
+        setDefaultPrompt(id);
+    }
+}
+</script>
+
+<style scoped>
+/* Mobile full-screen adjustments */
+@media (max-width: 640px) {
+    .sp-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-width: 0 !important;
+    }
+}
+
+/* Smooth scrolling area */
+.sp-modal :deep(.n-modal-body),
+.sp-modal :deep(.n-card__content) {
+    /* ensure body grows */
+    height: 100%;
+}
+</style>
+```
+
+## File: app/composables/useAi.ts
+```typescript
+import { ref } from 'vue';
+import { useToast } from '#imports';
+import { nowSec, newId } from '~/db/util';
+
+import { useUserApiKey } from './useUserApiKey';
+import { useHooks } from './useHooks';
+import { useActivePrompt } from './useActivePrompt';
+import { getDefaultPromptId } from './useDefaultPrompt';
+import { create, db, tx, upsert } from '~/db';
+import { createOrRefFile } from '~/db/files';
+import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
+import { getThreadSystemPrompt } from '~/db/threads';
+import { getPrompt } from '~/db/prompts';
+
+import type {
+    ContentPart,
+    ChatMessage,
+    SendMessageParams,
+    TextPart,
+} from '~/utils/chat/types';
+import {
+    buildParts,
+    getTextFromContent,
+    mergeFileHashes,
+    trimOrMessagesImages,
+} from '~/utils/chat/messages';
+import { openRouterStream } from '~/utils/chat/openrouterStream';
+import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
+import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
+import { promptJsonToString } from '~/utils/prompt-utils';
+
+const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+export function useChat(
+    msgs: ChatMessage[] = [],
+    initialThreadId?: string,
+    pendingPromptId?: string
+) {
+    const messages = ref<ChatMessage[]>([...msgs]);
+    const loading = ref(false);
+    // Abort controller & state for active streaming request
+    const abortController = ref<AbortController | null>(null);
+    const aborted = ref(false);
+    const { apiKey } = useUserApiKey();
+    const hooks = useHooks();
+    const { activePromptContent } = useActivePrompt();
+    const threadIdRef = ref<string | undefined>(initialThreadId);
+    const historyLoadedFor = ref<string | null>(null);
+
+    // Helper to get system prompt content for current thread
+    async function getSystemPromptContent(): Promise<string | null> {
+        if (!threadIdRef.value) return null;
+
+        try {
+            const promptId = await getThreadSystemPrompt(threadIdRef.value);
+            if (promptId) {
+                // Get the prompt content from the database
+                const prompt = await getPrompt(promptId);
+                if (prompt) {
+                    return promptJsonToString(prompt.content);
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to load thread system prompt:', error);
+        }
+
+        // Fallback to global active prompt
+        return activePromptContent.value
+            ? promptJsonToString(activePromptContent.value)
+            : null;
+    }
+
+    async function sendMessage(
+        content: string,
+        sendMessagesParams: SendMessageParams = {
+            files: [],
+            model: DEFAULT_AI_MODEL,
+            file_hashes: [],
+            online: false,
+        }
+    ) {
+        if (!apiKey.value) return;
+
+        if (!threadIdRef.value) {
+            // Resolve system prompt for new thread: pending > default > null
+            let effectivePromptId: string | null = pendingPromptId || null;
+            if (!effectivePromptId) {
+                try {
+                    effectivePromptId = await getDefaultPromptId();
+                } catch {
+                    /* noop */
+                }
+            }
+            const newThread = await create.thread({
+                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
+                last_message_at: nowSec(),
+                parent_thread_id: null,
+                system_prompt_id: effectivePromptId || null,
+            });
+            threadIdRef.value = newThread.id;
+        }
+
+        // Load full history so prior assistant images are available
+        await ensureThreadHistoryLoaded(
+            threadIdRef,
+            historyLoadedFor,
+            messages
+        );
+
+        // Merge prior assistant images (file hashes) into this outgoing user message
+        const prevAssistant = [...messages.value]
+            .reverse()
+            .find((m) => m.role === 'assistant');
+        let assistantHashes: string[] = [];
+        if (prevAssistant?.file_hashes) {
+            try {
+                assistantHashes =
+                    parseFileHashes(prevAssistant.file_hashes) || [];
+            } catch {}
+        }
+
+        // Normalize params, allow legacy images[] input
+        let { files, model, file_hashes, extraTextParts, online } =
+            sendMessagesParams as any;
+        if (
+            (!files || files.length === 0) &&
+            Array.isArray((sendMessagesParams as any)?.images)
+        ) {
+            files = (sendMessagesParams as any).images.map((img: any) => {
+                const url = typeof img === 'string' ? img : img.url;
+                const provided = typeof img === 'object' ? img.type : undefined;
+                return { type: inferMimeFromUrl(url, provided), url } as any;
+            });
+        }
+        if (!model) model = DEFAULT_AI_MODEL;
+        if (online === true) model = model + ':online';
+
+        // 1) Filter outgoing text
+        const outgoing = await hooks.applyFilters(
+            'ui.chat.message:filter:outgoing',
+            content
+        );
+
+        // 2) Persist user message (merge assistant hashes if present)
+        file_hashes = mergeFileHashes(file_hashes, assistantHashes);
+        const userDbMsg = await tx.appendMessage({
+            thread_id: threadIdRef.value!,
+            role: 'user',
+            data: { content: outgoing, attachments: files ?? [] },
+            file_hashes:
+                file_hashes && file_hashes.length
+                    ? (file_hashes as any)
+                    : undefined,
+        });
+
+        // 3) Build parts array for UI
+        const parts: ContentPart[] = buildParts(
+            outgoing,
+            files,
+            extraTextParts
+        );
+        messages.value.push({
+            role: 'user',
+            content: parts,
+            id: (userDbMsg as any).id,
+            file_hashes: userDbMsg.file_hashes,
+        } as any);
+
+        loading.value = true;
+
+        try {
+            const startedAt = Date.now();
+
+            const modelId = await hooks.applyFilters(
+                'ai.chat.model:filter:select',
+                model
+            );
+
+            // Inject system message if active prompt exists
+            let messagesWithSystem = [...messages.value];
+            const systemText = await getSystemPromptContent();
+            if (systemText && systemText.trim()) {
+                messagesWithSystem.unshift({
+                    role: 'system',
+                    content: systemText,
+                    id: `system-${newId()}`,
+                });
+            }
+
+            const effectiveMessages = await hooks.applyFilters(
+                'ai.chat.messages:filter:input',
+                messagesWithSystem
+            );
+
+            // Build OpenRouter message objects (images included)
+            const { buildOpenRouterMessages } = await import(
+                '~/utils/openrouter-build'
+            );
+
+            // Ensure history still loaded (in case of concurrent changes)
+            await ensureThreadHistoryLoaded(
+                threadIdRef,
+                historyLoadedFor,
+                messages
+            );
+
+            // Remove assistant file_hashes we just migrated so builder prefers user-role images
+            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
+                (m: any) => ({ ...m })
+            );
+            if (assistantHashes.length && prevAssistant?.id) {
+                const target = modelInputMessages.find(
+                    (m) => m.id === prevAssistant.id
+                );
+                if (target) target.file_hashes = null;
+            }
+
+            const orMessages = await buildOpenRouterMessages(
+                modelInputMessages as any,
+                {
+                    maxImageInputs: 16,
+                    imageInclusionPolicy: 'all',
+                    debug: false,
+                }
+            );
+
+            trimOrMessagesImages(orMessages, 5);
+            // Dynamically decide modalities: include image only if we have image inputs
+            // or the model name suggests image generation capability.
+            const hasImageInput = (modelInputMessages as any[]).some((m) =>
+                Array.isArray(m.content)
+                    ? (m.content as any[]).some(
+                          (p) =>
+                              p?.type === 'image_url' ||
+                              p?.type === 'image' ||
+                              p?.mediaType?.startsWith('image/')
+                      )
+                    : false
+            );
+            const modelImageHint = /image|vision|flash/i.test(modelId);
+            const modalities =
+                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+
+            // Prepare assistant placeholder (with stream id)
+            const streamId = newId();
+            const assistantDbMsg = await tx.appendMessage({
+                thread_id: threadIdRef.value!,
+                role: 'assistant',
+                stream_id: streamId,
+                data: { content: '', attachments: [] },
+            });
+
+            await hooks.doAction('ai.chat.send:action:before', {
+                threadId: threadIdRef.value,
+                modelId,
+                user: { id: userDbMsg.id, length: outgoing.length },
+                assistant: { id: assistantDbMsg.id, streamId },
+                messagesCount: Array.isArray(effectiveMessages)
+                    ? (effectiveMessages as any[]).length
+                    : undefined,
+            });
+
+            // Stream (setup abort controller)
+            aborted.value = false;
+            abortController.value = new AbortController();
+            const stream = openRouterStream({
+                apiKey: apiKey.value!,
+                model: modelId,
+                orMessages,
+                modalities,
+                signal: abortController.value.signal,
+            });
+
+            // Assistant placeholder in UI
+            const idx =
+                messages.value.push({
+                    role: 'assistant',
+                    content: '',
+                    id: (assistantDbMsg as any).id,
+                    stream_id: streamId,
+                    pending: true,
+                } as any) - 1;
+            const current = messages.value[idx]!;
+            let chunkIndex = 0;
+            const WRITE_INTERVAL_MS = 100;
+            let lastPersistAt = 0;
+
+            const assistantFileHashes: string[] = [];
+
+            for await (const ev of stream) {
+                if (ev.type === 'text') {
+                    if ((current as any).pending)
+                        (current as any).pending = false;
+                    const delta = ev.text;
+                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
+                        threadId: threadIdRef.value,
+                        assistantId: assistantDbMsg.id,
+                        streamId,
+                        deltaLength: String(delta ?? '').length,
+                        totalLength:
+                            getTextFromContent(current.content)!.length +
+                            String(delta ?? '').length,
+                        chunkIndex: chunkIndex++,
+                    });
+
+                    if (typeof current.content === 'string') {
+                        current.content = (current.content as string) + delta;
+                    } else if (Array.isArray(current.content)) {
+                        const firstText = (
+                            current.content as ContentPart[]
+                        ).find((p) => p.type === 'text') as
+                            | TextPart
+                            | undefined;
+                        if (firstText) firstText.text += delta;
+                        else
+                            (current.content as ContentPart[]).push({
+                                type: 'text',
+                                text: delta,
+                            });
+                    }
+                } else if (ev.type === 'image') {
+                    if ((current as any).pending)
+                        (current as any).pending = false;
+                    // Add image to assistant message content
+                    if (typeof current.content === 'string') {
+                        current.content = [
+                            { type: 'text', text: current.content as string },
+                            {
+                                type: 'image',
+                                image: ev.url,
+                                mediaType: 'image/png',
+                            },
+                        ];
+                    } else {
+                        (current.content as ContentPart[]).push({
+                            type: 'image',
+                            image: ev.url,
+                            mediaType: 'image/png',
+                        });
+                    }
+
+                    // Persist generated image file (data URL preferred; remote URLs best-effort)
+                    if (assistantFileHashes.length < 6) {
+                        let blob: Blob | null = null;
+                        if (ev.url.startsWith('data:image/'))
+                            blob = dataUrlToBlob(ev.url);
+                        else if (/^https?:/.test(ev.url)) {
+                            try {
+                                const r = await fetch(ev.url);
+                                if (r.ok) blob = await r.blob();
+                            } catch {
+                                /* ignore CORS/network issues */
+                            }
+                        }
+                        if (blob) {
+                            try {
+                                const meta = await createOrRefFile(
+                                    blob,
+                                    'gen-image'
+                                );
+                                assistantFileHashes.push(meta.hash);
+                                const serialized =
+                                    serializeFileHashes(assistantFileHashes);
+                                const updatedMsg = {
+                                    ...assistantDbMsg,
+                                    file_hashes: serialized,
+                                    updated_at: nowSec(),
+                                } as any;
+                                await upsert.message(updatedMsg);
+                                (current as any).file_hashes = serialized;
+                            } catch {
+                                /* ignore persistence errors */
+                            }
+                        }
+                    }
+                }
+
+                const now = Date.now();
+                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                    const textContent =
+                        getTextFromContent(current.content) || '';
+                    const updated = {
+                        ...assistantDbMsg,
+                        data: {
+                            ...((assistantDbMsg as any).data || {}),
+                            content: textContent,
+                        },
+                        file_hashes: assistantFileHashes.length
+                            ? serializeFileHashes(assistantFileHashes)
+                            : (assistantDbMsg as any).file_hashes,
+                        updated_at: nowSec(),
+                    } as any;
+                    await upsert.message(updated);
+                    if (assistantFileHashes.length)
+                        (current as any).file_hashes =
+                            serializeFileHashes(assistantFileHashes);
+                    lastPersistAt = now;
+                }
+            }
+
+            // Final post-process
+            const fullText = getTextFromContent(current.content) || '';
+            const incoming = await hooks.applyFilters(
+                'ui.chat.message:filter:incoming',
+                fullText,
+                threadIdRef.value
+            );
+
+            // Ensure pending cleared even if no chunks (empty response edge case)
+            if ((current as any).pending) (current as any).pending = false;
+
+            if (typeof current.content === 'string') {
+                current.content = incoming as string;
+            } else {
+                const firstText = (current.content as ContentPart[]).find(
+                    (p) => p.type === 'text'
+                ) as TextPart | undefined;
+                if (firstText) firstText.text = incoming as string;
+                else
+                    (current.content as ContentPart[]).unshift({
+                        type: 'text',
+                        text: incoming as string,
+                    });
+            }
+
+            const finalized = {
+                ...assistantDbMsg,
+                data: {
+                    ...((assistantDbMsg as any).data || {}),
+                    content: incoming,
+                },
+                file_hashes: assistantFileHashes.length
+                    ? serializeFileHashes(assistantFileHashes)
+                    : (assistantDbMsg as any).file_hashes,
+                updated_at: nowSec(),
+            } as any;
+            await upsert.message(finalized);
+
+            const endedAt = Date.now();
+            // Log full finalized assistant response (100% complete)
+            // Removed verbose success console.log to reduce noise/memory retention.
+            try {
+                // (Intentionally left blank for potential lightweight analytics hook)
+            } catch {}
+            await hooks.doAction('ai.chat.send:action:after', {
+                threadId: threadIdRef.value,
+                request: { modelId, userId: userDbMsg.id },
+                response: {
+                    assistantId: assistantDbMsg.id,
+                    length: (incoming as string).length,
+                },
+                timings: {
+                    startedAt,
+                    endedAt,
+                    durationMs: endedAt - startedAt,
+                },
+                aborted: false,
+            });
+        } catch (err) {
+            if (aborted.value) {
+                // Graceful abort: keep partial content, clear pending, fire after hook with aborted flag
+                try {
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        (last as any).pending = false;
+                    }
+                } catch {}
+                await hooks.doAction('ai.chat.send:action:after', {
+                    threadId: threadIdRef.value,
+                    aborted: true,
+                });
+            } else {
+                // Dispatch error hook first
+                await hooks.doAction('ai.chat.error:action', {
+                    threadId: threadIdRef.value,
+                    stage: 'stream',
+                    error: err,
+                });
+                try {
+                    // Remove any trailing pending assistant placeholder
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        messages.value.pop();
+                    }
+                } catch {}
+                // Present toast with retry option (if last user message exists)
+                try {
+                    const lastUser = [...messages.value]
+                        .reverse()
+                        .find((m) => m.role === 'user');
+                    const toast = useToast();
+                    toast.add({
+                        title: 'Message failed',
+                        description: (err as any)?.message || 'Request failed',
+                        color: 'error',
+                        actions: lastUser
+                            ? [
+                                  {
+                                      label: 'Retry',
+                                      onClick: () => {
+                                          if (lastUser?.id)
+                                              retryMessage(lastUser.id as any);
+                                      },
+                                  },
+                              ]
+                            : undefined,
+                        duration: 6000,
+                    });
+                } catch {}
+                // Swallow error so caller doesn't need try/catch; UI already handled
+                return;
+            }
+        } finally {
+            loading.value = false;
+            abortController.value = null;
+        }
+    }
+
+    // Retry logic unchanged in behavior, simplified
+    async function retryMessage(messageId: string, modelOverride?: string) {
+        if (loading.value || !threadIdRef.value) return;
+
+        try {
+            const target: any = await db.messages.get(messageId);
+            if (!target || target.thread_id !== threadIdRef.value) return;
+
+            // If assistant clicked, resolve to preceding user message
+            let userMsg: any = target.role === 'user' ? target : null;
+            if (!userMsg && target.role === 'assistant') {
+                const DexieMod = (await import('dexie')).default;
+                userMsg = await db.messages
+                    .where('[thread_id+index]')
+                    .between(
+                        [target.thread_id, DexieMod.minKey],
+                        [target.thread_id, target.index]
+                    )
+                    .filter(
+                        (m: any) =>
+                            m.role === 'user' &&
+                            !m.deleted &&
+                            m.index < target.index
+                    )
+                    .last();
+            }
+            if (!userMsg) return;
+
+            // Find assistant reply after the user (could be original target)
+            const DexieMod2 = (await import('dexie')).default;
+            const assistant = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [userMsg.thread_id, userMsg.index + 1],
+                    [userMsg.thread_id, DexieMod2.maxKey]
+                )
+                .filter((m: any) => m.role === 'assistant' && !m.deleted)
+                .first();
+
+            await hooks.doAction('ai.chat.retry:action:before', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                triggeredBy: target.role,
+            });
+
+            await db.transaction('rw', db.messages, async () => {
+                await db.messages.delete(userMsg.id);
+                if (assistant) await db.messages.delete(assistant.id);
+            });
+
+            (messages as any).value = (messages as any).value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+
+            const originalText = (userMsg.data as any)?.content || '';
+            let hashes: string[] = [];
+            if (userMsg.file_hashes) {
+                const { parseFileHashes } = await import('~/db/files-util');
+                hashes = parseFileHashes(userMsg.file_hashes);
+            }
+
+            await sendMessage(originalText, {
+                model: modelOverride || DEFAULT_AI_MODEL,
+                file_hashes: hashes,
+                files: [],
+                online: false,
+            });
+
+            const tail = (messages as any).value.slice(-2);
+            const newUser = tail.find((m: any) => m.role === 'user');
+            const newAssistant = tail.find((m: any) => m.role === 'assistant');
+            await hooks.doAction('ai.chat.retry:action:after', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                newUserId: newUser?.id,
+                newAssistantId: newAssistant?.id,
+            });
+        } catch (e) {
+            console.error('[useChat.retryMessage] failed', e);
+        }
+    }
+
+    return {
+        messages,
+        sendMessage,
+        retryMessage,
+        loading,
+        threadId: threadIdRef,
+        abort: () => {
+            if (!loading.value || !abortController.value) return;
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch {}
+        },
+    };
+}
+```
+
 ## File: app/components/chat/ChatInputDropper.vue
 ```vue
 <template>
@@ -13535,7 +13517,7 @@ async function onBranch() {
                         class="absolute top-1 right-1 flex items-center gap-2"
                     >
                         <UIcon
-                            name="i-lucide:loader-2"
+                            name="pixelarticons:loader"
                             class="w-4 h-4 animate-spin opacity-70"
                         />
                     </div>
@@ -13658,9 +13640,10 @@ async function onBranch() {
                     class="shrink-0 hidden sm:block"
                 />
 
-                <!-- Send Button -->
+                <!-- Send / Stop Button -->
                 <div>
                     <UButton
+                        v-if="!props.streaming"
                         @click="handleSend"
                         :disabled="
                             loading ||
@@ -13674,6 +13657,18 @@ async function onBranch() {
                         aria-label="Send message"
                     >
                         <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
+                    </UButton>
+                    <UButton
+                        v-else
+                        @click="emit('stop-stream')"
+                        :square="true"
+                        size="sm"
+                        color="error"
+                        class="retro-btn text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Stop generation"
+                    >
+                        <UIcon name="pixelarticons:pause" class="w-4 h-4" />
                     </UButton>
                 </div>
             </div>
@@ -13792,6 +13787,7 @@ const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
     threadId?: string;
+    streaming?: boolean; // assistant response streaming
 }>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
@@ -13800,7 +13796,7 @@ const LAST_MODEL_KEY = 'last_selected_model';
 
 onMounted(async () => {
     const fave = await getFavoriteModels();
-    console.log('Favorite models:', fave);
+    // Favorite models loaded (log removed)
     if (process.client) {
         try {
             const stored = localStorage.getItem(LAST_MODEL_KEY);
@@ -13900,6 +13896,7 @@ const emit = defineEmits<{
     (e: 'settings-change', settings: ImageSettings): void;
     (e: 'trigger-file-input'): void;
     (e: 'pending-prompt-selected', promptId: string | null): void;
+    (e: 'stop-stream'): void; // New event for stopping the stream
 }>();
 
 const promptText = ref('');
@@ -14154,16 +14151,11 @@ const handleSend = () => {
 };
 
 const handlePromptSelected = (id: string) => {
-    // Handle prompt selection - emit to parent if no thread yet
-    if (!props.threadId) {
-        emit('pending-prompt-selected', id);
-    }
-    console.log('Prompt selected:', id);
+    if (!props.threadId) emit('pending-prompt-selected', id);
 };
 
 const handlePromptModalClosed = () => {
-    // Handle modal close if needed
-    console.log('Prompt modal closed');
+    /* modal closed */
 };
 </script>
 
@@ -14231,1009 +14223,6 @@ textarea::-webkit-scrollbar-thumb:hover {
 </style>
 ```
 
-## File: app/components/chat/ChatContainer.vue
-```vue
-<template>
-    <main
-        ref="containerRoot"
-        class="flex w-full flex-1 flex-col overflow-hidden"
-    >
-        <!-- Scroll viewport -->
-        <div
-            ref="scrollParent"
-            class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
-            :style="{ paddingBottom: bottomPad + 'px' }"
-        >
-            <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
-            >
-                <!-- Virtualized stable messages (Req 3.1) -->
-                <VirtualMessageList
-                    :messages="virtualMessages"
-                    :item-size-estimation="320"
-                    :overscan="8"
-                    :scroll-parent="scrollParent"
-                    wrapper-class="flex flex-col"
-                >
-                    <template #item="{ message, index }">
-                        <div
-                            :key="message.id || message.stream_id || index"
-                            class="first:mt-0 mt-10"
-                        >
-                            <ChatMessage
-                                :message="message"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                            />
-                        </div>
-                    </template>
-                    <template #tail>
-                        <!-- Streaming tail appended (Req 3.2) -->
-                        <div v-if="tailActive" class="mt-10 first:mt-0">
-                            <div
-                                class="bg-white/5 border-2 w-full retro-shadow backdrop-blur-sm p-1 sm:p-5 rounded-md relative animate-in fade-in"
-                                style="animation-duration: 120ms"
-                            >
-                                <div
-                                    class="prose max-w-none w-full leading-[1.5] dark:prose-headings:text-white/95! prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] text-[var(--md-on-surface)] dark:text-[var(--md-on-surface)]"
-                                    v-html="tailRendered || tailPlaceholder"
-                                />
-                                <div
-                                    class="absolute -bottom-5 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
-                                >
-                                    <span
-                                        class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
-                                        >Streaming…</span
-                                    >
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </VirtualMessageList>
-            </div>
-        </div>
-        <!-- Input area overlay -->
-        <div class="pointer-events-none absolute bottom-0 top-0 w-full">
-            <div
-                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1"
-            >
-                <chat-input-dropper
-                    ref="chatInputEl"
-                    :loading="loading"
-                    :container-width="containerWidth"
-                    :thread-id="currentThreadId"
-                    @send="onSend"
-                    @model-change="onModelChange"
-                    @pending-prompt-selected="onPendingPromptSelected"
-                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
-                />
-            </div>
-        </div>
-    </main>
-</template>
-
-<script setup lang="ts">
-// Refactored ChatContainer (Task 4) – orchestration only.
-// Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
-import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref, nextTick } from 'vue';
-import { parseFileHashes } from '~/db/files-util';
-import { db } from '~/db';
-import { useChat } from '~/composables/useAi';
-import type {
-    ChatMessage as ChatMessageType,
-    ContentPart,
-} from '~/utils/chat/types';
-import { useHookEffect } from '~/composables/useHookEffect';
-import { marked } from 'marked';
-import VirtualMessageList from './VirtualMessageList.vue';
-import { useTailStream } from '../../composables/useTailStream';
-import { useAutoScroll } from '../../composables/useAutoScroll';
-import { useChatSend } from '../../composables/useChatSend';
-import { useElementSize } from '@vueuse/core';
-
-const model = ref('openai/gpt-oss-120b');
-const pendingPromptId = ref<string | null>(null);
-
-// Resize (Req 3.4): useElementSize -> reactive width
-const containerRoot = ref<HTMLElement | null>(null);
-const { width: containerWidth } = useElementSize(containerRoot);
-// Dynamic chat input height to compute scroll padding
-const chatInputEl = ref<HTMLElement | null>(null);
-const { height: chatInputHeight } = useElementSize(chatInputEl);
-const bottomPad = computed(() => {
-    // Add extra breathing space so last message sits above input slightly
-    const h = chatInputHeight.value || 140; // fallback similar to prior fixed 165
-    return Math.round(h + 36); // 36px buffer
-});
-
-function onModelChange(newModel: string) {
-    model.value = newModel;
-    console.log('Model changed to:', newModel);
-}
-
-const props = defineProps<{
-    threadId?: string;
-    messageHistory?: ChatMessageType[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'thread-selected', id: string): void;
-}>();
-
-// Initialize chat composable and make it refresh when threadId changes
-const chat = shallowRef(
-    useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined
-    )
-);
-
-watch(
-    () => props.threadId,
-    (newId) => {
-        const currentId = chat.value?.threadId?.value;
-        // Avoid re-initializing if the composable already set the same id (first-send case)
-        if (newId && currentId && newId === currentId) return;
-        chat.value = useChat(
-            props.messageHistory,
-            newId,
-            pendingPromptId.value || undefined
-        );
-    }
-);
-
-// Keep composable messages in sync when parent provides an updated messageHistory
-watch(
-    () => props.messageHistory,
-    (mh) => {
-        if (!chat.value) return;
-        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
-        if (chat.value.loading.value) return;
-        // Prefer to update the internal messages array directly to avoid remount flicker
-        chat.value.messages.value = [...(mh || [])];
-    }
-);
-
-// When a new thread id is created internally (first send), propagate upward once
-watch(
-    () => chat.value?.threadId?.value,
-    (id, prev) => {
-        if (!prev && id) {
-            emit('thread-selected', id);
-            // Clear pending prompt since it's now applied to the thread
-            pendingPromptId.value = null;
-        }
-    }
-);
-
-// Render messages with content narrowed to string for ChatMessage.vue
-type RenderMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    id?: string;
-    stream_id?: string;
-    file_hashes?: string | null; // serialized JSON array (from DB/user memory)
-    pending?: boolean; // UI-only flag for skeleton loader
-};
-function escapeAttr(v: string) {
-    return v
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-const messages = computed<RenderMessage[]>(() =>
-    (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
-        let contentStr = '';
-        if (typeof m.content === 'string') {
-            contentStr = m.content;
-        } else if (Array.isArray(m.content)) {
-            const segs: string[] = [];
-            for (const p of m.content as ContentPart[]) {
-                if (p.type === 'text') {
-                    segs.push(p.text);
-                } else if (p.type === 'image') {
-                    const src = typeof p.image === 'string' ? p.image : '';
-                    if (src.startsWith('data:image/')) {
-                        segs.push(
-                            `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                src
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
-                        );
-                    } else if (src) {
-                        segs.push(
-                            `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                src
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
-                        );
-                    }
-                } else if (p.type === 'file') {
-                    const label = (p as any).name || p.mediaType || 'file';
-                    segs.push(`**[file:${escapeAttr(label)}]**`);
-                }
-            }
-            contentStr = segs.join('\n\n');
-        } else {
-            contentStr = String((m as any).content ?? '');
-        }
-        // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
-        const hasImgTag = /<img\s/i.test(contentStr);
-        if (!hasImgTag && (m as any).file_hashes) {
-            const hashes = parseFileHashes((m as any).file_hashes);
-            if (hashes.length) {
-                const gallery = hashes
-                    .map(
-                        (h) =>
-                            `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
-                                h
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
-                    )
-                    .join('');
-                contentStr += (contentStr ? '\n\n' : '') + gallery;
-            }
-        }
-        return {
-            role: m.role,
-            content: contentStr,
-            id: m.id,
-            stream_id: m.stream_id,
-            file_hashes: (m as any).file_hashes,
-            pending: (m as any).pending,
-        } as RenderMessage;
-    })
-);
-const loading = computed(() => chat.value.loading.value);
-
-// Tail streaming via composable (Req 3.2)
-const tail = useTailStream({ flushIntervalMs: 50, immediate: true });
-const tailStreamId = ref<string | null>(null);
-// Current thread id for this container (reactive)
-const currentThreadId = computed(() => chat.value.threadId?.value);
-const tailActive = computed(() => tail.isStreaming.value);
-const tailRendered = computed(() =>
-    tail.displayText.value ? marked.parse(tail.displayText.value) : ''
-);
-const tailPlaceholder = computed(() =>
-    !tail.displayText.value ? 'Thinking…' : ''
-);
-
-// Identify the current streaming assistant message (last assistant with empty OR growing content while loading)
-const streamingAssistant = computed(() => {
-    if (!loading.value) return null;
-    const arr = messages.value;
-    if (!arr.length) return null;
-    const last = arr[arr.length - 1];
-    if (last && last.role === 'assistant') return last;
-    return null;
-});
-
-// Virtual list data excludes streaming assistant (Req 3.2 separation)
-const virtualMessages = computed(() => {
-    const base =
-        !tailActive.value || !tailStreamId.value
-            ? messages.value
-            : messages.value.filter((m) => m.stream_id !== tailStreamId.value);
-    // Ensure id present (fallback to index) to satisfy child expectation of string id
-    return base.map((m, i) => ({ ...m, id: m.id || String(i) }));
-});
-
-// Scroll handling (Req 3.3) via useAutoScroll
-const scrollParent = ref<HTMLElement | null>(null);
-const autoScroll = useAutoScroll(scrollParent, { thresholdPx: 64 });
-watch(
-    () => messages.value.length,
-    async () => {
-        await nextTick();
-        autoScroll.onContentIncrease();
-    }
-);
-watch(
-    () => tail.displayText.value,
-    () => {
-        if (tailActive.value) autoScroll.onContentIncrease();
-    }
-);
-
-// Initial bottom stick after mount (defer to allow user immediate scroll cancel)
-nextTick(() => {
-    setTimeout(() => {
-        if (autoScroll.atBottom.value)
-            autoScroll.scrollToBottom({ smooth: false });
-    }, 0);
-});
-
-// Hook: streaming delta buffering
-useHookEffect(
-    'ai.chat.stream:action:delta',
-    (delta: string, meta: any) => {
-        // Filter: only react if this delta belongs to this pane's thread
-        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
-        const sid = meta?.streamId || meta?.assistantId || 'stream';
-        if (!tailStreamId.value || tailStreamId.value !== sid) {
-            tailStreamId.value = sid;
-            tail.reset();
-        }
-        tail.push(String(delta || ''));
-    },
-    { kind: 'action', priority: 20 }
-);
-
-// Hook: after send (finalize)
-useHookEffect(
-    'ai.chat.send:action:after',
-    (meta?: any) => {
-        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
-        tail.complete();
-        nextTick(() => autoScroll.onContentIncrease());
-    },
-    { kind: 'action', priority: 50 }
-);
-
-// Hook: error path
-useHookEffect(
-    'ai.chat.error:action',
-    (meta?: any) => {
-        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
-        tail.fail(new Error('stream-error'));
-    },
-    { kind: 'action', priority: 50 }
-);
-
-// Forward tail error (Req 3.10) – placeholder for hook system integration
-watch(
-    () => tail.error.value,
-    (err) => {
-        if (err) {
-            // Could integrate hooks.doAction('chat.error', { source: 'tail', error: err }) if available
-            // eslint-disable-next-line no-console
-            console.error('[ChatContainer] tail error', err);
-        }
-    }
-);
-
-// Reset tail state when switching threads to prevent ghost streaming across panes
-watch(currentThreadId, () => {
-    tail.reset();
-    tailStreamId.value = null;
-});
-
-// When input height changes and user was at bottom, keep them pinned
-watch(
-    () => chatInputHeight.value,
-    async () => {
-        await nextTick();
-        if (autoScroll.atBottom.value) {
-            autoScroll.scrollToBottom({ smooth: false });
-        }
-    }
-);
-
-// Auto-scroll as tailDisplay grows
-// Chat send abstraction (Req 3.5)
-const chatSend = useChatSend();
-
-function onSend(payload: any) {
-    if (loading.value) return;
-    const readyImages = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'ready')
-        : [];
-    const pendingCount = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'pending')
-              .length
-        : 0;
-    if (pendingCount > 0 && readyImages.length === 0) {
-        // Defer sending until at least one image hashed (user can click again shortly)
-        console.warn(
-            '[ChatContainer.onSend] images still hashing; delaying send'
-        );
-        return;
-    }
-    const files = readyImages.map((img: any) => ({
-        type: img.file?.type || 'image/png',
-        url: img.url,
-    }));
-    const file_hashes = readyImages
-        .map((img: any) => img.hash)
-        .filter((h: any) => typeof h === 'string');
-    const extraTextParts = Array.isArray(payload.largeTexts)
-        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
-        : [];
-
-    // Basic transformation retained (future: move fully into useChatSend)
-    const result = chatSend.send({
-        threadId: chat.value.threadId?.value || '',
-        text: payload.text,
-    });
-    chat.value
-        .sendMessage(payload.text, {
-            model: model.value,
-            files,
-            file_hashes,
-            extraTextParts,
-            online: !!payload.webSearchEnabled,
-        })
-        .catch((e: any) =>
-            console.error('[ChatContainer.onSend] sendMessage error', e)
-        );
-    return result;
-}
-
-function onRetry(messageId: string) {
-    if (!chat.value || chat.value.loading.value) return;
-    // Provide current model so retry uses same selection
-    (chat.value as any).retryMessage(messageId, model.value);
-}
-
-function onBranch(newThreadId: string) {
-    if (newThreadId) emit('thread-selected', newThreadId);
-}
-
-function onEdited(payload: { id: string; content: string }) {
-    if (!chat.value) return;
-    const arr = chat.value.messages.value;
-    const idx = arr.findIndex((m: any) => m.id === payload.id);
-    if (idx === -1) return;
-    const msg = arr[idx];
-    if (!msg) return;
-    // If message content is a parts array, update the first text part; else update string directly
-    if (Array.isArray(msg.content)) {
-        const firstText = (msg.content as any[]).find((p) => p.type === 'text');
-        if (firstText) firstText.text = payload.content;
-        else
-            (msg.content as any[]).unshift({
-                type: 'text',
-                text: payload.content,
-            });
-    } else {
-        msg.content = payload.content;
-    }
-    // Trigger reactivity for computed messages mapping
-    chat.value.messages.value = [...arr];
-}
-
-function onPendingPromptSelected(promptId: string | null) {
-    pendingPromptId.value = promptId;
-    // Reinitialize chat with the pending prompt
-    chat.value = useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined
-    );
-}
-</script>
-
-<style>
-/* Optional custom styles placeholder */
-</style>
-```
-
-## File: app/components/chat/ChatPageShell.vue
-```vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <sidebar-side-nav-content
-                :active-thread="panes[0]?.threadId || ''"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <SidebarSideNavContentCollapsed
-                :active-thread="panes[0]?.threadId || ''"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
-            />
-        </template>
-        <div class="flex-1 h-screen w-full relative">
-            <div
-                id="top-nav"
-                :class="{
-                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
-                        panes.length > 1 || isMobile,
-                }"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
-            >
-                <!-- New Window Button -->
-                <div
-                    v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
-                >
-                    <UTooltip :delay-duration="0" text="Open sidebar">
-                        <UButton
-                            label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            aria-label="Open sidebar"
-                            title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
-                            @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div
-                    class="h-full items-center justify-center px-4 hidden md:flex"
-                >
-                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :disabled="!canAddPane"
-                            :class="
-                                'retro-btn pointer-events-auto mr-2 ' +
-                                (!canAddPane
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
-                            aria-label="New window"
-                            title="New window"
-                            @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <!-- Theme Toggle Button -->
-                <div class="h-full flex items-center justify-center px-4">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <!-- Panes Container -->
-            <div
-                :class="[
-                    showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                    @keydown.left.prevent="focusPrev(i)"
-                    @keydown.right.prevent="focusNext(i)"
-                >
-                    <!-- Close button (only if >1 pane) -->
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
-
-                    <template v-if="pane.mode === 'chat'">
-                        <ChatContainer
-                            class="flex-1 min-h-0"
-                            :message-history="pane.messages"
-                            :thread-id="pane.threadId"
-                            @thread-selected="
-                                (id) => onInternalThreadCreated(id, i)
-                            "
-                        />
-                    </template>
-                    <template v-else-if="pane.mode === 'doc'">
-                        <LazyDocumentsDocumentEditor
-                            v-if="pane.documentId"
-                            :document-id="pane.documentId"
-                            class="flex-1 min-h-0"
-                        ></LazyDocumentsDocumentEditor>
-                        <div
-                            v-else
-                            class="flex-1 flex items-center justify-center text-sm opacity-70"
-                        >
-                            No document.
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script setup lang="ts">
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
-import { db } from '~/db';
-// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
-
-/**
- * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
- * Props:
- *  - initialThreadId: optional id to load immediately (deep link)
- *  - validateInitial: if true, ensure the initial thread exists else redirect + toast
- *  - routeSync: keep URL in sync with active thread id (default true)
- */
-const props = withDefaults(
-    defineProps<{
-        initialThreadId?: string;
-        validateInitial?: boolean;
-        routeSync?: boolean;
-    }>(),
-    {
-        validateInitial: false,
-        routeSync: true,
-    }
-);
-
-const router = useRouter();
-const toast = useToast();
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-    id?: string;
-    stream_id?: string;
-};
-
-// ---------------- Multi-pane via composable ----------------
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-const {
-    panes,
-    activePaneIndex,
-    canAddPane,
-    newWindowTooltip,
-    addPane,
-    closePane,
-    setActive,
-    focusPrev,
-    focusNext,
-    setPaneThread,
-    loadMessagesFor,
-    ensureAtLeastOne,
-} = useMultiPane({
-    initialThreadId: props.initialThreadId,
-    maxPanes: 3,
-    onFlushDocument: (id) => flushDocument(id),
-});
-
-// Removed legacy aliases (threadId/messageHistory/validating); use pane[0] directly where needed
-let validateToken = 0; // token for initial validation
-
-// Watch pane add/remove to sync URL for active pane type
-watch(
-    () => panes.value.map((p) => p.id).join(','),
-    () => {
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        if (pane.mode === 'chat') updateUrlThread(pane.threadId || undefined);
-        else updateUrlThread(undefined);
-    }
-);
-
-async function ensureDbOpen() {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-}
-
-async function validateThread(id: string): Promise<boolean> {
-    await ensureDbOpen();
-    const ATTEMPTS = 5;
-    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        try {
-            const t = await db.threads.get(id);
-            if (t) return !t.deleted;
-        } catch {}
-        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-function redirectNotFound() {
-    router.replace('/chat');
-    toast.add({
-        title: 'Not found',
-        description: 'This chat does not exist.',
-        color: 'error',
-    });
-}
-
-async function initInitialThread() {
-    if (!process.client) return;
-    if (!props.initialThreadId) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.validateInitial) {
-        pane.validating = true;
-        const token = ++validateToken;
-        const ok = await validateThread(props.initialThreadId);
-        if (token !== validateToken) return; // superseded
-        if (!ok) {
-            redirectNotFound();
-            return;
-        }
-    }
-    await setPaneThread(0, props.initialThreadId);
-    pane.validating = false;
-}
-
-// Theme toggle (SSR safe)
-const nuxtApp = useNuxtApp();
-const getThemeSafe = () => {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client) {
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-        }
-    } catch {}
-    return 'light';
-};
-const themeName = ref<string>(getThemeSafe());
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    const api = nuxtApp.$theme as any;
-    if (api?.toggle) api.toggle();
-    // After toggle, re-read
-    syncTheme();
-}
-if (process.client) {
-    const root = document.documentElement;
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => observer.disconnect());
-    } else {
-        onUnmounted(() => observer.disconnect());
-    }
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// Mobile detection to keep padding on small screens
-import { isMobile } from '~/state/global';
-
-if (process.client) {
-    onMounted(() => {
-        const mq = window.matchMedia('(max-width: 640px)');
-        const apply = () => (isMobile.value = mq.matches);
-        apply();
-        mq.addEventListener('change', apply);
-        if (import.meta.hot) {
-            import.meta.hot.dispose(() =>
-                mq.removeEventListener('change', apply)
-            );
-        } else {
-            onUnmounted(() => mq.removeEventListener('change', apply));
-        }
-    });
-}
-
-// Only offset content when multi-pane OR on mobile (toolbar overlap avoidance)
-const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
-
-onMounted(() => {
-    initInitialThread();
-    syncTheme();
-    ensureAtLeastOne();
-});
-
-// Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
-
-function updateUrlThread(id?: string) {
-    if (!process.client || !props.routeSync) return;
-    const newPath = id ? `/chat/${id}` : '/chat';
-    if (window.location.pathname === newPath) return; // no-op
-    // Preserve existing history.state so back button stack stays intact
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-// Sidebar selection
-function onSidebarSelected(id: string) {
-    if (!id) return;
-    const target = activePaneIndex.value;
-    setPaneThread(target, id);
-    const pane = panes.value[target];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-    }
-    if (target === activePaneIndex.value) updateUrlThread(id);
-}
-
-// ChatContainer emitted new thread (first user send)
-function onInternalThreadCreated(id: string, paneIndex?: number) {
-    if (!id) return;
-    const idx =
-        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
-    const pane = panes.value[idx];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    if (pane.threadId !== id) setPaneThread(idx, id);
-    if (idx === activePaneIndex.value) updateUrlThread(id);
-}
-
-function onNewChat() {
-    const pane = panes.value[activePaneIndex.value];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-        pane.messages = [];
-        pane.threadId = '';
-    }
-    updateUrlThread(undefined);
-}
-
-// --------------- Documents Integration (minimal) ---------------
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
-
-// Document operations abstracted
-const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
-    panes,
-    activePaneIndex,
-    createNewDoc,
-    flushDocument: (id) => flushDocument(id),
-});
-
-async function onNewDocument(initial?: { title?: string }) {
-    await newDocumentInActive(initial);
-}
-
-async function onDocumentSelected(id: string) {
-    await selectDocumentInActive(id);
-}
-
-// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document in active pane
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            // Ignore if focused in input/textarea/contentEditable
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
-        }
-    };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    } else {
-        onUnmounted(() => window.removeEventListener('keydown', down));
-    }
-}
-
-// Mobile sidebar control
-function openMobileSidebar() {
-    // call exposed method on layout to force open
-    (layoutRef.value as any)?.openSidebar?.();
-}
-
-// Exposed to collapsed sidebar search button via emit
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    // Defer focus to next tick so sidebar DOM present if previously collapsed
-    requestAnimationFrame(() => {
-        const input = document.querySelector(
-            'aside input[placeholder="Search threads..."]'
-        ) as HTMLInputElement | null;
-        if (input) input.focus();
-    });
-}
-</script>
-
-<style scoped>
-body {
-    overflow-y: hidden;
-}
-
-/* Active pane visual indicator (retro glow using primary color) */
-.pane-active {
-    position: relative;
-    /* Smooth color / shadow transition when switching panes */
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0; /* cover full pane */
-    border: 1px solid var(--md-primary);
-
-    /* Layered shadows for a subtle glow while still retro / crisp */
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
-```
-
 ## File: app/components/sidebar/SideNavContent.vue
 ```vue
 <template>
@@ -15270,6 +14259,7 @@ body {
             </div>
             <div class="relative w-full ml-[1px]">
                 <UInput
+                    ref="searchInputWrapper"
                     v-model="sidebarQuery"
                     icon="pixelarticons:search"
                     size="md"
@@ -15888,6 +14878,17 @@ import { useSidebarSearch } from '~/composables/useSidebarSearch';
 // Documents live query (docs only) to feed search
 const docs = ref<any[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
+// Direct focus support for external callers
+const searchInputWrapper = ref<any | null>(null);
+function focusSearchInput() {
+    // Access underlying input inside UInput component
+    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
+        searchInputWrapper.value) as HTMLElement | null;
+    if (!root) return;
+    const input = root.querySelector('input');
+    if (input) (input as HTMLInputElement).focus();
+}
+defineExpose({ focusSearchInput });
 
 const {
     query: sidebarQuery,
@@ -15900,14 +14901,42 @@ const displayThreads = computed(() =>
     sidebarQuery.value.trim() ? threadResults.value : items.value
 );
 // Filter projects + entries when query active
+// Remove references to deleted threads/docs from project data live
+const existingThreadIds = computed(
+    () => new Set(items.value.map((t: any) => t.id))
+);
+const existingDocIds = computed(
+    () => new Set(docs.value.map((d: any) => d.id))
+);
+const projectsFilteredByExistence = computed(() =>
+    projects.value.map((p: any) => {
+        const dataArr = Array.isArray(p.data) ? p.data : [];
+        const filteredEntries = dataArr.filter((e: any) => {
+            if (!e) return false;
+            const id = e.id;
+            if (!id) return false;
+            const type = e.type || e.kind || 'thread';
+            if (type === 'thread' || type === 'chat')
+                return existingThreadIds.value.has(id);
+            if (type === 'doc' || type === 'document')
+                return existingDocIds.value.has(id);
+            return true;
+        });
+        // If filtering removed entries, return shallow copy to avoid mutating original p (reactivity safe)
+        return filteredEntries.length === dataArr.length
+            ? p
+            : { ...p, data: filteredEntries };
+    })
+);
+
 const displayProjects = computed(() => {
-    if (!sidebarQuery.value.trim()) return projects.value;
+    if (!sidebarQuery.value.trim()) return projectsFilteredByExistence.value;
     const threadSet = new Set(threadResults.value.map((t: any) => t.id));
     const docSet = new Set(documentResults.value.map((d: any) => d.id));
     const directProjectSet = new Set(
         projectResults.value.map((p: any) => p.id)
     );
-    return projects.value
+    return projectsFilteredByExistence.value
         .map((p: any) => {
             const filteredEntries = (p.data || []).filter(
                 (e: any) => e && (threadSet.has(e.id) || docSet.has(e.id))
@@ -16654,4 +15683,1071 @@ async function submitCreateDocument() {
     }
 }
 </script>
+```
+
+## File: app/components/chat/ChatContainer.vue
+```vue
+<template>
+    <main
+        ref="containerRoot"
+        class="flex w-full flex-1 flex-col overflow-hidden"
+    >
+        <!-- Scroll viewport -->
+        <div
+            ref="scrollParent"
+            class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            :style="{ paddingBottom: bottomPad + 'px' }"
+        >
+            <div
+                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
+            >
+                <!-- Virtualized stable messages (Req 3.1) -->
+                <VirtualMessageList
+                    :messages="virtualMessages"
+                    :item-size-estimation="520"
+                    :overscan="5"
+                    :scroll-parent="scrollParent"
+                    wrapper-class="flex flex-col"
+                >
+                    <template #item="{ message, index }">
+                        <div
+                            :key="message.id || message.stream_id || index"
+                            class="first:mt-0 mt-10"
+                        >
+                            <ChatMessage
+                                :message="message"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                            />
+                        </div>
+                    </template>
+                    <template #tail>
+                        <!-- Streaming tail appended (Req 3.2) -->
+                        <div v-if="tailActive" class="mt-10 first:mt-0">
+                            <div
+                                class="bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm p-2 min-w-[140px] rounded-md relative animate-in fade-in"
+                                style="animation-duration: 120ms"
+                            >
+                                <!-- Inner content wrapper mirrors assistant ChatMessage innerClass -->
+                                <div
+                                    class="prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5"
+                                    v-html="tailRendered || tailPlaceholder"
+                                />
+                                <div
+                                    class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+                                >
+                                    <span
+                                        class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
+                                        >Streaming…</span
+                                    >
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </VirtualMessageList>
+            </div>
+        </div>
+        <!-- Input area overlay -->
+        <div class="pointer-events-none absolute bottom-0 top-0 w-full">
+            <div
+                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1"
+            >
+                <chat-input-dropper
+                    ref="chatInputEl"
+                    :loading="loading"
+                    :streaming="loading"
+                    :container-width="containerWidth"
+                    :thread-id="currentThreadId"
+                    @send="onSend"
+                    @model-change="onModelChange"
+                    @stop-stream="onStopStream"
+                    @pending-prompt-selected="onPendingPromptSelected"
+                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
+                />
+            </div>
+        </div>
+    </main>
+</template>
+
+<script setup lang="ts">
+// Refactored ChatContainer (Task 4) – orchestration only.
+// Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
+import ChatMessage from './ChatMessage.vue';
+import { shallowRef, computed, watch, ref, nextTick } from 'vue';
+import { parseFileHashes } from '~/db/files-util';
+import { db } from '~/db';
+import { useChat } from '~/composables/useAi';
+import type {
+    ChatMessage as ChatMessageType,
+    ContentPart,
+} from '~/utils/chat/types';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { marked } from 'marked';
+import VirtualMessageList from './VirtualMessageList.vue';
+import { useTailStream } from '../../composables/useTailStream';
+import { useAutoScroll } from '../../composables/useAutoScroll';
+import { useChatSend } from '../../composables/useChatSend';
+import { useElementSize } from '@vueuse/core';
+
+const model = ref('openai/gpt-oss-120b');
+const pendingPromptId = ref<string | null>(null);
+
+// Resize (Req 3.4): useElementSize -> reactive width
+const containerRoot = ref<HTMLElement | null>(null);
+const { width: containerWidth } = useElementSize(containerRoot);
+// Dynamic chat input height to compute scroll padding
+const chatInputEl = ref<HTMLElement | null>(null);
+const { height: chatInputHeight } = useElementSize(chatInputEl);
+const bottomPad = computed(() => {
+    // Add extra breathing space so last message sits above input slightly
+    const h = chatInputHeight.value || 140; // fallback similar to prior fixed 165
+    return Math.round(h + 36); // 36px buffer
+});
+
+function onModelChange(newModel: string) {
+    model.value = newModel;
+    // Silenced model change log.
+}
+
+const props = defineProps<{
+    threadId?: string;
+    messageHistory?: ChatMessageType[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'thread-selected', id: string): void;
+}>();
+
+// Initialize chat composable and make it refresh when threadId changes
+const chat = shallowRef(
+    useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    )
+);
+
+watch(
+    () => props.threadId,
+    (newId) => {
+        const currentId = chat.value?.threadId?.value;
+        // Avoid re-initializing if the composable already set the same id (first-send case)
+        if (newId && currentId && newId === currentId) return;
+        chat.value = useChat(
+            props.messageHistory,
+            newId,
+            pendingPromptId.value || undefined
+        );
+    }
+);
+
+// Keep composable messages in sync when parent provides an updated messageHistory
+watch(
+    () => props.messageHistory,
+    (mh) => {
+        if (!chat.value) return;
+        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
+        if (chat.value.loading.value) return;
+        // Prefer to update the internal messages array directly to avoid remount flicker
+        chat.value.messages.value = [...(mh || [])];
+    }
+);
+
+// When a new thread id is created internally (first send), propagate upward once
+watch(
+    () => chat.value?.threadId?.value,
+    (id, prev) => {
+        if (!prev && id) {
+            emit('thread-selected', id);
+            // Clear pending prompt since it's now applied to the thread
+            pendingPromptId.value = null;
+        }
+    }
+);
+
+// Render messages with content narrowed to string for ChatMessage.vue
+type RenderMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    id?: string;
+    stream_id?: string;
+    file_hashes?: string | null; // serialized JSON array (from DB/user memory)
+    pending?: boolean; // UI-only flag for skeleton loader
+};
+function escapeAttr(v: string) {
+    return v
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+const messages = computed<RenderMessage[]>(() =>
+    (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
+        let contentStr = '';
+        if (typeof m.content === 'string') {
+            contentStr = m.content;
+        } else if (Array.isArray(m.content)) {
+            const segs: string[] = [];
+            for (const p of m.content as ContentPart[]) {
+                if (p.type === 'text') {
+                    segs.push(p.text);
+                } else if (p.type === 'image') {
+                    const src = typeof p.image === 'string' ? p.image : '';
+                    if (src.startsWith('data:image/')) {
+                        segs.push(
+                            `<div class=\"my-3\"><img src=\"${escapeAttr(
+                                src
+                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
+                        );
+                    } else if (src) {
+                        segs.push(
+                            `<div class=\"my-3\"><img src=\"${escapeAttr(
+                                src
+                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
+                        );
+                    }
+                } else if (p.type === 'file') {
+                    const label = (p as any).name || p.mediaType || 'file';
+                    segs.push(`**[file:${escapeAttr(label)}]**`);
+                }
+            }
+            contentStr = segs.join('\n\n');
+        } else {
+            contentStr = String((m as any).content ?? '');
+        }
+        // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
+        const hasImgTag = /<img\s/i.test(contentStr);
+        if (!hasImgTag && (m as any).file_hashes) {
+            const hashes = parseFileHashes((m as any).file_hashes);
+            if (hashes.length) {
+                const gallery = hashes
+                    .map(
+                        (h) =>
+                            `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
+                                h
+                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
+                    )
+                    .join('');
+                contentStr += (contentStr ? '\n\n' : '') + gallery;
+            }
+        }
+        return {
+            role: m.role,
+            content: contentStr,
+            id: m.id,
+            stream_id: m.stream_id,
+            file_hashes: (m as any).file_hashes,
+            pending: (m as any).pending,
+        } as RenderMessage;
+    })
+);
+const loading = computed(() => chat.value.loading.value);
+
+// Tail streaming via composable (Req 3.2)
+const tail = useTailStream({ flushIntervalMs: 50, immediate: true });
+const tailStreamId = ref<string | null>(null);
+// Current thread id for this container (reactive)
+const currentThreadId = computed(() => chat.value.threadId?.value);
+const tailActive = computed(() => tail.isStreaming.value);
+const tailRendered = computed(() =>
+    tail.displayText.value ? marked.parse(tail.displayText.value) : ''
+);
+const tailPlaceholder = computed(() =>
+    !tail.displayText.value ? 'Thinking…' : ''
+);
+
+// Identify the current streaming assistant message (last assistant with empty OR growing content while loading)
+const streamingAssistant = computed(() => {
+    if (!loading.value) return null;
+    const arr = messages.value;
+    if (!arr.length) return null;
+    const last = arr[arr.length - 1];
+    if (last && last.role === 'assistant') return last;
+    return null;
+});
+
+// Virtual list data excludes streaming assistant (Req 3.2 separation)
+const virtualMessages = computed(() => {
+    const base =
+        !tailActive.value || !tailStreamId.value
+            ? messages.value
+            : messages.value.filter((m) => m.stream_id !== tailStreamId.value);
+    // Ensure id present (fallback to index) to satisfy child expectation of string id
+    return base.map((m, i) => ({ ...m, id: m.id || String(i) }));
+});
+
+// Scroll handling (Req 3.3) via useAutoScroll
+const scrollParent = ref<HTMLElement | null>(null);
+const autoScroll = useAutoScroll(scrollParent, { thresholdPx: 64 });
+watch(
+    () => messages.value.length,
+    async () => {
+        await nextTick();
+        autoScroll.onContentIncrease();
+    }
+);
+watch(
+    () => tail.displayText.value,
+    () => {
+        if (tailActive.value) autoScroll.onContentIncrease();
+    }
+);
+
+// Initial bottom stick after mount (defer to allow user immediate scroll cancel)
+nextTick(() => {
+    setTimeout(() => {
+        if (autoScroll.atBottom.value)
+            autoScroll.scrollToBottom({ smooth: false });
+    }, 0);
+});
+
+// Hook: streaming delta buffering
+useHookEffect(
+    'ai.chat.stream:action:delta',
+    (delta: string, meta: any) => {
+        // Filter: only react if this delta belongs to this pane's thread
+        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
+        const sid = meta?.streamId || meta?.assistantId || 'stream';
+        if (!tailStreamId.value || tailStreamId.value !== sid) {
+            tailStreamId.value = sid;
+            tail.reset();
+        }
+        tail.push(String(delta || ''));
+    },
+    { kind: 'action', priority: 20 }
+);
+
+// Hook: after send (finalize)
+useHookEffect(
+    'ai.chat.send:action:after',
+    (meta?: any) => {
+        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
+        tail.complete();
+        nextTick(() => autoScroll.onContentIncrease());
+    },
+    { kind: 'action', priority: 50 }
+);
+
+// Hook: error path
+useHookEffect(
+    'ai.chat.error:action',
+    (meta?: any) => {
+        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
+        tail.fail(new Error('stream-error'));
+    },
+    { kind: 'action', priority: 50 }
+);
+
+// Forward tail error (Req 3.10) – placeholder for hook system integration
+watch(
+    () => tail.error.value,
+    (err) => {
+        if (err) {
+            // Could integrate hooks.doAction('chat.error', { source: 'tail', error: err }) if available
+            // eslint-disable-next-line no-console
+            console.error('[ChatContainer] tail error', err);
+        }
+    }
+);
+
+// Reset tail state when switching threads to prevent ghost streaming across panes
+watch(currentThreadId, () => {
+    tail.reset();
+    tailStreamId.value = null;
+});
+
+// When input height changes and user was at bottom, keep them pinned
+watch(
+    () => chatInputHeight.value,
+    async () => {
+        await nextTick();
+        if (autoScroll.atBottom.value) {
+            autoScroll.scrollToBottom({ smooth: false });
+        }
+    }
+);
+
+// Auto-scroll as tailDisplay grows
+// Chat send abstraction (Req 3.5)
+const chatSend = useChatSend();
+
+function onSend(payload: any) {
+    if (loading.value) return;
+    const readyImages = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'ready')
+        : [];
+    const pendingCount = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'pending')
+              .length
+        : 0;
+    if (pendingCount > 0 && readyImages.length === 0) {
+        // Defer sending until at least one image hashed (user can click again shortly)
+        console.warn(
+            '[ChatContainer.onSend] images still hashing; delaying send'
+        );
+        return;
+    }
+    const files = readyImages.map((img: any) => ({
+        type: img.file?.type || 'image/png',
+        url: img.url,
+    }));
+    const file_hashes = readyImages
+        .map((img: any) => img.hash)
+        .filter((h: any) => typeof h === 'string');
+    const extraTextParts = Array.isArray(payload.largeTexts)
+        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
+        : [];
+
+    // Basic transformation retained (future: move fully into useChatSend)
+    const result = chatSend.send({
+        threadId: chat.value.threadId?.value || '',
+        text: payload.text,
+    });
+    chat.value
+        .sendMessage(payload.text, {
+            model: model.value,
+            files,
+            file_hashes,
+            extraTextParts,
+            online: !!payload.webSearchEnabled,
+        })
+        .catch((e: any) =>
+            console.error('[ChatContainer.onSend] sendMessage error', e)
+        );
+    return result;
+}
+
+function onRetry(messageId: string) {
+    if (!chat.value || chat.value.loading.value) return;
+    // Provide current model so retry uses same selection
+    (chat.value as any).retryMessage(messageId, model.value);
+}
+
+function onBranch(newThreadId: string) {
+    if (newThreadId) emit('thread-selected', newThreadId);
+}
+
+function onEdited(payload: { id: string; content: string }) {
+    if (!chat.value) return;
+    const arr = chat.value.messages.value;
+    const idx = arr.findIndex((m: any) => m.id === payload.id);
+    if (idx === -1) return;
+    const msg = arr[idx];
+    if (!msg) return;
+    // If message content is a parts array, update the first text part; else update string directly
+    if (Array.isArray(msg.content)) {
+        const firstText = (msg.content as any[]).find((p) => p.type === 'text');
+        if (firstText) firstText.text = payload.content;
+        else
+            (msg.content as any[]).unshift({
+                type: 'text',
+                text: payload.content,
+            });
+    } else {
+        msg.content = payload.content;
+    }
+    // Trigger reactivity for computed messages mapping
+    chat.value.messages.value = [...arr];
+}
+
+function onPendingPromptSelected(promptId: string | null) {
+    pendingPromptId.value = promptId;
+    // Reinitialize chat with the pending prompt
+    chat.value = useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    );
+}
+
+function onStopStream() {
+    try {
+        (chat.value as any)?.abort?.();
+    } catch {}
+}
+</script>
+
+<style>
+/* Optional custom styles placeholder */
+</style>
+```
+
+## File: app/components/chat/ChatPageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="panes[0]?.threadId || ''"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <SidebarSideNavContentCollapsed
+                :active-thread="panes[0]?.threadId || ''"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <!-- New Window Button -->
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <!-- Theme Toggle Button -->
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <!-- Panes Container -->
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <!-- Close button (only if >1 pane) -->
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            @thread-selected="
+                                (id) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <LazyDocumentsDocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        ></LazyDocumentsDocumentEditor>
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
+// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
+
+/**
+ * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
+ * Props:
+ *  - initialThreadId: optional id to load immediately (deep link)
+ *  - validateInitial: if true, ensure the initial thread exists else redirect + toast
+ *  - routeSync: keep URL in sync with active thread id (default true)
+ */
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        validateInitial?: boolean;
+        routeSync?: boolean;
+    }>(),
+    {
+        validateInitial: false,
+        routeSync: true,
+    }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+    id?: string;
+    stream_id?: string;
+};
+
+// ---------------- Multi-pane via composable ----------------
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
+
+// Removed legacy aliases (threadId/messageHistory/validating); use pane[0] directly where needed
+let validateToken = 0; // token for initial validation
+
+// Watch pane add/remove to sync URL for active pane type
+watch(
+    () => panes.value.map((p) => p.id).join(','),
+    () => {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        if (pane.mode === 'chat') updateUrlThread(pane.threadId || undefined);
+        else updateUrlThread(undefined);
+    }
+);
+
+async function ensureDbOpen() {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+}
+
+async function validateThread(id: string): Promise<boolean> {
+    await ensureDbOpen();
+    const ATTEMPTS = 5;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t) return !t.deleted;
+        } catch {}
+        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+function redirectNotFound() {
+    router.replace('/chat');
+    toast.add({
+        title: 'Not found',
+        description: 'This chat does not exist.',
+        color: 'error',
+    });
+}
+
+async function initInitialThread() {
+    if (!process.client) return;
+    if (!props.initialThreadId) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.validateInitial) {
+        pane.validating = true;
+        const token = ++validateToken;
+        const ok = await validateThread(props.initialThreadId);
+        if (token !== validateToken) return; // superseded
+        if (!ok) {
+            redirectNotFound();
+            return;
+        }
+    }
+    await setPaneThread(0, props.initialThreadId);
+    pane.validating = false;
+}
+
+// Theme toggle (SSR safe)
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    const api = nuxtApp.$theme as any;
+    if (api?.toggle) api.toggle();
+    // After toggle, re-read
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// Mobile detection to keep padding on small screens
+import { isMobile } from '~/state/global';
+
+if (process.client) {
+    onMounted(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        const apply = () => (isMobile.value = mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() =>
+                mq.removeEventListener('change', apply)
+            );
+        } else {
+            onUnmounted(() => mq.removeEventListener('change', apply));
+        }
+    });
+}
+
+// Only offset content when multi-pane OR on mobile (toolbar overlap avoidance)
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+
+onMounted(() => {
+    initInitialThread();
+    syncTheme();
+    ensureAtLeastOne();
+});
+
+// Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
+
+function updateUrlThread(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/chat/${id}` : '/chat';
+    if (window.location.pathname === newPath) return; // no-op
+    // Preserve existing history.state so back button stack stays intact
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+// Sidebar selection
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrlThread(id);
+}
+
+// ChatContainer emitted new thread (first user send)
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrlThread(id);
+}
+
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrlThread(undefined);
+}
+
+// --------------- Documents Integration (minimal) ---------------
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+// Document operations abstracted
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    await newDocumentInActive(initial);
+}
+
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+}
+
+// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document in active pane
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            // Ignore if focused in input/textarea/contentEditable
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+
+// Mobile sidebar control
+function openMobileSidebar() {
+    // call exposed method on layout to force open
+    (layoutRef.value as any)?.openSidebar?.();
+}
+
+// Exposed to collapsed sidebar search button via emit
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    // Focus via exposed method on SideNavContent
+    requestAnimationFrame(() => {
+        sideNavExpandedRef.value?.focusSearchInput?.();
+    });
+}
+
+// ---------------- Auto-reset pane when active thread or document is deleted ----------------
+// If the currently loaded thread/doc is deleted (soft or hard), switch that pane to a blank chat.
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    // If this pane is the active one, update URL to /chat (blank)
+    if (paneIndex === activePaneIndex.value) updateUrlThread(undefined);
+}
+
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) {
+            resetPaneToBlank(i);
+        }
+    });
+}
+
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) {
+            resetPaneToBlank(i);
+        }
+    });
+}
+
+// Register hook listeners (both soft + hard delete events)
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+</script>
+
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+
+/* Active pane visual indicator (retro glow using primary color) */
+.pane-active {
+    position: relative;
+    /* Smooth color / shadow transition when switching panes */
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0; /* cover full pane */
+    border: 1px solid var(--md-primary);
+
+    /* Layered shadows for a subtle glow while still retro / crisp */
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
 ```
