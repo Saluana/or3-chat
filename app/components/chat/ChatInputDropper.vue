@@ -151,9 +151,10 @@
                     class="shrink-0 hidden sm:block"
                 />
 
-                <!-- Send Button -->
+                <!-- Send / Stop Button -->
                 <div>
                     <UButton
+                        v-if="!props.streaming"
                         @click="handleSend"
                         :disabled="
                             loading ||
@@ -167,6 +168,18 @@
                         aria-label="Send message"
                     >
                         <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
+                    </UButton>
+                    <UButton
+                        v-else
+                        @click="emit('stop-stream')"
+                        :square="true"
+                        size="sm"
+                        color="error"
+                        class="retro-btn text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Stop generation"
+                    >
+                        <UIcon name="pixelarticons:pause" class="w-4 h-4" />
                     </UButton>
                 </div>
             </div>
@@ -285,6 +298,7 @@ const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
     threadId?: string;
+    streaming?: boolean; // assistant response streaming
 }>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
@@ -393,6 +407,7 @@ const emit = defineEmits<{
     (e: 'settings-change', settings: ImageSettings): void;
     (e: 'trigger-file-input'): void;
     (e: 'pending-prompt-selected', promptId: string | null): void;
+    (e: 'stop-stream'): void; // New event for stopping the stream
 }>();
 
 const promptText = ref('');

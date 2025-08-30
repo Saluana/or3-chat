@@ -38,6 +38,9 @@ export function useChat(
 ) {
     const messages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
+    // Abort controller & state for active streaming request
+    const abortController = ref<AbortController | null>(null);
+    const aborted = ref(false);
     const { apiKey } = useUserApiKey();
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
@@ -257,12 +260,15 @@ export function useChat(
                     : undefined,
             });
 
-            // Stream
+            // Stream (setup abort controller)
+            aborted.value = false;
+            abortController.value = new AbortController();
             const stream = openRouterStream({
                 apiKey: apiKey.value!,
                 model: modelId,
                 orMessages,
                 modalities,
+                signal: abortController.value.signal,
             });
 
             // Assistant placeholder in UI
@@ -448,53 +454,73 @@ export function useChat(
                     endedAt,
                     durationMs: endedAt - startedAt,
                 },
+                aborted: false,
             });
         } catch (err) {
-            // Dispatch error hook first
-            await hooks.doAction('ai.chat.error:action', {
-                threadId: threadIdRef.value,
-                stage: 'stream',
-                error: err,
-            });
-            try {
-                // Remove any trailing pending assistant placeholder
-                const last = messages.value[messages.value.length - 1];
-                if (
-                    last &&
-                    last.role === 'assistant' &&
-                    (last as any).pending
-                ) {
-                    messages.value.pop();
-                }
-            } catch {}
-            // Present toast with retry option (if last user message exists)
-            try {
-                const lastUser = [...messages.value]
-                    .reverse()
-                    .find((m) => m.role === 'user');
-                const toast = useToast();
-                toast.add({
-                    title: 'Message failed',
-                    description: (err as any)?.message || 'Request failed',
-                    color: 'error',
-                    actions: lastUser
-                        ? [
-                              {
-                                  label: 'Retry',
-                                  onClick: () => {
-                                      if (lastUser?.id)
-                                          retryMessage(lastUser.id as any);
-                                  },
-                              },
-                          ]
-                        : undefined,
-                    duration: 6000,
+            if (aborted.value) {
+                // Graceful abort: keep partial content, clear pending, fire after hook with aborted flag
+                try {
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        (last as any).pending = false;
+                    }
+                } catch {}
+                await hooks.doAction('ai.chat.send:action:after', {
+                    threadId: threadIdRef.value,
+                    aborted: true,
                 });
-            } catch {}
-            // Swallow error so caller doesn't need try/catch; UI already handled
-            return;
+            } else {
+                // Dispatch error hook first
+                await hooks.doAction('ai.chat.error:action', {
+                    threadId: threadIdRef.value,
+                    stage: 'stream',
+                    error: err,
+                });
+                try {
+                    // Remove any trailing pending assistant placeholder
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        messages.value.pop();
+                    }
+                } catch {}
+                // Present toast with retry option (if last user message exists)
+                try {
+                    const lastUser = [...messages.value]
+                        .reverse()
+                        .find((m) => m.role === 'user');
+                    const toast = useToast();
+                    toast.add({
+                        title: 'Message failed',
+                        description: (err as any)?.message || 'Request failed',
+                        color: 'error',
+                        actions: lastUser
+                            ? [
+                                  {
+                                      label: 'Retry',
+                                      onClick: () => {
+                                          if (lastUser?.id)
+                                              retryMessage(lastUser.id as any);
+                                      },
+                                  },
+                              ]
+                            : undefined,
+                        duration: 6000,
+                    });
+                } catch {}
+                // Swallow error so caller doesn't need try/catch; UI already handled
+                return;
+            }
         } finally {
             loading.value = false;
+            abortController.value = null;
         }
     }
 
@@ -588,5 +614,12 @@ export function useChat(
         retryMessage,
         loading,
         threadId: threadIdRef,
+        abort: () => {
+            if (!loading.value || !abortController.value) return;
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch {}
+        },
     };
 }

@@ -68,10 +68,12 @@
                 <chat-input-dropper
                     ref="chatInputEl"
                     :loading="loading"
+                    :streaming="loading"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
                     @send="onSend"
                     @model-change="onModelChange"
+                    @stop-stream="onStopStream"
                     @pending-prompt-selected="onPendingPromptSelected"
                     class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
                 />
@@ -469,6 +471,12 @@ function onPendingPromptSelected(promptId: string | null) {
         props.threadId,
         pendingPromptId.value || undefined
     );
+}
+
+function onStopStream() {
+    try {
+        (chat.value as any)?.abort?.();
+    } catch {}
 }
 </script>
 
