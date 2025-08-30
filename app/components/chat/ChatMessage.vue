@@ -165,6 +165,22 @@
                         @click="beginEdit"
                     ></UButton>
                 </UTooltip>
+                <!-- Dynamically registered plugin actions -->
+                <template v-for="action in extraActions" :key="action.id">
+                    <UTooltip
+                        :delay-duration="0"
+                        :text="action.tooltip"
+                        :teleport="true"
+                    >
+                        <UButton
+                            :icon="action.icon"
+                            color="info"
+                            size="sm"
+                            class="text-black dark:text-white/95 flex items-center justify-center"
+                            @click="() => runExtraAction(action)"
+                        ></UButton>
+                    </UTooltip>
+                </template>
             </UButtonGroup>
         </div>
     </div>
@@ -494,6 +510,10 @@ function onRetry() {
 }
 
 import { forkThread, retryBranch } from '~/db/branching';
+import {
+    useMessageActions,
+    type ChatMessageAction,
+} from '~/composables/useMessageActions';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
@@ -535,6 +555,31 @@ async function onBranch() {
         });
     } finally {
         branching.value = false;
+    }
+}
+
+// Extensible message actions (plugin registered)
+// Narrow to expected role subset (exclude potential 'system' etc.)
+const extraActions = useMessageActions({
+    role: props.message.role as 'user' | 'assistant',
+});
+async function runExtraAction(action: ChatMessageAction) {
+    try {
+        await action.handler({
+            message: props.message,
+            threadId: props.threadId,
+        });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        // eslint-disable-next-line no-console
+        console.error('Message action error', action.id, e);
     }
 }
 </script>

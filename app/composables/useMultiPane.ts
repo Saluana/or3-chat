@@ -188,7 +188,7 @@ export function useMultiPane(
         }
     }
 
-    return {
+    const api: UseMultiPaneApi = {
         panes,
         activePaneIndex,
         canAddPane,
@@ -202,6 +202,14 @@ export function useMultiPane(
         loadMessagesFor,
         ensureAtLeastOne,
     };
+
+    // Expose globally so plugins (message action handlers etc.) can interact.
+    // This is intentionally lightweight; if multiple instances are created the latest wins.
+    try {
+        (globalThis as any).__or3MultiPaneApi = api;
+    } catch {}
+
+    return api;
 }
 
 export type { PaneState as MultiPaneState };
