@@ -120,32 +120,27 @@ export async function* openRouterStream(params: {
                 for (const choice of choices) {
                     const delta = choice.delta || {};
 
-                    if (
-                        choice?.delta?.reasoning_details &&
-                        choice?.delta?.reasoning_details[0]
-                    ) {
-                        /*
-                        console.log(
-                            'REASONING DETAILS',
-                            choice.delta.reasoning_details
-                        );*/
+                    // Handle model reasoning
+                    if (choice?.delta?.reasoning_details) {
                         if (
                             choice?.delta?.reasoning_details[0]?.type ===
                             'reasoning.text'
                         ) {
-                            /*
-                            console.log(
-                                'REASONING TEXT',
-                                choice.delta.reasoning_details[0].text
-                            );*/
-
-                            if (choice.delta.reasoning_details[0].text) {
+                            if (choice?.delta?.reasoning_details[0]?.text) {
                                 yield {
                                     type: 'reasoning',
                                     text: choice.delta.reasoning_details[0]
                                         .text,
                                 };
                             }
+                        } else if (
+                            choice?.delta?.reasoning_details[0]?.type ===
+                            'reasoning.summary'
+                        ) {
+                            yield {
+                                type: 'reasoning',
+                                text: choice.delta.reasoning_details[0].summary,
+                            };
                         }
                     }
 

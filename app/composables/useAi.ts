@@ -288,7 +288,9 @@ export function useChat(
             const assistantFileHashes: string[] = [];
 
             for await (const ev of stream) {
-                if (ev.type === 'text') {
+                if (ev.type === 'reasoning') {
+                    console.log('Received reasoning chunk useAi.ts:', ev.text);
+                } else if (ev.type === 'text') {
                     if ((current as any).pending)
                         (current as any).pending = false;
                     const delta = ev.text;
