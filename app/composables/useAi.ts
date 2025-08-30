@@ -203,11 +203,7 @@ export function useChat(
                 '~/utils/openrouter-build'
             );
 
-            await ensureThreadHistoryLoaded(
-                threadIdRef,
-                historyLoadedFor,
-                messages
-            );
+            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
             const modelInputMessages: any[] = (effectiveMessages as any[]).map(
                 (m: any) => ({ ...m })
             );

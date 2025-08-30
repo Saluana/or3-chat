@@ -29,7 +29,7 @@ Legend:
     -   Risk: L
     -   Acceptance: No log spam when viewing chat; message rendering unchanged.
 
--   [ ] P2 Integrate streaming tail directly into `useChat` (eliminate double buffering hooks)
+-   [x] P2 Integrate streaming tail directly into `useChat` (eliminate double buffering hooks)
 
     -   Files: `ChatContainer.vue` (tail logic lines ~300–372 & related watchers), `useTailStream.ts`, `useAi.ts` (stream loop lines ~154–275)
     -   Actions:
@@ -41,7 +41,7 @@ Legend:
     -   Risk: M (must preserve hook consumers if any)
     -   Acceptance: Streaming UI unchanged (manual test); tail unmount/reset on thread switch still works.
 
--   [ ] P2 Merge duplicate history loads in `sendMessage`
+-   [x] P2 Merge duplicate history loads in `sendMessage`
 
     -   File: `useAi.ts` lines ~104–108 and ~201–205
     -   Action: Keep first `ensureThreadHistoryLoaded` call only (or guard second behind condition if history length changed)
