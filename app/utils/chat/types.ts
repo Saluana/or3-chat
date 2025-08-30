@@ -34,4 +34,5 @@ export interface SendMessageParams {
 export type ORStreamEvent =
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }
+    | { type: 'reasoning'; text: string }
     | { type: 'done' };

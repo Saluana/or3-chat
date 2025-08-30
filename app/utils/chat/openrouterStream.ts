@@ -120,6 +120,35 @@ export async function* openRouterStream(params: {
                 for (const choice of choices) {
                     const delta = choice.delta || {};
 
+                    if (
+                        choice?.delta?.reasoning_details &&
+                        choice?.delta?.reasoning_details[0]
+                    ) {
+                        /*
+                        console.log(
+                            'REASONING DETAILS',
+                            choice.delta.reasoning_details
+                        );*/
+                        if (
+                            choice?.delta?.reasoning_details[0]?.type ===
+                            'reasoning.text'
+                        ) {
+                            /*
+                            console.log(
+                                'REASONING TEXT',
+                                choice.delta.reasoning_details[0].text
+                            );*/
+
+                            if (choice.delta.reasoning_details[0].text) {
+                                yield {
+                                    type: 'reasoning',
+                                    text: choice.delta.reasoning_details[0]
+                                        .text,
+                                };
+                            }
+                        }
+                    }
+
                     // Text variants
                     if (Array.isArray(delta.content)) {
                         for (const part of delta.content) {
