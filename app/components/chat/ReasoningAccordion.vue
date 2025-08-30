@@ -35,7 +35,7 @@
             <pre
                 v-show="expanded"
                 :id="`reasoning-${id}`"
-                class="reasoning-box"
+                class="reasoning-box text-black dark:text-white font-[inherit] text-wrap max-h-[300px] overflow-x-hidden overflow-y-auto bg-[var(--md-surface-container-low)] border-2 border-[var(--md-inverse-surface)] mt-2"
                 tabindex="0"
                 v-text="content"
             ></pre>
@@ -70,10 +70,6 @@ const charCount = computed(() => (props.content || '').length);
 </script>
 
 <style scoped>
-.reasoning-wrap {
-    margin-bottom: 0.5rem;
-}
-
 .reasoning-toggle {
     display: inline-flex;
     align-items: center;
@@ -105,19 +101,6 @@ const charCount = computed(() => (props.content || '').length);
 .reasoning-toggle:focus {
     outline: 2px solid var(--md-inverse-primary);
     outline-offset: 2px;
-}
-
-.reasoning-box {
-    max-height: 300px;
-    overflow: auto;
-    font: 12px/1.35 var(--font-mono, 'VT323', 'IBM Plex Mono', monospace);
-    padding: 6px 8px;
-    background: var(--md-surface-container-low);
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 4px;
-    white-space: pre-wrap;
-    box-shadow: 0 0 0 1px #000 inset;
-    margin-top: 4px;
 }
 
 .pulse {

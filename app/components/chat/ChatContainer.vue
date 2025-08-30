@@ -26,7 +26,7 @@
                             class="first:mt-0 mt-10"
                         >
                             <ChatMessage
-                                :message="message"
+                                :message="message as RenderMessage"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
@@ -251,6 +251,7 @@ const messages = computed<RenderMessage[]>(() =>
             stream_id: m.stream_id,
             file_hashes: (m as any).file_hashes,
             pending: (m as any).pending,
+            reasoning_text: (m as any).reasoning_text || null,
         } as RenderMessage;
     })
 );

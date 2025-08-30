@@ -74,7 +74,19 @@
                     ></span
                 >
             </div>
-            <div v-else v-html="rendered"></div>
+            <div
+                v-if="
+                    props.message.role === 'assistant' &&
+                    props.message.reasoning_text
+                "
+            >
+                <ReasoningAccordion
+                    :content="props.message.reasoning_text"
+                    :streaming="(props.message as any).streaming"
+                    :pending="(props.message as any).pending"
+                />
+            </div>
+            <div v-if="hasContent" v-html="rendered"></div>
         </div>
         <!-- Editing surface -->
         <div v-else class="w-full">
@@ -196,6 +208,7 @@ import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 type UIMessage = Omit<ChatMessageType, 'content'> & {
     content: string;
     pending?: boolean;
+    reasoning_text?: string | null;
 };
 
 const props = defineProps<{ message: UIMessage; threadId?: string }>();
@@ -459,6 +472,10 @@ async function hydrateInlineImages() {
 watch(rendered, () => hydrateInlineImages());
 watch(hashList, () => hydrateInlineImages());
 onMounted(() => hydrateInlineImages());
+
+onMounted(() => {
+    console.log(props.message.reasoning_text);
+});
 watch(
     () =>
         Object.keys(thumbnails).map((h) => {
@@ -485,6 +502,7 @@ function onRetry() {
 }
 
 import { forkThread, retryBranch } from '~/db/branching';
+import ReasoningAccordion from './ReasoningAccordion.vue';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
