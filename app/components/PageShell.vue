@@ -1,0 +1,582 @@
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            @thread-selected="
+                                (id: string) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <LazyDocumentsDocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        ></LazyDocumentsDocumentEditor>
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+// Generic PageShell merging chat + docs functionality.
+// Props allow initializing with a thread OR a document and choosing default mode.
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        initialDocumentId?: string;
+        validateInitial?: boolean; // applies to whichever id is provided
+        routeSync?: boolean;
+        defaultMode?: 'chat' | 'doc'; // used when no initial id
+    }>(),
+    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+
+// ---------------- Multi-pane ----------------
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
+
+// Active thread convenience (first pane for sidebar highlight)
+const activeChatThreadId = computed(() =>
+    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
+);
+
+// --------------- Initializers ---------------
+let validateToken = 0;
+
+async function validateThread(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t && !t.deleted) return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function validateDocument(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function initInitial() {
+    if (!process.client) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.initialThreadId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateThread(props.initialThreadId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('chat');
+                return;
+            }
+        }
+        await setPaneThread(0, props.initialThreadId);
+        pane.mode = 'chat';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    if (props.initialDocumentId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateDocument(props.initialDocumentId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('doc');
+                return;
+            }
+        }
+        pane.mode = 'doc';
+        pane.documentId = props.initialDocumentId;
+        pane.threadId = '';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    // No ids: set default mode
+    if (props.defaultMode === 'doc') {
+        pane.mode = 'doc';
+        pane.documentId = undefined;
+        pane.threadId = '';
+    } else {
+        pane.mode = 'chat';
+    }
+    updateUrl();
+}
+
+function redirectNotFound(kind: 'chat' | 'doc') {
+    if (kind === 'chat') router.replace('/chat');
+    else router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description:
+            kind === 'chat'
+                ? 'This chat does not exist.'
+                : 'This document does not exist.',
+        color: 'error',
+    });
+}
+
+// --------------- URL Sync ---------------
+function updateUrl() {
+    if (!process.client || !props.routeSync) return;
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    const base = pane.mode === 'doc' ? '/docs' : '/chat';
+    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
+    const newPath = id ? `${base}/${id}` : base;
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+watch(
+    () =>
+        panes.value
+            .map(
+                (p) =>
+                    `${p.id}:${p.mode}:${p.threadId || ''}:${
+                        p.documentId || ''
+                    }`
+            )
+            .join(','),
+    () => updateUrl()
+);
+
+watch(
+    () => activePaneIndex.value,
+    () => updateUrl()
+);
+
+// --------------- Documents Integration ---------------
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrl();
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrl();
+}
+
+// Sidebar chat selection always puts pane in chat mode
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrl();
+}
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrl();
+}
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrl();
+}
+
+// --------------- Theme ---------------
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// --------------- Mobile + layout ---------------
+import { isMobile } from '~/state/global';
+if (process.client) {
+    onMounted(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        const apply = () => (isMobile.value = mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() =>
+                mq.removeEventListener('change', apply)
+            );
+        } else {
+            onUnmounted(() => mq.removeEventListener('change', apply));
+        }
+    });
+}
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+function openMobileSidebar() {
+    (layoutRef.value as any)?.openSidebar?.();
+}
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => {
+        sideNavExpandedRef.value?.focusSearchInput?.();
+    });
+}
+
+// --------------- Deletion auto-reset ---------------
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    if (paneIndex === activePaneIndex.value) updateUrl();
+}
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
+    });
+}
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
+    });
+}
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+
+// --------------- Mount ---------------
+onMounted(() => {
+    initInitial();
+    syncTheme();
+    ensureAtLeastOne();
+});
+
+// --------------- Shortcuts ---------------
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+</script>
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>

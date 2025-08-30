@@ -1,5 +1,5 @@
 <template>
-    <PageShell :initial-thread-id="routeId" validate-initial />
+    <PageShell :initial-document-id="routeId" validate-initial />
 </template>
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';

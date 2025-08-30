@@ -160,6 +160,8 @@ function makeEditor() {
 
 onMounted(async () => {
     await loadDocument(props.documentId);
+    // Ensure title reflects loaded record (refresh / deep link case)
+    titleDraft.value = state.value.record?.title || titleDraft.value || '';
     // Ensure initial state ref matches (in case of rapid prop change before mount)
     makeEditor();
 });
