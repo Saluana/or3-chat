@@ -12,7 +12,7 @@ Legend:
 
 ## Task List
 
--   [ ] P1 Remove unused `useChatSend` abstraction
+-   [x] P1 Remove unused `useChatSend` abstraction
 
     -   Files: `app/components/chat/ChatContainer.vue` (import line ~97, usage lines ~410, ~439–447), `app/composables/useChatSend.ts` (entire file)
     -   Actions:

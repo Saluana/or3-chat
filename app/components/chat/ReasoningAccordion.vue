@@ -19,7 +19,9 @@
                         : collapsedLabel || 'Show reasoning'
                 }}
             </span>
-            <span v-else>Thinking…</span>
+            <span v-else class="inline-flex items-center gap-1">
+                <LoadingGenerating style="width: 120px; min-height: 28px" />
+            </span>
             <span
                 v-if="!expanded && content && !streaming"
                 class="count text-xs opacity-70 ml-2"
@@ -46,6 +48,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import LoadingGenerating from './LoadingGenerating.vue';
 
 interface Props {
     content?: string;

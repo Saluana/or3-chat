@@ -92,7 +92,7 @@ import type {
 import { useHookEffect } from '~/composables/useHookEffect';
 import { marked } from 'marked';
 import VirtualMessageList from './VirtualMessageList.vue';
-import { useTailStream } from '../../composables/useTailStream';
+// (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
 import { useElementSize } from '@vueuse/core';
 
@@ -245,7 +245,6 @@ const messages = computed<RenderMessage[]>(() =>
             (m as any).data?.reasoning_text ??
             null;
 
-        console.log(m);
         return {
             role: m.role,
             content: contentStr,
@@ -259,19 +258,20 @@ const messages = computed<RenderMessage[]>(() =>
 );
 const loading = computed(() => chat.value.loading.value);
 
-// Tail streaming via composable (kept for perf) + lightweight reasoning buffer
-const tail = useTailStream({ flushIntervalMs: 50, immediate: true });
-const tailStreamId = ref<string | null>(null);
-const tailReasoning = ref('');
+// Tail streaming now provided directly by useChat composable
+const tailStreamId = computed(() => chat.value.streamId.value);
+const tailReasoning = computed(() => chat.value.streamReasoning.value);
+const tailDisplay = computed(() => chat.value.streamDisplayText.value);
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value.threadId?.value);
 const tailActive = computed(
-    () => tail.isStreaming.value || !!tailReasoning.value
+    () => chat.value.streamActive.value || !!tailReasoning.value
 );
 // Single content computed for tail ChatMessage
 const tailContent = computed(() => {
-    if (tail.displayText.value) return marked.parse(tail.displayText.value);
-    return tailReasoning.value ? '' : 'Thinking…';
+    if (tailDisplay.value) return marked.parse(tailDisplay.value);
+    // When no display text yet, leave content empty so ChatMessage shows loader component
+    return '';
 });
 
 // Virtual list data excludes streaming assistant (Req 3.2 separation)
@@ -315,82 +315,18 @@ nextTick(() => {
 });
 
 // Hook: streaming delta buffering
-useHookEffect(
-    'ai.chat.stream:action:delta',
-    (delta: string, meta: any) => {
-        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
-        const sid = meta?.streamId || meta?.assistantId || 'stream';
-        if (!tailStreamId.value || tailStreamId.value !== sid) {
-            tailStreamId.value = sid;
-            tail.reset();
-            tailReasoning.value = '';
-        }
-        tail.push(String(delta || ''));
-        scheduleScrollIfAtBottom();
-    },
-    { kind: 'action', priority: 20 }
-);
-
-// Reasoning hook: accumulate reasoning_text continuously
-useHookEffect(
-    'ai.chat.stream:action:reasoning',
-    (chunk: string, meta: any) => {
-        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
-        const sid = meta?.streamId || meta?.assistantId || 'stream';
-        if (!tailStreamId.value || tailStreamId.value !== sid) {
-            tailStreamId.value = sid;
-            // Do not reset tail text; reasoning can start before text
-        }
-        tailReasoning.value += chunk || '';
-        scheduleScrollIfAtBottom();
-    },
-    { kind: 'action', priority: 25 }
-);
-
-// Hook: after send (finalize)
-useHookEffect(
-    'ai.chat.send:action:after',
-    (meta?: any) => {
-        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
-        tail.complete();
-        // Allow final assistant message to replace tail; clear stream id after a tick
-        nextTick(() => {
-            autoScroll.onContentIncrease();
-            setTimeout(() => {
-                tailStreamId.value = null;
-                tailReasoning.value = '';
-            }, 0);
-        });
-    },
-    { kind: 'action', priority: 50 }
-);
-
-// Hook: error path
-useHookEffect(
-    'ai.chat.error:action',
-    (meta?: any) => {
-        if (meta?.threadId && meta.threadId !== currentThreadId.value) return;
-        tail.fail(new Error('stream-error'));
-        setTimeout(() => {
-            tailStreamId.value = null;
-            tailReasoning.value = '';
-        }, 0);
-    },
-    { kind: 'action', priority: 50 }
-);
-
-// Forward tail error (Req 3.10) – placeholder for hook system integration
-// (Optional) Tail error logging retained (simplified)
+// Hooks no longer needed for streaming tail display; scroll on reactive tail changes
 watch(
-    () => tail.error.value,
-    (err) => err && console.error('[ChatContainer] tail error', err)
+    () => [tailDisplay.value, tailReasoning.value],
+    () => scheduleScrollIfAtBottom()
 );
-
-// Reset tail state when switching threads to prevent ghost streaming across panes
+watch(
+    () => chat.value.streamActive.value,
+    (active) => active && scheduleScrollIfAtBottom()
+);
 watch(currentThreadId, () => {
-    tail.reset();
-    tailStreamId.value = null;
-    tailReasoning.value = '';
+    // Clear computed tail when switching threads (stream refs reset inside useChat later)
+    scheduleScrollIfAtBottom();
 });
 
 // When input height changes and user was at bottom, keep them pinned

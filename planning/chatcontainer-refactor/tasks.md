@@ -40,6 +40,13 @@ artifact_id: 0f0d1c5a-6b1b-4f5c-9df9-7e8f1d5a2b2f
 -   [x] 4.9 Integrate error forwarding via hook system (Req 3.10) (tail error watcher added)
 -   [x] 4.10 Manual QA to ensure no behavior regression (Req 3.9) (basic send/stream/scroll verified manually)
 
+### 4A. Post-Refactor Streaming Consolidation (New)
+
+-   [x] 4A.1 Integrate tail streaming directly into `useChat` (replaces `useTailStream` usage in container)
+-   [x] 4A.2 Remove `useTailStream` wiring & hooks from `ChatContainer.vue` (retain hook events for external listeners)
+-   [ ] 4A.3 Remove `useTailStream.ts` & `TailStream.vue` once no other references remain (deferred – verify no external imports)
+-   [ ] 4A.4 Throttle markdown parsing of streaming text (deferred per instruction)
+
 ## 5. Testing & Validation
 
 -   [ ] 5.1 Write integration test simulating chunked stream & scroll interactions (Req 3.7)
