@@ -376,7 +376,7 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/bg-repeat-2.png');
+    background-image: url('/bg-repeat-2.webp');
     background-repeat: repeat;
     background-position: top left;
     --content-overlay-size: 380px;
