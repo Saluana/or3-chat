@@ -43,41 +43,13 @@
                                     content: tailRendered || tailPlaceholder,
                                     stream_id: tailStreamId,
                                     pending: true,
-                                    reasoning_text: null,
+                                    reasoning_text: '',
                                 }"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
                                 @edited="onEdited"
                             />
-                            <!-- Streaming reasoning (Req 3.11) -->
-                            <!--
-                            <ReasoningAccordion
-                                :content="null"
-                                :streaming="true"
-                                :pending="true"
-                            />
-                            -->
-                            <!--
-                            <div
-                                class="bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm p-2 min-w-[140px] rounded-md relative animate-in fade-in"
-                                style="animation-duration: 120ms"
-                            >
-                     
-                                <div
-                                    class="prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5"
-                                    v-html="tailRendered || tailPlaceholder"
-                                />
-                                <div
-                                    class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
-                                >
-                                    <span
-                                        class="text-[10px] px-2 py-0.5 rounded bg-[var(--md-surface-container-lowest)] border border-black retro-shadow"
-                                        >Streaming…</span
-                                    >
-                                </div>
-                            </div>
-                            -->
                         </div>
                     </template>
                 </VirtualMessageList>

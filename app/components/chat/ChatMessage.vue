@@ -477,9 +477,6 @@ watch(rendered, () => hydrateInlineImages());
 watch(hashList, () => hydrateInlineImages());
 onMounted(() => hydrateInlineImages());
 
-onMounted(() => {
-    console.log(props.message.reasoning_text);
-});
 watch(
     () =>
         Object.keys(thumbnails).map((h) => {
