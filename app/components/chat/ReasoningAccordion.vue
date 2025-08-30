@@ -11,6 +11,7 @@
             :aria-controls="`reasoning-${id}`"
             type="button"
         >
+            <UIcon name="pixelarticons:lightbulb-on" class="mr-1" />
             <span v-if="!pending || content">
                 {{
                     expanded
@@ -70,8 +71,8 @@ const charCount = computed(() => (props.content || '').length);
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-family: var(--font-mono, 'VT323', 'IBM Plex Mono', monospace);
-    font-size: 13px;
+
+    font-size: 16px;
     padding: 4px 8px;
     border: 2px solid var(--md-inverse-surface);
     background: linear-gradient(

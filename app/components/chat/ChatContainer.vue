@@ -181,7 +181,9 @@ type RenderMessage = {
     stream_id?: string;
     file_hashes?: string | null;
     pending?: boolean;
+    reasoning_text?: string | null;
 };
+
 function escapeAttr(v: string) {
     return v
         .replace(/&/g, '&amp;')
@@ -239,6 +241,12 @@ const messages = computed<RenderMessage[]>(() =>
                 contentStr += (contentStr ? '\n\n' : '') + gallery;
             }
         }
+        const rawReasoning =
+            (m as any).reasoning_text ??
+            (m as any).data?.reasoning_text ??
+            null;
+
+        console.log(m);
         return {
             role: m.role,
             content: contentStr,
@@ -246,7 +254,7 @@ const messages = computed<RenderMessage[]>(() =>
             stream_id: m.stream_id,
             file_hashes: (m as any).file_hashes,
             pending: (m as any).pending,
-            reasoning_text: (m as any).reasoning_text || null,
+            reasoning_text: rawReasoning,
         } as RenderMessage;
     })
 );

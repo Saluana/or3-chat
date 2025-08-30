@@ -155,7 +155,7 @@
                             :message-history="pane.messages"
                             :thread-id="pane.threadId"
                             @thread-selected="
-                                (id) => onInternalThreadCreated(id, i)
+                                (id: string) => onInternalThreadCreated(id, i)
                             "
                         />
                     </template>

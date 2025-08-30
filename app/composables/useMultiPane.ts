@@ -74,7 +74,10 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
             .filter((m: any) => !m.deleted)
             .toArray();
         return (msgs || []).map((msg: any) => {
-            const data = msg.data as unknown;
+            const data = msg.data as {
+                content?: string;
+                reasoning_text?: string | null;
+            };
             const content =
                 typeof data === 'object' && data !== null && 'content' in data
                     ? String((data as any).content ?? '')
@@ -85,6 +88,7 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                 file_hashes: msg.file_hashes,
                 id: msg.id,
                 stream_id: msg.stream_id,
+                reasoning_text: data?.reasoning_text || null,
             } as MultiPaneMessage;
         });
     } catch (e) {
