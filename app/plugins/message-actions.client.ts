@@ -1,7 +1,3 @@
-import { registerMessageAction } from '~/composables/useMessageActions';
-import { useToast } from '#imports';
-import { newDocument } from '~/composables/useDocumentsStore';
-
 export default defineNuxtPlugin(() => {
     registerMessageAction({
         id: 'Create document', // unique id

@@ -2,3 +2,4 @@
 export * from './useTailStream';
 export * from './useAutoScroll';
 export * from './useObservedElementSize';
+export * from './ui-extensions/messages/useMessageActions';

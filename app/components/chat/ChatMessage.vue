@@ -510,10 +510,6 @@ function onRetry() {
 }
 
 import { forkThread, retryBranch } from '~/db/branching';
-import {
-    useMessageActions,
-    type ChatMessageAction,
-} from '~/composables/useMessageActions';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
