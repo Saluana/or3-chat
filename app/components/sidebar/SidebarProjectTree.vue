@@ -16,7 +16,7 @@
                     <!-- Root-level quick add buttons (appear on hover) -->
                     <template v-if="level === 0">
                         <button
-                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addChat', item.value)"
                             aria-label="Add chat to project"
                         >
@@ -26,7 +26,7 @@
                             />
                         </button>
                         <button
-                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addDocument', item.value)"
                             aria-label="Add document to project"
                         >
@@ -64,8 +64,8 @@
                                         color="neutral"
                                         variant="ghost"
                                         size="sm"
-                                        class="w-full justify-start"
-                                        icon="i-lucide-pencil"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:edit"
                                         @click.stop.prevent="
                                             emit('renameProject', item.value)
                                         "
@@ -75,8 +75,8 @@
                                         color="error"
                                         variant="ghost"
                                         size="sm"
-                                        class="w-full justify-start"
-                                        icon="i-lucide-trash-2"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:trash"
                                         @click.stop.prevent="
                                             emit('deleteProject', item.value)
                                         "
@@ -89,7 +89,7 @@
                                         variant="ghost"
                                         size="sm"
                                         class="w-full justify-start"
-                                        icon="i-lucide-pencil"
+                                        icon="pixelarticons:edit"
                                         @click.stop.prevent="
                                             emit('renameEntry', {
                                                 projectId: item.parentId,
@@ -104,7 +104,7 @@
                                         variant="ghost"
                                         size="sm"
                                         class="w-full justify-start"
-                                        icon="i-lucide-x"
+                                        icon="pixelarticons:trash"
                                         @click.stop.prevent="
                                             emit('removeFromProject', {
                                                 projectId: item.parentId,
@@ -218,8 +218,9 @@ const treeItems = computed<any[]>(() =>
 );
 
 const ui = {
-    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden',
+    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
     link: 'group/addchat text-[13px] rounded-[4px] py-1',
+    item: 'cursor-pointer ',
 };
 </script>
 

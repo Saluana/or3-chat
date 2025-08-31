@@ -33,7 +33,7 @@
                         variant="ghost"
                         size="sm"
                         class="w-full justify-start"
-                        icon="i-lucide-pencil"
+                        icon="pixelarticons:edit"
                         @click="emit('rename', thread)"
                         >Rename</UButton
                     >
@@ -51,7 +51,7 @@
                         variant="ghost"
                         size="sm"
                         class="w-full justify-start"
-                        icon="i-lucide-trash-2"
+                        icon="pixelarticons:trash"
                         @click="emit('delete', thread)"
                         >Delete</UButton
                     >
