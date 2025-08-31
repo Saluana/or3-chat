@@ -100,178 +100,19 @@
                 @renameEntry="openRename"
                 @removeFromProject="handleRemoveFromProject"
             />
-            <div v-if="activeSections.chats && displayThreads.length > 0">
-                <h4
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
-                >
-                    Chats
-                </h4>
-                <!-- Conditional virtualization: only mount VList when large -->
-                <component
-                    v-if="useVirtualization && VListComp"
-                    :is="VListComp"
-                    :data="displayThreads as any[]"
-                    :overscan="8"
-                    class="mt-2"
-                    #default="{ item }"
-                >
-                    <div class="mb-2" :key="item.id">
-                        <RetroGlassBtn
-                            :class="{
-                                'active-element bg-primary/25':
-                                    item.id === props.activeThread,
-                            }"
-                            class="w-full flex items-center justify-between text-left"
-                            @click="() => selectChat(item.id)"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
-                            >
-                                <UIcon
-                                    v-if="item.forked"
-                                    name="pixelarticons:git-branch"
-                                    class="shrink-0"
-                                ></UIcon>
-                                <span
-                                    class="block flex-1 min-w-0 truncate"
-                                    :title="item.title || 'New Thread'"
-                                >
-                                    {{ item.title || 'New Thread' }}
-                                </span>
-                            </div>
-                            <UPopover
-                                :content="{
-                                    side: 'right',
-                                    align: 'start',
-                                    sideOffset: 6,
-                                }"
-                            >
-                                <span
-                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                                    @click.stop
-                                >
-                                    <UIcon
-                                        name="pixelarticons:more-vertical"
-                                        class="w-4 h-4 opacity-70"
-                                    />
-                                </span>
-                                <template #content>
-                                    <div class="p-1 w-44 space-y-1">
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-pencil"
-                                            @click="openRename(item)"
-                                            >Rename</UButton
-                                        >
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="pixelarticons:folder-plus"
-                                            @click="openAddToProject(item)"
-                                            >Add to project</UButton
-                                        >
-                                        <UButton
-                                            color="error"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-trash-2"
-                                            @click="confirmDelete(item)"
-                                            >Delete</UButton
-                                        >
-                                    </div>
-                                </template>
-                            </UPopover>
-                        </RetroGlassBtn>
-                    </div>
-                </component>
-                <!-- Fallback simple list when virtualization not needed -->
-                <div v-else class="mt-2">
-                    <div
-                        v-for="item in displayThreads"
-                        :key="item.id"
-                        class="mb-2"
-                    >
-                        <RetroGlassBtn
-                            :class="{
-                                'active-element bg-primary/25':
-                                    item.id === props.activeThread,
-                            }"
-                            class="w-full flex items-center justify-between text-left"
-                            @click="() => selectChat(item.id)"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
-                            >
-                                <UIcon
-                                    v-if="item.forked"
-                                    name="pixelarticons:git-branch"
-                                    class="shrink-0"
-                                ></UIcon>
-                                <span
-                                    class="block flex-1 min-w-0 truncate"
-                                    :title="item.title || 'New Thread'"
-                                >
-                                    {{ item.title || 'New Thread' }}
-                                </span>
-                            </div>
-                            <UPopover
-                                :content="{
-                                    side: 'right',
-                                    align: 'start',
-                                    sideOffset: 6,
-                                }"
-                            >
-                                <span
-                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                                    @click.stop
-                                >
-                                    <UIcon
-                                        name="pixelarticons:more-vertical"
-                                        class="w-4 h-4 opacity-70"
-                                    />
-                                </span>
-                                <template #content>
-                                    <div class="p-1 w-44 space-y-1">
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-pencil"
-                                            @click="openRename(item)"
-                                            >Rename</UButton
-                                        >
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="pixelarticons:folder-plus"
-                                            @click="openAddToProject(item)"
-                                            >Add to project</UButton
-                                        >
-                                        <UButton
-                                            color="error"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-trash-2"
-                                            @click="confirmDelete(item)"
-                                            >Delete</UButton
-                                        >
-                                    </div>
-                                </template>
-                            </UPopover>
-                        </RetroGlassBtn>
-                    </div>
-                </div>
-            </div>
+            <!-- Threads list -->
+            <LazySidebarThreadsList
+                hydrate-on-idle
+                v-if="activeSections.chats"
+                class="mt-4"
+                :active-thread="props.activeThread"
+                :external-threads="displayThreads"
+                @select="(id:string) => selectChat(id)"
+                @new-chat="onNewChat"
+                @add-to-project="(t:any) => openAddToProject(t)"
+                @delete-thread="(t:any) => confirmDelete(t)"
+                @rename-thread="(t:any) => openRename(t)"
+            />
             <!-- Documents list -->
             <LazySidebarDocumentsList
                 hydrate-on-idle
@@ -617,9 +458,7 @@ import { useHooks } from '~/composables/useHooks';
 import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
-// NOTE: Only load virtua when we actually need virtualization (perf + less layout jank)
-import { shallowRef } from 'vue';
-const VListComp = shallowRef<any | null>(null);
+// (Temporarily removed virtualization for chats — use simple list for now)
 
 // Section visibility (multi-select) defaults to all on
 const activeSections = ref<{
@@ -731,11 +570,7 @@ function onEscapeClear() {
 let sub: { unsubscribe: () => void } | null = null;
 let subProjects: { unsubscribe: () => void } | null = null;
 
-// Virtualization threshold (tune): above this many threads we mount VList
-const VIRTUALIZE_THRESHOLD = 250;
-const useVirtualization = computed(
-    () => displayThreads.value.length > VIRTUALIZE_THRESHOLD
-);
+// Virtualization removed — always render the simple list for chats.
 
 onMounted(async () => {
     const measure = () => {
@@ -801,20 +636,10 @@ onMounted(async () => {
         },
         error: (err) => console.error('documents liveQuery error', err),
     });
-    // Lazy import virtua only if needed initially
-    if (useVirtualization.value) {
-        const mod = await import('virtua/vue');
-        VListComp.value = mod.VList;
-    }
+    // (virtualization removed — nothing to lazy-load here)
 });
 
-// Watch for crossing threshold (both directions)
-watch(useVirtualization, async (val) => {
-    if (val && !VListComp.value) {
-        const mod = await import('virtua/vue');
-        VListComp.value = mod.VList;
-    }
-});
+// (virtualization removed — no watcher required)
 
 // Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
 watch([projects, expandedProjects], () => {
