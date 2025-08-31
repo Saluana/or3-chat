@@ -1,86 +1,18 @@
 <template>
     <div class="flex flex-col h-full relative">
-        <div class="px-2 pt-2 flex flex-col space-y-2">
-            <div class="flex">
-                <UButton
-                    @click="onNewChat"
-                    class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
-                    >New Chat</UButton
-                >
-                <UTooltip :delay-duration="0" text="Create project">
-                    <UButton
-                        color="inverse-primary"
-                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                        icon="pixelarticons:folder-plus"
-                        :ui="{
-                            leadingIcon: 'w-5 h-5',
-                        }"
-                        @click="openCreateProject"
-                    />
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Create document">
-                    <UButton
-                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                        icon="pixelarticons:note-plus"
-                        :ui="{
-                            base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                            leadingIcon: 'w-5 h-5',
-                        }"
-                        @click="openCreateDocumentModal"
-                    />
-                </UTooltip>
-            </div>
-            <div class="relative w-full ml-[1px]">
-                <UInput
-                    ref="searchInputWrapper"
-                    v-model="sidebarQuery"
-                    icon="pixelarticons:search"
-                    size="md"
-                    :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
-                    variant="outline"
-                    placeholder="Search..."
-                    aria-label="Search"
-                    class="w-full"
-                    @keydown.escape.prevent.stop="onEscapeClear"
-                >
-                    <template v-if="sidebarQuery.length > 0" #trailing>
-                        <UButton
-                            color="neutral"
-                            variant="subtle"
-                            size="xs"
-                            class="flex items-center justify-center p-0"
-                            icon="pixelarticons:close-box"
-                            aria-label="Clear input"
-                            @click="sidebarQuery = ''"
-                        />
-                    </template>
-                </UInput>
-            </div>
-
-            <div
-                class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
-                role="group"
-                aria-label="Sidebar sections"
-            >
-                <UButton
-                    v-for="seg in sectionToggles"
-                    :key="seg.value"
-                    size="sm"
-                    :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
-                    :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
-                    class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
-                    :class="
-                        activeSections[seg.value]
-                            ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
-                            : 'opacity-70 hover:bg-primary/15'
-                    "
-                    :aria-pressed="activeSections[seg.value]"
-                    @click="toggleSection(seg.value)"
-                >
-                    {{ seg.label }}
-                </UButton>
-            </div>
-        </div>
+        <SideNavHeader
+            :sidebar-query="sidebarQuery"
+            :active-sections="activeSections"
+            :projects="projects"
+            @update:sidebar-query="sidebarQuery = $event"
+            @update:active-sections="activeSections = $event"
+            @new-chat="onNewChat"
+            @new-document="emit('newDocument', $event)"
+            @open-rename="openRename"
+            @open-rename-project="openRenameProject"
+            @add-to-project="openAddToProject"
+            @add-document-to-project="openAddDocumentToProject"
+        />
         <!-- Scrollable content: projects + (virtualized) threads -->
         <div
             ref="scrollAreaRef"
@@ -456,6 +388,7 @@
 import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
 import { useHooks } from '~/composables/useHooks';
 import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
 // (Temporarily removed virtualization for chats — use simple list for now)
@@ -466,15 +399,6 @@ const activeSections = ref<{
     chats: boolean;
     docs: boolean;
 }>({ projects: true, chats: true, docs: true });
-const sectionToggles = [
-    { label: 'Proj', value: 'projects' as const },
-    { label: 'Chats', value: 'chats' as const },
-    { label: 'Docs', value: 'docs' as const },
-];
-function toggleSection(v: 'projects' | 'chats' | 'docs') {
-    const next = { ...activeSections.value, [v]: !activeSections.value[v] };
-    activeSections.value = next;
-}
 
 const props = defineProps<{
     activeThread?: string;
@@ -491,17 +415,6 @@ import { useSidebarSearch } from '~/composables/useSidebarSearch';
 // Documents live query (docs only) to feed search
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
-// Direct focus support for external callers
-const searchInputWrapper = ref<any | null>(null);
-function focusSearchInput() {
-    // Access underlying input inside UInput component
-    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
-        searchInputWrapper.value) as HTMLElement | null;
-    if (!root) return;
-    const input = root.querySelector('input');
-    if (input) (input as HTMLInputElement).focus();
-}
-defineExpose({ focusSearchInput });
 
 const {
     query: sidebarQuery,
