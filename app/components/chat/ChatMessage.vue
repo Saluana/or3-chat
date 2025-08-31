@@ -550,6 +550,7 @@ async function onBranch() {
 const extraActions = useMessageActions({
     role: props.message.role as 'user' | 'assistant',
 });
+
 async function runExtraAction(action: ChatMessageAction) {
     try {
         await action.handler({

@@ -75,6 +75,21 @@
                                 @click="$emit('delete-document', d)"
                                 >Delete</UButton
                             >
+                            <!-- Dynamically registered plugin actions -->
+                            <template
+                                v-for="action in extraActions"
+                                :key="action.id"
+                            >
+                                <UButton
+                                    :icon="action.icon"
+                                    color="neutral"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full justify-start"
+                                    @click="() => runExtraAction(action, d as Post)"
+                                    >{{ action?.label || '' }}</UButton
+                                >
+                            </template>
                         </div>
                     </template>
                 </UPopover>
@@ -85,7 +100,8 @@
 <script setup lang="ts">
 import { useDocumentsList } from '~/composables/useDocumentsList';
 import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-const props = defineProps<{ activeDocument?: string; externalDocs?: any[] }>();
+import type { Post } from '~/db';
+const props = defineProps<{ activeDocument?: string; externalDocs?: Post[] }>();
 const emit = defineEmits<{
     (e: 'select', id: string): void;
     (e: 'new-document'): void;
@@ -100,5 +116,28 @@ const effectiveDocs = computed(() =>
 function formatTime(ts: number) {
     const d = new Date(ts * 1000);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// Extensible message actions (plugin registered)
+// Narrow to expected role subset (exclude potential 'system' etc.)
+const extraActions = useDocumentHistoryActions();
+
+async function runExtraAction(action: DocumentHistoryAction, document: Post) {
+    try {
+        await action.handler({
+            document: document,
+        });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        // eslint-disable-next-line no-console
+        console.error('Message action error', action.id, e);
+    }
 }
 </script>

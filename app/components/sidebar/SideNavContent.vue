@@ -616,7 +616,7 @@ import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
 import { useHooks } from '~/composables/useHooks';
 import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpers
+import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
 // NOTE: Only load virtua when we actually need virtualization (perf + less layout jank)
 import { shallowRef } from 'vue';
 const VListComp = shallowRef<any | null>(null);
@@ -650,7 +650,7 @@ const bottomNavRef = ref<HTMLElement | null>(null);
 const bottomPad = ref(140); // fallback
 import { useSidebarSearch } from '~/composables/useSidebarSearch';
 // Documents live query (docs only) to feed search
-const docs = ref<any[]>([]);
+const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
 // Direct focus support for external callers
 const searchInputWrapper = ref<any | null>(null);
@@ -723,7 +723,7 @@ const displayProjects = computed(() => {
         .filter(Boolean);
 });
 const displayDocuments = computed(() =>
-    sidebarQuery.value.trim() ? documentResults.value : undefined
+    sidebarQuery.value.trim() ? (documentResults.value as Post[]) : undefined
 );
 function onEscapeClear() {
     if (sidebarQuery.value) sidebarQuery.value = '';
