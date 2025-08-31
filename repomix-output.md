@@ -70,6 +70,7 @@ app/
       VirtualMessageList.vue
     documents/
       DocumentEditor.vue
+      DocumentsPageShell.vue
       ToolbarButton.vue
     modal/
       SettingsModal.vue
@@ -83,14 +84,10 @@ app/
       SideBottomNav.vue
       SideNavContent.vue
       SideNavContentCollapsed.vue
+    PageShell.vue
     ResizableSidebarLayout.vue
     RetroGlassBtn.vue
   composables/
-    __tests__/
-      useAutoScroll.test.ts
-      useChatSend.test.ts
-      useObservedElementSize.test.ts
-      useTailStream.test.ts
     index.ts
     useActivePrompt.ts
     useAi.ts
@@ -100,6 +97,7 @@ app/
     useDocumentsStore.ts
     useHookEffect.ts
     useHooks.ts
+    useMessageActions.ts
     useMessageEditing.ts
     useModelSearch.ts
     useModelStore.ts
@@ -132,13 +130,16 @@ app/
     chat/
       [id].vue
       index.vue
+    docs/
+      [id].vue
+      index.vue
     _test.vue
-    home.vue
-    homepage.vue
+    index.vue
     openrouter-callback.vue
   plugins/
     hooks.client.ts
     hooks.server.ts
+    message-actions.client.ts
     theme.client.ts
   state/
     global.ts
@@ -1785,132 +1786,85 @@ Use Cases
 @import "./dark-mc.css";
 ```
 
-## File: app/components/chat/MessageEditor.vue
+## File: app/components/chat/ModelSelect.vue
 ```vue
 <template>
-    <div class="relative min-h-[40px]">
-        <EditorContent
-            v-if="editor"
-            :editor="editor as Editor"
-            class="tiptap-editor fade-in"
+    <div v-if="show" class="inline-block">
+        <USelectMenu
+            v-model="internalModel"
+            :items="items"
+            :value-key="'value'"
+            :disabled="loading"
+            :ui="ui"
+            :search-input="searchInput"
+            class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]"
         />
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import { StarterKit } from '@tiptap/starter-kit';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-// If you still want markdown extension keep it; otherwise remove these two lines:
-import { Markdown } from 'tiptap-markdown';
+import { computed, watch, ref } from 'vue';
+import { useModelStore } from '~/composables/useModelStore';
+
+interface Emits {
+    (e: 'update:model', value: string): void;
+    (e: 'change', value: string): void;
+}
 
 const props = defineProps<{
-    modelValue: string;
-    autofocus?: boolean;
-    focusDelay?: number;
+    model?: string;
+    loading?: boolean;
 }>();
-const emit = defineEmits<{
-    (e: 'update:modelValue', v: string): void;
-    (e: 'ready'): void;
-}>();
+const emit = defineEmits<Emits>();
 
-const editor = ref<any>(null);
-let destroy: (() => void) | null = null;
-// Prevent feedback loop when emitting updates -> watcher -> setContent -> update
-let internalUpdate = false;
-let lastEmitted = '';
+const { favoriteModels } = useModelStore();
 
-async function init() {
-    const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
-
-    const instance = new Editor({
-        extensions,
-        content: props.modelValue,
-        onUpdate: ({ editor: e }) => {
-            // Access markdown storage; fall back gracefully
-            const md: string | undefined =
-                // @ts-expect-error
-                e?.storage?.markdown?.getMarkdown?.();
-            const nextVal = md ?? e.getText();
-            if (nextVal === lastEmitted) return;
-            internalUpdate = true;
-            lastEmitted = nextVal;
-            emit('update:modelValue', nextVal);
-            queueMicrotask(() => {
-                internalUpdate = false;
-            });
-        },
-    });
-
-    editor.value = instance;
-    destroy = () => instance.destroy();
-
-    await nextTick();
-    if (props.autofocus) {
-        const delay =
-            typeof props.focusDelay === 'number' ? props.focusDelay : 90;
-        setTimeout(() => {
-            try {
-                instance.commands.focus('end');
-            } catch {}
-        }, delay);
-    }
-    lastEmitted = props.modelValue;
-    emit('ready');
-}
-
-onMounted(() => {
-    init();
-});
-
-onBeforeUnmount(() => {
-    destroy && destroy();
-});
-
+// Mirror v-model
+const internalModel = ref<string | undefined>(props.model);
 watch(
-    () => props.modelValue,
+    () => props.model,
     (val) => {
-        if (!editor.value) return;
-        if (internalUpdate) return; // skip updates we originated
-        // Determine current markdown representation (markdown storage optional)
-        const currentMd: string | undefined =
-            editor.value?.storage?.markdown?.getMarkdown?.();
-        const current = currentMd ?? editor.value.getText();
-        if (val === current) return;
-        // Update editor without firing transactions that cause flicker (emitUpdate: false not available; use setContent with emitUpdate false param)
-        editor.value.commands.setContent(val || '', false);
-        lastEmitted = val || '';
+        if (val !== internalModel.value) internalModel.value = val;
     }
 );
+watch(internalModel, (val) => {
+    if (typeof val === 'string') {
+        emit('update:model', val);
+        emit('change', val);
+    }
+});
+
+const show = computed(
+    () =>
+        !!internalModel.value &&
+        favoriteModels.value &&
+        favoriteModels.value.length > 0
+);
+
+const items = computed(() =>
+    favoriteModels.value.map((m: any) => ({
+        label: m.canonical_slug,
+        value: m.canonical_slug,
+    }))
+);
+
+const ui = {
+    content: 'border-[2px] border-black rounded-[3px] w-[320px]',
+    input: 'border-0 rounded-none!',
+    arrow: 'h-[18px] w-[18px]',
+    itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
+};
+
+const searchInput = {
+    icon: 'pixelarticons:search',
+    ui: {
+        base: 'border-0 border-b-1 rounded-none!',
+        leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+    },
+};
 </script>
 
-<style scoped>
-.tiptap-editor {
-    min-height: 40px;
-    outline: none;
-    font: inherit;
-}
-.tiptap-editor :deep(p) {
-    margin: 0 0 0.5rem;
-}
-.tiptap-editor :deep(pre) {
-    background: var(--md-surface-container-lowest);
-    padding: 0.5rem;
-    border: 1px solid var(--md-outline);
-}
-.tiptap-editor :deep(.ProseMirror) {
-    outline: none;
-}
-.fade-in {
-    opacity: 0;
-    animation: fadeInEditor 0.14s ease-out forwards;
-}
-@keyframes fadeInEditor {
-    to {
-        opacity: 1;
-    }
-}
-</style>
+<style scoped></style>
 ```
 
 ## File: app/components/sidebar/ResizeHandle.vue
@@ -3515,6 +3469,113 @@ export async function normalizeThreadIndexes(
 }
 ```
 
+## File: app/db/posts.ts
+```typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { nowSec, parseOrThrow } from './util';
+import {
+    PostSchema,
+    PostCreateSchema,
+    type Post,
+    type PostCreate,
+} from './schema';
+
+// Normalize meta to stored string form (JSON) regardless of input shape
+function normalizeMeta(meta: any): string | null | undefined {
+    if (meta == null) return meta; // keep null/undefined as-is
+    if (typeof meta === 'string') return meta; // assume already JSON or raw string
+    try {
+        return JSON.stringify(meta);
+    } catch {
+        return undefined; // fallback: drop invalid meta
+    }
+}
+
+export async function createPost(input: PostCreate): Promise<Post> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.posts.create:filter:input',
+        input
+    );
+    // Ensure title present & trimmed early (schema will enforce non-empty)
+    if (typeof (filtered as any).title === 'string') {
+        (filtered as any).title = (filtered as any).title.trim();
+    }
+    if ((filtered as any).meta !== undefined) {
+        (filtered as any).meta = normalizeMeta((filtered as any).meta);
+    }
+    const prepared = parseOrThrow(PostCreateSchema, filtered);
+    const value = parseOrThrow(PostSchema, prepared);
+    await hooks.doAction('db.posts.create:action:before', value);
+    await db.posts.put(value);
+    await hooks.doAction('db.posts.create:action:after', value);
+    return value;
+}
+
+export async function upsertPost(value: Post): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.posts.upsert:filter:input',
+        value
+    );
+    if (typeof (filtered as any).title === 'string') {
+        (filtered as any).title = (filtered as any).title.trim();
+    }
+    if ((filtered as any).meta !== undefined) {
+        (filtered as any).meta = normalizeMeta((filtered as any).meta);
+    }
+    await hooks.doAction('db.posts.upsert:action:before', filtered);
+    parseOrThrow(PostSchema, filtered);
+    await db.posts.put(filtered);
+    await hooks.doAction('db.posts.upsert:action:after', filtered);
+}
+
+export function getPost(id: string) {
+    const hooks = useHooks();
+    return db.posts
+        .get(id)
+        .then((res) => hooks.applyFilters('db.posts.get:filter:output', res));
+}
+
+export function allPosts() {
+    const hooks = useHooks();
+    return db.posts
+        .toArray()
+        .then((res) => hooks.applyFilters('db.posts.all:filter:output', res));
+}
+
+export function searchPosts(term: string) {
+    const q = term.toLowerCase();
+    const hooks = useHooks();
+    return db.posts
+        .filter((p) => p.title.toLowerCase().includes(q))
+        .toArray()
+        .then((res) =>
+            hooks.applyFilters('db.posts.search:filter:output', res)
+        );
+}
+
+export async function softDeletePost(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.posts, async () => {
+        const p = await db.posts.get(id);
+        if (!p) return;
+        await hooks.doAction('db.posts.delete:action:soft:before', p);
+        await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
+        await hooks.doAction('db.posts.delete:action:soft:after', p);
+    });
+}
+
+export async function hardDeletePost(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    await hooks.doAction('db.posts.delete:action:hard:before', existing ?? id);
+    await db.posts.delete(id);
+    await hooks.doAction('db.posts.delete:action:hard:after', id);
+}
+```
+
 ## File: app/db/projects.ts
 ```typescript
 import { db } from './client';
@@ -3601,28 +3662,6 @@ export function newId(): string {
     if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
     return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
-```
-
-## File: app/pages/chat/[id].vue
-```vue
-<template>
-    <ChatPageShell :initial-thread-id="routeId" validate-initial />
-</template>
-<script setup lang="ts">
-import ChatPageShell from '~/components/chat/ChatPageShell.vue';
-const route = useRoute();
-const routeId = (route.params.id as string) || '';
-</script>
-```
-
-## File: app/pages/chat/index.vue
-```vue
-<template>
-    <ChatPageShell />
-</template>
-<script setup lang="ts">
-import ChatPageShell from '~/components/chat/ChatPageShell.vue';
-</script>
 ```
 
 ## File: app/pages/_test.vue
@@ -3785,18 +3824,6 @@ function showToast() {
     });
 }
 </script>
-```
-
-## File: app/pages/home.vue
-```vue
-<template><div>hello</div></template>
-<script lang="ts" setup></script>
-```
-
-## File: app/pages/homepage.vue
-```vue
-<template><div>hello</div></template>
-<script lang="ts" setup></script>
 ```
 
 ## File: app/pages/openrouter-callback.vue
@@ -4156,6 +4183,18 @@ export default defineNuxtPlugin((nuxtApp) => {
         system: getSystemPref,
     });
 });
+```
+
+## File: app/state/global.ts
+```typescript
+import { openrouter } from '@openrouter/ai-sdk-provider';
+import { ref } from 'vue';
+
+export const state = ref({
+    openrouterKey: '' as string | null,
+});
+
+export const isMobile = ref<boolean>(false);
 ```
 
 ## File: app/utils/files-constants.ts
@@ -5524,85 +5563,119 @@ describe('VirtualMessageList', () => {
 </style>
 ```
 
-## File: app/components/chat/ModelSelect.vue
+## File: app/components/chat/MessageEditor.vue
 ```vue
 <template>
-    <div v-if="show" class="inline-block">
-        <USelectMenu
-            v-model="internalModel"
-            :items="items"
-            :value-key="'value'"
-            :disabled="loading"
-            :ui="ui"
-            :search-input="searchInput"
-            class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]"
+    <div class="relative min-h-[40px]">
+        <EditorContent
+            v-if="editor"
+            :editor="editor as Editor"
+            class="tiptap-editor fade-in"
         />
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref } from 'vue';
-import { useModelStore } from '~/composables/useModelStore';
-
-interface Emits {
-    (e: 'update:model', value: string): void;
-    (e: 'change', value: string): void;
-}
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+// If you still want markdown extension keep it; otherwise remove these two lines:
+import { Markdown } from 'tiptap-markdown';
+import { useDebounceFn } from '@vueuse/core';
 
 const props = defineProps<{
-    model?: string;
-    loading?: boolean;
+    modelValue: string;
+    autofocus?: boolean;
+    focusDelay?: number;
 }>();
-const emit = defineEmits<Emits>();
+const emit = defineEmits<{
+    (e: 'update:modelValue', v: string): void;
+    (e: 'ready'): void;
+}>();
 
-const { favoriteModels } = useModelStore();
+const editor = ref<any>(null);
+let destroy: (() => void) | null = null;
+// Prevent feedback loop when emitting updates -> watcher -> setContent -> update
+let internalUpdate = false;
+let lastEmitted = '';
 
-// Mirror v-model
-const internalModel = ref<string | undefined>(props.model);
-watch(
-    () => props.model,
-    (val) => {
-        if (val !== internalModel.value) internalModel.value = val;
+const emitModelValue = useDebounceFn((val: string): void => {
+    emit('update:modelValue', val);
+}, 200);
+
+async function init() {
+    const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
+
+    const instance = new Editor({
+        extensions,
+        content: props.modelValue,
+        onUpdate: ({ editor: e }) => {
+            // @ts-ignore
+            emitModelValue(e?.storage?.markdown?.getMarkdown());
+        },
+    });
+
+    editor.value = instance;
+    destroy = () => instance.destroy();
+
+    await nextTick();
+    if (props.autofocus) {
+        const delay =
+            typeof props.focusDelay === 'number' ? props.focusDelay : 90;
+        setTimeout(() => {
+            try {
+                instance.commands.focus('end');
+            } catch {}
+        }, delay);
     }
-);
-watch(internalModel, (val) => {
-    if (typeof val === 'string') {
-        emit('update:model', val);
-        emit('change', val);
-    }
+    lastEmitted = props.modelValue;
+    emit('ready');
+}
+
+onMounted(() => {
+    init();
 });
 
-const show = computed(
-    () =>
-        !!internalModel.value &&
-        favoriteModels.value &&
-        favoriteModels.value.length > 0
+onBeforeUnmount(() => {
+    destroy && destroy();
+});
+
+watch(
+    () => props.modelValue,
+    (val) => {
+        if (!editor.value) return;
+        if (internalUpdate) return;
+    }
 );
-
-const items = computed(() =>
-    favoriteModels.value.map((m: any) => ({
-        label: m.canonical_slug,
-        value: m.canonical_slug,
-    }))
-);
-
-const ui = {
-    content: 'border-[2px] border-black rounded-[3px] w-[320px]',
-    input: 'border-0 rounded-none!',
-    arrow: 'h-[18px] w-[18px]',
-    itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
-};
-
-const searchInput = {
-    icon: 'pixelarticons:search',
-    ui: {
-        base: 'border-0 border-b-1 rounded-none!',
-        leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-    },
-};
 </script>
 
-<style scoped></style>
+<style scoped>
+.tiptap-editor {
+    min-height: 40px;
+    outline: none;
+    font: inherit;
+}
+.tiptap-editor :deep(p) {
+    margin: 0 0 0.5rem;
+}
+.tiptap-editor :deep(pre) {
+    background: var(--md-surface-container-lowest);
+    padding: 0.5rem;
+    border: 1px solid var(--md-outline);
+}
+.tiptap-editor :deep(.ProseMirror) {
+    outline: none;
+}
+.fade-in {
+    opacity: 0;
+    animation: fadeInEditor 0.14s ease-out forwards;
+}
+@keyframes fadeInEditor {
+    to {
+        opacity: 1;
+    }
+}
+</style>
 ```
 
 ## File: app/components/chat/TailStream.vue
@@ -5654,6 +5727,363 @@ watchEffect(() => {
 
 <style scoped>
 /* Retro caret blink via animate-pulse (Tailwind). Customize if needed. */
+</style>
+```
+
+## File: app/components/documents/DocumentsPageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="''"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+                @chatSelected="onSidebarChatSelected"
+                @new-chat="onSidebarNewChat"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="''"
+                @focusSearch="focusSidebarSearch"
+                @chatSelected="onSidebarChatSelected"
+                @new-chat="onSidebarNewChat"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full relative">
+            <div
+                id="top-nav"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"
+            >
+                <div class="h-full flex items-center justify-center px-2">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    'pt-[46px]',
+                    'h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+                    <LazyDocumentsDocumentEditor
+                        v-if="pane.documentId"
+                        :document-id="pane.documentId"
+                        class="flex-1 min-h-0"
+                    />
+                    <div
+                        v-else
+                        class="flex-1 flex items-center justify-center text-sm opacity-70"
+                    >
+                        No document.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { ensureDbOpen as ensureDocumentsDbOpen } from '~/db/documents';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+import { db } from '~/db';
+
+const props = withDefaults(
+    defineProps<{
+        initialDocumentId?: string;
+        validateInitial?: boolean;
+        routeSync?: boolean;
+    }>(),
+    { validateInitial: false, routeSync: true }
+);
+
+// Multi-pane: we only use doc mode; thread related fields remain unused.
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    ensureAtLeastOne,
+} = useMultiPane({ onFlushDocument: (id) => flushDocument(id) });
+
+// Convert first pane to doc mode when loading an existing document
+watch(
+    () => props.initialDocumentId,
+    (id) => {
+        if (!id) return;
+        const pane = panes.value[0];
+        if (pane) {
+            pane.mode = 'doc';
+            pane.documentId = id;
+            pane.threadId = '';
+        }
+    },
+    { immediate: true }
+);
+
+const router = useRouter();
+const toast = useToast();
+
+async function validateDocument(id: string): Promise<boolean> {
+    await ensureDocumentsDbOpen();
+    const ATTEMPTS = 5;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+function redirectNotFound() {
+    router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description: 'This document does not exist.',
+        color: 'error',
+    });
+}
+
+let validateToken = 0;
+async function initInitialDocument() {
+    if (!process.client) return;
+    if (!props.initialDocumentId) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.validateInitial) {
+        pane.validating = true;
+        const token = ++validateToken;
+        const ok = await validateDocument(props.initialDocumentId);
+        if (token !== validateToken) return;
+        if (!ok) return redirectNotFound();
+    }
+    pane.mode = 'doc';
+    pane.documentId = props.initialDocumentId;
+    pane.threadId = '';
+    pane.validating = false;
+    updateUrlDocument(props.initialDocumentId);
+}
+
+function updateUrlDocument(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/docs/${id}` : '/docs';
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+// Watch active pane doc changes to sync URL
+watch(
+    () =>
+        panes.value
+            .map((p) => `${p.id}:${p.documentId || ''}:${p.mode}`)
+            .join(','),
+    () => {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        if (pane.mode === 'doc') updateUrlDocument(pane.documentId);
+        else updateUrlDocument(undefined);
+    }
+);
+
+// Documents operations
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrlDocument(doc.id);
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrlDocument(id);
+}
+
+// If user picks a chat in sidebar, navigate to chat route (keeps consistent behavior with unified sidebar)
+function onSidebarChatSelected(id: string) {
+    if (!id) return;
+    router.push(`/chat/${id}`);
+}
+function onSidebarNewChat() {
+    router.push('/chat');
+}
+
+// Theme toggle (copied minimal from chat shell)
+const nuxtApp = useNuxtApp();
+const themeName = ref('light');
+function getThemeSafe() {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client)
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+    } catch {}
+    return 'light';
+}
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    onMounted(() => {
+        syncTheme();
+        const root = document.documentElement;
+        const observer = new MutationObserver(syncTheme);
+        observer.observe(root, {
+            attributes: true,
+            attributeFilter: ['class'],
+        });
+        if (import.meta.hot)
+            import.meta.hot.dispose(() => observer.disconnect());
+        else onUnmounted(() => observer.disconnect());
+    });
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// Sidebar focus (collapsed)
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => sideNavExpandedRef.value?.focusSearchInput?.());
+}
+
+onMounted(() => {
+    ensureAtLeastOne();
+    initInitialDocument();
+});
+
+// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot)
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    else onUnmounted(() => window.removeEventListener('keydown', down));
+}
+</script>
+<style scoped>
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
 </style>
 ```
 
@@ -6010,130 +6440,590 @@ function formatPerMillion(raw: unknown, currency = 'USD') {
 </script>
 ```
 
-## File: app/composables/__tests__/useAutoScroll.test.ts
-```typescript
-import { describe, it, expect } from 'vitest';
-import { ref, defineComponent, h } from 'vue';
-import { useAutoScroll } from '../useAutoScroll';
+## File: app/components/PageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 h-screen w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
 
-function mockContainer(): HTMLElement {
-    const el = document.createElement('div');
-    Object.defineProperty(el, 'scrollHeight', { value: 1000, writable: true });
-    Object.defineProperty(el, 'clientHeight', { value: 500, writable: true });
-    el.scrollTop = 500; // bottom
-    el.scrollTo = ({ top }: any) => {
-        el.scrollTop = top;
-    };
-    return el;
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            @thread-selected="
+                                (id: string) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <LazyDocumentsDocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        ></LazyDocumentsDocumentEditor>
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+// Generic PageShell merging chat + docs functionality.
+// Props allow initializing with a thread OR a document and choosing default mode.
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        initialDocumentId?: string;
+        validateInitial?: boolean; // applies to whichever id is provided
+        routeSync?: boolean;
+        defaultMode?: 'chat' | 'doc'; // used when no initial id
+    }>(),
+    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+
+// ---------------- Multi-pane ----------------
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
+
+// Active thread convenience (first pane for sidebar highlight)
+const activeChatThreadId = computed(() =>
+    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
+);
+
+// --------------- Initializers ---------------
+let validateToken = 0;
+
+async function validateThread(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t && !t.deleted) return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
 }
 
-describe('useAutoScroll', () => {
-    it('detects bottom then un-sticks when scrolled up', () => {
-        let api: ReturnType<typeof useAutoScroll> | null = null;
-        const c = ref<HTMLElement | null>(mockContainer());
-        defineComponent({
-            setup() {
-                api = useAutoScroll(c, { thresholdPx: 10, throttleMs: 0 });
-                return () => h('div');
-            },
-        });
-        // initial compute
-        api = useAutoScroll(c, { thresholdPx: 10, throttleMs: 0 });
-        api.onContentIncrease();
-        expect(api.atBottom.value).toBe(true);
-        if (c.value) {
-            c.value.scrollTop = 200; // distance 300 > threshold 10
-            api.recompute();
+async function validateDocument(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function initInitial() {
+    if (!process.client) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.initialThreadId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateThread(props.initialThreadId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('chat');
+                return;
+            }
         }
-        expect(api.atBottom.value).toBe(false); // should have un-stuck now
-        api.stickBottom();
-        expect(api.atBottom.value).toBe(true);
+        await setPaneThread(0, props.initialThreadId);
+        pane.mode = 'chat';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    if (props.initialDocumentId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateDocument(props.initialDocumentId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('doc');
+                return;
+            }
+        }
+        pane.mode = 'doc';
+        pane.documentId = props.initialDocumentId;
+        pane.threadId = '';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    // No ids: set default mode
+    if (props.defaultMode === 'doc') {
+        pane.mode = 'doc';
+        pane.documentId = undefined;
+        pane.threadId = '';
+    } else {
+        pane.mode = 'chat';
+    }
+    updateUrl();
+}
+
+function redirectNotFound(kind: 'chat' | 'doc') {
+    if (kind === 'chat') router.replace('/chat');
+    else router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description:
+            kind === 'chat'
+                ? 'This chat does not exist.'
+                : 'This document does not exist.',
+        color: 'error',
     });
+}
+
+// --------------- URL Sync ---------------
+function updateUrl() {
+    if (!process.client || !props.routeSync) return;
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    const base = pane.mode === 'doc' ? '/docs' : '/chat';
+    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
+    const newPath = id ? `${base}/${id}` : base;
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+watch(
+    () =>
+        panes.value
+            .map(
+                (p) =>
+                    `${p.id}:${p.mode}:${p.threadId || ''}:${
+                        p.documentId || ''
+                    }`
+            )
+            .join(','),
+    () => updateUrl()
+);
+
+watch(
+    () => activePaneIndex.value,
+    () => updateUrl()
+);
+
+// --------------- Documents Integration ---------------
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
 });
-```
 
-## File: app/composables/__tests__/useChatSend.test.ts
-```typescript
-import { describe, it, expect } from 'vitest';
-import { useChatSend } from '../useChatSend';
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrl();
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrl();
+}
 
-describe('useChatSend', () => {
-    it('rejects empty', async () => {
-        const chat = useChatSend();
-        await expect(chat.send({ threadId: 't1', text: '' })).rejects.toThrow(
-            'Empty message'
+// Sidebar chat selection always puts pane in chat mode
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrl();
+}
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrl();
+}
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrl();
+}
+
+// --------------- Theme ---------------
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// --------------- Mobile + layout ---------------
+import { isMobile } from '~/state/global';
+if (process.client) {
+    onMounted(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        const apply = () => (isMobile.value = mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() =>
+                mq.removeEventListener('change', apply)
+            );
+        } else {
+            onUnmounted(() => mq.removeEventListener('change', apply));
+        }
+    });
+}
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+function openMobileSidebar() {
+    (layoutRef.value as any)?.openSidebar?.();
+}
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => {
+        sideNavExpandedRef.value?.focusSearchInput?.();
+    });
+}
+
+// --------------- Deletion auto-reset ---------------
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    if (paneIndex === activePaneIndex.value) updateUrl();
+}
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
+    });
+}
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
+    });
+}
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+
+// --------------- Mount ---------------
+onMounted(() => {
+    initInitial();
+    syncTheme();
+    ensureAtLeastOne();
+});
+
+// --------------- Shortcuts ---------------
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
         );
-    });
-    it('sends basic message', async () => {
-        const chat = useChatSend();
-        const res = await chat.send({ threadId: 't1', text: 'Hello' });
-        expect(res.id).toBeTruthy();
-        expect(typeof res.createdAt).toBe('number');
-    });
-});
-```
-
-## File: app/composables/__tests__/useObservedElementSize.test.ts
-```typescript
-import { describe, it, expect } from 'vitest';
-import { ref } from 'vue';
-import { useObservedElementSize } from '../useObservedElementSize';
-
-// JSDOM lacks real ResizeObserver layout; this is a smoke test only.
-
-describe.skip('useObservedElementSize (environment limited)', () => {
-    it('initializes refs', () => {
-        const el = ref<HTMLElement | null>(document.createElement('div'));
-        const { width, height } = useObservedElementSize(el);
-        expect(width.value).toBeDefined();
-        expect(height.value).toBeDefined();
-    });
-});
-```
-
-## File: app/composables/__tests__/useTailStream.test.ts
-```typescript
-import { describe, it, expect } from 'vitest';
-import { useTailStream } from '../useTailStream';
-import { nextTick } from 'vue';
-
-// NOTE: Timer-based behavior; flushIntervalMs shortened for faster test.
-
-describe('useTailStream', () => {
-    it('accumulates and flushes chunks', async () => {
-        const tail = useTailStream({ flushIntervalMs: 5 });
-        tail.push('Hel');
-        tail.push('lo');
-        expect(tail.displayText.value).toBe(''); // not flushed yet
-        await new Promise((r) => setTimeout(r, 12));
-        expect(tail.displayText.value).toBe('Hello');
-        tail.complete();
-        expect(tail.done.value).toBe(true);
-    });
-
-    it('immediate flushes first chunk when immediate true', () => {
-        const tail = useTailStream({ immediate: true });
-        tail.push('A');
-        expect(tail.displayText.value).toBe('A');
-    });
-
-    it('handles fail()', async () => {
-        const tail = useTailStream({ flushIntervalMs: 5 });
-        tail.push('x');
-        tail.fail(new Error('boom'));
-        expect(tail.error.value?.message).toBe('boom');
-        expect(tail.done.value).toBe(false);
-    });
-});
-```
-
-## File: app/composables/index.ts
-```typescript
-/** Barrel export for chat-related composables (Task 1.6) */
-export * from './useTailStream';
-export * from './useAutoScroll';
-export * from './useChatSend';
-export * from './useObservedElementSize';
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+</script>
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
 ```
 
 ## File: app/composables/useAutoScroll.ts
@@ -6422,6 +7312,68 @@ export function useDocumentState(id: string) {
 export function useAllDocumentsState() {
     return documentsMap;
 }
+```
+
+## File: app/composables/useMessageActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+
+/** Definition for an extendable chat message action button. */
+export interface ChatMessageAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Tooltip text. */
+    tooltip: string;
+    /** Where to show the action. */
+    showOn: 'user' | 'assistant' | 'both';
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    /** Handler invoked on click. */
+    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, ChatMessageAction> =
+    g.__or3MessageActionsRegistry ||
+    (g.__or3MessageActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerMessageAction(action: ChatMessageAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterMessageAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useMessageActions(message: { role: 'user' | 'assistant' }) {
+    return computed(() =>
+        reactiveList.items
+            .filter((a) => a.showOn === 'both' || a.showOn === message.role)
+            .sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredMessageActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
 ## File: app/composables/useMessageEditing.ts
@@ -7228,111 +8180,194 @@ export function useTailStream(
 }
 ```
 
-## File: app/db/posts.ts
+## File: app/db/documents.ts
 ```typescript
 import { db } from './client';
+import { newId, nowSec } from './util';
 import { useHooks } from '../composables/useHooks';
-import { nowSec, parseOrThrow } from './util';
-import {
-    PostSchema,
-    PostCreateSchema,
-    type Post,
-    type PostCreate,
-} from './schema';
 
-// Normalize meta to stored string form (JSON) regardless of input shape
-function normalizeMeta(meta: any): string | null | undefined {
-    if (meta == null) return meta; // keep null/undefined as-is
-    if (typeof meta === 'string') return meta; // assume already JSON or raw string
+/**
+ * Internal stored row shape (reuses posts table with postType = 'doc').
+ * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
+ * Content is persisted as a JSON string (TipTap JSON) for flexibility.
+ */
+export interface DocumentRow {
+    id: string;
+    title: string; // non-empty trimmed
+    content: string; // JSON string
+    postType: string; // always 'doc'
+    created_at: number; // seconds
+    updated_at: number; // seconds
+    deleted: boolean;
+}
+
+/** Public facing record with content already parsed. */
+export interface DocumentRecord {
+    id: string;
+    title: string;
+    content: any; // TipTap JSON object
+    created_at: number;
+    updated_at: number;
+    deleted: boolean;
+}
+
+function emptyDocJSON() {
+    return { type: 'doc', content: [] };
+}
+
+function normalizeTitle(title?: string | null): string {
+    const t = (title ?? '').trim();
+    return t.length ? t : 'Untitled';
+}
+
+function parseContent(raw: string | null | undefined): any {
+    if (!raw) return emptyDocJSON();
     try {
-        return JSON.stringify(meta);
+        const parsed = JSON.parse(raw);
+        // Basic structural guard
+        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        return emptyDocJSON();
     } catch {
-        return undefined; // fallback: drop invalid meta
+        return emptyDocJSON();
     }
 }
 
-export async function createPost(input: PostCreate): Promise<Post> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.posts.create:filter:input',
-        input
-    );
-    // Ensure title present & trimmed early (schema will enforce non-empty)
-    if (typeof (filtered as any).title === 'string') {
-        (filtered as any).title = (filtered as any).title.trim();
-    }
-    if ((filtered as any).meta !== undefined) {
-        (filtered as any).meta = normalizeMeta((filtered as any).meta);
-    }
-    const prepared = parseOrThrow(PostCreateSchema, filtered);
-    const value = parseOrThrow(PostSchema, prepared);
-    await hooks.doAction('db.posts.create:action:before', value);
-    await db.posts.put(value);
-    await hooks.doAction('db.posts.create:action:after', value);
-    return value;
+function rowToRecord(row: DocumentRow): DocumentRecord {
+    return {
+        id: row.id,
+        title: row.title,
+        content: parseContent(row.content),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted,
+    };
 }
 
-export async function upsertPost(value: Post): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.posts.upsert:filter:input',
-        value
-    );
-    if (typeof (filtered as any).title === 'string') {
-        (filtered as any).title = (filtered as any).title.trim();
-    }
-    if ((filtered as any).meta !== undefined) {
-        (filtered as any).meta = normalizeMeta((filtered as any).meta);
-    }
-    await hooks.doAction('db.posts.upsert:action:before', filtered);
-    parseOrThrow(PostSchema, filtered);
-    await db.posts.put(filtered);
-    await hooks.doAction('db.posts.upsert:action:after', filtered);
+export interface CreateDocumentInput {
+    title?: string | null;
+    content?: any; // TipTap JSON object
 }
 
-export function getPost(id: string) {
+export async function createDocument(
+    input: CreateDocumentInput = {}
+): Promise<DocumentRecord> {
     const hooks = useHooks();
-    return db.posts
-        .get(id)
-        .then((res) => hooks.applyFilters('db.posts.get:filter:output', res));
+    const prepared: DocumentRow = {
+        id: newId(),
+        title: normalizeTitle(input.title),
+        content: JSON.stringify(input.content ?? emptyDocJSON()),
+        postType: 'doc',
+        created_at: nowSec(),
+        updated_at: nowSec(),
+        deleted: false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.create:filter:input',
+        prepared
+    )) as DocumentRow;
+    await hooks.doAction('db.documents.create:action:before', filtered);
+    await db.posts.put(filtered as any); // reuse posts table
+    await hooks.doAction('db.documents.create:action:after', filtered);
+    return rowToRecord(filtered);
 }
 
-export function allPosts() {
+export async function getDocument(
+    id: string
+): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    return db.posts
-        .toArray()
-        .then((res) => hooks.applyFilters('db.posts.all:filter:output', res));
+    const row = await db.posts.get(id);
+    if (!row || (row as any).postType !== 'doc') return undefined;
+    const filtered = (await hooks.applyFilters(
+        'db.documents.get:filter:output',
+        row
+    )) as DocumentRow | undefined;
+    return filtered ? rowToRecord(filtered) : undefined;
 }
 
-export function searchPosts(term: string) {
-    const q = term.toLowerCase();
+export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     const hooks = useHooks();
-    return db.posts
-        .filter((p) => p.title.toLowerCase().includes(q))
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.posts.search:filter:output', res)
-        );
+    // Filter by postType (indexed) and non-deleted
+    const rows = await db.posts
+        .where('postType')
+        .equals('doc')
+        .and((r) => !(r as any).deleted)
+        .reverse() // by primary key order soon? we'll sort manually after fetch
+        .toArray();
+    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
+    rows.sort((a, b) => b.updated_at - a.updated_at);
+    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
+    const filtered = (await hooks.applyFilters(
+        'db.documents.list:filter:output',
+        sliced
+    )) as DocumentRow[];
+    return filtered.map(rowToRecord);
 }
 
-export async function softDeletePost(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.posts, async () => {
-        const p = await db.posts.get(id);
-        if (!p) return;
-        await hooks.doAction('db.posts.delete:action:soft:before', p);
-        await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
-        await hooks.doAction('db.posts.delete:action:soft:after', p);
-    });
+export interface UpdateDocumentPatch {
+    title?: string;
+    content?: any; // TipTap JSON object
 }
 
-export async function hardDeletePost(id: string): Promise<void> {
+export async function updateDocument(
+    id: string,
+    patch: UpdateDocumentPatch
+): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
     const existing = await db.posts.get(id);
-    await hooks.doAction('db.posts.delete:action:hard:before', existing ?? id);
-    await db.posts.delete(id);
-    await hooks.doAction('db.posts.delete:action:hard:after', id);
+    if (!existing || (existing as any).postType !== 'doc') return undefined;
+    const updated: DocumentRow = {
+        id: existing.id,
+        title: patch.title ? normalizeTitle(patch.title) : existing.title,
+        content: patch.content
+            ? JSON.stringify(patch.content)
+            : (existing as any).content,
+        postType: 'doc',
+        created_at: existing.created_at,
+        updated_at: nowSec(),
+        deleted: (existing as any).deleted ?? false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.update:filter:input',
+        { existing, updated, patch }
+    )) as { updated: DocumentRow } | DocumentRow;
+    const row = (filtered as any).updated
+        ? (filtered as any).updated
+        : (filtered as any as DocumentRow);
+    await hooks.doAction('db.documents.update:action:before', row);
+    await db.posts.put(row as any);
+    await hooks.doAction('db.documents.update:action:after', row);
+    return rowToRecord(row);
 }
+
+export async function softDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return;
+    const row = {
+        ...(existing as any),
+        deleted: true,
+        updated_at: nowSec(),
+    };
+    await hooks.doAction('db.documents.delete:action:soft:before', row);
+    await db.posts.put(row);
+    await hooks.doAction('db.documents.delete:action:soft:after', row);
+}
+
+export async function hardDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return;
+    await hooks.doAction('db.documents.delete:action:hard:before', existing);
+    await db.posts.delete(id);
+    await hooks.doAction('db.documents.delete:action:hard:after', id);
+}
+
+// Convenience for ensuring DB open (mirrors pattern in other modules)
+export async function ensureDbOpen() {
+    if (!db.isOpen()) await db.open();
+}
+
+export type { DocumentRecord as Document };
 ```
 
 ## File: app/db/threads.ts
@@ -7528,16 +8563,58 @@ export async function getThreadSystemPrompt(
 }
 ```
 
-## File: app/state/global.ts
-```typescript
-import { openrouter } from '@openrouter/ai-sdk-provider';
-import { ref } from 'vue';
+## File: app/pages/chat/[id].vue
+```vue
+<template>
+    <PageShell :initial-thread-id="routeId" validate-initial />
+</template>
+<script setup lang="ts">
+import PageShell from '~/components/PageShell.vue';
+const route = useRoute();
+const routeId = (route.params.id as string) || '';
+</script>
+```
 
-export const state = ref({
-    openrouterKey: '' as string | null,
-});
+## File: app/pages/chat/index.vue
+```vue
+<template>
+    <PageShell default-mode="chat" />
+</template>
+<script setup lang="ts">
+import PageShell from '~/components/PageShell.vue';
+</script>
+```
 
-export const isMobile = ref<boolean>(false);
+## File: app/pages/docs/[id].vue
+```vue
+<template>
+    <PageShell :initial-document-id="routeId" validate-initial />
+</template>
+<script setup lang="ts">
+import PageShell from '~/components/PageShell.vue';
+const route = useRoute();
+const routeId = (route.params.id as string) || '';
+</script>
+```
+
+## File: app/pages/docs/index.vue
+```vue
+<template>
+    <PageShell default-mode="doc" />
+</template>
+<script setup lang="ts">
+import PageShell from '~/components/PageShell.vue';
+</script>
+```
+
+## File: app/pages/index.vue
+```vue
+<template>
+    <PageShell />
+</template>
+<script setup lang="ts">
+import PageShell from '~/components/PageShell.vue';
+</script>
 ```
 
 ## File: app/utils/chat/files.ts
@@ -7704,39 +8781,6 @@ export function trimOrMessagesImages(orMessages: any[], max: number) {
         // ignore trimming errors
     }
 }
-```
-
-## File: app/app.vue
-```vue
-<template>
-    <UApp>
-        <NuxtPage />
-    </UApp>
-</template>
-<script setup lang="ts">
-// Apply initial theme class to <html> so CSS variables cascade app-wide
-useHead({
-    htmlAttrs: {
-        class: 'light',
-    },
-});
-
-import { onMounted } from 'vue';
-import { useNuxtApp } from '#app';
-
-// Fire app.init:action:after once after the root app mounts (client-only)
-const nuxtApp = useNuxtApp();
-
-onMounted(() => {
-    const g: any = globalThis as any;
-    if (g.__OR3_APP_INIT_FIRED__) return;
-    g.__OR3_APP_INIT_FIRED__ = true;
-    const hooks: any = nuxtApp.$hooks;
-    if (hooks && typeof hooks.doAction === 'function') {
-        hooks.doAction('app.init:action:after', nuxtApp);
-    }
-});
-</script>
 ```
 
 ## File: tests/setup.ts
@@ -8118,326 +9162,6 @@ const statusText = computed(() => {
 </style>
 ```
 
-## File: app/components/sidebar/SidebarHeader.vue
-```vue
-<template>
-    <div
-        :class="{
-            'px-0 justify-center': collapsed,
-            'px-3 justify-between': !collapsed,
-        }"
-        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
-    >
-        <div v-show="!collapsed">
-            <slot name="sidebar-header">
-                <h1 class="text-[14px] font-medium uppercase tracking-wide">
-                    Chat app
-                </h1>
-            </slot>
-        </div>
-
-        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
-            <UButton
-                size="xs"
-                :square="true"
-                color="neutral"
-                variant="ghost"
-                :class="'retro-btn'"
-                @click="onToggle"
-                :ui="{ base: 'retro-btn' }"
-                :aria-label="toggleAria"
-                :title="toggleAria"
-            >
-                <UIcon :name="toggleIcon" class="w-5 h-5" />
-            </UButton>
-        </slot>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
-
-const props = defineProps({
-    collapsed: { type: Boolean, required: true },
-    toggleIcon: { type: String, required: true },
-    toggleAria: { type: String, required: true },
-});
-const emit = defineEmits(['toggle']);
-
-function onToggle() {
-    emit('toggle');
-}
-</script>
-
-<style scoped>
-/* Gradient already supplied by global pattern image; we just ensure better dark base */
-.header-pattern {
-    background-image: url('/gradient-x.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-.dark .header-pattern {
-    /* Elevated surface tone for dark mode header to distinguish from main background */
-    background-color: var(--md-surface-container-high) !important;
-}
-</style>
-```
-
-## File: app/components/sidebar/SideBottomNav.vue
-```vue
-<template>
-    <div
-        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
-    >
-        <!-- Removed previously added extra div; using pseudo-element for top pattern -->
-        <div
-            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container)] border-2 border-[var(--md-outline-variant)]"
-        >
-            <div class="h-[10px] top-10 header-pattern-flipped"></div>
-            <div
-                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] dark:bg-[var(--md-surface-container-low)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
-            >
-                <!-- MY INFO -->
-                <UPopover>
-                    <button
-                        type="button"
-                        aria-label="My Info"
-                        class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                    >
-                        <div
-                            class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                        >
-                            <UIcon
-                                name="pixelarticons:user"
-                                class="h-5 w-5"
-                            ></UIcon>
-                        </div>
-                        <div
-                            class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                        >
-                            <div
-                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                            >
-                                INFO
-                            </div>
-                            <div
-                                class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                            >
-                                <div class="h-[2px] bg-current"></div>
-                                <div class="h-[2px] bg-current"></div>
-                            </div>
-                        </div>
-                    </button>
-                    <template #content>
-                        <div class="flex flex-col items-start w-[140px]">
-                            <button
-                                class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
-                                @click="navigateToActivity"
-                            >
-                                <UIcon
-                                    name="pixelarticons:human-run"
-                                    class="mr-1.5"
-                                />
-                                Activity
-                            </button>
-                            <button
-                                class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
-                                @click="navigateToCredits"
-                            >
-                                <UIcon
-                                    name="pixelarticons:coin"
-                                    class="mr-1.5"
-                                />
-                                Credits
-                            </button>
-                        </div>
-                    </template>
-                </UPopover>
-
-                <!-- Connect -->
-                <button
-                    label="Open"
-                    @click="onConnectButtonClick"
-                    type="button"
-                    aria-label="Connect"
-                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                >
-                    <div
-                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                    >
-                        <svg
-                            class="w-4 h-4"
-                            viewBox="0 0 512 512"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="currentColor"
-                            stroke="currentColor"
-                        >
-                            <g clip-path="url(#clip0_205_3)">
-                                <path
-                                    d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
-                                    stroke-width="90"
-                                />
-                                <path
-                                    d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
-                                />
-                                <path
-                                    d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
-                                    stroke-width="90"
-                                />
-                                <path
-                                    d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
-                                />
-                            </g>
-                        </svg>
-                    </div>
-                    <div
-                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                    >
-                        <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                        >
-                            {{ orIsConnected ? 'Disconnect' : 'Connect' }}
-                        </div>
-                        <div
-                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                        >
-                            <div
-                                :class="{
-                                    'bg-green-600': orIsConnected,
-                                    'bg-error': !orIsConnected,
-                                }"
-                                class="h-[2px]"
-                            ></div>
-                            <div
-                                :class="{
-                                    'bg-success': orIsConnected,
-                                    'bg-error': !orIsConnected,
-                                }"
-                                class="h-[2px]"
-                            ></div>
-                        </div>
-                    </div>
-                </button>
-
-                <!-- HELP -->
-                <button
-                    @click="showSettingsModal = true"
-                    type="button"
-                    aria-label="Help"
-                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                >
-                    <div
-                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                    >
-                        <UIcon
-                            class="w-5 h-5"
-                            name="pixelarticons:sliders-2"
-                        ></UIcon>
-                    </div>
-                    <div
-                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                    >
-                        <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                        >
-                            HELP
-                        </div>
-                        <div
-                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                        >
-                            <div class="h-[2px] bg-current"></div>
-                            <div class="h-[2px] bg-current"></div>
-                        </div>
-                    </div>
-                </button>
-            </div>
-            <div class="h-[10px] top-10"></div>
-        </div>
-    </div>
-    <modal-settings-modal v-model:showModal="showSettingsModal" />
-</template>
-
-<script lang="ts" setup>
-import { state } from '~/state/global';
-
-const openrouter = useOpenRouterAuth();
-const orIsConnected = computed(() => state.value.openrouterKey);
-const showSettingsModal = ref(false);
-
-function onConnectButtonClick() {
-    if (orIsConnected.value) {
-        console.log(orIsConnected);
-        // Logic to disconnect
-        state.value.openrouterKey = null;
-        openrouter.logoutOpenRouter();
-    } else {
-        // Logic to connect
-        openrouter.startLogin();
-    }
-}
-
-function navigateToActivity() {
-    window.open('https://openrouter.ai/activity', '_blank');
-}
-
-function navigateToCredits() {
-    window.open('https://openrouter.ai/settings/credits', '_blank');
-}
-</script>
-
-<style scoped>
-/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
-.retro-bar {
-    position: relative;
-    isolation: isolate; /* contain blend */
-}
-.retro-bar::before {
-    /* Chrome gloss + bevel hint */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background: linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.18),
-        rgba(255, 255, 255, 0.06) 28%,
-        rgba(0, 0, 0, 0) 40%,
-        rgba(0, 0, 0, 0.1) 100%
-    );
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-.retro-bar::after {
-    /* Scanlines + speckle noise, extremely subtle */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background-image: repeating-linear-gradient(
-            0deg,
-            rgba(255, 255, 255, 0.045) 0px,
-            rgba(255, 255, 255, 0.045) 1px,
-            rgba(0, 0, 0, 0) 1px,
-            rgba(0, 0, 0, 0) 3px
-        ),
-        radial-gradient(
-            1px 1px at 12% 18%,
-            rgba(255, 255, 255, 0.04),
-            transparent 100%
-        ),
-        radial-gradient(
-            1px 1px at 64% 62%,
-            rgba(0, 0, 0, 0.04),
-            transparent 100%
-        );
-    opacity: 0.25;
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-</style>
-```
-
 ## File: app/components/sidebar/SideNavContentCollapsed.vue
 ```vue
 <template>
@@ -8567,6 +9291,14 @@ function onNewChat() {
 </script>
 ```
 
+## File: app/composables/index.ts
+```typescript
+/** Barrel export for chat-related composables (Task 1.6) */
+export * from './useTailStream';
+export * from './useAutoScroll';
+export * from './useObservedElementSize';
+```
+
 ## File: app/composables/useActivePrompt.ts
 ```typescript
 import { ref, readonly } from 'vue';
@@ -8626,194 +9358,61 @@ export function useActivePrompt() {
 }
 ```
 
-## File: app/db/documents.ts
+## File: app/db/client.ts
 ```typescript
-import { db } from './client';
-import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
+import Dexie, { type Table } from 'dexie';
+import type {
+    Attachment,
+    Kv,
+    Message,
+    Project,
+    Thread,
+    FileMeta,
+    Post,
+} from './schema';
 
-/**
- * Internal stored row shape (reuses posts table with postType = 'doc').
- * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
- * Content is persisted as a JSON string (TipTap JSON) for flexibility.
- */
-export interface DocumentRow {
-    id: string;
-    title: string; // non-empty trimmed
-    content: string; // JSON string
-    postType: string; // always 'doc'
-    created_at: number; // seconds
-    updated_at: number; // seconds
-    deleted: boolean;
+export interface FileBlobRow {
+    hash: string; // primary key
+    blob: Blob; // actual binary Blob
 }
 
-/** Public facing record with content already parsed. */
-export interface DocumentRecord {
-    id: string;
-    title: string;
-    content: any; // TipTap JSON object
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
-}
+// Dexie database versioning & schema
+export class Or3DB extends Dexie {
+    projects!: Table<Project, string>;
+    threads!: Table<Thread, string>;
+    messages!: Table<Message, string>;
+    kv!: Table<Kv, string>;
+    attachments!: Table<Attachment, string>;
+    file_meta!: Table<FileMeta, string>; // hash as primary key
+    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
+    posts!: Table<Post, string>;
 
-function emptyDocJSON() {
-    return { type: 'doc', content: [] };
-}
-
-function normalizeTitle(title?: string | null): string {
-    const t = (title ?? '').trim();
-    return t.length ? t : 'Untitled';
-}
-
-function parseContent(raw: string | null | undefined): any {
-    if (!raw) return emptyDocJSON();
-    try {
-        const parsed = JSON.parse(raw);
-        // Basic structural guard
-        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
-        return emptyDocJSON();
-    } catch {
-        return emptyDocJSON();
+    constructor() {
+        super('or3-db');
+        // Simplified schema: collapse historical migrations into a single
+        // version to avoid full-table upgrade passes (which previously
+        // loaded entire tables into memory via toArray()). Since there are
+        // no external users / all data already upgraded, we can safely
+        // define only the latest structure.
+        // NOTE: Keep version number at 5 so existing local DBs at v5 open
+        // without triggering a downgrade. Future schema changes should bump.
+        this.version(5).stores({
+            projects: 'id, name, clock, created_at, updated_at',
+            threads:
+                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+            messages:
+                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+            kv: 'id, &name, clock, created_at, updated_at',
+            attachments: 'id, type, name, clock, created_at, updated_at',
+            file_meta:
+                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+            file_blobs: 'hash',
+            posts: 'id, title, postType, deleted, created_at, updated_at',
+        });
     }
 }
 
-function rowToRecord(row: DocumentRow): DocumentRecord {
-    return {
-        id: row.id,
-        title: row.title,
-        content: parseContent(row.content),
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        deleted: row.deleted,
-    };
-}
-
-export interface CreateDocumentInput {
-    title?: string | null;
-    content?: any; // TipTap JSON object
-}
-
-export async function createDocument(
-    input: CreateDocumentInput = {}
-): Promise<DocumentRecord> {
-    const hooks = useHooks();
-    const prepared: DocumentRow = {
-        id: newId(),
-        title: normalizeTitle(input.title),
-        content: JSON.stringify(input.content ?? emptyDocJSON()),
-        postType: 'doc',
-        created_at: nowSec(),
-        updated_at: nowSec(),
-        deleted: false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.documents.create:filter:input',
-        prepared
-    )) as DocumentRow;
-    await hooks.doAction('db.documents.create:action:before', filtered);
-    await db.posts.put(filtered as any); // reuse posts table
-    await hooks.doAction('db.documents.create:action:after', filtered);
-    return rowToRecord(filtered);
-}
-
-export async function getDocument(
-    id: string
-): Promise<DocumentRecord | undefined> {
-    const hooks = useHooks();
-    const row = await db.posts.get(id);
-    if (!row || (row as any).postType !== 'doc') return undefined;
-    const filtered = (await hooks.applyFilters(
-        'db.documents.get:filter:output',
-        row
-    )) as DocumentRow | undefined;
-    return filtered ? rowToRecord(filtered) : undefined;
-}
-
-export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
-    const hooks = useHooks();
-    // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
-        .where('postType')
-        .equals('doc')
-        .and((r) => !(r as any).deleted)
-        .reverse() // by primary key order soon? we'll sort manually after fetch
-        .toArray();
-    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
-    rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
-    const filtered = (await hooks.applyFilters(
-        'db.documents.list:filter:output',
-        sliced
-    )) as DocumentRow[];
-    return filtered.map(rowToRecord);
-}
-
-export interface UpdateDocumentPatch {
-    title?: string;
-    content?: any; // TipTap JSON object
-}
-
-export async function updateDocument(
-    id: string,
-    patch: UpdateDocumentPatch
-): Promise<DocumentRecord | undefined> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return undefined;
-    const updated: DocumentRow = {
-        id: existing.id,
-        title: patch.title ? normalizeTitle(patch.title) : existing.title,
-        content: patch.content
-            ? JSON.stringify(patch.content)
-            : (existing as any).content,
-        postType: 'doc',
-        created_at: existing.created_at,
-        updated_at: nowSec(),
-        deleted: (existing as any).deleted ?? false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.documents.update:filter:input',
-        { existing, updated, patch }
-    )) as { updated: DocumentRow } | DocumentRow;
-    const row = (filtered as any).updated
-        ? (filtered as any).updated
-        : (filtered as any as DocumentRow);
-    await hooks.doAction('db.documents.update:action:before', row);
-    await db.posts.put(row as any);
-    await hooks.doAction('db.documents.update:action:after', row);
-    return rowToRecord(row);
-}
-
-export async function softDeleteDocument(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return;
-    const row = {
-        ...(existing as any),
-        deleted: true,
-        updated_at: nowSec(),
-    };
-    await hooks.doAction('db.documents.delete:action:soft:before', row);
-    await db.posts.put(row);
-    await hooks.doAction('db.documents.delete:action:soft:after', row);
-}
-
-export async function hardDeleteDocument(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return;
-    await hooks.doAction('db.documents.delete:action:hard:before', existing);
-    await db.posts.delete(id);
-    await hooks.doAction('db.documents.delete:action:hard:after', id);
-}
-
-// Convenience for ensuring DB open (mirrors pattern in other modules)
-export async function ensureDbOpen() {
-    if (!db.isOpen()) await db.open();
-}
-
-export type { DocumentRecord as Document };
+export const db = new Or3DB();
 ```
 
 ## File: app/db/index.ts
@@ -9186,6 +9785,333 @@ export async function ensureDbOpen() {
 export type { PromptRecord as Prompt };
 ```
 
+## File: app/db/schema.ts
+```typescript
+import { z } from 'zod';
+import { newId } from './util';
+
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+export const ProjectSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    data: z.any(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type Project = z.infer<typeof ProjectSchema>;
+
+// threads
+export const ThreadSchema = z.object({
+    id: z.string(),
+    title: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    last_message_at: z.number().int().nullable().optional(),
+    parent_thread_id: z.string().nullable().optional(),
+    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
+    anchor_message_id: z.string().nullable().optional(),
+    anchor_index: z.number().int().nullable().optional(),
+    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
+    status: z.string().default('ready'),
+    deleted: z.boolean().default(false),
+    pinned: z.boolean().default(false),
+    clock: z.number().int(),
+    forked: z.boolean().default(false),
+    project_id: z.string().nullable().optional(),
+    system_prompt_id: z.string().nullable().optional(),
+});
+export type Thread = z.infer<typeof ThreadSchema>;
+
+// For incoming create payloads (apply defaults like the DB)
+export const ThreadCreateSchema = ThreadSchema.partial({
+    // Make a wide set of fields optional for input; we'll supply defaults below
+    id: true,
+    title: true,
+    last_message_at: true,
+    parent_thread_id: true,
+    status: true,
+    deleted: true,
+    pinned: true,
+    forked: true,
+    project_id: true,
+    system_prompt_id: true,
+})
+    // We'll re-add with defaults/derived values
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Dynamic defaults while keeping inputs optional
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use z.input so defaulted fields are optional for callers
+export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
+// messages
+export const MessageSchema = z.object({
+    id: z.string(),
+    data: z.unknown().nullable().optional(),
+    role: z.string(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    error: z.string().nullable().optional(),
+    deleted: z.boolean().default(false),
+    thread_id: z.string(),
+    index: z.number().int(),
+    clock: z.number().int(),
+    stream_id: z.string().nullable().optional(),
+    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
+    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
+    file_hashes: z.string().nullable().optional(),
+});
+
+export type Message = z.infer<typeof MessageSchema>;
+
+export const PostSchema = z.object({
+    id: z.string(),
+    // Title must be non-empty after trimming
+    title: z
+        .string()
+        .transform((s) => s.trim())
+        .refine((s) => s.length > 0, 'Title is required'),
+    content: z.string().default(''),
+    postType: z.string().default('markdown'),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    meta: z.union([
+        z.string(),
+        z.object({
+            key: z.string(),
+            value: z.string().nullable().optional(),
+        }),
+        z
+            .array(
+                z.object({
+                    key: z.string(),
+                    value: z.string().nullable().optional(),
+                })
+            )
+            .nullable()
+            .optional(),
+    ]),
+    file_hashes: z.string().nullable().optional(),
+});
+
+export type Post = z.infer<typeof PostSchema>;
+
+// Create schema for posts allowing omission of id/timestamps; meta may be provided as
+// string | object | array and will be normalized to string upstream before storage.
+export const PostCreateSchema = PostSchema.partial({
+    id: true,
+    created_at: true,
+    updated_at: true,
+}).extend({
+    id: z
+        .string()
+        .optional()
+        .transform((v) => v ?? newId()),
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type PostCreate = z.input<typeof PostCreateSchema>;
+
+export const MessageCreateSchema = MessageSchema.partial({ index: true })
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Keep inputs minimal; generate missing id/clock
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use input type so callers can omit defaulted fields
+export type MessageCreate = z.input<typeof MessageCreateSchema>;
+
+// kv
+export const KvSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    value: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    clock: z.number().int(),
+});
+export type Kv = z.infer<typeof KvSchema>;
+
+export const KvCreateSchema = KvSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type KvCreate = z.infer<typeof KvCreateSchema>;
+
+// attachments
+export const AttachmentSchema = z.object({
+    id: z.string(),
+    type: z.string(),
+    name: z.string(),
+    url: z.url(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type Attachment = z.infer<typeof AttachmentSchema>;
+
+export const AttachmentCreateSchema = AttachmentSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
+
+// file meta (metadata only; binary stored separately in file_blobs table)
+export const FileMetaSchema = z.object({
+    // Use hash as both primary key and lookup value for simplicity
+    hash: z.string(), // md5 hex lowercase
+    name: z.string(),
+    mime_type: z.string(),
+    kind: z.enum(['image', 'pdf']).default('image'),
+    size_bytes: z.number().int(),
+    width: z.number().int().optional(),
+    height: z.number().int().optional(),
+    page_count: z.number().int().optional(),
+    ref_count: z.number().int().default(0),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type FileMeta = z.infer<typeof FileMetaSchema>;
+
+export const FileMetaCreateSchema = FileMetaSchema.omit({
+    created_at: true,
+    updated_at: true,
+    ref_count: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+    ref_count: z.number().int().default(1),
+    clock: z.number().int().default(0),
+});
+export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
+```
+
+## File: app/plugins/message-actions.client.ts
+```typescript
+import { registerMessageAction } from '~/composables/useMessageActions';
+import { useToast } from '#imports';
+import { newDocument } from '~/composables/useDocumentsStore';
+
+export default defineNuxtPlugin(() => {
+    registerMessageAction({
+        id: 'Create document', // unique id
+        icon: 'pixelarticons:notes-plus', // any icon name supported by <UButton>
+        tooltip: 'Create document',
+        showOn: 'assistant', // 'user' | 'assistant' | 'both'
+        order: 300, // optional; after built-ins ( <200 reserved )
+        async handler({ message }) {
+            console.log('Create document action invoked', message);
+
+            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
+            async function markdownToTipTapDoc(md: string) {
+                const markdown = (md || '').trim();
+                if (!markdown) return { type: 'doc', content: [] };
+                try {
+                    const [{ Editor }] = await Promise.all([
+                        import('@tiptap/core'),
+                    ]);
+                    const StarterKit = (await import('@tiptap/starter-kit'))
+                        .default;
+                    // tiptap-markdown exports markdownToProseMirror function
+                    const { Markdown } = await import('tiptap-markdown');
+
+                    const editor = new Editor({
+                        extensions: [StarterKit, Markdown],
+                        content: '',
+                    });
+
+                    editor.commands.setContent(markdown);
+                    return editor.getJSON();
+                } catch (e) {
+                    alert('error!!!');
+                }
+            }
+
+            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
+
+            const doc = await newDocument({
+                title: (message as any).title || 'Untitled',
+                content: tiptapDoc,
+            });
+
+            console.log('Created document record', doc);
+
+            // Attempt to open in a new pane (if capacity) else reuse active pane
+            const mp: any = (globalThis as any).__or3MultiPaneApi;
+            try {
+                if (mp) {
+                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
+                    if (couldAdd && typeof mp.addPane === 'function') {
+                        mp.addPane(); // sets new pane active
+                    }
+                    const panes = mp.panes?.value;
+
+                    const activeIndex = mp.activePaneIndex?.value ?? 0;
+
+                    if (Array.isArray(panes)) {
+                        const pane = panes[activeIndex];
+                        if (pane) {
+                            pane.mode = 'doc';
+                            pane.documentId = doc.id;
+                            // Reset chat-related fields when switching
+                            pane.threadId =
+                                pane.mode === 'doc'
+                                    ? pane.threadId
+                                    : pane.threadId;
+                        }
+                    }
+                }
+            } catch (e) {
+                // non-fatal; fallback is just created doc without auto-open
+                console.warn('Open document in pane failed', e);
+            }
+
+            useToast().add({
+                title: 'Document created',
+                description: `Opened in ${
+                    mp?.canAddPane?.value ? 'new' : 'current'
+                } pane: ${doc.id}`,
+                duration: 2600,
+            });
+        },
+    });
+});
+```
+
 ## File: app/utils/prompt-utils.ts
 ```typescript
 /**
@@ -9238,6 +10164,41 @@ export function promptJsonToString(json: any): string {
     flushLine();
     return lines.join('\n');
 }
+```
+
+## File: app/app.vue
+```vue
+<template>
+    <UApp>
+        <NuxtPage />
+    </UApp>
+</template>
+<script setup lang="ts">
+// Apply initial theme class to <html> so CSS variables cascade app-wide
+useHead({
+    htmlAttrs: {
+        class: 'light',
+    },
+    title: 'or3 chat',
+    link: [{ rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' }],
+});
+
+import { onMounted } from 'vue';
+import { useNuxtApp } from '#app';
+
+// Fire app.init:action:after once after the root app mounts (client-only)
+const nuxtApp = useNuxtApp();
+
+onMounted(() => {
+    const g: any = globalThis as any;
+    if (g.__OR3_APP_INIT_FIRED__) return;
+    g.__OR3_APP_INIT_FIRED__ = true;
+    const hooks: any = nuxtApp.$hooks;
+    if (hooks && typeof hooks.doAction === 'function') {
+        hooks.doAction('app.init:action:after', nuxtApp);
+    }
+});
+</script>
 ```
 
 ## File: vitest.config.ts
@@ -9384,298 +10345,86 @@ onMounted(() => onInternalUpdate());
 </style>
 ```
 
-## File: app/composables/useDocumentsList.ts
-```typescript
-import { ref } from 'vue';
-import { listDocuments, type Document } from '~/db/documents';
-import { useToast } from '#imports';
-import { useHookEffect } from './useHookEffect';
-
-export function useDocumentsList(limit = 200) {
-    const docs = ref<Document[]>([]);
-    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
-    const loading = ref(true);
-    const error = ref<unknown>(null);
-
-    async function refresh() {
-        loading.value = true;
-        error.value = null;
-        try {
-            docs.value = await listDocuments(limit);
-        } catch (e) {
-            error.value = e;
-            useToast().add({ color: 'error', title: 'Document: list failed' });
-        } finally {
-            loading.value = false;
-        }
-    }
-
-    // initial load + subscribe to document DB hook events (client only)
-    if (process.client) {
-        refresh();
-        // Auto-refresh on create/update/delete after actions complete
-        useHookEffect('db.documents.create:action:after', () => refresh(), {
-            kind: 'action',
-        });
-        useHookEffect('db.documents.update:action:after', () => refresh(), {
-            kind: 'action',
-        });
-        useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
-            kind: 'action',
-        });
-    }
-
-    return { docs, loading, error, refresh };
-}
-```
-
-## File: app/components/documents/DocumentEditor.vue
+## File: app/components/sidebar/SidebarHeader.vue
 ```vue
 <template>
     <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+        :class="{
+            'px-0 justify-center': collapsed,
+            'px-3 justify-between': !collapsed,
+        }"
+        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
     >
-        <div class="flex items-center justify-center gap-3 px-3 pt-2 pb-2">
-            <UInput
-                v-model="titleDraft"
-                placeholder="Untitled"
-                size="md"
-                class="flex-1 max-w-[60%]"
-                @update:model-value="onTitleChange"
-            />
-            <div class="flex items-center gap-1">
-                <UTooltip :text="statusText">
-                    <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
-                        >{{ statusText }}</span
-                    >
-                </UTooltip>
-            </div>
+        <div v-show="!collapsed">
+            <slot name="sidebar-header">
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-[14px] font-medium uppercase tracking-wide">
+                        or3-chat
+                    </h1>
+                </div>
+            </slot>
         </div>
-        <div
-            class="flex flex-row items-stretch border-b-2 px-2 py-1 gap-1 flex-wrap"
-        >
-            <ToolbarButton
-                icon="carbon:text-bold"
-                :active="isActive('bold')"
-                label="Bold (⌘B)"
-                @activate="cmd('toggleBold')"
-            />
-            <ToolbarButton
-                icon="carbon:text-italic"
-                :active="isActive('italic')"
-                label="Italic (⌘I)"
-                @activate="cmd('toggleItalic')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:code"
-                :active="isActive('code')"
-                label="Code"
-                @activate="cmd('toggleCode')"
-            />
-            <ToolbarButton
-                text="H1"
-                :active="isActiveHeading(1)"
-                label="H1"
-                @activate="toggleHeading(1)"
-            />
-            <ToolbarButton
-                text="H2"
-                :active="isActiveHeading(2)"
-                label="H2"
-                @activate="toggleHeading(2)"
-            />
-            <ToolbarButton
-                text="H3"
-                :active="isActiveHeading(3)"
-                label="H3"
-                @activate="toggleHeading(3)"
-            />
-            <ToolbarButton
-                icon="pixelarticons:list"
-                :active="isActive('bulletList')"
-                label="Bullets"
-                @activate="cmd('toggleBulletList')"
-            />
-            <ToolbarButton
-                icon="carbon:list-numbered"
-                :active="isActive('orderedList')"
-                label="Ordered"
-                @activate="cmd('toggleOrderedList')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:minus"
-                label="HR"
-                @activate="cmd('setHorizontalRule')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:undo"
-                label="Undo"
-                @activate="cmd('undo')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:redo"
-                label="Redo"
-                @activate="cmd('redo')"
-            />
-        </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
-            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
-                <EditorContent
-                    :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
-                ></EditorContent>
-            </div>
-        </div>
+
+        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
+            <UButton
+                size="xs"
+                :square="true"
+                color="neutral"
+                variant="ghost"
+                :class="'retro-btn'"
+                @click="onToggle"
+                :ui="{ base: 'retro-btn' }"
+                :aria-label="toggleAria"
+                :title="toggleAria"
+            >
+                <UIcon :name="toggleIcon" class="w-5 h-5" />
+            </UButton>
+        </slot>
     </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
-import ToolbarButton from './ToolbarButton.vue';
-import {
-    useDocumentState,
-    setDocumentContent,
-    setDocumentTitle,
-    loadDocument,
-} from '~/composables/useDocumentsStore';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-import type { JSONContent } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
+import { defineProps, defineEmits } from 'vue';
 
-const props = defineProps<{ documentId: string }>();
-
-// Reactive state wrapper (computed to always fetch current map entry)
-const state = computed(() => useDocumentState(props.documentId));
-const titleDraft = ref(state.value.record?.title || '');
-
-watch(
-    () => props.documentId,
-    async (id, _old, onCleanup) => {
-        // Switch to new state object from map
-        const currentLoadId = id;
-        await loadDocument(id);
-        if (props.documentId !== currentLoadId) return; // prop changed again
-        titleDraft.value = state.value.record?.title || '';
-        if (editor.value && state.value.record) {
-            const json = state.value.record.content as JSONContent;
-            editor.value.commands.setContent(json, { emitUpdate: false });
-        }
-    }
-);
-
-const editor = ref<Editor | null>(null);
-
-function onTitleChange() {
-    setDocumentTitle(props.documentId, titleDraft.value);
-}
-
-function emitContent() {
-    if (!editor.value) return;
-    const json = editor.value.getJSON();
-    setDocumentContent(props.documentId, json);
-}
-
-function makeEditor() {
-    editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2] } }),
-            Placeholder.configure({
-                placeholder: 'Type your text here...',
-            }),
-        ],
-        content: state.value.record?.content || { type: 'doc', content: [] },
-        autofocus: false,
-        onUpdate: () => emitContent(),
-    });
-}
-
-onMounted(async () => {
-    await loadDocument(props.documentId);
-    // Ensure initial state ref matches (in case of rapid prop change before mount)
-    makeEditor();
+const props = defineProps({
+    collapsed: { type: Boolean, required: true },
+    toggleIcon: { type: String, required: true },
+    toggleAria: { type: String, required: true },
 });
+const emit = defineEmits(['toggle']);
 
-onBeforeUnmount(() => {
-    editor.value?.destroy();
-});
-
-function isActive(name: string) {
-    return editor.value?.isActive(name) || false;
+function onToggle() {
+    emit('toggle');
 }
-function isActiveHeading(level: number) {
-    return editor.value?.isActive('heading', { level }) || false;
-}
-
-function toggleHeading(level: number) {
-    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
-    editor.value
-        ?.chain()
-        .focus()
-        .toggleHeading({ level: level as any })
-        .run();
-    emitContent();
-}
-
-const commands: Record<string, () => void> = {
-    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
-    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
-    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
-    toggleBulletList: () =>
-        editor.value?.chain().focus().toggleBulletList().run(),
-    toggleOrderedList: () =>
-        editor.value?.chain().focus().toggleOrderedList().run(),
-    setHorizontalRule: () =>
-        editor.value?.chain().focus().setHorizontalRule().run(),
-    undo: () => editor.value?.commands.undo(),
-    redo: () => editor.value?.commands.redo(),
-};
-function cmd(name: string) {
-    commands[name]?.();
-    emitContent();
-}
-
-const statusText = computed(() => {
-    switch (state.value.status) {
-        case 'saving':
-            return 'Saving…';
-        case 'saved':
-            return 'Saved';
-        case 'error':
-            return 'Error';
-        default:
-            return 'Ready';
-    }
-});
 </script>
 
 <style scoped>
-.prose :where(h1, h2) {
-    font-family: 'Press Start 2P', monospace;
+/* Gradient already supplied by global pattern image; we just ensure better dark base */
+.header-pattern {
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+.dark .header-pattern {
+    /* Elevated surface tone for dark mode header to distinguish from main background */
+    background-color: var(--md-surface-container-high) !important;
 }
 
-/* ProseMirror (TipTap) base styles */
-/* TipTap base */
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
+/* Logo rendering tweaks */
+.logo {
+    width: 20px; /* lock display size */
+    height: 20px;
+    aspect-ratio: 1 / 1;
+    display: block;
+    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
+    /* image-rendering: pixelated; */
 }
 
-/* Placeholder (needs :deep due to scoped styles) */
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    /* Use design tokens; ensure sufficient contrast in dark mode */
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    opacity: 0.85; /* increase for dark background readability */
-    font-weight: normal;
-}
+/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
+   switch to a DPR-based srcset for sharper sampling:
+   src="/logo-20.png"
+   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
 </style>
 ```
 
@@ -10059,7 +10808,7 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/bg-repeat-2.png');
+    background-image: url('/bg-repeat-2.webp');
     background-repeat: repeat;
     background-position: top left;
     --content-overlay-size: 380px;
@@ -10100,507 +10849,321 @@ aside > *:not(.resize-handle-layer) {
 </style>
 ```
 
-## File: app/composables/useMultiPane.ts
+## File: app/composables/useDocumentsList.ts
 ```typescript
-// Multi-pane state management composable for chat & documents
-// Keeps pane logic outside of UI components for easier testing & extension.
+import { ref } from 'vue';
+import { listDocuments, type Document } from '~/db/documents';
+import { useToast } from '#imports';
+import { useHookEffect } from './useHookEffect';
 
-import Dexie from 'dexie';
-import { db } from '~/db';
-import { useHooks } from './useHooks';
+export function useDocumentsList(limit = 200) {
+    const docs = ref<Document[]>([]);
+    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
+    const loading = ref(true);
+    const error = ref<unknown>(null);
 
-// Narrow pane message representation (always flattened string content)
-export type MultiPaneMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-    id?: string;
-    stream_id?: string;
-};
-
-export interface PaneState {
-    id: string;
-    mode: 'chat' | 'doc';
-    threadId: string; // '' indicates unsaved/new chat
-    documentId?: string;
-    messages: MultiPaneMessage[];
-    validating: boolean;
-}
-
-export interface UseMultiPaneOptions {
-    initialThreadId?: string;
-    maxPanes?: number; // default 3
-    onFlushDocument?: (id: string) => void | Promise<void>;
-    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
-}
-
-export interface UseMultiPaneApi {
-    panes: Ref<PaneState[]>;
-    activePaneIndex: Ref<number>;
-    canAddPane: ComputedRef<boolean>;
-    newWindowTooltip: ComputedRef<string>;
-    addPane: () => void;
-    closePane: (index: number) => Promise<void> | void;
-    setActive: (index: number) => void;
-    focusPrev: (current: number) => void;
-    focusNext: (current: number) => void;
-    setPaneThread: (index: number, threadId: string) => Promise<void>;
-    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;
-    ensureAtLeastOne: () => void;
-}
-
-function genId() {
-    try {
-        if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-            // @ts-ignore
-            return crypto.randomUUID();
+    async function refresh() {
+        loading.value = true;
+        error.value = null;
+        try {
+            docs.value = await listDocuments(limit);
+        } catch (e) {
+            error.value = e;
+            useToast().add({ color: 'error', title: 'Document: list failed' });
+        } finally {
+            loading.value = false;
         }
-    } catch {}
-    return 'pane-' + Math.random().toString(36).slice(2);
-}
+    }
 
-function createEmptyPane(initialThreadId = ''): PaneState {
-    return {
-        id: genId(),
-        mode: 'chat',
-        threadId: initialThreadId,
-        messages: [],
-        validating: false,
-    };
-}
-
-async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
-    if (!id) return [];
-    try {
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([id, Dexie.minKey], [id, Dexie.maxKey])
-            .filter((m: any) => !m.deleted)
-            .toArray();
-        return (msgs || []).map((msg: any) => {
-            const data = msg.data as {
-                content?: string;
-                reasoning_text?: string | null;
-            };
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
-            return {
-                role: msg.role as 'user' | 'assistant',
-                content,
-                file_hashes: msg.file_hashes,
-                id: msg.id,
-                stream_id: msg.stream_id,
-                reasoning_text: data?.reasoning_text || null,
-            } as MultiPaneMessage;
+    // initial load + subscribe to document DB hook events (client only)
+    if (process.client) {
+        refresh();
+        // Auto-refresh on create/update/delete after actions complete
+        useHookEffect('db.documents.create:action:after', () => refresh(), {
+            kind: 'action',
         });
-    } catch (e) {
-        return [];
+        useHookEffect('db.documents.update:action:after', () => refresh(), {
+            kind: 'action',
+        });
+        useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
+            kind: 'action',
+        });
+    }
+
+    return { docs, loading, error, refresh };
+}
+```
+
+## File: app/components/sidebar/SideBottomNav.vue
+```vue
+<template>
+    <div
+        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+    >
+        <!-- Removed previously added extra div; using pseudo-element for top pattern -->
+        <div
+            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container)] border-2 border-[var(--md-outline-variant)]"
+        >
+            <div class="h-[10px] top-10 header-pattern-flipped"></div>
+            <div
+                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] dark:bg-[var(--md-surface-container-low)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
+            >
+                <!-- MY INFO -->
+                <UPopover>
+                    <button
+                        type="button"
+                        aria-label="My Info"
+                        class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                    >
+                        <div
+                            class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                        >
+                            <UIcon
+                                name="pixelarticons:user"
+                                class="h-5 w-5"
+                            ></UIcon>
+                        </div>
+                        <div
+                            class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                        >
+                            <div
+                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                            >
+                                INFO
+                            </div>
+                            <div
+                                class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                            >
+                                <div class="h-[2px] bg-current"></div>
+                                <div class="h-[2px] bg-current"></div>
+                            </div>
+                        </div>
+                    </button>
+                    <template #content>
+                        <div class="flex flex-col items-start w-[140px]">
+                            <button
+                                class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToActivity"
+                            >
+                                <UIcon
+                                    name="pixelarticons:human-run"
+                                    class="mr-1.5"
+                                />
+                                Activity
+                            </button>
+                            <button
+                                class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToCredits"
+                            >
+                                <UIcon
+                                    name="pixelarticons:coin"
+                                    class="mr-1.5"
+                                />
+                                Credits
+                            </button>
+                        </div>
+                    </template>
+                </UPopover>
+
+                <!-- Connect -->
+                <button
+                    label="Open"
+                    @click="onConnectButtonClick"
+                    type="button"
+                    aria-label="Connect"
+                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                >
+                    <div
+                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                    >
+                        <svg
+                            class="w-4 h-4"
+                            viewBox="0 0 512 512"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="currentColor"
+                            stroke="currentColor"
+                        >
+                            <g clip-path="url(#clip0_205_3)">
+                                <path
+                                    d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
+                                />
+                                <path
+                                    d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
+                                />
+                            </g>
+                        </svg>
+                    </div>
+                    <div
+                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                    >
+                        <div
+                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                        >
+                            <!-- Hydration guard: render stable 'Connect' on SSR & first client paint -->
+                            <template v-if="hydrated">
+                                {{ orIsConnected ? 'Disconnect' : 'Connect' }}
+                            </template>
+                            <template v-else>Connect</template>
+                        </div>
+                        <div
+                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                        >
+                            <div
+                                :class="
+                                    hydrated
+                                        ? orIsConnected
+                                            ? 'bg-green-600'
+                                            : 'bg-error'
+                                        : 'bg-error'
+                                "
+                                class="h-[2px]"
+                            ></div>
+                            <div
+                                :class="
+                                    hydrated
+                                        ? orIsConnected
+                                            ? 'bg-success'
+                                            : 'bg-error'
+                                        : 'bg-error'
+                                "
+                                class="h-[2px]"
+                            ></div>
+                        </div>
+                    </div>
+                </button>
+
+                <!-- HELP -->
+                <button
+                    @click="showSettingsModal = true"
+                    type="button"
+                    aria-label="Help"
+                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                >
+                    <div
+                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                    >
+                        <UIcon
+                            class="w-5 h-5"
+                            name="pixelarticons:sliders-2"
+                        ></UIcon>
+                    </div>
+                    <div
+                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                    >
+                        <div
+                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                        >
+                            HELP
+                        </div>
+                        <div
+                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                        >
+                            <div class="h-[2px] bg-current"></div>
+                            <div class="h-[2px] bg-current"></div>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div class="h-[10px] top-10"></div>
+        </div>
+    </div>
+    <lazy-modal-settings-modal
+        hydrate-on-visible
+        v-model:showModal="showSettingsModal"
+    />
+</template>
+
+<script lang="ts" setup>
+import { state } from '~/state/global';
+
+const openrouter = useOpenRouterAuth();
+const orIsConnected = computed(() => state.value.openrouterKey);
+// Hydration mismatch fix: only show dynamic connection state after client mounted
+const hydrated = ref(false);
+onMounted(() => {
+    hydrated.value = true;
+});
+const showSettingsModal = ref(false);
+
+function onConnectButtonClick() {
+    if (orIsConnected.value) {
+        console.log(orIsConnected);
+        // Logic to disconnect
+        state.value.openrouterKey = null;
+        openrouter.logoutOpenRouter();
+    } else {
+        // Logic to connect
+        openrouter.startLogin();
     }
 }
 
-export function useMultiPane(
-    options: UseMultiPaneOptions = {}
-): UseMultiPaneApi {
-    const { initialThreadId = '', maxPanes = 3 } = options;
+function navigateToActivity() {
+    window.open('https://openrouter.ai/activity', '_blank');
+}
 
-    const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
-    const activePaneIndex = ref(0);
-    const hooks = useHooks();
+function navigateToCredits() {
+    window.open('https://openrouter.ai/settings/credits', '_blank');
+}
+</script>
 
-    const canAddPane = computed(() => panes.value.length < maxPanes);
-    const newWindowTooltip = computed(() =>
-        canAddPane.value ? 'New window' : `Max ${maxPanes} windows`
+<style scoped>
+/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
+.retro-bar {
+    position: relative;
+    isolation: isolate; /* contain blend */
+}
+.retro-bar::before {
+    /* Chrome gloss + bevel hint */
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* render under content */
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.18),
+        rgba(255, 255, 255, 0.06) 28%,
+        rgba(0, 0, 0, 0) 40%,
+        rgba(0, 0, 0, 0.1) 100%
     );
-
-    const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
-
-    async function setPaneThread(index: number, threadId: string) {
-        const pane = panes.value[index];
-        if (!pane) return;
-        pane.threadId = threadId;
-        pane.messages = await loadMessagesFor(threadId);
-    }
-
-    function setActive(i: number) {
-        if (i >= 0 && i < panes.value.length) {
-            if (i !== activePaneIndex.value) {
-                activePaneIndex.value = i;
-                // Emit switch action with new pane state
-                hooks.doAction('ui.pane.switch:action', panes.value[i], i);
-            }
-        }
-    }
-
-    function addPane() {
-        if (!canAddPane.value) return;
-        const pane = createEmptyPane();
-        panes.value.push(pane);
-        setActive(panes.value.length - 1);
-        hooks.doAction(
-            'ui.pane.open:action:after',
-            pane,
-            panes.value.length - 1
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+.retro-bar::after {
+    /* Scanlines + speckle noise, extremely subtle */
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* render under content */
+    background-image: repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.045) 0px,
+            rgba(255, 255, 255, 0.045) 1px,
+            rgba(0, 0, 0, 0) 1px,
+            rgba(0, 0, 0, 0) 3px
+        ),
+        radial-gradient(
+            1px 1px at 12% 18%,
+            rgba(255, 255, 255, 0.04),
+            transparent 100%
+        ),
+        radial-gradient(
+            1px 1px at 64% 62%,
+            rgba(0, 0, 0, 0.04),
+            transparent 100%
         );
-    }
-
-    async function closePane(i: number) {
-        if (panes.value.length <= 1) return; // never close last
-        const closing = panes.value[i];
-        // Pre-close hook
-        hooks.doAction('ui.pane.close:action:before', closing, i);
-        if (
-            closing?.mode === 'doc' &&
-            closing.documentId &&
-            options.onFlushDocument
-        ) {
-            try {
-                await options.onFlushDocument(closing.documentId);
-            } catch {}
-        }
-        const wasActive = i === activePaneIndex.value;
-        panes.value.splice(i, 1);
-        if (!panes.value.length) {
-            panes.value.push(createEmptyPane());
-            activePaneIndex.value = 0;
-            return;
-        }
-        if (wasActive) {
-            const newIndex = Math.min(i, panes.value.length - 1);
-            setActive(newIndex);
-        } else if (i < activePaneIndex.value) {
-            activePaneIndex.value -= 1; // shift left
-        }
-    }
-
-    function focusPrev(current: number) {
-        if (panes.value.length < 2) return;
-        const target = current - 1;
-        if (target >= 0) setActive(target);
-    }
-    function focusNext(current: number) {
-        if (panes.value.length < 2) return;
-        const target = current + 1;
-        if (target < panes.value.length) setActive(target);
-    }
-
-    function ensureAtLeastOne() {
-        if (!panes.value.length) {
-            panes.value.push(createEmptyPane());
-            activePaneIndex.value = 0;
-        }
-    }
-
-    return {
-        panes,
-        activePaneIndex,
-        canAddPane,
-        newWindowTooltip,
-        addPane,
-        closePane,
-        setActive,
-        focusPrev,
-        focusNext,
-        setPaneThread,
-        loadMessagesFor,
-        ensureAtLeastOne,
-    };
+    opacity: 0.25;
+    pointer-events: none;
+    mix-blend-mode: soft-light;
 }
-
-export type { PaneState as MultiPaneState };
-```
-
-## File: app/db/client.ts
-```typescript
-import Dexie, { type Table } from 'dexie';
-import type {
-    Attachment,
-    Kv,
-    Message,
-    Project,
-    Thread,
-    FileMeta,
-    Post,
-} from './schema';
-
-export interface FileBlobRow {
-    hash: string; // primary key
-    blob: Blob; // actual binary Blob
-}
-
-// Dexie database versioning & schema
-export class Or3DB extends Dexie {
-    projects!: Table<Project, string>;
-    threads!: Table<Thread, string>;
-    messages!: Table<Message, string>;
-    kv!: Table<Kv, string>;
-    attachments!: Table<Attachment, string>;
-    file_meta!: Table<FileMeta, string>; // hash as primary key
-    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
-    posts!: Table<Post, string>;
-
-    constructor() {
-        super('or3-db');
-        // Simplified schema: collapse historical migrations into a single
-        // version to avoid full-table upgrade passes (which previously
-        // loaded entire tables into memory via toArray()). Since there are
-        // no external users / all data already upgraded, we can safely
-        // define only the latest structure.
-        // NOTE: Keep version number at 5 so existing local DBs at v5 open
-        // without triggering a downgrade. Future schema changes should bump.
-        this.version(5).stores({
-            projects: 'id, name, clock, created_at, updated_at',
-            threads:
-                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-            messages:
-                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-            kv: 'id, &name, clock, created_at, updated_at',
-            attachments: 'id, type, name, clock, created_at, updated_at',
-            file_meta:
-                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-            file_blobs: 'hash',
-            posts: 'id, title, postType, deleted, created_at, updated_at',
-        });
-    }
-}
-
-export const db = new Or3DB();
-```
-
-## File: app/db/schema.ts
-```typescript
-import { z } from 'zod';
-import { newId } from './util';
-
-const nowSec = () => Math.floor(Date.now() / 1000);
-
-export const ProjectSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string().nullable().optional(),
-    data: z.any(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Project = z.infer<typeof ProjectSchema>;
-
-// threads
-export const ThreadSchema = z.object({
-    id: z.string(),
-    title: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    last_message_at: z.number().int().nullable().optional(),
-    parent_thread_id: z.string().nullable().optional(),
-    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
-    anchor_message_id: z.string().nullable().optional(),
-    anchor_index: z.number().int().nullable().optional(),
-    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
-    status: z.string().default('ready'),
-    deleted: z.boolean().default(false),
-    pinned: z.boolean().default(false),
-    clock: z.number().int(),
-    forked: z.boolean().default(false),
-    project_id: z.string().nullable().optional(),
-    system_prompt_id: z.string().nullable().optional(),
-});
-export type Thread = z.infer<typeof ThreadSchema>;
-
-// For incoming create payloads (apply defaults like the DB)
-export const ThreadCreateSchema = ThreadSchema.partial({
-    // Make a wide set of fields optional for input; we'll supply defaults below
-    id: true,
-    title: true,
-    last_message_at: true,
-    parent_thread_id: true,
-    status: true,
-    deleted: true,
-    pinned: true,
-    forked: true,
-    project_id: true,
-    system_prompt_id: true,
-})
-    // We'll re-add with defaults/derived values
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Dynamic defaults while keeping inputs optional
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use z.input so defaulted fields are optional for callers
-export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
-// messages
-export const MessageSchema = z.object({
-    id: z.string(),
-    data: z.unknown().nullable().optional(),
-    role: z.string(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    error: z.string().nullable().optional(),
-    deleted: z.boolean().default(false),
-    thread_id: z.string(),
-    index: z.number().int(),
-    clock: z.number().int(),
-    stream_id: z.string().nullable().optional(),
-    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
-    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
-    file_hashes: z.string().nullable().optional(),
-});
-
-export type Message = z.infer<typeof MessageSchema>;
-
-export const PostSchema = z.object({
-    id: z.string(),
-    // Title must be non-empty after trimming
-    title: z
-        .string()
-        .transform((s) => s.trim())
-        .refine((s) => s.length > 0, 'Title is required'),
-    content: z.string().default(''),
-    postType: z.string().default('markdown'),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    meta: z.union([
-        z.string(),
-        z.object({
-            key: z.string(),
-            value: z.string().nullable().optional(),
-        }),
-        z
-            .array(
-                z.object({
-                    key: z.string(),
-                    value: z.string().nullable().optional(),
-                })
-            )
-            .nullable()
-            .optional(),
-    ]),
-    file_hashes: z.string().nullable().optional(),
-});
-
-export type Post = z.infer<typeof PostSchema>;
-
-// Create schema for posts allowing omission of id/timestamps; meta may be provided as
-// string | object | array and will be normalized to string upstream before storage.
-export const PostCreateSchema = PostSchema.partial({
-    id: true,
-    created_at: true,
-    updated_at: true,
-}).extend({
-    id: z
-        .string()
-        .optional()
-        .transform((v) => v ?? newId()),
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type PostCreate = z.input<typeof PostCreateSchema>;
-
-export const MessageCreateSchema = MessageSchema.partial({ index: true })
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Keep inputs minimal; generate missing id/clock
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use input type so callers can omit defaulted fields
-export type MessageCreate = z.input<typeof MessageCreateSchema>;
-
-// kv
-export const KvSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    value: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    clock: z.number().int(),
-});
-export type Kv = z.infer<typeof KvSchema>;
-
-export const KvCreateSchema = KvSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type KvCreate = z.infer<typeof KvCreateSchema>;
-
-// attachments
-export const AttachmentSchema = z.object({
-    id: z.string(),
-    type: z.string(),
-    name: z.string(),
-    url: z.url(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Attachment = z.infer<typeof AttachmentSchema>;
-
-export const AttachmentCreateSchema = AttachmentSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
-
-// file meta (metadata only; binary stored separately in file_blobs table)
-export const FileMetaSchema = z.object({
-    // Use hash as both primary key and lookup value for simplicity
-    hash: z.string(), // md5 hex lowercase
-    name: z.string(),
-    mime_type: z.string(),
-    kind: z.enum(['image', 'pdf']).default('image'),
-    size_bytes: z.number().int(),
-    width: z.number().int().optional(),
-    height: z.number().int().optional(),
-    page_count: z.number().int().optional(),
-    ref_count: z.number().int().default(0),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type FileMeta = z.infer<typeof FileMetaSchema>;
-
-export const FileMetaCreateSchema = FileMetaSchema.omit({
-    created_at: true,
-    updated_at: true,
-    ref_count: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-    ref_count: z.number().int().default(1),
-    clock: z.number().int().default(0),
-});
-export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
+</style>
 ```
 
 ## File: app/utils/chat/types.ts
@@ -11117,6 +11680,258 @@ export function decideModalities(
 }
 ```
 
+## File: app/components/documents/DocumentEditor.vue
+```vue
+<template>
+    <div
+        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+    >
+        <div class="flex items-center justify-center gap-3 px-3 pt-2 pb-2">
+            <UInput
+                v-model="titleDraft"
+                placeholder="Untitled"
+                size="md"
+                class="flex-1 max-w-[60%]"
+                @update:model-value="onTitleChange"
+            />
+            <div class="flex items-center gap-1">
+                <UTooltip :text="statusText">
+                    <span
+                        class="text-xs opacity-70 w-16 text-right select-none"
+                        >{{ statusText }}</span
+                    >
+                </UTooltip>
+            </div>
+        </div>
+        <div
+            class="flex flex-row items-stretch border-b-2 px-2 py-1 gap-1 flex-wrap"
+        >
+            <ToolbarButton
+                icon="carbon:text-bold"
+                :active="isActive('bold')"
+                label="Bold (⌘B)"
+                @activate="cmd('toggleBold')"
+            />
+            <ToolbarButton
+                icon="carbon:text-italic"
+                :active="isActive('italic')"
+                label="Italic (⌘I)"
+                @activate="cmd('toggleItalic')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:code"
+                :active="isActive('code')"
+                label="Code"
+                @activate="cmd('toggleCode')"
+            />
+            <ToolbarButton
+                text="H1"
+                :active="isActiveHeading(1)"
+                label="H1"
+                @activate="toggleHeading(1)"
+            />
+            <ToolbarButton
+                text="H2"
+                :active="isActiveHeading(2)"
+                label="H2"
+                @activate="toggleHeading(2)"
+            />
+            <ToolbarButton
+                text="H3"
+                :active="isActiveHeading(3)"
+                label="H3"
+                @activate="toggleHeading(3)"
+            />
+            <ToolbarButton
+                icon="pixelarticons:list"
+                :active="isActive('bulletList')"
+                label="Bullets"
+                @activate="cmd('toggleBulletList')"
+            />
+            <ToolbarButton
+                icon="carbon:list-numbered"
+                :active="isActive('orderedList')"
+                label="Ordered"
+                @activate="cmd('toggleOrderedList')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:minus"
+                label="HR"
+                @activate="cmd('setHorizontalRule')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:undo"
+                label="Undo"
+                @activate="cmd('undo')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:redo"
+                label="Redo"
+                @activate="cmd('redo')"
+            />
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto">
+            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
+                <EditorContent
+                    :editor="editor as Editor"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                ></EditorContent>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
+import ToolbarButton from './ToolbarButton.vue';
+import {
+    useDocumentState,
+    setDocumentContent,
+    setDocumentTitle,
+    loadDocument,
+} from '~/composables/useDocumentsStore';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import type { JSONContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
+
+const props = defineProps<{ documentId: string }>();
+
+// Reactive state wrapper (computed to always fetch current map entry)
+const state = computed(() => useDocumentState(props.documentId));
+const titleDraft = ref(state.value.record?.title || '');
+
+watch(
+    () => props.documentId,
+    async (id, _old, onCleanup) => {
+        // Switch to new state object from map
+        const currentLoadId = id;
+        await loadDocument(id);
+        if (props.documentId !== currentLoadId) return; // prop changed again
+        titleDraft.value = state.value.record?.title || '';
+        if (editor.value && state.value.record) {
+            const json = state.value.record.content as JSONContent;
+            editor.value.commands.setContent(json, { emitUpdate: false });
+        }
+    }
+);
+
+const editor = ref<Editor | null>(null);
+
+function onTitleChange() {
+    setDocumentTitle(props.documentId, titleDraft.value);
+}
+
+function emitContent() {
+    if (!editor.value) return;
+    const json = editor.value.getJSON();
+    setDocumentContent(props.documentId, json);
+}
+
+function makeEditor() {
+    editor.value = new Editor({
+        extensions: [
+            StarterKit.configure({ heading: { levels: [1, 2] } }),
+            Placeholder.configure({
+                placeholder: 'Type your text here...',
+            }),
+        ],
+        content: state.value.record?.content || { type: 'doc', content: [] },
+        autofocus: false,
+        onUpdate: () => emitContent(),
+    });
+}
+
+onMounted(async () => {
+    await loadDocument(props.documentId);
+    // Ensure title reflects loaded record (refresh / deep link case)
+    titleDraft.value = state.value.record?.title || titleDraft.value || '';
+    // Ensure initial state ref matches (in case of rapid prop change before mount)
+    makeEditor();
+});
+
+onBeforeUnmount(() => {
+    editor.value?.destroy();
+});
+
+function isActive(name: string) {
+    return editor.value?.isActive(name) || false;
+}
+function isActiveHeading(level: number) {
+    return editor.value?.isActive('heading', { level }) || false;
+}
+
+function toggleHeading(level: number) {
+    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
+    editor.value
+        ?.chain()
+        .focus()
+        .toggleHeading({ level: level as any })
+        .run();
+    emitContent();
+}
+
+const commands: Record<string, () => void> = {
+    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
+    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
+    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
+    toggleBulletList: () =>
+        editor.value?.chain().focus().toggleBulletList().run(),
+    toggleOrderedList: () =>
+        editor.value?.chain().focus().toggleOrderedList().run(),
+    setHorizontalRule: () =>
+        editor.value?.chain().focus().setHorizontalRule().run(),
+    undo: () => editor.value?.commands.undo(),
+    redo: () => editor.value?.commands.redo(),
+};
+function cmd(name: string) {
+    commands[name]?.();
+    emitContent();
+}
+
+const statusText = computed(() => {
+    switch (state.value.status) {
+        case 'saving':
+            return 'Saving…';
+        case 'saved':
+            return 'Saved';
+        case 'error':
+            return 'Error';
+        default:
+            return 'Ready';
+    }
+});
+</script>
+
+<style scoped>
+.prose :where(h1, h2) {
+    font-family: 'Press Start 2P', monospace;
+}
+
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85; /* increase for dark background readability */
+    font-weight: normal;
+}
+</style>
+```
+
 ## File: app/components/sidebar/SidebarProjectTree.vue
 ```vue
 <template>
@@ -11344,6 +12159,225 @@ const ui = {
 </script>
 
 <style scoped></style>
+```
+
+## File: app/composables/useMultiPane.ts
+```typescript
+// Multi-pane state management composable for chat & documents
+// Keeps pane logic outside of UI components for easier testing & extension.
+
+import Dexie from 'dexie';
+import { db } from '~/db';
+import { useHooks } from './useHooks';
+
+// Narrow pane message representation (always flattened string content)
+export type MultiPaneMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+    id?: string;
+    stream_id?: string;
+};
+
+export interface PaneState {
+    id: string;
+    mode: 'chat' | 'doc';
+    threadId: string; // '' indicates unsaved/new chat
+    documentId?: string;
+    messages: MultiPaneMessage[];
+    validating: boolean;
+}
+
+export interface UseMultiPaneOptions {
+    initialThreadId?: string;
+    maxPanes?: number; // default 3
+    onFlushDocument?: (id: string) => void | Promise<void>;
+    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
+}
+
+export interface UseMultiPaneApi {
+    panes: Ref<PaneState[]>;
+    activePaneIndex: Ref<number>;
+    canAddPane: ComputedRef<boolean>;
+    newWindowTooltip: ComputedRef<string>;
+    addPane: () => void;
+    closePane: (index: number) => Promise<void> | void;
+    setActive: (index: number) => void;
+    focusPrev: (current: number) => void;
+    focusNext: (current: number) => void;
+    setPaneThread: (index: number, threadId: string) => Promise<void>;
+    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;
+    ensureAtLeastOne: () => void;
+}
+
+function genId() {
+    try {
+        if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+            // @ts-ignore
+            return crypto.randomUUID();
+        }
+    } catch {}
+    return 'pane-' + Math.random().toString(36).slice(2);
+}
+
+function createEmptyPane(initialThreadId = ''): PaneState {
+    return {
+        id: genId(),
+        mode: 'chat',
+        threadId: initialThreadId,
+        messages: [],
+        validating: false,
+    };
+}
+
+async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
+    if (!id) return [];
+    try {
+        const msgs = await db.messages
+            .where('[thread_id+index]')
+            .between([id, Dexie.minKey], [id, Dexie.maxKey])
+            .filter((m: any) => !m.deleted)
+            .toArray();
+        return (msgs || []).map((msg: any) => {
+            const data = msg.data as {
+                content?: string;
+                reasoning_text?: string | null;
+            };
+            const content =
+                typeof data === 'object' && data !== null && 'content' in data
+                    ? String((data as any).content ?? '')
+                    : String((msg.content as any) ?? '');
+            return {
+                role: msg.role as 'user' | 'assistant',
+                content,
+                file_hashes: msg.file_hashes,
+                id: msg.id,
+                stream_id: msg.stream_id,
+                reasoning_text: data?.reasoning_text || null,
+            } as MultiPaneMessage;
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+export function useMultiPane(
+    options: UseMultiPaneOptions = {}
+): UseMultiPaneApi {
+    const { initialThreadId = '', maxPanes = 3 } = options;
+
+    const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
+    const activePaneIndex = ref(0);
+    const hooks = useHooks();
+
+    const canAddPane = computed(() => panes.value.length < maxPanes);
+    const newWindowTooltip = computed(() =>
+        canAddPane.value ? 'New window' : `Max ${maxPanes} windows`
+    );
+
+    const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
+
+    async function setPaneThread(index: number, threadId: string) {
+        const pane = panes.value[index];
+        if (!pane) return;
+        pane.threadId = threadId;
+        pane.messages = await loadMessagesFor(threadId);
+    }
+
+    function setActive(i: number) {
+        if (i >= 0 && i < panes.value.length) {
+            if (i !== activePaneIndex.value) {
+                activePaneIndex.value = i;
+                // Emit switch action with new pane state
+                hooks.doAction('ui.pane.switch:action', panes.value[i], i);
+            }
+        }
+    }
+
+    function addPane() {
+        if (!canAddPane.value) return;
+        const pane = createEmptyPane();
+        panes.value.push(pane);
+        setActive(panes.value.length - 1);
+        hooks.doAction(
+            'ui.pane.open:action:after',
+            pane,
+            panes.value.length - 1
+        );
+    }
+
+    async function closePane(i: number) {
+        if (panes.value.length <= 1) return; // never close last
+        const closing = panes.value[i];
+        // Pre-close hook
+        hooks.doAction('ui.pane.close:action:before', closing, i);
+        if (
+            closing?.mode === 'doc' &&
+            closing.documentId &&
+            options.onFlushDocument
+        ) {
+            try {
+                await options.onFlushDocument(closing.documentId);
+            } catch {}
+        }
+        const wasActive = i === activePaneIndex.value;
+        panes.value.splice(i, 1);
+        if (!panes.value.length) {
+            panes.value.push(createEmptyPane());
+            activePaneIndex.value = 0;
+            return;
+        }
+        if (wasActive) {
+            const newIndex = Math.min(i, panes.value.length - 1);
+            setActive(newIndex);
+        } else if (i < activePaneIndex.value) {
+            activePaneIndex.value -= 1; // shift left
+        }
+    }
+
+    function focusPrev(current: number) {
+        if (panes.value.length < 2) return;
+        const target = current - 1;
+        if (target >= 0) setActive(target);
+    }
+    function focusNext(current: number) {
+        if (panes.value.length < 2) return;
+        const target = current + 1;
+        if (target < panes.value.length) setActive(target);
+    }
+
+    function ensureAtLeastOne() {
+        if (!panes.value.length) {
+            panes.value.push(createEmptyPane());
+            activePaneIndex.value = 0;
+        }
+    }
+
+    const api: UseMultiPaneApi = {
+        panes,
+        activePaneIndex,
+        canAddPane,
+        newWindowTooltip,
+        addPane,
+        closePane,
+        setActive,
+        focusPrev,
+        focusNext,
+        setPaneThread,
+        loadMessagesFor,
+        ensureAtLeastOne,
+    };
+
+    // Expose globally so plugins (message action handlers etc.) can interact.
+    // This is intentionally lightweight; if multiple instances are created the latest wins.
+    try {
+        (globalThis as any).__or3MultiPaneApi = api;
+    } catch {}
+
+    return api;
+}
+
+export type { PaneState as MultiPaneState };
 ```
 
 ## File: app/app.config.ts
@@ -12238,7 +13272,6 @@ import {
     type PromptRecord,
 } from '~/db/prompts';
 import { useActivePrompt } from '~/composables/useActivePrompt';
-import PromptEditor from '~/components/prompts/PromptEditor.vue';
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 import { encode } from 'gpt-tokenizer';
 import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
@@ -12547,1417 +13580,12 @@ function toggleDefault(id: string) {
 </style>
 ```
 
-## File: app/components/chat/ChatInputDropper.vue
-```vue
-<template>
-    <div
-        @dragover.prevent="onDragOver"
-        @dragleave.prevent="onDragLeave"
-        @drop.prevent="handleDrop"
-        :class="[
-            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
-            isDragging
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
-            loading ? 'opacity-90 pointer-events-auto' : '',
-        ]"
-    >
-        <div class="flex flex-col gap-3.5 m-3.5">
-            <!-- Main Input Area -->
-            <div class="relative">
-                <div
-                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
-                >
-                    <!-- TipTap Editor -->
-                    <EditorContent
-                        :editor="editor as Editor"
-                        class="prosemirror-host"
-                    ></EditorContent>
-
-                    <div
-                        v-if="loading"
-                        class="absolute top-1 right-1 flex items-center gap-2"
-                    >
-                        <UIcon
-                            name="pixelarticons:loader"
-                            class="w-4 h-4 animate-spin opacity-70"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Controls -->
-            <div class="flex gap-2.5 w-full items-center">
-                <div
-                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
-                >
-                    <!-- Attachment Button -->
-                    <div class="relative shrink-0">
-                        <UButton
-                            @click="triggerFileInput"
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Add attachments"
-                            :disabled="loading"
-                        >
-                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
-                        </UButton>
-                    </div>
-
-                    <!-- Settings Button (stub) -->
-                    <div class="relative shrink-0">
-                        <UPopover>
-                            <UButton
-                                label="Open"
-                                :square="true"
-                                size="sm"
-                                color="info"
-                                class="retro-btn text-black dark:text-white flex items-center justify-center"
-                                type="button"
-                                aria-label="Settings"
-                                :disabled="loading"
-                            >
-                                <UIcon
-                                    name="pixelarticons:sliders"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                            <template #content>
-                                <div class="flex flex-col w-[320px]">
-                                    <!-- Model Selector extracted -->
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2"
-                                    >
-                                        <ModelSelect
-                                            v-if="
-                                                containerWidth &&
-                                                containerWidth < 400
-                                            "
-                                            v-model:model="selectedModel"
-                                            :loading="loading"
-                                            class="w-full!"
-                                        />
-                                    </div>
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
-                                    >
-                                        <USwitch
-                                            color="primary"
-                                            label="Enable web search"
-                                            class="w-full"
-                                            v-model="webSearchEnabled"
-                                        ></USwitch>
-                                        <UIcon
-                                            name="pixelarticons:visible"
-                                            class="w-4 h-4"
-                                        />
-                                    </div>
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
-                                    >
-                                        <USwitch
-                                            color="primary"
-                                            label="Enable thinking"
-                                            class="w-full"
-                                        ></USwitch>
-                                        <UIcon
-                                            name="pixelarticons:lightbulb-on"
-                                            class="w-4 h-4"
-                                        />
-                                    </div>
-                                    <button
-                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
-                                        @click="showSystemPrompts = true"
-                                    >
-                                        <span class="px-1">System prompts</span>
-                                        <UIcon
-                                            name="pixelarticons:script-text"
-                                            class="w-4 h-4"
-                                        />
-                                    </button>
-                                    <button
-                                        @click="showModelCatalog = true"
-                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
-                                    >
-                                        <span class="px-1">Model Catalog</span>
-                                        <UIcon
-                                            name="pixelarticons:android"
-                                            class="w-4 h-4"
-                                        />
-                                    </button>
-                                </div>
-                            </template>
-                        </UPopover>
-                    </div>
-                </div>
-
-                <!-- Model Selector extracted -->
-                <ModelSelect
-                    v-if="!isMobile && containerWidth && containerWidth > 400"
-                    v-model:model="selectedModel"
-                    :loading="loading"
-                    class="shrink-0 hidden sm:block"
-                />
-
-                <!-- Send / Stop Button -->
-                <div>
-                    <UButton
-                        v-if="!props.streaming"
-                        @click="handleSend"
-                        :disabled="
-                            loading ||
-                            (!promptText.trim() && uploadedImages.length === 0)
-                        "
-                        :square="true"
-                        size="sm"
-                        color="primary"
-                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
-                        type="button"
-                        aria-label="Send message"
-                    >
-                        <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
-                    </UButton>
-                    <UButton
-                        v-else
-                        @click="emit('stop-stream')"
-                        :square="true"
-                        size="sm"
-                        color="error"
-                        class="retro-btn text-white dark:text-black flex items-center justify-center"
-                        type="button"
-                        aria-label="Stop generation"
-                    >
-                        <UIcon name="pixelarticons:pause" class="w-4 h-4" />
-                    </UButton>
-                </div>
-            </div>
-        </div>
-
-        <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
-        <div
-            v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
-            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
-        >
-            <!-- Images -->
-            <div
-                v-for="(image, index) in uploadedImages.filter(
-                    (att: any) => att.kind === 'image'
-                )"
-                :key="'img-' + index"
-                class="relative group aspect-square"
-            >
-                <img
-                    :src="image.url"
-                    :alt="'Uploaded Image ' + (index + 1)"
-                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
-                />
-                <button
-                    @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove image"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
-                <div
-                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
-                >
-                    {{ image.name }}
-                </div>
-            </div>
-            <!-- PDFs -->
-            <div
-                v-for="(pdf, index) in uploadedImages.filter(
-                    (att: any) => att.kind === 'pdf'
-                )"
-                :key="'pdf-' + index"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
-            >
-                <div
-                    class="flex flex-col items-center justify-center w-full h-full"
-                >
-                    <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
-                        >PDF</span
-                    >
-                    <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
-                        :title="pdf.name"
-                        >{{ pdf.name }}</span
-                    >
-                </div>
-                <button
-                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove PDF"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
-            </div>
-            <!-- Large Text Blocks -->
-            <div
-                v-for="(block, tIndex) in largeTextBlocks"
-                :key="'txt-' + block.id"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
-            >
-                <div
-                    class="flex flex-col items-center justify-center w-full h-full"
-                >
-                    <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
-                        >TXT</span
-                    >
-                    <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
-                        :title="block.previewFull"
-                    >
-                        {{ block.preview }}
-                    </span>
-                    <span class="mt-1 text-[10px] opacity-70"
-                        >{{ block.wordCount }}w</span
-                    >
-                </div>
-                <button
-                    @click="removeTextBlock(tIndex)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove text block"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
-            </div>
-        </div>
-
-        <!-- Drag and Drop Overlay -->
-        <div
-            v-if="isDragging"
-            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
-        >
-            <div class="text-center">
-                <UIcon
-                    name="i-lucide:upload-cloud"
-                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
-                />
-                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
-                    Drop images here to upload
-                </p>
-            </div>
-        </div>
-        <modal-settings-modal v-model:showModal="showModelCatalog" />
-        <LazyChatSystemPromptsModal
-            v-model:showModal="showSystemPrompts"
-            :thread-id="props.threadId"
-            @selected="handlePromptSelected"
-            @closed="handlePromptModalClosed"
-        />
-    </div>
-</template>
-
-<script setup lang="ts">
-import {
-    ref,
-    nextTick,
-    defineEmits,
-    onMounted,
-    onBeforeUnmount,
-    watch,
-} from 'vue';
-import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
-import { createOrRefFile } from '~/db/files';
-import type { FileMeta } from '~/db/schema';
-import { useModelStore } from '~/composables/useModelStore';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
-import { computed } from 'vue';
-import ModelSelect from './ModelSelect.vue';
-import SystemPromptsModal from './SystemPromptsModal.vue';
-import { isMobile } from '~/state/global';
-const props = defineProps<{
-    loading?: boolean;
-    containerWidth?: number;
-    threadId?: string;
-    streaming?: boolean; // assistant response streaming
-}>();
-
-const { favoriteModels, getFavoriteModels } = useModelStore();
-const webSearchEnabled = ref<boolean>(false);
-const LAST_MODEL_KEY = 'last_selected_model';
-
-onMounted(async () => {
-    const fave = await getFavoriteModels();
-    // Favorite models loaded (log removed)
-    if (process.client) {
-        try {
-            const stored = localStorage.getItem(LAST_MODEL_KEY);
-            if (stored && typeof stored === 'string') {
-                selectedModel.value = stored;
-            }
-        } catch (e) {
-            console.warn('[ChatInputDropper] restore last model failed', e);
-        }
-    }
-});
-
-onMounted(() => {
-    if (!process.client) return;
-    try {
-        editor.value = new Editor({
-            extensions: [
-                Placeholder.configure({
-                    // Use a placeholder:
-                    placeholder: 'Write something …',
-                }),
-                StarterKit.configure({
-                    bold: false,
-                    italic: false,
-                    strike: false,
-                    code: false,
-                    blockquote: false,
-                    heading: false,
-                    bulletList: false,
-                    orderedList: false,
-                    codeBlock: false,
-                    horizontalRule: false,
-                    dropcursor: false,
-                    gapcursor: false,
-                }),
-            ],
-            onUpdate: ({ editor: ed }) => {
-                promptText.value = ed.getText();
-                autoResize();
-            },
-            onPaste: (event) => {
-                handlePaste(event);
-            },
-            content: '',
-        });
-    } catch (err) {
-        console.warn(
-            '[ChatInputDropper] TipTap init failed, using fallback textarea',
-            err
-        );
-    }
-});
-
-onBeforeUnmount(() => {
-    try {
-        editor.value?.destroy();
-    } catch (err) {
-        console.warn('[ChatInputDropper] TipTap destroy error', err);
-    }
-});
-
-interface UploadedImage {
-    file: File;
-    url: string; // data URL preview
-    name: string;
-    hash?: string; // content hash after persistence
-    status: 'pending' | 'ready' | 'error';
-    error?: string;
-    meta?: FileMeta;
-    mime: string;
-    kind: 'image' | 'pdf';
-}
-
-interface ImageSettings {
-    quality: 'low' | 'medium' | 'high';
-    numResults: number;
-    size: '1024x1024' | '1024x1536' | '1536x1024';
-}
-
-const showModelCatalog = ref(false);
-const showSystemPrompts = ref(false);
-
-const emit = defineEmits<{
-    (
-        e: 'send',
-        payload: {
-            text: string;
-            images: UploadedImage[]; // backward compatibility
-            attachments: UploadedImage[]; // new unified field
-            largeTexts: LargeTextBlock[];
-            model: string;
-            settings: ImageSettings;
-            webSearchEnabled: boolean;
-        }
-    ): void;
-    (e: 'prompt-change', value: string): void;
-    (e: 'image-add', image: UploadedImage): void;
-    (e: 'image-remove', index: number): void;
-    (e: 'model-change', model: string): void;
-    (e: 'settings-change', settings: ImageSettings): void;
-    (e: 'trigger-file-input'): void;
-    (e: 'pending-prompt-selected', promptId: string | null): void;
-    (e: 'stop-stream'): void; // New event for stopping the stream
-}>();
-
-const promptText = ref('');
-// Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
-// Future TipTap editor container & instance refs (Task 2 structure only)
-const editorContainerRef = ref<HTMLElement | null>(null);
-const editor = ref<Editor | null>(null);
-const editorIsEmpty = computed(() => {
-    return editor.value ? editor.value.isEmpty : true;
-});
-
-const attachments = ref<UploadedImage[]>([]);
-// Backward compatibility: expose as uploadedImages for template
-const uploadedImages = computed(() => attachments.value);
-// Large pasted text blocks (> threshold)
-interface LargeTextBlock {
-    id: string;
-    text: string;
-    wordCount: number;
-    preview: string;
-    previewFull: string;
-}
-const largeTextBlocks = ref<LargeTextBlock[]>([]);
-const LARGE_TEXT_WORD_THRESHOLD = 600;
-function makeId() {
-    return Math.random().toString(36).slice(2, 9);
-}
-const isDragging = ref(false);
-const selectedModel = ref<string>('openai/gpt-oss-120b');
-const hiddenFileInput = ref<HTMLInputElement | null>(null);
-const imageSettings = ref<ImageSettings>({
-    quality: 'medium',
-    numResults: 2,
-    size: '1024x1024',
-});
-const showSettingsDropdown = ref(false);
-
-watch(selectedModel, (newModel) => {
-    emit('model-change', newModel);
-    if (process.client) {
-        try {
-            localStorage.setItem(LAST_MODEL_KEY, newModel);
-        } catch (e) {
-            console.warn('[ChatInputDropper] persist last model failed', e);
-        }
-    }
-});
-
-const autoResize = async () => {
-    await nextTick();
-    if (textareaRef.value) {
-        textareaRef.value.style.height = 'auto';
-        textareaRef.value.style.height =
-            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
-    }
-};
-
-const handlePromptInput = () => {
-    emit('prompt-change', promptText.value);
-    autoResize();
-};
-
-const handlePaste = async (event: ClipboardEvent) => {
-    const cd = event.clipboardData;
-    if (!cd) return;
-    // 1. Handle images and PDFs first (extended behavior)
-    const items = cd.items;
-    let handled = false;
-    for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        if (!it) continue;
-        const mime = it.type || '';
-        if (mime.startsWith('image/') || mime === 'application/pdf') {
-            event.preventDefault();
-            handled = true;
-            const file = it.getAsFile();
-            if (!file) continue;
-            await processAttachment(
-                file,
-                file.name ||
-                    `pasted-${
-                        mime.startsWith('image/') ? 'image' : 'pdf'
-                    }-${Date.now()}.${
-                        mime === 'application/pdf' ? 'pdf' : 'png'
-                    }`
-            );
-        }
-    }
-    if (handled) return; // skip text path if attachment already captured
-
-    // 2. Large text detection
-    const text = cd.getData('text/plain');
-    if (!text) return; // allow normal behavior
-    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-    if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
-        // Prevent the heavy text from entering the rich-text editor (lag source)
-        event.preventDefault();
-        event.stopPropagation();
-        const prev = editor.value ? editor.value.getText() : '';
-        const previewFull = text.slice(0, 800).trim();
-        const preview =
-            previewFull.split(/\s+/).slice(0, 12).join(' ') +
-            (wordCount > 12 ? '…' : '');
-        largeTextBlocks.value.push({
-            id: makeId(),
-            text,
-            wordCount,
-            preview,
-            previewFull,
-        });
-        // TipTap may still stage an insertion despite preventDefault in some edge cases;
-        // restore previous content on next tick to be safe.
-        nextTick(() => {
-            try {
-                if (editor.value)
-                    editor.value.commands.setContent(prev, {
-                        emitUpdate: false,
-                    });
-            } catch {}
-        });
-    }
-};
-
-const triggerFileInput = () => {
-    emit('trigger-file-input');
-    if (!hiddenFileInput.value) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.multiple = true;
-        input.accept = 'image/*';
-        input.style.display = 'none';
-        input.addEventListener('change', (e) => {
-            handleFileChange(e);
-        });
-        document.body.appendChild(input);
-        hiddenFileInput.value = input;
-    }
-    hiddenFileInput.value?.click();
-};
-
-const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
-
-async function processAttachment(file: File, name?: string) {
-    const mime = file.type || '';
-    const kind = mime.startsWith('image/')
-        ? 'image'
-        : mime === 'application/pdf'
-        ? 'pdf'
-        : null;
-    if (!kind) return; // only images and PDFs
-    // Fast preview first
-    const dataUrl: string = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) =>
-            resolve(
-                typeof e.target?.result === 'string'
-                    ? (e.target?.result as string)
-                    : ''
-            );
-        reader.onerror = () => reject(new Error('read failed'));
-        reader.readAsDataURL(file);
-    });
-    if (attachments.value.length >= MAX_IMAGES) return;
-    const attachment: UploadedImage = {
-        file,
-        url: dataUrl,
-        name: name || file.name,
-        status: 'pending',
-        mime,
-        kind,
-    };
-    attachments.value.push(attachment);
-    emit('image-add', attachment);
-    try {
-        const meta = await createOrRefFile(file, attachment.name);
-        attachment.hash = meta.hash;
-        attachment.meta = meta;
-        attachment.status = 'ready';
-    } catch (err: any) {
-        attachment.status = 'error';
-        attachment.error = err?.message || 'failed';
-        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
-    }
-}
-
-const processFiles = async (files: FileList | null) => {
-    if (!files) return;
-    for (let i = 0; i < files.length; i++) {
-        if (attachments.value.length >= MAX_IMAGES) break;
-        const file = files[i];
-        if (!file) continue;
-        await processAttachment(file);
-    }
-};
-
-const handleFileChange = (event: Event) => {
-    const target = event.target as HTMLInputElement | null;
-    if (!target || !target.files) return;
-    processFiles(target.files);
-};
-
-const handleDrop = (event: DragEvent) => {
-    isDragging.value = false;
-    processFiles(event.dataTransfer?.files || null);
-};
-
-const onDragOver = (event: DragEvent) => {
-    const items = event.dataTransfer?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
-        if (mime.startsWith('image/') || mime === 'application/pdf') {
-            isDragging.value = true;
-            return;
-        }
-    }
-};
-
-const onDragLeave = (event: DragEvent) => {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = event.clientX;
-    const y = event.clientY;
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-        isDragging.value = false;
-    }
-};
-
-const removeImage = (index: number) => {
-    attachments.value.splice(index, 1);
-    emit('image-remove', index);
-};
-
-const removeTextBlock = (index: number) => {
-    largeTextBlocks.value.splice(index, 1);
-};
-
-const handleSend = () => {
-    if (props.loading) return;
-    if (
-        promptText.value.trim() ||
-        uploadedImages.value.length > 0 ||
-        largeTextBlocks.value.length > 0
-    ) {
-        emit('send', {
-            text: promptText.value,
-            images: attachments.value, // backward compatibility
-            attachments: attachments.value, // new unified field
-            largeTexts: largeTextBlocks.value,
-            model: selectedModel.value,
-            settings: imageSettings.value,
-            webSearchEnabled: webSearchEnabled.value,
-        });
-        // Reset local state and editor content so placeholder shows again
-        promptText.value = '';
-        try {
-            editor.value?.commands.clearContent();
-        } catch (e) {
-            // noop
-        }
-        attachments.value = [];
-        largeTextBlocks.value = [];
-        autoResize();
-    }
-};
-
-const handlePromptSelected = (id: string) => {
-    if (!props.threadId) emit('pending-prompt-selected', id);
-};
-
-const handlePromptModalClosed = () => {
-    /* modal closed */
-};
-</script>
-
-<style scoped>
-/* Custom scrollbar for textarea */
-/* Firefox */
-textarea {
-    scrollbar-width: thin;
-    scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit */
-textarea::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-textarea::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-textarea::-webkit-scrollbar-thumb {
-    background: var(--md-primary);
-    border-radius: 9999px;
-}
-
-textarea::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-
-/* Focus states */
-.group:hover .opacity-0 {
-    opacity: 1;
-}
-
-/* Smooth transitions */
-* {
-    transition-property: color, background-color, border-color, opacity,
-        transform;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-}
-
-/* ProseMirror (TipTap) base styles */
-/* TipTap base */
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
-}
-
-/* Placeholder (needs :deep due to scoped styles) */
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    /* Use design tokens; ensure sufficient contrast in dark mode */
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    opacity: 0.85; /* increase for dark background readability */
-    font-weight: normal;
-}
-</style>
-```
-
-## File: app/components/chat/ChatMessage.vue
-```vue
-<template>
-    <div
-        :class="outerClass"
-        :style="{
-            paddingRight:
-                props.message.role === 'user' && hashList.length && !expanded
-                    ? '80px'
-                    : '16px',
-        }"
-        class="p-2 min-w-[140px] rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
-    >
-        <!-- Compact thumb (collapsed state) -->
-        <button
-            v-if="props.message.role === 'user' && hashList.length && !expanded"
-            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
-            @click="toggleExpanded"
-            type="button"
-            aria-label="Show attachments"
-        >
-            <template v-if="firstThumb && pdfMeta[firstThumb]">
-                <div class="pdf-thumb w-full h-full">
-                    <div
-                        class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
-                    >
-                        {{ pdfDisplayName }}
-                    </div>
-
-                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
-                </div>
-            </template>
-            <template
-                v-else-if="
-                    firstThumb && thumbnails[firstThumb]?.status === 'ready'
-                "
-            >
-                <img
-                    :src="thumbnails[firstThumb!]?.url"
-                    :alt="'attachment ' + firstThumb.slice(0, 6)"
-                    class="object-cover w-full h-full"
-                    draggable="false"
-                />
-            </template>
-            <template
-                v-else-if="
-                    firstThumb && thumbnails[firstThumb]?.status === 'error'
-                "
-            >
-                <span class="text-[10px] text-error">err</span>
-            </template>
-            <template v-else>
-                <span class="text-[10px] animate-pulse opacity-70">…</span>
-            </template>
-            <span
-                v-if="hashList.length > 1"
-                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
-                >+{{ hashList.length - 1 }}</span
-            >
-        </button>
-
-        <div v-if="!editing" :class="innerClass" ref="contentEl">
-            <!-- Retro loader extracted to component -->
-            <LoadingGenerating
-                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
-                class="animate-in"
-            />
-            <div
-                v-if="
-                    props.message.role === 'assistant' &&
-                    props.message.reasoning_text
-                "
-            >
-                <ReasoningAccordion
-                    :content="props.message.reasoning_text"
-                    :streaming="isStreamingReasoning"
-                    :pending="(props.message as any).pending"
-                />
-            </div>
-            <div v-if="hasContent" v-html="rendered"></div>
-        </div>
-        <!-- Editing surface -->
-        <div v-else class="w-full">
-            <MessageEditor
-                v-model="draft"
-                :autofocus="true"
-                :focus-delay="120"
-            />
-            <div class="flex w-full justify-end gap-2 mt-2">
-                <UButton
-                    size="sm"
-                    color="success"
-                    class="retro-btn"
-                    @click="saveEdit"
-                    :loading="saving"
-                    >Save</UButton
-                >
-                <UButton
-                    size="sm"
-                    color="error"
-                    class="retro-btn"
-                    @click="cancelEdit"
-                    >Cancel</UButton
-                >
-            </div>
-        </div>
-
-        <!-- Expanded grid -->
-        <MessageAttachmentsGallery
-            v-if="hashList.length && expanded"
-            :hashes="hashList"
-            @collapse="toggleExpanded"
-        />
-
-        <!-- Action buttons: overlap bubble border half outside -->
-        <div
-            v-if="!editing"
-            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
-        >
-            <UButtonGroup
-                :class="{
-                    'bg-primary': props.message.role === 'user',
-                    'bg-white': props.message.role === 'assistant',
-                }"
-                class="rounded-[3px]"
-            >
-                <UTooltip :delay-duration="0" text="Copy" :teleport="true">
-                    <UButton
-                        @click="copyMessage"
-                        icon="pixelarticons:copy"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip
-                    :delay-duration="0"
-                    text="Retry"
-                    :popper="{ strategy: 'fixed' }"
-                    :teleport="true"
-                >
-                    <UButton
-                        icon="pixelarticons:reload"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                        @click="onRetry"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Branch" :teleport="true">
-                    <UButton
-                        @click="onBranch"
-                        icon="pixelarticons:git-branch"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Edit" :teleport="true">
-                    <UButton
-                        icon="pixelarticons:edit-box"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                        @click="beginEdit"
-                    ></UButton>
-                </UTooltip>
-            </UButtonGroup>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import {
-    computed,
-    reactive,
-    ref,
-    watch,
-    onBeforeUnmount,
-    nextTick,
-    onMounted,
-} from 'vue';
-import LoadingGenerating from './LoadingGenerating.vue';
-import { parseFileHashes } from '~/db/files-util';
-import { getFileMeta } from '~/db/files';
-import { marked } from 'marked';
-import MessageEditor from './MessageEditor.vue';
-import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
-import { useMessageEditing } from '~/composables/useMessageEditing';
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null; // serialized array
-};
-
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
-
-// Local UI message expects content to be a string (rendered markdown/html)
-type UIMessage = Omit<ChatMessageType, 'content'> & {
-    content: string;
-    pending?: boolean;
-    reasoning_text?: string | null;
-};
-
-const props = defineProps<{ message: UIMessage; threadId?: string }>();
-const emit = defineEmits<{
-    (e: 'retry', id: string): void;
-    (e: 'branch', id: string): void;
-    (e: 'edited', payload: { id: string; content: string }): void;
-}>();
-
-const isStreamingReasoning = computed(() => {
-    return props.message.reasoning_text && !hasContent.value;
-});
-
-const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
-        props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
-        props.message.role === 'assistant',
-}));
-
-const innerClass = computed(() => ({
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
-        props.message.role === 'assistant',
-}));
-
-// Detect if assistant message currently has any textual content yet
-const hasContent = computed(() => {
-    const c: any = props.message.content;
-    if (typeof c === 'string') return c.trim().length > 0;
-    if (Array.isArray(c))
-        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
-    return false;
-});
-
-// Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => {
-    const raw = (props.message as any).file_hashes;
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as string[];
-    if (typeof raw === 'string') return parseFileHashes(raw);
-    return [];
-});
-
-// Render markdown/text. For assistant messages keep existing inline images during live stream.
-// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
-const rendered = computed(() => {
-    const raw = props.message.content || '';
-    const parsed = (marked.parse(raw) as string) || '';
-    if (props.message.role === 'user') {
-        return parsed.replace(/<img\b[^>]*>/gi, '');
-    }
-    const hasAnyImg = /<img\b/i.test(parsed);
-    if (hasAnyImg) return parsed; // live streaming case retains inline imgs
-    if (hashList.value.length) {
-        const placeholders = hashList.value
-            .map(
-                (h) =>
-                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
-            )
-            .join('');
-        return parsed + placeholders;
-    }
-    return parsed;
-});
-
-// Editing (extracted)
-const {
-    editing,
-    draft,
-    saving,
-    beginEdit,
-    cancelEdit,
-    saveEdit: internalSaveEdit,
-} = useMessageEditing(props.message);
-async function saveEdit() {
-    await internalSaveEdit();
-    if (!editing.value) {
-        const id = (props.message as any).id;
-        if (id) emit('edited', { id, content: draft.value });
-    }
-}
-
-// (hashList defined earlier)
-
-// Compact thumb preview support (attachments gallery handles full grid). Reuse global caches.
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string;
-}
-const thumbnails = reactive<Record<string, ThumbState>>({});
-// PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
-const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
-const safePdfName = computed(() => {
-    const h = firstThumb.value;
-    if (!h) return 'document.pdf';
-    const m = pdfMeta[h];
-    return (m && m.name) || 'document.pdf';
-});
-// Short display (keep extension, truncate middle if long)
-const pdfDisplayName = computed(() => {
-    const name = safePdfName.value;
-    const max = 18;
-    if (name.length <= max) return name;
-    const dot = name.lastIndexOf('.');
-    const ext = dot > 0 ? name.slice(dot) : '';
-    const base = dot > 0 ? name.slice(0, dot) : name;
-    const keep = max - ext.length - 3; // 3 for ellipsis
-    if (keep <= 4) return base.slice(0, max - 3) + '...';
-    const head = Math.ceil(keep / 2);
-    const tail = Math.floor(keep / 2);
-    return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
-});
-const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
-    string,
-    ThumbState
->());
-const thumbLoadPromises = ((globalThis as any).__or3ThumbInflight ||= new Map<
-    string,
-    Promise<void>
->());
-// Reference counts per file hash so we can safely revoke object URLs when unused.
-const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
-    string,
-    number
->());
-
-function retainThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    thumbRefCounts.set(hash, prev + 1);
-}
-function releaseThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    if (prev <= 1) {
-        thumbRefCounts.delete(hash);
-        const state = thumbCache.get(hash);
-        if (state?.url) {
-            try {
-                URL.revokeObjectURL(state.url);
-            } catch {}
-        }
-        thumbCache.delete(hash);
-    } else {
-        thumbRefCounts.set(hash, prev - 1);
-    }
-}
-
-// Per-message persistent UI state stored directly on the message object to
-// survive virtualization recycling without external maps.
-const expanded = ref<boolean>(
-    (props.message as any)._expanded === true || false
-);
-watch(expanded, (v) => ((props.message as any)._expanded = v));
-const firstThumb = computed(() => hashList.value[0]);
-function toggleExpanded() {
-    if (!hashList.value.length) return;
-    expanded.value = !expanded.value;
-}
-
-async function ensureThumb(h: string) {
-    // If we already know it's a PDF just ensure meta exists.
-    if (pdfMeta[h]) return;
-    if (thumbnails[h] && thumbnails[h].status === 'ready') return;
-    const cached = thumbCache.get(h);
-    if (cached) {
-        thumbnails[h] = cached;
-        return;
-    }
-    if (thumbLoadPromises.has(h)) {
-        await thumbLoadPromises.get(h);
-        const after = thumbCache.get(h);
-        if (after) thumbnails[h] = after;
-        return;
-    }
-    thumbnails[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
-            const [blob, meta] = await Promise.all([
-                (await import('~/db/files')).getFileBlob(h),
-                getFileMeta(h).catch(() => undefined),
-            ]);
-            if (meta && meta.kind === 'pdf') {
-                pdfMeta[h] = { name: meta.name, kind: meta.kind };
-                // Remove the temporary loading state since we won't have an image thumb
-                delete thumbnails[h];
-                return;
-            }
-            if (!blob) throw new Error('missing');
-            if (blob.type === 'application/pdf') {
-                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
-                delete thumbnails[h];
-                return;
-            }
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            thumbCache.set(h, ready);
-            thumbnails[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            thumbCache.set(h, err);
-            thumbnails[h] = err;
-        } finally {
-            thumbLoadPromises.delete(h);
-        }
-    })();
-    thumbLoadPromises.set(h, p);
-    await p;
-}
-
-// Track current hashes used by this message for ref counting.
-const currentHashes = new Set<string>();
-// Load new hashes when list changes with diffing for retain/release.
-watch(
-    hashList,
-    async (list) => {
-        const nextSet = new Set(list);
-        // Additions
-        for (const h of nextSet) {
-            if (!currentHashes.has(h)) {
-                await ensureThumb(h);
-                // Only retain if loaded and ready
-                const state = thumbCache.get(h);
-                if (state?.status === 'ready') retainThumb(h);
-                currentHashes.add(h);
-            }
-        }
-        // Removals
-        for (const h of Array.from(currentHashes)) {
-            if (!nextSet.has(h)) {
-                currentHashes.delete(h);
-                releaseThumb(h);
-            }
-        }
-    },
-    { immediate: true }
-);
-
-// Cleanup: release all thumbs used by this message.
-onBeforeUnmount(() => {
-    for (const h of currentHashes) releaseThumb(h);
-    currentHashes.clear();
-});
-// Inline image hydration: replace <img data-file-hash> with object URL once ready
-const contentEl = ref<HTMLElement | null>(null);
-async function hydrateInlineImages() {
-    // Only hydrate assistant messages (users have inline images stripped).
-    if (props.message.role !== 'assistant') return;
-    await nextTick();
-    const root = contentEl.value;
-    if (!root) return;
-    const imgs = root.querySelectorAll(
-        'img[data-file-hash]:not([data-hydrated])'
-    );
-    imgs.forEach((imgEl) => {
-        const hash = imgEl.getAttribute('data-file-hash') || '';
-        if (!hash) return;
-        const state = thumbCache.get(hash) || thumbnails[hash];
-        if (state && state.status === 'ready' && state.url) {
-            (imgEl as HTMLImageElement).src = state.url;
-            imgEl.setAttribute('data-hydrated', 'true');
-            imgEl.classList.remove('opacity-60');
-        }
-    });
-}
-// Re-run hydration when rendered HTML changes or thumbnails update
-watch(rendered, () => hydrateInlineImages());
-watch(hashList, () => hydrateInlineImages());
-onMounted(() => hydrateInlineImages());
-
-watch(
-    () =>
-        Object.keys(thumbnails).map((h) => {
-            const t = thumbnails[h]!; // state always initialized before use
-            return t.status + ':' + (t.url || '');
-        }),
-    () => hydrateInlineImages()
-);
-import { useToast } from '#imports';
-function copyMessage() {
-    navigator.clipboard.writeText(props.message.content);
-
-    useToast().add({
-        title: 'Message copied',
-        description: 'The message content has been copied to your clipboard.',
-        duration: 2000,
-    });
-}
-
-function onRetry() {
-    const id = (props.message as any).id;
-    if (!id) return;
-    emit('retry', id);
-}
-
-import { forkThread, retryBranch } from '~/db/branching';
-import ReasoningAccordion from './ReasoningAccordion.vue';
-
-// Branch popover state
-const branchMode = ref<'reference' | 'copy'>('copy');
-const branchModes = [
-    { label: 'Reference', value: 'reference' },
-    { label: 'Copy', value: 'copy' },
-];
-const branchTitle = ref('');
-const branching = ref(false);
-
-async function onBranch() {
-    if (branching.value) return;
-    branching.value = true;
-    const messageId = (props.message as any).id;
-    if (!messageId) return;
-    try {
-        let res: any;
-        // For assistant messages we now allow direct anchoring (captures assistant content in branch).
-        // If "retry" semantics desired, a separate Retry action still uses retryBranch.
-        res = await forkThread({
-            sourceThreadId: props.threadId || '',
-            anchorMessageId: messageId,
-            mode: branchMode.value,
-            titleOverride: branchTitle.value || undefined,
-        });
-        emit('branch', res.thread.id);
-        useToast().add({
-            title: 'Branched',
-            description: `New branch: ${res.thread.title}`,
-            color: 'primary',
-            duration: 2200,
-        });
-    } catch (e: any) {
-        useToast().add({
-            title: 'Branch failed',
-            description: e?.message || 'Error creating branch',
-            color: 'error',
-            duration: 3000,
-        });
-    } finally {
-        branching.value = false;
-    }
-}
-</script>
-
-<style scoped>
-/* PDF compact thumb */
-.pdf-thumb {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-lowest) 0%,
-        var(--md-surface-container-low) 100%
-    );
-    width: 100%;
-    height: 100%;
-    padding: 2px 2px 3px;
-    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
-        2px 2px 0 0 var(--md-inverse-surface);
-    font-family: 'VT323', monospace;
-}
-.pdf-thumb__icon {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--md-inverse-surface);
-    width: 100%;
-}
-.pdf-thumb__name {
-    font-size: 8px;
-    line-height: 1.05;
-    font-weight: 600;
-    text-align: center;
-    max-height: 3.2em;
-    overflow: hidden;
-    display: -webkit-box;
-    line-clamp: 3;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    margin-top: 1px;
-    padding: 0 1px;
-    text-shadow: 0 1px 0 #000;
-    color: var(--md-inverse-on-surface);
-}
-.pdf-thumb__ext {
-    position: absolute;
-    top: 0;
-    left: 0;
-    background: var(--md-inverse-surface);
-    color: var(--md-inverse-on-surface);
-    font-size: 7px;
-    font-weight: 700;
-    padding: 1px 3px;
-    letter-spacing: 0.5px;
-    box-shadow: 1px 1px 0 0 #000;
-}
-.pdf-thumb::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    background: linear-gradient(
-        135deg,
-        var(--md-surface-container-low) 0%,
-        var(--md-surface-container-high) 100%
-    );
-    clip-path: polygon(0 0, 100% 0, 100% 100%);
-    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
-}
-</style>
-```
-
 ## File: app/components/chat/ChatPageShell.vue
 ```vue
 <template>
     <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
-            <sidebar-side-nav-content
+            <lazy-sidebar-side-nav-content
                 ref="sideNavExpandedRef"
                 :active-thread="panes[0]?.threadId || ''"
                 @new-chat="onNewChat"
@@ -13967,7 +13595,7 @@ async function onBranch() {
             />
         </template>
         <template #sidebar-collapsed>
-            <SidebarSideNavContentCollapsed
+            <lazy-sidebar-side-nav-content-collapsed
                 :active-thread="panes[0]?.threadId || ''"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
@@ -14526,6 +14154,790 @@ body {
     .pane-active::after {
         animation: none;
     }
+}
+</style>
+```
+
+## File: app/components/chat/ChatInputDropper.vue
+```vue
+<template>
+    <div
+        @dragover.prevent="onDragOver"
+        @dragleave.prevent="onDragLeave"
+        @drop.prevent="handleDrop"
+        :class="[
+            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            isDragging
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+            loading ? 'opacity-90 pointer-events-auto' : '',
+        ]"
+    >
+        <div class="flex flex-col gap-3.5 m-3.5">
+            <!-- Main Input Area -->
+            <div class="relative">
+                <div
+                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
+                >
+                    <!-- TipTap Editor -->
+                    <EditorContent
+                        :editor="editor as Editor"
+                        class="prosemirror-host"
+                    ></EditorContent>
+
+                    <div
+                        v-if="loading"
+                        class="absolute top-1 right-1 flex items-center gap-2"
+                    >
+                        <UIcon
+                            name="pixelarticons:loader"
+                            class="w-4 h-4 animate-spin opacity-70"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="flex gap-2.5 w-full items-center">
+                <div
+                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
+                >
+                    <!-- Attachment Button -->
+                    <div class="relative shrink-0">
+                        <UButton
+                            @click="triggerFileInput"
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
+                            type="button"
+                            aria-label="Add attachments"
+                            :disabled="loading"
+                        >
+                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
+                        </UButton>
+                    </div>
+
+                    <!-- Settings Button (stub) -->
+                    <div class="relative shrink-0">
+                        <UPopover>
+                            <UButton
+                                label="Open"
+                                :square="true"
+                                size="sm"
+                                color="info"
+                                class="retro-btn text-black dark:text-white flex items-center justify-center"
+                                type="button"
+                                aria-label="Settings"
+                                :disabled="loading"
+                            >
+                                <UIcon
+                                    name="pixelarticons:sliders"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                            <template #content>
+                                <div class="flex flex-col w-[320px]">
+                                    <!-- Model Selector extracted -->
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2"
+                                    >
+                                        <LazyChatModelSelect
+                                            hydrate-on-interaction="focus"
+                                            v-if="
+                                                containerWidth &&
+                                                containerWidth < 400
+                                            "
+                                            v-model:model="selectedModel"
+                                            :loading="loading"
+                                            class="w-full!"
+                                        />
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable web search"
+                                            class="w-full"
+                                            v-model="webSearchEnabled"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:visible"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable thinking"
+                                            class="w-full"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:lightbulb-on"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+                                    <button
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
+                                        @click="showSystemPrompts = true"
+                                    >
+                                        <span class="px-1">System prompts</span>
+                                        <UIcon
+                                            name="pixelarticons:script-text"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
+                                    <button
+                                        @click="showModelCatalog = true"
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
+                                    >
+                                        <span class="px-1">Model Catalog</span>
+                                        <UIcon
+                                            name="pixelarticons:android"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
+                                </div>
+                            </template>
+                        </UPopover>
+                    </div>
+                </div>
+
+                <!-- Model Selector extracted -->
+                <LazyChatModelSelect
+                    hydrate-on-interaction="focus"
+                    v-if="!isMobile && containerWidth && containerWidth > 400"
+                    v-model:model="selectedModel"
+                    :loading="loading"
+                    class="shrink-0 hidden sm:block"
+                />
+
+                <!-- Send / Stop Button -->
+                <div>
+                    <UButton
+                        v-if="!props.streaming"
+                        @click="handleSend"
+                        :disabled="
+                            loading ||
+                            (!promptText.trim() && uploadedImages.length === 0)
+                        "
+                        :square="true"
+                        size="sm"
+                        color="primary"
+                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Send message"
+                    >
+                        <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
+                    </UButton>
+                    <UButton
+                        v-else
+                        @click="emit('stop-stream')"
+                        :square="true"
+                        size="sm"
+                        color="error"
+                        class="retro-btn text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Stop generation"
+                    >
+                        <UIcon name="pixelarticons:pause" class="w-4 h-4" />
+                    </UButton>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
+        <div
+            v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
+            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+        >
+            <!-- Images -->
+            <div
+                v-for="(image, index) in uploadedImages.filter(
+                    (att: any) => att.kind === 'image'
+                )"
+                :key="'img-' + index"
+                class="relative group aspect-square"
+            >
+                <img
+                    :src="image.url"
+                    :alt="'Uploaded Image ' + (index + 1)"
+                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                />
+                <button
+                    @click="() => removeImage(uploadedImages.indexOf(image))"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove image"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+                <div
+                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                >
+                    {{ image.name }}
+                </div>
+            </div>
+            <!-- PDFs -->
+            <div
+                v-for="(pdf, index) in uploadedImages.filter(
+                    (att: any) => att.kind === 'pdf'
+                )"
+                :key="'pdf-' + index"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >PDF</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="pdf.name"
+                        >{{ pdf.name }}</span
+                    >
+                </div>
+                <button
+                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove PDF"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+            </div>
+            <!-- Large Text Blocks -->
+            <div
+                v-for="(block, tIndex) in largeTextBlocks"
+                :key="'txt-' + block.id"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >TXT</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="block.previewFull"
+                    >
+                        {{ block.preview }}
+                    </span>
+                    <span class="mt-1 text-[10px] opacity-70"
+                        >{{ block.wordCount }}w</span
+                    >
+                </div>
+                <button
+                    @click="removeTextBlock(tIndex)"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove text block"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+            </div>
+        </div>
+
+        <!-- Drag and Drop Overlay -->
+        <div
+            v-if="isDragging"
+            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+        >
+            <div class="text-center">
+                <UIcon
+                    name="i-lucide:upload-cloud"
+                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
+                />
+                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                    Drop images here to upload
+                </p>
+            </div>
+        </div>
+        <lazy-modal-settings-modal v-model:showModal="showModelCatalog" />
+        <LazyChatSystemPromptsModal
+            hydrate-on-visible
+            v-model:showModal="showSystemPrompts"
+            :thread-id="props.threadId"
+            @selected="handlePromptSelected"
+            @closed="handlePromptModalClosed"
+        />
+    </div>
+</template>
+
+<script setup lang="ts">
+import {
+    ref,
+    nextTick,
+    defineEmits,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+} from 'vue';
+import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
+import { createOrRefFile } from '~/db/files';
+import type { FileMeta } from '~/db/schema';
+import { useModelStore } from '~/composables/useModelStore';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
+import { computed } from 'vue';
+import { isMobile } from '~/state/global';
+const props = defineProps<{
+    loading?: boolean;
+    containerWidth?: number;
+    threadId?: string;
+    streaming?: boolean; // assistant response streaming
+}>();
+
+const { favoriteModels, getFavoriteModels } = useModelStore();
+const webSearchEnabled = ref<boolean>(false);
+const LAST_MODEL_KEY = 'last_selected_model';
+
+onMounted(async () => {
+    const fave = await getFavoriteModels();
+    // Favorite models loaded (log removed)
+    if (process.client) {
+        try {
+            const stored = localStorage.getItem(LAST_MODEL_KEY);
+            if (stored && typeof stored === 'string') {
+                selectedModel.value = stored;
+            }
+        } catch (e) {
+            console.warn('[ChatInputDropper] restore last model failed', e);
+        }
+    }
+});
+
+onMounted(() => {
+    if (!process.client) return;
+    try {
+        editor.value = new Editor({
+            extensions: [
+                Placeholder.configure({
+                    // Use a placeholder:
+                    placeholder: 'Write something …',
+                }),
+                StarterKit.configure({
+                    bold: false,
+                    italic: false,
+                    strike: false,
+                    code: false,
+                    blockquote: false,
+                    heading: false,
+                    bulletList: false,
+                    orderedList: false,
+                    codeBlock: false,
+                    horizontalRule: false,
+                    dropcursor: false,
+                    gapcursor: false,
+                }),
+            ],
+            onUpdate: ({ editor: ed }) => {
+                promptText.value = ed.getText();
+                autoResize();
+            },
+            onPaste: (event) => {
+                handlePaste(event);
+            },
+            content: '',
+        });
+    } catch (err) {
+        console.warn(
+            '[ChatInputDropper] TipTap init failed, using fallback textarea',
+            err
+        );
+    }
+});
+
+onBeforeUnmount(() => {
+    try {
+        editor.value?.destroy();
+    } catch (err) {
+        console.warn('[ChatInputDropper] TipTap destroy error', err);
+    }
+});
+
+interface UploadedImage {
+    file: File;
+    url: string; // data URL preview
+    name: string;
+    hash?: string; // content hash after persistence
+    status: 'pending' | 'ready' | 'error';
+    error?: string;
+    meta?: FileMeta;
+    mime: string;
+    kind: 'image' | 'pdf';
+}
+
+interface ImageSettings {
+    quality: 'low' | 'medium' | 'high';
+    numResults: number;
+    size: '1024x1024' | '1024x1536' | '1536x1024';
+}
+
+const showModelCatalog = ref(false);
+const showSystemPrompts = ref(false);
+
+const emit = defineEmits<{
+    (
+        e: 'send',
+        payload: {
+            text: string;
+            images: UploadedImage[]; // backward compatibility
+            attachments: UploadedImage[]; // new unified field
+            largeTexts: LargeTextBlock[];
+            model: string;
+            settings: ImageSettings;
+            webSearchEnabled: boolean;
+        }
+    ): void;
+    (e: 'prompt-change', value: string): void;
+    (e: 'image-add', image: UploadedImage): void;
+    (e: 'image-remove', index: number): void;
+    (e: 'model-change', model: string): void;
+    (e: 'settings-change', settings: ImageSettings): void;
+    (e: 'trigger-file-input'): void;
+    (e: 'pending-prompt-selected', promptId: string | null): void;
+    (e: 'stop-stream'): void; // New event for stopping the stream
+}>();
+
+const promptText = ref('');
+// Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const editor = ref<Editor | null>(null);
+
+const attachments = ref<UploadedImage[]>([]);
+// Backward compatibility: expose as uploadedImages for template
+const uploadedImages = computed(() => attachments.value);
+// Large pasted text blocks (> threshold)
+interface LargeTextBlock {
+    id: string;
+    text: string;
+    wordCount: number;
+    preview: string;
+    previewFull: string;
+}
+const largeTextBlocks = ref<LargeTextBlock[]>([]);
+const LARGE_TEXT_WORD_THRESHOLD = 600;
+function makeId() {
+    return Math.random().toString(36).slice(2, 9);
+}
+const isDragging = ref(false);
+const selectedModel = ref<string>('openai/gpt-oss-120b');
+const hiddenFileInput = ref<HTMLInputElement | null>(null);
+const imageSettings = ref<ImageSettings>({
+    quality: 'medium',
+    numResults: 2,
+    size: '1024x1024',
+});
+const showSettingsDropdown = ref(false);
+
+watch(selectedModel, (newModel) => {
+    emit('model-change', newModel);
+    if (process.client) {
+        try {
+            localStorage.setItem(LAST_MODEL_KEY, newModel);
+        } catch (e) {
+            console.warn('[ChatInputDropper] persist last model failed', e);
+        }
+    }
+});
+
+const autoResize = async () => {
+    await nextTick();
+    if (textareaRef.value) {
+        textareaRef.value.style.height = 'auto';
+        textareaRef.value.style.height =
+            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
+    }
+};
+
+const handlePromptInput = () => {
+    emit('prompt-change', promptText.value);
+    autoResize();
+};
+
+const handlePaste = async (event: ClipboardEvent) => {
+    const cd = event.clipboardData;
+    if (!cd) return;
+    // 1. Handle images and PDFs first (extended behavior)
+    const items = cd.items;
+    let handled = false;
+    for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it) continue;
+        const mime = it.type || '';
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
+            event.preventDefault();
+            handled = true;
+            const file = it.getAsFile();
+            if (!file) continue;
+            await processAttachment(
+                file,
+                file.name ||
+                    `pasted-${
+                        mime.startsWith('image/') ? 'image' : 'pdf'
+                    }-${Date.now()}.${
+                        mime === 'application/pdf' ? 'pdf' : 'png'
+                    }`
+            );
+        }
+    }
+    if (handled) return; // skip text path if attachment already captured
+
+    // 2. Large text detection
+    const text = cd.getData('text/plain');
+    if (!text) return; // allow normal behavior
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
+        // Prevent the heavy text from entering the rich-text editor (lag source)
+        event.preventDefault();
+        event.stopPropagation();
+        const prev = editor.value ? editor.value.getText() : '';
+        const previewFull = text.slice(0, 800).trim();
+        const preview =
+            previewFull.split(/\s+/).slice(0, 12).join(' ') +
+            (wordCount > 12 ? '…' : '');
+        largeTextBlocks.value.push({
+            id: makeId(),
+            text,
+            wordCount,
+            preview,
+            previewFull,
+        });
+        // TipTap may still stage an insertion despite preventDefault in some edge cases;
+        // restore previous content on next tick to be safe.
+        nextTick(() => {
+            try {
+                if (editor.value)
+                    editor.value.commands.setContent(prev, {
+                        emitUpdate: false,
+                    });
+            } catch {}
+        });
+    }
+};
+
+const triggerFileInput = () => {
+    emit('trigger-file-input');
+    if (!hiddenFileInput.value) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        input.addEventListener('change', (e) => {
+            handleFileChange(e);
+        });
+        document.body.appendChild(input);
+        hiddenFileInput.value = input;
+    }
+    hiddenFileInput.value?.click();
+};
+
+const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
+
+async function processAttachment(file: File, name?: string) {
+    const mime = file.type || '';
+    const kind = mime.startsWith('image/')
+        ? 'image'
+        : mime === 'application/pdf'
+        ? 'pdf'
+        : null;
+    if (!kind) return; // only images and PDFs
+    // Fast preview first
+    const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) =>
+            resolve(
+                typeof e.target?.result === 'string'
+                    ? (e.target?.result as string)
+                    : ''
+            );
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+    });
+    if (attachments.value.length >= MAX_IMAGES) return;
+    const attachment: UploadedImage = {
+        file,
+        url: dataUrl,
+        name: name || file.name,
+        status: 'pending',
+        mime,
+        kind,
+    };
+    attachments.value.push(attachment);
+    emit('image-add', attachment);
+    try {
+        const meta = await createOrRefFile(file, attachment.name);
+        attachment.hash = meta.hash;
+        attachment.meta = meta;
+        attachment.status = 'ready';
+    } catch (err: any) {
+        attachment.status = 'error';
+        attachment.error = err?.message || 'failed';
+        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
+    }
+}
+
+const processFiles = async (files: FileList | null) => {
+    if (!files) return;
+    for (let i = 0; i < files.length; i++) {
+        if (attachments.value.length >= MAX_IMAGES) break;
+        const file = files[i];
+        if (!file) continue;
+        await processAttachment(file);
+    }
+};
+
+const handleFileChange = (event: Event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || !target.files) return;
+    processFiles(target.files);
+};
+
+const handleDrop = (event: DragEvent) => {
+    isDragging.value = false;
+    processFiles(event.dataTransfer?.files || null);
+};
+
+const onDragOver = (event: DragEvent) => {
+    const items = event.dataTransfer?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
+            isDragging.value = true;
+            return;
+        }
+    }
+};
+
+const onDragLeave = (event: DragEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = event.clientX;
+    const y = event.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        isDragging.value = false;
+    }
+};
+
+const removeImage = (index: number) => {
+    attachments.value.splice(index, 1);
+    emit('image-remove', index);
+};
+
+const removeTextBlock = (index: number) => {
+    largeTextBlocks.value.splice(index, 1);
+};
+
+const handleSend = () => {
+    if (props.loading) return;
+    if (
+        promptText.value.trim() ||
+        uploadedImages.value.length > 0 ||
+        largeTextBlocks.value.length > 0
+    ) {
+        emit('send', {
+            text: promptText.value,
+            images: attachments.value, // backward compatibility
+            attachments: attachments.value, // new unified field
+            largeTexts: largeTextBlocks.value,
+            model: selectedModel.value,
+            settings: imageSettings.value,
+            webSearchEnabled: webSearchEnabled.value,
+        });
+        // Reset local state and editor content so placeholder shows again
+        promptText.value = '';
+        try {
+            editor.value?.commands.clearContent();
+        } catch (e) {
+            // noop
+        }
+        attachments.value = [];
+        largeTextBlocks.value = [];
+        autoResize();
+    }
+};
+
+const handlePromptSelected = (id: string) => {
+    if (!props.threadId) emit('pending-prompt-selected', id);
+};
+
+const handlePromptModalClosed = () => {
+    /* modal closed */
+};
+</script>
+
+<style scoped>
+/* Custom scrollbar for textarea */
+/* Firefox */
+textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit */
+textarea::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background: var(--md-primary);
+    border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+
+/* Focus states */
+.group:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Smooth transitions */
+* {
+    transition-property: color, background-color, border-color, opacity,
+        transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85; /* increase for dark background readability */
+    font-weight: normal;
 }
 </style>
 ```
@@ -15157,6 +15569,668 @@ export function useChat(
 }
 ```
 
+## File: app/components/chat/ChatMessage.vue
+```vue
+<template>
+    <div
+        :class="outerClass"
+        :style="{
+            paddingRight:
+                props.message.role === 'user' && hashList.length && !expanded
+                    ? '80px'
+                    : '16px',
+        }"
+        class="p-2 min-w-[140px] rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
+    >
+        <!-- Compact thumb (collapsed state) -->
+        <button
+            v-if="props.message.role === 'user' && hashList.length && !expanded"
+            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            @click="toggleExpanded"
+            type="button"
+            aria-label="Show attachments"
+        >
+            <template v-if="firstThumb && pdfMeta[firstThumb]">
+                <div class="pdf-thumb w-full h-full">
+                    <div
+                        class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
+                    >
+                        {{ pdfDisplayName }}
+                    </div>
+
+                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
+                </div>
+            </template>
+            <template
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'ready'
+                "
+            >
+                <img
+                    :src="thumbnails[firstThumb!]?.url"
+                    :alt="'attachment ' + firstThumb.slice(0, 6)"
+                    class="object-cover w-full h-full"
+                    draggable="false"
+                />
+            </template>
+            <template
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'error'
+                "
+            >
+                <span class="text-[10px] text-error">err</span>
+            </template>
+            <template v-else>
+                <span class="text-[10px] animate-pulse opacity-70">…</span>
+            </template>
+            <span
+                v-if="hashList.length > 1"
+                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
+                >+{{ hashList.length - 1 }}</span
+            >
+        </button>
+
+        <div v-if="!editing" :class="innerClass" ref="contentEl">
+            <!-- Retro loader extracted to component -->
+            <LoadingGenerating
+                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
+                class="animate-in"
+            />
+            <div
+                v-if="
+                    props.message.role === 'assistant' &&
+                    props.message.reasoning_text
+                "
+            >
+                <LazyChatReasoningAccordion
+                    hydrate-on-visible
+                    :content="props.message.reasoning_text"
+                    :streaming="isStreamingReasoning as boolean"
+                    :pending="(props.message as any).pending"
+                />
+            </div>
+            <div v-if="hasContent" v-html="rendered"></div>
+        </div>
+        <!-- Editing surface -->
+        <div v-else class="w-full">
+            <LazyChatMessageEditor
+                hydrate-on-interaction="focus"
+                v-model="draft"
+                :autofocus="true"
+                :focus-delay="120"
+            />
+            <div class="flex w-full justify-end gap-2 mt-2">
+                <UButton
+                    size="sm"
+                    color="success"
+                    class="retro-btn"
+                    @click="saveEdit"
+                    :loading="saving"
+                    >Save</UButton
+                >
+                <UButton
+                    size="sm"
+                    color="error"
+                    class="retro-btn"
+                    @click="cancelEdit"
+                    >Cancel</UButton
+                >
+            </div>
+        </div>
+
+        <!-- Expanded grid -->
+        <MessageAttachmentsGallery
+            v-if="hashList.length && expanded"
+            :hashes="hashList"
+            @collapse="toggleExpanded"
+        />
+
+        <!-- Action buttons: overlap bubble border half outside -->
+        <div
+            v-if="!editing"
+            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+        >
+            <UButtonGroup
+                :class="{
+                    'bg-primary': props.message.role === 'user',
+                    'bg-white': props.message.role === 'assistant',
+                }"
+                class="rounded-[3px]"
+            >
+                <UTooltip :delay-duration="0" text="Copy" :teleport="true">
+                    <UButton
+                        @click="copyMessage"
+                        icon="pixelarticons:copy"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip
+                    :delay-duration="0"
+                    text="Retry"
+                    :popper="{ strategy: 'fixed' }"
+                    :teleport="true"
+                >
+                    <UButton
+                        icon="pixelarticons:reload"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        @click="onRetry"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Branch" :teleport="true">
+                    <UButton
+                        @click="onBranch"
+                        icon="pixelarticons:git-branch"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Edit" :teleport="true">
+                    <UButton
+                        icon="pixelarticons:edit-box"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        @click="beginEdit"
+                    ></UButton>
+                </UTooltip>
+                <!-- Dynamically registered plugin actions -->
+                <template v-for="action in extraActions" :key="action.id">
+                    <UTooltip
+                        :delay-duration="0"
+                        :text="action.tooltip"
+                        :teleport="true"
+                    >
+                        <UButton
+                            :icon="action.icon"
+                            color="info"
+                            size="sm"
+                            class="text-black dark:text-white/95 flex items-center justify-center"
+                            @click="() => runExtraAction(action)"
+                        ></UButton>
+                    </UTooltip>
+                </template>
+            </UButtonGroup>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import {
+    computed,
+    reactive,
+    ref,
+    watch,
+    onBeforeUnmount,
+    nextTick,
+    onMounted,
+} from 'vue';
+import LoadingGenerating from './LoadingGenerating.vue';
+import { parseFileHashes } from '~/db/files-util';
+import { getFileMeta } from '~/db/files';
+import { marked } from 'marked';
+import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
+import { useMessageEditing } from '~/composables/useMessageEditing';
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null; // serialized array
+};
+
+import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+
+// Local UI message expects content to be a string (rendered markdown/html)
+type UIMessage = Omit<ChatMessageType, 'content'> & {
+    content: string;
+    pending?: boolean;
+    reasoning_text?: string | null;
+};
+
+const props = defineProps<{ message: UIMessage; threadId?: string }>();
+const emit = defineEmits<{
+    (e: 'retry', id: string): void;
+    (e: 'branch', id: string): void;
+    (e: 'edited', payload: { id: string; content: string }): void;
+}>();
+
+const isStreamingReasoning = computed(() => {
+    return props.message.reasoning_text && !hasContent.value;
+});
+
+const outerClass = computed(() => ({
+    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+        props.message.role === 'user',
+    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
+        props.message.role === 'assistant',
+}));
+
+const innerClass = computed(() => ({
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+        props.message.role === 'assistant',
+}));
+
+// Detect if assistant message currently has any textual content yet
+const hasContent = computed(() => {
+    const c: any = props.message.content;
+    if (typeof c === 'string') return c.trim().length > 0;
+    if (Array.isArray(c))
+        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
+    return false;
+});
+
+// Extract hash list (serialized JSON string or array already?)
+const hashList = computed<string[]>(() => {
+    const raw = (props.message as any).file_hashes;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string') return parseFileHashes(raw);
+    return [];
+});
+
+// Render markdown/text. For assistant messages keep existing inline images during live stream.
+// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
+const rendered = computed(() => {
+    const raw = props.message.content || '';
+    const parsed = (marked.parse(raw) as string) || '';
+    if (props.message.role === 'user') {
+        return parsed.replace(/<img\b[^>]*>/gi, '');
+    }
+    const hasAnyImg = /<img\b/i.test(parsed);
+    if (hasAnyImg) return parsed; // live streaming case retains inline imgs
+    if (hashList.value.length) {
+        const placeholders = hashList.value
+            .map(
+                (h) =>
+                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
+            )
+            .join('');
+        return parsed + placeholders;
+    }
+    return parsed;
+});
+
+// Editing (extracted)
+const {
+    editing,
+    draft,
+    saving,
+    beginEdit,
+    cancelEdit,
+    saveEdit: internalSaveEdit,
+} = useMessageEditing(props.message);
+async function saveEdit() {
+    await internalSaveEdit();
+    if (!editing.value) {
+        const id = (props.message as any).id;
+        if (id) emit('edited', { id, content: draft.value });
+    }
+}
+
+// (hashList defined earlier)
+
+// Compact thumb preview support (attachments gallery handles full grid). Reuse global caches.
+interface ThumbState {
+    status: 'loading' | 'ready' | 'error';
+    url?: string;
+}
+const thumbnails = reactive<Record<string, ThumbState>>({});
+// PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
+const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
+const safePdfName = computed(() => {
+    const h = firstThumb.value;
+    if (!h) return 'document.pdf';
+    const m = pdfMeta[h];
+    return (m && m.name) || 'document.pdf';
+});
+// Short display (keep extension, truncate middle if long)
+const pdfDisplayName = computed(() => {
+    const name = safePdfName.value;
+    const max = 18;
+    if (name.length <= max) return name;
+    const dot = name.lastIndexOf('.');
+    const ext = dot > 0 ? name.slice(dot) : '';
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    const keep = max - ext.length - 3; // 3 for ellipsis
+    if (keep <= 4) return base.slice(0, max - 3) + '...';
+    const head = Math.ceil(keep / 2);
+    const tail = Math.floor(keep / 2);
+    return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
+});
+const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
+    string,
+    ThumbState
+>());
+const thumbLoadPromises = ((globalThis as any).__or3ThumbInflight ||= new Map<
+    string,
+    Promise<void>
+>());
+// Reference counts per file hash so we can safely revoke object URLs when unused.
+const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
+    string,
+    number
+>());
+
+function retainThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    thumbRefCounts.set(hash, prev + 1);
+}
+function releaseThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    if (prev <= 1) {
+        thumbRefCounts.delete(hash);
+        const state = thumbCache.get(hash);
+        if (state?.url) {
+            try {
+                URL.revokeObjectURL(state.url);
+            } catch {}
+        }
+        thumbCache.delete(hash);
+    } else {
+        thumbRefCounts.set(hash, prev - 1);
+    }
+}
+
+// Per-message persistent UI state stored directly on the message object to
+// survive virtualization recycling without external maps.
+const expanded = ref<boolean>(
+    (props.message as any)._expanded === true || false
+);
+watch(expanded, (v) => ((props.message as any)._expanded = v));
+const firstThumb = computed(() => hashList.value[0]);
+function toggleExpanded() {
+    if (!hashList.value.length) return;
+    expanded.value = !expanded.value;
+}
+
+async function ensureThumb(h: string) {
+    // If we already know it's a PDF just ensure meta exists.
+    if (pdfMeta[h]) return;
+    if (thumbnails[h] && thumbnails[h].status === 'ready') return;
+    const cached = thumbCache.get(h);
+    if (cached) {
+        thumbnails[h] = cached;
+        return;
+    }
+    if (thumbLoadPromises.has(h)) {
+        await thumbLoadPromises.get(h);
+        const after = thumbCache.get(h);
+        if (after) thumbnails[h] = after;
+        return;
+    }
+    thumbnails[h] = { status: 'loading' };
+    const p = (async () => {
+        try {
+            const [blob, meta] = await Promise.all([
+                (await import('~/db/files')).getFileBlob(h),
+                getFileMeta(h).catch(() => undefined),
+            ]);
+            if (meta && meta.kind === 'pdf') {
+                pdfMeta[h] = { name: meta.name, kind: meta.kind };
+                // Remove the temporary loading state since we won't have an image thumb
+                delete thumbnails[h];
+                return;
+            }
+            if (!blob) throw new Error('missing');
+            if (blob.type === 'application/pdf') {
+                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
+                delete thumbnails[h];
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const ready: ThumbState = { status: 'ready', url };
+            thumbCache.set(h, ready);
+            thumbnails[h] = ready;
+        } catch {
+            const err: ThumbState = { status: 'error' };
+            thumbCache.set(h, err);
+            thumbnails[h] = err;
+        } finally {
+            thumbLoadPromises.delete(h);
+        }
+    })();
+    thumbLoadPromises.set(h, p);
+    await p;
+}
+
+// Track current hashes used by this message for ref counting.
+const currentHashes = new Set<string>();
+// Load new hashes when list changes with diffing for retain/release.
+watch(
+    hashList,
+    async (list) => {
+        const nextSet = new Set(list);
+        // Additions
+        for (const h of nextSet) {
+            if (!currentHashes.has(h)) {
+                await ensureThumb(h);
+                // Only retain if loaded and ready
+                const state = thumbCache.get(h);
+                if (state?.status === 'ready') retainThumb(h);
+                currentHashes.add(h);
+            }
+        }
+        // Removals
+        for (const h of Array.from(currentHashes)) {
+            if (!nextSet.has(h)) {
+                currentHashes.delete(h);
+                releaseThumb(h);
+            }
+        }
+    },
+    { immediate: true }
+);
+
+// Cleanup: release all thumbs used by this message.
+onBeforeUnmount(() => {
+    for (const h of currentHashes) releaseThumb(h);
+    currentHashes.clear();
+});
+// Inline image hydration: replace <img data-file-hash> with object URL once ready
+const contentEl = ref<HTMLElement | null>(null);
+async function hydrateInlineImages() {
+    // Only hydrate assistant messages (users have inline images stripped).
+    if (props.message.role !== 'assistant') return;
+    await nextTick();
+    const root = contentEl.value;
+    if (!root) return;
+    const imgs = root.querySelectorAll(
+        'img[data-file-hash]:not([data-hydrated])'
+    );
+    imgs.forEach((imgEl) => {
+        const hash = imgEl.getAttribute('data-file-hash') || '';
+        if (!hash) return;
+        const state = thumbCache.get(hash) || thumbnails[hash];
+        if (state && state.status === 'ready' && state.url) {
+            (imgEl as HTMLImageElement).src = state.url;
+            imgEl.setAttribute('data-hydrated', 'true');
+            imgEl.classList.remove('opacity-60');
+        }
+    });
+}
+// Re-run hydration when rendered HTML changes or thumbnails update
+watch(rendered, () => hydrateInlineImages());
+watch(hashList, () => hydrateInlineImages());
+onMounted(() => hydrateInlineImages());
+
+watch(
+    () =>
+        Object.keys(thumbnails).map((h) => {
+            const t = thumbnails[h]!; // state always initialized before use
+            return t.status + ':' + (t.url || '');
+        }),
+    () => hydrateInlineImages()
+);
+import { useToast } from '#imports';
+function copyMessage() {
+    navigator.clipboard.writeText(props.message.content);
+
+    useToast().add({
+        title: 'Message copied',
+        description: 'The message content has been copied to your clipboard.',
+        duration: 2000,
+    });
+}
+
+function onRetry() {
+    const id = (props.message as any).id;
+    if (!id) return;
+    emit('retry', id);
+}
+
+import { forkThread, retryBranch } from '~/db/branching';
+import {
+    useMessageActions,
+    type ChatMessageAction,
+} from '~/composables/useMessageActions';
+
+// Branch popover state
+const branchMode = ref<'reference' | 'copy'>('copy');
+const branchModes = [
+    { label: 'Reference', value: 'reference' },
+    { label: 'Copy', value: 'copy' },
+];
+const branchTitle = ref('');
+const branching = ref(false);
+
+async function onBranch() {
+    if (branching.value) return;
+    branching.value = true;
+    const messageId = (props.message as any).id;
+    if (!messageId) return;
+    try {
+        let res: any;
+        // For assistant messages we now allow direct anchoring (captures assistant content in branch).
+        // If "retry" semantics desired, a separate Retry action still uses retryBranch.
+        res = await forkThread({
+            sourceThreadId: props.threadId || '',
+            anchorMessageId: messageId,
+            mode: branchMode.value,
+            titleOverride: branchTitle.value || undefined,
+        });
+        emit('branch', res.thread.id);
+        useToast().add({
+            title: 'Branched',
+            description: `New branch: ${res.thread.title}`,
+            color: 'primary',
+            duration: 2200,
+        });
+    } catch (e: any) {
+        useToast().add({
+            title: 'Branch failed',
+            description: e?.message || 'Error creating branch',
+            color: 'error',
+            duration: 3000,
+        });
+    } finally {
+        branching.value = false;
+    }
+}
+
+// Extensible message actions (plugin registered)
+// Narrow to expected role subset (exclude potential 'system' etc.)
+const extraActions = useMessageActions({
+    role: props.message.role as 'user' | 'assistant',
+});
+async function runExtraAction(action: ChatMessageAction) {
+    try {
+        await action.handler({
+            message: props.message,
+            threadId: props.threadId,
+        });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        // eslint-disable-next-line no-console
+        console.error('Message action error', action.id, e);
+    }
+}
+</script>
+
+<style scoped>
+/* PDF compact thumb */
+.pdf-thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    background: linear-gradient(
+        180deg,
+        var(--md-surface-container-lowest) 0%,
+        var(--md-surface-container-low) 100%
+    );
+    width: 100%;
+    height: 100%;
+    padding: 2px 2px 3px;
+    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
+        2px 2px 0 0 var(--md-inverse-surface);
+    font-family: 'VT323', monospace;
+}
+.pdf-thumb__icon {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--md-inverse-surface);
+    width: 100%;
+}
+.pdf-thumb__name {
+    font-size: 8px;
+    line-height: 1.05;
+    font-weight: 600;
+    text-align: center;
+    max-height: 3.2em;
+    overflow: hidden;
+    display: -webkit-box;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    margin-top: 1px;
+    padding: 0 1px;
+    text-shadow: 0 1px 0 #000;
+    color: var(--md-inverse-on-surface);
+}
+.pdf-thumb__ext {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--md-inverse-surface);
+    color: var(--md-inverse-on-surface);
+    font-size: 7px;
+    font-weight: 700;
+    padding: 1px 3px;
+    letter-spacing: 0.5px;
+    box-shadow: 1px 1px 0 0 #000;
+}
+.pdf-thumb::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background: linear-gradient(
+        135deg,
+        var(--md-surface-container-low) 0%,
+        var(--md-surface-container-high) 100%
+    );
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
+}
+</style>
+```
+
 ## File: app/components/sidebar/SideNavContent.vue
 ```vue
 <template>
@@ -15434,7 +16508,8 @@ export function useChat(
                 </div>
             </div>
             <!-- Documents list -->
-            <SidebarDocumentsList
+            <LazySidebarDocumentsList
+                hydrate-on-idle
                 v-if="activeSections.docs"
                 class="mt-4"
                 :external-docs="displayDocuments"
