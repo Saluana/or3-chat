@@ -98,7 +98,7 @@
                                     size="sm"
                                     class="w-full justify-start"
                                     @click="() => runExtraAction(action, t)"
-                                    >{{ action?.tooltip || '' }}</UButton
+                                    >{{ action.label || '' }}</UButton
                                 >
                             </template>
                         </div>
@@ -111,7 +111,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { liveQuery } from 'dexie';
-import { db } from '~/db';
+import { db, type Thread } from '~/db';
 import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
 
 const props = defineProps<{
@@ -159,14 +159,14 @@ const effectiveThreads = computed(() =>
     Array.isArray(props.externalThreads) ? props.externalThreads : threads.value
 );
 
-// Extensible thread actions (plugin registered)
-const extraActions = useMessageActions({ role: 'assistant' }); // Use assistant actions as default
+// Extensible message actions (plugin registered)
+// Narrow to expected role subset (exclude potential 'system' etc.)
+const extraActions = useThreadHistoryActions();
 
-async function runExtraAction(action: any, thread: any) {
+async function runExtraAction(action: any, thread: Thread) {
     try {
         await action.handler({
-            message: thread, // Adapt to message interface
-            threadId: thread.id,
+            thread,
         });
     } catch (e: any) {
         try {

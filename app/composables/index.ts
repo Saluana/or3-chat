@@ -4,3 +4,4 @@ export * from './useAutoScroll';
 export * from './useObservedElementSize';
 export * from './ui-extensions/messages/useMessageActions';
 export * from './ui-extensions/documents/useDocumentHistoryActions';
+export * from './ui-extensions/threads/useThreadHistoryActions';
