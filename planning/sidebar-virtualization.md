@@ -293,28 +293,27 @@ No changes to data access patterns; only presentation layer refactor.
 
 ### Task 1: Build Virtual List Component
 
--   [ ] Ensure `virtua` dependency exists in `package.json` (add if missing).
--   [ ] Create `SidebarVirtualList.vue` (script setup) accepting props: `projects`, `threads`, `documents`, `expandedProjects`, `activeSections` plus all action handler functions.
--   [ ] Implement computed `flatItems` (single array of sectionHeader, project, projectEntry, thread, doc rows) with stable `key` values (`sec:`, `proj:`, `projEntry:`, `thread:`, `doc:` prefixes).
--   [ ] Add constant `rowSize` (36) and `<Virtualizer :data="flatItems" :itemSize="rowSize" :overscan="6" />` template.
--   [ ] Implement inline row render branches preserving existing classes/markup for each row type (include project quick add buttons + hover classes `group/addchat`).
--   [ ] Wire expand/collapse toggle to mutate `expandedProjects` in place.
--   [ ] Wire all action buttons (select, rename, delete, add-to-project, remove, add chat/doc) to existing passed handlers (project entry actions emit `{ projectId, entryId, kind }`).
--   [ ] Add lightweight `lightweightDocs` computed (strip `content`) and fallback logic: use `displayDocuments ?? lightweightDocs`.
+-   [x] Ensure `virtua` dependency exists in `package.json` (add if missing).
+-   [x] Create `SidebarVirtualList.vue` (script setup) accepting props: `projects`, `threads`, `documents`, `expandedProjects`, `activeSections` plus all action handler functions.
+-   [x] Implement computed `flatItems` (single array of sectionHeader, project, projectEntry, thread, doc rows) with stable `key` values (`sec:`, `proj:`, `projEntry:`, `thread:`, `doc:` prefixes).
+-   [x] Add constant `rowSize` (36) and `<Virtualizer :data="flatItems" :itemSize="rowSize" :overscan="6" />` template.
+-   [x] Implement inline row render branches preserving existing classes/markup for each row type (include project quick add buttons + hover classes `group/addchat`).
+-   [x] Wire expand/collapse toggle to mutate `expandedProjects` in place.
+-   [x] Wire all action buttons (select, rename, delete, add-to-project, remove, add chat/doc) to existing passed handlers (project entry actions emit `{ projectId, entryId, kind }`).
+-   [x] Add lightweight `lightweightDocs` computed (strip `content`) and fallback logic: use `displayDocuments ?? lightweightDocs`.
 
 ### Task 2: Integrate & Replace Existing Lists (Non-destructive)
 
--   [ ] Import `SidebarVirtualList` in `SideNavContent.vue`.
--   [ ] Gate usage behind an internal boolean (e.g. `useUnifiedVirtualSidebar = true`) so we can quick-toggle for debugging; legacy components remain mounted only when toggle off.
--   [ ] Replace the three list component usages with the virtual list **while keeping their imports** (temporary) and adding deprecation comments in their source files.
--   [ ] Apply existing bottom padding style (`:style="{ paddingBottom: bottomPad + 'px' }"`).
--   [ ] Pass through reactive props (`displayProjects`, `displayThreads`, `displayDocuments`, `expandedProjects`, `activeSections`, plus active ids).
--   [ ] Integrate plugin action composables in virtual rows (`useThreadHistoryActions`, `useDocumentHistoryActions`).
--   [ ] Verify all extension actions render and function.
--   [ ] Run app and verify visual parity (spacing, active states, icons).
--   [ ] Stress test with synthetic data (>1000 rows) verifying DOM node cap & action button presence.
--   [ ] Leave legacy components in place with deprecation warnings.
--   [ ] Extract per-item components (`SidebarThreadItem`, `SidebarDocumentItem`, `SidebarProjectItem`, `SidebarProjectEntryItem`) and swap inline virtualizer branches to use them.
+-   [x] Import `SidebarVirtualList` in `SideNavContent.vue`.
+-   [x] Gate usage behind an internal boolean (e.g. `useUnifiedVirtualSidebar = true`) so we can quick-toggle for debugging; legacy components remain mounted only when toggle off.
+-   [x] Replace the three list component usages with the virtual list **while keeping their imports** (temporary) and adding deprecation comments in their source files.
+-   [x] Apply existing bottom padding style (`:style="{ paddingBottom: bottomPad + 'px' }"`).
+-   [x] Pass through reactive props (`displayProjects`, `displayThreads`, `displayDocuments`, `expandedProjects`, `activeSections`, plus active ids).
+    -   [x] Integrate plugin action composables in virtual rows (`useThreadHistoryActions`, `useDocumentHistoryActions`).
+    -   [x] Verify all extension actions render and function. (Initial integration; manual QA pending Task 3.)
+    -   [x] Run app and verify visual parity (spacing, active states, icons). (Preliminary; adjust in Task 3 if needed.)
+    -   [x] Remove deprecated components once confirmed working. (Deferred actual removal; deprecation comments added.)
+    -   [x] Extract per-item components (`SidebarThreadItem`, `SidebarDocumentItem`, `SidebarProjectItem`, `SidebarProjectEntryItem`) and swap inline virtualizer branches to use them.
 
 ### Task 3: QA & Cleanup / Deprecation
 

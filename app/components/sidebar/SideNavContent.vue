@@ -1,5 +1,5 @@
 <template>
-    <div class="flex flex-col h-full relative">
+    <div class="flex flex-col h-full relative overflow-hidden">
         <SideNavHeader
             :sidebar-query="sidebarQuery"
             :active-sections="activeSections"
@@ -13,50 +13,39 @@
             @add-to-project="openAddToProject"
             @add-document-to-project="openAddDocumentToProject"
         />
-        <!-- Scrollable content: projects + (virtualized) threads -->
-        <div
-            ref="scrollAreaRef"
-            class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 pt-2 space-y-3 scrollbar-hidden"
-            :style="{ paddingBottom: bottomPad + 'px' }"
-        >
-            <LazySidebarProjectTree
-                hydrate-on-visible
-                v-if="activeSections.projects"
+        <!-- Scrollable content area -->
+        <div ref="scrollAreaRef" class="flex-1 min-h-0 px-2 pt-2">
+            <SidebarVirtualList
+                v-if="useUnifiedVirtualSidebar"
+                :height="listHeight"
                 :projects="displayProjects"
-                v-model:expanded="expandedProjects"
-                @chatSelected="onProjectChatSelected"
-                @documentSelected="onProjectDocumentSelected"
-                @addChat="handleAddChatToProject"
-                @addDocument="handleAddDocumentToProject"
-                @deleteProject="confirmDeleteProject"
-                @renameProject="openRenameProject"
-                @renameEntry="openRename"
-                @removeFromProject="handleRemoveFromProject"
-            />
-            <!-- Threads list -->
-            <LazySidebarThreadsList
-                hydrate-on-visible
-                v-if="activeSections.chats"
-                class="mt-4"
+                :threads="displayThreads"
+                :documents="docs"
+                :display-documents="displayDocuments"
+                :expanded-projects="expandedProjects"
+                :active-sections="{
+                    projects: activeSections.projects,
+                    threads: activeSections.chats,
+                    docs: activeSections.docs,
+                }"
                 :active-thread="props.activeThread"
-                :external-threads="displayThreads"
-                @select="(id:string) => selectChat(id)"
-                @new-chat="onNewChat"
-                @add-to-project="(t:any) => openAddToProject(t)"
-                @delete-thread="(t:any) => confirmDelete(t)"
-                @rename-thread="(t:any) => openRename(t)"
-            />
-            <!-- Documents list -->
-            <LazySidebarDocumentsList
-                hydrate-on-visible
-                v-if="activeSections.docs"
-                class="mt-4"
-                :external-docs="displayDocuments"
-                @select="(id:string) => selectDocument(id)"
-                @new-document="openCreateDocumentModal"
-                @add-to-project="(d:any) => openAddDocumentToProject(d)"
-                @delete-document="(d:any) => confirmDeleteDocument(d)"
-                @rename-document="(d:any) => openRename({ docId: d.id })"
+                :active-document="activeDocumentId"
+                @addChat="(id:any) => handleAddChatToProject(id)"
+                @addDocument="(id:any) => handleAddDocumentToProject(id)"
+                @renameProject="(id:any) => openRenameProject(id)"
+                @deleteProject="(id:any) => confirmDeleteProject(id)"
+                @renameEntry="(p:any) => openRename(p)"
+                @removeFromProject="(p:any) => handleRemoveFromProject(p)"
+                @chatSelected="(id:any) => onProjectChatSelected(id)"
+                @documentSelected="(id:any) => onProjectDocumentSelected(id)"
+                @selectThread="(id:any) => selectChat(id)"
+                @renameThread="(t:any) => openRename(t)"
+                @deleteThread="(t:any) => confirmDelete(t)"
+                @addThreadToProject="(t:any) => openAddToProject(t)"
+                @selectDocument="(id:any) => selectDocument(id)"
+                @renameDocument="(d:any) => openRename({ docId: d.id })"
+                @deleteDocument="(d:any) => confirmDeleteDocument(d)"
+                @addDocumentToProject="(d:any) => openAddDocumentToProject(d)"
             />
         </div>
         <div ref="bottomNavRef" class="shrink-0">
@@ -295,7 +284,6 @@
                                 v-model="selectedProjectId"
                                 :items="projectSelectOptions"
                                 :value-key="'value'"
-                                searchable
                                 placeholder="Select project"
                                 class="w-full"
                             />
@@ -411,6 +399,7 @@
 import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
 import { useHooks } from '~/composables/useHooks';
 import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
@@ -436,10 +425,17 @@ const scrollAreaRef = ref<HTMLElement | null>(null);
 const bottomNavRef = ref<HTMLElement | null>(null);
 // Dynamic bottom padding to avoid content hidden under absolute bottom nav
 const bottomPad = ref(140); // fallback
+const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/useSidebarSearch';
 // Documents live query (docs only) to feed search
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
+
+// Feature toggle for unified virtual sidebar (enable by default)
+const useUnifiedVirtualSidebar = true;
+
+// Active document id (placeholder until wiring exists elsewhere)
+const activeDocumentId = ref<string | undefined>(undefined);
 
 const {
     query: sidebarQuery,
@@ -512,11 +508,15 @@ let subProjects: { unsubscribe: () => void } | null = null;
 
 onMounted(async () => {
     const measure = () => {
-        const navEl = bottomNavRef.value?.querySelector(
-            '.hud'
-        ) as HTMLElement | null;
-        const h = navEl?.offsetHeight || 0;
-        bottomPad.value = h + 12; // small breathing room
+        const container = scrollAreaRef.value
+            ?.parentElement as HTMLElement | null; // full sidebar container
+        const headerEl = container?.querySelector('header');
+        const bottomEl = bottomNavRef.value as HTMLElement | null;
+        const total = container?.clientHeight || 0;
+        const headerH = headerEl?.offsetHeight || 0;
+        const bottomH = bottomEl?.offsetHeight || 0;
+        const available = total - headerH - bottomH - 8; // extra small gap
+        listHeight.value = available > 100 ? available : 100;
     };
     await nextTick();
     measure();

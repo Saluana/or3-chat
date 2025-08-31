@@ -1,3 +1,4 @@
+<!-- DEPRECATED: Superseded by SidebarVirtualList + SidebarThreadItem.vue -->
 <template>
     <div v-if="effectiveThreads.length > 0" class="mt-4">
         <div class="flex items-center justify-between px-1 mb-1">

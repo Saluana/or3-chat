@@ -1,3 +1,4 @@
+<!-- DEPRECATED: Superseded by SidebarVirtualList + SidebarDocumentItem.vue -->
 <template>
     <div v-if="effectiveDocs.length > 0" class="mt-4">
         <div class="flex items-center justify-between px-1 mb-1">
