@@ -9,6 +9,8 @@ useHead({
     htmlAttrs: {
         class: 'light',
     },
+    title: 'or3 chat',
+    link: [{ rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' }],
 });
 
 import { onMounted } from 'vue';

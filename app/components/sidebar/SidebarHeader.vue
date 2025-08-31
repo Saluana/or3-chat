@@ -8,9 +8,11 @@
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
-                <h1 class="text-[14px] font-medium uppercase tracking-wide">
-                    Chat app
-                </h1>
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-[14px] font-medium uppercase tracking-wide">
+                        or3-chat
+                    </h1>
+                </div>
             </slot>
         </div>
 
@@ -59,4 +61,19 @@ function onToggle() {
     /* Elevated surface tone for dark mode header to distinguish from main background */
     background-color: var(--md-surface-container-high) !important;
 }
+
+/* Logo rendering tweaks */
+.logo {
+    width: 20px; /* lock display size */
+    height: 20px;
+    aspect-ratio: 1 / 1;
+    display: block;
+    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
+    /* image-rendering: pixelated; */
+}
+
+/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
+   switch to a DPR-based srcset for sharper sampling:
+   src="/logo-20.png"
+   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
 </style>
