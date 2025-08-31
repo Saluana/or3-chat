@@ -203,12 +203,6 @@ import { marked } from 'marked';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
 
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null; // serialized array
-};
-
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 
 // Local UI message expects content to be a string (rendered markdown/html)
@@ -509,14 +503,11 @@ function onRetry() {
     emit('retry', id);
 }
 
-import { forkThread, retryBranch } from '~/db/branching';
+import { forkThread } from '~/db/branching';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
-const branchModes = [
-    { label: 'Reference', value: 'reference' },
-    { label: 'Copy', value: 'copy' },
-];
+
 const branchTitle = ref('');
 const branching = ref(false);
 
