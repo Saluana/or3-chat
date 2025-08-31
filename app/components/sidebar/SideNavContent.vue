@@ -19,7 +19,8 @@
             class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 pt-2 space-y-3 scrollbar-hidden"
             :style="{ paddingBottom: bottomPad + 'px' }"
         >
-            <SidebarProjectTree
+            <LazySidebarProjectTree
+                hydrate-on-visible
                 v-if="activeSections.projects"
                 :projects="displayProjects"
                 v-model:expanded="expandedProjects"
@@ -34,7 +35,7 @@
             />
             <!-- Threads list -->
             <LazySidebarThreadsList
-                hydrate-on-idle
+                hydrate-on-visible
                 v-if="activeSections.chats"
                 class="mt-4"
                 :active-thread="props.activeThread"
@@ -47,7 +48,7 @@
             />
             <!-- Documents list -->
             <LazySidebarDocumentsList
-                hydrate-on-idle
+                hydrate-on-visible
                 v-if="activeSections.docs"
                 class="mt-4"
                 :external-docs="displayDocuments"
