@@ -3,10 +3,10 @@
         <VList
             :data="flatItems"
             :style="{ height: 'calc(100vh - 318px)' }"
-            class="overflow-y-auto overflow-x-hidden scrollbar-hidden"
+            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
             #default="{ item, index }"
         >
-            <div :key="item.key || index" class="">
+            <div :key="item.key || index">
                 <h1
                     v-if="item.type === 'sectionHeader'"
                     class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"

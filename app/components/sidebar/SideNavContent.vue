@@ -14,9 +14,8 @@
             @add-document-to-project="openAddDocumentToProject"
         />
         <!-- Scrollable content area -->
-        <div ref="scrollAreaRef" class="flex-1 min-h-0 px-2 pt-2">
+        <div ref="scrollAreaRef" class="flex-1 min-h-0 px-2">
             <SidebarVirtualList
-                v-if="useUnifiedVirtualSidebar"
                 :height="listHeight"
                 :projects="displayProjects"
                 :threads="displayThreads"
@@ -398,7 +397,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
 import { useHooks } from '~/composables/useHooks';
-import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
@@ -430,9 +428,6 @@ import { useSidebarSearch } from '~/composables/useSidebarSearch';
 // Documents live query (docs only) to feed search
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
-
-// Feature toggle for unified virtual sidebar (enable by default)
-const useUnifiedVirtualSidebar = true;
 
 // Active document id (placeholder until wiring exists elsewhere)
 const activeDocumentId = ref<string | undefined>(undefined);
