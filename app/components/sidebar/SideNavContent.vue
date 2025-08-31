@@ -27,7 +27,7 @@
                 @documentSelected="onProjectDocumentSelected"
                 @addChat="handleAddChatToProject"
                 @addDocument="handleAddDocumentToProject"
-                @deleteProject="handleDeleteProject"
+                @deleteProject="confirmDeleteProject"
                 @renameProject="openRenameProject"
                 @renameEntry="openRename"
                 @removeFromProject="handleRemoveFromProject"
@@ -166,6 +166,28 @@
                     >Cancel</UButton
                 >
                 <UButton color="error" @click="deleteDocument">Delete</UButton>
+            </template>
+        </UModal>
+
+        <!-- Delete project confirm modal -->
+        <UModal
+            v-model:open="showDeleteProjectModal"
+            title="Delete project?"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Delete project?</h3> </template>
+            <template #body>
+                <p class="text-sm opacity-70">
+                    This will remove the project from the sidebar. Project data
+                    will be soft-deleted and can be recovered.
+                </p>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showDeleteProjectModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="error" @click="deleteProject">Delete</UButton>
             </template>
         </UModal>
 
@@ -596,6 +618,10 @@ const deleteId = ref<string | null>(null);
 const showDeleteDocumentModal = ref(false);
 const deleteDocumentId = ref<string | null>(null);
 
+// Project delete state
+const showDeleteProjectModal = ref(false);
+const deleteProjectId = ref<string | null>(null);
+
 async function openRename(target: any) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
     if (target && typeof target === 'object' && 'entryId' in target) {
@@ -736,11 +762,39 @@ function confirmDelete(thread: any) {
     showDeleteModal.value = true;
 }
 
+// Confirm deletion of a project (opens modal)
+function confirmDeleteProject(projectOrId: any) {
+    // SidebarProjectTree may emit either the project id (string) or
+    // a project object; handle both safely.
+    const id =
+        typeof projectOrId === 'string'
+            ? projectOrId
+            : projectOrId && typeof projectOrId === 'object'
+            ? projectOrId.id
+            : null;
+    if (!id) return;
+    deleteProjectId.value = id as string;
+    showDeleteProjectModal.value = true;
+}
+
 async function deleteThread() {
     if (!deleteId.value) return;
     await dbDel.hard.thread(deleteId.value);
     showDeleteModal.value = false;
     deleteId.value = null;
+}
+
+async function deleteProject() {
+    if (!deleteProjectId.value) return;
+    try {
+        // Use soft delete so project is recoverable like existing handler
+        await dbDel.soft.project(deleteProjectId.value);
+    } catch (e) {
+        console.error('delete project failed', e);
+    } finally {
+        showDeleteProjectModal.value = false;
+        deleteProjectId.value = null;
+    }
 }
 
 // Document delete handling
