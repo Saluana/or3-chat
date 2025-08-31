@@ -413,6 +413,8 @@ import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
+import { updateDocument } from '~/db/documents';
+import { loadDocument } from '~/composables/useDocumentsStore';
 // (Temporarily removed virtualization for chats — use simple list for now)
 
 // Section visibility (multi-select) defaults to all on
@@ -673,12 +675,12 @@ async function saveRename() {
     const maybeDoc = await db.posts.get(renameId.value);
     const now = Math.floor(Date.now() / 1000);
     if (maybeDoc && (maybeDoc as any).postType === 'doc') {
-        // Update doc title
-        await upsert.post({
-            ...(maybeDoc as any),
-            title: renameTitle.value,
-            updated_at: now,
-        });
+        // Update doc title via documents API (fires hooks for sidebar refresh)
+        await updateDocument(renameId.value, { title: renameTitle.value });
+        // Refresh open document state if loaded in editor
+        try {
+            await loadDocument(renameId.value);
+        } catch {}
         // Sync inside projects
         try {
             const allProjects = await db.projects.toArray();

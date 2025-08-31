@@ -13,7 +13,20 @@ export function useDocumentsList(limit = 200) {
         loading.value = true;
         error.value = null;
         try {
-            docs.value = await listDocuments(limit);
+            // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
+            const full = await listDocuments(limit);
+            docs.value = full.map((d: any) => ({
+                // Keep lightweight/meta fields
+                id: d.id,
+                title: d.title,
+                postType: d.postType,
+                created_at: d.created_at,
+                updated_at: d.updated_at,
+                deleted: d.deleted,
+                meta: d.meta,
+                // Drop large content string; empty string placeholder keeps type happy
+                content: '',
+            }));
         } catch (e) {
             error.value = e;
             useToast().add({ color: 'error', title: 'Document: list failed' });

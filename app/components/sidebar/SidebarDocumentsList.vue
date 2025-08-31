@@ -29,6 +29,7 @@
                     'active-element bg-primary/25': d.id === activeDocument,
                 }"
                 @click="$emit('select', d.id)"
+                @mouseenter="onHoverDoc(d as Post)"
             >
                 <span class="truncate flex-1 min-w-0" :title="d.title">{{
                     d.title
@@ -101,6 +102,8 @@
 import { useDocumentsList } from '~/composables/useDocumentsList';
 import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
 import type { Post } from '~/db';
+import { db } from '~/db';
+import { useThrottleFn } from '@vueuse/core';
 const props = defineProps<{ activeDocument?: string; externalDocs?: Post[] }>();
 const emit = defineEmits<{
     (e: 'select', id: string): void;
@@ -122,10 +125,58 @@ function formatTime(ts: number) {
 // Narrow to expected role subset (exclude potential 'system' etc.)
 const extraActions = useDocumentHistoryActions();
 
+// Simple in-memory cache for fetched full docs (session-scoped)
+const fullDocCache = new Map<string, Post>();
+const prefetching = new Set<string>();
+
+async function fetchFullDoc(id: string): Promise<Post | null> {
+    if (fullDocCache.has(id)) return fullDocCache.get(id)!;
+    try {
+        const rec = await db.posts.get(id);
+        if (rec) {
+            fullDocCache.set(id, rec as Post);
+            return rec as Post;
+        }
+    } catch (e) {
+        // swallow; toast will happen in caller if needed
+    }
+    return null;
+}
+
+// Throttled hover prefetch (avoid spamming when user scrubs list)
+const doPrefetch = useThrottleFn(async (id: string) => {
+    if (fullDocCache.has(id) || prefetching.has(id)) return;
+    prefetching.add(id);
+    await fetchFullDoc(id);
+    prefetching.delete(id);
+}, 300);
+
+function onHoverDoc(d: Post) {
+    if (!d || !d.id) return;
+    // Only prefetch if we currently have no content cached
+    if (!fullDocCache.has(d.id)) doPrefetch(d.id);
+}
+
 async function runExtraAction(action: DocumentHistoryAction, document: Post) {
     try {
+        let docToSend = document;
+        if (!docToSend.content || docToSend.content.length === 0) {
+            const full = await fetchFullDoc(document.id);
+            if (full) docToSend = full;
+            else {
+                try {
+                    useToast().add({
+                        title: 'Document not available',
+                        description: 'Failed to load full content',
+                        color: 'error',
+                        duration: 3000,
+                    });
+                } catch {}
+                return; // abort action if we cannot get content
+            }
+        }
         await action.handler({
-            document: document,
+            document: docToSend,
         });
     } catch (e: any) {
         try {

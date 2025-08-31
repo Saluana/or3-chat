@@ -138,6 +138,22 @@ function onTitleChange() {
     setDocumentTitle(props.documentId, titleDraft.value);
 }
 
+// Reflect external title updates (e.g., sidebar rename) into the input when
+// we're not currently staging a local pendingTitle.
+watch(
+    () => state.value.record?.title,
+    (newTitle) => {
+        if (
+            typeof newTitle === 'string' &&
+            newTitle.length > 0 &&
+            newTitle !== titleDraft.value &&
+            state.value.pendingTitle === undefined // don't clobber local edits
+        ) {
+            titleDraft.value = newTitle;
+        }
+    }
+);
+
 function emitContent() {
     if (!editor.value) return;
     const json = editor.value.getJSON();
