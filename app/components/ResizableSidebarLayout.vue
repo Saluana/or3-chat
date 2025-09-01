@@ -1,6 +1,6 @@
 <template>
     <div
-        class="relative w-full h-screen border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
     >
         <!-- Backdrop on mobile when open -->
         <Transition

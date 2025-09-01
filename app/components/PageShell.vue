@@ -18,7 +18,7 @@
                 @focusSearch="focusSidebarSearch"
             />
         </template>
-        <div class="flex-1 h-screen w-full relative">
+        <div class="flex-1 h-[100dvh] w-full relative">
             <div
                 id="top-nav"
                 :class="{

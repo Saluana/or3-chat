@@ -15,7 +15,7 @@
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
+                    class="max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
