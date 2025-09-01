@@ -6,6 +6,8 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import json from 'highlight.js/lib/languages/json';
 import xml from 'highlight.js/lib/languages/xml';
 import python from 'highlight.js/lib/languages/python';
+import rust from 'highlight.js/lib/languages/rust';
+import css from 'highlight.js/lib/languages/css';
 
 // Register only needed languages to keep bundle smaller
 hljs.registerLanguage('javascript', javascript);
@@ -13,6 +15,9 @@ hljs.registerLanguage('typescript', typescript);
 hljs.registerLanguage('json', json);
 hljs.registerLanguage('xml', xml);
 hljs.registerLanguage('python', python);
+hljs.registerLanguage('html', xml); // alias
+hljs.registerLanguage('rust', rust); // alias
+hljs.registerLanguage('css', css); // alias
 
 // Configure marked with highlight.js
 marked.use(
