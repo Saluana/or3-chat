@@ -1,4 +1,4 @@
-# Local-first OpenRouter Chat & Docs (Nuxt 3)
+# OR3.chat Local-first OpenRouter Chat & Docs (Nuxt 3)
 
 A lightweight, plugin-friendly chat + documents playground that runs entirely in your browser, talks directly to **OpenRouter**, and stores your data locally with **Dexie**. No accounts. No backend. Just open the tab and go.
 
@@ -187,7 +187,3 @@ They’re read when constructing the OpenRouter auth URL and PKCE verifier. &#x2
 -   `app/plugins/hooks.client.ts` — registers the global hook engine.&#x20;
 -   `app/plugins/examples/*` — message/doc/tree action examples.&#x20;
 -   `app/pages/docs/*` — documents routes/shell.&#x20;
-
----
-
-If you want, I can slot this straight into your repo as `README.md` and add a minimal `.env.example` with the three OpenRouter runtime keys.
