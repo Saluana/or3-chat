@@ -142,3 +142,7 @@ html {
 .dark .prosemirror-host :where(.ProseMirror) strong {
 	color: var(--md-on-surface);
 }
+
+.hljs {
+	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
+}
