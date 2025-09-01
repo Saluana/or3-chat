@@ -1,12 +1,12 @@
 <template>
     <main
         ref="containerRoot"
-        class="flex w-full flex-1 flex-col overflow-hidden"
+        class="flex w-full flex-1 flex-col overflow-hidden relative min-h-[100dvh]"
     >
         <!-- Scroll viewport -->
         <div
             ref="scrollParent"
-            class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
             :style="{ paddingBottom: bottomPad + 'px' }"
         >
             <div
@@ -56,10 +56,8 @@
             </div>
         </div>
         <!-- Input area overlay -->
-        <div class="pointer-events-none absolute bottom-0 top-0 w-full">
-            <div
-                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1"
-            >
+        <div :class="inputWrapperClass" :style="inputWrapperStyle">
+            <div :class="innerInputContainerClass">
                 <chat-input-dropper
                     ref="chatInputEl"
                     :loading="loading"
@@ -70,6 +68,7 @@
                     @model-change="onModelChange"
                     @stop-stream="onStopStream"
                     @pending-prompt-selected="onPendingPromptSelected"
+                    @resize="onInputResize"
                     class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
                 />
             </div>
@@ -95,6 +94,7 @@ import VirtualMessageList from './VirtualMessageList.vue';
 // (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
 import { useElementSize } from '@vueuse/core';
+import { isMobile } from '~/state/global';
 
 const model = ref('openai/gpt-oss-120b');
 const pendingPromptId = ref<string | null>(null);
@@ -105,11 +105,34 @@ const { width: containerWidth } = useElementSize(containerRoot);
 // Dynamic chat input height to compute scroll padding
 const chatInputEl = ref<HTMLElement | null>(null);
 const { height: chatInputHeight } = useElementSize(chatInputEl);
-const bottomPad = computed(() => {
-    // Add extra breathing space so last message sits above input slightly
-    const h = chatInputHeight.value || 140; // fallback similar to prior fixed 165
-    return Math.round(h + 36); // 36px buffer
-});
+// Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
+const emittedInputHeight = ref<number | null>(null);
+const effectiveInputHeight = computed(
+    () => emittedInputHeight.value || chatInputHeight.value || 140
+);
+const bottomPad = computed(() => Math.round(effectiveInputHeight.value + 36));
+
+// Mobile fixed wrapper classes/styles
+const inputWrapperClass = computed(() =>
+    isMobile.value
+        ? 'pointer-events-none fixed left-0 right-0 w-full z-40'
+        : 'pointer-events-none absolute bottom-0 top-0 w-full'
+);
+const inputWrapperStyle = computed(() =>
+    isMobile.value
+        ? {
+              bottom: 'max(0px, env(safe-area-inset-bottom))',
+          }
+        : {}
+);
+const innerInputContainerClass = computed(() =>
+    isMobile.value
+        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1'
+        : 'pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1'
+);
+function onInputResize(e: { height: number }) {
+    emittedInputHeight.value = e?.height || null;
+}
 
 function onModelChange(newModel: string) {
     model.value = newModel;
@@ -334,6 +357,15 @@ watch(currentThreadId, () => {
 // When input height changes and user was at bottom, keep them pinned
 watch(
     () => chatInputHeight.value,
+    async () => {
+        await nextTick();
+        if (autoScroll.atBottom.value) {
+            autoScroll.scrollToBottom({ smooth: false });
+        }
+    }
+);
+watch(
+    () => emittedInputHeight.value,
     async () => {
         await nextTick();
         if (autoScroll.atBottom.value) {

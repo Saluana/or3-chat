@@ -15,7 +15,7 @@
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
+                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
@@ -317,6 +317,7 @@ import {
     onMounted,
     onBeforeUnmount,
     watch,
+    getCurrentInstance,
 } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
@@ -327,7 +328,7 @@ import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
-import { isMobile } from '~/state/global';
+import { isMobile, state } from '~/state/global';
 import { useUserApiKey } from '~/composables/useUserApiKey';
 import { useOpenRouterAuth } from '~/composables/useOpenrouter';
 import { useToast } from '#imports';
@@ -467,6 +468,7 @@ const emit = defineEmits<{
     (e: 'trigger-file-input'): void;
     (e: 'pending-prompt-selected', promptId: string | null): void;
     (e: 'stop-stream'): void; // New event for stopping the stream
+    (e: 'resize', payload: { height: number }): void;
 }>();
 
 const promptText = ref('');
@@ -720,6 +722,21 @@ const handleSend = () => {
                     onClick: () => startLogin(),
                     size: 'sm',
                 },
+                {
+                    label: 'Manually enter key',
+                    onClick: (toast) => {
+                        const apiKey = prompt(
+                            'Please enter your OpenRouter API key:'
+                        );
+
+                        if (apiKey && apiKey.trim()) {
+                            // Save the API key
+                            state.value.openrouterKey = apiKey.trim();
+                        }
+                    },
+                    size: 'sm',
+                    variant: 'link',
+                },
             ],
         });
         return;
@@ -758,6 +775,27 @@ const handlePromptSelected = (id: string) => {
 const handlePromptModalClosed = () => {
     /* modal closed */
 };
+
+// Emit live height via ResizeObserver (debounced with rAF)
+let __resizeRaf: number | null = null;
+onMounted(() => {
+    if (!process.client) return;
+    const rootEl = (getCurrentInstance()?.proxy?.$el as HTMLElement) || null;
+    if (!rootEl || !('ResizeObserver' in window)) return;
+    const ro = new ResizeObserver(() => {
+        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
+        __resizeRaf = requestAnimationFrame(() => {
+            emit('resize', { height: rootEl.offsetHeight });
+        });
+    });
+    ro.observe(rootEl);
+    onBeforeUnmount(() => {
+        try {
+            ro.disconnect();
+        } catch {}
+        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
+    });
+});
 </script>
 
 <style scoped>

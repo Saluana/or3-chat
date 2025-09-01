@@ -28,6 +28,7 @@ import { openRouterStream } from '~/utils/chat/openrouterStream';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
 import { promptJsonToString } from '~/utils/prompt-utils';
+import { state } from '~/state/global';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
@@ -40,11 +41,17 @@ export function useChat(
     const loading = ref(false);
     const abortController = ref<AbortController | null>(null);
     const aborted = ref(false);
-    const { apiKey } = useUserApiKey();
+    let { apiKey, setKey } = useUserApiKey();
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
     const historyLoadedFor = ref<string | null>(null);
+
+    if (import.meta.dev) {
+        if (state.value.openrouterKey && apiKey) {
+            setKey(state.value.openrouterKey);
+        }
+    }
 
     // Integrated streaming tail state
     const streamId = ref<string | null>(null);

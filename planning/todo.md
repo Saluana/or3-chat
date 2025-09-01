@@ -1,6 +1,6 @@
 WHERE (extension points)
 
--   [ ] More vertical icons in chats / docs / projects
+-   [x] More vertical icons in chats / docs / projects
 -   [ ] Doc editor toolbar (TipTap)
 -   [ ] Chat input tools button
 -   [ ] Allow custom modals (global/modal API)
@@ -24,7 +24,7 @@ Sidebar & Mobile UX
 
 Input & Upload behaviors
 
--   [ ] Enter to send — Shift + Enter new line
+-   [x] Enter to send — Shift + Enter new line
 -   [ ] Block image uploads on unsupported models
 -   [ ] Add visual hint if model doesn’t support uploads
 
