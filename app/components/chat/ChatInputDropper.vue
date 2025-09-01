@@ -363,16 +363,15 @@ onMounted(() => {
             addKeyboardShortcuts() {
                 return {
                     Enter: () => {
-                        // TipTap exposes DOM event on window; use native key combo detection via last keydown
-                        // We'll attach a temporary flag via globalThis for simplicity.
-                        if ((window as any).__lastKeyEvent?.shiftKey)
-                            return false;
-                        (window as any).__suppressNextEnter = true;
-                        // send message
+                        // Disable auto-send on mobile; allow normal newline
+                        if (isMobile.value) return false;
+                        // Respect Shift+Enter for newline
+                        const ev = window.event as KeyboardEvent | undefined;
+                        if (ev?.shiftKey) return false;
                         handleSend();
-                        handleSend();
-                        return true;
+                        return true; // prevent default newline
                     },
+                    'Shift-Enter': () => false, // explicit newline
                 };
             },
         });
