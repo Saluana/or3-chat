@@ -294,24 +294,24 @@ watch(
         autoScroll.onContentIncrease();
     }
 );
-// Unified scroll scheduling for tail updates
+// Unified scroll scheduling for streaming updates.
+// Prior version stacked nextTick + rAF + nextTick creating visible lag.
 let scrollScheduled = false;
 function scheduleScrollIfAtBottom() {
     if (!autoScroll.atBottom.value) return;
     if (scrollScheduled) return;
     scrollScheduled = true;
+    // Single rAF keeps it to one frame; no nested nextTick.
     requestAnimationFrame(() => {
         scrollScheduled = false;
-        nextTick(() => autoScroll.onContentIncrease());
+        autoScroll.onContentIncrease();
     });
 }
 
 // Initial bottom stick after mount (defer to allow user immediate scroll cancel)
-nextTick(() => {
-    setTimeout(() => {
-        if (autoScroll.atBottom.value)
-            autoScroll.scrollToBottom({ smooth: false });
-    }, 0);
+// Initial stick: do on first frame without extra timers.
+requestAnimationFrame(() => {
+    if (autoScroll.atBottom.value) autoScroll.scrollToBottom({ smooth: false });
 });
 
 // Hook: streaming delta buffering

@@ -8,7 +8,7 @@
  * const auto = useAutoScroll(container, { thresholdPx: 64 })
  * auto.onContentIncrease() // call after DOM height increases
  */
-import { ref, onMounted, onBeforeUnmount, nextTick, type Ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount, type Ref } from 'vue';
 import { useEventListener, useThrottleFn } from '@vueuse/core';
 
 export interface AutoScrollApi {
@@ -62,7 +62,9 @@ export function useAutoScroll(
     }
 
     function onContentIncrease() {
-        if (stick) nextTick(() => scrollToBottom({ smooth: false }));
+        // Previously this deferred with nextTick, which combined with callers
+        // already awaiting nextTick created a double frame delay causing jank.
+        if (stick) scrollToBottom({ smooth: false });
         else compute();
     }
 
