@@ -18,7 +18,7 @@
                 @new-chat="onSidebarNewChat"
             />
         </template>
-        <div class="flex-1 h-screen w-full relative">
+        <div class="flex-1 min-h-[100dvh] w-full relative">
             <div
                 id="top-nav"
                 class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"

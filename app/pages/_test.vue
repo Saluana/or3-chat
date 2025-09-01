@@ -30,7 +30,7 @@
         </template>
 
         <!-- Default slot = main content (right side) -->
-        <div class="h-screen overflow-y-scroll">
+        <div class="min-h-[100dvh] overflow-y-scroll">
             <div
                 class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
             ></div>
