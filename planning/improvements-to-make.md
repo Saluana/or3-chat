@@ -19,7 +19,7 @@ Here’s a ruthless, no-nonsense list of the **top 12 fixes** that will most imp
 
 -   On iOS Safari, open keyboard → input stays glued to the bottom, list doesn’t reflow or hide content.
 
----
+## ** DONE **
 
 # 2) Replace vh with dvh everywhere the viewport height matters
 
