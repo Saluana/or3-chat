@@ -82,6 +82,29 @@
                                         "
                                         >Delete Project</UButton
                                     >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="
+                                                !action.showOn ||
+                                                action.showOn.includes('root')
+                                            "
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        root: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
                                 </template>
                                 <template v-else>
                                     <UButton
@@ -92,9 +115,9 @@
                                         icon="pixelarticons:edit"
                                         @click.stop.prevent="
                                             emit('renameEntry', {
-                                                projectId: item.parentId,
+                                                projectId: item.parentId!,
                                                 entryId: item.value,
-                                                kind: item.kind,
+                                                kind: item.kind as ProjectEntryKind,
                                             })
                                         "
                                         >Rename</UButton
@@ -107,13 +130,33 @@
                                         icon="pixelarticons:trash"
                                         @click.stop.prevent="
                                             emit('removeFromProject', {
-                                                projectId: item.parentId,
+                                                projectId: item.parentId!,
                                                 entryId: item.value,
-                                                kind: item.kind,
+                                                kind: item.kind as ProjectEntryKind,
                                             })
                                         "
                                         >Remove from Project</UButton
                                     >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        child: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
                                 </template>
                             </div>
                         </template>
@@ -127,15 +170,37 @@
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
 
+// Distinct kinds of entries that can live under a project.
+// Extend here if we introduce more entry types in the future.
+export type ProjectEntryKind = 'chat' | 'doc';
+
+// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
 interface ProjectEntry {
     id: string;
     name?: string;
-    kind?: string;
+    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
 }
+
 interface ProjectRow {
     id: string;
     name: string;
-    data?: any;
+    // The backing data that encodes the project entries. Can be
+    //  - an already parsed array of ProjectEntry objects
+    //  - a JSON string representing that array
+    //  - anything else (ignored)
+    data?: unknown;
+}
+
+// Shape consumed by UTree. (We only type the properties we actually use.)
+interface TreeItem {
+    label: string;
+    value: string;
+    icon?: string;
+    kind?: ProjectEntryKind; // Only for non-root items
+    parentId?: string; // Only set for child entries
+    defaultExpanded?: boolean;
+    children?: TreeItem[];
+    onSelect?: (e: Event) => void;
 }
 
 const props = defineProps<{
@@ -153,11 +218,11 @@ const emit = defineEmits<{
     (e: 'renameProject', projectId: string): void;
     (
         e: 'renameEntry',
-        payload: { projectId: string; entryId: string; kind?: string }
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
     ): void;
     (
         e: 'removeFromProject',
-        payload: { projectId: string; entryId: string; kind?: string }
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
     ): void;
 }>();
 
@@ -174,7 +239,7 @@ watch(
 );
 watch(internalExpanded, (val) => emit('update:expanded', val));
 
-function normalizeProjectData(p: any): ProjectEntry[] {
+function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
     const raw = p?.data;
     if (Array.isArray(raw)) return raw as ProjectEntry[];
     if (typeof raw === 'string') {
@@ -182,37 +247,42 @@ function normalizeProjectData(p: any): ProjectEntry[] {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) return parsed as ProjectEntry[];
         } catch {
-            /* ignore */
+            // Silently ignore malformed JSON
         }
     }
     return [];
 }
 
-const treeItems = computed<any[]>(() =>
-    props.projects.map((p) => {
-        const children = normalizeProjectData(p).map((entry) => {
-            const kind = entry.kind || 'chat';
-            return {
-                label: entry.name || '(untitled)',
-                value: entry.id,
-                icon:
-                    kind === 'doc'
-                        ? 'pixelarticons:note'
-                        : 'pixelarticons:chat',
-                kind,
-                parentId: p.id,
-                onSelect: (e: Event) => {
-                    if (kind === 'chat') emit('chatSelected', entry.id);
-                    else if (kind === 'doc') emit('documentSelected', entry.id);
-                },
-            };
-        });
+const treeItems = computed<TreeItem[]>(() =>
+    props.projects.map<TreeItem>((p) => {
+        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
+            (entry) => {
+                // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
+                const kind: ProjectEntryKind =
+                    entry.kind === 'doc' ? 'doc' : 'chat';
+                return {
+                    label: entry.name || '(untitled)',
+                    value: entry.id,
+                    icon:
+                        kind === 'doc'
+                            ? 'pixelarticons:note'
+                            : 'pixelarticons:chat',
+                    kind,
+                    parentId: p.id,
+                    onSelect: (e: Event) => {
+                        if (kind === 'chat') emit('chatSelected', entry.id);
+                        else emit('documentSelected', entry.id);
+                        // Prevent default selection behavior if needed by UTree (not sure), otherwise leave.
+                    },
+                };
+            }
+        );
         return {
             label: p.name,
             value: p.id,
             defaultExpanded: false,
             children,
-            onSelect: (e: Event) => e.preventDefault(),
+            onSelect: (e: Event) => e.preventDefault(), // Root projects themselves aren't selectable
         };
     })
 );
@@ -222,6 +292,24 @@ const ui = {
     link: 'group/addchat text-[13px] rounded-[4px] py-1',
     item: 'cursor-pointer ',
 };
+
+// Plugin project tree actions
+const extraActions = useProjectTreeActions();
+async function runExtraAction(action: any, data: { root?: any; child?: any }) {
+    try {
+        await action.handler(data);
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Project tree action error', action.id, e);
+    }
+}
 </script>
 
 <style scoped></style>
