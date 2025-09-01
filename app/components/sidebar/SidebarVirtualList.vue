@@ -29,7 +29,7 @@
                 <div v-else-if="item.type === 'thread'" class="mr-1">
                     <SidebarThreadItem
                         :thread="item.thread"
-                        :active="item.thread.id === activeThread"
+                        :active="activeThreadSet.has(item.thread.id)"
                         class="mb-2"
                         @select="emit('selectThread', $event)"
                         @rename="emit('renameThread', $event)"
@@ -41,7 +41,7 @@
                     <SidebarDocumentItem
                         :doc="item.doc"
                         class="mb-2"
-                        :active="item.doc.id === activeDocument"
+                        :active="activeDocumentSet.has(item.doc.id)"
                         @select="emit('selectDocument', $event)"
                         @rename="emit('renameDocument', $event)"
                         @delete="emit('deleteDocument', $event)"
@@ -117,8 +117,10 @@ const props = defineProps<{
     displayDocuments?: any[]; // optional filtered docs from search
     expandedProjects: string[]; // mutated in place (passed to tree)
     activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
-    activeThread?: string;
-    activeDocument?: string;
+    activeThread?: string; // legacy single selection
+    activeDocument?: string; // legacy single selection
+    activeThreads?: string[]; // new multi-active selection
+    activeDocuments?: string[]; // new multi-active selection
     height: number; // required external measured height
 }>();
 
@@ -184,4 +186,16 @@ const flatItems = computed<SidebarRowItem[]>(() => {
 
 // Constant row size estimate
 const rowSize = 36;
+
+// ---- Multi-active support ----
+const activeThreadSet = computed(() => {
+    if (Array.isArray(props.activeThreads))
+        return new Set(props.activeThreads.filter(Boolean));
+    return new Set(props.activeThread ? [props.activeThread] : []);
+});
+const activeDocumentSet = computed(() => {
+    if (Array.isArray(props.activeDocuments))
+        return new Set(props.activeDocuments.filter(Boolean));
+    return new Set(props.activeDocument ? [props.activeDocument] : []);
+});
 </script>

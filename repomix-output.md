@@ -78,16 +78,28 @@ app/
       PromptEditor.vue
     sidebar/
       ResizeHandle.vue
-      SidebarDocumentsList.vue
+      SidebarDocumentItem.vue
       SidebarHeader.vue
       SidebarProjectTree.vue
+      SidebarThreadItem.vue
+      SidebarVirtualList.vue
       SideBottomNav.vue
       SideNavContent.vue
       SideNavContentCollapsed.vue
+      SideNavHeader.vue
     PageShell.vue
     ResizableSidebarLayout.vue
     RetroGlassBtn.vue
   composables/
+    ui-extensions/
+      documents/
+        useDocumentHistoryActions.ts
+      messages/
+        useMessageActions.ts
+      projects/
+        useProjectTreeActions.ts
+      threads/
+        useThreadHistoryActions.ts
     index.ts
     useActivePrompt.ts
     useAi.ts
@@ -97,7 +109,6 @@ app/
     useDocumentsStore.ts
     useHookEffect.ts
     useHooks.ts
-    useMessageActions.ts
     useMessageEditing.ts
     useModelSearch.ts
     useModelStore.ts
@@ -137,6 +148,11 @@ app/
     index.vue
     openrouter-callback.vue
   plugins/
+    examples/
+      document-history-test.client.ts
+      message-actions-test.client.ts
+      project-tree-actions.client.ts
+      thread-history-test.client.ts
     hooks.client.ts
     hooks.server.ts
     message-actions.client.ts
@@ -1678,6 +1694,154 @@ Use Cases
 }
 ```
 
+## File: app/assets/css/main.css
+```css
+/* Tailwind v4: single import includes preflight + utilities */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Nuxt UI base styles (load first so we can override its tokens below) */
+@import "@nuxt/ui";
+
+/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
+	so classes used in Nuxt UI theme overrides are generated. */
+@source "../../../app.config.ts";
+
+
+/* Your Material theme variable files (scoped: .light, .dark, etc.) */
+@import "./theme.css";
+
+/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
+@import "~/assets/css/nuxt-ui-map.css";
+
+/* Font setup: body uses VT323, headings use Press Start 2P */
+:root {
+	/* Tailwind v4 token vars (optional for font utilities) */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+    --ui-radius: 3px;
+}
+
+html, body {
+	font-family: var(--font-sans) !important;
+    font-size: 20px; 
+}
+
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+	font-family: var(--font-heading) !important;
+}
+
+.retro-btn { 
+	display: inline-flex;
+	line-height: 1; /* avoid extra vertical space from font metrics */
+	position: relative;
+	border-radius: 3px;                               /* default */
+	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
+.retro-btn.aspect-square {
+	padding: 0; /* our button variant already sets px-0, this enforces it */
+	place-items: center;
+}
+
+/* Physical press: move button into its shadow and add subtle inner bevel */
+.retro-btn:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+.active-element {
+		box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Keyboard accessibility: preserve pixel look while focused */
+.retro-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Global thin colored scrollbars (WebKit + Firefox) */
+/* Firefox */
+html {
+	scrollbar-width: thin;
+	/* thumb color, then track color */
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit (Chromium, Safari) */
+/* Apply to all scrollable elements */
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+	border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--md-primary);
+	border-radius: 9999px;
+	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern-flipped {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    rotate: 180deg;
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
+.dark .prose strong,
+.dark .prosemirror-host :where(.ProseMirror) strong {
+	color: var(--md-on-surface);
+}
+```
+
 ## File: app/assets/css/nuxt-ui-map.css
 ```css
 /* Map Material Design variables to Nuxt UI CSS tokens.
@@ -1867,6 +2031,52 @@ const searchInput = {
 <style scoped></style>
 ```
 
+## File: app/components/documents/ToolbarButton.vue
+```vue
+<template>
+    <button
+        class="retro-btn h-8 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm"
+        :class="[
+            active
+                ? 'bg-primary/40 aria-[pressed=true]:outline'
+                : 'opacity-80 hover:opacity-100',
+            square ? 'aspect-square w-8 p-0' : 'px-2',
+        ]"
+        :title="label"
+        :aria-pressed="active ? 'true' : 'false'"
+        :aria-label="computedAriaLabel"
+        type="button"
+        @click="$emit('activate')"
+    >
+        <template v-if="text">{{ text }}</template>
+        <template v-else-if="icon">
+            <UIcon :name="icon" class="w-4 h-4" />
+        </template>
+    </button>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+const props = defineProps<{
+    icon?: string;
+    active?: boolean;
+    label?: string;
+    text?: string;
+}>();
+defineEmits<{ (e: 'activate'): void }>();
+const computedAriaLabel = computed(() => props.text || props.label || '');
+const square = computed(
+    () => !props.text || (props.text && props.text.length <= 2)
+);
+</script>
+
+<style scoped>
+button {
+    font-family: inherit;
+}
+</style>
+```
+
 ## File: app/components/sidebar/ResizeHandle.vue
 ```vue
 <template>
@@ -1934,6 +2144,127 @@ function onHandleKeydown(e: KeyboardEvent) {
 </template>
 
 <script setup></script>
+```
+
+## File: app/composables/useDocumentsStore.ts
+```typescript
+import { ref, reactive } from 'vue';
+import {
+    createDocument,
+    updateDocument,
+    getDocument,
+    type Document,
+} from '~/db/documents';
+import { useToast } from '#imports';
+
+interface DocState {
+    record: Document | null;
+    status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
+    lastError?: any;
+    pendingTitle?: string; // staged changes
+    pendingContent?: any; // TipTap JSON
+    timer?: any;
+}
+
+const documentsMap = reactive(new Map<string, DocState>());
+const loadingIds = ref(new Set<string>());
+
+function ensure(id: string): DocState {
+    let st = documentsMap.get(id);
+    if (!st) {
+        st = { record: null, status: 'loading' } as DocState;
+        documentsMap.set(id, st);
+    }
+    return st;
+}
+
+function scheduleSave(id: string, delay = 750) {
+    const st = documentsMap.get(id);
+    if (!st) return;
+    if (st.timer) clearTimeout(st.timer);
+    st.timer = setTimeout(() => flush(id), delay);
+}
+
+export async function flush(id: string) {
+    const st = documentsMap.get(id);
+    if (!st || !st.record) return;
+    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
+    const patch: any = {};
+    if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
+    if (st.pendingContent !== undefined) patch.content = st.pendingContent;
+    st.status = 'saving';
+    try {
+        const updated = await updateDocument(id, patch);
+        if (updated) {
+            st.record = updated;
+            st.status = 'saved';
+        } else {
+            st.status = 'error';
+        }
+    } catch (e) {
+        st.status = 'error';
+        st.lastError = e;
+        useToast().add({ color: 'error', title: 'Document: save failed' });
+    } finally {
+        st.pendingTitle = undefined;
+        st.pendingContent = undefined;
+    }
+}
+
+export async function loadDocument(id: string) {
+    const st = ensure(id);
+    st.status = 'loading';
+    try {
+        const rec = await getDocument(id);
+        st.record = rec || null;
+        st.status = rec ? 'idle' : 'error';
+        if (!rec) {
+            useToast().add({ color: 'error', title: 'Document: not found' });
+        }
+    } catch (e) {
+        st.status = 'error';
+        st.lastError = e;
+        useToast().add({ color: 'error', title: 'Document: load failed' });
+    }
+    return st.record;
+}
+
+export async function newDocument(initial?: { title?: string; content?: any }) {
+    try {
+        const rec = await createDocument(initial);
+        const st = ensure(rec.id);
+        st.record = rec;
+        st.status = 'idle';
+        return rec;
+    } catch (e) {
+        useToast().add({ color: 'error', title: 'Document: create failed' });
+        throw e;
+    }
+}
+
+export function setDocumentTitle(id: string, title: string) {
+    const st = ensure(id);
+    if (st.record) {
+        st.pendingTitle = title;
+        scheduleSave(id);
+    }
+}
+
+export function setDocumentContent(id: string, content: any) {
+    const st = ensure(id);
+    if (st.record) {
+        st.pendingContent = content;
+        scheduleSave(id);
+    }
+}
+
+export function useDocumentState(id: string) {
+    return documentsMap.get(id) || ensure(id);
+}
+
+export function useAllDocumentsState() {
+    return documentsMap;
+}
 ```
 
 ## File: app/composables/useHookEffect.ts
@@ -2740,6 +3071,196 @@ export async function buildContext({ threadId }: BuildContextParams) {
 }
 ```
 
+## File: app/db/documents.ts
+```typescript
+import { db } from './client';
+import { newId, nowSec } from './util';
+import { useHooks } from '../composables/useHooks';
+
+/**
+ * Internal stored row shape (reuses posts table with postType = 'doc').
+ * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
+ * Content is persisted as a JSON string (TipTap JSON) for flexibility.
+ */
+export interface DocumentRow {
+    id: string;
+    title: string; // non-empty trimmed
+    content: string; // JSON string
+    postType: string; // always 'doc'
+    created_at: number; // seconds
+    updated_at: number; // seconds
+    deleted: boolean;
+}
+
+/** Public facing record with content already parsed. */
+export interface DocumentRecord {
+    id: string;
+    title: string;
+    content: any; // TipTap JSON object
+    created_at: number;
+    updated_at: number;
+    deleted: boolean;
+}
+
+function emptyDocJSON() {
+    return { type: 'doc', content: [] };
+}
+
+function normalizeTitle(title?: string | null): string {
+    const t = (title ?? '').trim();
+    return t.length ? t : 'Untitled';
+}
+
+function parseContent(raw: string | null | undefined): any {
+    if (!raw) return emptyDocJSON();
+    try {
+        const parsed = JSON.parse(raw);
+        // Basic structural guard
+        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        return emptyDocJSON();
+    } catch {
+        return emptyDocJSON();
+    }
+}
+
+function rowToRecord(row: DocumentRow): DocumentRecord {
+    return {
+        id: row.id,
+        title: row.title,
+        content: parseContent(row.content),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted,
+    };
+}
+
+export interface CreateDocumentInput {
+    title?: string | null;
+    content?: any; // TipTap JSON object
+}
+
+export async function createDocument(
+    input: CreateDocumentInput = {}
+): Promise<DocumentRecord> {
+    const hooks = useHooks();
+    const prepared: DocumentRow = {
+        id: newId(),
+        title: normalizeTitle(input.title),
+        content: JSON.stringify(input.content ?? emptyDocJSON()),
+        postType: 'doc',
+        created_at: nowSec(),
+        updated_at: nowSec(),
+        deleted: false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.create:filter:input',
+        prepared
+    )) as DocumentRow;
+    await hooks.doAction('db.documents.create:action:before', filtered);
+    await db.posts.put(filtered as any); // reuse posts table
+    await hooks.doAction('db.documents.create:action:after', filtered);
+    return rowToRecord(filtered);
+}
+
+export async function getDocument(
+    id: string
+): Promise<DocumentRecord | undefined> {
+    const hooks = useHooks();
+    const row = await db.posts.get(id);
+    if (!row || (row as any).postType !== 'doc') return undefined;
+    const filtered = (await hooks.applyFilters(
+        'db.documents.get:filter:output',
+        row
+    )) as DocumentRow | undefined;
+    return filtered ? rowToRecord(filtered) : undefined;
+}
+
+export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
+    const hooks = useHooks();
+    // Filter by postType (indexed) and non-deleted
+    const rows = await db.posts
+        .where('postType')
+        .equals('doc')
+        .and((r) => !(r as any).deleted)
+        .reverse() // by primary key order soon? we'll sort manually after fetch
+        .toArray();
+    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
+    rows.sort((a, b) => b.updated_at - a.updated_at);
+    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
+    const filtered = (await hooks.applyFilters(
+        'db.documents.list:filter:output',
+        sliced
+    )) as DocumentRow[];
+    return filtered.map(rowToRecord);
+}
+
+export interface UpdateDocumentPatch {
+    title?: string;
+    content?: any; // TipTap JSON object
+}
+
+export async function updateDocument(
+    id: string,
+    patch: UpdateDocumentPatch
+): Promise<DocumentRecord | undefined> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return undefined;
+    const updated: DocumentRow = {
+        id: existing.id,
+        title: patch.title ? normalizeTitle(patch.title) : existing.title,
+        content: patch.content
+            ? JSON.stringify(patch.content)
+            : (existing as any).content,
+        postType: 'doc',
+        created_at: existing.created_at,
+        updated_at: nowSec(),
+        deleted: (existing as any).deleted ?? false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.update:filter:input',
+        { existing, updated, patch }
+    )) as { updated: DocumentRow } | DocumentRow;
+    const row = (filtered as any).updated
+        ? (filtered as any).updated
+        : (filtered as any as DocumentRow);
+    await hooks.doAction('db.documents.update:action:before', row);
+    await db.posts.put(row as any);
+    await hooks.doAction('db.documents.update:action:after', row);
+    return rowToRecord(row);
+}
+
+export async function softDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return;
+    const row = {
+        ...(existing as any),
+        deleted: true,
+        updated_at: nowSec(),
+    };
+    await hooks.doAction('db.documents.delete:action:soft:before', row);
+    await db.posts.put(row);
+    await hooks.doAction('db.documents.delete:action:soft:after', row);
+}
+
+export async function hardDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'doc') return;
+    await hooks.doAction('db.documents.delete:action:hard:before', existing);
+    await db.posts.delete(id);
+    await hooks.doAction('db.documents.delete:action:hard:after', id);
+}
+
+// Convenience for ensuring DB open (mirrors pattern in other modules)
+export async function ensureDbOpen() {
+    if (!db.isOpen()) await db.open();
+}
+
+export type { DocumentRecord as Document };
+```
+
 ## File: app/db/files-util.ts
 ```typescript
 import { nowSec } from './util';
@@ -2985,6 +3506,177 @@ function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
         }
     } catch {}
 }
+```
+
+## File: app/db/index.ts
+```typescript
+import { db } from './client';
+import type {
+    Attachment,
+    AttachmentCreate,
+    Kv,
+    KvCreate,
+    Message,
+    MessageCreate,
+    Project,
+    Thread,
+    ThreadCreate,
+    Post,
+    PostCreate,
+} from './schema';
+import {
+    createThread,
+    searchThreadsByTitle,
+    threadsByProject,
+    upsertThread,
+    softDeleteThread,
+    hardDeleteThread,
+} from './threads';
+import {
+    appendMessage,
+    createMessage,
+    messagesByThread,
+    moveMessage,
+    copyMessage,
+    getMessage,
+    messageByStream,
+    softDeleteMessage,
+    upsertMessage,
+    hardDeleteMessage,
+} from './messages';
+import {
+    createKv,
+    upsertKv,
+    hardDeleteKv,
+    getKv,
+    getKvByName,
+    setKvByName,
+    hardDeleteKvByName,
+} from './kv';
+import {
+    createAttachment,
+    upsertAttachment,
+    softDeleteAttachment,
+    hardDeleteAttachment,
+    getAttachment,
+} from './attachments';
+import {
+    createProject,
+    upsertProject,
+    softDeleteProject,
+    hardDeleteProject,
+    getProject,
+} from './projects';
+import {
+    createPost,
+    upsertPost,
+    getPost,
+    allPosts,
+    searchPosts,
+    softDeletePost,
+    hardDeletePost,
+} from './posts';
+import {
+    createDocument,
+    getDocument,
+    listDocuments,
+    updateDocument,
+    softDeleteDocument,
+    hardDeleteDocument,
+} from './documents';
+
+// Barrel API (backward compatible shape)
+export { db } from './client';
+
+export const create = {
+    thread: createThread,
+    message: createMessage,
+    kv: createKv,
+    attachment: createAttachment,
+    project: createProject,
+    post: createPost,
+    document: createDocument,
+};
+
+export const upsert = {
+    thread: upsertThread,
+    message: upsertMessage,
+    kv: upsertKv,
+    attachment: upsertAttachment,
+    project: upsertProject,
+    post: upsertPost,
+    document: updateDocument, // upsert alias (update only for now)
+};
+
+export const queries = {
+    threadsByProject,
+    messagesByThread,
+    searchThreadsByTitle,
+    getMessage,
+    messageByStream,
+    getKv,
+    getKvByName,
+    getAttachment,
+    getProject,
+    getPost,
+    allPosts,
+    searchPosts,
+    getDocument,
+    listDocuments,
+};
+
+export const del = {
+    // soft deletes
+    soft: {
+        project: softDeleteProject,
+        thread: softDeleteThread,
+        message: softDeleteMessage,
+        attachment: softDeleteAttachment,
+        post: softDeletePost,
+        document: softDeleteDocument,
+        // kv has no deleted flag; only hard delete is supported
+    },
+    // hard deletes (destructive)
+    hard: {
+        project: hardDeleteProject,
+        thread: hardDeleteThread,
+        message: hardDeleteMessage,
+        attachment: hardDeleteAttachment,
+        kv: hardDeleteKv,
+        kvByName: hardDeleteKvByName,
+        post: hardDeletePost,
+        document: hardDeleteDocument,
+    },
+};
+
+export const tx = {
+    appendMessage,
+    moveMessage,
+    copyMessage,
+};
+
+// Shorthand helpers for common KV flows
+export const kv = {
+    get: getKvByName,
+    set: setKvByName,
+    delete: hardDeleteKvByName,
+};
+
+export type {
+    Thread,
+    ThreadCreate,
+    Message,
+    MessageCreate,
+    Kv,
+    KvCreate,
+    Attachment,
+    AttachmentCreate,
+    Project,
+    Post,
+    PostCreate,
+};
+
+export type { Document } from './documents';
 ```
 
 ## File: app/db/kv.ts
@@ -5189,154 +5881,6 @@ export default defineNuxtConfig({
 }
 ```
 
-## File: app/assets/css/main.css
-```css
-/* Tailwind v4: single import includes preflight + utilities */
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-
-/* Nuxt UI base styles (load first so we can override its tokens below) */
-@import "@nuxt/ui";
-
-/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
-	so classes used in Nuxt UI theme overrides are generated. */
-@source "../../../app.config.ts";
-
-
-/* Your Material theme variable files (scoped: .light, .dark, etc.) */
-@import "./theme.css";
-
-/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
-@import "~/assets/css/nuxt-ui-map.css";
-
-/* Font setup: body uses VT323, headings use Press Start 2P */
-:root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
-    --ui-radius: 3px;
-}
-
-html, body {
-	font-family: var(--font-sans) !important;
-    font-size: 20px; 
-}
-
-/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
-.scrollbars {
-	scrollbar-width: thin;
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
-.scrollbar-hidden {
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE/Edge legacy */
-}
-.scrollbar-hidden::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
-
-h1, h2, h3, h4, h5, h6, .font-heading {
-	font-family: var(--font-heading) !important;
-}
-
-.retro-btn { 
-	display: inline-flex;
-	line-height: 1; /* avoid extra vertical space from font metrics */
-	position: relative;
-	border-radius: 3px;                               /* default */
-	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-
-/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
-.retro-btn.aspect-square {
-	padding: 0; /* our button variant already sets px-0, this enforces it */
-	place-items: center;
-}
-
-/* Physical press: move button into its shadow and add subtle inner bevel */
-.retro-btn:active {
-	transform: translate(2px, 2px);
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-.active-element {
-		box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-/* Keyboard accessibility: preserve pixel look while focused */
-.retro-btn:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-/* Global thin colored scrollbars (WebKit + Firefox) */
-/* Firefox */
-html {
-	scrollbar-width: thin;
-	/* thumb color, then track color */
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit (Chromium, Safari) */
-/* Apply to all scrollable elements */
-*::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
-}
-*::-webkit-scrollbar-track {
-	background: transparent;
-	border-radius: 9999px;
-}
-*::-webkit-scrollbar-thumb {
-	background: var(--md-primary);
-	border-radius: 9999px;
-	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
-	background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-*::-webkit-scrollbar-corner { background: transparent; }
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern-flipped {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    rotate: 180deg;
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
-.dark .prose strong,
-.dark .prosemirror-host :where(.ProseMirror) strong {
-	color: var(--md-on-surface);
-}
-```
-
 ## File: app/components/chat/__tests__/VirtualMessageList.test.ts
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -6087,52 +6631,6 @@ if (process.client) {
 </style>
 ```
 
-## File: app/components/documents/ToolbarButton.vue
-```vue
-<template>
-    <button
-        class="retro-btn h-8 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm"
-        :class="[
-            active
-                ? 'bg-primary/40 aria-[pressed=true]:outline'
-                : 'opacity-80 hover:opacity-100',
-            square ? 'aspect-square w-8 p-0' : 'px-2',
-        ]"
-        :title="label"
-        :aria-pressed="active ? 'true' : 'false'"
-        :aria-label="computedAriaLabel"
-        type="button"
-        @click="$emit('activate')"
-    >
-        <template v-if="text">{{ text }}</template>
-        <template v-else-if="icon">
-            <UIcon :name="icon" class="w-4 h-4" />
-        </template>
-    </button>
-</template>
-
-<script setup lang="ts">
-import { computed } from 'vue';
-const props = defineProps<{
-    icon?: string;
-    active?: boolean;
-    label?: string;
-    text?: string;
-}>();
-defineEmits<{ (e: 'activate'): void }>();
-const computedAriaLabel = computed(() => props.text || props.label || '');
-const square = computed(
-    () => !props.text || (props.text && props.text.length <= 2)
-);
-</script>
-
-<style scoped>
-button {
-    font-family: inherit;
-}
-</style>
-```
-
 ## File: app/components/modal/SettingsModal.vue
 ```vue
 <template>
@@ -6435,6 +6933,730 @@ function formatPerMillion(raw: unknown, currency = 'USD') {
     } catch (e) {
         // Fallback: simple fixed formatting
         return `$${perMillion.toFixed(2)}`;
+    }
+}
+</script>
+```
+
+## File: app/components/sidebar/SideNavContentCollapsed.vue
+```vue
+<template>
+    <div class="flex flex-col justify-between h-full relative">
+        <div class="px-1 pt-2 flex flex-col space-y-2">
+            <UTooltip :delay-duration="0" text="New chat">
+                <UButton
+                    @click="onNewChat"
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:message-plus"
+                    :ui="{
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                ></UButton>
+                <UButton
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:search"
+                    :ui="{
+                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="emit('focusSearch')"
+                ></UButton>
+            </UTooltip>
+        </div>
+        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
+            <UButton
+                size="md"
+                class="flex item-center justify-center"
+                icon="pixelarticons:sliders-2"
+                :ui="{
+                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
+                    leadingIcon: 'w-5 h-5',
+                }"
+            ></UButton>
+        </div>
+    </div>
+</template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
+import { liveQuery } from 'dexie';
+import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { VList } from 'virtua/vue';
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
+
+const items = ref<any[]>([]);
+import { useThreadSearch } from '~/composables/useThreadSearch';
+const { query: threadSearchQuery, results: threadSearchResults } =
+    useThreadSearch(items as any);
+const displayThreads = computed(() =>
+    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+);
+let sub: { unsubscribe: () => void } | null = null;
+
+onMounted(() => {
+    // Sort by last opened using updated_at index; filter out deleted
+    sub = liveQuery(() =>
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
+    ).subscribe({
+        next: (results) => (items.value = results),
+        error: (err) => console.error('liveQuery error', err),
+    });
+});
+
+watch(
+    () => items.value,
+    () => {
+        /* silent: removed Items updated log */
+    }
+);
+
+onUnmounted(() => {
+    sub?.unsubscribe();
+});
+
+const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+
+const showDeleteModal = ref(false);
+const deleteId = ref<string | null>(null);
+
+function openRename(thread: any) {
+    renameId.value = thread.id;
+    renameTitle.value = thread.title ?? '';
+    showRenameModal.value = true;
+}
+
+async function saveRename() {
+    if (!renameId.value) return;
+    const t = await db.threads.get(renameId.value);
+    if (!t) return;
+    const now = Math.floor(Date.now() / 1000);
+    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+}
+
+function confirmDelete(thread: any) {
+    deleteId.value = thread.id as string;
+    showDeleteModal.value = true;
+}
+
+async function deleteThread() {
+    if (!deleteId.value) return;
+    await dbDel.hard.thread(deleteId.value);
+    showDeleteModal.value = false;
+    deleteId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+}
+</script>
+```
+
+## File: app/components/sidebar/SideNavHeader.vue
+```vue
+<template>
+    <div class="px-2 pt-2 flex flex-col space-y-2">
+        <div class="flex">
+            <UButton
+                @click="$emit('new-chat')"
+                class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
+                >New Chat</UButton
+            >
+            <UTooltip :delay-duration="0" text="Create project">
+                <UButton
+                    color="inverse-primary"
+                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                    icon="pixelarticons:folder-plus"
+                    :ui="{
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="openCreateProject"
+                />
+            </UTooltip>
+            <UTooltip :delay-duration="0" text="Create document">
+                <UButton
+                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                    icon="pixelarticons:note-plus"
+                    :ui="{
+                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="openCreateDocumentModal"
+                />
+            </UTooltip>
+        </div>
+        <div class="relative w-full ml-[1px]">
+            <UInput
+                ref="searchInputWrapper"
+                v-model="sidebarQuery"
+                icon="pixelarticons:search"
+                size="md"
+                :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
+                variant="outline"
+                placeholder="Search..."
+                aria-label="Search"
+                class="w-full"
+                @keydown.escape.prevent.stop="onEscapeClear"
+            >
+                <template v-if="sidebarQuery.length > 0" #trailing>
+                    <UButton
+                        color="neutral"
+                        variant="subtle"
+                        size="xs"
+                        class="flex items-center justify-center p-0"
+                        icon="pixelarticons:close-box"
+                        aria-label="Clear input"
+                        @click="sidebarQuery = ''"
+                    />
+                </template>
+            </UInput>
+        </div>
+
+        <div
+            class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
+            role="group"
+            aria-label="Sidebar sections"
+        >
+            <UButton
+                v-for="seg in sectionToggles"
+                :key="seg.value"
+                size="sm"
+                :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
+                :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
+                class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
+                :class="
+                    activeSections[seg.value]
+                        ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
+                        : 'opacity-70 hover:bg-primary/15'
+                "
+                :aria-pressed="activeSections[seg.value]"
+                @click="toggleSection(seg.value)"
+            >
+                {{ seg.label }}
+            </UButton>
+        </div>
+
+        <!-- Rename modal -->
+        <UModal
+            v-model:open="showRenameModal"
+            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
+            :ui="{
+                footer: 'justify-end ',
+            }"
+        >
+            <template #header>
+                <h3>
+                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
+                </h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameTitle"
+                        :placeholder="
+                            isRenamingDoc ? 'Document title' : 'Thread title'
+                        "
+                        icon="pixelarticons:edit"
+                        @keyup.enter="saveRename"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="primary" @click="saveRename">Save</UButton>
+            </template>
+        </UModal>
+
+        <!-- Rename Project Modal -->
+        <UModal
+            v-model:open="showRenameProjectModal"
+            title="Rename project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header><h3>Rename project?</h3></template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameProjectName"
+                        placeholder="Project name"
+                        icon="pixelarticons:folder"
+                        @keyup.enter="saveRenameProject"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameProjectModal = false"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="!renameProjectName.trim()"
+                    @click="saveRenameProject"
+                    >Save</UButton
+                >
+            </template>
+        </UModal>
+
+        <!-- Create Project Modal -->
+        <UModal
+            v-model:open="showCreateProjectModal"
+            title="New Project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Create project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="createProjectState"
+                        @submit.prevent="submitCreateProject"
+                    >
+                        <div class="flex flex-col space-y-3">
+                            <UFormField
+                                label="Title"
+                                name="name"
+                                :error="createProjectErrors.name"
+                            >
+                                <UInput
+                                    v-model="createProjectState.name"
+                                    required
+                                    placeholder="Project title"
+                                    icon="pixelarticons:folder"
+                                    class="w-full"
+                                    @keyup.enter="submitCreateProject"
+                                />
+                            </UFormField>
+                            <UFormField label="Description" name="description">
+                                <UTextarea
+                                    class="w-full border-2 rounded-[6px]"
+                                    v-model="createProjectState.description"
+                                    :rows="3"
+                                    placeholder="Optional description"
+                                />
+                            </UFormField>
+                        </div>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    :disabled="
+                        !createProjectState.name.trim() || creatingProject
+                    "
+                    color="primary"
+                    @click="submitCreateProject"
+                >
+                    <span v-if="!creatingProject">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+
+        <!-- Add To Project Modal -->
+        <UModal
+            v-model:open="showAddToProjectModal"
+            title="Add to project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Add thread to project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <div class="flex gap-2 text-xs font-mono">
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'select'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'select'"
+                        >
+                            Select Existing
+                        </button>
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'create'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'create'"
+                        >
+                            Create New
+                        </button>
+                    </div>
+                    <div v-if="addMode === 'select'" class="space-y-3">
+                        <UFormField label="Project" name="project">
+                            <USelectMenu
+                                v-model="selectedProjectId"
+                                :items="projectSelectOptions"
+                                :value-key="'value'"
+                                searchable
+                                placeholder="Select project"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                    <div v-else class="space-y-3">
+                        <UFormField label="Project Title" name="newProjectName">
+                            <UInput
+                                v-model="newProjectName"
+                                placeholder="Project name"
+                                icon="pixelarticons:folder"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <UFormField
+                            label="Description"
+                            name="newProjectDescription"
+                        >
+                            <UTextarea
+                                v-model="newProjectDescription"
+                                :rows="3"
+                                placeholder="Optional description"
+                                class="w-full border-2 rounded-[6px]"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeAddToProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        addingToProject ||
+                        (addMode === 'select'
+                            ? !selectedProjectId
+                            : !newProjectName.trim())
+                    "
+                    @click="submitAddToProject"
+                >
+                    <span v-if="!addingToProject">Add</span>
+                    <span v-else class="inline-flex items-center gap-1"
+                        ><UIcon
+                            name="i-lucide-loader"
+                            class="animate-spin"
+                        />Adding</span
+                    >
+                </UButton>
+            </template>
+        </UModal>
+
+        <!-- New Document Naming Modal -->
+        <UModal
+            v-model:open="showCreateDocumentModal"
+            title="New Document"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Name new document</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="newDocumentState"
+                        @submit.prevent="submitCreateDocument"
+                    >
+                        <UFormField
+                            label="Title"
+                            name="title"
+                            :error="newDocumentErrors.title"
+                        >
+                            <UInput
+                                v-model="newDocumentState.title"
+                                required
+                                placeholder="Document title"
+                                icon="pixelarticons:note"
+                                class="w-full"
+                                @keyup.enter="submitCreateDocument"
+                            />
+                        </UFormField>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateDocumentModal"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        creatingDocument || !newDocumentState.title.trim()
+                    "
+                    @click="submitCreateDocument"
+                >
+                    <span v-if="!creatingDocument">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+    </div>
+</template>
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import { db, upsert, create } from '~/db';
+
+const props = defineProps<{
+    sidebarQuery: string;
+    activeSections: {
+        projects: boolean;
+        chats: boolean;
+        docs: boolean;
+    };
+    projects: any[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'update:sidebarQuery', value: string): void;
+    (e: 'update:activeSections', value: typeof props.activeSections): void;
+    (e: 'new-chat'): void;
+    (e: 'new-document', initial?: { title?: string }): void;
+    (e: 'open-rename', target: any): void;
+    (e: 'open-rename-project', projectId: string): void;
+    (e: 'add-to-project', thread: any): void;
+    (e: 'add-document-to-project', doc: any): void;
+}>();
+
+// Section visibility (multi-select) defaults to all on
+const sectionToggles = [
+    { label: 'Proj', value: 'projects' as const },
+    { label: 'Chats', value: 'chats' as const },
+    { label: 'Docs', value: 'docs' as const },
+];
+
+function toggleSection(v: 'projects' | 'chats' | 'docs') {
+    const next = { ...props.activeSections, [v]: !props.activeSections[v] };
+    emit('update:activeSections', next);
+}
+
+// Direct focus support for external callers
+const searchInputWrapper = ref<any | null>(null);
+function focusSearchInput() {
+    // Access underlying input inside UInput component
+    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
+        searchInputWrapper.value) as HTMLElement | null;
+    if (!root) return;
+    const input = root.querySelector('input');
+    if (input) (input as HTMLInputElement).focus();
+}
+defineExpose({ focusSearchInput });
+
+const sidebarQuery = computed({
+    get: () => props.sidebarQuery,
+    set: (value) => emit('update:sidebarQuery', value),
+});
+
+function onEscapeClear() {
+    if (sidebarQuery.value) sidebarQuery.value = '';
+}
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+const renameMetaKind = ref<'chat' | 'doc' | null>(null);
+const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
+
+async function openRename(target: any) {
+    emit('open-rename', target);
+}
+
+async function saveRename() {
+    emit('open-rename', {
+        id: renameId.value,
+        title: renameTitle.value,
+        kind: renameMetaKind.value,
+    });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+    renameMetaKind.value = null;
+}
+
+// ---- Project Rename Modal Logic ----
+const showRenameProjectModal = ref(false);
+const renameProjectId = ref<string | null>(null);
+const renameProjectName = ref('');
+
+async function openRenameProject(projectId: string) {
+    emit('open-rename-project', projectId);
+}
+
+async function saveRenameProject() {
+    if (!renameProjectId.value) return;
+    const name = renameProjectName.value.trim();
+    if (!name) return;
+    const project = await db.projects.get(renameProjectId.value);
+    if (!project) return;
+    try {
+        await upsert.project({
+            ...project,
+            name,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        showRenameProjectModal.value = false;
+        renameProjectId.value = null;
+        renameProjectName.value = '';
+    } catch (e) {
+        console.error('rename project failed', e);
+    }
+}
+
+// ---- Project Creation ----
+const showCreateProjectModal = ref(false);
+const creatingProject = ref(false);
+const createProjectState = ref<{ name: string; description: string }>({
+    name: '',
+    description: '',
+});
+const createProjectErrors = ref<{ name?: string }>({});
+
+function openCreateProject() {
+    showCreateProjectModal.value = true;
+    createProjectState.value = { name: '', description: '' };
+    createProjectErrors.value = {};
+}
+function closeCreateProject() {
+    showCreateProjectModal.value = false;
+}
+
+async function submitCreateProject() {
+    if (creatingProject.value) return;
+    const name = createProjectState.value.name.trim();
+    if (!name) {
+        createProjectErrors.value.name = 'Title required';
+        return;
+    }
+    creatingProject.value = true;
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        // data holds ordered list of entities (chat/doc) we include kind now per request
+        const newId = crypto.randomUUID();
+        await create.project({
+            id: newId,
+            name,
+            description: createProjectState.value.description?.trim() || null,
+            data: [], // store as array; schema allows any
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+        } as any);
+        closeCreateProject();
+    } catch (e) {
+        console.error('Failed to create project', e);
+    } finally {
+        creatingProject.value = false;
+    }
+}
+
+// ---- Add To Project Flow ----
+const showAddToProjectModal = ref(false);
+const addToProjectThreadId = ref<string | null>(null);
+// Support documents
+const addToProjectDocumentId = ref<string | null>(null);
+const addMode = ref<'select' | 'create'>('select');
+const selectedProjectId = ref<string | null>(null);
+const newProjectName = ref('');
+const newProjectDescription = ref('');
+const addingToProject = ref(false);
+const addToProjectError = ref<string | null>(null);
+
+const projectSelectOptions = computed(() =>
+    props.projects.map((p) => ({ label: p.name, value: p.id }))
+);
+
+function openAddToProject(thread: any) {
+    emit('add-to-project', thread);
+}
+
+function openAddDocumentToProject(doc: any) {
+    emit('add-document-to-project', doc);
+}
+
+function closeAddToProject() {
+    showAddToProjectModal.value = false;
+    addToProjectThreadId.value = null;
+    addToProjectDocumentId.value = null;
+}
+
+async function submitAddToProject() {
+    emit('add-to-project', {
+        threadId: addToProjectThreadId.value,
+        documentId: addToProjectDocumentId.value,
+        mode: addMode.value,
+        selectedProjectId: selectedProjectId.value,
+        newProjectName: newProjectName.value,
+        newProjectDescription: newProjectDescription.value,
+    });
+    closeAddToProject();
+}
+
+// ---- New Document Flow (naming modal) ----
+const showCreateDocumentModal = ref(false);
+const creatingDocument = ref(false);
+const newDocumentState = ref<{ title: string }>({ title: '' });
+const newDocumentErrors = ref<{ title?: string }>({});
+
+function openCreateDocumentModal() {
+    showCreateDocumentModal.value = true;
+    newDocumentState.value = { title: '' };
+    newDocumentErrors.value = {};
+}
+function closeCreateDocumentModal() {
+    showCreateDocumentModal.value = false;
+}
+async function submitCreateDocument() {
+    if (creatingDocument.value) return;
+    const title = newDocumentState.value.title.trim();
+    if (!title) {
+        newDocumentErrors.value.title = 'Title required';
+        return;
+    }
+    creatingDocument.value = true;
+    try {
+        emit('new-document', { title });
+        closeCreateDocumentModal();
+    } finally {
+        creatingDocument.value = false;
     }
 }
 </script>
@@ -7026,6 +8248,284 @@ body {
 </style>
 ```
 
+## File: app/composables/ui-extensions/documents/useDocumentHistoryActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+import type { Post } from '~/db';
+
+/** Definition for an extendable chat message action button. */
+export interface DocumentHistoryAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Label text. */
+    label: string;
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    /** Handler invoked on click. */
+    handler: (ctx: { document: Post }) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, DocumentHistoryAction> =
+    g.__or3DocumentHistoryActionsRegistry ||
+    (g.__or3DocumentHistoryActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: DocumentHistoryAction[] }>({
+    items: [],
+});
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerDocumentHistoryAction(action: DocumentHistoryAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterDocumentHistoryAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useDocumentHistoryActions() {
+    return computed(() =>
+        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredDocumentHistoryActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatDocumentHistory.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+```
+
+## File: app/composables/ui-extensions/messages/useMessageActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+
+/** Definition for an extendable chat message action button. */
+export interface ChatMessageAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Tooltip text. */
+    tooltip: string;
+    /** Where to show the action. */
+    showOn: 'user' | 'assistant' | 'both';
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    /** Handler invoked on click. */
+    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, ChatMessageAction> =
+    g.__or3MessageActionsRegistry ||
+    (g.__or3MessageActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerMessageAction(action: ChatMessageAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterMessageAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useMessageActions(message: { role: 'user' | 'assistant' }) {
+    return computed(() =>
+        reactiveList.items
+            .filter((a) => a.showOn === 'both' || a.showOn === message.role)
+            .sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredMessageActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+```
+
+## File: app/composables/ui-extensions/projects/useProjectTreeActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+
+// Local interfaces describing the tree rows printed in the console.
+// These mirror the shape produced by SidebarProjectTree.vue for root and child items.
+export type ProjectTreeKind = 'chat' | 'doc';
+export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';
+
+export interface ProjectTreeChild {
+    value: string; // id of the entry
+    label: string;
+    icon?: string;
+    kind?: ProjectTreeKind; // 'chat' | 'doc'
+    parentId?: string;
+    onSelect?: (e: Event) => void;
+}
+
+export interface ProjectTreeRoot {
+    value: string; // project id
+    label: string; // project name
+    defaultExpanded?: boolean;
+    children?: ProjectTreeChild[];
+    onSelect?: (e: Event) => void;
+}
+
+export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;
+
+export interface ProjectTreeHandlerCtx {
+    // The tree row this action was invoked for (root or child)
+    treeRow: ProjectTreeRow;
+    // legacy/alternate shapes seen in the wild may include a `child` property
+    // but prefer to use `treeRow`.
+    child?: ProjectTreeChild;
+    root?: ProjectTreeRoot;
+}
+
+/** Definition for an extendable chat message action button. */
+export interface ProjectTreeAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Label text. */
+    label: string;
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds
+    /** Handler invoked on click. */
+    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, ProjectTreeAction> =
+    g.__or3ProjectTreeActionsRegistry ||
+    (g.__or3ProjectTreeActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: ProjectTreeAction[] }>({
+    items: [],
+});
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerProjectTreeAction(action: ProjectTreeAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterProjectTreeAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useProjectTreeActions() {
+    return computed(() =>
+        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredProjectTreeActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatProjectTree.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+```
+
+## File: app/composables/ui-extensions/threads/useThreadHistoryActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+import type { Post, Thread } from '~/db';
+
+/** Definition for an extendable chat message action button. */
+export interface ThreadHistoryAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Label text. */
+    label: string;
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    /** Handler invoked on click. */
+    handler: (ctx: { document: Thread }) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, ThreadHistoryAction> =
+    g.__or3ThreadHistoryActionsRegistry ||
+    (g.__or3ThreadHistoryActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: ThreadHistoryAction[] }>({
+    items: [],
+});
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerThreadHistoryAction(action: ThreadHistoryAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterThreadHistoryAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useThreadHistoryActions() {
+    return computed(() =>
+        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredThreadHistoryActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatThreadHistory.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+```
+
 ## File: app/composables/useAutoScroll.ts
 ```typescript
 /**
@@ -7191,189 +8691,6 @@ export async function getDefaultPromptId(): Promise<string | null> {
         return null;
     }
 }
-```
-
-## File: app/composables/useDocumentsStore.ts
-```typescript
-import { ref, reactive } from 'vue';
-import {
-    createDocument,
-    updateDocument,
-    getDocument,
-    type Document,
-} from '~/db/documents';
-import { useToast } from '#imports';
-
-interface DocState {
-    record: Document | null;
-    status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
-    lastError?: any;
-    pendingTitle?: string; // staged changes
-    pendingContent?: any; // TipTap JSON
-    timer?: any;
-}
-
-const documentsMap = reactive(new Map<string, DocState>());
-const loadingIds = ref(new Set<string>());
-
-function ensure(id: string): DocState {
-    let st = documentsMap.get(id);
-    if (!st) {
-        st = { record: null, status: 'loading' } as DocState;
-        documentsMap.set(id, st);
-    }
-    return st;
-}
-
-function scheduleSave(id: string, delay = 750) {
-    const st = documentsMap.get(id);
-    if (!st) return;
-    if (st.timer) clearTimeout(st.timer);
-    st.timer = setTimeout(() => flush(id), delay);
-}
-
-export async function flush(id: string) {
-    const st = documentsMap.get(id);
-    if (!st || !st.record) return;
-    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
-    const patch: any = {};
-    if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
-    if (st.pendingContent !== undefined) patch.content = st.pendingContent;
-    st.status = 'saving';
-    try {
-        const updated = await updateDocument(id, patch);
-        if (updated) {
-            st.record = updated;
-            st.status = 'saved';
-        } else {
-            st.status = 'error';
-        }
-    } catch (e) {
-        st.status = 'error';
-        st.lastError = e;
-        useToast().add({ color: 'error', title: 'Document: save failed' });
-    } finally {
-        st.pendingTitle = undefined;
-        st.pendingContent = undefined;
-    }
-}
-
-export async function loadDocument(id: string) {
-    const st = ensure(id);
-    st.status = 'loading';
-    try {
-        const rec = await getDocument(id);
-        st.record = rec || null;
-        st.status = rec ? 'idle' : 'error';
-        if (!rec) {
-            useToast().add({ color: 'error', title: 'Document: not found' });
-        }
-    } catch (e) {
-        st.status = 'error';
-        st.lastError = e;
-        useToast().add({ color: 'error', title: 'Document: load failed' });
-    }
-    return st.record;
-}
-
-export async function newDocument(initial?: { title?: string; content?: any }) {
-    try {
-        const rec = await createDocument(initial);
-        const st = ensure(rec.id);
-        st.record = rec;
-        st.status = 'idle';
-        return rec;
-    } catch (e) {
-        useToast().add({ color: 'error', title: 'Document: create failed' });
-        throw e;
-    }
-}
-
-export function setDocumentTitle(id: string, title: string) {
-    const st = ensure(id);
-    if (st.record) {
-        st.pendingTitle = title;
-        scheduleSave(id);
-    }
-}
-
-export function setDocumentContent(id: string, content: any) {
-    const st = ensure(id);
-    if (st.record) {
-        st.pendingContent = content;
-        scheduleSave(id);
-    }
-}
-
-export function useDocumentState(id: string) {
-    return documentsMap.get(id) || ensure(id);
-}
-
-export function useAllDocumentsState() {
-    return documentsMap;
-}
-```
-
-## File: app/composables/useMessageActions.ts
-```typescript
-import { computed, reactive } from 'vue';
-
-/** Definition for an extendable chat message action button. */
-export interface ChatMessageAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Tooltip text. */
-    tooltip: string;
-    /** Where to show the action. */
-    showOn: 'user' | 'assistant' | 'both';
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
-}
-
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
-const registry: Map<string, ChatMessageAction> =
-    g.__or3MessageActionsRegistry ||
-    (g.__or3MessageActionsRegistry = new Map());
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
-}
-
-/** Register (or replace) a message action. */
-export function registerMessageAction(action: ChatMessageAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
-}
-
-/** Unregister an action by id (optional utility). */
-export function unregisterMessageAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
-}
-
-/** Accessor for actions applicable to a specific message. */
-export function useMessageActions(message: { role: 'user' | 'assistant' }) {
-    return computed(() =>
-        reactiveList.items
-            .filter((a) => a.showOn === 'both' || a.showOn === message.role)
-            .sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
-    );
-}
-
-/** Convenience for plugin authors to check existing action ids. */
-export function listRegisteredMessageActionIds(): string[] {
-    return Array.from(registry.keys());
-}
-
-// Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;
-// external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
 ## File: app/composables/useMessageEditing.ts
@@ -8180,194 +9497,239 @@ export function useTailStream(
 }
 ```
 
-## File: app/db/documents.ts
+## File: app/db/schema.ts
 ```typescript
-import { db } from './client';
-import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
+import { z } from 'zod';
+import { newId } from './util';
 
-/**
- * Internal stored row shape (reuses posts table with postType = 'doc').
- * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
- * Content is persisted as a JSON string (TipTap JSON) for flexibility.
- */
-export interface DocumentRow {
-    id: string;
-    title: string; // non-empty trimmed
-    content: string; // JSON string
-    postType: string; // always 'doc'
-    created_at: number; // seconds
-    updated_at: number; // seconds
-    deleted: boolean;
-}
+const nowSec = () => Math.floor(Date.now() / 1000);
 
-/** Public facing record with content already parsed. */
-export interface DocumentRecord {
-    id: string;
-    title: string;
-    content: any; // TipTap JSON object
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
-}
+export const ProjectSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    data: z.any(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type Project = z.infer<typeof ProjectSchema>;
 
-function emptyDocJSON() {
-    return { type: 'doc', content: [] };
-}
+// threads
+export const ThreadSchema = z.object({
+    id: z.string(),
+    title: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    last_message_at: z.number().int().nullable().optional(),
+    parent_thread_id: z.string().nullable().optional(),
+    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
+    anchor_message_id: z.string().nullable().optional(),
+    anchor_index: z.number().int().nullable().optional(),
+    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
+    status: z.string().default('ready'),
+    deleted: z.boolean().default(false),
+    pinned: z.boolean().default(false),
+    clock: z.number().int(),
+    forked: z.boolean().default(false),
+    project_id: z.string().nullable().optional(),
+    system_prompt_id: z.string().nullable().optional(),
+});
+export type Thread = z.infer<typeof ThreadSchema>;
 
-function normalizeTitle(title?: string | null): string {
-    const t = (title ?? '').trim();
-    return t.length ? t : 'Untitled';
-}
+// For incoming create payloads (apply defaults like the DB)
+export const ThreadCreateSchema = ThreadSchema.partial({
+    // Make a wide set of fields optional for input; we'll supply defaults below
+    id: true,
+    title: true,
+    last_message_at: true,
+    parent_thread_id: true,
+    status: true,
+    deleted: true,
+    pinned: true,
+    forked: true,
+    project_id: true,
+    system_prompt_id: true,
+})
+    // We'll re-add with defaults/derived values
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Dynamic defaults while keeping inputs optional
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use z.input so defaulted fields are optional for callers
+export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
+// messages
+export const MessageSchema = z.object({
+    id: z.string(),
+    data: z.unknown().nullable().optional(),
+    role: z.string(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    error: z.string().nullable().optional(),
+    deleted: z.boolean().default(false),
+    thread_id: z.string(),
+    index: z.number().int(),
+    clock: z.number().int(),
+    stream_id: z.string().nullable().optional(),
+    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
+    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
+    file_hashes: z.string().nullable().optional(),
+});
 
-function parseContent(raw: string | null | undefined): any {
-    if (!raw) return emptyDocJSON();
-    try {
-        const parsed = JSON.parse(raw);
-        // Basic structural guard
-        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
-        return emptyDocJSON();
-    } catch {
-        return emptyDocJSON();
-    }
-}
+export type Message = z.infer<typeof MessageSchema>;
 
-function rowToRecord(row: DocumentRow): DocumentRecord {
-    return {
-        id: row.id,
-        title: row.title,
-        content: parseContent(row.content),
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        deleted: row.deleted,
-    };
-}
+export const PostSchema = z.object({
+    id: z.string(),
+    // Title must be non-empty after trimming
+    title: z
+        .string()
+        .transform((s) => s.trim())
+        .refine((s) => s.length > 0, 'Title is required'),
+    content: z.string().default(''),
+    postType: z.string().default('markdown'),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    meta: z.union([
+        z.string(),
+        z.object({
+            key: z.string(),
+            value: z.string().nullable().optional(),
+        }),
+        z
+            .array(
+                z.object({
+                    key: z.string(),
+                    value: z.string().nullable().optional(),
+                })
+            )
+            .nullable()
+            .optional(),
+    ]),
+    file_hashes: z.string().nullable().optional(),
+});
 
-export interface CreateDocumentInput {
-    title?: string | null;
-    content?: any; // TipTap JSON object
-}
+export type Post = z.infer<typeof PostSchema>;
 
-export async function createDocument(
-    input: CreateDocumentInput = {}
-): Promise<DocumentRecord> {
-    const hooks = useHooks();
-    const prepared: DocumentRow = {
-        id: newId(),
-        title: normalizeTitle(input.title),
-        content: JSON.stringify(input.content ?? emptyDocJSON()),
-        postType: 'doc',
-        created_at: nowSec(),
-        updated_at: nowSec(),
-        deleted: false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.documents.create:filter:input',
-        prepared
-    )) as DocumentRow;
-    await hooks.doAction('db.documents.create:action:before', filtered);
-    await db.posts.put(filtered as any); // reuse posts table
-    await hooks.doAction('db.documents.create:action:after', filtered);
-    return rowToRecord(filtered);
-}
+// Create schema for posts allowing omission of id/timestamps; meta may be provided as
+// string | object | array and will be normalized to string upstream before storage.
+export const PostCreateSchema = PostSchema.partial({
+    id: true,
+    created_at: true,
+    updated_at: true,
+}).extend({
+    id: z
+        .string()
+        .optional()
+        .transform((v) => v ?? newId()),
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type PostCreate = z.input<typeof PostCreateSchema>;
 
-export async function getDocument(
-    id: string
-): Promise<DocumentRecord | undefined> {
-    const hooks = useHooks();
-    const row = await db.posts.get(id);
-    if (!row || (row as any).postType !== 'doc') return undefined;
-    const filtered = (await hooks.applyFilters(
-        'db.documents.get:filter:output',
-        row
-    )) as DocumentRow | undefined;
-    return filtered ? rowToRecord(filtered) : undefined;
-}
+export const MessageCreateSchema = MessageSchema.partial({ index: true })
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Keep inputs minimal; generate missing id/clock
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use input type so callers can omit defaulted fields
+export type MessageCreate = z.input<typeof MessageCreateSchema>;
 
-export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
-    const hooks = useHooks();
-    // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
-        .where('postType')
-        .equals('doc')
-        .and((r) => !(r as any).deleted)
-        .reverse() // by primary key order soon? we'll sort manually after fetch
-        .toArray();
-    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
-    rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
-    const filtered = (await hooks.applyFilters(
-        'db.documents.list:filter:output',
-        sliced
-    )) as DocumentRow[];
-    return filtered.map(rowToRecord);
-}
+// kv
+export const KvSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    value: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    clock: z.number().int(),
+});
+export type Kv = z.infer<typeof KvSchema>;
 
-export interface UpdateDocumentPatch {
-    title?: string;
-    content?: any; // TipTap JSON object
-}
+export const KvCreateSchema = KvSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type KvCreate = z.infer<typeof KvCreateSchema>;
 
-export async function updateDocument(
-    id: string,
-    patch: UpdateDocumentPatch
-): Promise<DocumentRecord | undefined> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return undefined;
-    const updated: DocumentRow = {
-        id: existing.id,
-        title: patch.title ? normalizeTitle(patch.title) : existing.title,
-        content: patch.content
-            ? JSON.stringify(patch.content)
-            : (existing as any).content,
-        postType: 'doc',
-        created_at: existing.created_at,
-        updated_at: nowSec(),
-        deleted: (existing as any).deleted ?? false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.documents.update:filter:input',
-        { existing, updated, patch }
-    )) as { updated: DocumentRow } | DocumentRow;
-    const row = (filtered as any).updated
-        ? (filtered as any).updated
-        : (filtered as any as DocumentRow);
-    await hooks.doAction('db.documents.update:action:before', row);
-    await db.posts.put(row as any);
-    await hooks.doAction('db.documents.update:action:after', row);
-    return rowToRecord(row);
-}
+// attachments
+export const AttachmentSchema = z.object({
+    id: z.string(),
+    type: z.string(),
+    name: z.string(),
+    url: z.url(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type Attachment = z.infer<typeof AttachmentSchema>;
 
-export async function softDeleteDocument(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return;
-    const row = {
-        ...(existing as any),
-        deleted: true,
-        updated_at: nowSec(),
-    };
-    await hooks.doAction('db.documents.delete:action:soft:before', row);
-    await db.posts.put(row);
-    await hooks.doAction('db.documents.delete:action:soft:after', row);
-}
+export const AttachmentCreateSchema = AttachmentSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
 
-export async function hardDeleteDocument(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return;
-    await hooks.doAction('db.documents.delete:action:hard:before', existing);
-    await db.posts.delete(id);
-    await hooks.doAction('db.documents.delete:action:hard:after', id);
-}
+// file meta (metadata only; binary stored separately in file_blobs table)
+export const FileMetaSchema = z.object({
+    // Use hash as both primary key and lookup value for simplicity
+    hash: z.string(), // md5 hex lowercase
+    name: z.string(),
+    mime_type: z.string(),
+    kind: z.enum(['image', 'pdf']).default('image'),
+    size_bytes: z.number().int(),
+    width: z.number().int().optional(),
+    height: z.number().int().optional(),
+    page_count: z.number().int().optional(),
+    ref_count: z.number().int().default(0),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type FileMeta = z.infer<typeof FileMetaSchema>;
 
-// Convenience for ensuring DB open (mirrors pattern in other modules)
-export async function ensureDbOpen() {
-    if (!db.isOpen()) await db.open();
-}
-
-export type { DocumentRecord as Document };
+export const FileMetaCreateSchema = FileMetaSchema.omit({
+    created_at: true,
+    updated_at: true,
+    ref_count: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+    ref_count: z.number().int().default(1),
+    clock: z.number().int().default(0),
+});
+export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
 ```
 
 ## File: app/db/threads.ts
@@ -8615,6 +9977,263 @@ import PageShell from '~/components/PageShell.vue';
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';
 </script>
+```
+
+## File: app/plugins/examples/document-history-test.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    // Simple test plugin that registers a document history action.
+    // Mirrors the pattern used by app/plugins/message-actions.client.ts
+    try {
+        console.info('[doc-history-test] registering action');
+
+        registerDocumentHistoryAction({
+            id: 'test:inspect-doc',
+            icon: 'i-lucide-eye',
+            label: 'Inspect Document',
+            order: 300,
+            async handler({ document }) {
+                // Detailed console output for inspection
+                console.group('[doc-history-test] Inspect Document');
+                try {
+                    console.log('document.id:', document?.id);
+                    console.log('document.title:', document?.title);
+                    console.log('document.content (snippet):',
+                        typeof document?.content === 'string'
+                            ? document.content.slice(0, 200)
+                            : document?.content
+                    );
+                    console.log('full document object:', document);
+                } catch (e) {
+                    console.error('[doc-history-test] logging error', e);
+                }
+                console.groupEnd();
+
+                // Show a friendly toast for quick UI verification
+                try {
+                    useToast().add({
+                        title: 'Inspect Document',
+                        description: `id: ${document?.id ?? 'unknown'} — title: ${document?.title ?? 'Untitled'}`,
+                        duration: 4000,
+                    });
+                } catch (e) {
+                    // If useToast isn't available, still continue — we logged details above
+                    // eslint-disable-next-line no-console
+                    console.warn('[doc-history-test] useToast unavailable', e);
+                }
+            },
+        });
+
+        // Log current registered ids for debugging
+        try {
+            const ids = listRegisteredDocumentHistoryActionIds?.() ?? [];
+            console.info('[doc-history-test] registered action ids:', ids);
+        } catch (e) {
+            // ignore
+        }
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[doc-history-test] plugin failed to initialize', e);
+    }
+});
+```
+
+## File: app/plugins/examples/message-actions-test.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    try {
+        console.info('[message-actions-test] registering action');
+
+        registerMessageAction({
+            id: 'test:create-doc',
+            icon: 'pixelarticons:frame-delete',
+            tooltip: 'Create test document',
+            showOn: 'both',
+            order: 300,
+            async handler({ message }) {
+                console.group('[message-actions-test] handler invoked');
+                try {
+                    console.log('message id:', message?.id);
+                    console.log('message role:', message?.role);
+                    console.log(
+                        'message content (preview):',
+                        typeof message?.content === 'string'
+                            ? message.content.slice(0, 300)
+                            : message?.content
+                    );
+                    console.log('full message object:', message);
+                } catch (e) {
+                    console.error('[message-actions-test] logging error', e);
+                }
+                console.groupEnd();
+
+                try {
+                    useToast().add({
+                        title: 'Test Create Document',
+                        description: `message id: ${
+                            message?.id ?? 'unknown'
+                        } — role: ${message?.role ?? 'unknown'}`,
+                        duration: 3500,
+                    });
+                } catch (e) {
+                    console.warn(
+                        '[message-actions-test] useToast unavailable',
+                        e
+                    );
+                }
+            },
+        });
+
+        try {
+            const ids = listRegisteredMessageActionIds?.() ?? [];
+            console.info('[message-actions-test] registered action ids:', ids);
+        } catch (e) {
+            // ignore
+        }
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[message-actions-test] plugin failed to initialize', e);
+    }
+});
+```
+
+## File: app/plugins/examples/project-tree-actions.client.ts
+```typescript
+import type { ProjectTreeHandlerCtx } from '@/composables/ui-extensions/projects/useProjectTreeActions';
+
+export default defineNuxtPlugin(() => {
+    // Test plugin to register thread history actions for development/debugging.
+    // Registers two actions and logs output to console + toasts. Cleans up on app unmount.
+    try {
+        console.info('[thread-history-test] registering actions');
+
+        // Inspect thread action — shows a console group and a toast
+        registerProjectTreeAction({
+            id: 'test:inspect-thread',
+            icon: 'i-lucide-eye',
+            label: 'Inspect Thread',
+            order: 300,
+            showOn: ['root', 'chat'],
+            async handler(ctx: ProjectTreeHandlerCtx) {
+                // Keep the same runtime behavior; log the typed context for authors.
+                console.log(ctx);
+            },
+        });
+    } catch (e) {
+        console.error('[thread-history-test] registration error', e);
+    }
+});
+```
+
+## File: app/plugins/examples/thread-history-test.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    // Test plugin to register thread history actions for development/debugging.
+    // Registers two actions and logs output to console + toasts. Cleans up on app unmount.
+    try {
+        console.info('[thread-history-test] registering actions');
+
+        // Inspect thread action — shows a console group and a toast
+        registerThreadHistoryAction({
+            id: 'test:inspect-thread',
+            icon: 'i-lucide-eye',
+            label: 'Inspect Thread',
+            order: 300,
+            async handler(ctx: any) {
+                const t = ctx?.thread ?? ctx?.document ?? ctx;
+                console.group('[thread-history-test] Inspect Thread');
+                try {
+                    console.log('id:', t?.id);
+                    console.log('title:', t?.title);
+                    console.log(
+                        'snippet (messages or content):',
+                        Array.isArray(t?.messages)
+                            ? t.messages.slice(0, 5)
+                            : t?.content
+                    );
+                    console.log('full thread object:', t);
+                } catch (e) {
+                    console.error('[thread-history-test] logging error', e);
+                }
+                console.groupEnd();
+
+                try {
+                    useToast().add({
+                        title: 'Inspect Thread',
+                        description: `id: ${t?.id ?? 'unknown'} — title: ${
+                            t?.title ?? 'Untitled'
+                        }`,
+                        duration: 4000,
+                    });
+                } catch (e) {
+                    console.warn(
+                        '[thread-history-test] useToast unavailable',
+                        e
+                    );
+                }
+            },
+        });
+
+        // Dump thread to console action — lightweight, useful for automation tests
+        registerThreadHistoryAction({
+            id: 'test:dump-thread',
+            icon: 'i-lucide-copy',
+            label: 'Dump thread',
+            order: 310,
+            handler(ctx: any) {
+                const t = ctx?.thread ?? ctx?.document ?? ctx;
+                try {
+                    console.info('[thread-history-test] dump-thread', t);
+                    useToast()?.add?.({
+                        title: 'Dumped Thread',
+                        description: `Thread ${
+                            t?.id ?? 'unknown'
+                        } logged to console.`,
+                        duration: 2500,
+                    });
+                } catch (e) {
+                    // Best-effort: fall back to console only
+                    console.info(
+                        '[thread-history-test] toast unavailable, logged to console'
+                    );
+                }
+            },
+        });
+
+        // Debug: list current registered action ids (if helper available)
+        try {
+            const ids = listRegisteredThreadHistoryActionIds?.() ?? [];
+            console.info(
+                '[thread-history-test] registered thread action ids:',
+                ids
+            );
+        } catch (e) {
+            // ignore
+        }
+
+        // Clean up on app unmount (use Nuxt hook) so HMR doesn't duplicate actions.
+        try {
+            const nuxtApp = useNuxtApp();
+            // Cast hook key to any to avoid strict HookKeys typing; this is a dev helper plugin.
+            (nuxtApp.hook as any)('app:beforeUnmount', () => {
+                try {
+                    unregisterThreadHistoryAction?.('test:inspect-thread');
+                    unregisterThreadHistoryAction?.('test:dump-thread');
+                    console.info(
+                        '[thread-history-test] unregistered actions on app:beforeUnmount'
+                    );
+                } catch (e) {
+                    console.warn('[thread-history-test] cleanup failed', e);
+                }
+            });
+        } catch (e) {
+            // if hooks unavailable, it's non-fatal — actions will persist for dev session
+        }
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[thread-history-test] plugin failed to initialize', e);
+    }
+});
 ```
 
 ## File: app/utils/chat/files.ts
@@ -9162,1270 +10781,437 @@ const statusText = computed(() => {
 </style>
 ```
 
-## File: app/components/sidebar/SideNavContentCollapsed.vue
+## File: app/components/sidebar/SidebarDocumentItem.vue
 ```vue
 <template>
-    <div class="flex flex-col justify-between h-full relative">
-        <div class="px-1 pt-2 flex flex-col space-y-2">
-            <UTooltip :delay-duration="0" text="New chat">
-                <UButton
-                    @click="onNewChat"
-                    size="md"
-                    class="flex item-center justify-center"
-                    icon="pixelarticons:message-plus"
-                    :ui="{
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                ></UButton>
-                <UButton
-                    size="md"
-                    class="flex item-center justify-center"
-                    icon="pixelarticons:search"
-                    :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="emit('focusSearch')"
-                ></UButton>
-            </UTooltip>
-        </div>
-        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
-            <UButton
-                size="md"
-                class="flex item-center justify-center"
-                icon="pixelarticons:sliders-2"
-                :ui="{
-                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
-                    leadingIcon: 'w-5 h-5',
-                }"
-            ></UButton>
-        </div>
-    </div>
+    <RetroGlassBtn
+        class="w-full flex items-center justify-between text-left"
+        :class="{ 'active-element bg-primary/25': active }"
+        @click="emit('select', doc.id)"
+        @mouseenter="onHoverDoc()"
+    >
+        <span class="truncate flex-1 min-w-0" :title="doc.title">{{
+            doc.title
+        }}</span>
+        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+            <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                @click.stop
+            >
+                <UIcon
+                    name="pixelarticons:more-vertical"
+                    class="w-4 h-4 opacity-70"
+                />
+            </span>
+            <template #content>
+                <div class="p-1 w-44 space-y-1">
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:edit"
+                        @click="emit('rename', doc)"
+                        >Rename</UButton
+                    >
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:folder-plus"
+                        @click="emit('add-to-project', doc)"
+                        >Add to project</UButton
+                    >
+                    <UButton
+                        color="error"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:trash"
+                        @click="emit('delete', doc)"
+                        >Delete</UButton
+                    >
+                    <template v-for="action in extraActions" :key="action.id">
+                        <UButton
+                            :icon="action.icon"
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            class="w-full justify-start"
+                            @click="() => runExtraAction(action)"
+                            >{{ action.label || '' }}</UButton
+                        >
+                    </template>
+                </div>
+            </template>
+        </UPopover>
+    </RetroGlassBtn>
 </template>
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
-import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
-import { VList } from 'virtua/vue';
-
-const props = defineProps<{
-    activeThread?: string;
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import type { Post } from '~/db';
+import { db } from '~/db';
+import { useThrottleFn } from '@vueuse/core';
+const props = defineProps<{ doc: any; active?: boolean }>();
+const emit = defineEmits<{
+    (e: 'select', id: string): void;
+    (e: 'rename', doc: any): void;
+    (e: 'delete', doc: any): void;
+    (e: 'add-to-project', doc: any): void;
 }>();
-
-const items = ref<any[]>([]);
-import { useThreadSearch } from '~/composables/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
-const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
-);
-let sub: { unsubscribe: () => void } | null = null;
-
-onMounted(() => {
-    // Sort by last opened using updated_at index; filter out deleted
-    sub = liveQuery(() =>
-        db.threads
-            .orderBy('updated_at')
-            .reverse()
-            .filter((t) => !t.deleted)
-            .toArray()
-    ).subscribe({
-        next: (results) => (items.value = results),
-        error: (err) => console.error('liveQuery error', err),
-    });
-});
-
-watch(
-    () => items.value,
-    () => {
-        /* silent: removed Items updated log */
+const extraActions = useDocumentHistoryActions();
+const fullDocCache = new Map<string, Post>();
+const prefetching = new Set<string>();
+async function fetchFullDoc(id: string) {
+    if (fullDocCache.has(id)) return fullDocCache.get(id)!;
+    try {
+        const rec = await db.posts.get(id);
+        if (rec) {
+            fullDocCache.set(id, rec as Post);
+            return rec as Post;
+        }
+    } catch {}
+    return null;
+}
+const doPrefetch = useThrottleFn(async (id: string) => {
+    if (fullDocCache.has(id) || prefetching.has(id)) return;
+    prefetching.add(id);
+    await fetchFullDoc(id);
+    prefetching.delete(id);
+}, 300);
+function onHoverDoc() {
+    if (!props.doc?.id) return;
+    if (!fullDocCache.has(props.doc.id)) doPrefetch(props.doc.id);
+}
+async function runExtraAction(action: any) {
+    try {
+        let docToSend = props.doc;
+        if (!docToSend.content || docToSend.content.length === 0) {
+            const full = await fetchFullDoc(props.doc.id);
+            if (full) docToSend = full;
+            else {
+                try {
+                    useToast().add({
+                        title: 'Document not available',
+                        description: 'Failed to load full content',
+                        color: 'error',
+                        duration: 3000,
+                    });
+                } catch {}
+                return;
+            }
+        }
+        await action.handler({ document: docToSend });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Doc action error', action.id, e);
     }
-);
-
-onUnmounted(() => {
-    sub?.unsubscribe();
-});
-
-const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-
-const showDeleteModal = ref(false);
-const deleteId = ref<string | null>(null);
-
-function openRename(thread: any) {
-    renameId.value = thread.id;
-    renameTitle.value = thread.title ?? '';
-    showRenameModal.value = true;
-}
-
-async function saveRename() {
-    if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
-    const now = Math.floor(Date.now() / 1000);
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-}
-
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
-    showDeleteModal.value = true;
-}
-
-async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
-    showDeleteModal.value = false;
-    deleteId.value = null;
-}
-
-function onNewChat() {
-    emit('newChat');
 }
 </script>
 ```
 
-## File: app/composables/index.ts
-```typescript
-/** Barrel export for chat-related composables (Task 1.6) */
-export * from './useTailStream';
-export * from './useAutoScroll';
-export * from './useObservedElementSize';
-```
-
-## File: app/composables/useActivePrompt.ts
-```typescript
-import { ref, readonly } from 'vue';
-import { getPrompt } from '~/db/prompts';
-import { useHooks } from './useHooks';
-
-export interface ActivePromptState {
-    activePromptId: string | null;
-    activePromptContent: any | null;
-}
-
-// NOTE: Must be module-singleton so different composables/components share state.
-// Previously each invocation created new refs, so selection in modal was not
-// visible to chat sending logic. We lift refs to module scope.
-const _activePromptId = ref<string | null>(null);
-const _activePromptContent = ref<any | null>(null);
-
-export function useActivePrompt() {
-    const hooks = useHooks();
-
-    async function setActivePrompt(id: string | null): Promise<void> {
-        if (!id) {
-            _activePromptId.value = null;
-            _activePromptContent.value = null;
-            return;
-        }
-
-        const prompt = await getPrompt(id);
-        if (prompt) {
-            _activePromptId.value = prompt.id;
-            _activePromptContent.value = prompt.content;
-            await hooks.doAction('chat.systemPrompt.select:action:after', {
-                id: prompt.id,
-                content: prompt.content,
+## File: app/components/sidebar/SidebarThreadItem.vue
+```vue
+<template>
+    <RetroGlassBtn
+        class="w-full flex items-center justify-between text-left"
+        :class="{ 'active-element bg-primary/25': active }"
+        @click="emit('select', thread.id)"
+    >
+        <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+            <UIcon
+                v-if="thread.forked"
+                name="pixelarticons:git-branch"
+                class="shrink-0"
+            />
+            <span
+                class="truncate flex-1 min-w-0"
+                :title="thread.title || 'New Thread'"
+                >{{ thread.title || 'New Thread' }}</span
+            >
+        </div>
+        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+            <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                @click.stop
+            >
+                <UIcon
+                    name="pixelarticons:more-vertical"
+                    class="w-4 h-4 opacity-70"
+                />
+            </span>
+            <template #content>
+                <div class="p-1 w-44 space-y-1">
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:edit"
+                        @click="emit('rename', thread)"
+                        >Rename</UButton
+                    >
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:folder-plus"
+                        @click="emit('add-to-project', thread)"
+                        >Add to project</UButton
+                    >
+                    <UButton
+                        color="error"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:trash"
+                        @click="emit('delete', thread)"
+                        >Delete</UButton
+                    >
+                    <template v-for="action in extraActions" :key="action.id">
+                        <UButton
+                            :icon="action.icon"
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            class="w-full justify-start"
+                            @click="() => runExtraAction(action, thread)"
+                            >{{ action.label || '' }}</UButton
+                        >
+                    </template>
+                </div>
+            </template>
+        </UPopover>
+    </RetroGlassBtn>
+</template>
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import type { Thread } from '~/db';
+const props = defineProps<{ thread: Thread; active?: boolean }>();
+const emit = defineEmits<{
+    (e: 'select', id: string): void;
+    (e: 'rename', thread: Thread): void;
+    (e: 'delete', thread: Thread): void;
+    (e: 'add-to-project', thread: Thread): void;
+}>();
+// Plugin thread actions
+const extraActions = useThreadHistoryActions();
+async function runExtraAction(action: any, thread: Thread) {
+    try {
+        await action.handler({ thread });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
             });
-        } else {
-            _activePromptId.value = null;
-            _activePromptContent.value = null;
-        }
-    }
-
-    function clearActivePrompt(): void {
-        setActivePrompt(null);
-    }
-
-    function getActivePromptContent(): any | null {
-        return _activePromptContent.value;
-    }
-
-    return {
-        activePromptId: readonly(_activePromptId),
-        activePromptContent: readonly(_activePromptContent),
-        setActivePrompt,
-        clearActivePrompt,
-        getActivePromptContent,
-    };
-}
-```
-
-## File: app/db/client.ts
-```typescript
-import Dexie, { type Table } from 'dexie';
-import type {
-    Attachment,
-    Kv,
-    Message,
-    Project,
-    Thread,
-    FileMeta,
-    Post,
-} from './schema';
-
-export interface FileBlobRow {
-    hash: string; // primary key
-    blob: Blob; // actual binary Blob
-}
-
-// Dexie database versioning & schema
-export class Or3DB extends Dexie {
-    projects!: Table<Project, string>;
-    threads!: Table<Thread, string>;
-    messages!: Table<Message, string>;
-    kv!: Table<Kv, string>;
-    attachments!: Table<Attachment, string>;
-    file_meta!: Table<FileMeta, string>; // hash as primary key
-    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
-    posts!: Table<Post, string>;
-
-    constructor() {
-        super('or3-db');
-        // Simplified schema: collapse historical migrations into a single
-        // version to avoid full-table upgrade passes (which previously
-        // loaded entire tables into memory via toArray()). Since there are
-        // no external users / all data already upgraded, we can safely
-        // define only the latest structure.
-        // NOTE: Keep version number at 5 so existing local DBs at v5 open
-        // without triggering a downgrade. Future schema changes should bump.
-        this.version(5).stores({
-            projects: 'id, name, clock, created_at, updated_at',
-            threads:
-                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-            messages:
-                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-            kv: 'id, &name, clock, created_at, updated_at',
-            attachments: 'id, type, name, clock, created_at, updated_at',
-            file_meta:
-                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-            file_blobs: 'hash',
-            posts: 'id, title, postType, deleted, created_at, updated_at',
-        });
+        } catch {}
+        console.error('Thread action error', action.id, e);
     }
 }
-
-export const db = new Or3DB();
+</script>
 ```
 
-## File: app/db/index.ts
-```typescript
-import { db } from './client';
-import type {
-    Attachment,
-    AttachmentCreate,
-    Kv,
-    KvCreate,
-    Message,
-    MessageCreate,
-    Project,
-    Thread,
-    ThreadCreate,
-    Post,
-    PostCreate,
-} from './schema';
-import {
-    createThread,
-    searchThreadsByTitle,
-    threadsByProject,
-    upsertThread,
-    softDeleteThread,
-    hardDeleteThread,
-} from './threads';
-import {
-    appendMessage,
-    createMessage,
-    messagesByThread,
-    moveMessage,
-    copyMessage,
-    getMessage,
-    messageByStream,
-    softDeleteMessage,
-    upsertMessage,
-    hardDeleteMessage,
-} from './messages';
-import {
-    createKv,
-    upsertKv,
-    hardDeleteKv,
-    getKv,
-    getKvByName,
-    setKvByName,
-    hardDeleteKvByName,
-} from './kv';
-import {
-    createAttachment,
-    upsertAttachment,
-    softDeleteAttachment,
-    hardDeleteAttachment,
-    getAttachment,
-} from './attachments';
-import {
-    createProject,
-    upsertProject,
-    softDeleteProject,
-    hardDeleteProject,
-    getProject,
-} from './projects';
-import {
-    createPost,
-    upsertPost,
-    getPost,
-    allPosts,
-    searchPosts,
-    softDeletePost,
-    hardDeletePost,
-} from './posts';
-import {
-    createDocument,
-    getDocument,
-    listDocuments,
-    updateDocument,
-    softDeleteDocument,
-    hardDeleteDocument,
-} from './documents';
+## File: app/components/sidebar/SidebarVirtualList.vue
+```vue
+<template>
+    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <VList
+            :data="flatItems"
+            :style="{ height: 'calc(100vh - 318px)' }"
+            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
+            #default="{ item, index }"
+        >
+            <div :key="item.key || index">
+                <h1
+                    v-if="item.type === 'sectionHeader'"
+                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
+                >
+                    {{ item.label }}
+                </h1>
+                <SidebarProjectTree
+                    v-else-if="item.type === 'projectsTree'"
+                    :projects="projects"
+                    v-model:expanded="expandedProjectsLocal"
+                    @chatSelected="emit('chatSelected', $event)"
+                    @documentSelected="emit('documentSelected', $event)"
+                    @addChat="emit('addChat', $event)"
+                    @addDocument="emit('addDocument', $event)"
+                    @renameProject="emit('renameProject', $event)"
+                    @deleteProject="emit('deleteProject', $event)"
+                    @renameEntry="emit('renameEntry', $event)"
+                    @removeFromProject="emit('removeFromProject', $event)"
+                />
+                <div v-else-if="item.type === 'thread'" class="mr-1">
+                    <SidebarThreadItem
+                        :thread="item.thread"
+                        :active="item.thread.id === activeThread"
+                        class="mb-2"
+                        @select="emit('selectThread', $event)"
+                        @rename="emit('renameThread', $event)"
+                        @delete="emit('deleteThread', $event)"
+                        @add-to-project="emit('addThreadToProject', $event)"
+                    />
+                </div>
+                <div v-else-if="item.type === 'doc'" class="mr-1">
+                    <SidebarDocumentItem
+                        :doc="item.doc"
+                        class="mb-2"
+                        :active="item.doc.id === activeDocument"
+                        @select="emit('selectDocument', $event)"
+                        @rename="emit('renameDocument', $event)"
+                        @delete="emit('deleteDocument', $event)"
+                        @add-to-project="emit('addDocumentToProject', $event)"
+                    />
+                </div>
+            </div>
+        </VList>
+    </div>
+</template>
 
-// Barrel API (backward compatible shape)
-export { db } from './client';
+<script setup lang="ts">
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
+import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
+import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 
-export const create = {
-    thread: createThread,
-    message: createMessage,
-    kv: createKv,
-    attachment: createAttachment,
-    project: createProject,
-    post: createPost,
-    document: createDocument,
-};
-
-export const upsert = {
-    thread: upsertThread,
-    message: upsertMessage,
-    kv: upsertKv,
-    attachment: upsertAttachment,
-    project: upsertProject,
-    post: upsertPost,
-    document: updateDocument, // upsert alias (update only for now)
-};
-
-export const queries = {
-    threadsByProject,
-    messagesByThread,
-    searchThreadsByTitle,
-    getMessage,
-    messageByStream,
-    getKv,
-    getKvByName,
-    getAttachment,
-    getProject,
-    getPost,
-    allPosts,
-    searchPosts,
-    getDocument,
-    listDocuments,
-};
-
-export const del = {
-    // soft deletes
-    soft: {
-        project: softDeleteProject,
-        thread: softDeleteThread,
-        message: softDeleteMessage,
-        attachment: softDeleteAttachment,
-        post: softDeletePost,
-        document: softDeleteDocument,
-        // kv has no deleted flag; only hard delete is supported
-    },
-    // hard deletes (destructive)
-    hard: {
-        project: hardDeleteProject,
-        thread: hardDeleteThread,
-        message: hardDeleteMessage,
-        attachment: hardDeleteAttachment,
-        kv: hardDeleteKv,
-        kvByName: hardDeleteKvByName,
-        post: hardDeletePost,
-        document: hardDeleteDocument,
-    },
-};
-
-export const tx = {
-    appendMessage,
-    moveMessage,
-    copyMessage,
-};
-
-// Shorthand helpers for common KV flows
-export const kv = {
-    get: getKvByName,
-    set: setKvByName,
-    delete: hardDeleteKvByName,
-};
-
-export type {
-    Thread,
-    ThreadCreate,
-    Message,
-    MessageCreate,
-    Kv,
-    KvCreate,
-    Attachment,
-    AttachmentCreate,
-    Project,
-    Post,
-    PostCreate,
-};
-
-export type { Document } from './documents';
-```
-
-## File: app/db/prompts.ts
-```typescript
-import { db } from './client';
-import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
-
-/**
- * Internal stored row shape (reuses posts table with postType = 'prompt').
- * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
- * Content is persisted as a JSON string (TipTap JSON) for flexibility.
- */
-export interface PromptRow {
+interface ProjectEntry {
     id: string;
-    title: string; // non-empty trimmed
-    content: string; // JSON string
-    postType: string; // always 'prompt'
-    created_at: number; // seconds
-    updated_at: number; // seconds
-    deleted: boolean;
+    name?: string;
+    kind: 'chat' | 'doc';
 }
-
-/** Public facing record with content already parsed. */
-export interface PromptRecord {
+interface Project {
+    id: string;
+    name: string;
+    data?: any;
+}
+interface Thread {
+    id: string;
+    title?: string;
+    forked?: boolean;
+}
+interface DocLite {
     id: string;
     title: string;
-    content: any; // TipTap JSON object
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
+    updated_at?: number;
+    created_at?: number;
+    postType?: string;
 }
 
-function emptyPromptJSON() {
-    return { type: 'doc', content: [] };
+// Row item discriminated union
+interface SectionHeaderItem {
+    type: 'sectionHeader';
+    key: string;
+    label: string;
+}
+interface ProjectsTreeItem {
+    type: 'projectsTree';
+    key: string;
+}
+interface ThreadItem {
+    type: 'thread';
+    key: string;
+    thread: Thread;
+}
+interface DocItem {
+    type: 'doc';
+    key: string;
+    doc: DocLite;
 }
 
-function normalizeTitle(
-    title?: string | null,
-    {
-        fallback = 'Untitled Prompt',
-        allowEmpty = true,
-    }: { fallback?: string; allowEmpty?: boolean } = {}
-): string {
-    const raw = title ?? '';
-    const trimmed = raw.trim();
-    if (!trimmed && !allowEmpty) return fallback;
-    return trimmed; // may be '' when allowEmpty true
-}
+type SidebarRowItem =
+    | SectionHeaderItem
+    | ProjectsTreeItem
+    | ThreadItem
+    | DocItem;
 
-function parseContent(raw: string | null | undefined): any {
-    if (!raw) return emptyPromptJSON();
-    try {
-        const parsed = JSON.parse(raw);
-        // Basic structural guard
-        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
-        return emptyPromptJSON();
-    } catch {
-        return emptyPromptJSON();
-    }
-}
-
-function rowToRecord(row: PromptRow): PromptRecord {
-    return {
-        id: row.id,
-        title: row.title,
-        content: parseContent(row.content),
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        deleted: row.deleted,
-    };
-}
-
-export interface CreatePromptInput {
-    title?: string | null;
-    content?: any; // TipTap JSON object
-}
-
-export async function createPrompt(
-    input: CreatePromptInput = {}
-): Promise<PromptRecord> {
-    const hooks = useHooks();
-    const prepared: PromptRow = {
-        id: newId(),
-        title: normalizeTitle(input.title, { allowEmpty: false }),
-        content: JSON.stringify(input.content ?? emptyPromptJSON()),
-        postType: 'prompt',
-        created_at: nowSec(),
-        updated_at: nowSec(),
-        deleted: false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.create:filter:input',
-        prepared
-    )) as PromptRow;
-    await hooks.doAction('db.prompts.create:action:before', filtered);
-    await db.posts.put(filtered as any); // reuse posts table
-    await hooks.doAction('db.prompts.create:action:after', filtered);
-    return rowToRecord(filtered);
-}
-
-export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
-    const hooks = useHooks();
-    const row = await db.posts.get(id);
-    if (!row || (row as any).postType !== 'prompt') return undefined;
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.get:filter:output',
-        row
-    )) as PromptRow | undefined;
-    return filtered ? rowToRecord(filtered) : undefined;
-}
-
-export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
-    const hooks = useHooks();
-    // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
-        .where('postType')
-        .equals('prompt')
-        .and((r) => !(r as any).deleted)
-        .reverse() // by primary key order soon? we'll sort manually after fetch
-        .toArray();
-    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
-    rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as PromptRow[];
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.list:filter:output',
-        sliced
-    )) as PromptRow[];
-    return filtered.map(rowToRecord);
-}
-
-export interface UpdatePromptPatch {
-    title?: string;
-    content?: any; // TipTap JSON object
-}
-
-export async function updatePrompt(
-    id: string,
-    patch: UpdatePromptPatch
-): Promise<PromptRecord | undefined> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return undefined;
-    const updated: PromptRow = {
-        id: existing.id,
-        title:
-            patch.title !== undefined
-                ? normalizeTitle(patch.title, { allowEmpty: true })
-                : existing.title,
-        content: patch.content
-            ? JSON.stringify(patch.content)
-            : (existing as any).content,
-        postType: 'prompt',
-        created_at: existing.created_at,
-        updated_at: nowSec(),
-        deleted: (existing as any).deleted ?? false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.update:filter:input',
-        { existing, updated, patch }
-    )) as { updated: PromptRow } | PromptRow;
-    const row = (filtered as any).updated
-        ? (filtered as any).updated
-        : (filtered as any as PromptRow);
-    await hooks.doAction('db.prompts.update:action:before', row);
-    await db.posts.put(row as any);
-    await hooks.doAction('db.prompts.update:action:after', row);
-    return rowToRecord(row);
-}
-
-export async function softDeletePrompt(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return;
-    const row = {
-        ...(existing as any),
-        deleted: true,
-        updated_at: nowSec(),
-    };
-    await hooks.doAction('db.prompts.delete:action:soft:before', row);
-    await db.posts.put(row);
-    await hooks.doAction('db.prompts.delete:action:soft:after', row);
-}
-
-export async function hardDeletePrompt(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return;
-    await hooks.doAction('db.prompts.delete:action:hard:before', existing);
-    await db.posts.delete(id);
-    await hooks.doAction('db.prompts.delete:action:hard:after', id);
-}
-
-// Convenience for ensuring DB open (mirrors pattern in other modules)
-export async function ensureDbOpen() {
-    if (!db.isOpen()) await db.open();
-}
-
-export type { PromptRecord as Prompt };
-```
-
-## File: app/db/schema.ts
-```typescript
-import { z } from 'zod';
-import { newId } from './util';
-
-const nowSec = () => Math.floor(Date.now() / 1000);
-
-export const ProjectSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string().nullable().optional(),
-    data: z.any(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Project = z.infer<typeof ProjectSchema>;
-
-// threads
-export const ThreadSchema = z.object({
-    id: z.string(),
-    title: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    last_message_at: z.number().int().nullable().optional(),
-    parent_thread_id: z.string().nullable().optional(),
-    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
-    anchor_message_id: z.string().nullable().optional(),
-    anchor_index: z.number().int().nullable().optional(),
-    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
-    status: z.string().default('ready'),
-    deleted: z.boolean().default(false),
-    pinned: z.boolean().default(false),
-    clock: z.number().int(),
-    forked: z.boolean().default(false),
-    project_id: z.string().nullable().optional(),
-    system_prompt_id: z.string().nullable().optional(),
-});
-export type Thread = z.infer<typeof ThreadSchema>;
-
-// For incoming create payloads (apply defaults like the DB)
-export const ThreadCreateSchema = ThreadSchema.partial({
-    // Make a wide set of fields optional for input; we'll supply defaults below
-    id: true,
-    title: true,
-    last_message_at: true,
-    parent_thread_id: true,
-    status: true,
-    deleted: true,
-    pinned: true,
-    forked: true,
-    project_id: true,
-    system_prompt_id: true,
-})
-    // We'll re-add with defaults/derived values
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Dynamic defaults while keeping inputs optional
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use z.input so defaulted fields are optional for callers
-export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
-// messages
-export const MessageSchema = z.object({
-    id: z.string(),
-    data: z.unknown().nullable().optional(),
-    role: z.string(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    error: z.string().nullable().optional(),
-    deleted: z.boolean().default(false),
-    thread_id: z.string(),
-    index: z.number().int(),
-    clock: z.number().int(),
-    stream_id: z.string().nullable().optional(),
-    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
-    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
-    file_hashes: z.string().nullable().optional(),
-});
-
-export type Message = z.infer<typeof MessageSchema>;
-
-export const PostSchema = z.object({
-    id: z.string(),
-    // Title must be non-empty after trimming
-    title: z
-        .string()
-        .transform((s) => s.trim())
-        .refine((s) => s.length > 0, 'Title is required'),
-    content: z.string().default(''),
-    postType: z.string().default('markdown'),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    meta: z.union([
-        z.string(),
-        z.object({
-            key: z.string(),
-            value: z.string().nullable().optional(),
-        }),
-        z
-            .array(
-                z.object({
-                    key: z.string(),
-                    value: z.string().nullable().optional(),
-                })
-            )
-            .nullable()
-            .optional(),
-    ]),
-    file_hashes: z.string().nullable().optional(),
-});
-
-export type Post = z.infer<typeof PostSchema>;
-
-// Create schema for posts allowing omission of id/timestamps; meta may be provided as
-// string | object | array and will be normalized to string upstream before storage.
-export const PostCreateSchema = PostSchema.partial({
-    id: true,
-    created_at: true,
-    updated_at: true,
-}).extend({
-    id: z
-        .string()
-        .optional()
-        .transform((v) => v ?? newId()),
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type PostCreate = z.input<typeof PostCreateSchema>;
-
-export const MessageCreateSchema = MessageSchema.partial({ index: true })
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Keep inputs minimal; generate missing id/clock
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use input type so callers can omit defaulted fields
-export type MessageCreate = z.input<typeof MessageCreateSchema>;
-
-// kv
-export const KvSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    value: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    clock: z.number().int(),
-});
-export type Kv = z.infer<typeof KvSchema>;
-
-export const KvCreateSchema = KvSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type KvCreate = z.infer<typeof KvCreateSchema>;
-
-// attachments
-export const AttachmentSchema = z.object({
-    id: z.string(),
-    type: z.string(),
-    name: z.string(),
-    url: z.url(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Attachment = z.infer<typeof AttachmentSchema>;
-
-export const AttachmentCreateSchema = AttachmentSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
-
-// file meta (metadata only; binary stored separately in file_blobs table)
-export const FileMetaSchema = z.object({
-    // Use hash as both primary key and lookup value for simplicity
-    hash: z.string(), // md5 hex lowercase
-    name: z.string(),
-    mime_type: z.string(),
-    kind: z.enum(['image', 'pdf']).default('image'),
-    size_bytes: z.number().int(),
-    width: z.number().int().optional(),
-    height: z.number().int().optional(),
-    page_count: z.number().int().optional(),
-    ref_count: z.number().int().default(0),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type FileMeta = z.infer<typeof FileMetaSchema>;
-
-export const FileMetaCreateSchema = FileMetaSchema.omit({
-    created_at: true,
-    updated_at: true,
-    ref_count: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-    ref_count: z.number().int().default(1),
-    clock: z.number().int().default(0),
-});
-export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
-```
-
-## File: app/plugins/message-actions.client.ts
-```typescript
-import { registerMessageAction } from '~/composables/useMessageActions';
-import { useToast } from '#imports';
-import { newDocument } from '~/composables/useDocumentsStore';
-
-export default defineNuxtPlugin(() => {
-    registerMessageAction({
-        id: 'Create document', // unique id
-        icon: 'pixelarticons:notes-plus', // any icon name supported by <UButton>
-        tooltip: 'Create document',
-        showOn: 'assistant', // 'user' | 'assistant' | 'both'
-        order: 300, // optional; after built-ins ( <200 reserved )
-        async handler({ message }) {
-            console.log('Create document action invoked', message);
-
-            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
-            async function markdownToTipTapDoc(md: string) {
-                const markdown = (md || '').trim();
-                if (!markdown) return { type: 'doc', content: [] };
-                try {
-                    const [{ Editor }] = await Promise.all([
-                        import('@tiptap/core'),
-                    ]);
-                    const StarterKit = (await import('@tiptap/starter-kit'))
-                        .default;
-                    // tiptap-markdown exports markdownToProseMirror function
-                    const { Markdown } = await import('tiptap-markdown');
-
-                    const editor = new Editor({
-                        extensions: [StarterKit, Markdown],
-                        content: '',
-                    });
-
-                    editor.commands.setContent(markdown);
-                    return editor.getJSON();
-                } catch (e) {
-                    alert('error!!!');
-                }
-            }
-
-            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
-
-            const doc = await newDocument({
-                title: (message as any).title || 'Untitled',
-                content: tiptapDoc,
-            });
-
-            console.log('Created document record', doc);
-
-            // Attempt to open in a new pane (if capacity) else reuse active pane
-            const mp: any = (globalThis as any).__or3MultiPaneApi;
-            try {
-                if (mp) {
-                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
-                    if (couldAdd && typeof mp.addPane === 'function') {
-                        mp.addPane(); // sets new pane active
-                    }
-                    const panes = mp.panes?.value;
-
-                    const activeIndex = mp.activePaneIndex?.value ?? 0;
-
-                    if (Array.isArray(panes)) {
-                        const pane = panes[activeIndex];
-                        if (pane) {
-                            pane.mode = 'doc';
-                            pane.documentId = doc.id;
-                            // Reset chat-related fields when switching
-                            pane.threadId =
-                                pane.mode === 'doc'
-                                    ? pane.threadId
-                                    : pane.threadId;
-                        }
-                    }
-                }
-            } catch (e) {
-                // non-fatal; fallback is just created doc without auto-open
-                console.warn('Open document in pane failed', e);
-            }
-
-            useToast().add({
-                title: 'Document created',
-                description: `Opened in ${
-                    mp?.canAddPane?.value ? 'new' : 'current'
-                } pane: ${doc.id}`,
-                duration: 2600,
-            });
-        },
-    });
-});
-```
-
-## File: app/utils/prompt-utils.ts
-```typescript
-/**
- * Utility functions for system prompts
- */
-
-/**
- * Converts TipTap JSON content to plain text string for use as system message.
- * Extracts text from paragraph nodes and joins with newlines.
- */
-export function promptJsonToString(json: any): string {
-    if (!json) return '';
-    const lines: string[] = [];
-
-    function walk(node: any, collectLine = false) {
-        if (!node) return;
-        // Gather plain text from leaf text nodes
-        if (Array.isArray(node)) {
-            node.forEach((n) => walk(n));
-            return;
-        }
-        if (node.type === 'text') {
-            currentLine += node.text || '';
-            return;
-        }
-        const blockTypes = new Set([
-            'paragraph',
-            'heading',
-            'blockquote',
-            'codeBlock',
-            'orderedList',
-            'bulletList',
-            'listItem',
-        ]);
-        let isBlock = blockTypes.has(node.type);
-        if (isBlock) {
-            flushLine();
-        }
-        if (node.content) node.content.forEach((c: any) => walk(c));
-        if (isBlock) flushLine();
-    }
-
-    let currentLine = '';
-    function flushLine() {
-        if (currentLine.trim().length) lines.push(currentLine.trim());
-        currentLine = '';
-    }
-
-    walk(json.content || json);
-    flushLine();
-    return lines.join('\n');
-}
-```
-
-## File: app/app.vue
-```vue
-<template>
-    <UApp>
-        <NuxtPage />
-    </UApp>
-</template>
-<script setup lang="ts">
-// Apply initial theme class to <html> so CSS variables cascade app-wide
-useHead({
-    htmlAttrs: {
-        class: 'light',
-    },
-    title: 'or3 chat',
-    link: [{ rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' }],
-});
-
-import { onMounted } from 'vue';
-import { useNuxtApp } from '#app';
-
-// Fire app.init:action:after once after the root app mounts (client-only)
-const nuxtApp = useNuxtApp();
-
-onMounted(() => {
-    const g: any = globalThis as any;
-    if (g.__OR3_APP_INIT_FIRED__) return;
-    g.__OR3_APP_INIT_FIRED__ = true;
-    const hooks: any = nuxtApp.$hooks;
-    if (hooks && typeof hooks.doAction === 'function') {
-        hooks.doAction('app.init:action:after', nuxtApp);
-    }
-});
-</script>
-```
-
-## File: vitest.config.ts
-```typescript
-import { defineConfig } from 'vitest/config';
-import vue from '@vitejs/plugin-vue';
-
-// Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
-// We intentionally cast the plugin to any to bypass structural mismatch.
-// No dependency version changes per instruction.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const vueAny: any = vue;
-
-export default defineConfig({
-    // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
-    plugins: [vueAny()],
-    test: {
-        environment: 'jsdom',
-        globals: true,
-        include: ['app/**/__tests__/**/*.test.ts'],
-        exclude: ['node_modules', 'dist', '.nuxt'],
-        setupFiles: ['tests/setup.ts'],
-        testTimeout: 10000,
-        hookTimeout: 10000,
-        bail: 1,
-    },
-});
-```
-
-## File: app/components/chat/VirtualMessageList.vue
-```vue
-<template>
-    <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" class="flex flex-col" :class="wrapperClass">
-        <Virtualizer
-            :data="messages"
-            :itemSize="itemSizeEstimation || undefined"
-            :overscan="overscan"
-            :scrollRef="scrollParent || undefined"
-            @scroll="onScroll"
-            @scroll-end="onScrollEnd"
-            v-slot="{ item, index }"
-        >
-            <div :key="item.id || index">
-                <slot name="item" :message="item" :index="index" />
-            </div>
-        </Virtualizer>
-        <!-- Tail slot for streaming message appended after virtualized stable messages -->
-        <slot name="tail" />
-    </div>
-</template>
-
-<script setup lang="ts">
-/**
- * VirtualMessageList
- * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
- * Thin abstraction over virtua's <VList>. Purpose:
- *  - Decouple higher-level chat code from 3p library specifics (swap easier).
- *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
- *    auto-scroll + lazy fetch triggers without leaking scroll math.
- *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
- *    don't sprinkle magic numbers.
- *
- * Performance Notes (Task 2.4):
- *  - itemSizeEstimation is a heuristic avg row height (px). Virtua benefits
- *    from closer estimates for jump accuracy. We'll measure once real message
- *    mix known; keep default conservative (72) to reduce under-estimation.
- *  - overscan kept small (4) to balance DOM churn vs. rapid wheel scroll.
- *  - computeRange() currently returns full range because virtua's public API
- *    doesn't expose internal first/last indices directly. This is acceptable
- *    for now since downstream consumers only need edge detection. If/when we
- *    require partial range (e.g. transcript minimap) we can either:
- *      a) Contribute an API upstream, or
- *      b) Probe DOM for rendered children & derive indices (slower fallback).
- *  - Scroll events: we coalesce logic via onInternalUpdate() — cheap constant
- *    operations (no layout thrash) so safe each scroll tick.
- *  - Future optimization hooks: dynamic itemSizeEstimation sampling (median of
- *    first N rendered rows) and throttled range emission if CPU hotspots seen.
- */
-import { onMounted, ref, watch, type PropType } from 'vue';
-// eslint-disable-next-line import/no-unresolved
-import { Virtualizer } from 'virtua/vue';
-
-interface ChatMessage {
-    id: string;
-    role?: string;
-    content?: string;
-    [k: string]: any;
-}
-
-const props = defineProps({
-    messages: { type: Array as PropType<ChatMessage[]>, required: true },
-    itemSizeEstimation: { type: Number, default: 72 }, // heuristic average row height
-    overscan: { type: Number, default: 4 },
-    wrapperClass: { type: String, default: '' },
-    scrollParent: {
-        type: Object as PropType<HTMLElement | null>,
-        default: null,
-    },
-});
-
-const emit = defineEmits<{
-    (e: 'visible-range-change', range: { start: number; end: number }): void;
-    (e: 'reached-top'): void;
-    (e: 'reached-bottom'): void;
+const props = defineProps<{
+    projects: Project[];
+    threads: Thread[];
+    documents: any[]; // possibly full posts containing heavy fields
+    displayDocuments?: any[]; // optional filtered docs from search
+    expandedProjects: string[]; // mutated in place (passed to tree)
+    activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
+    activeThread?: string;
+    activeDocument?: string;
+    height: number; // required external measured height
 }>();
 
-const root = ref<HTMLElement | null>(null);
+// Simplified emit typing (broad) to accommodate both legacy kebab-case and new camelCase events during transition
+// TODO: tighten types once integration finalized
+// eslint-disable-next-line @typescript-eslint/ban-types
+const emit = defineEmits<(e: string, ...args: any[]) => void>();
 
-// Track visible range heuristically via scroll metrics
-function computeRange(): { start: number; end: number } {
-    // virtua does not expose direct API here; fallback simplistic approach:
-    // We rely on overscan as smoothing; refine later if library offers hooks.
-    const total = props.messages.length;
-    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
-    // Placeholder: without internal indices, emit full range.
-    return { start: 0, end: total - 1 };
-}
-
-function onInternalUpdate() {
-    const range = computeRange();
-    emit('visible-range-change', range);
-    if (range.start === 0) emit('reached-top');
-    if (range.end >= props.messages.length - 1) emit('reached-bottom');
-}
-
-function onScroll() {
-    onInternalUpdate();
-}
-function onScrollEnd() {
-    onInternalUpdate();
-}
-
-watch(
-    () => props.messages.length,
-    () => onInternalUpdate()
+// Lightweight docs mapping (strip heavy fields like content)
+const lightweightDocs = computed<DocLite[]>(() =>
+    (props.documents || []).map((d: any) => ({
+        id: d.id,
+        title: d.title || '(untitled document)',
+        updated_at: d.updated_at,
+        created_at: d.created_at,
+        postType: d.postType,
+    }))
 );
 
-onMounted(() => onInternalUpdate());
-</script>
-
-<style scoped>
-/* Keep retro feel: no extra styling here; rely on parent theme utilities */
-</style>
-```
-
-## File: app/components/sidebar/SidebarHeader.vue
-```vue
-<template>
-    <div
-        :class="{
-            'px-0 justify-center': collapsed,
-            'px-3 justify-between': !collapsed,
-        }"
-        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
-    >
-        <div v-show="!collapsed">
-            <slot name="sidebar-header">
-                <div class="flex items-center space-x-2">
-                    <h1 class="text-[14px] font-medium uppercase tracking-wide">
-                        or3-chat
-                    </h1>
-                </div>
-            </slot>
-        </div>
-
-        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
-            <UButton
-                size="xs"
-                :square="true"
-                color="neutral"
-                variant="ghost"
-                :class="'retro-btn'"
-                @click="onToggle"
-                :ui="{ base: 'retro-btn' }"
-                :aria-label="toggleAria"
-                :title="toggleAria"
-            >
-                <UIcon :name="toggleIcon" class="w-5 h-5" />
-            </UButton>
-        </slot>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
-
-const props = defineProps({
-    collapsed: { type: Boolean, required: true },
-    toggleIcon: { type: String, required: true },
-    toggleAria: { type: String, required: true },
+const effectiveDocs = computed<DocLite[]>(() => {
+    if (props.displayDocuments && props.displayDocuments.length) {
+        return props.displayDocuments.map((d: any) => ({
+            id: d.id,
+            title: d.title || '(untitled document)',
+            updated_at: d.updated_at,
+            created_at: d.created_at,
+            postType: d.postType,
+        }));
+    }
+    return lightweightDocs.value;
 });
-const emit = defineEmits(['toggle']);
 
-function onToggle() {
-    emit('toggle');
-}
+// Local mirror for v-model with tree (keep reference semantics for parent array)
+const expandedProjectsLocal = computed({
+    get: () => props.expandedProjects,
+    set: (val: string[]) => {
+        // mutate original array for parent expectations
+        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
+    },
+});
+
+const flatItems = computed<SidebarRowItem[]>(() => {
+    const out: SidebarRowItem[] = [];
+    if (props.activeSections.projects && props.projects.length) {
+        out.push({ type: 'projectsTree', key: 'projectsTree' });
+    }
+    // Threads section
+    if (props.activeSections.threads && props.threads.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
+        for (const t of props.threads) {
+            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
+        }
+    }
+    // Docs section
+    if (props.activeSections.docs && effectiveDocs.value.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
+        for (const d of effectiveDocs.value) {
+            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
+        }
+    }
+    return out;
+});
+
+// Constant row size estimate
+const rowSize = 36;
 </script>
-
-<style scoped>
-/* Gradient already supplied by global pattern image; we just ensure better dark base */
-.header-pattern {
-    background-image: url('/gradient-x.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-.dark .header-pattern {
-    /* Elevated surface tone for dark mode header to distinguish from main background */
-    background-color: var(--md-surface-container-high) !important;
-}
-
-/* Logo rendering tweaks */
-.logo {
-    width: 20px; /* lock display size */
-    height: 20px;
-    aspect-ratio: 1 / 1;
-    display: block;
-    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
-    /* image-rendering: pixelated; */
-}
-
-/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
-   switch to a DPR-based srcset for sharper sampling:
-   src="/logo-20.png"
-   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
-</style>
 ```
 
 ## File: app/components/ResizableSidebarLayout.vue
@@ -10849,6 +11635,65 @@ aside > *:not(.resize-handle-layer) {
 </style>
 ```
 
+## File: app/composables/useActivePrompt.ts
+```typescript
+import { ref, readonly } from 'vue';
+import { getPrompt } from '~/db/prompts';
+import { useHooks } from './useHooks';
+
+export interface ActivePromptState {
+    activePromptId: string | null;
+    activePromptContent: any | null;
+}
+
+// NOTE: Must be module-singleton so different composables/components share state.
+// Previously each invocation created new refs, so selection in modal was not
+// visible to chat sending logic. We lift refs to module scope.
+const _activePromptId = ref<string | null>(null);
+const _activePromptContent = ref<any | null>(null);
+
+export function useActivePrompt() {
+    const hooks = useHooks();
+
+    async function setActivePrompt(id: string | null): Promise<void> {
+        if (!id) {
+            _activePromptId.value = null;
+            _activePromptContent.value = null;
+            return;
+        }
+
+        const prompt = await getPrompt(id);
+        if (prompt) {
+            _activePromptId.value = prompt.id;
+            _activePromptContent.value = prompt.content;
+            await hooks.doAction('chat.systemPrompt.select:action:after', {
+                id: prompt.id,
+                content: prompt.content,
+            });
+        } else {
+            _activePromptId.value = null;
+            _activePromptContent.value = null;
+        }
+    }
+
+    function clearActivePrompt(): void {
+        setActivePrompt(null);
+    }
+
+    function getActivePromptContent(): any | null {
+        return _activePromptContent.value;
+    }
+
+    return {
+        activePromptId: readonly(_activePromptId),
+        activePromptContent: readonly(_activePromptContent),
+        setActivePrompt,
+        clearActivePrompt,
+        getActivePromptContent,
+    };
+}
+```
+
 ## File: app/composables/useDocumentsList.ts
 ```typescript
 import { ref } from 'vue';
@@ -10866,7 +11711,20 @@ export function useDocumentsList(limit = 200) {
         loading.value = true;
         error.value = null;
         try {
-            docs.value = await listDocuments(limit);
+            // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
+            const full = await listDocuments(limit);
+            docs.value = full.map((d: any) => ({
+                // Keep lightweight/meta fields
+                id: d.id,
+                title: d.title,
+                postType: d.postType,
+                created_at: d.created_at,
+                updated_at: d.updated_at,
+                deleted: d.deleted,
+                meta: d.meta,
+                // Drop large content string; empty string placeholder keeps type happy
+                content: '',
+            }));
         } catch (e) {
             error.value = e;
             useToast().add({ color: 'error', title: 'Document: list failed' });
@@ -10892,6 +11750,846 @@ export function useDocumentsList(limit = 200) {
 
     return { docs, loading, error, refresh };
 }
+```
+
+## File: app/db/client.ts
+```typescript
+import Dexie, { type Table } from 'dexie';
+import type {
+    Attachment,
+    Kv,
+    Message,
+    Project,
+    Thread,
+    FileMeta,
+    Post,
+} from './schema';
+
+export interface FileBlobRow {
+    hash: string; // primary key
+    blob: Blob; // actual binary Blob
+}
+
+// Dexie database versioning & schema
+export class Or3DB extends Dexie {
+    projects!: Table<Project, string>;
+    threads!: Table<Thread, string>;
+    messages!: Table<Message, string>;
+    kv!: Table<Kv, string>;
+    attachments!: Table<Attachment, string>;
+    file_meta!: Table<FileMeta, string>; // hash as primary key
+    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
+    posts!: Table<Post, string>;
+
+    constructor() {
+        super('or3-db');
+        // Simplified schema: collapse historical migrations into a single
+        // version to avoid full-table upgrade passes (which previously
+        // loaded entire tables into memory via toArray()). Since there are
+        // no external users / all data already upgraded, we can safely
+        // define only the latest structure.
+        // NOTE: Keep version number at 5 so existing local DBs at v5 open
+        // without triggering a downgrade. Future schema changes should bump.
+        this.version(5).stores({
+            projects: 'id, name, clock, created_at, updated_at',
+            threads:
+                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+            messages:
+                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+            kv: 'id, &name, clock, created_at, updated_at',
+            attachments: 'id, type, name, clock, created_at, updated_at',
+            file_meta:
+                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+            file_blobs: 'hash',
+            posts: 'id, title, postType, deleted, created_at, updated_at',
+        });
+    }
+}
+
+export const db = new Or3DB();
+```
+
+## File: app/db/prompts.ts
+```typescript
+import { db } from './client';
+import { newId, nowSec } from './util';
+import { useHooks } from '../composables/useHooks';
+
+/**
+ * Internal stored row shape (reuses posts table with postType = 'prompt').
+ * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
+ * Content is persisted as a JSON string (TipTap JSON) for flexibility.
+ */
+export interface PromptRow {
+    id: string;
+    title: string; // non-empty trimmed
+    content: string; // JSON string
+    postType: string; // always 'prompt'
+    created_at: number; // seconds
+    updated_at: number; // seconds
+    deleted: boolean;
+}
+
+/** Public facing record with content already parsed. */
+export interface PromptRecord {
+    id: string;
+    title: string;
+    content: any; // TipTap JSON object
+    created_at: number;
+    updated_at: number;
+    deleted: boolean;
+}
+
+function emptyPromptJSON() {
+    return { type: 'doc', content: [] };
+}
+
+function normalizeTitle(
+    title?: string | null,
+    {
+        fallback = 'Untitled Prompt',
+        allowEmpty = true,
+    }: { fallback?: string; allowEmpty?: boolean } = {}
+): string {
+    const raw = title ?? '';
+    const trimmed = raw.trim();
+    if (!trimmed && !allowEmpty) return fallback;
+    return trimmed; // may be '' when allowEmpty true
+}
+
+function parseContent(raw: string | null | undefined): any {
+    if (!raw) return emptyPromptJSON();
+    try {
+        const parsed = JSON.parse(raw);
+        // Basic structural guard
+        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        return emptyPromptJSON();
+    } catch {
+        return emptyPromptJSON();
+    }
+}
+
+function rowToRecord(row: PromptRow): PromptRecord {
+    return {
+        id: row.id,
+        title: row.title,
+        content: parseContent(row.content),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted,
+    };
+}
+
+export interface CreatePromptInput {
+    title?: string | null;
+    content?: any; // TipTap JSON object
+}
+
+export async function createPrompt(
+    input: CreatePromptInput = {}
+): Promise<PromptRecord> {
+    const hooks = useHooks();
+    const prepared: PromptRow = {
+        id: newId(),
+        title: normalizeTitle(input.title, { allowEmpty: false }),
+        content: JSON.stringify(input.content ?? emptyPromptJSON()),
+        postType: 'prompt',
+        created_at: nowSec(),
+        updated_at: nowSec(),
+        deleted: false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.create:filter:input',
+        prepared
+    )) as PromptRow;
+    await hooks.doAction('db.prompts.create:action:before', filtered);
+    await db.posts.put(filtered as any); // reuse posts table
+    await hooks.doAction('db.prompts.create:action:after', filtered);
+    return rowToRecord(filtered);
+}
+
+export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
+    const hooks = useHooks();
+    const row = await db.posts.get(id);
+    if (!row || (row as any).postType !== 'prompt') return undefined;
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.get:filter:output',
+        row
+    )) as PromptRow | undefined;
+    return filtered ? rowToRecord(filtered) : undefined;
+}
+
+export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
+    const hooks = useHooks();
+    // Filter by postType (indexed) and non-deleted
+    const rows = await db.posts
+        .where('postType')
+        .equals('prompt')
+        .and((r) => !(r as any).deleted)
+        .reverse() // by primary key order soon? we'll sort manually after fetch
+        .toArray();
+    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
+    rows.sort((a, b) => b.updated_at - a.updated_at);
+    const sliced = rows.slice(0, limit) as unknown as PromptRow[];
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.list:filter:output',
+        sliced
+    )) as PromptRow[];
+    return filtered.map(rowToRecord);
+}
+
+export interface UpdatePromptPatch {
+    title?: string;
+    content?: any; // TipTap JSON object
+}
+
+export async function updatePrompt(
+    id: string,
+    patch: UpdatePromptPatch
+): Promise<PromptRecord | undefined> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'prompt') return undefined;
+    const updated: PromptRow = {
+        id: existing.id,
+        title:
+            patch.title !== undefined
+                ? normalizeTitle(patch.title, { allowEmpty: true })
+                : existing.title,
+        content: patch.content
+            ? JSON.stringify(patch.content)
+            : (existing as any).content,
+        postType: 'prompt',
+        created_at: existing.created_at,
+        updated_at: nowSec(),
+        deleted: (existing as any).deleted ?? false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.update:filter:input',
+        { existing, updated, patch }
+    )) as { updated: PromptRow } | PromptRow;
+    const row = (filtered as any).updated
+        ? (filtered as any).updated
+        : (filtered as any as PromptRow);
+    await hooks.doAction('db.prompts.update:action:before', row);
+    await db.posts.put(row as any);
+    await hooks.doAction('db.prompts.update:action:after', row);
+    return rowToRecord(row);
+}
+
+export async function softDeletePrompt(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'prompt') return;
+    const row = {
+        ...(existing as any),
+        deleted: true,
+        updated_at: nowSec(),
+    };
+    await hooks.doAction('db.prompts.delete:action:soft:before', row);
+    await db.posts.put(row);
+    await hooks.doAction('db.prompts.delete:action:soft:after', row);
+}
+
+export async function hardDeletePrompt(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'prompt') return;
+    await hooks.doAction('db.prompts.delete:action:hard:before', existing);
+    await db.posts.delete(id);
+    await hooks.doAction('db.prompts.delete:action:hard:after', id);
+}
+
+// Convenience for ensuring DB open (mirrors pattern in other modules)
+export async function ensureDbOpen() {
+    if (!db.isOpen()) await db.open();
+}
+
+export type { PromptRecord as Prompt };
+```
+
+## File: app/utils/prompt-utils.ts
+```typescript
+/**
+ * Utility functions for system prompts
+ */
+
+/**
+ * Converts TipTap JSON content to plain text string for use as system message.
+ * Extracts text from paragraph nodes and joins with newlines.
+ */
+export function promptJsonToString(json: any): string {
+    if (!json) return '';
+    const lines: string[] = [];
+
+    function walk(node: any, collectLine = false) {
+        if (!node) return;
+        // Gather plain text from leaf text nodes
+        if (Array.isArray(node)) {
+            node.forEach((n) => walk(n));
+            return;
+        }
+        if (node.type === 'text') {
+            currentLine += node.text || '';
+            return;
+        }
+        const blockTypes = new Set([
+            'paragraph',
+            'heading',
+            'blockquote',
+            'codeBlock',
+            'orderedList',
+            'bulletList',
+            'listItem',
+        ]);
+        let isBlock = blockTypes.has(node.type);
+        if (isBlock) {
+            flushLine();
+        }
+        if (node.content) node.content.forEach((c: any) => walk(c));
+        if (isBlock) flushLine();
+    }
+
+    let currentLine = '';
+    function flushLine() {
+        if (currentLine.trim().length) lines.push(currentLine.trim());
+        currentLine = '';
+    }
+
+    walk(json.content || json);
+    flushLine();
+    return lines.join('\n');
+}
+```
+
+## File: app/app.vue
+```vue
+<template>
+    <UApp>
+        <NuxtPage />
+    </UApp>
+</template>
+<script setup lang="ts">
+// Apply initial theme class to <html> so CSS variables cascade app-wide
+useHead({
+    htmlAttrs: {
+        class: 'light',
+    },
+    title: 'or3 chat',
+    link: [{ rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' }],
+});
+
+import { onMounted } from 'vue';
+import { useNuxtApp } from '#app';
+
+// Fire app.init:action:after once after the root app mounts (client-only)
+const nuxtApp = useNuxtApp();
+
+onMounted(() => {
+    const g: any = globalThis as any;
+    if (g.__OR3_APP_INIT_FIRED__) return;
+    g.__OR3_APP_INIT_FIRED__ = true;
+    const hooks: any = nuxtApp.$hooks;
+    if (hooks && typeof hooks.doAction === 'function') {
+        hooks.doAction('app.init:action:after', nuxtApp);
+    }
+});
+</script>
+```
+
+## File: vitest.config.ts
+```typescript
+import { defineConfig } from 'vitest/config';
+import vue from '@vitejs/plugin-vue';
+
+// Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
+// We intentionally cast the plugin to any to bypass structural mismatch.
+// No dependency version changes per instruction.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const vueAny: any = vue;
+
+export default defineConfig({
+    // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
+    plugins: [vueAny()],
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        include: ['app/**/__tests__/**/*.test.ts'],
+        exclude: ['node_modules', 'dist', '.nuxt'],
+        setupFiles: ['tests/setup.ts'],
+        testTimeout: 10000,
+        hookTimeout: 10000,
+        bail: 1,
+    },
+});
+```
+
+## File: app/components/chat/VirtualMessageList.vue
+```vue
+<template>
+    <!-- Wrapper around virtua's virtual list for messages -->
+    <div ref="root" class="flex flex-col" :class="wrapperClass">
+        <Virtualizer
+            :data="messages"
+            :itemSize="itemSizeEstimation || undefined"
+            :overscan="overscan"
+            :scrollRef="scrollParent || undefined"
+            @scroll="onScroll"
+            @scroll-end="onScrollEnd"
+            v-slot="{ item, index }"
+        >
+            <div :key="item.id || index">
+                <slot name="item" :message="item" :index="index" />
+            </div>
+        </Virtualizer>
+        <!-- Tail slot for streaming message appended after virtualized stable messages -->
+        <slot name="tail" />
+    </div>
+</template>
+
+<script setup lang="ts">
+/**
+ * VirtualMessageList
+ * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
+ * Thin abstraction over virtua's <VList>. Purpose:
+ *  - Decouple higher-level chat code from 3p library specifics (swap easier).
+ *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
+ *    auto-scroll + lazy fetch triggers without leaking scroll math.
+ *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
+ *    don't sprinkle magic numbers.
+ *
+ * Performance Notes (Task 2.4):
+ *  - itemSizeEstimation is a heuristic avg row height (px). Virtua benefits
+ *    from closer estimates for jump accuracy. We'll measure once real message
+ *    mix known; keep default conservative (72) to reduce under-estimation.
+ *  - overscan kept small (4) to balance DOM churn vs. rapid wheel scroll.
+ *  - computeRange() currently returns full range because virtua's public API
+ *    doesn't expose internal first/last indices directly. This is acceptable
+ *    for now since downstream consumers only need edge detection. If/when we
+ *    require partial range (e.g. transcript minimap) we can either:
+ *      a) Contribute an API upstream, or
+ *      b) Probe DOM for rendered children & derive indices (slower fallback).
+ *  - Scroll events: we coalesce logic via onInternalUpdate() — cheap constant
+ *    operations (no layout thrash) so safe each scroll tick.
+ *  - Future optimization hooks: dynamic itemSizeEstimation sampling (median of
+ *    first N rendered rows) and throttled range emission if CPU hotspots seen.
+ */
+import { onMounted, ref, watch, type PropType } from 'vue';
+// eslint-disable-next-line import/no-unresolved
+import { Virtualizer } from 'virtua/vue';
+
+interface ChatMessage {
+    id: string;
+    role?: string;
+    content?: string;
+    [k: string]: any;
+}
+
+const props = defineProps({
+    messages: { type: Array as PropType<ChatMessage[]>, required: true },
+    itemSizeEstimation: { type: Number, default: 72 }, // heuristic average row height
+    overscan: { type: Number, default: 4 },
+    wrapperClass: { type: String, default: '' },
+    scrollParent: {
+        type: Object as PropType<HTMLElement | null>,
+        default: null,
+    },
+});
+
+const emit = defineEmits<{
+    (e: 'visible-range-change', range: { start: number; end: number }): void;
+    (e: 'reached-top'): void;
+    (e: 'reached-bottom'): void;
+}>();
+
+const root = ref<HTMLElement | null>(null);
+
+// Track visible range heuristically via scroll metrics
+function computeRange(): { start: number; end: number } {
+    // virtua does not expose direct API here; fallback simplistic approach:
+    // We rely on overscan as smoothing; refine later if library offers hooks.
+    const total = props.messages.length;
+    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
+    // Placeholder: without internal indices, emit full range.
+    return { start: 0, end: total - 1 };
+}
+
+function onInternalUpdate() {
+    const range = computeRange();
+    emit('visible-range-change', range);
+    if (range.start === 0) emit('reached-top');
+    if (range.end >= props.messages.length - 1) emit('reached-bottom');
+}
+
+function onScroll() {
+    onInternalUpdate();
+}
+function onScrollEnd() {
+    onInternalUpdate();
+}
+
+watch(
+    () => props.messages.length,
+    () => onInternalUpdate()
+);
+
+onMounted(() => onInternalUpdate());
+</script>
+
+<style scoped>
+/* Keep retro feel: no extra styling here; rely on parent theme utilities */
+</style>
+```
+
+## File: app/components/documents/DocumentEditor.vue
+```vue
+<template>
+    <div
+        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+    >
+        <div class="flex items-center justify-center gap-3 px-3 pt-2 pb-2">
+            <UInput
+                v-model="titleDraft"
+                placeholder="Untitled"
+                size="md"
+                class="flex-1 max-w-[60%]"
+                @update:model-value="onTitleChange"
+            />
+            <div class="flex items-center gap-1">
+                <UTooltip :text="statusText">
+                    <span
+                        class="text-xs opacity-70 w-16 text-right select-none"
+                        >{{ statusText }}</span
+                    >
+                </UTooltip>
+            </div>
+        </div>
+        <div
+            class="flex flex-row items-stretch border-b-2 px-2 py-1 gap-1 flex-wrap"
+        >
+            <ToolbarButton
+                icon="carbon:text-bold"
+                :active="isActive('bold')"
+                label="Bold (⌘B)"
+                @activate="cmd('toggleBold')"
+            />
+            <ToolbarButton
+                icon="carbon:text-italic"
+                :active="isActive('italic')"
+                label="Italic (⌘I)"
+                @activate="cmd('toggleItalic')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:code"
+                :active="isActive('code')"
+                label="Code"
+                @activate="cmd('toggleCode')"
+            />
+            <ToolbarButton
+                text="H1"
+                :active="isActiveHeading(1)"
+                label="H1"
+                @activate="toggleHeading(1)"
+            />
+            <ToolbarButton
+                text="H2"
+                :active="isActiveHeading(2)"
+                label="H2"
+                @activate="toggleHeading(2)"
+            />
+            <ToolbarButton
+                text="H3"
+                :active="isActiveHeading(3)"
+                label="H3"
+                @activate="toggleHeading(3)"
+            />
+            <ToolbarButton
+                icon="pixelarticons:list"
+                :active="isActive('bulletList')"
+                label="Bullets"
+                @activate="cmd('toggleBulletList')"
+            />
+            <ToolbarButton
+                icon="carbon:list-numbered"
+                :active="isActive('orderedList')"
+                label="Ordered"
+                @activate="cmd('toggleOrderedList')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:minus"
+                label="HR"
+                @activate="cmd('setHorizontalRule')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:undo"
+                label="Undo"
+                @activate="cmd('undo')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:redo"
+                label="Redo"
+                @activate="cmd('redo')"
+            />
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto">
+            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
+                <EditorContent
+                    :editor="editor as Editor"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                ></EditorContent>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
+import ToolbarButton from './ToolbarButton.vue';
+import {
+    useDocumentState,
+    setDocumentContent,
+    setDocumentTitle,
+    loadDocument,
+} from '~/composables/useDocumentsStore';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import type { JSONContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
+
+const props = defineProps<{ documentId: string }>();
+
+// Reactive state wrapper (computed to always fetch current map entry)
+const state = computed(() => useDocumentState(props.documentId));
+const titleDraft = ref(state.value.record?.title || '');
+
+watch(
+    () => props.documentId,
+    async (id, _old, onCleanup) => {
+        // Switch to new state object from map
+        const currentLoadId = id;
+        await loadDocument(id);
+        if (props.documentId !== currentLoadId) return; // prop changed again
+        titleDraft.value = state.value.record?.title || '';
+        if (editor.value && state.value.record) {
+            const json = state.value.record.content as JSONContent;
+            editor.value.commands.setContent(json, { emitUpdate: false });
+        }
+    }
+);
+
+const editor = ref<Editor | null>(null);
+
+function onTitleChange() {
+    setDocumentTitle(props.documentId, titleDraft.value);
+}
+
+// Reflect external title updates (e.g., sidebar rename) into the input when
+// we're not currently staging a local pendingTitle.
+watch(
+    () => state.value.record?.title,
+    (newTitle) => {
+        if (
+            typeof newTitle === 'string' &&
+            newTitle.length > 0 &&
+            newTitle !== titleDraft.value &&
+            state.value.pendingTitle === undefined // don't clobber local edits
+        ) {
+            titleDraft.value = newTitle;
+        }
+    }
+);
+
+function emitContent() {
+    if (!editor.value) return;
+    const json = editor.value.getJSON();
+    setDocumentContent(props.documentId, json);
+}
+
+function makeEditor() {
+    editor.value = new Editor({
+        extensions: [
+            StarterKit.configure({ heading: { levels: [1, 2] } }),
+            Placeholder.configure({
+                placeholder: 'Type your text here...',
+            }),
+        ],
+        content: state.value.record?.content || { type: 'doc', content: [] },
+        autofocus: false,
+        onUpdate: () => emitContent(),
+    });
+}
+
+onMounted(async () => {
+    await loadDocument(props.documentId);
+    // Ensure title reflects loaded record (refresh / deep link case)
+    titleDraft.value = state.value.record?.title || titleDraft.value || '';
+    // Ensure initial state ref matches (in case of rapid prop change before mount)
+    makeEditor();
+});
+
+onBeforeUnmount(() => {
+    editor.value?.destroy();
+});
+
+function isActive(name: string) {
+    return editor.value?.isActive(name) || false;
+}
+function isActiveHeading(level: number) {
+    return editor.value?.isActive('heading', { level }) || false;
+}
+
+function toggleHeading(level: number) {
+    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
+    editor.value
+        ?.chain()
+        .focus()
+        .toggleHeading({ level: level as any })
+        .run();
+    emitContent();
+}
+
+const commands: Record<string, () => void> = {
+    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
+    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
+    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
+    toggleBulletList: () =>
+        editor.value?.chain().focus().toggleBulletList().run(),
+    toggleOrderedList: () =>
+        editor.value?.chain().focus().toggleOrderedList().run(),
+    setHorizontalRule: () =>
+        editor.value?.chain().focus().setHorizontalRule().run(),
+    undo: () => editor.value?.commands.undo(),
+    redo: () => editor.value?.commands.redo(),
+};
+function cmd(name: string) {
+    commands[name]?.();
+    emitContent();
+}
+
+const statusText = computed(() => {
+    switch (state.value.status) {
+        case 'saving':
+            return 'Saving…';
+        case 'saved':
+            return 'Saved';
+        case 'error':
+            return 'Error';
+        default:
+            return 'Ready';
+    }
+});
+</script>
+
+<style scoped>
+.prose :where(h1, h2) {
+    font-family: 'Press Start 2P', monospace;
+}
+
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85; /* increase for dark background readability */
+    font-weight: normal;
+}
+</style>
+```
+
+## File: app/components/sidebar/SidebarHeader.vue
+```vue
+<template>
+    <div
+        :class="{
+            'px-0 justify-center': collapsed,
+            'px-3 justify-between': !collapsed,
+        }"
+        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+    >
+        <div v-show="!collapsed">
+            <slot name="sidebar-header">
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-[14px] font-medium uppercase tracking-wide">
+                        or3-chat
+                    </h1>
+                </div>
+            </slot>
+        </div>
+
+        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
+            <UButton
+                size="xs"
+                :square="true"
+                color="neutral"
+                variant="ghost"
+                :class="'retro-btn'"
+                @click="onToggle"
+                :ui="{ base: 'retro-btn' }"
+                :aria-label="toggleAria"
+                :title="toggleAria"
+            >
+                <UIcon :name="toggleIcon" class="w-5 h-5" />
+            </UButton>
+        </slot>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { defineProps, defineEmits } from 'vue';
+
+const props = defineProps({
+    collapsed: { type: Boolean, required: true },
+    toggleIcon: { type: String, required: true },
+    toggleAria: { type: String, required: true },
+});
+const emit = defineEmits(['toggle']);
+
+function onToggle() {
+    emit('toggle');
+}
+</script>
+
+<style scoped>
+/* Gradient already supplied by global pattern image; we just ensure better dark base */
+.header-pattern {
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+.dark .header-pattern {
+    /* Elevated surface tone for dark mode header to distinguish from main background */
+    background-color: var(--md-surface-container-high) !important;
+}
+
+/* Logo rendering tweaks */
+.logo {
+    width: 20px; /* lock display size */
+    height: 20px;
+    aspect-ratio: 1 / 1;
+    display: block;
+    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
+    /* image-rendering: pixelated; */
+}
+
+/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
+   switch to a DPR-based srcset for sharper sampling:
+   src="/logo-20.png"
+   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
+</style>
 ```
 
 ## File: app/components/sidebar/SideBottomNav.vue
@@ -11164,6 +12862,587 @@ function navigateToCredits() {
     mix-blend-mode: soft-light;
 }
 </style>
+```
+
+## File: app/plugins/message-actions.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    registerMessageAction({
+        id: 'Create document', // unique id
+        icon: 'pixelarticons:notes-plus', // any icon name supported by <UButton>
+        tooltip: 'Create document',
+        showOn: 'assistant', // 'user' | 'assistant' | 'both'
+        order: 300, // optional; after built-ins ( <200 reserved )
+        async handler({ message }) {
+            console.log('Create document action invoked', message);
+
+            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
+            async function markdownToTipTapDoc(md: string) {
+                const markdown = (md || '').trim();
+                if (!markdown) return { type: 'doc', content: [] };
+                try {
+                    const [{ Editor }] = await Promise.all([
+                        import('@tiptap/core'),
+                    ]);
+                    const StarterKit = (await import('@tiptap/starter-kit'))
+                        .default;
+                    // tiptap-markdown exports markdownToProseMirror function
+                    const { Markdown } = await import('tiptap-markdown');
+
+                    const editor = new Editor({
+                        extensions: [StarterKit, Markdown],
+                        content: '',
+                    });
+
+                    editor.commands.setContent(markdown);
+                    return editor.getJSON();
+                } catch (e) {
+                    alert('error!!!');
+                }
+            }
+
+            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
+
+            const doc = await newDocument({
+                title: (message as any).title || 'Untitled',
+                content: tiptapDoc,
+            });
+
+            console.log('Created document record', doc);
+
+            // Attempt to open in a new pane (if capacity) else reuse active pane
+            const mp: any = (globalThis as any).__or3MultiPaneApi;
+            try {
+                if (mp) {
+                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
+                    if (couldAdd && typeof mp.addPane === 'function') {
+                        mp.addPane(); // sets new pane active
+                    }
+                    const panes = mp.panes?.value;
+
+                    const activeIndex = mp.activePaneIndex?.value ?? 0;
+
+                    if (Array.isArray(panes)) {
+                        const pane = panes[activeIndex];
+                        if (pane) {
+                            pane.mode = 'doc';
+                            pane.documentId = doc.id;
+                            // Reset chat-related fields when switching
+                            pane.threadId =
+                                pane.mode === 'doc'
+                                    ? pane.threadId
+                                    : pane.threadId;
+                        }
+                    }
+                }
+            } catch (e) {
+                // non-fatal; fallback is just created doc without auto-open
+                console.warn('Open document in pane failed', e);
+            }
+
+            useToast().add({
+                title: 'Document created',
+                description: `Opened in ${
+                    mp?.canAddPane?.value ? 'new' : 'current'
+                } pane: ${doc.id}`,
+                duration: 2600,
+            });
+        },
+    });
+});
+```
+
+## File: app/app.config.ts
+```typescript
+export default defineAppConfig({
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
+        },
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
+                header: 'border-0',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
+    },
+});
+```
+
+## File: package.json
+```json
+{
+    "name": "nuxt-app",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "build": "nuxt build",
+        "dev": "nuxt dev",
+        "generate": "nuxt generate",
+        "preview": "nuxt preview",
+        "postinstall": "nuxt prepare",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@nuxt/ui": "^3.3.2",
+        "@openrouter/ai-sdk-provider": "^1.1.2",
+        "@orama/orama": "^3.1.11",
+        "@tiptap/extension-placeholder": "^3.3.0",
+        "@tiptap/pm": "^3.3.0",
+        "@tiptap/starter-kit": "^3.3.0",
+        "@tiptap/vue-3": "^3.3.0",
+        "@types/spark-md5": "^3.0.5",
+        "@vueuse/core": "^13.7.0",
+        "ai": "^5.0.17",
+        "dexie": "^4.0.11",
+        "gpt-tokenizer": "^3.0.1",
+        "highlight.js": "^11.11.1",
+        "marked-highlight": "^2.2.2",
+        "nuxt": "^4.0.3",
+        "spark-md5": "^3.0.2",
+        "tiptap-markdown": "^0.8.10",
+        "turndown": "^7.2.1",
+        "typescript": "^5.6.3",
+        "virtua": "^0.41.5",
+        "vue": "^3.5.18",
+        "vue-router": "^4.5.1",
+        "zod": "^4.0.17"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.16",
+        "vitest": "^2.1.2",
+        "@vitest/ui": "^2.1.2",
+        "jsdom": "^25.0.0",
+        "@vue/test-utils": "^2.4.6",
+        "@vitejs/plugin-vue": "^5.1.4",
+        "vite": "^5.4.8"
+    }
+}
+```
+
+## File: app/components/sidebar/SidebarProjectTree.vue
+```vue
+<!-- DEPRECATED: Superseded by SidebarVirtualList + item components. Retain temporarily for compatibility. -->
+<template>
+    <div v-if="projects.length" class="space-y-1">
+        <h1 class="text-xs uppercase opacity-70 px-1 py-3 select-none">
+            Projects
+        </h1>
+        <UTree
+            v-model:expanded="internalExpanded"
+            :items="treeItems"
+            color="neutral"
+            size="sm"
+            :ui="ui"
+        >
+            <template #item-trailing="{ item, level }">
+                <div class="flex items-center gap-1">
+                    <!-- Root-level quick add buttons (appear on hover) -->
+                    <template v-if="level === 0">
+                        <button
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addChat', item.value)"
+                            aria-label="Add chat to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:message-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                        <button
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addDocument', item.value)"
+                            aria-label="Add document to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:note-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                    </template>
+                    <UPopover
+                        :content="{
+                            side: 'right',
+                            align: 'start',
+                            sideOffset: 6,
+                        }"
+                    >
+                        <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop
+                            :aria-label="
+                                level === 0
+                                    ? 'Project actions'
+                                    : 'Entry actions'
+                            "
+                        >
+                            <UIcon
+                                name="pixelarticons:more-vertical"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </span>
+                        <template #content>
+                            <div class="p-1 w-48 space-y-1">
+                                <template v-if="level === 0">
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:edit"
+                                        @click.stop.prevent="
+                                            emit('renameProject', item.value)
+                                        "
+                                        >Rename Project</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:trash"
+                                        @click.stop.prevent="
+                                            emit('deleteProject', item.value)
+                                        "
+                                        >Delete Project</UButton
+                                    >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="
+                                                !action.showOn ||
+                                                action.showOn.includes('root')
+                                            "
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        root: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
+                                </template>
+                                <template v-else>
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="pixelarticons:edit"
+                                        @click.stop.prevent="
+                                            emit('renameEntry', {
+                                                projectId: item.parentId!,
+                                                entryId: item.value,
+                                                kind: item.kind as ProjectEntryKind,
+                                            })
+                                        "
+                                        >Rename</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="pixelarticons:trash"
+                                        @click.stop.prevent="
+                                            emit('removeFromProject', {
+                                                projectId: item.parentId!,
+                                                entryId: item.value,
+                                                kind: item.kind as ProjectEntryKind,
+                                            })
+                                        "
+                                        >Remove from Project</UButton
+                                    >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        child: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
+                                </template>
+                            </div>
+                        </template>
+                    </UPopover>
+                </div>
+            </template>
+        </UTree>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed, watch, ref } from 'vue';
+
+// Distinct kinds of entries that can live under a project.
+// Extend here if we introduce more entry types in the future.
+export type ProjectEntryKind = 'chat' | 'doc';
+
+// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
+interface ProjectEntry {
+    id: string;
+    name?: string;
+    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
+}
+
+interface ProjectRow {
+    id: string;
+    name: string;
+    // The backing data that encodes the project entries. Can be
+    //  - an already parsed array of ProjectEntry objects
+    //  - a JSON string representing that array
+    //  - anything else (ignored)
+    data?: unknown;
+}
+
+// Shape consumed by UTree. (We only type the properties we actually use.)
+interface TreeItem {
+    label: string;
+    value: string;
+    icon?: string;
+    kind?: ProjectEntryKind; // Only for non-root items
+    parentId?: string; // Only set for child entries
+    defaultExpanded?: boolean;
+    children?: TreeItem[];
+    onSelect?: (e: Event) => void;
+}
+
+const props = defineProps<{
+    projects: ProjectRow[];
+    expanded?: string[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'update:expanded', value: string[]): void;
+    (e: 'chatSelected', id: string): void;
+    (e: 'documentSelected', id: string): void;
+    (e: 'addChat', projectId: string): void;
+    (e: 'addDocument', projectId: string): void;
+    (e: 'deleteProject', projectId: string): void;
+    (e: 'renameProject', projectId: string): void;
+    (
+        e: 'renameEntry',
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
+    ): void;
+    (
+        e: 'removeFromProject',
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
+    ): void;
+}>();
+
+// Local mirror for v-model:expanded
+const internalExpanded = ref<string[]>(
+    props.expanded ? [...props.expanded] : []
+);
+watch(
+    () => props.expanded,
+    (val) => {
+        if (val && val !== internalExpanded.value)
+            internalExpanded.value = [...val];
+    }
+);
+watch(internalExpanded, (val) => emit('update:expanded', val));
+
+function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
+    const raw = p?.data;
+    if (Array.isArray(raw)) return raw as ProjectEntry[];
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
+        } catch {
+            // Silently ignore malformed JSON
+        }
+    }
+    return [];
+}
+
+const treeItems = computed<TreeItem[]>(() =>
+    props.projects.map<TreeItem>((p) => {
+        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
+            (entry) => {
+                // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
+                const kind: ProjectEntryKind =
+                    entry.kind === 'doc' ? 'doc' : 'chat';
+                return {
+                    label: entry.name || '(untitled)',
+                    value: entry.id,
+                    icon:
+                        kind === 'doc'
+                            ? 'pixelarticons:note'
+                            : 'pixelarticons:chat',
+                    kind,
+                    parentId: p.id,
+                    onSelect: (e: Event) => {
+                        if (kind === 'chat') emit('chatSelected', entry.id);
+                        else emit('documentSelected', entry.id);
+                        // Prevent default selection behavior if needed by UTree (not sure), otherwise leave.
+                    },
+                };
+            }
+        );
+        return {
+            label: p.name,
+            value: p.id,
+            defaultExpanded: false,
+            children,
+            onSelect: (e: Event) => e.preventDefault(), // Root projects themselves aren't selectable
+        };
+    })
+);
+
+const ui = {
+    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
+    link: 'group/addchat text-[13px] rounded-[4px] py-1',
+    item: 'cursor-pointer ',
+};
+
+// Plugin project tree actions
+const extraActions = useProjectTreeActions();
+async function runExtraAction(action: any, data: { root?: any; child?: any }) {
+    try {
+        await action.handler(data);
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Project tree action error', action.id, e);
+    }
+}
+</script>
+
+<style scoped></style>
 ```
 
 ## File: app/utils/chat/types.ts
@@ -11628,539 +13907,6 @@ export function decideModalities(
 }
 ```
 
-## File: package.json
-```json
-{
-    "name": "nuxt-app",
-    "type": "module",
-    "private": true,
-    "scripts": {
-        "build": "nuxt build",
-        "dev": "nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
-        "test": "vitest run",
-        "test:watch": "vitest"
-    },
-    "dependencies": {
-        "@nuxt/ui": "^3.3.2",
-        "@openrouter/ai-sdk-provider": "^1.1.2",
-        "@orama/orama": "^3.1.11",
-        "@tiptap/extension-placeholder": "^3.3.0",
-        "@tiptap/pm": "^3.3.0",
-        "@tiptap/starter-kit": "^3.3.0",
-        "@tiptap/vue-3": "^3.3.0",
-        "@types/spark-md5": "^3.0.5",
-        "@vueuse/core": "^13.7.0",
-        "ai": "^5.0.17",
-        "dexie": "^4.0.11",
-        "gpt-tokenizer": "^3.0.1",
-        "highlight.js": "^11.11.1",
-        "marked-highlight": "^2.2.2",
-        "nuxt": "^4.0.3",
-        "spark-md5": "^3.0.2",
-        "tiptap-markdown": "^0.8.10",
-        "turndown": "^7.2.1",
-        "typescript": "^5.6.3",
-        "virtua": "^0.41.5",
-        "vue": "^3.5.18",
-        "vue-router": "^4.5.1",
-        "zod": "^4.0.17"
-    },
-    "devDependencies": {
-        "@tailwindcss/typography": "^0.5.16",
-        "vitest": "^2.1.2",
-        "@vitest/ui": "^2.1.2",
-        "jsdom": "^25.0.0",
-        "@vue/test-utils": "^2.4.6",
-        "@vitejs/plugin-vue": "^5.1.4",
-        "vite": "^5.4.8"
-    }
-}
-```
-
-## File: app/components/documents/DocumentEditor.vue
-```vue
-<template>
-    <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
-    >
-        <div class="flex items-center justify-center gap-3 px-3 pt-2 pb-2">
-            <UInput
-                v-model="titleDraft"
-                placeholder="Untitled"
-                size="md"
-                class="flex-1 max-w-[60%]"
-                @update:model-value="onTitleChange"
-            />
-            <div class="flex items-center gap-1">
-                <UTooltip :text="statusText">
-                    <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
-                        >{{ statusText }}</span
-                    >
-                </UTooltip>
-            </div>
-        </div>
-        <div
-            class="flex flex-row items-stretch border-b-2 px-2 py-1 gap-1 flex-wrap"
-        >
-            <ToolbarButton
-                icon="carbon:text-bold"
-                :active="isActive('bold')"
-                label="Bold (⌘B)"
-                @activate="cmd('toggleBold')"
-            />
-            <ToolbarButton
-                icon="carbon:text-italic"
-                :active="isActive('italic')"
-                label="Italic (⌘I)"
-                @activate="cmd('toggleItalic')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:code"
-                :active="isActive('code')"
-                label="Code"
-                @activate="cmd('toggleCode')"
-            />
-            <ToolbarButton
-                text="H1"
-                :active="isActiveHeading(1)"
-                label="H1"
-                @activate="toggleHeading(1)"
-            />
-            <ToolbarButton
-                text="H2"
-                :active="isActiveHeading(2)"
-                label="H2"
-                @activate="toggleHeading(2)"
-            />
-            <ToolbarButton
-                text="H3"
-                :active="isActiveHeading(3)"
-                label="H3"
-                @activate="toggleHeading(3)"
-            />
-            <ToolbarButton
-                icon="pixelarticons:list"
-                :active="isActive('bulletList')"
-                label="Bullets"
-                @activate="cmd('toggleBulletList')"
-            />
-            <ToolbarButton
-                icon="carbon:list-numbered"
-                :active="isActive('orderedList')"
-                label="Ordered"
-                @activate="cmd('toggleOrderedList')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:minus"
-                label="HR"
-                @activate="cmd('setHorizontalRule')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:undo"
-                label="Undo"
-                @activate="cmd('undo')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:redo"
-                label="Redo"
-                @activate="cmd('redo')"
-            />
-        </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
-            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
-                <EditorContent
-                    :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
-                ></EditorContent>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
-import ToolbarButton from './ToolbarButton.vue';
-import {
-    useDocumentState,
-    setDocumentContent,
-    setDocumentTitle,
-    loadDocument,
-} from '~/composables/useDocumentsStore';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-import type { JSONContent } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
-
-const props = defineProps<{ documentId: string }>();
-
-// Reactive state wrapper (computed to always fetch current map entry)
-const state = computed(() => useDocumentState(props.documentId));
-const titleDraft = ref(state.value.record?.title || '');
-
-watch(
-    () => props.documentId,
-    async (id, _old, onCleanup) => {
-        // Switch to new state object from map
-        const currentLoadId = id;
-        await loadDocument(id);
-        if (props.documentId !== currentLoadId) return; // prop changed again
-        titleDraft.value = state.value.record?.title || '';
-        if (editor.value && state.value.record) {
-            const json = state.value.record.content as JSONContent;
-            editor.value.commands.setContent(json, { emitUpdate: false });
-        }
-    }
-);
-
-const editor = ref<Editor | null>(null);
-
-function onTitleChange() {
-    setDocumentTitle(props.documentId, titleDraft.value);
-}
-
-function emitContent() {
-    if (!editor.value) return;
-    const json = editor.value.getJSON();
-    setDocumentContent(props.documentId, json);
-}
-
-function makeEditor() {
-    editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2] } }),
-            Placeholder.configure({
-                placeholder: 'Type your text here...',
-            }),
-        ],
-        content: state.value.record?.content || { type: 'doc', content: [] },
-        autofocus: false,
-        onUpdate: () => emitContent(),
-    });
-}
-
-onMounted(async () => {
-    await loadDocument(props.documentId);
-    // Ensure title reflects loaded record (refresh / deep link case)
-    titleDraft.value = state.value.record?.title || titleDraft.value || '';
-    // Ensure initial state ref matches (in case of rapid prop change before mount)
-    makeEditor();
-});
-
-onBeforeUnmount(() => {
-    editor.value?.destroy();
-});
-
-function isActive(name: string) {
-    return editor.value?.isActive(name) || false;
-}
-function isActiveHeading(level: number) {
-    return editor.value?.isActive('heading', { level }) || false;
-}
-
-function toggleHeading(level: number) {
-    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
-    editor.value
-        ?.chain()
-        .focus()
-        .toggleHeading({ level: level as any })
-        .run();
-    emitContent();
-}
-
-const commands: Record<string, () => void> = {
-    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
-    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
-    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
-    toggleBulletList: () =>
-        editor.value?.chain().focus().toggleBulletList().run(),
-    toggleOrderedList: () =>
-        editor.value?.chain().focus().toggleOrderedList().run(),
-    setHorizontalRule: () =>
-        editor.value?.chain().focus().setHorizontalRule().run(),
-    undo: () => editor.value?.commands.undo(),
-    redo: () => editor.value?.commands.redo(),
-};
-function cmd(name: string) {
-    commands[name]?.();
-    emitContent();
-}
-
-const statusText = computed(() => {
-    switch (state.value.status) {
-        case 'saving':
-            return 'Saving…';
-        case 'saved':
-            return 'Saved';
-        case 'error':
-            return 'Error';
-        default:
-            return 'Ready';
-    }
-});
-</script>
-
-<style scoped>
-.prose :where(h1, h2) {
-    font-family: 'Press Start 2P', monospace;
-}
-
-/* ProseMirror (TipTap) base styles */
-/* TipTap base */
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
-}
-
-/* Placeholder (needs :deep due to scoped styles) */
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    /* Use design tokens; ensure sufficient contrast in dark mode */
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    opacity: 0.85; /* increase for dark background readability */
-    font-weight: normal;
-}
-</style>
-```
-
-## File: app/components/sidebar/SidebarProjectTree.vue
-```vue
-<template>
-    <div v-if="projects.length" class="space-y-1">
-        <h4 class="text-xs uppercase tracking-wide opacity-70 px-1 select-none">
-            Projects
-        </h4>
-        <UTree
-            v-model:expanded="internalExpanded"
-            :items="treeItems"
-            color="neutral"
-            size="sm"
-            :ui="ui"
-        >
-            <template #item-trailing="{ item, level }">
-                <div class="flex items-center gap-1">
-                    <!-- Root-level quick add buttons (appear on hover) -->
-                    <template v-if="level === 0">
-                        <button
-                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop="emit('addChat', item.value)"
-                            aria-label="Add chat to project"
-                        >
-                            <UIcon
-                                name="pixelarticons:message-plus"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </button>
-                        <button
-                            class="opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop="emit('addDocument', item.value)"
-                            aria-label="Add document to project"
-                        >
-                            <UIcon
-                                name="pixelarticons:note-plus"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </button>
-                    </template>
-                    <UPopover
-                        :content="{
-                            side: 'right',
-                            align: 'start',
-                            sideOffset: 6,
-                        }"
-                    >
-                        <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop
-                            :aria-label="
-                                level === 0
-                                    ? 'Project actions'
-                                    : 'Entry actions'
-                            "
-                        >
-                            <UIcon
-                                name="pixelarticons:more-vertical"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </span>
-                        <template #content>
-                            <div class="p-1 w-48 space-y-1">
-                                <template v-if="level === 0">
-                                    <UButton
-                                        color="neutral"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="i-lucide-pencil"
-                                        @click.stop.prevent="
-                                            emit('renameProject', item.value)
-                                        "
-                                        >Rename Project</UButton
-                                    >
-                                    <UButton
-                                        color="error"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="i-lucide-trash-2"
-                                        @click.stop.prevent="
-                                            emit('deleteProject', item.value)
-                                        "
-                                        >Delete Project</UButton
-                                    >
-                                </template>
-                                <template v-else>
-                                    <UButton
-                                        color="neutral"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="i-lucide-pencil"
-                                        @click.stop.prevent="
-                                            emit('renameEntry', {
-                                                projectId: item.parentId,
-                                                entryId: item.value,
-                                                kind: item.kind,
-                                            })
-                                        "
-                                        >Rename</UButton
-                                    >
-                                    <UButton
-                                        color="error"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="i-lucide-x"
-                                        @click.stop.prevent="
-                                            emit('removeFromProject', {
-                                                projectId: item.parentId,
-                                                entryId: item.value,
-                                                kind: item.kind,
-                                            })
-                                        "
-                                        >Remove from Project</UButton
-                                    >
-                                </template>
-                            </div>
-                        </template>
-                    </UPopover>
-                </div>
-            </template>
-        </UTree>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed, watch, ref } from 'vue';
-
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind?: string;
-}
-interface ProjectRow {
-    id: string;
-    name: string;
-    data?: any;
-}
-
-const props = defineProps<{
-    projects: ProjectRow[];
-    expanded?: string[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'update:expanded', value: string[]): void;
-    (e: 'chatSelected', id: string): void;
-    (e: 'documentSelected', id: string): void;
-    (e: 'addChat', projectId: string): void;
-    (e: 'addDocument', projectId: string): void;
-    (e: 'deleteProject', projectId: string): void;
-    (e: 'renameProject', projectId: string): void;
-    (
-        e: 'renameEntry',
-        payload: { projectId: string; entryId: string; kind?: string }
-    ): void;
-    (
-        e: 'removeFromProject',
-        payload: { projectId: string; entryId: string; kind?: string }
-    ): void;
-}>();
-
-// Local mirror for v-model:expanded
-const internalExpanded = ref<string[]>(
-    props.expanded ? [...props.expanded] : []
-);
-watch(
-    () => props.expanded,
-    (val) => {
-        if (val && val !== internalExpanded.value)
-            internalExpanded.value = [...val];
-    }
-);
-watch(internalExpanded, (val) => emit('update:expanded', val));
-
-function normalizeProjectData(p: any): ProjectEntry[] {
-    const raw = p?.data;
-    if (Array.isArray(raw)) return raw as ProjectEntry[];
-    if (typeof raw === 'string') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
-        } catch {
-            /* ignore */
-        }
-    }
-    return [];
-}
-
-const treeItems = computed<any[]>(() =>
-    props.projects.map((p) => {
-        const children = normalizeProjectData(p).map((entry) => {
-            const kind = entry.kind || 'chat';
-            return {
-                label: entry.name || '(untitled)',
-                value: entry.id,
-                icon:
-                    kind === 'doc'
-                        ? 'pixelarticons:note'
-                        : 'pixelarticons:chat',
-                kind,
-                parentId: p.id,
-                onSelect: (e: Event) => {
-                    if (kind === 'chat') emit('chatSelected', entry.id);
-                    else if (kind === 'doc') emit('documentSelected', entry.id);
-                },
-            };
-        });
-        return {
-            label: p.name,
-            value: p.id,
-            defaultExpanded: false,
-            children,
-            onSelect: (e: Event) => e.preventDefault(),
-        };
-    })
-);
-
-const ui = {
-    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden',
-    link: 'group/addchat text-[13px] rounded-[4px] py-1',
-};
-</script>
-
-<style scoped></style>
-```
-
 ## File: app/composables/useMultiPane.ts
 ```typescript
 // Multi-pane state management composable for chat & documents
@@ -12380,128 +14126,6 @@ export function useMultiPane(
 export type { PaneState as MultiPaneState };
 ```
 
-## File: app/app.config.ts
-```typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
-                header: 'border-0',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                color: {
-                    'inverse-primary':
-                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
-    },
-});
-```
-
 ## File: app/components/chat/ReasoningAccordion.vue
 ```vue
 <template>
@@ -12632,6 +14256,18 @@ const charCount = computed(() => (props.content || '').length);
 
 /* Vue transition classes removed in favor of Tailwind utility transitions */
 </style>
+```
+
+## File: app/composables/index.ts
+```typescript
+/** Barrel export for chat-related composables (Task 1.6) */
+export * from './useTailStream';
+export * from './useAutoScroll';
+export * from './useObservedElementSize';
+export * from './ui-extensions/messages/useMessageActions';
+export * from './ui-extensions/documents/useDocumentHistoryActions';
+export * from './ui-extensions/threads/useThreadHistoryActions';
+export * from './ui-extensions/projects/useProjectTreeActions';
 ```
 
 ## File: app/utils/chat/openrouterStream.ts
@@ -12907,677 +14543,6 @@ export async function* openRouterStream(params: {
 
     yield { type: 'done' };
 }
-```
-
-## File: app/components/sidebar/SidebarDocumentsList.vue
-```vue
-<template>
-    <div v-if="effectiveDocs.length > 0" class="mt-4">
-        <div class="flex items-center justify-between px-1 mb-1">
-            <h4 class="text-xs uppercase tracking-wide opacity-70 select-none">
-                Docs
-            </h4>
-            <UTooltip text="New Document" :delay-duration="0">
-                <UButton
-                    icon="pixelarticons:note-plus"
-                    size="xs"
-                    variant="subtle"
-                    @click="$emit('new-document')"
-                />
-            </UTooltip>
-        </div>
-        <div v-if="loading" class="text-xs opacity-60 px-1 py-2">Loading…</div>
-        <div
-            v-else-if="effectiveDocs.length === 0"
-            class="text-xs opacity-60 px-1 py-2"
-        >
-            No documents
-        </div>
-        <div v-else class="space-y-2">
-            <RetroGlassBtn
-                v-for="d in effectiveDocs"
-                :key="d.id"
-                class="w-full flex items-center justify-between text-left"
-                :class="{
-                    'active-element bg-primary/25': d.id === activeDocument,
-                }"
-                @click="$emit('select', d.id)"
-            >
-                <span class="truncate flex-1 min-w-0" :title="d.title">{{
-                    d.title
-                }}</span>
-                <!-- Actions popover (mirrors thread list) -->
-                <UPopover
-                    :content="{ side: 'right', align: 'start', sideOffset: 6 }"
-                >
-                    <span
-                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                        @click.stop
-                    >
-                        <UIcon
-                            name="pixelarticons:more-vertical"
-                            class="w-4 h-4 opacity-70"
-                        />
-                    </span>
-                    <template #content>
-                        <div class="p-1 w-44 space-y-1">
-                            <UButton
-                                color="neutral"
-                                variant="ghost"
-                                size="sm"
-                                class="w-full justify-start"
-                                icon="i-lucide-pencil"
-                                @click="$emit('rename-document', d)"
-                                >Rename</UButton
-                            >
-                            <UButton
-                                color="neutral"
-                                variant="ghost"
-                                size="sm"
-                                class="w-full justify-start"
-                                icon="pixelarticons:folder-plus"
-                                @click="$emit('add-to-project', d)"
-                                >Add to project</UButton
-                            >
-                            <UButton
-                                color="error"
-                                variant="ghost"
-                                size="sm"
-                                class="w-full justify-start"
-                                icon="i-lucide-trash-2"
-                                @click="$emit('delete-document', d)"
-                                >Delete</UButton
-                            >
-                        </div>
-                    </template>
-                </UPopover>
-            </RetroGlassBtn>
-        </div>
-    </div>
-</template>
-<script setup lang="ts">
-import { useDocumentsList } from '~/composables/useDocumentsList';
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-const props = defineProps<{ activeDocument?: string; externalDocs?: any[] }>();
-const emit = defineEmits<{
-    (e: 'select', id: string): void;
-    (e: 'new-document'): void;
-    (e: 'add-to-project', doc: any): void;
-    (e: 'delete-document', doc: any): void;
-    (e: 'rename-document', doc: any): void;
-}>();
-const { docs, loading } = useDocumentsList(200);
-const effectiveDocs = computed(() =>
-    Array.isArray(props.externalDocs) ? props.externalDocs : docs.value
-);
-function formatTime(ts: number) {
-    const d = new Date(ts * 1000);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-</script>
-```
-
-## File: app/components/chat/SystemPromptsModal.vue
-```vue
-<template>
-    <UModal
-        v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-none',
-            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0! border-b-0! overflow-hidden',
-        }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] max-h-[80vh] overflow-hidden"
-    >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    System Prompts
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="sm"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-        </template>
-        <template #body>
-            <div class="flex flex-col h-full" @keydown="handleKeydown">
-                <div
-                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
-                >
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <UButton
-                            @click="createNewPrompt"
-                            size="sm"
-                            color="primary"
-                            class="retro-btn"
-                        >
-                            New Prompt
-                        </UButton>
-                        <UButton
-                            v-if="currentActivePromptId"
-                            @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
-                        >
-                            Clear Active
-                        </UButton>
-                    </div>
-                    <UInput
-                        v-model="searchQuery"
-                        placeholder="Search prompts..."
-                        size="sm"
-                        class="max-w-xs"
-                        icon="i-heroicons-magnifying-glass"
-                    />
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <!-- List View -->
-                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
-                        <div
-                            v-if="filteredPrompts.length === 0"
-                            class="flex flex-col items-center justify-center h-full text-center p-8"
-                        >
-                            <UIcon
-                                name="pixelarticons:script-text"
-                                class="w-16 h-16 text-gray-400 mb-4"
-                            />
-                            <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
-                            >
-                                No system prompts yet
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
-                                Create your first system prompt to customize AI
-                                behavior.
-                            </p>
-                            <UButton @click="createNewPrompt" color="primary">
-                                Create Your First Prompt
-                            </UButton>
-                        </div>
-
-                        <div v-else class="p-4 space-y-3">
-                            <div
-                                v-for="prompt in filteredPrompts"
-                                :key="prompt.id"
-                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
-                                :class="{
-                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
-                                        prompt.id === currentActivePromptId ||
-                                        prompt.id === defaultPromptId,
-                                }"
-                            >
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h4
-                                            class="font-medium text-gray-900 dark:text-white truncate"
-                                            :class="{
-                                                'italic opacity-60':
-                                                    !prompt.title,
-                                            }"
-                                        >
-                                            {{
-                                                prompt.title ||
-                                                'Untitled Prompt'
-                                            }}
-                                        </h4>
-                                        <span
-                                            v-if="prompt.id === defaultPromptId"
-                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
-                                            >Default</span
-                                        >
-                                    </div>
-                                    <p
-                                        class="text-sm text-gray-500 dark:text-gray-400"
-                                    >
-                                        Updated
-                                        {{ formatDate(prompt.updated_at) }} •
-                                        {{ tokenCounts[prompt.id] || 0 }} tokens
-                                    </p>
-                                </div>
-
-                                <div
-                                    class="flex items-center gap-2 ml-4 shrink-0"
-                                >
-                                    <UTooltip
-                                        :delay-duration="0"
-                                        :text="
-                                            prompt.id === defaultPromptId
-                                                ? 'Remove default prompt'
-                                                : 'Set as default prompt'
-                                        "
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            :variant="
-                                                prompt.id === defaultPromptId
-                                                    ? 'solid'
-                                                    : 'outline'
-                                            "
-                                            :color="
-                                                prompt.id === defaultPromptId
-                                                    ? 'primary'
-                                                    : 'neutral'
-                                            "
-                                            :square="true"
-                                            :ui="{
-                                                base: 'retro-btn px-1! text-nowrap',
-                                            }"
-                                            class="retro-btn"
-                                            aria-label="Toggle default prompt"
-                                            @click.stop="
-                                                toggleDefault(prompt.id)
-                                            "
-                                            >{{
-                                                prompt.id === defaultPromptId
-                                                    ? 'default'
-                                                    : 'set default'
-                                            }}</UButton
-                                        >
-                                    </UTooltip>
-                                    <UButton
-                                        @click="selectPrompt(prompt.id)"
-                                        size="sm"
-                                        :color="
-                                            prompt.id === currentActivePromptId
-                                                ? 'primary'
-                                                : 'neutral'
-                                        "
-                                        :variant="
-                                            prompt.id === currentActivePromptId
-                                                ? 'solid'
-                                                : 'outline'
-                                        "
-                                    >
-                                        {{
-                                            prompt.id === currentActivePromptId
-                                                ? 'Selected'
-                                                : 'Select'
-                                        }}
-                                    </UButton>
-                                    <UPopover
-                                        :popper="{ placement: 'bottom-end' }"
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            variant="outline"
-                                            color="neutral"
-                                            class="flex items-center justify-center"
-                                            :square="true"
-                                            icon="pixelarticons:more-vertical"
-                                            aria-label="More actions"
-                                        />
-                                        <template #content>
-                                            <div
-                                                class="flex flex-col py-1 w-36 text-sm"
-                                            >
-                                                <button
-                                                    @click="
-                                                        startEditing(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:edit"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Edit</span>
-                                                </button>
-                                                <button
-                                                    @click="
-                                                        deletePrompt(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:trash"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Delete</span>
-                                                </button>
-                                            </div>
-                                        </template>
-                                    </UPopover>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Editor View -->
-                    <div v-else class="h-full overflow-hidden flex flex-col">
-                        <div class="flex-1 p-4 overflow-hidden">
-                            <LazyPromptsPromptEditor
-                                :prompt-id="editingPrompt.id"
-                                @back="stopEditing"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
-    </UModal>
-</template>
-
-<script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import {
-    listPrompts,
-    createPrompt,
-    softDeletePrompt,
-    type PromptRecord,
-} from '~/db/prompts';
-import { useActivePrompt } from '~/composables/useActivePrompt';
-import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-import { encode } from 'gpt-tokenizer';
-import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
-
-// Props & modal open bridging (like SettingsModal pattern)
-const props = defineProps<{
-    showModal: boolean;
-    threadId?: string;
-}>();
-const emit = defineEmits({
-    'update:showModal': (value: boolean) => typeof value === 'boolean',
-    selected: (id: string) => typeof id === 'string',
-    closed: () => true,
-    threadCreated: (threadId: string, promptId: string | null) => true,
-});
-
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
-
-watch(
-    () => props.showModal,
-    (v, ov) => {
-        if (!v && ov) emit('closed');
-    }
-);
-
-const {
-    activePromptId,
-    setActivePrompt,
-    clearActivePrompt: clearGlobalActivePrompt,
-} = useActivePrompt();
-
-const prompts = ref<PromptRecord[]>([]);
-const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
-    useDefaultPrompt();
-const editingPrompt = ref<PromptRecord | null>(null);
-const showDeleteConfirm = ref<string | null>(null);
-
-const searchQuery = ref('');
-const filteredPrompts = computed(() => {
-    if (!searchQuery.value) return prompts.value;
-    return prompts.value.filter((p) =>
-        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    );
-});
-
-// Thread-specific system prompt handling
-const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
-
-// Computed for current active prompt (thread-specific or global)
-const currentActivePromptId = computed(() => {
-    if (props.threadId) {
-        return threadSystemPromptId.value;
-    }
-    return activePromptId.value;
-});
-
-// Extract plain text from TipTap JSON recursively
-function extractText(node: any): string {
-    if (!node) return '';
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    const type = node.type;
-    let acc = '';
-    if (type === 'text') {
-        acc += node.text || '';
-    }
-    if (node.content && Array.isArray(node.content)) {
-        const inner = node.content.map(extractText).join('');
-        acc += inner;
-    }
-    // Block separators to avoid word merging
-    if (
-        [
-            'paragraph',
-            'heading',
-            'bulletList',
-            'orderedList',
-            'listItem',
-        ].includes(type)
-    ) {
-        acc += '\n';
-    }
-    return acc;
-}
-
-function contentToText(content: any): string {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    // TipTap root usually { type: 'doc', content: [...] }
-    if (content.type === 'doc' && Array.isArray(content.content)) {
-        return extractText(content)
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-    }
-    if (Array.isArray(content.content)) return extractText(content).trim();
-    return '';
-}
-
-// Cached token counts per prompt id (recomputed when prompts list changes)
-const tokenCounts = computed<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const p of prompts.value) {
-        try {
-            const text = contentToText(p.content);
-            map[p.id] = text ? encode(text).length : 0;
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token encode failed', e);
-            map[p.id] = 0;
-        }
-    }
-    return map;
-});
-
-// Totals derived from cached counts
-const totalTokens = computed(() =>
-    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
-);
-const filteredTokens = computed(() =>
-    filteredPrompts.value.reduce(
-        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
-        0
-    )
-);
-
-// (Events moved above with prop bridging)
-
-const loadPrompts = async () => {
-    try {
-        prompts.value = await listPrompts();
-        if (
-            defaultPromptId.value &&
-            !prompts.value.find((p) => p.id === defaultPromptId.value)
-        ) {
-            await clearDefaultPrompt();
-        }
-    } catch (error) {
-        console.error('Failed to load prompts:', error);
-    }
-};
-
-const loadThreadSystemPrompt = async () => {
-    if (props.threadId) {
-        try {
-            threadSystemPromptId.value = await getThreadSystemPrompt(
-                props.threadId
-            );
-        } catch (error) {
-            console.error('Failed to load thread system prompt:', error);
-            threadSystemPromptId.value = null;
-        }
-    } else {
-        threadSystemPromptId.value = null;
-    }
-};
-
-const createNewPrompt = async () => {
-    try {
-        const newPrompt = await createPrompt();
-        prompts.value.unshift(newPrompt);
-        startEditing(newPrompt.id);
-    } catch (error) {
-        console.error('Failed to create prompt:', error);
-    }
-};
-
-const selectPrompt = async (id: string) => {
-    try {
-        if (props.threadId) {
-            // Update thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, id);
-            threadSystemPromptId.value = id;
-        } else {
-            // Store as pending for when thread is created
-            pendingPromptId.value = id;
-            // Also update global for immediate feedback
-            await setActivePrompt(id);
-        }
-        emit('selected', id);
-    } catch (error) {
-        console.error('Failed to select prompt:', error);
-    }
-};
-
-const clearActivePrompt = async () => {
-    try {
-        if (props.threadId) {
-            // Clear thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, null);
-            threadSystemPromptId.value = null;
-        } else {
-            // Clear pending and global active prompt
-            pendingPromptId.value = null;
-            await clearGlobalActivePrompt();
-        }
-    } catch (error) {
-        console.error('Failed to clear active prompt:', error);
-    }
-};
-
-const startEditing = (id: string) => {
-    const prompt = prompts.value.find((p) => p.id === id);
-    if (prompt) {
-        editingPrompt.value = prompt;
-    }
-};
-
-const stopEditing = () => {
-    editingPrompt.value = null;
-    loadPrompts(); // Refresh list in case of changes
-};
-
-const applyPendingPromptToThread = async (threadId: string) => {
-    if (pendingPromptId.value) {
-        try {
-            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
-            emit('threadCreated', threadId, pendingPromptId.value);
-            pendingPromptId.value = null;
-        } catch (error) {
-            console.error('Failed to apply pending prompt to thread:', error);
-        }
-    }
-};
-
-const deletePrompt = async (id: string) => {
-    if (confirm('Are you sure you want to delete this prompt?')) {
-        try {
-            await softDeletePrompt(id);
-            if (activePromptId.value === id) {
-                clearActivePrompt();
-            }
-            if (defaultPromptId.value === id) {
-                await clearDefaultPrompt();
-            }
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to delete prompt:', error);
-        }
-    }
-};
-
-const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-    if (editingPrompt.value) return;
-    const key = event.key;
-    if (key >= '1' && key <= '9') {
-        const index = parseInt(key) - 1;
-        if (index < filteredPrompts.value.length) {
-            const prompt = filteredPrompts.value[index];
-            if (prompt) {
-                selectPrompt(prompt.id);
-                event.preventDefault();
-            }
-        }
-    }
-};
-
-onMounted(() => {
-    loadPrompts();
-    loadThreadSystemPrompt();
-});
-
-// Watch for threadId changes to reload thread-specific prompt
-watch(
-    () => props.threadId,
-    () => {
-        loadThreadSystemPrompt();
-    }
-);
-
-function toggleDefault(id: string) {
-    if (defaultPromptId.value === id) {
-        clearDefaultPrompt();
-    } else {
-        setDefaultPrompt(id);
-    }
-}
-</script>
-
-<style scoped>
-/* Mobile full-screen adjustments */
-@media (max-width: 640px) {
-    .sp-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh !important;
-        max-height: 100dvh !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border-width: 0 !important;
-    }
-}
-
-/* Smooth scrolling area */
-.sp-modal :deep(.n-modal-body),
-.sp-modal :deep(.n-card__content) {
-    /* ensure body grows */
-    height: 100%;
-}
-</style>
 ```
 
 ## File: app/components/chat/ChatPageShell.vue
@@ -14154,6 +15119,569 @@ body {
     .pane-active::after {
         animation: none;
     }
+}
+</style>
+```
+
+## File: app/components/chat/SystemPromptsModal.vue
+```vue
+<template>
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-none',
+            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
+            body: 'p-0! border-b-0! overflow-hidden',
+        }"
+        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] max-h-[80vh] overflow-hidden"
+    >
+        <template #header>
+            <div class="flex w-full items-center justify-between pr-2">
+                <h3 class="font-semibold text-sm pl-2 dark:text-black">
+                    System Prompts
+                </h3>
+                <UButton
+                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
+                    :square="true"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-heroicons-x-mark"
+                    @click="open = false"
+                />
+            </div>
+        </template>
+        <template #body>
+            <div class="flex flex-col h-full" @keydown="handleKeydown">
+                <div
+                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
+                >
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <UButton
+                            @click="createNewPrompt"
+                            size="sm"
+                            color="primary"
+                            class="retro-btn"
+                        >
+                            New Prompt
+                        </UButton>
+                        <UButton
+                            v-if="currentActivePromptId"
+                            @click="clearActivePrompt"
+                            size="sm"
+                            color="neutral"
+                            variant="outline"
+                        >
+                            Clear Active
+                        </UButton>
+                    </div>
+                    <UInput
+                        v-model="searchQuery"
+                        placeholder="Search prompts..."
+                        size="sm"
+                        class="max-w-xs"
+                        icon="i-heroicons-magnifying-glass"
+                    />
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <!-- List View -->
+                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
+                        <div
+                            v-if="filteredPrompts.length === 0"
+                            class="flex flex-col items-center justify-center h-full text-center p-8"
+                        >
+                            <UIcon
+                                name="pixelarticons:script-text"
+                                class="w-16 h-16 text-gray-400 mb-4"
+                            />
+                            <h3
+                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
+                            >
+                                No system prompts yet
+                            </h3>
+                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                                Create your first system prompt to customize AI
+                                behavior.
+                            </p>
+                            <UButton @click="createNewPrompt" color="primary">
+                                Create Your First Prompt
+                            </UButton>
+                        </div>
+
+                        <div v-else class="p-4 space-y-3">
+                            <div
+                                v-for="prompt in filteredPrompts"
+                                :key="prompt.id"
+                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
+                                :class="{
+                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
+                                        prompt.id === currentActivePromptId ||
+                                        prompt.id === defaultPromptId,
+                                }"
+                            >
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h4
+                                            class="font-medium text-gray-900 dark:text-white truncate"
+                                            :class="{
+                                                'italic opacity-60':
+                                                    !prompt.title,
+                                            }"
+                                        >
+                                            {{
+                                                prompt.title ||
+                                                'Untitled Prompt'
+                                            }}
+                                        </h4>
+                                        <span
+                                            v-if="prompt.id === defaultPromptId"
+                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            >Default</span
+                                        >
+                                    </div>
+                                    <p
+                                        class="text-sm text-gray-500 dark:text-gray-400"
+                                    >
+                                        Updated
+                                        {{ formatDate(prompt.updated_at) }} •
+                                        {{ tokenCounts[prompt.id] || 0 }} tokens
+                                    </p>
+                                </div>
+
+                                <div
+                                    class="flex items-center gap-2 ml-4 shrink-0"
+                                >
+                                    <UTooltip
+                                        :delay-duration="0"
+                                        :text="
+                                            prompt.id === defaultPromptId
+                                                ? 'Remove default prompt'
+                                                : 'Set as default prompt'
+                                        "
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            :variant="
+                                                prompt.id === defaultPromptId
+                                                    ? 'solid'
+                                                    : 'outline'
+                                            "
+                                            :color="
+                                                prompt.id === defaultPromptId
+                                                    ? 'primary'
+                                                    : 'neutral'
+                                            "
+                                            :square="true"
+                                            :ui="{
+                                                base: 'retro-btn px-1! text-nowrap',
+                                            }"
+                                            class="retro-btn"
+                                            aria-label="Toggle default prompt"
+                                            @click.stop="
+                                                toggleDefault(prompt.id)
+                                            "
+                                            >{{
+                                                prompt.id === defaultPromptId
+                                                    ? 'default'
+                                                    : 'set default'
+                                            }}</UButton
+                                        >
+                                    </UTooltip>
+                                    <UButton
+                                        @click="selectPrompt(prompt.id)"
+                                        size="sm"
+                                        :color="
+                                            prompt.id === currentActivePromptId
+                                                ? 'primary'
+                                                : 'neutral'
+                                        "
+                                        :variant="
+                                            prompt.id === currentActivePromptId
+                                                ? 'solid'
+                                                : 'outline'
+                                        "
+                                    >
+                                        {{
+                                            prompt.id === currentActivePromptId
+                                                ? 'Selected'
+                                                : 'Select'
+                                        }}
+                                    </UButton>
+                                    <UPopover
+                                        :popper="{ placement: 'bottom-end' }"
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            variant="outline"
+                                            color="neutral"
+                                            class="flex items-center justify-center"
+                                            :square="true"
+                                            icon="pixelarticons:more-vertical"
+                                            aria-label="More actions"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex flex-col py-1 w-36 text-sm"
+                                            >
+                                                <button
+                                                    @click="
+                                                        startEditing(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:edit"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button
+                                                    @click="
+                                                        deletePrompt(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:trash"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editor View -->
+                    <div v-else class="h-full overflow-hidden flex flex-col">
+                        <div class="flex-1 p-4 overflow-hidden">
+                            <LazyPromptsPromptEditor
+                                :prompt-id="editingPrompt.id"
+                                @back="stopEditing"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </UModal>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, computed, watch } from 'vue';
+import {
+    listPrompts,
+    createPrompt,
+    softDeletePrompt,
+    type PromptRecord,
+} from '~/db/prompts';
+import { useActivePrompt } from '~/composables/useActivePrompt';
+import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
+import { encode } from 'gpt-tokenizer';
+import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+
+// Props & modal open bridging (like SettingsModal pattern)
+const props = defineProps<{
+    showModal: boolean;
+    threadId?: string;
+}>();
+const emit = defineEmits({
+    'update:showModal': (value: boolean) => typeof value === 'boolean',
+    selected: (id: string) => typeof id === 'string',
+    closed: () => true,
+    threadCreated: (threadId: string, promptId: string | null) => true,
+});
+
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
+});
+
+watch(
+    () => props.showModal,
+    (v, ov) => {
+        if (!v && ov) emit('closed');
+    }
+);
+
+const {
+    activePromptId,
+    setActivePrompt,
+    clearActivePrompt: clearGlobalActivePrompt,
+} = useActivePrompt();
+
+const prompts = ref<PromptRecord[]>([]);
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
+const editingPrompt = ref<PromptRecord | null>(null);
+const showDeleteConfirm = ref<string | null>(null);
+
+const searchQuery = ref('');
+const filteredPrompts = computed(() => {
+    if (!searchQuery.value) return prompts.value;
+    return prompts.value.filter((p) =>
+        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+});
+
+// Thread-specific system prompt handling
+const threadSystemPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
+
+// Computed for current active prompt (thread-specific or global)
+const currentActivePromptId = computed(() => {
+    if (props.threadId) {
+        return threadSystemPromptId.value;
+    }
+    return activePromptId.value;
+});
+
+// Extract plain text from TipTap JSON recursively
+function extractText(node: any): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    const type = node.type;
+    let acc = '';
+    if (type === 'text') {
+        acc += node.text || '';
+    }
+    if (node.content && Array.isArray(node.content)) {
+        const inner = node.content.map(extractText).join('');
+        acc += inner;
+    }
+    // Block separators to avoid word merging
+    if (
+        [
+            'paragraph',
+            'heading',
+            'bulletList',
+            'orderedList',
+            'listItem',
+        ].includes(type)
+    ) {
+        acc += '\n';
+    }
+    return acc;
+}
+
+function contentToText(content: any): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    // TipTap root usually { type: 'doc', content: [...] }
+    if (content.type === 'doc' && Array.isArray(content.content)) {
+        return extractText(content)
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+    }
+    if (Array.isArray(content.content)) return extractText(content).trim();
+    return '';
+}
+
+// Cached token counts per prompt id (recomputed when prompts list changes)
+const tokenCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of prompts.value) {
+        try {
+            const text = contentToText(p.content);
+            map[p.id] = text ? encode(text).length : 0;
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token encode failed', e);
+            map[p.id] = 0;
+        }
+    }
+    return map;
+});
+
+// Totals derived from cached counts
+const totalTokens = computed(() =>
+    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
+);
+const filteredTokens = computed(() =>
+    filteredPrompts.value.reduce(
+        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
+        0
+    )
+);
+
+// (Events moved above with prop bridging)
+
+const loadPrompts = async () => {
+    try {
+        prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.find((p) => p.id === defaultPromptId.value)
+        ) {
+            await clearDefaultPrompt();
+        }
+    } catch (error) {
+        console.error('Failed to load prompts:', error);
+    }
+};
+
+const loadThreadSystemPrompt = async () => {
+    if (props.threadId) {
+        try {
+            threadSystemPromptId.value = await getThreadSystemPrompt(
+                props.threadId
+            );
+        } catch (error) {
+            console.error('Failed to load thread system prompt:', error);
+            threadSystemPromptId.value = null;
+        }
+    } else {
+        threadSystemPromptId.value = null;
+    }
+};
+
+const createNewPrompt = async () => {
+    try {
+        const newPrompt = await createPrompt();
+        prompts.value.unshift(newPrompt);
+        startEditing(newPrompt.id);
+    } catch (error) {
+        console.error('Failed to create prompt:', error);
+    }
+};
+
+const selectPrompt = async (id: string) => {
+    try {
+        if (props.threadId) {
+            // Update thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, id);
+            threadSystemPromptId.value = id;
+        } else {
+            // Store as pending for when thread is created
+            pendingPromptId.value = id;
+            // Also update global for immediate feedback
+            await setActivePrompt(id);
+        }
+        emit('selected', id);
+    } catch (error) {
+        console.error('Failed to select prompt:', error);
+    }
+};
+
+const clearActivePrompt = async () => {
+    try {
+        if (props.threadId) {
+            // Clear thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadSystemPromptId.value = null;
+        } else {
+            // Clear pending and global active prompt
+            pendingPromptId.value = null;
+            await clearGlobalActivePrompt();
+        }
+    } catch (error) {
+        console.error('Failed to clear active prompt:', error);
+    }
+};
+
+const startEditing = (id: string) => {
+    const prompt = prompts.value.find((p) => p.id === id);
+    if (prompt) {
+        editingPrompt.value = prompt;
+    }
+};
+
+const stopEditing = () => {
+    editingPrompt.value = null;
+    loadPrompts(); // Refresh list in case of changes
+};
+
+const applyPendingPromptToThread = async (threadId: string) => {
+    if (pendingPromptId.value) {
+        try {
+            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
+            emit('threadCreated', threadId, pendingPromptId.value);
+            pendingPromptId.value = null;
+        } catch (error) {
+            console.error('Failed to apply pending prompt to thread:', error);
+        }
+    }
+};
+
+const deletePrompt = async (id: string) => {
+    if (confirm('Are you sure you want to delete this prompt?')) {
+        try {
+            await softDeletePrompt(id);
+            if (activePromptId.value === id) {
+                clearActivePrompt();
+            }
+            if (defaultPromptId.value === id) {
+                await clearDefaultPrompt();
+            }
+            loadPrompts();
+        } catch (error) {
+            console.error('Failed to delete prompt:', error);
+        }
+    }
+};
+
+const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (editingPrompt.value) return;
+    const key = event.key;
+    if (key >= '1' && key <= '9') {
+        const index = parseInt(key) - 1;
+        if (index < filteredPrompts.value.length) {
+            const prompt = filteredPrompts.value[index];
+            if (prompt) {
+                selectPrompt(prompt.id);
+                event.preventDefault();
+            }
+        }
+    }
+};
+
+onMounted(() => {
+    loadPrompts();
+    loadThreadSystemPrompt();
+});
+
+// Watch for threadId changes to reload thread-specific prompt
+watch(
+    () => props.threadId,
+    () => {
+        loadThreadSystemPrompt();
+    }
+);
+
+function toggleDefault(id: string) {
+    if (defaultPromptId.value === id) {
+        clearDefaultPrompt();
+    } else {
+        setDefaultPrompt(id);
+    }
+}
+</script>
+
+<style scoped>
+/* Mobile full-screen adjustments */
+@media (max-width: 640px) {
+    .sp-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-width: 0 !important;
+    }
+}
+
+/* Smooth scrolling area */
+.sp-modal :deep(.n-modal-body),
+.sp-modal :deep(.n-card__content) {
+    /* ensure body grows */
+    height: 100%;
 }
 </style>
 ```
@@ -15569,955 +17097,55 @@ export function useChat(
 }
 ```
 
-## File: app/components/chat/ChatMessage.vue
-```vue
-<template>
-    <div
-        :class="outerClass"
-        :style="{
-            paddingRight:
-                props.message.role === 'user' && hashList.length && !expanded
-                    ? '80px'
-                    : '16px',
-        }"
-        class="p-2 min-w-[140px] rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
-    >
-        <!-- Compact thumb (collapsed state) -->
-        <button
-            v-if="props.message.role === 'user' && hashList.length && !expanded"
-            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
-            @click="toggleExpanded"
-            type="button"
-            aria-label="Show attachments"
-        >
-            <template v-if="firstThumb && pdfMeta[firstThumb]">
-                <div class="pdf-thumb w-full h-full">
-                    <div
-                        class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
-                    >
-                        {{ pdfDisplayName }}
-                    </div>
-
-                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
-                </div>
-            </template>
-            <template
-                v-else-if="
-                    firstThumb && thumbnails[firstThumb]?.status === 'ready'
-                "
-            >
-                <img
-                    :src="thumbnails[firstThumb!]?.url"
-                    :alt="'attachment ' + firstThumb.slice(0, 6)"
-                    class="object-cover w-full h-full"
-                    draggable="false"
-                />
-            </template>
-            <template
-                v-else-if="
-                    firstThumb && thumbnails[firstThumb]?.status === 'error'
-                "
-            >
-                <span class="text-[10px] text-error">err</span>
-            </template>
-            <template v-else>
-                <span class="text-[10px] animate-pulse opacity-70">…</span>
-            </template>
-            <span
-                v-if="hashList.length > 1"
-                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
-                >+{{ hashList.length - 1 }}</span
-            >
-        </button>
-
-        <div v-if="!editing" :class="innerClass" ref="contentEl">
-            <!-- Retro loader extracted to component -->
-            <LoadingGenerating
-                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
-                class="animate-in"
-            />
-            <div
-                v-if="
-                    props.message.role === 'assistant' &&
-                    props.message.reasoning_text
-                "
-            >
-                <LazyChatReasoningAccordion
-                    hydrate-on-visible
-                    :content="props.message.reasoning_text"
-                    :streaming="isStreamingReasoning as boolean"
-                    :pending="(props.message as any).pending"
-                />
-            </div>
-            <div v-if="hasContent" v-html="rendered"></div>
-        </div>
-        <!-- Editing surface -->
-        <div v-else class="w-full">
-            <LazyChatMessageEditor
-                hydrate-on-interaction="focus"
-                v-model="draft"
-                :autofocus="true"
-                :focus-delay="120"
-            />
-            <div class="flex w-full justify-end gap-2 mt-2">
-                <UButton
-                    size="sm"
-                    color="success"
-                    class="retro-btn"
-                    @click="saveEdit"
-                    :loading="saving"
-                    >Save</UButton
-                >
-                <UButton
-                    size="sm"
-                    color="error"
-                    class="retro-btn"
-                    @click="cancelEdit"
-                    >Cancel</UButton
-                >
-            </div>
-        </div>
-
-        <!-- Expanded grid -->
-        <MessageAttachmentsGallery
-            v-if="hashList.length && expanded"
-            :hashes="hashList"
-            @collapse="toggleExpanded"
-        />
-
-        <!-- Action buttons: overlap bubble border half outside -->
-        <div
-            v-if="!editing"
-            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
-        >
-            <UButtonGroup
-                :class="{
-                    'bg-primary': props.message.role === 'user',
-                    'bg-white': props.message.role === 'assistant',
-                }"
-                class="rounded-[3px]"
-            >
-                <UTooltip :delay-duration="0" text="Copy" :teleport="true">
-                    <UButton
-                        @click="copyMessage"
-                        icon="pixelarticons:copy"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip
-                    :delay-duration="0"
-                    text="Retry"
-                    :popper="{ strategy: 'fixed' }"
-                    :teleport="true"
-                >
-                    <UButton
-                        icon="pixelarticons:reload"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                        @click="onRetry"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Branch" :teleport="true">
-                    <UButton
-                        @click="onBranch"
-                        icon="pixelarticons:git-branch"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                    ></UButton>
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Edit" :teleport="true">
-                    <UButton
-                        icon="pixelarticons:edit-box"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
-                        @click="beginEdit"
-                    ></UButton>
-                </UTooltip>
-                <!-- Dynamically registered plugin actions -->
-                <template v-for="action in extraActions" :key="action.id">
-                    <UTooltip
-                        :delay-duration="0"
-                        :text="action.tooltip"
-                        :teleport="true"
-                    >
-                        <UButton
-                            :icon="action.icon"
-                            color="info"
-                            size="sm"
-                            class="text-black dark:text-white/95 flex items-center justify-center"
-                            @click="() => runExtraAction(action)"
-                        ></UButton>
-                    </UTooltip>
-                </template>
-            </UButtonGroup>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import {
-    computed,
-    reactive,
-    ref,
-    watch,
-    onBeforeUnmount,
-    nextTick,
-    onMounted,
-} from 'vue';
-import LoadingGenerating from './LoadingGenerating.vue';
-import { parseFileHashes } from '~/db/files-util';
-import { getFileMeta } from '~/db/files';
-import { marked } from 'marked';
-import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
-import { useMessageEditing } from '~/composables/useMessageEditing';
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null; // serialized array
-};
-
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
-
-// Local UI message expects content to be a string (rendered markdown/html)
-type UIMessage = Omit<ChatMessageType, 'content'> & {
-    content: string;
-    pending?: boolean;
-    reasoning_text?: string | null;
-};
-
-const props = defineProps<{ message: UIMessage; threadId?: string }>();
-const emit = defineEmits<{
-    (e: 'retry', id: string): void;
-    (e: 'branch', id: string): void;
-    (e: 'edited', payload: { id: string; content: string }): void;
-}>();
-
-const isStreamingReasoning = computed(() => {
-    return props.message.reasoning_text && !hasContent.value;
-});
-
-const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
-        props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
-        props.message.role === 'assistant',
-}));
-
-const innerClass = computed(() => ({
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
-        props.message.role === 'assistant',
-}));
-
-// Detect if assistant message currently has any textual content yet
-const hasContent = computed(() => {
-    const c: any = props.message.content;
-    if (typeof c === 'string') return c.trim().length > 0;
-    if (Array.isArray(c))
-        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
-    return false;
-});
-
-// Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => {
-    const raw = (props.message as any).file_hashes;
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as string[];
-    if (typeof raw === 'string') return parseFileHashes(raw);
-    return [];
-});
-
-// Render markdown/text. For assistant messages keep existing inline images during live stream.
-// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
-const rendered = computed(() => {
-    const raw = props.message.content || '';
-    const parsed = (marked.parse(raw) as string) || '';
-    if (props.message.role === 'user') {
-        return parsed.replace(/<img\b[^>]*>/gi, '');
-    }
-    const hasAnyImg = /<img\b/i.test(parsed);
-    if (hasAnyImg) return parsed; // live streaming case retains inline imgs
-    if (hashList.value.length) {
-        const placeholders = hashList.value
-            .map(
-                (h) =>
-                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
-            )
-            .join('');
-        return parsed + placeholders;
-    }
-    return parsed;
-});
-
-// Editing (extracted)
-const {
-    editing,
-    draft,
-    saving,
-    beginEdit,
-    cancelEdit,
-    saveEdit: internalSaveEdit,
-} = useMessageEditing(props.message);
-async function saveEdit() {
-    await internalSaveEdit();
-    if (!editing.value) {
-        const id = (props.message as any).id;
-        if (id) emit('edited', { id, content: draft.value });
-    }
-}
-
-// (hashList defined earlier)
-
-// Compact thumb preview support (attachments gallery handles full grid). Reuse global caches.
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string;
-}
-const thumbnails = reactive<Record<string, ThumbState>>({});
-// PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
-const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
-const safePdfName = computed(() => {
-    const h = firstThumb.value;
-    if (!h) return 'document.pdf';
-    const m = pdfMeta[h];
-    return (m && m.name) || 'document.pdf';
-});
-// Short display (keep extension, truncate middle if long)
-const pdfDisplayName = computed(() => {
-    const name = safePdfName.value;
-    const max = 18;
-    if (name.length <= max) return name;
-    const dot = name.lastIndexOf('.');
-    const ext = dot > 0 ? name.slice(dot) : '';
-    const base = dot > 0 ? name.slice(0, dot) : name;
-    const keep = max - ext.length - 3; // 3 for ellipsis
-    if (keep <= 4) return base.slice(0, max - 3) + '...';
-    const head = Math.ceil(keep / 2);
-    const tail = Math.floor(keep / 2);
-    return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
-});
-const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
-    string,
-    ThumbState
->());
-const thumbLoadPromises = ((globalThis as any).__or3ThumbInflight ||= new Map<
-    string,
-    Promise<void>
->());
-// Reference counts per file hash so we can safely revoke object URLs when unused.
-const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
-    string,
-    number
->());
-
-function retainThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    thumbRefCounts.set(hash, prev + 1);
-}
-function releaseThumb(hash: string) {
-    const prev = thumbRefCounts.get(hash) || 0;
-    if (prev <= 1) {
-        thumbRefCounts.delete(hash);
-        const state = thumbCache.get(hash);
-        if (state?.url) {
-            try {
-                URL.revokeObjectURL(state.url);
-            } catch {}
-        }
-        thumbCache.delete(hash);
-    } else {
-        thumbRefCounts.set(hash, prev - 1);
-    }
-}
-
-// Per-message persistent UI state stored directly on the message object to
-// survive virtualization recycling without external maps.
-const expanded = ref<boolean>(
-    (props.message as any)._expanded === true || false
-);
-watch(expanded, (v) => ((props.message as any)._expanded = v));
-const firstThumb = computed(() => hashList.value[0]);
-function toggleExpanded() {
-    if (!hashList.value.length) return;
-    expanded.value = !expanded.value;
-}
-
-async function ensureThumb(h: string) {
-    // If we already know it's a PDF just ensure meta exists.
-    if (pdfMeta[h]) return;
-    if (thumbnails[h] && thumbnails[h].status === 'ready') return;
-    const cached = thumbCache.get(h);
-    if (cached) {
-        thumbnails[h] = cached;
-        return;
-    }
-    if (thumbLoadPromises.has(h)) {
-        await thumbLoadPromises.get(h);
-        const after = thumbCache.get(h);
-        if (after) thumbnails[h] = after;
-        return;
-    }
-    thumbnails[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
-            const [blob, meta] = await Promise.all([
-                (await import('~/db/files')).getFileBlob(h),
-                getFileMeta(h).catch(() => undefined),
-            ]);
-            if (meta && meta.kind === 'pdf') {
-                pdfMeta[h] = { name: meta.name, kind: meta.kind };
-                // Remove the temporary loading state since we won't have an image thumb
-                delete thumbnails[h];
-                return;
-            }
-            if (!blob) throw new Error('missing');
-            if (blob.type === 'application/pdf') {
-                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
-                delete thumbnails[h];
-                return;
-            }
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            thumbCache.set(h, ready);
-            thumbnails[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            thumbCache.set(h, err);
-            thumbnails[h] = err;
-        } finally {
-            thumbLoadPromises.delete(h);
-        }
-    })();
-    thumbLoadPromises.set(h, p);
-    await p;
-}
-
-// Track current hashes used by this message for ref counting.
-const currentHashes = new Set<string>();
-// Load new hashes when list changes with diffing for retain/release.
-watch(
-    hashList,
-    async (list) => {
-        const nextSet = new Set(list);
-        // Additions
-        for (const h of nextSet) {
-            if (!currentHashes.has(h)) {
-                await ensureThumb(h);
-                // Only retain if loaded and ready
-                const state = thumbCache.get(h);
-                if (state?.status === 'ready') retainThumb(h);
-                currentHashes.add(h);
-            }
-        }
-        // Removals
-        for (const h of Array.from(currentHashes)) {
-            if (!nextSet.has(h)) {
-                currentHashes.delete(h);
-                releaseThumb(h);
-            }
-        }
-    },
-    { immediate: true }
-);
-
-// Cleanup: release all thumbs used by this message.
-onBeforeUnmount(() => {
-    for (const h of currentHashes) releaseThumb(h);
-    currentHashes.clear();
-});
-// Inline image hydration: replace <img data-file-hash> with object URL once ready
-const contentEl = ref<HTMLElement | null>(null);
-async function hydrateInlineImages() {
-    // Only hydrate assistant messages (users have inline images stripped).
-    if (props.message.role !== 'assistant') return;
-    await nextTick();
-    const root = contentEl.value;
-    if (!root) return;
-    const imgs = root.querySelectorAll(
-        'img[data-file-hash]:not([data-hydrated])'
-    );
-    imgs.forEach((imgEl) => {
-        const hash = imgEl.getAttribute('data-file-hash') || '';
-        if (!hash) return;
-        const state = thumbCache.get(hash) || thumbnails[hash];
-        if (state && state.status === 'ready' && state.url) {
-            (imgEl as HTMLImageElement).src = state.url;
-            imgEl.setAttribute('data-hydrated', 'true');
-            imgEl.classList.remove('opacity-60');
-        }
-    });
-}
-// Re-run hydration when rendered HTML changes or thumbnails update
-watch(rendered, () => hydrateInlineImages());
-watch(hashList, () => hydrateInlineImages());
-onMounted(() => hydrateInlineImages());
-
-watch(
-    () =>
-        Object.keys(thumbnails).map((h) => {
-            const t = thumbnails[h]!; // state always initialized before use
-            return t.status + ':' + (t.url || '');
-        }),
-    () => hydrateInlineImages()
-);
-import { useToast } from '#imports';
-function copyMessage() {
-    navigator.clipboard.writeText(props.message.content);
-
-    useToast().add({
-        title: 'Message copied',
-        description: 'The message content has been copied to your clipboard.',
-        duration: 2000,
-    });
-}
-
-function onRetry() {
-    const id = (props.message as any).id;
-    if (!id) return;
-    emit('retry', id);
-}
-
-import { forkThread, retryBranch } from '~/db/branching';
-import {
-    useMessageActions,
-    type ChatMessageAction,
-} from '~/composables/useMessageActions';
-
-// Branch popover state
-const branchMode = ref<'reference' | 'copy'>('copy');
-const branchModes = [
-    { label: 'Reference', value: 'reference' },
-    { label: 'Copy', value: 'copy' },
-];
-const branchTitle = ref('');
-const branching = ref(false);
-
-async function onBranch() {
-    if (branching.value) return;
-    branching.value = true;
-    const messageId = (props.message as any).id;
-    if (!messageId) return;
-    try {
-        let res: any;
-        // For assistant messages we now allow direct anchoring (captures assistant content in branch).
-        // If "retry" semantics desired, a separate Retry action still uses retryBranch.
-        res = await forkThread({
-            sourceThreadId: props.threadId || '',
-            anchorMessageId: messageId,
-            mode: branchMode.value,
-            titleOverride: branchTitle.value || undefined,
-        });
-        emit('branch', res.thread.id);
-        useToast().add({
-            title: 'Branched',
-            description: `New branch: ${res.thread.title}`,
-            color: 'primary',
-            duration: 2200,
-        });
-    } catch (e: any) {
-        useToast().add({
-            title: 'Branch failed',
-            description: e?.message || 'Error creating branch',
-            color: 'error',
-            duration: 3000,
-        });
-    } finally {
-        branching.value = false;
-    }
-}
-
-// Extensible message actions (plugin registered)
-// Narrow to expected role subset (exclude potential 'system' etc.)
-const extraActions = useMessageActions({
-    role: props.message.role as 'user' | 'assistant',
-});
-async function runExtraAction(action: ChatMessageAction) {
-    try {
-        await action.handler({
-            message: props.message,
-            threadId: props.threadId,
-        });
-    } catch (e: any) {
-        try {
-            useToast().add({
-                title: 'Action failed',
-                description: e?.message || 'Error running action',
-                color: 'error',
-                duration: 3000,
-            });
-        } catch {}
-        // eslint-disable-next-line no-console
-        console.error('Message action error', action.id, e);
-    }
-}
-</script>
-
-<style scoped>
-/* PDF compact thumb */
-.pdf-thumb {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-lowest) 0%,
-        var(--md-surface-container-low) 100%
-    );
-    width: 100%;
-    height: 100%;
-    padding: 2px 2px 3px;
-    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
-        2px 2px 0 0 var(--md-inverse-surface);
-    font-family: 'VT323', monospace;
-}
-.pdf-thumb__icon {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--md-inverse-surface);
-    width: 100%;
-}
-.pdf-thumb__name {
-    font-size: 8px;
-    line-height: 1.05;
-    font-weight: 600;
-    text-align: center;
-    max-height: 3.2em;
-    overflow: hidden;
-    display: -webkit-box;
-    line-clamp: 3;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    margin-top: 1px;
-    padding: 0 1px;
-    text-shadow: 0 1px 0 #000;
-    color: var(--md-inverse-on-surface);
-}
-.pdf-thumb__ext {
-    position: absolute;
-    top: 0;
-    left: 0;
-    background: var(--md-inverse-surface);
-    color: var(--md-inverse-on-surface);
-    font-size: 7px;
-    font-weight: 700;
-    padding: 1px 3px;
-    letter-spacing: 0.5px;
-    box-shadow: 1px 1px 0 0 #000;
-}
-.pdf-thumb::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    background: linear-gradient(
-        135deg,
-        var(--md-surface-container-low) 0%,
-        var(--md-surface-container-high) 100%
-    );
-    clip-path: polygon(0 0, 100% 0, 100% 100%);
-    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
-}
-</style>
-```
-
 ## File: app/components/sidebar/SideNavContent.vue
 ```vue
 <template>
-    <div class="flex flex-col h-full relative">
-        <div class="px-2 pt-2 flex flex-col space-y-2">
-            <div class="flex">
-                <UButton
-                    @click="onNewChat"
-                    class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
-                    >New Chat</UButton
-                >
-                <UTooltip :delay-duration="0" text="Create project">
-                    <UButton
-                        color="inverse-primary"
-                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                        icon="pixelarticons:folder-plus"
-                        :ui="{
-                            leadingIcon: 'w-5 h-5',
-                        }"
-                        @click="openCreateProject"
-                    />
-                </UTooltip>
-                <UTooltip :delay-duration="0" text="Create document">
-                    <UButton
-                        class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                        icon="pixelarticons:note-plus"
-                        :ui="{
-                            base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                            leadingIcon: 'w-5 h-5',
-                        }"
-                        @click="openCreateDocumentModal"
-                    />
-                </UTooltip>
-            </div>
-            <div class="relative w-full ml-[1px]">
-                <UInput
-                    ref="searchInputWrapper"
-                    v-model="sidebarQuery"
-                    icon="pixelarticons:search"
-                    size="md"
-                    :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
-                    variant="outline"
-                    placeholder="Search..."
-                    aria-label="Search"
-                    class="w-full"
-                    @keydown.escape.prevent.stop="onEscapeClear"
-                >
-                    <template v-if="sidebarQuery.length > 0" #trailing>
-                        <UButton
-                            color="neutral"
-                            variant="subtle"
-                            size="xs"
-                            class="flex items-center justify-center p-0"
-                            icon="pixelarticons:close-box"
-                            aria-label="Clear input"
-                            @click="sidebarQuery = ''"
-                        />
-                    </template>
-                </UInput>
-            </div>
-
-            <div
-                class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
-                role="group"
-                aria-label="Sidebar sections"
-            >
-                <UButton
-                    v-for="seg in sectionToggles"
-                    :key="seg.value"
-                    size="sm"
-                    :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
-                    :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
-                    class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
-                    :class="
-                        activeSections[seg.value]
-                            ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
-                            : 'opacity-70 hover:bg-primary/15'
-                    "
-                    :aria-pressed="activeSections[seg.value]"
-                    @click="toggleSection(seg.value)"
-                >
-                    {{ seg.label }}
-                </UButton>
-            </div>
-        </div>
-        <!-- Scrollable content: projects + (virtualized) threads -->
-        <div
-            ref="scrollAreaRef"
-            class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 pt-2 space-y-3 scrollbar-hidden"
-            :style="{ paddingBottom: bottomPad + 'px' }"
-        >
-            <SidebarProjectTree
-                v-if="activeSections.projects"
+    <div class="flex flex-col h-full relative overflow-hidden">
+        <SideNavHeader
+            :sidebar-query="sidebarQuery"
+            :active-sections="activeSections"
+            :projects="projects"
+            @update:sidebar-query="sidebarQuery = $event"
+            @update:active-sections="activeSections = $event"
+            @new-chat="onNewChat"
+            @new-document="emit('newDocument', $event)"
+            @open-rename="openRename"
+            @open-rename-project="openRenameProject"
+            @add-to-project="openAddToProject"
+            @add-document-to-project="openAddDocumentToProject"
+        />
+        <!-- Scrollable content area -->
+        <div ref="scrollAreaRef" class="flex-1 min-h-0 px-2">
+            <SidebarVirtualList
+                :height="listHeight"
                 :projects="displayProjects"
-                v-model:expanded="expandedProjects"
-                @chatSelected="onProjectChatSelected"
-                @documentSelected="onProjectDocumentSelected"
-                @addChat="handleAddChatToProject"
-                @addDocument="handleAddDocumentToProject"
-                @deleteProject="handleDeleteProject"
-                @renameProject="openRenameProject"
-                @renameEntry="openRename"
-                @removeFromProject="handleRemoveFromProject"
-            />
-            <div v-if="activeSections.chats && displayThreads.length > 0">
-                <h4
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 select-none"
-                >
-                    Chats
-                </h4>
-                <!-- Conditional virtualization: only mount VList when large -->
-                <component
-                    v-if="useVirtualization && VListComp"
-                    :is="VListComp"
-                    :data="displayThreads as any[]"
-                    :overscan="8"
-                    class="mt-2"
-                    #default="{ item }"
-                >
-                    <div class="mb-2" :key="item.id">
-                        <RetroGlassBtn
-                            :class="{
-                                'active-element bg-primary/25':
-                                    item.id === props.activeThread,
-                            }"
-                            class="w-full flex items-center justify-between text-left"
-                            @click="() => selectChat(item.id)"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
-                            >
-                                <UIcon
-                                    v-if="item.forked"
-                                    name="pixelarticons:git-branch"
-                                    class="shrink-0"
-                                ></UIcon>
-                                <span
-                                    class="block flex-1 min-w-0 truncate"
-                                    :title="item.title || 'New Thread'"
-                                >
-                                    {{ item.title || 'New Thread' }}
-                                </span>
-                            </div>
-                            <UPopover
-                                :content="{
-                                    side: 'right',
-                                    align: 'start',
-                                    sideOffset: 6,
-                                }"
-                            >
-                                <span
-                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                                    @click.stop
-                                >
-                                    <UIcon
-                                        name="pixelarticons:more-vertical"
-                                        class="w-4 h-4 opacity-70"
-                                    />
-                                </span>
-                                <template #content>
-                                    <div class="p-1 w-44 space-y-1">
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-pencil"
-                                            @click="openRename(item)"
-                                            >Rename</UButton
-                                        >
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="pixelarticons:folder-plus"
-                                            @click="openAddToProject(item)"
-                                            >Add to project</UButton
-                                        >
-                                        <UButton
-                                            color="error"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-trash-2"
-                                            @click="confirmDelete(item)"
-                                            >Delete</UButton
-                                        >
-                                    </div>
-                                </template>
-                            </UPopover>
-                        </RetroGlassBtn>
-                    </div>
-                </component>
-                <!-- Fallback simple list when virtualization not needed -->
-                <div v-else class="mt-2">
-                    <div
-                        v-for="item in displayThreads"
-                        :key="item.id"
-                        class="mb-2"
-                    >
-                        <RetroGlassBtn
-                            :class="{
-                                'active-element bg-primary/25':
-                                    item.id === props.activeThread,
-                            }"
-                            class="w-full flex items-center justify-between text-left"
-                            @click="() => selectChat(item.id)"
-                        >
-                            <div
-                                class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden"
-                            >
-                                <UIcon
-                                    v-if="item.forked"
-                                    name="pixelarticons:git-branch"
-                                    class="shrink-0"
-                                ></UIcon>
-                                <span
-                                    class="block flex-1 min-w-0 truncate"
-                                    :title="item.title || 'New Thread'"
-                                >
-                                    {{ item.title || 'New Thread' }}
-                                </span>
-                            </div>
-                            <UPopover
-                                :content="{
-                                    side: 'right',
-                                    align: 'start',
-                                    sideOffset: 6,
-                                }"
-                            >
-                                <span
-                                    class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                                    @click.stop
-                                >
-                                    <UIcon
-                                        name="pixelarticons:more-vertical"
-                                        class="w-4 h-4 opacity-70"
-                                    />
-                                </span>
-                                <template #content>
-                                    <div class="p-1 w-44 space-y-1">
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-pencil"
-                                            @click="openRename(item)"
-                                            >Rename</UButton
-                                        >
-                                        <UButton
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="pixelarticons:folder-plus"
-                                            @click="openAddToProject(item)"
-                                            >Add to project</UButton
-                                        >
-                                        <UButton
-                                            color="error"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            icon="i-lucide-trash-2"
-                                            @click="confirmDelete(item)"
-                                            >Delete</UButton
-                                        >
-                                    </div>
-                                </template>
-                            </UPopover>
-                        </RetroGlassBtn>
-                    </div>
-                </div>
-            </div>
-            <!-- Documents list -->
-            <LazySidebarDocumentsList
-                hydrate-on-idle
-                v-if="activeSections.docs"
-                class="mt-4"
-                :external-docs="displayDocuments"
-                @select="(id:string) => selectDocument(id)"
-                @new-document="openCreateDocumentModal"
-                @add-to-project="(d:any) => openAddDocumentToProject(d)"
-                @delete-document="(d:any) => confirmDeleteDocument(d)"
-                @rename-document="(d:any) => openRename({ docId: d.id })"
+                :threads="displayThreads"
+                :documents="docs"
+                :display-documents="displayDocuments"
+                :expanded-projects="expandedProjects"
+                :active-sections="{
+                    projects: activeSections.projects,
+                    threads: activeSections.chats,
+                    docs: activeSections.docs,
+                }"
+                :active-thread="props.activeThread"
+                :active-document="activeDocumentId"
+                @addChat="(id:any) => handleAddChatToProject(id)"
+                @addDocument="(id:any) => handleAddDocumentToProject(id)"
+                @renameProject="(id:any) => openRenameProject(id)"
+                @deleteProject="(id:any) => confirmDeleteProject(id)"
+                @renameEntry="(p:any) => openRename(p)"
+                @removeFromProject="(p:any) => handleRemoveFromProject(p)"
+                @chatSelected="(id:any) => onProjectChatSelected(id)"
+                @documentSelected="(id:any) => onProjectDocumentSelected(id)"
+                @selectThread="(id:any) => selectChat(id)"
+                @renameThread="(t:any) => openRename(t)"
+                @deleteThread="(t:any) => confirmDelete(t)"
+                @addThreadToProject="(t:any) => openAddToProject(t)"
+                @selectDocument="(id:any) => selectDocument(id)"
+                @renameDocument="(d:any) => openRename({ docId: d.id })"
+                @deleteDocument="(d:any) => confirmDeleteDocument(d)"
+                @addDocumentToProject="(d:any) => openAddDocumentToProject(d)"
             />
         </div>
         <div ref="bottomNavRef" class="shrink-0">
@@ -16631,6 +17259,28 @@ async function runExtraAction(action: ChatMessageAction) {
             </template>
         </UModal>
 
+        <!-- Delete project confirm modal -->
+        <UModal
+            v-model:open="showDeleteProjectModal"
+            title="Delete project?"
+            :ui="{ footer: 'justify-end' }"
+            class="border-2"
+        >
+            <template #header> <h3>Delete project?</h3> </template>
+            <template #body>
+                <p class="text-sm opacity-70">
+                    This will remove the project from the sidebar. Project data
+                    will be soft-deleted and can be recovered.
+                </p>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showDeleteProjectModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="error" @click="deleteProject">Delete</UButton>
+            </template>
+        </UModal>
+
         <!-- Create Project Modal -->
         <UModal
             v-model:open="showCreateProjectModal"
@@ -16734,7 +17384,6 @@ async function runExtraAction(action: ChatMessageAction) {
                                 v-model="selectedProjectId"
                                 :items="projectSelectOptions"
                                 :value-key="'value'"
-                                searchable
                                 placeholder="Select project"
                                 class="w-full"
                             />
@@ -16849,12 +17498,13 @@ async function runExtraAction(action: ChatMessageAction) {
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
 import { useHooks } from '~/composables/useHooks';
-import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
+import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel, create } from '~/db'; // Dexie + barrel helpers
-// NOTE: Only load virtua when we actually need virtualization (perf + less layout jank)
-import { shallowRef } from 'vue';
-const VListComp = shallowRef<any | null>(null);
+import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
+import { updateDocument } from '~/db/documents';
+import { loadDocument } from '~/composables/useDocumentsStore';
+// (Temporarily removed virtualization for chats — use simple list for now)
 
 // Section visibility (multi-select) defaults to all on
 const activeSections = ref<{
@@ -16862,15 +17512,6 @@ const activeSections = ref<{
     chats: boolean;
     docs: boolean;
 }>({ projects: true, chats: true, docs: true });
-const sectionToggles = [
-    { label: 'Proj', value: 'projects' as const },
-    { label: 'Chats', value: 'chats' as const },
-    { label: 'Docs', value: 'docs' as const },
-];
-function toggleSection(v: 'projects' | 'chats' | 'docs') {
-    const next = { ...activeSections.value, [v]: !activeSections.value[v] };
-    activeSections.value = next;
-}
 
 const props = defineProps<{
     activeThread?: string;
@@ -16883,21 +17524,14 @@ const scrollAreaRef = ref<HTMLElement | null>(null);
 const bottomNavRef = ref<HTMLElement | null>(null);
 // Dynamic bottom padding to avoid content hidden under absolute bottom nav
 const bottomPad = ref(140); // fallback
+const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/useSidebarSearch';
 // Documents live query (docs only) to feed search
-const docs = ref<any[]>([]);
+const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
-// Direct focus support for external callers
-const searchInputWrapper = ref<any | null>(null);
-function focusSearchInput() {
-    // Access underlying input inside UInput component
-    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
-        searchInputWrapper.value) as HTMLElement | null;
-    if (!root) return;
-    const input = root.querySelector('input');
-    if (input) (input as HTMLInputElement).focus();
-}
-defineExpose({ focusSearchInput });
+
+// Active document id (placeholder until wiring exists elsewhere)
+const activeDocumentId = ref<string | undefined>(undefined);
 
 const {
     query: sidebarQuery,
@@ -16958,7 +17592,7 @@ const displayProjects = computed(() => {
         .filter(Boolean);
 });
 const displayDocuments = computed(() =>
-    sidebarQuery.value.trim() ? documentResults.value : undefined
+    sidebarQuery.value.trim() ? (documentResults.value as Post[]) : undefined
 );
 function onEscapeClear() {
     if (sidebarQuery.value) sidebarQuery.value = '';
@@ -16966,19 +17600,19 @@ function onEscapeClear() {
 let sub: { unsubscribe: () => void } | null = null;
 let subProjects: { unsubscribe: () => void } | null = null;
 
-// Virtualization threshold (tune): above this many threads we mount VList
-const VIRTUALIZE_THRESHOLD = 250;
-const useVirtualization = computed(
-    () => displayThreads.value.length > VIRTUALIZE_THRESHOLD
-);
+// Virtualization removed — always render the simple list for chats.
 
 onMounted(async () => {
     const measure = () => {
-        const navEl = bottomNavRef.value?.querySelector(
-            '.hud'
-        ) as HTMLElement | null;
-        const h = navEl?.offsetHeight || 0;
-        bottomPad.value = h + 12; // small breathing room
+        const container = scrollAreaRef.value
+            ?.parentElement as HTMLElement | null; // full sidebar container
+        const headerEl = container?.querySelector('header');
+        const bottomEl = bottomNavRef.value as HTMLElement | null;
+        const total = container?.clientHeight || 0;
+        const headerH = headerEl?.offsetHeight || 0;
+        const bottomH = bottomEl?.offsetHeight || 0;
+        const available = total - headerH - bottomH - 8; // extra small gap
+        listHeight.value = available > 100 ? available : 100;
     };
     await nextTick();
     measure();
@@ -17036,20 +17670,10 @@ onMounted(async () => {
         },
         error: (err) => console.error('documents liveQuery error', err),
     });
-    // Lazy import virtua only if needed initially
-    if (useVirtualization.value) {
-        const mod = await import('virtua/vue');
-        VListComp.value = mod.VList;
-    }
+    // (virtualization removed — nothing to lazy-load here)
 });
 
-// Watch for crossing threshold (both directions)
-watch(useVirtualization, async (val) => {
-    if (val && !VListComp.value) {
-        const mod = await import('virtua/vue');
-        VListComp.value = mod.VList;
-    }
-});
+// (virtualization removed — no watcher required)
 
 // Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
 watch([projects, expandedProjects], () => {
@@ -17092,6 +17716,10 @@ const deleteId = ref<string | null>(null);
 // Document delete state
 const showDeleteDocumentModal = ref(false);
 const deleteDocumentId = ref<string | null>(null);
+
+// Project delete state
+const showDeleteProjectModal = ref(false);
+const deleteProjectId = ref<string | null>(null);
 
 async function openRename(target: any) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
@@ -17144,12 +17772,12 @@ async function saveRename() {
     const maybeDoc = await db.posts.get(renameId.value);
     const now = Math.floor(Date.now() / 1000);
     if (maybeDoc && (maybeDoc as any).postType === 'doc') {
-        // Update doc title
-        await upsert.post({
-            ...(maybeDoc as any),
-            title: renameTitle.value,
-            updated_at: now,
-        });
+        // Update doc title via documents API (fires hooks for sidebar refresh)
+        await updateDocument(renameId.value, { title: renameTitle.value });
+        // Refresh open document state if loaded in editor
+        try {
+            await loadDocument(renameId.value);
+        } catch {}
         // Sync inside projects
         try {
             const allProjects = await db.projects.toArray();
@@ -17233,11 +17861,39 @@ function confirmDelete(thread: any) {
     showDeleteModal.value = true;
 }
 
+// Confirm deletion of a project (opens modal)
+function confirmDeleteProject(projectOrId: any) {
+    // SidebarProjectTree may emit either the project id (string) or
+    // a project object; handle both safely.
+    const id =
+        typeof projectOrId === 'string'
+            ? projectOrId
+            : projectOrId && typeof projectOrId === 'object'
+            ? projectOrId.id
+            : null;
+    if (!id) return;
+    deleteProjectId.value = id as string;
+    showDeleteProjectModal.value = true;
+}
+
 async function deleteThread() {
     if (!deleteId.value) return;
     await dbDel.hard.thread(deleteId.value);
     showDeleteModal.value = false;
     deleteId.value = null;
+}
+
+async function deleteProject() {
+    if (!deleteProjectId.value) return;
+    try {
+        // Use soft delete so project is recoverable like existing handler
+        await dbDel.soft.project(deleteProjectId.value);
+    } catch (e) {
+        console.error('delete project failed', e);
+    } finally {
+        showDeleteProjectModal.value = false;
+        deleteProjectId.value = null;
+    }
 }
 
 // Document delete handling
@@ -17692,6 +18348,656 @@ async function submitCreateDocument() {
     }
 }
 </script>
+```
+
+## File: app/components/chat/ChatMessage.vue
+```vue
+<template>
+    <div
+        :class="outerClass"
+        :style="{
+            paddingRight:
+                props.message.role === 'user' && hashList.length && !expanded
+                    ? '80px'
+                    : '16px',
+        }"
+        class="p-2 min-w-[140px] rounded-md first:mt-3 first:mb-6 not-first:my-6 relative"
+    >
+        <!-- Compact thumb (collapsed state) -->
+        <button
+            v-if="props.message.role === 'user' && hashList.length && !expanded"
+            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            @click="toggleExpanded"
+            type="button"
+            aria-label="Show attachments"
+        >
+            <template v-if="firstThumb && pdfMeta[firstThumb]">
+                <div class="pdf-thumb w-full h-full">
+                    <div
+                        class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
+                    >
+                        {{ pdfDisplayName }}
+                    </div>
+
+                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
+                </div>
+            </template>
+            <template
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'ready'
+                "
+            >
+                <img
+                    :src="thumbnails[firstThumb!]?.url"
+                    :alt="'attachment ' + firstThumb.slice(0, 6)"
+                    class="object-cover w-full h-full"
+                    draggable="false"
+                />
+            </template>
+            <template
+                v-else-if="
+                    firstThumb && thumbnails[firstThumb]?.status === 'error'
+                "
+            >
+                <span class="text-[10px] text-error">err</span>
+            </template>
+            <template v-else>
+                <span class="text-[10px] animate-pulse opacity-70">…</span>
+            </template>
+            <span
+                v-if="hashList.length > 1"
+                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
+                >+{{ hashList.length - 1 }}</span
+            >
+        </button>
+
+        <div v-if="!editing" :class="innerClass" ref="contentEl">
+            <!-- Retro loader extracted to component -->
+            <LoadingGenerating
+                v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
+                class="animate-in"
+            />
+            <div
+                v-if="
+                    props.message.role === 'assistant' &&
+                    props.message.reasoning_text
+                "
+            >
+                <LazyChatReasoningAccordion
+                    hydrate-on-visible
+                    :content="props.message.reasoning_text"
+                    :streaming="isStreamingReasoning as boolean"
+                    :pending="(props.message as any).pending"
+                />
+            </div>
+            <div v-if="hasContent" v-html="rendered"></div>
+        </div>
+        <!-- Editing surface -->
+        <div v-else class="w-full">
+            <LazyChatMessageEditor
+                hydrate-on-interaction="focus"
+                v-model="draft"
+                :autofocus="true"
+                :focus-delay="120"
+            />
+            <div class="flex w-full justify-end gap-2 mt-2">
+                <UButton
+                    size="sm"
+                    color="success"
+                    class="retro-btn"
+                    @click="saveEdit"
+                    :loading="saving"
+                    >Save</UButton
+                >
+                <UButton
+                    size="sm"
+                    color="error"
+                    class="retro-btn"
+                    @click="cancelEdit"
+                    >Cancel</UButton
+                >
+            </div>
+        </div>
+
+        <!-- Expanded grid -->
+        <MessageAttachmentsGallery
+            v-if="hashList.length && expanded"
+            :hashes="hashList"
+            @collapse="toggleExpanded"
+        />
+
+        <!-- Action buttons: overlap bubble border half outside -->
+        <div
+            v-if="!editing"
+            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+        >
+            <UButtonGroup
+                :class="{
+                    'bg-primary': props.message.role === 'user',
+                    'bg-white': props.message.role === 'assistant',
+                }"
+                class="rounded-[3px]"
+            >
+                <UTooltip :delay-duration="0" text="Copy" :teleport="true">
+                    <UButton
+                        @click="copyMessage"
+                        icon="pixelarticons:copy"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip
+                    :delay-duration="0"
+                    text="Retry"
+                    :popper="{ strategy: 'fixed' }"
+                    :teleport="true"
+                >
+                    <UButton
+                        icon="pixelarticons:reload"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        @click="onRetry"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Branch" :teleport="true">
+                    <UButton
+                        @click="onBranch"
+                        icon="pixelarticons:git-branch"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                    ></UButton>
+                </UTooltip>
+                <UTooltip :delay-duration="0" text="Edit" :teleport="true">
+                    <UButton
+                        icon="pixelarticons:edit-box"
+                        color="info"
+                        size="sm"
+                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        @click="beginEdit"
+                    ></UButton>
+                </UTooltip>
+                <!-- Dynamically registered plugin actions -->
+                <template v-for="action in extraActions" :key="action.id">
+                    <UTooltip
+                        :delay-duration="0"
+                        :text="action.tooltip"
+                        :teleport="true"
+                    >
+                        <UButton
+                            :icon="action.icon"
+                            color="info"
+                            size="sm"
+                            class="text-black dark:text-white/95 flex items-center justify-center"
+                            @click="() => runExtraAction(action)"
+                        ></UButton>
+                    </UTooltip>
+                </template>
+            </UButtonGroup>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import {
+    computed,
+    reactive,
+    ref,
+    watch,
+    onBeforeUnmount,
+    nextTick,
+    onMounted,
+} from 'vue';
+import LoadingGenerating from './LoadingGenerating.vue';
+import { parseFileHashes } from '~/db/files-util';
+import { getFileMeta } from '~/db/files';
+import { marked } from 'marked';
+import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
+import { useMessageEditing } from '~/composables/useMessageEditing';
+
+import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+
+// Local UI message expects content to be a string (rendered markdown/html)
+type UIMessage = Omit<ChatMessageType, 'content'> & {
+    content: string;
+    pending?: boolean;
+    reasoning_text?: string | null;
+};
+
+const props = defineProps<{ message: UIMessage; threadId?: string }>();
+const emit = defineEmits<{
+    (e: 'retry', id: string): void;
+    (e: 'branch', id: string): void;
+    (e: 'edited', payload: { id: string; content: string }): void;
+}>();
+
+const isStreamingReasoning = computed(() => {
+    return props.message.reasoning_text && !hasContent.value;
+});
+
+const outerClass = computed(() => ({
+    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+        props.message.role === 'user',
+    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
+        props.message.role === 'assistant',
+}));
+
+const innerClass = computed(() => ({
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+        props.message.role === 'assistant',
+}));
+
+// Detect if assistant message currently has any textual content yet
+const hasContent = computed(() => {
+    const c: any = props.message.content;
+    if (typeof c === 'string') return c.trim().length > 0;
+    if (Array.isArray(c))
+        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
+    return false;
+});
+
+// Extract hash list (serialized JSON string or array already?)
+const hashList = computed<string[]>(() => {
+    const raw = (props.message as any).file_hashes;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string') return parseFileHashes(raw);
+    return [];
+});
+
+// Render markdown/text. For assistant messages keep existing inline images during live stream.
+// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
+const rendered = computed(() => {
+    const raw = props.message.content || '';
+    const parsed = (marked.parse(raw) as string) || '';
+    if (props.message.role === 'user') {
+        return parsed.replace(/<img\b[^>]*>/gi, '');
+    }
+    const hasAnyImg = /<img\b/i.test(parsed);
+    if (hasAnyImg) return parsed; // live streaming case retains inline imgs
+    if (hashList.value.length) {
+        const placeholders = hashList.value
+            .map(
+                (h) =>
+                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
+            )
+            .join('');
+        return parsed + placeholders;
+    }
+    return parsed;
+});
+
+// Editing (extracted)
+const {
+    editing,
+    draft,
+    saving,
+    beginEdit,
+    cancelEdit,
+    saveEdit: internalSaveEdit,
+} = useMessageEditing(props.message);
+async function saveEdit() {
+    await internalSaveEdit();
+    if (!editing.value) {
+        const id = (props.message as any).id;
+        if (id) emit('edited', { id, content: draft.value });
+    }
+}
+
+// (hashList defined earlier)
+
+// Compact thumb preview support (attachments gallery handles full grid). Reuse global caches.
+interface ThumbState {
+    status: 'loading' | 'ready' | 'error';
+    url?: string;
+}
+const thumbnails = reactive<Record<string, ThumbState>>({});
+// PDF meta (name/kind) for hashes that are PDFs so we show placeholder instead of broken image
+const pdfMeta = reactive<Record<string, { name?: string; kind: string }>>({});
+const safePdfName = computed(() => {
+    const h = firstThumb.value;
+    if (!h) return 'document.pdf';
+    const m = pdfMeta[h];
+    return (m && m.name) || 'document.pdf';
+});
+// Short display (keep extension, truncate middle if long)
+const pdfDisplayName = computed(() => {
+    const name = safePdfName.value;
+    const max = 18;
+    if (name.length <= max) return name;
+    const dot = name.lastIndexOf('.');
+    const ext = dot > 0 ? name.slice(dot) : '';
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    const keep = max - ext.length - 3; // 3 for ellipsis
+    if (keep <= 4) return base.slice(0, max - 3) + '...';
+    const head = Math.ceil(keep / 2);
+    const tail = Math.floor(keep / 2);
+    return base.slice(0, head) + '…' + base.slice(base.length - tail) + ext;
+});
+const thumbCache = ((globalThis as any).__or3ThumbCache ||= new Map<
+    string,
+    ThumbState
+>());
+const thumbLoadPromises = ((globalThis as any).__or3ThumbInflight ||= new Map<
+    string,
+    Promise<void>
+>());
+// Reference counts per file hash so we can safely revoke object URLs when unused.
+const thumbRefCounts = ((globalThis as any).__or3ThumbRefCounts ||= new Map<
+    string,
+    number
+>());
+
+function retainThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    thumbRefCounts.set(hash, prev + 1);
+}
+function releaseThumb(hash: string) {
+    const prev = thumbRefCounts.get(hash) || 0;
+    if (prev <= 1) {
+        thumbRefCounts.delete(hash);
+        const state = thumbCache.get(hash);
+        if (state?.url) {
+            try {
+                URL.revokeObjectURL(state.url);
+            } catch {}
+        }
+        thumbCache.delete(hash);
+    } else {
+        thumbRefCounts.set(hash, prev - 1);
+    }
+}
+
+// Per-message persistent UI state stored directly on the message object to
+// survive virtualization recycling without external maps.
+const expanded = ref<boolean>(
+    (props.message as any)._expanded === true || false
+);
+watch(expanded, (v) => ((props.message as any)._expanded = v));
+const firstThumb = computed(() => hashList.value[0]);
+function toggleExpanded() {
+    if (!hashList.value.length) return;
+    expanded.value = !expanded.value;
+}
+
+async function ensureThumb(h: string) {
+    // If we already know it's a PDF just ensure meta exists.
+    if (pdfMeta[h]) return;
+    if (thumbnails[h] && thumbnails[h].status === 'ready') return;
+    const cached = thumbCache.get(h);
+    if (cached) {
+        thumbnails[h] = cached;
+        return;
+    }
+    if (thumbLoadPromises.has(h)) {
+        await thumbLoadPromises.get(h);
+        const after = thumbCache.get(h);
+        if (after) thumbnails[h] = after;
+        return;
+    }
+    thumbnails[h] = { status: 'loading' };
+    const p = (async () => {
+        try {
+            const [blob, meta] = await Promise.all([
+                (await import('~/db/files')).getFileBlob(h),
+                getFileMeta(h).catch(() => undefined),
+            ]);
+            if (meta && meta.kind === 'pdf') {
+                pdfMeta[h] = { name: meta.name, kind: meta.kind };
+                // Remove the temporary loading state since we won't have an image thumb
+                delete thumbnails[h];
+                return;
+            }
+            if (!blob) throw new Error('missing');
+            if (blob.type === 'application/pdf') {
+                pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
+                delete thumbnails[h];
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const ready: ThumbState = { status: 'ready', url };
+            thumbCache.set(h, ready);
+            thumbnails[h] = ready;
+        } catch {
+            const err: ThumbState = { status: 'error' };
+            thumbCache.set(h, err);
+            thumbnails[h] = err;
+        } finally {
+            thumbLoadPromises.delete(h);
+        }
+    })();
+    thumbLoadPromises.set(h, p);
+    await p;
+}
+
+// Track current hashes used by this message for ref counting.
+const currentHashes = new Set<string>();
+// Load new hashes when list changes with diffing for retain/release.
+watch(
+    hashList,
+    async (list) => {
+        const nextSet = new Set(list);
+        // Additions
+        for (const h of nextSet) {
+            if (!currentHashes.has(h)) {
+                await ensureThumb(h);
+                // Only retain if loaded and ready
+                const state = thumbCache.get(h);
+                if (state?.status === 'ready') retainThumb(h);
+                currentHashes.add(h);
+            }
+        }
+        // Removals
+        for (const h of Array.from(currentHashes)) {
+            if (!nextSet.has(h)) {
+                currentHashes.delete(h);
+                releaseThumb(h);
+            }
+        }
+    },
+    { immediate: true }
+);
+
+// Cleanup: release all thumbs used by this message.
+onBeforeUnmount(() => {
+    for (const h of currentHashes) releaseThumb(h);
+    currentHashes.clear();
+});
+// Inline image hydration: replace <img data-file-hash> with object URL once ready
+const contentEl = ref<HTMLElement | null>(null);
+async function hydrateInlineImages() {
+    // Only hydrate assistant messages (users have inline images stripped).
+    if (props.message.role !== 'assistant') return;
+    await nextTick();
+    const root = contentEl.value;
+    if (!root) return;
+    const imgs = root.querySelectorAll(
+        'img[data-file-hash]:not([data-hydrated])'
+    );
+    imgs.forEach((imgEl) => {
+        const hash = imgEl.getAttribute('data-file-hash') || '';
+        if (!hash) return;
+        const state = thumbCache.get(hash) || thumbnails[hash];
+        if (state && state.status === 'ready' && state.url) {
+            (imgEl as HTMLImageElement).src = state.url;
+            imgEl.setAttribute('data-hydrated', 'true');
+            imgEl.classList.remove('opacity-60');
+        }
+    });
+}
+// Re-run hydration when rendered HTML changes or thumbnails update
+watch(rendered, () => hydrateInlineImages());
+watch(hashList, () => hydrateInlineImages());
+onMounted(() => hydrateInlineImages());
+
+watch(
+    () =>
+        Object.keys(thumbnails).map((h) => {
+            const t = thumbnails[h]!; // state always initialized before use
+            return t.status + ':' + (t.url || '');
+        }),
+    () => hydrateInlineImages()
+);
+import { useToast } from '#imports';
+function copyMessage() {
+    navigator.clipboard.writeText(props.message.content);
+
+    useToast().add({
+        title: 'Message copied',
+        description: 'The message content has been copied to your clipboard.',
+        duration: 2000,
+    });
+}
+
+function onRetry() {
+    const id = (props.message as any).id;
+    if (!id) return;
+    emit('retry', id);
+}
+
+import { forkThread } from '~/db/branching';
+
+// Branch popover state
+const branchMode = ref<'reference' | 'copy'>('copy');
+
+const branchTitle = ref('');
+const branching = ref(false);
+
+async function onBranch() {
+    if (branching.value) return;
+    branching.value = true;
+    const messageId = (props.message as any).id;
+    if (!messageId) return;
+    try {
+        let res: any;
+        // For assistant messages we now allow direct anchoring (captures assistant content in branch).
+        // If "retry" semantics desired, a separate Retry action still uses retryBranch.
+        res = await forkThread({
+            sourceThreadId: props.threadId || '',
+            anchorMessageId: messageId,
+            mode: branchMode.value,
+            titleOverride: branchTitle.value || undefined,
+        });
+        emit('branch', res.thread.id);
+        useToast().add({
+            title: 'Branched',
+            description: `New branch: ${res.thread.title}`,
+            color: 'primary',
+            duration: 2200,
+        });
+    } catch (e: any) {
+        useToast().add({
+            title: 'Branch failed',
+            description: e?.message || 'Error creating branch',
+            color: 'error',
+            duration: 3000,
+        });
+    } finally {
+        branching.value = false;
+    }
+}
+
+// Extensible message actions (plugin registered)
+// Narrow to expected role subset (exclude potential 'system' etc.)
+const extraActions = useMessageActions({
+    role: props.message.role as 'user' | 'assistant',
+});
+
+async function runExtraAction(action: ChatMessageAction) {
+    try {
+        await action.handler({
+            message: props.message,
+            threadId: props.threadId,
+        });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        // eslint-disable-next-line no-console
+        console.error('Message action error', action.id, e);
+    }
+}
+</script>
+
+<style scoped>
+/* PDF compact thumb */
+.pdf-thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    background: linear-gradient(
+        180deg,
+        var(--md-surface-container-lowest) 0%,
+        var(--md-surface-container-low) 100%
+    );
+    width: 100%;
+    height: 100%;
+    padding: 2px 2px 3px;
+    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
+        2px 2px 0 0 var(--md-inverse-surface);
+    font-family: 'VT323', monospace;
+}
+.pdf-thumb__icon {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--md-inverse-surface);
+    width: 100%;
+}
+.pdf-thumb__name {
+    font-size: 8px;
+    line-height: 1.05;
+    font-weight: 600;
+    text-align: center;
+    max-height: 3.2em;
+    overflow: hidden;
+    display: -webkit-box;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    margin-top: 1px;
+    padding: 0 1px;
+    text-shadow: 0 1px 0 #000;
+    color: var(--md-inverse-on-surface);
+}
+.pdf-thumb__ext {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--md-inverse-surface);
+    color: var(--md-inverse-on-surface);
+    font-size: 7px;
+    font-weight: 700;
+    padding: 1px 3px;
+    letter-spacing: 0.5px;
+    box-shadow: 1px 1px 0 0 #000;
+}
+.pdf-thumb::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background: linear-gradient(
+        135deg,
+        var(--md-surface-container-low) 0%,
+        var(--md-surface-container-high) 100%
+    );
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
+}
+</style>
 ```
 
 ## File: app/components/chat/ChatContainer.vue

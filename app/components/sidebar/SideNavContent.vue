@@ -28,7 +28,9 @@
                     docs: activeSections.docs,
                 }"
                 :active-thread="props.activeThread"
-                :active-document="activeDocumentId"
+                :active-document="activeDocumentIds[0]"
+                :active-threads="activeThreadIds"
+                :active-documents="activeDocumentIds"
                 @addChat="(id:any) => handleAddChatToProject(id)"
                 @addDocument="(id:any) => handleAddDocumentToProject(id)"
                 @renameProject="(id:any) => openRenameProject(id)"
@@ -429,8 +431,27 @@ import { useSidebarSearch } from '~/composables/useSidebarSearch';
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
 
-// Active document id (placeholder until wiring exists elsewhere)
-const activeDocumentId = ref<string | undefined>(undefined);
+// Active item tracking (multi-pane aware). Uses global multi-pane API if present.
+const activeDocumentIds = computed<string[]>(() => {
+    const api: any = (globalThis as any).__or3MultiPaneApi;
+    if (api && api.panes && Array.isArray(api.panes.value)) {
+        return api.panes.value
+            .filter((p: any) => p.mode === 'doc' && p.documentId)
+            .map((p: any) => p.documentId as string);
+    }
+    return [];
+});
+const activeThreadIds = computed<string[]>(() => {
+    const api: any = (globalThis as any).__or3MultiPaneApi;
+    if (api && api.panes && Array.isArray(api.panes.value)) {
+        const ids = api.panes.value
+            .filter((p: any) => p.mode === 'chat' && p.threadId)
+            .map((p: any) => p.threadId as string)
+            .filter(Boolean);
+        if (ids.length) return ids;
+    }
+    return props.activeThread ? [props.activeThread] : [];
+});
 
 const {
     query: sidebarQuery,
