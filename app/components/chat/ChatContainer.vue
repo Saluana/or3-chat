@@ -308,11 +308,13 @@ function scheduleScrollIfAtBottom() {
     });
 }
 
-// Initial bottom stick after mount (defer to allow user immediate scroll cancel)
-// Initial stick: do on first frame without extra timers.
-requestAnimationFrame(() => {
-    if (autoScroll.atBottom.value) autoScroll.scrollToBottom({ smooth: false });
-});
+// Initial bottom stick (client only; SSR lacks requestAnimationFrame)
+if (process.client) {
+    requestAnimationFrame(() => {
+        if (autoScroll.atBottom.value)
+            autoScroll.scrollToBottom({ smooth: false });
+    });
+}
 
 // Hook: streaming delta buffering
 // Hooks no longer needed for streaming tail display; scroll on reactive tail changes
