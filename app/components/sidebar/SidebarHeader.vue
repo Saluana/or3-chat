@@ -4,14 +4,25 @@
             'px-0 justify-center': collapsed,
             'px-3 justify-between': !collapsed,
         }"
-        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
                 <div class="flex items-center space-x-2">
-                    <h1 class="text-[14px] font-medium uppercase tracking-wide">
-                        or3-chat
-                    </h1>
+                    <div
+                        class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
+                    >
+                        <div
+                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
+                        >
+                            <div>Or</div>
+                            <div class="text-[17px]">3</div>
+                        </div>
+                        <span
+                            class="text-[18px] pb-[1.5px] -ml-0.5 font-vt323 font-bold text-primary"
+                            >.chat</span
+                        >
+                    </div>
                 </div>
             </slot>
         </div>
@@ -60,6 +71,25 @@ function onToggle() {
 .dark .header-pattern {
     /* Elevated surface tone for dark mode header to distinguish from main background */
     background-color: var(--md-surface-container-high) !important;
+}
+
+/* Retro logo title: pixel shadow + underline accent (no stroke) */
+.header-title {
+    font-family: 'Press Start 2P', monospace;
+
+    letter-spacing: 1px;
+    color: var(--md-primary);
+    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
+    padding: 2px 4px 3px 4px; /* subtle padding for readability */
+}
+
+.dark .header-title {
+    color: var(--md-on-primary-container);
+    text-shadow: 2px 2px 0 var(--md-primary);
+}
+.dark .header-title::after {
+    background: var(--md-on-primary-container);
+    box-shadow: 2px 2px 0 var(--md-primary);
 }
 
 /* Logo rendering tweaks */

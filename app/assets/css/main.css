@@ -24,6 +24,14 @@
     --ui-radius: 3px;
 }
 
+.font-ps2 {
+	font-family: var(--font-heading) !important;
+}
+
+.font-vt323 {
+	font-family: var(--font-sans) !important;
+}
+
 html, body {
 	font-family: var(--font-sans) !important;
     font-size: 20px; 
