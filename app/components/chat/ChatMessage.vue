@@ -76,7 +76,7 @@
                     :pending="(props.message as any).pending"
                 />
             </div>
-            <div v-if="hasContent" v-html="rendered"></div>
+            <div v-if="hasContent" class="message-body" v-html="rendered"></div>
         </div>
         <!-- Editing surface -->
         <div v-else class="w-full">
@@ -231,7 +231,7 @@ const outerClass = computed(() => ({
 }));
 
 const innerClass = computed(() => ({
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-2 prose-pre:border-[var(--md-inverse-surface)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
         props.message.role === 'assistant',
 }));
 
@@ -478,6 +478,17 @@ watch(rendered, () => hydrateInlineImages());
 watch(hashList, () => hydrateInlineImages());
 onMounted(() => hydrateInlineImages());
 
+// Mark oversized code blocks (purely cosmetic hook for future styling / fade)
+onMounted(() => {
+    nextTick(() => {
+        const root = contentEl.value;
+        if (!root) return;
+        root.querySelectorAll('pre').forEach((el) => {
+            if (el.scrollHeight > 380) el.classList.add('code-overflow');
+        });
+    });
+});
+
 watch(
     () =>
         Object.keys(thumbnails).map((h) => {
@@ -573,6 +584,66 @@ async function runExtraAction(action: ChatMessageAction) {
 </script>
 
 <style scoped>
+/* Large code block/layout guard */
+.message-body pre {
+    max-height: 380px;
+    overflow: auto;
+    position: relative;
+    padding: 0.75rem 0.85rem;
+    line-height: 1.3;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        'Liberation Mono', 'Courier New', monospace;
+}
+.message-body pre code {
+    white-space: pre;
+    word-break: normal;
+    font-size: 0.78rem;
+    tab-size: 4;
+}
+.message-body pre::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+.message-body pre::-webkit-scrollbar-thumb {
+    background: var(--md-inverse-surface);
+    border-radius: 0;
+}
+.message-body pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+.message-body :not(pre) > code {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.78rem;
+    padding: 2px 4px;
+    border: 1px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    background: var(--md-surface-container-lowest);
+}
+.message-body pre::after {
+    content: '';
+    position: sticky;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 14px;
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0),
+        rgba(0, 0, 0, 0.45)
+    );
+    display: block;
+    pointer-events: none;
+}
+@media (prefers-color-scheme: light) {
+    .message-body pre::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0),
+            rgba(255, 255, 255, 0.85)
+        );
+    }
+}
 /* PDF compact thumb */
 .pdf-thumb {
     position: relative;
