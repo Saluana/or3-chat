@@ -323,6 +323,7 @@ import { createOrRefFile } from '~/db/files';
 import type { FileMeta } from '~/db/schema';
 import { useModelStore } from '~/composables/useModelStore';
 import { Editor, EditorContent } from '@tiptap/vue-3';
+import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
@@ -356,8 +357,28 @@ onMounted(async () => {
 onMounted(() => {
     if (!process.client) return;
     try {
+        // Minimal shortcut: Enter sends, Shift+Enter = newline
+        const enterToSend = Extension.create({
+            name: 'enterToSend',
+            addKeyboardShortcuts() {
+                return {
+                    Enter: () => {
+                        // TipTap exposes DOM event on window; use native key combo detection via last keydown
+                        // We'll attach a temporary flag via globalThis for simplicity.
+                        if ((window as any).__lastKeyEvent?.shiftKey)
+                            return false;
+                        (window as any).__suppressNextEnter = true;
+                        // send message
+                        handleSend();
+                        handleSend();
+                        return true;
+                    },
+                };
+            },
+        });
         editor.value = new Editor({
             extensions: [
+                enterToSend,
                 Placeholder.configure({
                     // Use a placeholder:
                     placeholder: 'Write something …',
