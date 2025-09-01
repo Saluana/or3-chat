@@ -328,6 +328,9 @@ import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
 import { isMobile } from '~/state/global';
+import { useUserApiKey } from '~/composables/useUserApiKey';
+import { useOpenRouterAuth } from '~/composables/useOpenrouter';
+import { useToast } from '#imports';
 const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
@@ -700,6 +703,27 @@ const removeTextBlock = (index: number) => {
 
 const handleSend = () => {
     if (props.loading) return;
+    // Require OpenRouter connection (api key) before sending
+    const { apiKey } = useUserApiKey();
+    if (!apiKey.value) {
+        const { startLogin } = useOpenRouterAuth();
+        // Show toast with action to initiate login
+        useToast().add({
+            id: 'need-openrouter-login',
+            title: 'Connect to OpenRouter',
+            description: 'You need to log in before sending messages.',
+            color: 'primary',
+            duration: 5000,
+            actions: [
+                {
+                    label: 'Login',
+                    onClick: () => startLogin(),
+                    size: 'sm',
+                },
+            ],
+        });
+        return;
+    }
     if (
         promptText.value.trim() ||
         uploadedImages.value.length > 0 ||
