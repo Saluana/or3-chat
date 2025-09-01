@@ -1,7 +1,9 @@
 {
-    "name": "nuxt-app",
+    "name": "or3-chat",
     "type": "module",
-    "private": true,
+    "private": false,
+    "version": "0.1.0",
+    "license": "GPL-3.0",
     "scripts": {
         "build": "nuxt build",
         "dev": "nuxt dev",
