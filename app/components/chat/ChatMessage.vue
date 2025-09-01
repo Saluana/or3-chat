@@ -524,7 +524,7 @@ onMounted(() => {
             if (!el.querySelector('.copy-btn')) {
                 const btn = document.createElement('button');
                 btn.className =
-                    'z-10 absolute! top-2 right-2 px-1 h-6 rounded-[3px] bg-[var(--md-surface-container)]  text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-high)] active:bg-elevated transition-colors text-sm flex items-center justify-center retro-btn';
+                    'w-full px-1 mb-3 h-6 rounded-[3px] bg-[var(--md-surface-container)]  text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-high)] active:bg-elevated transition-colors text-sm flex items-center justify-center retro-btn';
                 btn.innerHTML =
                     '<div class="flex items-center justify-center space-x-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><!-- Icon from Pixelarticons by Gerrit Halfmann - https://github.com/halfmage/pixelarticons/blob/master/LICENSE --><path fill="currentColor" d="M4 2h11v2H6v13H4zm4 4h12v16H8zm2 2v12h8V8z"/></svg> <p>Copy</p></div>';
                 btn.setAttribute('aria-label', 'Copy code');
@@ -536,8 +536,9 @@ onMounted(() => {
                     navigator.clipboard.writeText(code);
                     useToast().add({ title: 'Code copied', duration: 1500 });
                 };
-                el.style.position = 'relative';
-                el.appendChild(btn);
+                el.classList.add('flex');
+                el.classList.add('flex-col');
+                el.prepend(btn);
             }
         });
     });
@@ -642,7 +643,7 @@ async function runExtraAction(action: ChatMessageAction) {
 .message-body pre {
     max-height: 380px;
     overflow: auto;
-    position: relative;
+
     padding: 0.75rem 0.85rem;
     line-height: 1.3;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
