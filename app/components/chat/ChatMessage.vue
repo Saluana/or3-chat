@@ -76,7 +76,15 @@
                     :pending="(props.message as any).pending"
                 />
             </div>
-            <div v-if="hasContent" class="message-body" v-html="rendered"></div>
+            <div v-if="hasContent" class="message-body">
+                <div
+                    v-if="props.message.role === 'user'"
+                    class="whitespace-pre-wrap"
+                >
+                    {{ props.message.content }}
+                </div>
+                <div v-else v-html="rendered"></div>
+            </div>
         </div>
         <!-- Editing surface -->
         <div v-else class="w-full">
@@ -256,11 +264,11 @@ const hashList = computed<string[]>(() => {
 // Render markdown/text. For assistant messages keep existing inline images during live stream.
 // After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
 const rendered = computed(() => {
+    // Only render markdown for assistant messages
+    if (props.message.role !== 'assistant') return '';
+
     const raw = props.message.content || '';
     const parsed = (marked.parse(raw) as string) || '';
-    if (props.message.role === 'user') {
-        return parsed.replace(/<img\b[^>]*>/gi, '');
-    }
     const hasAnyImg = /<img\b/i.test(parsed);
     if (hasAnyImg) return parsed; // live streaming case retains inline imgs
     if (hashList.value.length) {
