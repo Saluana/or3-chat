@@ -79,9 +79,23 @@
             <div v-if="hasContent" class="message-body">
                 <div
                     v-if="props.message.role === 'user'"
-                    class="whitespace-pre-wrap"
+                    class="whitespace-pre-wrap relative"
                 >
-                    {{ props.message.content }}
+                    <div
+                        :class="{
+                            'line-clamp-6 overflow-hidden':
+                                isUserMessageCollapsed && shouldCollapse,
+                        }"
+                    >
+                        {{ props.message.content }}
+                    </div>
+                    <button
+                        v-if="shouldCollapse"
+                        @click="toggleUserMessage"
+                        class="mt-2 text-sm underline hover:no-underline opacity-80 hover:opacity-100 transition-opacity"
+                    >
+                        {{ isUserMessageCollapsed ? 'Read more' : 'Show less' }}
+                    </button>
                 </div>
                 <div v-else v-html="rendered"></div>
             </div>
@@ -230,6 +244,18 @@ const emit = defineEmits<{
 const isStreamingReasoning = computed(() => {
     return props.message.reasoning_text && !hasContent.value;
 });
+
+// User message collapse/expand
+const isUserMessageCollapsed = ref(true);
+const shouldCollapse = computed(() => {
+    if (props.message.role !== 'user') return false;
+    const lines = (props.message.content || '').split('\n').length;
+    return lines > 6;
+});
+
+function toggleUserMessage() {
+    isUserMessageCollapsed.value = !isUserMessageCollapsed.value;
+}
 
 const outerClass = computed(() => ({
     'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
@@ -666,6 +692,13 @@ async function runExtraAction(action: ChatMessageAction) {
 
 .retro-shadow {
     box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+}
+
+.line-clamp-6 {
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 @media (prefers-color-scheme: light) {
     .message-body pre::after {
