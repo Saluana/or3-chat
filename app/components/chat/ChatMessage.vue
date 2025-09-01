@@ -523,8 +523,17 @@ onMounted(() => {
             // Add copy button if not already present
             if (!el.querySelector('.copy-btn')) {
                 const btn = document.createElement('button');
+                const container = document.createElement('div');
+                container.className =
+                    'flex items-center justify-between w-full border-b-2 py-2 px-3 border-[var(--md-inverse-surface)]';
+                const langName = document.createElement('span');
+                langName.className = 'text-xs text-[var(--md-on-surface)]';
+                langName.innerText =
+                    'Language: ' +
+                    (el.getAttribute('data-lang') || 'plaintext');
+                container.appendChild(langName);
                 btn.className =
-                    'w-full px-1 mb-3 h-6 rounded-[3px] bg-[var(--md-surface-container)]  text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-high)] active:bg-elevated transition-colors text-sm flex items-center justify-center retro-btn';
+                    ' px-1 h-6 rounded-[3px] bg-[var(--md-surface-container)]  text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-high)] active:bg-elevated transition-colors text-sm flex items-center justify-center retro-btn';
                 btn.innerHTML =
                     '<div class="flex items-center justify-center space-x-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><!-- Icon from Pixelarticons by Gerrit Halfmann - https://github.com/halfmage/pixelarticons/blob/master/LICENSE --><path fill="currentColor" d="M4 2h11v2H6v13H4zm4 4h12v16H8zm2 2v12h8V8z"/></svg> <p>Copy</p></div>';
                 btn.setAttribute('aria-label', 'Copy code');
@@ -536,9 +545,15 @@ onMounted(() => {
                     navigator.clipboard.writeText(code);
                     useToast().add({ title: 'Code copied', duration: 1500 });
                 };
-                el.classList.add('flex');
-                el.classList.add('flex-col');
-                el.prepend(btn);
+                const codeBlock = el.querySelector('code');
+                if (codeBlock) {
+                    codeBlock.className = 'overflow-x-scroll px-3 pt-2';
+                }
+
+                el.className = 'flex flex-col overflow-x-hidden pt-0 px-0';
+
+                container.appendChild(btn);
+                el.prepend(container);
             }
         });
     });
