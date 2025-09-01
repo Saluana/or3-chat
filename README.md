@@ -1,4 +1,4 @@
-# OR3.chat Local-first OpenRouter Chat & Docs (Nuxt 3)
+# OR3.chat - Local-first OpenRouter Chat
 
 A lightweight, plugin-friendly chat + documents playground that runs entirely in your browser, talks directly to **OpenRouter**, and stores your data locally with **Dexie**. No accounts. No backend. Just open the tab and go.
 
