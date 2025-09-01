@@ -528,9 +528,37 @@ onMounted(() => {
                     'flex items-center justify-between w-full border-b-2 py-2 px-3 border-[var(--md-inverse-surface)]';
                 const langName = document.createElement('span');
                 langName.className = 'text-xs text-[var(--md-on-surface)]';
-                langName.innerText =
-                    'Language: ' +
-                    (el.getAttribute('data-lang') || 'plaintext');
+                // Detect language from nested <code> classes: language-xyz | lang-xyz | hljs language-xyz
+                const codeBlock = el.querySelector('code');
+                let detected: string = '';
+                if (codeBlock) {
+                    const cls = codeBlock.className || '';
+                    const m = cls.match(/(?:language|lang)-([a-z0-9#+._-]+)/i);
+                    if (m && m[1]) detected = m[1];
+                    else if (/\bjson\b/i.test(cls)) detected = 'json';
+                }
+                if (!detected) {
+                    // Secondary: data-lang on <code> or <pre>
+                    detected = (
+                        codeBlock?.getAttribute('data-lang') ||
+                        el.getAttribute('data-lang') ||
+                        ''
+                    ).trim();
+                }
+                if (!detected && codeBlock) {
+                    // Heuristic fallback based on content
+                    const sample = (codeBlock.textContent || '')
+                        .trim()
+                        .slice(0, 200);
+                    if (/^\{[\s\n]*"/.test(sample)) detected = 'json';
+                    else if (/^<[^>]+>/.test(sample)) detected = 'html';
+                    else if (/^#include\s+</.test(sample)) detected = 'c++';
+                    else if (/^import\s+[^;]+from\s+['"]/m.test(sample))
+                        detected = 'js';
+                    else if (/^def\s+\w+\(/.test(sample)) detected = 'python';
+                }
+                if (!detected) detected = 'plaintext';
+                langName.innerText = 'Language: ' + detected.toLowerCase();
                 container.appendChild(langName);
                 btn.className =
                     ' px-1 h-6 rounded-[3px] bg-[var(--md-surface-container)]  text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-high)] active:bg-elevated transition-colors text-sm flex items-center justify-center retro-btn';
@@ -545,12 +573,24 @@ onMounted(() => {
                     navigator.clipboard.writeText(code);
                     useToast().add({ title: 'Code copied', duration: 1500 });
                 };
-                const codeBlock = el.querySelector('code');
+                // Re-reference codeBlock (already declared) for styling
                 if (codeBlock) {
-                    codeBlock.className = 'overflow-x-scroll px-3 pt-2';
+                    // Preserve any existing language classes (e.g. language-js, lang-ts)
+                    codeBlock.classList.add(
+                        'overflow-x-scroll',
+                        'px-3',
+                        'pt-2'
+                    );
                 }
 
-                el.className = 'flex flex-col overflow-x-hidden pt-0 px-0';
+                // Preserve any existing classes on <pre> (don't wipe language-...)
+                el.classList.add(
+                    'flex',
+                    'flex-col',
+                    'overflow-x-hidden',
+                    'pt-0',
+                    'px-0'
+                );
 
                 container.appendChild(btn);
                 el.prepend(container);
