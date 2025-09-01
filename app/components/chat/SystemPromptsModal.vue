@@ -6,7 +6,7 @@
             header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
             body: 'p-0! border-b-0! overflow-hidden',
         }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] max-h-[80vh] overflow-hidden"
+        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80dvh] max-h-[80dvh] overflow-hidden"
     >
         <template #header>
             <div class="flex w-full items-center justify-between pr-2">

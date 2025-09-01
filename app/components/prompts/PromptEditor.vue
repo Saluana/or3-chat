@@ -42,7 +42,7 @@
             </div>
             <div
                 v-else
-                class="w-full max-h-[70vh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
+                class="w-full max-h-[70dvh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
             >
                 <EditorContent
                     :editor="editor as Editor"

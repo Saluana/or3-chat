@@ -86,7 +86,7 @@
                 <div v-else class="flex-1 min-h-0">
                     <VList
                         :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 70vh"
+                        style="height: 70dvh"
                         class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
                         :overscan="4"
                         #default="{ item: row }"
