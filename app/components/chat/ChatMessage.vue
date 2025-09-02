@@ -232,6 +232,7 @@ type UIMessage = Omit<ChatMessageType, 'content'> & {
     content: string;
     pending?: boolean;
     reasoning_text?: string | null;
+    pre_html?: string; // optional pre-rendered HTML supplied by container (skips local markdown parse)
 };
 
 const props = defineProps<{ message: UIMessage; threadId?: string }>();
@@ -291,13 +292,13 @@ const hashList = computed<string[]>(() => {
 // Render markdown/text. For assistant messages keep existing inline images during live stream.
 // After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
 const rendered = computed(() => {
-    // Only render markdown for assistant messages
     if (props.message.role !== 'assistant') return '';
-
+    // If container supplied pre-rendered html, trust it and skip parsing.
+    if (props.message.pre_html) return props.message.pre_html;
     const raw = props.message.content || '';
     const parsed = (marked.parse(raw) as string) || '';
     const hasAnyImg = /<img\b/i.test(parsed);
-    if (hasAnyImg) return parsed; // live streaming case retains inline imgs
+    if (hasAnyImg) return parsed;
     if (hashList.value.length) {
         const placeholders = hashList.value
             .map(

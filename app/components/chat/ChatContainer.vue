@@ -14,7 +14,7 @@
             >
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
-                    :messages="virtualMessages"
+                    :messages="virtualStableMessages"
                     :item-size-estimation="520"
                     :overscan="5"
                     :scroll-parent="scrollParent"
@@ -23,7 +23,9 @@
                     <template #item="{ message, index }">
                         <div
                             :key="message.id || message.stream_id || index"
-                            class="first:mt-0 mt-10"
+                            class="first:mt-0"
+                            :data-msg-id="message.id"
+                            :data-stream-id="message.stream_id"
                         >
                             <ChatMessage
                                 :message="message as RenderMessage"
@@ -35,11 +37,29 @@
                         </div>
                     </template>
                     <template #tail>
+                        <!-- Stable virtualization ends here -->
+                        <!-- Recently active (non-virtual) messages -->
+                        <div
+                            v-for="rm in recentMessages"
+                            :key="rm.id"
+                            class="first:mt-0"
+                            :data-msg-id="rm.id"
+                            :data-stream-id="rm.stream_id"
+                        >
+                            <ChatMessage
+                                :message="rm as RenderMessage"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                            />
+                        </div>
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
-                            v-if="tailActive"
+                            v-if="tailActive || handoff"
                             class="mt-10 first:mt-0"
                             style="overflow-anchor: none"
+                            ref="tailWrapper"
                         >
                             <ChatMessage
                                 :message="{
@@ -92,13 +112,14 @@ import type {
     ChatMessage as ChatMessageType,
     ContentPart,
 } from '~/utils/chat/types';
-import { useHookEffect } from '~/composables/useHookEffect';
 import { marked } from 'marked';
 import VirtualMessageList from './VirtualMessageList.vue';
 // (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
+
+// Debug utilities removed per request.
 
 const model = ref('openai/gpt-oss-120b');
 const pendingPromptId = ref<string | null>(null);
@@ -166,7 +187,9 @@ watch(
     (newId) => {
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
-        if (newId && currentId && newId === currentId) return;
+        if (newId && currentId && newId === currentId) {
+            return;
+        }
         chat.value = useChat(
             props.messageHistory,
             newId,
@@ -181,7 +204,9 @@ watch(
     (mh) => {
         if (!chat.value) return;
         // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
-        if (chat.value.loading.value) return;
+        if (chat.value.loading.value) {
+            return;
+        }
         // Prefer to update the internal messages array directly to avoid remount flicker
         chat.value.messages.value = [...(mh || [])];
     }
@@ -203,7 +228,8 @@ watch(
 type RenderMessage = {
     role: 'user' | 'assistant';
     content: string;
-    id?: string;
+    // Required id for virtualization; fallback synthesized if source missing
+    id: string;
     stream_id?: string;
     file_hashes?: string | null;
     pending?: boolean;
@@ -218,98 +244,176 @@ function escapeAttr(v: string) {
         .replace(/>/g, '&gt;');
 }
 const messages = computed<RenderMessage[]>(() =>
-    (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
-        let contentStr = '';
-        if (typeof m.content === 'string') {
-            contentStr = m.content;
-        } else if (Array.isArray(m.content)) {
-            const segs: string[] = [];
-            for (const p of m.content as ContentPart[]) {
-                if (p.type === 'text') {
-                    segs.push(p.text);
-                } else if (p.type === 'image') {
-                    const src = typeof p.image === 'string' ? p.image : '';
-                    if (src.startsWith('data:image/')) {
-                        segs.push(
-                            `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                src
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
-                        );
-                    } else if (src) {
-                        segs.push(
-                            `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                src
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
-                        );
+    (chat.value.messages.value || []).map(
+        (m: ChatMessageType & any, i: number) => {
+            let contentStr = '';
+            if (typeof m.content === 'string') {
+                contentStr = m.content;
+            } else if (Array.isArray(m.content)) {
+                const segs: string[] = [];
+                for (const p of m.content as ContentPart[]) {
+                    if (p.type === 'text') {
+                        segs.push(p.text);
+                    } else if (p.type === 'image') {
+                        const src = typeof p.image === 'string' ? p.image : '';
+                        if (src.startsWith('data:image/')) {
+                            segs.push(
+                                `<div class=\"my-3\"><img src=\"${escapeAttr(
+                                    src
+                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
+                            );
+                        } else if (src) {
+                            segs.push(
+                                `<div class=\"my-3\"><img src=\"${escapeAttr(
+                                    src
+                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
+                            );
+                        }
+                    } else if (p.type === 'file') {
+                        const label = (p as any).name || p.mediaType || 'file';
+                        segs.push(`**[file:${escapeAttr(label)}]**`);
                     }
-                } else if (p.type === 'file') {
-                    const label = (p as any).name || p.mediaType || 'file';
-                    segs.push(`**[file:${escapeAttr(label)}]**`);
+                }
+                contentStr = segs.join('\n\n');
+            } else {
+                contentStr = String((m as any).content ?? '');
+            }
+            // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
+            const hasImgTag = /<img\s/i.test(contentStr);
+            if (!hasImgTag && (m as any).file_hashes) {
+                const hashes = parseFileHashes((m as any).file_hashes);
+                if (hashes.length) {
+                    const gallery = hashes
+                        .map(
+                            (h) =>
+                                `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
+                                    h
+                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
+                        )
+                        .join('');
+                    contentStr += (contentStr ? '\n\n' : '') + gallery;
                 }
             }
-            contentStr = segs.join('\n\n');
-        } else {
-            contentStr = String((m as any).content ?? '');
-        }
-        // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
-        const hasImgTag = /<img\s/i.test(contentStr);
-        if (!hasImgTag && (m as any).file_hashes) {
-            const hashes = parseFileHashes((m as any).file_hashes);
-            if (hashes.length) {
-                const gallery = hashes
-                    .map(
-                        (h) =>
-                            `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
-                                h
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
-                    )
-                    .join('');
-                contentStr += (contentStr ? '\n\n' : '') + gallery;
-            }
-        }
-        const rawReasoning =
-            (m as any).reasoning_text ??
-            (m as any).data?.reasoning_text ??
-            null;
+            const rawReasoning =
+                (m as any).reasoning_text ??
+                (m as any).data?.reasoning_text ??
+                null;
 
-        return {
-            role: m.role,
-            content: contentStr,
-            id: m.id,
-            stream_id: m.stream_id,
-            file_hashes: (m as any).file_hashes,
-            pending: (m as any).pending,
-            reasoning_text: rawReasoning,
-        } as RenderMessage;
-    })
+            return {
+                role: m.role,
+                content: contentStr,
+                id: (m.id || m.stream_id || 'm' + i) + '',
+                stream_id: m.stream_id,
+                file_hashes: (m as any).file_hashes,
+                pending: (m as any).pending,
+                reasoning_text: rawReasoning,
+            } as RenderMessage;
+        }
+    )
 );
+// Removed length logging watcher.
 const loading = computed(() => chat.value.loading.value);
 
 // Tail streaming now provided directly by useChat composable
 const tailStreamId = computed(() => chat.value.streamId.value);
 const tailReasoning = computed(() => chat.value.streamReasoning.value);
 const tailDisplay = computed(() => chat.value.streamDisplayText.value);
+// Removed tail char delta logging.
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value.threadId?.value);
-const tailActive = computed(
-    () => chat.value.streamActive.value || !!tailReasoning.value
-);
-// Single content computed for tail ChatMessage
+// Tail active means: actively streaming OR (reasoning still present and not finalized)
+const finalizedOnce = ref(false);
+const tailActive = computed(() => {
+    return (
+        chat.value.streamActive.value ||
+        (!!tailReasoning.value && !finalizedOnce.value)
+    );
+});
+// Pre-render support for seamless handoff
+const preRenderedHtml = ref('');
+let lastRenderLen = 0;
+const lastParseAt = ref(0);
+const PARSE_INTERVAL_MS = 120;
+const handoff = ref(false); // one-frame overlap flag
+const assistantVisible = ref(false); // detection of assistant row presence post-stream
+const tailWrapper = ref<HTMLElement | null>(null);
+// Handoff tuning thresholds
+const FINALIZE_LEN_SINGLE_RAF = 4000; // below this, one rAF is enough
+const FINALIZE_LEN_DOUBLE_RAF = 12000; // above this, keep double rAF safety
+let heightLockApplied = false;
+function maybeUpdatePreRendered(force = false) {
+    const now = performance.now();
+    const raw = tailDisplay.value || '';
+    if (!raw && !force) {
+        // Avoid parsing empty string during steady-state idle updates.
+        return;
+    }
+    if (!force) {
+        if (raw.length === lastRenderLen) {
+            return;
+        }
+        if (
+            raw.length - lastRenderLen < 80 &&
+            now - lastParseAt.value < PARSE_INTERVAL_MS
+        ) {
+            return;
+        }
+    }
+    preRenderedHtml.value = marked.parse(raw) as string;
+    lastRenderLen = raw.length;
+    lastParseAt.value = now;
+}
+watch(tailDisplay, () => maybeUpdatePreRendered(false));
+watch(tailReasoning, () => maybeUpdatePreRendered(false));
+// Single content computed for tail ChatMessage (kept for loader visuals)
 const tailContent = computed(() => {
-    if (tailDisplay.value) return marked.parse(tailDisplay.value);
-    // When no display text yet, leave content empty so ChatMessage shows loader component
-    return '';
+    // Prefer preRenderedHtml (already parsed & throttled) to avoid duplicate parses.
+    if (preRenderedHtml.value) return preRenderedHtml.value;
+    // Fallback to raw text early in the stream before first parse.
+    return tailDisplay.value || '';
 });
 
-// Virtual list data excludes streaming assistant (Req 3.2 separation)
-const virtualMessages = computed(() => {
-    if (!tailActive.value || !tailStreamId.value) {
-        return messages.value.map((m, i) => ({ ...m, id: m.id || String(i) }));
+// Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
+const RECENT_NON_VIRTUAL = 6;
+function filterStreaming(arr: RenderMessage[]) {
+    if (chat.value.streamActive.value && tailStreamId.value && !handoff.value) {
+        return arr.filter((m) => m.stream_id !== tailStreamId.value);
     }
-    return messages.value
-        .filter((m) => m.stream_id !== tailStreamId.value)
-        .map((m, i) => ({ ...m, id: m.id || String(i) }));
+    return arr;
+}
+const recentMessages = computed<RenderMessage[]>(() => {
+    const base = filterStreaming(messages.value);
+    if (base.length <= RECENT_NON_VIRTUAL) return base;
+    return base.slice(-RECENT_NON_VIRTUAL);
 });
+const virtualStableMessages = computed<RenderMessage[]>(() => {
+    const base = filterStreaming(messages.value);
+    if (base.length <= RECENT_NON_VIRTUAL) return [];
+    return base.slice(0, -RECENT_NON_VIRTUAL);
+});
+// Removed size change logging for virtual/recent message groups.
+
+// Track when the assistant streaming message (by stream_id) is actually present in virtual list
+watch(
+    [
+        virtualStableMessages,
+        recentMessages,
+        tailStreamId,
+        () => chat.value.streamActive.value,
+    ],
+    () => {
+        if (!tailStreamId.value) return;
+        const present =
+            recentMessages.value.some(
+                (m: any) => m.stream_id === tailStreamId.value
+            ) ||
+            virtualStableMessages.value.some(
+                (m: any) => m.stream_id === tailStreamId.value
+            );
+        if (present !== assistantVisible.value)
+            assistantVisible.value = present;
+    }
+);
 
 // Scroll handling (Req 3.3) via useAutoScroll
 const scrollParent = ref<HTMLElement | null>(null);
@@ -325,10 +429,11 @@ watch(
 // Prior version stacked nextTick + rAF + nextTick creating visible lag.
 let scrollScheduled = false;
 function scheduleScrollIfAtBottom() {
-    if (!autoScroll.atBottom.value) return;
+    if (!autoScroll.atBottom.value) {
+        return;
+    }
     if (scrollScheduled) return;
     scrollScheduled = true;
-    // Single rAF keeps it to one frame; no nested nextTick.
     requestAnimationFrame(() => {
         scrollScheduled = false;
         autoScroll.onContentIncrease();
@@ -347,11 +452,105 @@ if (process.client) {
 // Hooks no longer needed for streaming tail display; scroll on reactive tail changes
 watch(
     () => [tailDisplay.value, tailReasoning.value],
-    () => scheduleScrollIfAtBottom()
+    () => {
+        scheduleScrollIfAtBottom();
+    }
 );
 watch(
     () => chat.value.streamActive.value,
-    (active) => active && scheduleScrollIfAtBottom()
+    (active) => {
+        if (active) {
+            scheduleScrollIfAtBottom();
+        } else {
+            // Stream ended: force final parse, attach pre_html, start overlap
+            maybeUpdatePreRendered(true);
+            const sid = tailStreamId.value;
+            if (sid) {
+                const target = (chat.value.messages.value as any[])
+                    .slice()
+                    .reverse()
+                    .find((m) => m.stream_id === sid);
+                if (target) {
+                    (target as any).pre_html = preRenderedHtml.value;
+                } else {
+                }
+            }
+            handoff.value = true; // keep tail while assistant row enters
+
+            // Decide finalize strategy
+            const len = lastRenderLen;
+            let strategy: 'sync' | 'single-raf' | 'double-raf' = 'single-raf';
+            if (assistantVisible.value) strategy = 'sync';
+            else if (len >= FINALIZE_LEN_DOUBLE_RAF) strategy = 'double-raf';
+            else if (len < FINALIZE_LEN_SINGLE_RAF) strategy = 'single-raf';
+
+            // Capture tail height for smooth swap (prevents collapse flash)
+            let tailHeight = 0;
+            if (tailWrapper.value) {
+                tailHeight = tailWrapper.value.offsetHeight;
+            }
+
+            // Wait until assistant row detected, then allow two frames before removing tail
+            const finalize = () => {
+                const performRemoval = () => {
+                    handoff.value = false;
+                    preRenderedHtml.value = '';
+                    lastRenderLen = 0;
+                    finalizedOnce.value = true; // prevent reasoning-only tail reappearing
+                    heightLockApplied = false;
+                };
+                // Apply height lock to final assistant element if we captured and not yet applied
+                if (tailHeight > 0) {
+                    requestAnimationFrame(() => {
+                        const container = containerRoot.value;
+                        if (container) {
+                            const selector = `[data-stream-id="${sid}"]`;
+                            const finalEl = container.querySelector(
+                                selector
+                            ) as HTMLElement | null;
+                            if (finalEl) {
+                                finalEl.style.minHeight = tailHeight + 'px';
+                                heightLockApplied = true;
+                                requestAnimationFrame(() => {
+                                    finalEl.style.removeProperty('min-height');
+                                });
+                            }
+                        }
+                    });
+                }
+                if (strategy === 'sync') {
+                    performRemoval();
+                } else if (strategy === 'single-raf') {
+                    requestAnimationFrame(() => {
+                        performRemoval();
+                    });
+                } else {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            performRemoval();
+                        });
+                    });
+                }
+            };
+            if (assistantVisible.value) {
+                finalize();
+            } else {
+                const stopWatch = watch(assistantVisible, (v) => {
+                    if (v) {
+                        stopWatch();
+                        finalize();
+                    }
+                });
+            }
+        }
+    }
+);
+// Reset finalized flag when a new stream starts
+watch(
+    () => chat.value.streamActive.value,
+    (active, prev) => {
+        if (active && !prev) finalizedOnce.value = false;
+    }
 );
 watch(currentThreadId, () => {
     // Clear computed tail when switching threads (stream refs reset inside useChat later)
@@ -417,9 +616,7 @@ function onSend(payload: any) {
             extraTextParts,
             online: !!payload.webSearchEnabled,
         })
-        .catch((e: any) =>
-            console.error('[ChatContainer.onSend] sendMessage error', e)
-        );
+        .catch(() => {});
 }
 
 function onRetry(messageId: string) {

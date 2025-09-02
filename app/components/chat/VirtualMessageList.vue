@@ -76,6 +76,8 @@ const emit = defineEmits<{
 
 const root = ref<HTMLElement | null>(null);
 
+// Debug/logging removed per request.
+
 // Track visible range heuristically via scroll metrics
 function computeRange(): { start: number; end: number } {
     // virtua does not expose direct API here; fallback simplistic approach:
@@ -102,10 +104,14 @@ function onScrollEnd() {
 
 watch(
     () => props.messages.length,
-    () => onInternalUpdate()
+    () => {
+        onInternalUpdate();
+    }
 );
 
-onMounted(() => onInternalUpdate());
+onMounted(() => {
+    onInternalUpdate();
+});
 </script>
 
 <style scoped>
