@@ -265,7 +265,8 @@ const outerClass = computed(() => ({
 }));
 
 const innerClass = computed(() => ({
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-2 prose-pre:border-[var(--md-inverse-surface)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+    // Added Tailwind Typography per-element utilities for tables (no custom CSS)
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-2 prose-pre:border-[var(--md-inverse-surface)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-table:w-max prose-table:min-w-full prose-th:whitespace-nowrap prose-td:whitespace-nowrap':
         props.message.role === 'assistant',
 }));
 
@@ -596,6 +597,20 @@ onMounted(() => {
                 el.prepend(container);
             }
         });
+        // Ensure wide tables can scroll horizontally without custom CSS.
+        // Wrap each table in a div with Tailwind utilities (idempotent by data attr).
+        /*
+        if (root) {
+            root.querySelectorAll('table').forEach((tbl) => {
+                if (tbl.getAttribute('data-or3-table-wrapped') === 'y') return;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'overflow-x-auto -mx-1 sm:mx-0';
+                tbl.parentElement?.insertBefore(wrapper, tbl);
+                wrapper.appendChild(tbl);
+                tbl.setAttribute('data-or3-table-wrapped', 'y');
+            });
+        }
+                        */
     });
 });
 
@@ -704,6 +719,26 @@ async function runExtraAction(action: ChatMessageAction) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
         'Liberation Mono', 'Courier New', monospace;
 }
+.message-body {
+    /* Allow long unbroken words (e.g., headers like "considerations") to wrap and avoid horizontal scroll */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+}
+.message-body h1,
+.message-body h2,
+.message-body h3,
+.message-body h4,
+.message-body h5,
+.message-body h6 {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+/* Prevent accidental horizontal scroll on message container */
+:host,
+.message-body {
+    overflow-x: hidden;
+}
 .message-body pre code {
     white-space: pre;
     word-break: normal;
@@ -753,6 +788,7 @@ async function runExtraAction(action: ChatMessageAction) {
 .line-clamp-6 {
     display: -webkit-box;
     -webkit-line-clamp: 6;
+    line-clamp: 6; /* standard property for compatibility */
     -webkit-box-orient: vertical;
     overflow: hidden;
 }

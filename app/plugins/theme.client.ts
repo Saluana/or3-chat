@@ -35,6 +35,44 @@ marked.use(
     }) as any
 );
 
+// Retro table renderer (simplified): horizontal scroll, sticky header, single wrapped description column
+const retroRenderer = new marked.Renderer();
+retroRenderer.table = function (token: any) {
+    const headers = token.header || [];
+
+    const buildRow = (cells: any[], tag: 'th' | 'td') =>
+        cells
+            .map((cell: any, i: number) => {
+                return `<${tag} class="max-w-[240px] p-3!  text-wrap!">${
+                    cell.text || ''
+                }</${tag}>`;
+            })
+            .join('');
+
+    const thead = headers.length
+        ? `<thead class="bg-[var(--md-surface-container-lowest)]">
+  <tr>${buildRow(headers, 'th')}</tr>
+</thead>`
+        : '';
+    const bodyRows = (token.rows || [])
+        .map(
+            (row: any[], rIdx: number) =>
+                `<tr class="${
+                    rIdx % 2 === 1
+                        ? 'bg-[var(--md-surface-container-lowest)]/60'
+                        : ''
+                }">${buildRow(row, 'td')}</tr>`
+        )
+        .join('');
+    const tbody = `<tbody>${bodyRows}</tbody>`;
+    return `<div class="mb-2 overflow-hidden rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow bg-[var(--md-surface-container-low)]/30">
+  <div class="overflow-auto">
+    <table class="retro-table h-fit my-0! w-max min-w-full border-separate border-spacing-0">${thead}${tbody}</table>
+  </div>
+</div>`;
+};
+marked.use({ renderer: retroRenderer });
+
 export default defineNuxtPlugin((nuxtApp) => {
     const THEME_CLASSES = [
         'light',

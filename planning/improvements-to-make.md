@@ -34,7 +34,7 @@ Here’s a ruthless, no-nonsense list of the **top 12 fixes** that will most imp
 
 -   No vertical jump when scrolling in/out of the address bar or focusing inputs on iOS.
 
----
+## ** DONE **
 
 # 3) Safe auto-scroll: don’t yank the user to bottom mid-scroll
 

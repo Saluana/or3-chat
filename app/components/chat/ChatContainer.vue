@@ -7,7 +7,7 @@
         <div
             ref="scrollParent"
             class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
-            :style="{ paddingBottom: bottomPad + 'px' }"
+            :style="{ paddingBottom: bottomPad + 'px', overflowAnchor: 'auto' }"
         >
             <div
                 class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
@@ -36,7 +36,11 @@
                     </template>
                     <template #tail>
                         <!-- Streaming tail appended (Req 3.2) -->
-                        <div v-if="tailActive" class="mt-10 first:mt-0">
+                        <div
+                            v-if="tailActive"
+                            class="mt-10 first:mt-0"
+                            style="overflow-anchor: none"
+                        >
                             <ChatMessage
                                 :message="{
                                     role: 'assistant',

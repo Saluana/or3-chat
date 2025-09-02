@@ -18,6 +18,9 @@ export interface AutoScrollApi {
     onContentIncrease: () => void;
     detach: () => void;
     recompute: () => void; // explicit recompute (useful for tests/manual)
+    userScrolling: Ref<boolean>;
+    /** Epoch ms when we were last within NEAR_BOTTOM_PX */
+    lastBottomAt: Ref<number>;
 }
 
 export interface UseAutoScrollOptions {
@@ -32,7 +35,15 @@ export function useAutoScroll(
 ): AutoScrollApi {
     const { thresholdPx = 64, behavior = 'auto', throttleMs = 50 } = opts;
     const atBottom = ref(true);
+    // Internal sticky intent (cleared when user scrolls away from bottom)
     let stick = true;
+    // User actively interacting with scroll (wheel/touch) recently
+    const userScrolling = ref(false);
+    // Timestamp (ms) last time viewport was near the very bottom
+    const lastBottomAt = ref(Date.now());
+    const NEAR_BOTTOM_PX = 24; // threshold for considering user "at bottom" for snap eligibility window
+    const USER_SCROLL_INACTIVE_TIMEOUT = 800; // ms
+    let userScrollTimer: any = null;
 
     function compute() {
         const el = container.value;
@@ -41,6 +52,9 @@ export function useAutoScroll(
         const newAtBottom = dist <= thresholdPx;
         if (!newAtBottom) stick = false;
         atBottom.value = newAtBottom;
+        if (dist <= NEAR_BOTTOM_PX) {
+            lastBottomAt.value = Date.now();
+        }
     }
 
     const throttledCompute = useThrottleFn(compute, throttleMs);
@@ -54,6 +68,7 @@ export function useAutoScroll(
         });
         stick = true;
         atBottom.value = true;
+        lastBottomAt.value = Date.now();
     }
 
     function stickBottom() {
@@ -62,18 +77,55 @@ export function useAutoScroll(
     }
 
     function onContentIncrease() {
-        // Previously this deferred with nextTick, which combined with callers
-        // already awaiting nextTick created a double frame delay causing jank.
-        if (stick) scrollToBottom({ smooth: false });
-        else compute();
+        // Safe auto-scroll gate: only snap if user recently at bottom and not scrolling.
+        const now = Date.now();
+        const recentlyAtBottom = now - lastBottomAt.value < 1200; // 1.2s window
+        if (stick && !userScrolling.value && recentlyAtBottom) {
+            scrollToBottom({ smooth: false });
+        } else {
+            compute();
+        }
     }
 
     let cleanup: (() => void) | null = null;
+    function markUserScroll() {
+        userScrolling.value = true;
+        if (userScrollTimer) clearTimeout(userScrollTimer);
+        userScrollTimer = setTimeout(() => {
+            userScrolling.value = false;
+        }, USER_SCROLL_INACTIVE_TIMEOUT);
+    }
+
     onMounted(() => {
         compute();
         cleanup = useEventListener(container, 'scroll', throttledCompute, {
             passive: true,
         });
+        // Interaction listeners (wheel & touchstart) to gate auto-scroll
+        useEventListener(
+            container,
+            'wheel',
+            () => {
+                markUserScroll();
+            },
+            { passive: true }
+        );
+        useEventListener(
+            container,
+            'touchstart',
+            () => {
+                markUserScroll();
+            },
+            { passive: true }
+        );
+        useEventListener(
+            container,
+            'touchmove',
+            () => {
+                markUserScroll();
+            },
+            { passive: true }
+        );
     });
     function detach() {
         if (cleanup) {
@@ -90,5 +142,7 @@ export function useAutoScroll(
         onContentIncrease,
         detach,
         recompute: compute,
+        userScrolling,
+        lastBottomAt,
     };
 }
