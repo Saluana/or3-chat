@@ -738,7 +738,7 @@ async function runExtraAction(action: ChatMessageAction) {
 /* Prevent accidental horizontal scroll on message container */
 :host,
 .message-body {
-    overflow-x: hidden;
+    overflow-x: visible;
 }
 .message-body pre code {
     white-space: pre;

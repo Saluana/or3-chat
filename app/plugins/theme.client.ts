@@ -39,49 +39,60 @@ marked.use(
 const retroRenderer = new marked.Renderer();
 retroRenderer.table = function (token: any) {
     const headers = token.header || [];
+    const rows = token.rows || [];
 
-    const buildRow = (cells: any[], tag: 'th' | 'td') =>
-        cells
-            .map((cell: any, i: number) => {
-                const content = cell.text || '';
-                // Use only divs and flex to compose table cells.
-                // min-w ensures horizontal scrolling when needed; flex-1 lets columns grow.
-                const base = 'min-w-[160px] flex-1 px-3 py-2';
-                if (tag === 'th') {
-                    return `<div role="columnheader" class="${base} font-medium text-left">${content}</div>`;
-                } else {
-                    return `<div role="cell" class="${base} text-left">${content}</div>`;
-                }
-            })
-            .join('');
+    // Wrapper classes applied to an inner div to constrain each cell's content width while allowing wrapping.
+    // We'll apply min/max constraints directly on th/td so the intrinsic table width grows
+    // beyond the viewport and triggers horizontal scrolling inside the wrapper.
+    const cellInner = 'px-3 py-2 whitespace-normal break-words';
+    const cellDims = 'min-w-[160px] max-w-[240px]';
 
-    // Header: sticky so it remains visible during vertical scroll.
-    const thead = headers.length
-        ? `<div class="flex sticky top-0 z-10 bg-[var(--md-surface-container-lowest)] border-b border-[var(--md-inverse-surface)]">
-            ${buildRow(headers, 'th')}
-          </div>`
+    const headHtml = headers.length
+        ? `<thead class="bg-[var(--md-surface-container-lowest)]">
+            <tr>
+                            ${headers
+                                .map((cell: any) => {
+                                    const content = cell.text || '';
+                                    return `<th class="align-top sticky top-0 z-10 border-b border-[var(--md-inverse-surface)] text-left bg-[var(--md-surface-container-lowest)] ${cellDims}">
+                                                                <div class="${cellInner} font-medium">${content}</div>
+                                                            </th>`;
+                                })
+                                .join('')}
+          </tr>
+        </thead>`
         : '';
 
-    // Body rows: each row is a flex container matching header columns.
-    const bodyRows = (token.rows || [])
-        .map(
-            (row: any[], rIdx: number) =>
-                `<div class="flex ${
-                    rIdx % 2 === 1
-                        ? 'bg-[var(--md-surface-container-lowest)]/60'
-                        : ''
-                }">
-                    ${buildRow(row, 'td')}
-                 </div>`
-        )
-        .join('');
+    const bodyHtml = rows.length
+        ? `<tbody>
+            ${rows
+                .map(
+                    (row: any[], rIdx: number) =>
+                        `<tr class="${
+                            rIdx % 2 === 1
+                                ? 'bg-[var(--md-surface-container-lowest)]/60'
+                                : ''
+                        }">
+                            ${row
+                                .map((cell: any) => {
+                                    const content = cell.text || '';
+                                    return `<td class="align-top border-b border-[var(--md-inverse-surface)]/40 last:border-b-0 ${cellDims}">
+                                                <div class="${cellInner}">${content}</div>
+                                            </td>`;
+                                })
+                                .join('')}
+                          </tr>`
+                )
+                .join('')}
+          </tbody>`
+        : '';
 
-    // Outer wrapper provides horizontal scrolling (flex-only layout, no table elements).
-    return `<div class="relative w-full overflow-x-auto min-w-0 not-prose! rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow bg-[var(--md-surface-container-low)]/30">
-                <div class="min-w-full inline-flex flex-col">
-                    ${thead}
-                    ${bodyRows}
-                </div>
+    // NOTE: We do NOT force table w-full; letting it size to intrinsic width (> container) enables horizontal scrolling.
+    // The outer wrapper constrains available width and provides the scroll context.
+    return `<div class="relative max-w-full overflow-x-auto min-w-0 not-prose rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow bg-[var(--md-surface-container-low)]/30">
+              <table class="border-collapse text-sm w-max">
+                ${headHtml}
+                ${bodyHtml}
+              </table>
             </div>`;
 };
 marked.use({ renderer: retroRenderer });
