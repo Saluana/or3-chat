@@ -600,7 +600,7 @@ onMounted(() => {
         });
         // Ensure wide tables can scroll horizontally without custom CSS.
         // Wrap each table in a div with Tailwind utilities (idempotent by data attr).
-
+        /*
         if (root) {
             root.querySelectorAll('table').forEach((tbl) => {
                 if (tbl.getAttribute('data-or3-table-wrapped') === 'y') return;
@@ -611,6 +611,7 @@ onMounted(() => {
                 tbl.setAttribute('data-or3-table-wrapped', 'y');
             });
         }
+            */
     });
 });
 
