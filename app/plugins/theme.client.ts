@@ -43,40 +43,46 @@ retroRenderer.table = function (token: any) {
     const buildRow = (cells: any[], tag: 'th' | 'td') =>
         cells
             .map((cell: any, i: number) => {
+                const content = cell.text || '';
+                // Use only divs and flex to compose table cells.
+                // min-w ensures horizontal scrolling when needed; flex-1 lets columns grow.
+                const base = 'min-w-[160px] flex-1 px-3 py-2';
                 if (tag === 'th') {
-                    return `<${tag} class="h-10 px-2 text-left align-middle font-medium [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px] sticky top-0 z-[5] bg-secondary/20 py-2 text-sm text-foreground first:pl-4">${
-                        cell.text || ''
-                    }</${tag}>`;
+                    return `<div role="columnheader" class="${base} font-medium text-left">${content}</div>`;
                 } else {
-                    return `<${tag} class="p-2 [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px] min-w-8 max-w-[40ch] overflow-hidden text-ellipsis align-top text-sm first:pl-4 last:max-w-[65ch]">${
-                        cell.text || ''
-                    }</${tag}>`;
+                    return `<div role="cell" class="${base} text-left">${content}</div>`;
                 }
             })
             .join('');
 
+    // Header: sticky so it remains visible during vertical scroll.
     const thead = headers.length
-        ? `<thead class="bg-[var(--md-surface-container-lowest)]">
-  <tr>${buildRow(headers, 'th')}</tr>
-</thead>`
+        ? `<div class="flex sticky top-0 z-10 bg-[var(--md-surface-container-lowest)] border-b border-[var(--md-inverse-surface)]">
+            ${buildRow(headers, 'th')}
+          </div>`
         : '';
+
+    // Body rows: each row is a flex container matching header columns.
     const bodyRows = (token.rows || [])
         .map(
             (row: any[], rIdx: number) =>
-                `<tr class="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted [thead_&]:hover:bg-transparent ${
+                `<div class="flex ${
                     rIdx % 2 === 1
                         ? 'bg-[var(--md-surface-container-lowest)]/60'
                         : ''
-                }">${buildRow(row, 'td')}</tr>`
+                }">
+                    ${buildRow(row, 'td')}
+                 </div>`
         )
         .join('');
-    const tbody = `<tbody>${bodyRows}</tbody>`;
-    return `<div class="relative  w-full overflow-hidden rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow bg-[var(--md-surface-container-low)]/30">
-  <div class="overflow-auto z-[1] scrollbar-transparent max-h-[60vh] relative pb-0">
-    <table class="w-full caption-bottom text-sm my-0!">${thead}${tbody}</table>
-  </div>
-  <div role="caption" class="text-sm text-muted-foreground relative z-[5] mt-0 flex w-full flex-row justify-between rounded-[3px] bg-secondary/20 p-1 text-right"><button class="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 hover:bg-muted/40 hover:text-foreground disabled:hover:bg-transparent disabled:hover:text-foreground/50 h-8 rounded-md px-3 text-xs" type="button" data-state="closed"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-expand size-4"><path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"></path><path d="M3 16.2V21m0 0h4.8M3 21l6-6"></path><path d="M21 7.8V3m0 0h-4.8M21 3l-6 6"></path><path d="M3 7.8V3m0 0h4.8M3 3l6 6"></path></svg><span class="sr-only">Expand all cells</span></button><div class="flex items-center gap-2"><button class="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 hover:bg-muted/40 hover:text-foreground disabled:hover:bg-transparent disabled:hover:text-foreground/50 h-8 rounded-md text-xs p-2 transition-opacity duration-200" type="button" data-state="closed" id="radix-_r_1o_" aria-haspopup="menu" aria-expanded="false" style="user-select: none;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download h-3 w-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></button><button class="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 hover:bg-muted/40 hover:text-foreground disabled:hover:bg-transparent disabled:hover:text-foreground/50 h-8 rounded-md text-xs p-2 transition-opacity duration-200" type="button" data-state="closed" style="user-select: none;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy h-3 w-3"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button></div></div>
-</div>`;
+
+    // Outer wrapper provides horizontal scrolling (flex-only layout, no table elements).
+    return `<div class="relative w-full overflow-x-auto min-w-0 not-prose! rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow bg-[var(--md-surface-container-low)]/30">
+                <div class="min-w-full inline-flex flex-col">
+                    ${thead}
+                    ${bodyRows}
+                </div>
+            </div>`;
 };
 marked.use({ renderer: retroRenderer });
 
