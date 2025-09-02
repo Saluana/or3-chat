@@ -8,8 +8,12 @@ import xml from 'highlight.js/lib/languages/xml';
 import python from 'highlight.js/lib/languages/python';
 import rust from 'highlight.js/lib/languages/rust';
 import css from 'highlight.js/lib/languages/css';
+import 'katex/dist/katex.min.css';
+import { useShikiHighlighter } from 'streamdown-vue';
+useShikiHighlighter();
 
 // Register only needed languages to keep bundle smaller
+/*
 hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('typescript', typescript);
 hljs.registerLanguage('json', json);
@@ -20,6 +24,7 @@ hljs.registerLanguage('rust', rust); // alias
 hljs.registerLanguage('css', css); // alias
 
 // Configure marked with highlight.js
+
 marked.use(
     markedHighlight({
         highlight(code, lang) {
@@ -27,14 +32,14 @@ marked.use(
                 try {
                     return hljs.highlight(code, { language: lang }).value;
                 } catch (_) {
-                    /* fallthrough */
+                 
                 }
             }
             return hljs.highlightAuto(code).value;
         },
     }) as any
-);
-
+);*/
+/*
 // Retro table renderer (simplified): horizontal scroll, sticky header, single wrapped description column
 const retroRenderer = new marked.Renderer();
 retroRenderer.table = function (token: any) {
@@ -96,6 +101,7 @@ retroRenderer.table = function (token: any) {
             </div>`;
 };
 marked.use({ renderer: retroRenderer });
+*/
 
 export default defineNuxtPlugin((nuxtApp) => {
     const THEME_CLASSES = [

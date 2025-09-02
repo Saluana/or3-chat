@@ -97,7 +97,10 @@
                         {{ isUserMessageCollapsed ? 'Read more' : 'Show less' }}
                     </button>
                 </div>
+                <StreamMarkdown v-else :content="props.message.content" />
+                <!--
                 <div v-else v-html="rendered"></div>
+                -->
             </div>
         </div>
         <!-- Editing surface -->
@@ -224,8 +227,8 @@ import { getFileMeta } from '~/db/files';
 import { marked } from 'marked';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
-
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+import { StreamMarkdown } from 'streamdown-vue';
 
 // Local UI message expects content to be a string (rendered markdown/html)
 type UIMessage = Omit<ChatMessageType, 'content'> & {
