@@ -23,7 +23,7 @@
                     <template #item="{ message, index }">
                         <div
                             :key="message.id || message.stream_id || index"
-                            class="first:mt-0"
+                            class="first:mt-0 group relative w-full max-w-full space-y-4 break-words"
                             :data-msg-id="message.id"
                             :data-stream-id="message.stream_id"
                         >
