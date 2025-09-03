@@ -97,7 +97,12 @@
                         {{ isUserMessageCollapsed ? 'Read more' : 'Show less' }}
                     </button>
                 </div>
-                <StreamMarkdown v-else :content="props.message.content" />
+                <StreamMarkdown
+                    :key="props.message.id"
+                    v-else
+                    :content="assistantMarkdown"
+                    :allowed-image-prefixes="['data:image/', 'file-hash:']"
+                ></StreamMarkdown>
                 <!--
                 <div v-else v-html="rendered"></div>
                 -->
@@ -314,6 +319,94 @@ const rendered = computed(() => {
     return parsed;
 });
 
+// Unified markdown (text + inline base64 images) for StreamMarkdown.
+// Keeps streaming reactive even if underlying message.content mutates from string to array.
+const assistantMarkdown = computed(() => {
+    if (props.message.role !== 'assistant') return '';
+    // ChatContainer now supplies raw markdown string in message.content
+    const raw = props.message.content;
+    if (typeof raw === 'string') return raw;
+    // Fallback: If an unexpected parts array slips through (shouldn't with UIMessage typing)
+    if (Array.isArray(raw)) {
+        const arr = raw as any[];
+        return arr
+            .map((p: any) => {
+                if (p?.type === 'text') return p.text || '';
+                if (p?.type === 'image') {
+                    const src = p.image || p.image_url?.url || p.image_url;
+                    if (typeof src === 'string')
+                        return `![generated image](${src})`;
+                }
+                return '';
+            })
+            .filter(Boolean)
+            .join('\n\n');
+    }
+    return '';
+});
+// Debug watchers for content lifecycle
+watch(
+    () => (props.message as any).content,
+    (val, old) => {
+        const typeOld = Array.isArray(old) ? 'array' : typeof old;
+        const typeNew = Array.isArray(val) ? 'array' : typeof val;
+        console.debug(
+            '[ChatMessage] content changed',
+            props.message.id,
+            typeOld,
+            '=>',
+            typeNew,
+            typeNew === 'string'
+                ? (val as string).slice(0, 120)
+                : Array.isArray(val)
+                ? val.length + ' parts'
+                : ''
+        );
+    },
+    { deep: false }
+);
+onMounted(() => {
+    const c: any = (props.message as any).content;
+    const type = Array.isArray(c) ? 'array' : typeof c;
+    console.debug(
+        '[ChatMessage] mounted',
+        props.message.id,
+        props.message.role,
+        'content type=',
+        type,
+        type === 'string'
+            ? (c as string).slice(0, 120)
+            : Array.isArray(c)
+            ? c.length + ' parts'
+            : ''
+    );
+});
+// Enhance hydrateInlineImages with debug
+const originalHydrate = hydrateInlineImages;
+async function hydrateInlineImagesDebugWrapper() {
+    await nextTick();
+    const root = contentEl.value;
+    if (!root) return originalHydrate();
+    const before = root.innerHTML.length;
+    await originalHydrate();
+    const after = root.innerHTML.length;
+    console.debug(
+        '[ChatMessage] hydrate run',
+        props.message.id,
+        'len',
+        before,
+        '=>',
+        after
+    );
+}
+// Replace watchers to call debug wrapper
+watch(rendered, () => hydrateInlineImagesDebugWrapper());
+watch(hashList, () => hydrateInlineImagesDebugWrapper());
+// Patch ensureThumb with logs if not already
+// NOTE: ensureThumb already defined above; add debug via wrapper pattern not reassignment.
+// (Could also inline logs inside original definition; keeping wrapper commented for reference.)
+// console.debug('[ChatMessage] debug hook installed for ensureThumb');
+
 // Editing (extracted)
 const {
     editing,
@@ -498,6 +591,16 @@ async function hydrateInlineImages() {
     await nextTick();
     const root = contentEl.value;
     if (!root) return;
+    // 1. Markdown placeholders turned into <img src="file-hash:HASH"> by marked? (depends on custom renderer); handle both src and data-file-hash forms.
+    const srcImgs = root.querySelectorAll(
+        'img[src^="file-hash:"]:not([data-hydrated])'
+    );
+    srcImgs.forEach((imgEl) => {
+        const src = imgEl.getAttribute('src') || '';
+        const hash = src.replace('file-hash:', '');
+        if (!hash) return;
+        imgEl.setAttribute('data-file-hash', hash);
+    });
     const imgs = root.querySelectorAll(
         'img[data-file-hash]:not([data-hydrated])'
     );
@@ -513,7 +616,8 @@ async function hydrateInlineImages() {
     });
 }
 // Re-run hydration when rendered HTML changes or thumbnails update
-watch(rendered, () => hydrateInlineImages());
+// Use assistantMarkdown (raw markdown) instead of rendered (legacy) to trigger hydration
+watch(assistantMarkdown, () => hydrateInlineImages());
 watch(hashList, () => hydrateInlineImages());
 onMounted(() => hydrateInlineImages());
 

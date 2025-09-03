@@ -112,7 +112,6 @@ import type {
     ChatMessage as ChatMessageType,
     ContentPart,
 } from '~/utils/chat/types';
-import { marked } from 'marked';
 import VirtualMessageList from './VirtualMessageList.vue';
 // (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
@@ -248,57 +247,63 @@ const messages = computed<RenderMessage[]>(() =>
         (m: ChatMessageType & any, i: number) => {
             let contentStr = '';
             if (typeof m.content === 'string') {
-                contentStr = m.content;
+                contentStr = m.content; // already markdown or plain text
+                // If this is an assistant message with persisted images (file_hashes) but
+                // the stored content is only text (no inline images), append markdown placeholders
+                // so ChatMessage can hydrate them.
+                if (
+                    m.role === 'assistant' &&
+                    (m as any).file_hashes &&
+                    !/file-hash:/i.test(contentStr)
+                ) {
+                    try {
+                        const hashes = parseFileHashes((m as any).file_hashes) || [];
+                        if (hashes.length) {
+                            const placeholders = hashes.map((h: string) => `![generated image](file-hash:${h})`);
+                            // Only append if no existing image markdown already present
+                            const hasImageMarkdown = /!\[[^\]]*\]\((?:data:image|file-hash:|https?:)/i.test(contentStr);
+                            if (!hasImageMarkdown) {
+                                contentStr += (contentStr ? '\n\n' : '') + placeholders.join('\n\n');
+                            }
+                        }
+                    } catch {}
+                }
             } else if (Array.isArray(m.content)) {
                 const segs: string[] = [];
+                let imageCount = 0;
                 for (const p of m.content as ContentPart[]) {
                     if (p.type === 'text') {
                         segs.push(p.text);
                     } else if (p.type === 'image') {
                         const src = typeof p.image === 'string' ? p.image : '';
-                        if (src.startsWith('data:image/')) {
-                            segs.push(
-                                `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                    src
-                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
-                            );
-                        } else if (src) {
-                            segs.push(
-                                `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                    src
-                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
-                            );
+                        if (src) {
+                            // Always inject as markdown image so ChatMessage StreamMarkdown handles it.
+                            segs.push(`![generated image](${src})`);
+                            imageCount++;
                         }
                     } else if (p.type === 'file') {
                         const label = (p as any).name || p.mediaType || 'file';
-                        segs.push(`**[file:${escapeAttr(label)}]**`);
+                        segs.push(`**[file:${label}]**`);
+                    }
+                }
+                // If no actual image parts present but we have stored file hashes (persisted images), add markdown placeholders so hydration can swap later.
+                if (imageCount === 0 && (m as any).file_hashes) {
+                    const hashes =
+                        parseFileHashes((m as any).file_hashes) || [];
+                    if (hashes.length) {
+                        hashes.forEach((h: string) => {
+                            segs.push(`![generated image](file-hash:${h})`);
+                        });
                     }
                 }
                 contentStr = segs.join('\n\n');
             } else {
                 contentStr = String((m as any).content ?? '');
             }
-            // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
-            const hasImgTag = /<img\s/i.test(contentStr);
-            if (!hasImgTag && (m as any).file_hashes) {
-                const hashes = parseFileHashes((m as any).file_hashes);
-                if (hashes.length) {
-                    const gallery = hashes
-                        .map(
-                            (h) =>
-                                `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
-                                    h
-                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
-                        )
-                        .join('');
-                    contentStr += (contentStr ? '\n\n' : '') + gallery;
-                }
-            }
             const rawReasoning =
-                (m as any).reasoning_text ??
-                (m as any).data?.reasoning_text ??
+                (m as any).reasoning_text ||
+                (m as any).data?.reasoning_text ||
                 null;
-
             return {
                 role: m.role,
                 content: contentStr,
@@ -330,48 +335,14 @@ const tailActive = computed(() => {
     );
 });
 // Pre-render support for seamless handoff
-const preRenderedHtml = ref('');
-let lastRenderLen = 0;
-const lastParseAt = ref(0);
-const PARSE_INTERVAL_MS = 120;
 const handoff = ref(false); // one-frame overlap flag
 const assistantVisible = ref(false); // detection of assistant row presence post-stream
 const tailWrapper = ref<HTMLElement | null>(null);
-// Handoff tuning thresholds
-const FINALIZE_LEN_SINGLE_RAF = 4000; // below this, one rAF is enough
-const FINALIZE_LEN_DOUBLE_RAF = 12000; // above this, keep double rAF safety
+const FINALIZE_LEN_SINGLE_RAF = 4000;
+const FINALIZE_LEN_DOUBLE_RAF = 12000;
 let heightLockApplied = false;
-function maybeUpdatePreRendered(force = false) {
-    const now = performance.now();
-    const raw = tailDisplay.value || '';
-    if (!raw && !force) {
-        // Avoid parsing empty string during steady-state idle updates.
-        return;
-    }
-    if (!force) {
-        if (raw.length === lastRenderLen) {
-            return;
-        }
-        if (
-            raw.length - lastRenderLen < 80 &&
-            now - lastParseAt.value < PARSE_INTERVAL_MS
-        ) {
-            return;
-        }
-    }
-    preRenderedHtml.value = marked.parse(raw) as string;
-    lastRenderLen = raw.length;
-    lastParseAt.value = now;
-}
-watch(tailDisplay, () => maybeUpdatePreRendered(false));
-watch(tailReasoning, () => maybeUpdatePreRendered(false));
-// Single content computed for tail ChatMessage (kept for loader visuals)
-const tailContent = computed(() => {
-    // Prefer preRenderedHtml (already parsed & throttled) to avoid duplicate parses.
-    if (preRenderedHtml.value) return preRenderedHtml.value;
-    // Fallback to raw text early in the stream before first parse.
-    return tailDisplay.value || '';
-});
+// Tail content: raw markdown only (no pre-render HTML)
+const tailContent = computed(() => tailDisplay.value || '');
 
 // Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
 const RECENT_NON_VIRTUAL = 6;
@@ -462,8 +433,7 @@ watch(
         if (active) {
             scheduleScrollIfAtBottom();
         } else {
-            // Stream ended: force final parse, attach pre_html, start overlap
-            maybeUpdatePreRendered(true);
+            // Stream ended: start overlap (no pre-render HTML now)
             const sid = tailStreamId.value;
             if (sid) {
                 const target = (chat.value.messages.value as any[])
@@ -471,14 +441,13 @@ watch(
                     .reverse()
                     .find((m) => m.stream_id === sid);
                 if (target) {
-                    (target as any).pre_html = preRenderedHtml.value;
-                } else {
+                    // We deliberately do NOT set pre_html anymore; ChatMessage consumes raw markdown
                 }
             }
             handoff.value = true; // keep tail while assistant row enters
 
             // Decide finalize strategy
-            const len = lastRenderLen;
+            const len = (tailDisplay.value || '').length;
             let strategy: 'sync' | 'single-raf' | 'double-raf' = 'single-raf';
             if (assistantVisible.value) strategy = 'sync';
             else if (len >= FINALIZE_LEN_DOUBLE_RAF) strategy = 'double-raf';
@@ -494,8 +463,6 @@ watch(
             const finalize = () => {
                 const performRemoval = () => {
                     handoff.value = false;
-                    preRenderedHtml.value = '';
-                    lastRenderLen = 0;
                     finalizedOnce.value = true; // prevent reasoning-only tail reappearing
                     heightLockApplied = false;
                 };
