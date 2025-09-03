@@ -76,7 +76,10 @@
                     :pending="(props.message as any).pending"
                 />
             </div>
-            <div v-if="hasContent" class="message-body">
+            <div
+                v-if="hasContent"
+                class="message-body min-w-0 max-w-full overflow-x-hidden"
+            >
                 <div
                     v-if="props.message.role === 'user'"
                     class="whitespace-pre-wrap relative"
@@ -101,9 +104,9 @@
                     :key="props.message.id"
                     v-else
                     :content="assistantMarkdown"
-                    :class="mdClasslist.join(' ')"
+                    :class="streamMdClasses"
                     :allowed-image-prefixes="['data:image/', 'file-hash:']"
-                ></StreamMarkdown>
+                />
                 <!--
                 <div v-else v-html="rendered"></div>
                 -->
@@ -268,9 +271,9 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
+    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',
 }));
 
@@ -816,14 +819,22 @@ async function runExtraAction(action: ChatMessageAction) {
     }
 }
 
-const mdClasslist = ref<string[]>([
-    'prose max-w-none dark:text-white/95 ...',
-    'prose-table:!w-auto prose-table:!min-w-max prose-table:table-auto',
-    'prose-table:break-normal prose-th:whitespace-nowrap prose-td:whitespace-nowrap',
+// Classes applied to <StreamMarkdown> (joined string for TS friendliness)
+const streamMdClasses = [
+    'w-full min-w-0',
+    'prose-table:!w-auto prose-table:table-auto',
+    'sm:prose-table:!min-w-max',
+    'max-[639px]:prose-table:min-w-[560px]',
+    'prose-table:break-normal prose-td:whitespace-nowrap prose-th:whitespace-nowrap',
     "[&_[data-streamdown='table']_td:nth-child(2)]:whitespace-normal",
     "[&_[data-streamdown='table']_td:nth-child(2)]:max-w-[32rem]",
-    'prose-td:align-top prose-th:align-top',
-]);
+    "[&_div[data-streamdown='table-wrapper']]:block",
+    "[&_div[data-streamdown='table-wrapper']]:max-w-full",
+    "[&_div[data-streamdown='table-wrapper']]:overflow-x-auto",
+    "[&_div[data-streamdown='table-wrapper']]:w-full",
+    "[&_div[data-streamdown='table-wrapper']]:min-w-0",
+    "[&_div[data-streamdown='table-wrapper']]:shrink",
+].join(' ');
 </script>
 
 <style scoped>
@@ -989,17 +1000,13 @@ const mdClasslist = ref<string[]>([
     clip-path: polygon(0 0, 100% 0, 100% 100%);
     box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
 }
-.message-body table,
-.message-body table * {
-    overflow-wrap: normal;
-    word-break: normal;
-    white-space: nowrap; /* default no-wrap; we’ll opt-in where needed */
+/* Safety net for table layout */
+.message-body [data-streamdown='table-wrapper'] {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
 }
-
-/* Let description wrap and cap its width so it doesn't become infinite */
-.message-body [data-streamdown='table'] td:nth-child(2),
-.message-body [data-streamdown='table'] th:nth-child(2) {
-    white-space: normal;
-    max-width: 32rem; /* tweak as you like */
+.message-body [data-streamdown='table'] {
+    width: auto;
 }
 </style>

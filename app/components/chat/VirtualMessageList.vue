@@ -1,6 +1,6 @@
 <template>
     <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" class="flex flex-col" :class="wrapperClass">
+    <div ref="root" class="flex flex-col min-w-0" :class="wrapperClass">
         <Virtualizer
             :data="messages"
             :itemSize="itemSizeEstimation || undefined"

@@ -119,7 +119,7 @@
         </aside>
 
         <!-- Main content -->
-        <div class="relative z-10 flex-1 h-full flex flex-col">
+        <div class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
             <div
                 class="flex-1 overflow-hidden content-bg"
                 :style="{

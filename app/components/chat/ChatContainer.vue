@@ -23,7 +23,7 @@
                     <template #item="{ message, index }">
                         <div
                             :key="message.id || message.stream_id || index"
-                            class="group relative w-full max-w-full space-y-4 break-words"
+                            class="group relative w-full max-w-full min-w-0 space-y-4 break-words"
                             :data-msg-id="message.id"
                             :data-stream-id="message.stream_id"
                         >
@@ -42,7 +42,7 @@
                         <div
                             v-for="rm in recentMessages"
                             :key="rm.id"
-                            class=""
+                            class="min-w-0"
                             :data-msg-id="rm.id"
                             :data-stream-id="rm.stream_id"
                         >
