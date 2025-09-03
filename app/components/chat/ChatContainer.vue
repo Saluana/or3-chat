@@ -257,13 +257,22 @@ const messages = computed<RenderMessage[]>(() =>
                     !/file-hash:/i.test(contentStr)
                 ) {
                     try {
-                        const hashes = parseFileHashes((m as any).file_hashes) || [];
+                        const hashes =
+                            parseFileHashes((m as any).file_hashes) || [];
                         if (hashes.length) {
-                            const placeholders = hashes.map((h: string) => `![generated image](file-hash:${h})`);
+                            const placeholders = hashes.map(
+                                (h: string) =>
+                                    `![generated image](file-hash:${h})`
+                            );
                             // Only append if no existing image markdown already present
-                            const hasImageMarkdown = /!\[[^\]]*\]\((?:data:image|file-hash:|https?:)/i.test(contentStr);
+                            const hasImageMarkdown =
+                                /!\[[^\]]*\]\((?:data:image|file-hash:|https?:)/i.test(
+                                    contentStr
+                                );
                             if (!hasImageMarkdown) {
-                                contentStr += (contentStr ? '\n\n' : '') + placeholders.join('\n\n');
+                                contentStr +=
+                                    (contentStr ? '\n\n' : '') +
+                                    placeholders.join('\n\n');
                             }
                         }
                     } catch {}
