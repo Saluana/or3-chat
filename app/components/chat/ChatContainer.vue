@@ -1,7 +1,7 @@
 <template>
     <main
         ref="containerRoot"
-        class="flex w-full flex-1 flex-col overflow-hidden relative min-h-[100dvh]"
+        class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
     >
         <!-- Scroll viewport -->
         <div
@@ -23,7 +23,7 @@
                     <template #item="{ message, index }">
                         <div
                             :key="message.id || message.stream_id || index"
-                            class="first:mt-0 group relative w-full max-w-full space-y-4 break-words"
+                            class="group relative w-full max-w-full space-y-4 break-words"
                             :data-msg-id="message.id"
                             :data-stream-id="message.stream_id"
                         >
@@ -42,7 +42,7 @@
                         <div
                             v-for="rm in recentMessages"
                             :key="rm.id"
-                            class="first:mt-0"
+                            class=""
                             :data-msg-id="rm.id"
                             :data-stream-id="rm.stream_id"
                         >
@@ -57,7 +57,7 @@
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
                             v-if="tailActive || handoff"
-                            class="mt-10 first:mt-0"
+                            class=""
                             style="overflow-anchor: none"
                             ref="tailWrapper"
                         >
@@ -134,25 +134,25 @@ const emittedInputHeight = ref<number | null>(null);
 const effectiveInputHeight = computed(
     () => emittedInputHeight.value || chatInputHeight.value || 140
 );
-const bottomPad = computed(() => Math.round(effectiveInputHeight.value + 36));
+// Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
+const bottomPad = computed(() => {
+    const base = Math.round(effectiveInputHeight.value + 36);
+    return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
+});
 
 // Mobile fixed wrapper classes/styles
+// Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
 const inputWrapperClass = computed(() =>
     isMobile.value
-        ? 'pointer-events-none fixed left-0 right-0 w-full z-40'
-        : 'pointer-events-none absolute bottom-0 top-0 w-full'
+        ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
+        : // Desktop: keep input scoped to its pane container
+          'pointer-events-none absolute inset-x-0 bottom-0 z-10'
 );
-const inputWrapperStyle = computed(() =>
-    isMobile.value
-        ? {
-              bottom: 'max(0px, env(safe-area-inset-bottom))',
-          }
-        : {}
-);
+const inputWrapperStyle = computed(() => ({}));
 const innerInputContainerClass = computed(() =>
     isMobile.value
-        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1'
-        : 'pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1'
+        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
+        : 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2'
 );
 function onInputResize(e: { height: number }) {
     emittedInputHeight.value = e?.height || null;
