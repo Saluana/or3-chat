@@ -101,6 +101,7 @@
                     :key="props.message.id"
                     v-else
                     :content="assistantMarkdown"
+                    :class="mdClasslist.join(' ')"
                     :allowed-image-prefixes="['data:image/', 'file-hash:']"
                 ></StreamMarkdown>
                 <!--
@@ -814,6 +815,15 @@ async function runExtraAction(action: ChatMessageAction) {
         console.error('Message action error', action.id, e);
     }
 }
+
+const mdClasslist = ref<string[]>([
+    'prose max-w-none dark:text-white/95 ...',
+    'prose-table:!w-auto prose-table:!min-w-max prose-table:table-auto',
+    'prose-table:break-normal prose-th:whitespace-nowrap prose-td:whitespace-nowrap',
+    "[&_[data-streamdown='table']_td:nth-child(2)]:whitespace-normal",
+    "[&_[data-streamdown='table']_td:nth-child(2)]:max-w-[32rem]",
+    'prose-td:align-top prose-th:align-top',
+]);
 </script>
 
 <style scoped>
@@ -978,5 +988,18 @@ async function runExtraAction(action: ChatMessageAction) {
     );
     clip-path: polygon(0 0, 100% 0, 100% 100%);
     box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
+}
+.message-body table,
+.message-body table * {
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: nowrap; /* default no-wrap; we’ll opt-in where needed */
+}
+
+/* Let description wrap and cap its width so it doesn't become infinite */
+.message-body [data-streamdown='table'] td:nth-child(2),
+.message-body [data-streamdown='table'] th:nth-child(2) {
+    white-space: normal;
+    max-width: 32rem; /* tweak as you like */
 }
 </style>
