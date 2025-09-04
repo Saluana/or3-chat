@@ -1071,4 +1071,41 @@ const streamMdClasses = [
 .message-body :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
     background: var(--md-surface-container-high);
 }
+
+.message-body :deep([data-streamdown='code-block']) {
+    padding: 0;
+    margin-top: 32px;
+    margin-bottom: 32px;
+    border: none;
+    border-radius: 3px;
+    height: fit-content;
+    overflow-y: hidden;
+    overflow-x: auto;
+    white-space: nowrap;
+    background: var(--md-surface-container-lowest);
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.message-body :deep([data-streamdown='code-block-header']) {
+    border-bottom: 2px solid var(--md-inverse-surface);
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+.message-body :deep([data-streamdown='code-body']) {
+    padding: 0;
+    padding-left: 15px;
+    padding-right: 15px;
+    margin: 0;
+    border: none;
+}
+
+.message-body :deep([data-streamdown='code-body']) pre {
+    border: none;
+    margin-bottom: 0;
+    padding-bottom: 30px;
+}
+.message-body :deep([data-streamdown='code-lang']) {
+    font: inherit;
+}
 </style>
