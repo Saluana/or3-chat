@@ -105,7 +105,6 @@
                     v-else
                     :content="assistantMarkdown"
                     :class="streamMdClasses"
-                    :shiki-theme="'github-light'"
                     :allowed-image-prefixes="['data:image/', 'file-hash:']"
                 />
                 <!--

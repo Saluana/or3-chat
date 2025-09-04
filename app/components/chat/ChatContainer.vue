@@ -63,6 +63,8 @@
                         >
                             <ChatMessage
                                 :message="{
+                                    // Provide stable id so StreamMarkdown retains component instance during tail streaming
+                                    id: tailStreamId ? 'tail-' + tailStreamId : 'tail-stream',
                                     role: 'assistant',
                                     content: tailContent,
                                     stream_id: tailStreamId,
