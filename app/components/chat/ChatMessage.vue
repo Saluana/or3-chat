@@ -1001,12 +1001,73 @@ const streamMdClasses = [
     box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
 }
 /* Safety net for table layout */
-.message-body [data-streamdown='table-wrapper'] {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
+.message-body :deep([data-streamdown='table-wrapper']) {
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    margin-top: 32px !important;
+    margin-bottom: 32px;
 }
-.message-body [data-streamdown='table'] {
-    width: auto;
+
+.message-body :deep([data-streamdown='table']) {
+    margin-bottom: 0px;
+    margin-top: 0px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    border-left: none;
+    border-right: none;
+}
+
+.message-body :deep([data-streamdown='th']) {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    font-weight: 600;
+    border-top: none;
+}
+
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='th']:first-child
+    ),
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='td']:first-child
+    ) {
+    border-left: 0;
+}
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='th']:last-child
+    ),
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='td']:last-child
+    ) {
+    border-right: 0;
+}
+
+.message-body :deep([data-streamdown='td']) {
+    max-width: 50ch;
+}
+/* Zebra striping for table body rows (every 2nd data row) */
+.message-body
+    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even)) {
+    background: var(--md-surface-container-low);
+}
+.message-body
+    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd)) {
+    background: var(--md-surface-container-lowest);
+}
+/* Optional hover highlight */
+.message-body :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
+    background: var(--md-surface-container-high);
 }
 </style>
