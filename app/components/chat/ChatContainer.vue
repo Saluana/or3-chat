@@ -1,7 +1,7 @@
 <template>
     <main
         ref="containerRoot"
-        class="flex w-full flex-1 flex-col overflow-hidden relative min-h-[100dvh]"
+        class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
     >
         <!-- Scroll viewport -->
         <div
@@ -23,7 +23,7 @@
                     <template #item="{ message, index }">
                         <div
                             :key="message.id || message.stream_id || index"
-                            class="first:mt-0 group relative w-full max-w-full space-y-4 break-words"
+                            class="group relative w-full max-w-full min-w-0 space-y-4 break-words"
                             :data-msg-id="message.id"
                             :data-stream-id="message.stream_id"
                         >
@@ -42,7 +42,7 @@
                         <div
                             v-for="rm in recentMessages"
                             :key="rm.id"
-                            class="first:mt-0"
+                            class="min-w-0"
                             :data-msg-id="rm.id"
                             :data-stream-id="rm.stream_id"
                         >
@@ -57,12 +57,14 @@
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
                             v-if="tailActive || handoff"
-                            class="mt-10 first:mt-0"
+                            class=""
                             style="overflow-anchor: none"
                             ref="tailWrapper"
                         >
                             <ChatMessage
                                 :message="{
+                                    // Provide stable id so StreamMarkdown retains component instance during tail streaming
+                                    id: tailStreamId ? 'tail-' + tailStreamId : 'tail-stream',
                                     role: 'assistant',
                                     content: tailContent,
                                     stream_id: tailStreamId,
@@ -106,13 +108,11 @@
 import ChatMessage from './ChatMessage.vue';
 import { shallowRef, computed, watch, ref, nextTick } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
-import { db } from '~/db';
 import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
     ContentPart,
 } from '~/utils/chat/types';
-import { marked } from 'marked';
 import VirtualMessageList from './VirtualMessageList.vue';
 // (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
@@ -135,25 +135,25 @@ const emittedInputHeight = ref<number | null>(null);
 const effectiveInputHeight = computed(
     () => emittedInputHeight.value || chatInputHeight.value || 140
 );
-const bottomPad = computed(() => Math.round(effectiveInputHeight.value + 36));
+// Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
+const bottomPad = computed(() => {
+    const base = Math.round(effectiveInputHeight.value + 36);
+    return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
+});
 
 // Mobile fixed wrapper classes/styles
+// Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
 const inputWrapperClass = computed(() =>
     isMobile.value
-        ? 'pointer-events-none fixed left-0 right-0 w-full z-40'
-        : 'pointer-events-none absolute bottom-0 top-0 w-full'
+        ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
+        : // Desktop: keep input scoped to its pane container
+          'pointer-events-none absolute inset-x-0 bottom-0 z-10'
 );
-const inputWrapperStyle = computed(() =>
-    isMobile.value
-        ? {
-              bottom: 'max(0px, env(safe-area-inset-bottom))',
-          }
-        : {}
-);
+const inputWrapperStyle = computed(() => ({}));
 const innerInputContainerClass = computed(() =>
     isMobile.value
-        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1'
-        : 'pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1'
+        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
+        : 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2'
 );
 function onInputResize(e: { height: number }) {
     emittedInputHeight.value = e?.height || null;
@@ -236,69 +236,77 @@ type RenderMessage = {
     reasoning_text?: string | null;
 };
 
-function escapeAttr(v: string) {
-    return v
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
 const messages = computed<RenderMessage[]>(() =>
     (chat.value.messages.value || []).map(
         (m: ChatMessageType & any, i: number) => {
             let contentStr = '';
             if (typeof m.content === 'string') {
-                contentStr = m.content;
+                contentStr = m.content; // already markdown or plain text
+                // If this is an assistant message with persisted images (file_hashes) but
+                // the stored content is only text (no inline images), append markdown placeholders
+                // so ChatMessage can hydrate them.
+                if (
+                    m.role === 'assistant' &&
+                    (m as any).file_hashes &&
+                    !/file-hash:/i.test(contentStr)
+                ) {
+                    try {
+                        const hashes =
+                            parseFileHashes((m as any).file_hashes) || [];
+                        if (hashes.length) {
+                            const placeholders = hashes.map(
+                                (h: string) =>
+                                    `![generated image](file-hash:${h})`
+                            );
+                            // Only append if no existing image markdown already present
+                            const hasImageMarkdown =
+                                /!\[[^\]]*\]\((?:data:image|file-hash:|https?:)/i.test(
+                                    contentStr
+                                );
+                            if (!hasImageMarkdown) {
+                                contentStr +=
+                                    (contentStr ? '\n\n' : '') +
+                                    placeholders.join('\n\n');
+                            }
+                        }
+                    } catch {}
+                }
             } else if (Array.isArray(m.content)) {
                 const segs: string[] = [];
+                let imageCount = 0;
                 for (const p of m.content as ContentPart[]) {
                     if (p.type === 'text') {
                         segs.push(p.text);
                     } else if (p.type === 'image') {
                         const src = typeof p.image === 'string' ? p.image : '';
-                        if (src.startsWith('data:image/')) {
-                            segs.push(
-                                `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                    src
-                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
-                            );
-                        } else if (src) {
-                            segs.push(
-                                `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                    src
-                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
-                            );
+                        if (src) {
+                            // Always inject as markdown image so ChatMessage StreamMarkdown handles it.
+                            segs.push(`![generated image](${src})`);
+                            imageCount++;
                         }
                     } else if (p.type === 'file') {
                         const label = (p as any).name || p.mediaType || 'file';
-                        segs.push(`**[file:${escapeAttr(label)}]**`);
+                        segs.push(`**[file:${label}]**`);
+                    }
+                }
+                // If no actual image parts present but we have stored file hashes (persisted images), add markdown placeholders so hydration can swap later.
+                if (imageCount === 0 && (m as any).file_hashes) {
+                    const hashes =
+                        parseFileHashes((m as any).file_hashes) || [];
+                    if (hashes.length) {
+                        hashes.forEach((h: string) => {
+                            segs.push(`![generated image](file-hash:${h})`);
+                        });
                     }
                 }
                 contentStr = segs.join('\n\n');
             } else {
                 contentStr = String((m as any).content ?? '');
             }
-            // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
-            const hasImgTag = /<img\s/i.test(contentStr);
-            if (!hasImgTag && (m as any).file_hashes) {
-                const hashes = parseFileHashes((m as any).file_hashes);
-                if (hashes.length) {
-                    const gallery = hashes
-                        .map(
-                            (h) =>
-                                `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
-                                    h
-                                )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
-                        )
-                        .join('');
-                    contentStr += (contentStr ? '\n\n' : '') + gallery;
-                }
-            }
             const rawReasoning =
-                (m as any).reasoning_text ??
-                (m as any).data?.reasoning_text ??
+                (m as any).reasoning_text ||
+                (m as any).data?.reasoning_text ||
                 null;
-
             return {
                 role: m.role,
                 content: contentStr,
@@ -330,48 +338,14 @@ const tailActive = computed(() => {
     );
 });
 // Pre-render support for seamless handoff
-const preRenderedHtml = ref('');
-let lastRenderLen = 0;
-const lastParseAt = ref(0);
-const PARSE_INTERVAL_MS = 120;
 const handoff = ref(false); // one-frame overlap flag
 const assistantVisible = ref(false); // detection of assistant row presence post-stream
 const tailWrapper = ref<HTMLElement | null>(null);
-// Handoff tuning thresholds
-const FINALIZE_LEN_SINGLE_RAF = 4000; // below this, one rAF is enough
-const FINALIZE_LEN_DOUBLE_RAF = 12000; // above this, keep double rAF safety
+const FINALIZE_LEN_SINGLE_RAF = 4000;
+const FINALIZE_LEN_DOUBLE_RAF = 12000;
 let heightLockApplied = false;
-function maybeUpdatePreRendered(force = false) {
-    const now = performance.now();
-    const raw = tailDisplay.value || '';
-    if (!raw && !force) {
-        // Avoid parsing empty string during steady-state idle updates.
-        return;
-    }
-    if (!force) {
-        if (raw.length === lastRenderLen) {
-            return;
-        }
-        if (
-            raw.length - lastRenderLen < 80 &&
-            now - lastParseAt.value < PARSE_INTERVAL_MS
-        ) {
-            return;
-        }
-    }
-    preRenderedHtml.value = marked.parse(raw) as string;
-    lastRenderLen = raw.length;
-    lastParseAt.value = now;
-}
-watch(tailDisplay, () => maybeUpdatePreRendered(false));
-watch(tailReasoning, () => maybeUpdatePreRendered(false));
-// Single content computed for tail ChatMessage (kept for loader visuals)
-const tailContent = computed(() => {
-    // Prefer preRenderedHtml (already parsed & throttled) to avoid duplicate parses.
-    if (preRenderedHtml.value) return preRenderedHtml.value;
-    // Fallback to raw text early in the stream before first parse.
-    return tailDisplay.value || '';
-});
+// Tail content: raw markdown only (no pre-render HTML)
+const tailContent = computed(() => tailDisplay.value || '');
 
 // Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
 const RECENT_NON_VIRTUAL = 6;
@@ -417,7 +391,12 @@ watch(
 
 // Scroll handling (Req 3.3) via useAutoScroll
 const scrollParent = ref<HTMLElement | null>(null);
-const autoScroll = useAutoScroll(scrollParent, { thresholdPx: 64 });
+// Add disengageDeltaPx so a small upward scroll (8px) releases stickiness
+// preventing jump-to-bottom when stream finalizes while user is reading.
+const autoScroll = useAutoScroll(scrollParent, {
+    thresholdPx: 64,
+    disengageDeltaPx: 8,
+});
 watch(
     () => messages.value.length,
     async () => {
@@ -462,8 +441,7 @@ watch(
         if (active) {
             scheduleScrollIfAtBottom();
         } else {
-            // Stream ended: force final parse, attach pre_html, start overlap
-            maybeUpdatePreRendered(true);
+            // Stream ended: start overlap (no pre-render HTML now)
             const sid = tailStreamId.value;
             if (sid) {
                 const target = (chat.value.messages.value as any[])
@@ -471,14 +449,18 @@ watch(
                     .reverse()
                     .find((m) => m.stream_id === sid);
                 if (target) {
-                    (target as any).pre_html = preRenderedHtml.value;
-                } else {
+                    // We deliberately do NOT set pre_html anymore; ChatMessage consumes raw markdown
                 }
+            }
+            // If user is not truly at bottom (released stick via upward scroll) ensure
+            // we don't force snap during handoff. Release sticky just in case.
+            if (!autoScroll.atBottom.value) {
+                autoScroll.release();
             }
             handoff.value = true; // keep tail while assistant row enters
 
             // Decide finalize strategy
-            const len = lastRenderLen;
+            const len = (tailDisplay.value || '').length;
             let strategy: 'sync' | 'single-raf' | 'double-raf' = 'single-raf';
             if (assistantVisible.value) strategy = 'sync';
             else if (len >= FINALIZE_LEN_DOUBLE_RAF) strategy = 'double-raf';
@@ -494,8 +476,6 @@ watch(
             const finalize = () => {
                 const performRemoval = () => {
                     handoff.value = false;
-                    preRenderedHtml.value = '';
-                    lastRenderLen = 0;
                     finalizedOnce.value = true; // prevent reasoning-only tail reappearing
                     heightLockApplied = false;
                 };

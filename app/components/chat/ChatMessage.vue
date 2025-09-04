@@ -76,7 +76,10 @@
                     :pending="(props.message as any).pending"
                 />
             </div>
-            <div v-if="hasContent" class="message-body">
+            <div
+                v-if="hasContent"
+                class="message-body min-w-0 max-w-full overflow-x-hidden"
+            >
                 <div
                     v-if="props.message.role === 'user'"
                     class="whitespace-pre-wrap relative"
@@ -97,7 +100,15 @@
                         {{ isUserMessageCollapsed ? 'Read more' : 'Show less' }}
                     </button>
                 </div>
-                <div v-else v-html="rendered"></div>
+                <StreamMarkdown
+                    :key="props.message.id"
+                    v-else
+                    :content="assistantMarkdown"
+                    :shiki-theme="currentShikiTheme"
+                    :class="streamMdClasses"
+                    :allowed-image-prefixes="['data:image/', 'file-hash:']"
+                />
+                <!-- legacy rendered html path removed -->
             </div>
         </div>
         <!-- Editing surface -->
@@ -221,13 +232,13 @@ import {
 import LoadingGenerating from './LoadingGenerating.vue';
 import { parseFileHashes } from '~/db/files-util';
 import { getFileMeta } from '~/db/files';
-import { marked } from 'marked';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
-
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+import { StreamMarkdown } from 'streamdown-vue';
+import { useNuxtApp } from '#app';
 
-// Local UI message expects content to be a string (rendered markdown/html)
+// UI message content is plain markdown string now
 type UIMessage = Omit<ChatMessageType, 'content'> & {
     content: string;
     pending?: boolean;
@@ -259,9 +270,9 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
+    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',
 }));
 
@@ -289,27 +300,86 @@ const hashList = computed<string[]>(() => {
     return [];
 });
 
-// Render markdown/text. For assistant messages keep existing inline images during live stream.
-// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
-const rendered = computed(() => {
+// Unified markdown (text + inline base64 images) for StreamMarkdown.
+// Keeps streaming reactive even if underlying message.content mutates from string to array.
+const assistantMarkdown = computed(() => {
     if (props.message.role !== 'assistant') return '';
-    // If container supplied pre-rendered html, trust it and skip parsing.
-    if (props.message.pre_html) return props.message.pre_html;
-    const raw = props.message.content || '';
-    const parsed = (marked.parse(raw) as string) || '';
-    const hasAnyImg = /<img\b/i.test(parsed);
-    if (hasAnyImg) return parsed;
-    if (hashList.value.length) {
-        const placeholders = hashList.value
-            .map(
-                (h) =>
-                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
-            )
-            .join('');
-        return parsed + placeholders;
+    // ChatContainer now supplies raw markdown string in message.content
+    const raw = props.message.content;
+    if (typeof raw === 'string') return raw;
+    // Fallback: If an unexpected parts array slips through (shouldn't with UIMessage typing)
+    if (Array.isArray(raw)) {
+        const arr = raw as any[];
+        return arr
+            .map((p: any) => {
+                if (p?.type === 'text') return p.text || '';
+                if (p?.type === 'image') {
+                    const src = p.image || p.image_url?.url || p.image_url;
+                    if (typeof src === 'string')
+                        return `![generated image](${src})`;
+                }
+                return '';
+            })
+            .filter(Boolean)
+            .join('\n\n');
     }
-    return parsed;
+    return '';
 });
+
+// Dynamic Shiki theme: map current theme (light/dark*/light*) to github-light / github-dark
+const nuxtApp = useNuxtApp() as any;
+const currentShikiTheme = computed(() => {
+    const themeObj = nuxtApp?.$theme;
+    let t: any = 'light';
+    if (themeObj) {
+        if (themeObj.current && 'value' in themeObj.current)
+            t = themeObj.current.value;
+        else if (typeof themeObj.get === 'function') t = themeObj.get();
+    }
+    return String(t).startsWith('dark') ? 'github-dark' : 'github-light';
+});
+// Debug watchers for content lifecycle
+watch(
+    () => (props.message as any).content,
+    (val, old) => {
+        const typeOld = Array.isArray(old) ? 'array' : typeof old;
+        const typeNew = Array.isArray(val) ? 'array' : typeof val;
+        console.debug(
+            '[ChatMessage] content changed',
+            props.message.id,
+            typeOld,
+            '=>',
+            typeNew,
+            typeNew === 'string'
+                ? (val as string).slice(0, 120)
+                : Array.isArray(val)
+                ? val.length + ' parts'
+                : ''
+        );
+    },
+    { deep: false }
+);
+onMounted(() => {
+    const c: any = (props.message as any).content;
+    const type = Array.isArray(c) ? 'array' : typeof c;
+    console.debug(
+        '[ChatMessage] mounted',
+        props.message.id,
+        props.message.role,
+        'content type=',
+        type,
+        type === 'string'
+            ? (c as string).slice(0, 120)
+            : Array.isArray(c)
+            ? c.length + ' parts'
+            : ''
+    );
+});
+// Removed debug hydration wrappers.
+// Patch ensureThumb with logs if not already
+// NOTE: ensureThumb already defined above; add debug via wrapper pattern not reassignment.
+// (Could also inline logs inside original definition; keeping wrapper commented for reference.)
+// console.debug('[ChatMessage] debug hook installed for ensureThumb');
 
 // Editing (extracted)
 const {
@@ -495,6 +565,16 @@ async function hydrateInlineImages() {
     await nextTick();
     const root = contentEl.value;
     if (!root) return;
+    // 1. Markdown placeholders turned into <img src="file-hash:HASH"> by marked? (depends on custom renderer); handle both src and data-file-hash forms.
+    const srcImgs = root.querySelectorAll(
+        'img[src^="file-hash:"]:not([data-hydrated])'
+    );
+    srcImgs.forEach((imgEl) => {
+        const src = imgEl.getAttribute('src') || '';
+        const hash = src.replace('file-hash:', '');
+        if (!hash) return;
+        imgEl.setAttribute('data-file-hash', hash);
+    });
     const imgs = root.querySelectorAll(
         'img[data-file-hash]:not([data-hydrated])'
     );
@@ -509,8 +589,8 @@ async function hydrateInlineImages() {
         }
     });
 }
-// Re-run hydration when rendered HTML changes or thumbnails update
-watch(rendered, () => hydrateInlineImages());
+// Legacy hydration comments removed
+watch(assistantMarkdown, () => hydrateInlineImages());
 watch(hashList, () => hydrateInlineImages());
 onMounted(() => hydrateInlineImages());
 
@@ -641,6 +721,7 @@ function onRetry() {
 }
 
 import { forkThread } from '~/db/branching';
+import themeClient from '~/plugins/theme.client';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
@@ -707,6 +788,23 @@ async function runExtraAction(action: ChatMessageAction) {
         console.error('Message action error', action.id, e);
     }
 }
+
+// Classes applied to <StreamMarkdown> (joined string for TS friendliness)
+const streamMdClasses = [
+    'w-full min-w-0',
+    'prose-table:!w-auto prose-table:table-auto',
+    'sm:prose-table:!min-w-max',
+    'max-[639px]:prose-table:min-w-[560px]',
+    'prose-table:break-normal prose-td:whitespace-nowrap prose-th:whitespace-nowrap',
+    "[&_[data-streamdown='table']_td:nth-child(2)]:whitespace-normal",
+    "[&_[data-streamdown='table']_td:nth-child(2)]:max-w-[32rem]",
+    "[&_div[data-streamdown='table-wrapper']]:block",
+    "[&_div[data-streamdown='table-wrapper']]:max-w-full",
+    "[&_div[data-streamdown='table-wrapper']]:overflow-x-auto",
+    "[&_div[data-streamdown='table-wrapper']]:w-full",
+    "[&_div[data-streamdown='table-wrapper']]:min-w-0",
+    "[&_div[data-streamdown='table-wrapper']]:shrink",
+].join(' ');
 </script>
 
 <style scoped>
@@ -871,5 +969,113 @@ async function runExtraAction(action: ChatMessageAction) {
     );
     clip-path: polygon(0 0, 100% 0, 100% 100%);
     box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
+}
+/* Safety net for table layout */
+.message-body :deep([data-streamdown='table-wrapper']) {
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    margin-top: 32px !important;
+    margin-bottom: 32px;
+}
+
+.message-body :deep([data-streamdown='table']) {
+    margin-bottom: 0px;
+    margin-top: 0px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    border-left: none;
+    border-right: none;
+}
+
+.message-body :deep([data-streamdown='th']) {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    font-weight: 600;
+    border-top: none;
+}
+
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='th']:first-child
+    ),
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='td']:first-child
+    ) {
+    border-left: 0;
+}
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='th']:last-child
+    ),
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='td']:last-child
+    ) {
+    border-right: 0;
+}
+
+.message-body :deep([data-streamdown='td']) {
+    max-width: 50ch;
+}
+/* Zebra striping for table body rows (every 2nd data row) */
+.message-body
+    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even)) {
+    background: var(--md-surface-container-low);
+}
+.message-body
+    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd)) {
+    background: var(--md-surface-container-lowest);
+}
+/* Optional hover highlight */
+.message-body :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
+    background: var(--md-surface-container-high);
+}
+
+.message-body :deep([data-streamdown='code-block']) {
+    padding: 0;
+    margin-top: 32px;
+    margin-bottom: 32px;
+    border: none;
+    border-radius: 3px;
+    height: fit-content;
+    overflow-y: hidden;
+    overflow-x: auto;
+    white-space: nowrap;
+    background: var(--md-surface-container-lowest);
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.message-body :deep([data-streamdown='code-block-header']) {
+    border-bottom: 2px solid var(--md-inverse-surface);
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+.message-body :deep([data-streamdown='code-body']) {
+    padding: 0;
+    padding-left: 15px;
+    padding-right: 15px;
+    margin: 0;
+    border: none;
+}
+
+.message-body :deep([data-streamdown='code-body']) pre {
+    border: none;
+    margin-bottom: 0;
+    padding-bottom: 30px;
+    background: var(--md-surface-container-lowest) !important;
+}
+.message-body :deep([data-streamdown='code-lang']) {
+    font: inherit;
 }
 </style>

@@ -21,19 +21,33 @@ export interface AutoScrollApi {
     userScrolling: Ref<boolean>;
     /** Epoch ms when we were last within NEAR_BOTTOM_PX */
     lastBottomAt: Ref<number>;
+    /** Forcibly disable sticky behavior until user explicitly sticks again */
+    release: () => void;
 }
 
 export interface UseAutoScrollOptions {
     thresholdPx?: number;
     behavior?: ScrollBehavior;
     throttleMs?: number; // to avoid scroll thrash; default 50ms
+    /**
+     * Minimum upward scroll (px) while inside the bottom threshold that will
+     * disengage sticky auto-scroll. Fixes the "end-of-stream jump" when user
+     * scrolls a little bit up to read but still remains within thresholdPx.
+     * Default 12px – small deliberate nudge.
+     */
+    disengageDeltaPx?: number;
 }
 
 export function useAutoScroll(
     container: Ref<HTMLElement | null>,
     opts: UseAutoScrollOptions = {}
 ): AutoScrollApi {
-    const { thresholdPx = 64, behavior = 'auto', throttleMs = 50 } = opts;
+    const {
+        thresholdPx = 64,
+        behavior = 'auto',
+        throttleMs = 50,
+        disengageDeltaPx = 12,
+    } = opts;
     const atBottom = ref(true);
     // Internal sticky intent (cleared when user scrolls away from bottom)
     let stick = true;
@@ -44,17 +58,28 @@ export function useAutoScroll(
     const NEAR_BOTTOM_PX = 24; // threshold for considering user "at bottom" for snap eligibility window
     const USER_SCROLL_INACTIVE_TIMEOUT = 800; // ms
     let userScrollTimer: any = null;
+    // Track previous scrollTop to detect upward user scroll even while still
+    // considered "at bottom" by threshold heuristics.
+    let lastScrollTop = 0;
 
     function compute() {
         const el = container.value;
         if (!el) return;
+        const currentTop = el.scrollTop;
         const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
         const newAtBottom = dist <= thresholdPx;
+        // Detect deliberate upward scroll (negative delta beyond disengageDeltaPx)
+        // while still inside bottom threshold window. This means user intends
+        // to read earlier content; release sticky so finalize delta won't snap.
+        if (currentTop < lastScrollTop - disengageDeltaPx) {
+            stick = false;
+        }
         if (!newAtBottom) stick = false;
         atBottom.value = newAtBottom;
         if (dist <= NEAR_BOTTOM_PX) {
             lastBottomAt.value = Date.now();
         }
+        lastScrollTop = currentTop;
     }
 
     const throttledCompute = useThrottleFn(compute, throttleMs);
@@ -144,5 +169,8 @@ export function useAutoScroll(
         recompute: compute,
         userScrolling,
         lastBottomAt,
+        release: () => {
+            stick = false;
+        },
     };
 }
