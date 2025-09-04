@@ -108,7 +108,6 @@
 import ChatMessage from './ChatMessage.vue';
 import { shallowRef, computed, watch, ref, nextTick } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
-import { db } from '~/db';
 import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
@@ -237,13 +236,6 @@ type RenderMessage = {
     reasoning_text?: string | null;
 };
 
-function escapeAttr(v: string) {
-    return v
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
 const messages = computed<RenderMessage[]>(() =>
     (chat.value.messages.value || []).map(
         (m: ChatMessageType & any, i: number) => {

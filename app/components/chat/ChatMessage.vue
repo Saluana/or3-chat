@@ -104,12 +104,11 @@
                     :key="props.message.id"
                     v-else
                     :content="assistantMarkdown"
+                    :shiki-theme="currentShikiTheme"
                     :class="streamMdClasses"
                     :allowed-image-prefixes="['data:image/', 'file-hash:']"
                 />
-                <!--
-                <div v-else v-html="rendered"></div>
-                -->
+                <!-- legacy rendered html path removed -->
             </div>
         </div>
         <!-- Editing surface -->
@@ -233,13 +232,13 @@ import {
 import LoadingGenerating from './LoadingGenerating.vue';
 import { parseFileHashes } from '~/db/files-util';
 import { getFileMeta } from '~/db/files';
-import { marked } from 'marked';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import { StreamMarkdown } from 'streamdown-vue';
+import { useNuxtApp } from '#app';
 
-// Local UI message expects content to be a string (rendered markdown/html)
+// UI message content is plain markdown string now
 type UIMessage = Omit<ChatMessageType, 'content'> & {
     content: string;
     pending?: boolean;
@@ -301,28 +300,6 @@ const hashList = computed<string[]>(() => {
     return [];
 });
 
-// Render markdown/text. For assistant messages keep existing inline images during live stream.
-// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
-const rendered = computed(() => {
-    if (props.message.role !== 'assistant') return '';
-    // If container supplied pre-rendered html, trust it and skip parsing.
-    if (props.message.pre_html) return props.message.pre_html;
-    const raw = props.message.content || '';
-    const parsed = (marked.parse(raw) as string) || '';
-    const hasAnyImg = /<img\b/i.test(parsed);
-    if (hasAnyImg) return parsed;
-    if (hashList.value.length) {
-        const placeholders = hashList.value
-            .map(
-                (h) =>
-                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
-            )
-            .join('');
-        return parsed + placeholders;
-    }
-    return parsed;
-});
-
 // Unified markdown (text + inline base64 images) for StreamMarkdown.
 // Keeps streaming reactive even if underlying message.content mutates from string to array.
 const assistantMarkdown = computed(() => {
@@ -347,6 +324,19 @@ const assistantMarkdown = computed(() => {
             .join('\n\n');
     }
     return '';
+});
+
+// Dynamic Shiki theme: map current theme (light/dark*/light*) to github-light / github-dark
+const nuxtApp = useNuxtApp() as any;
+const currentShikiTheme = computed(() => {
+    const themeObj = nuxtApp?.$theme;
+    let t: any = 'light';
+    if (themeObj) {
+        if (themeObj.current && 'value' in themeObj.current)
+            t = themeObj.current.value;
+        else if (typeof themeObj.get === 'function') t = themeObj.get();
+    }
+    return String(t).startsWith('dark') ? 'github-dark' : 'github-light';
 });
 // Debug watchers for content lifecycle
 watch(
@@ -385,27 +375,7 @@ onMounted(() => {
             : ''
     );
 });
-// Enhance hydrateInlineImages with debug
-const originalHydrate = hydrateInlineImages;
-async function hydrateInlineImagesDebugWrapper() {
-    await nextTick();
-    const root = contentEl.value;
-    if (!root) return originalHydrate();
-    const before = root.innerHTML.length;
-    await originalHydrate();
-    const after = root.innerHTML.length;
-    console.debug(
-        '[ChatMessage] hydrate run',
-        props.message.id,
-        'len',
-        before,
-        '=>',
-        after
-    );
-}
-// Replace watchers to call debug wrapper
-watch(rendered, () => hydrateInlineImagesDebugWrapper());
-watch(hashList, () => hydrateInlineImagesDebugWrapper());
+// Removed debug hydration wrappers.
 // Patch ensureThumb with logs if not already
 // NOTE: ensureThumb already defined above; add debug via wrapper pattern not reassignment.
 // (Could also inline logs inside original definition; keeping wrapper commented for reference.)
@@ -619,8 +589,7 @@ async function hydrateInlineImages() {
         }
     });
 }
-// Re-run hydration when rendered HTML changes or thumbnails update
-// Use assistantMarkdown (raw markdown) instead of rendered (legacy) to trigger hydration
+// Legacy hydration comments removed
 watch(assistantMarkdown, () => hydrateInlineImages());
 watch(hashList, () => hydrateInlineImages());
 onMounted(() => hydrateInlineImages());
@@ -752,6 +721,7 @@ function onRetry() {
 }
 
 import { forkThread } from '~/db/branching';
+import themeClient from '~/plugins/theme.client';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
@@ -1103,6 +1073,7 @@ const streamMdClasses = [
     border: none;
     margin-bottom: 0;
     padding-bottom: 30px;
+    background: var(--md-surface-container-lowest) !important;
 }
 .message-body :deep([data-streamdown='code-lang']) {
     font: inherit;
