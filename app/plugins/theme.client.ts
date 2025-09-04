@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+/*
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -8,6 +9,7 @@ import xml from 'highlight.js/lib/languages/xml';
 import python from 'highlight.js/lib/languages/python';
 import rust from 'highlight.js/lib/languages/rust';
 import css from 'highlight.js/lib/languages/css';
+*/
 import 'katex/dist/katex.min.css';
 import { useShikiHighlighter } from 'streamdown-vue';
 useShikiHighlighter();
@@ -102,6 +104,13 @@ retroRenderer.table = function (token: any) {
 };
 marked.use({ renderer: retroRenderer });
 */
+
+// Provide markdown renderer with syntax highlighting
+/*
+    nuxtApp.provide('markdown', {
+        render: (src: string) => marked.parse(src) as string,
+        marked,
+    });*/
 
 export default defineNuxtPlugin((nuxtApp) => {
     const THEME_CLASSES = [
@@ -198,11 +207,5 @@ export default defineNuxtPlugin((nuxtApp) => {
         toggle,
         get: () => current,
         system: getSystemPref,
-    });
-
-    // Provide markdown renderer with syntax highlighting
-    nuxtApp.provide('markdown', {
-        render: (src: string) => marked.parse(src) as string,
-        marked,
     });
 });
