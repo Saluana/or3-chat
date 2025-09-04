@@ -19,15 +19,15 @@ Req Mapping: R# refers to requirements in `requirements.md`.
 
 ## 2. Unit Tests for Accumulator
 
--   [ ] 2.1 Add test file `app/db/__tests__/streamAccumulator.spec.ts` or appropriate tests folder (R1-R6,R11)
-    -   [ ] 2.1.1 Test batching (multiple appends single frame) (R3)
-    -   [ ] 2.1.2 Test reasoning vs main channels (R6)
-    -   [ ] 2.1.3 Test finalize flushes pending tokens (R4)
-    -   [ ] 2.1.4 Test finalize idempotent (R4)
-    -   [ ] 2.1.5 Test error finalize sets error (R5)
-    -   [ ] 2.1.6 Test abort finalize no error (R5)
-    -   [ ] 2.1.7 Test append after finalize ignored (R4)
-    -   [ ] 2.1.8 Test reset reactivates state (R11)
+-   [x] 2.1 Add test file `app/composables/__tests__/streamAccumulator.test.ts` (R1-R6,R11)
+    -   [x] 2.1.1 Test batching (multiple appends single frame) (R3)
+    -   [x] 2.1.2 Test reasoning vs main channels (R6)
+    -   [x] 2.1.3 Test finalize flushes pending tokens (R4)
+    -   [x] 2.1.4 Test finalize idempotent (R4)
+    -   [x] 2.1.5 Test error finalize sets error (R5)
+    -   [x] 2.1.6 Test abort finalize no error (R5)
+    -   [x] 2.1.7 Test append after finalize ignored (R4)
+    -   [x] 2.1.8 Test reset reactivates state (R11)
 
 ## 3. Hook Order Snapshot (Pre-change)
 
