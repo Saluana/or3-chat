@@ -8,14 +8,14 @@ Req Mapping: R# refers to requirements in `requirements.md`.
 
 ## 1. Accumulator Module Implementation
 
--   [ ] 1.1 Create file `composables/useStreamAccumulator.ts` exporting `createStreamAccumulator` (Req: R1,R2,R3,R4,R5,R6,R11)
-    -   [ ] 1.1.1 Define `StreamingState`, `AppendKind`, API interface (R11)
-    -   [ ] 1.1.2 Implement batching via rAF with fallback (R3)
-    -   [ ] 1.1.3 Implement `append` staging logic (R2,R6)
-    -   [ ] 1.1.4 Implement `flush()` internal + version increment (R1,R3)
-    -   [ ] 1.1.5 Implement `finalize()` (success/error/abort) idempotent (R4,R5)
-    -   [ ] 1.1.6 Implement `reset()` (R11)
-    -   [ ] 1.1.7 Dev warnings for misuse (append after finalize) (R4,R5)
+-   [x] 1.1 Create file `composables/useStreamAccumulator.ts` exporting `createStreamAccumulator` (Req: R1,R2,R3,R4,R5,R6,R11)
+    -   [x] 1.1.1 Define `StreamingState`, `AppendKind`, API interface (R11)
+    -   [x] 1.1.2 Implement batching via rAF with fallback (R3)
+    -   [x] 1.1.3 Implement `append` staging logic (R2,R6)
+    -   [x] 1.1.4 Implement `flush()` internal + version increment (R1,R3)
+    -   [x] 1.1.5 Implement `finalize()` (success/error/abort) idempotent (R4,R5)
+    -   [x] 1.1.6 Implement `reset()` (R11)
+    -   [x] 1.1.7 Dev warnings for misuse (append after finalize) (R4,R5)
 
 ## 2. Unit Tests for Accumulator
 
