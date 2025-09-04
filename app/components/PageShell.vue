@@ -106,7 +106,7 @@
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
-                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    class="flex-1 min-w-0 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
                     :class="[
                         i === activePaneIndex && panes.length > 1
                             ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
