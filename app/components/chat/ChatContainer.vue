@@ -391,7 +391,12 @@ watch(
 
 // Scroll handling (Req 3.3) via useAutoScroll
 const scrollParent = ref<HTMLElement | null>(null);
-const autoScroll = useAutoScroll(scrollParent, { thresholdPx: 64 });
+// Add disengageDeltaPx so a small upward scroll (8px) releases stickiness
+// preventing jump-to-bottom when stream finalizes while user is reading.
+const autoScroll = useAutoScroll(scrollParent, {
+    thresholdPx: 64,
+    disengageDeltaPx: 8,
+});
 watch(
     () => messages.value.length,
     async () => {
@@ -446,6 +451,11 @@ watch(
                 if (target) {
                     // We deliberately do NOT set pre_html anymore; ChatMessage consumes raw markdown
                 }
+            }
+            // If user is not truly at bottom (released stick via upward scroll) ensure
+            // we don't force snap during handoff. Release sticky just in case.
+            if (!autoScroll.atBottom.value) {
+                autoScroll.release();
             }
             handoff.value = true; // keep tail while assistant row enters
 
