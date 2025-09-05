@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Hook order snapshot (pre-accumulator integration) > records hook invocation order for a simple sendMessage 1`] = `
+[
+  "ai.chat.send:action:before",
+  "ai.chat.stream:action:delta",
+  "ai.chat.stream:action:delta",
+  "ai.chat.send:action:after",
+]
+`;
