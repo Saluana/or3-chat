@@ -327,22 +327,22 @@ const finalizedOnce = ref(false);
 const streamActive = computed(() => !streamState.value?.finalized);
 // Unified streaming message (8.2)
 const streamingMessage = computed<RenderMessage | null>(() => {
-    // Suppress placeholder when there are zero chat messages (blank state) and no
-    // actual streamed content yet.
-    const anyMessages = messages.value.length > 0;
+    const anyMsgs = messages.value.length > 0;
     const rawTail = tailDisplay.value || '';
     const reasoningTail = streamReasoning.value || '';
-    const hasTailContent = rawTail.length > 0 || reasoningTail.length > 0;
-    // If stream not active and not in handoff, never show.
-    if (!streamActive.value && !handoff.value) return null;
-    // After finalization and one successful handoff, suppress reappearance even if accumulator state lingers
-    if (!streamActive.value && finalizedOnce.value) return null;
-    // If handoff frame, only show if there was some tail content (avoid empty stub at end).
-    if (handoff.value && !hasTailContent) return null;
-    // If active but no messages yet, require some content to have arrived.
-    if (streamActive.value && !anyMessages && !hasTailContent) return null;
-    // If no stream id yet (not assigned) and no content, hide.
-    if (!streamId.value && !hasTailContent) return null;
+    const hasTail = rawTail.length > 0 || reasoningTail.length > 0;
+
+    // Active stream: show if we have a stream id and either some tail tokens OR at least one prior message (user just sent one).
+    if (streamActive.value) {
+        if (!streamId.value) return null;
+        if (!hasTail && !anyMsgs) return null; // blank brand-new chat before first token
+    } else if (handoff.value) {
+        // One-frame overlap after finalize; only if there was content and not already fully removed.
+        if (!hasTail || finalizedOnce.value) return null;
+    } else {
+        return null; // neither active nor handoff
+    }
+
     return {
         role: 'assistant',
         content: rawTail,
