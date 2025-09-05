@@ -122,34 +122,6 @@ Encapsulate: cache maps, ref counting, PDF name logic, truncated display names, 
 
 ---
 
-## 4. Watcher Consolidation & Effect Folding
-
-**Where**: `ChatContainer.vue` (multiple `watch` blocks for tail, scroll, heights), `ChatMessage.vue` (content, hashList watchers, hydration watchers).
-
-**Current**: >15 watchers in container handling: message length, tail changes, active state toggles, input height, emitted height, thread id changes, etc. Many schedule near-identical scroll updates.
-
-**Proposal**: Replace clusters with grouped `watchEffect` + internal diff detection:
-
--   Single effect monitors `[messages.length, streamState.version, inputHeight, emittedHeight, threadId]` & calls `autoScroll.onContentIncrease()` if at bottom.
--   Combine tail start/stop watchers into one effect adjusting a local `finalizedOnce` flag.
--   In `ChatMessage.vue`, batch hydration triggers: effect monitors `(assistantMarkdown, hashList.join(','))` and debounces hydration via rAF.
-
-**Why**: Fewer reactive subscriptions & less maintenance overhead; improved determinism.
-
-**How**: Introduce minimal utilities: `useRafBatch(fn)` for coalesced work; move schedule logic there.
-
-**Est. Lines Saved**: 110–150.
-
-**Perf Impact**: Lower microtask / flush count; improved scroll smoothness.
-
-**Risks**: Over-consolidation could hide fine-grained conditions leading to unnecessary scroll jumps. Mitigate with internal guard comparing previous bottom state.
-
-**Steps**:
-
-1. List watchers & their side-effects.
-2. Merge logically compatible ones.
-3. Add test capturing expected auto-scroll behavior (user scrolled up remains unaffected).
-
 ---
 
 ## 5. Reasoning Stream Path Simplification
