@@ -45,14 +45,14 @@ Req Mapping: R# refers to requirements in `requirements.md`.
 
 ## 5. Regression Snapshot Tests
 
--   [ ] 5.1 Simulated pure text stream parity test (R9)
--   [ ] 5.2 Interleaved reasoning + text parity test (R6,R9)
--   [ ] 5.3 Abort mid-stream parity test (R4,R9)
+-   [x] 5.1 Simulated pure text stream parity test (R9)
+-   [x] 5.2 Interleaved reasoning + text parity test (R6,R9)
+-   [x] 5.3 Abort mid-stream parity test (R4,R9)
 
 ## 6. Performance Test Harness
 
--   [ ] 6.1 Add test measuring version increments for 200-token synthetic burst (R10)
-    -   [ ] 6.1.1 Assert ≤20 version increments
+-   [x] 6.1 Add test measuring version increments for 200-token synthetic burst (R10)
+    -   [x] 6.1.1 Assert ≤20 version increments
 
 ## 7. Remove Legacy Tail Stream
 
