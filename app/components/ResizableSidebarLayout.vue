@@ -86,7 +86,7 @@
                             </div>
                         </slot>
                     </div>
-                    <div v-show="collapsed" class="flex-1 h-full">
+                    <div v-if="collapsed" class="flex-1 h-full">
                         <slot name="sidebar-collapsed">
                             <div class="p-3 space-y-2 text-sm opacity-80">
                                 <p>Add your nav here…</p>

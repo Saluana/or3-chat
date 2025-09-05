@@ -295,7 +295,7 @@ export function useChat(
             const idx = messages.value.push(uiAssistant) - 1;
             const current = messages.value[idx]!; // UiChatMessage
             let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 100;
+            const WRITE_INTERVAL_MS = 500;
             let lastPersistAt = 0;
             const assistantFileHashes: string[] = [];
 
