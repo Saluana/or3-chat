@@ -2,7 +2,6 @@ import { ref } from 'vue';
 import { createStreamAccumulator } from './useStreamAccumulator';
 import { useToast } from '#imports';
 import { nowSec, newId } from '~/db/util';
-
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
 import { useActivePrompt } from './useActivePrompt';
@@ -12,7 +11,6 @@ import { createOrRefFile } from '~/db/files';
 import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
 import { getThreadSystemPrompt } from '~/db/threads';
 import { getPrompt } from '~/db/prompts';
-
 import type {
     ContentPart,
     ChatMessage,
@@ -38,6 +36,7 @@ export function useChat(
     initialThreadId?: string,
     pendingPromptId?: string
 ) {
+    // Messages and basic state
     const messages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
     const abortController = ref<AbortController | null>(null);
@@ -54,24 +53,13 @@ export function useChat(
         }
     }
 
-    // Unified streaming accumulator (dual-write phase)
-    const USE_NEW_STREAM = true; // Task 4.1.1 feature flag
-    const streamAcc = USE_NEW_STREAM ? createStreamAccumulator() : null;
-    const streamState = streamAcc?.state;
-    // Legacy integrated streaming tail state (to be removed after parity)
+    // Unified streaming accumulator only (legacy removed)
+    const streamAcc = createStreamAccumulator();
+    const streamState = streamAcc.state;
     const streamId = ref<string | null>(null);
-    const streamDisplayText = ref('');
-    const streamReasoning = ref('');
-    const streamActive = ref(false);
-    const streamPending = ref(false);
-    const streamError = ref<Error | null>(null);
     function resetStream() {
+        streamAcc.reset();
         streamId.value = null;
-        streamDisplayText.value = '';
-        streamReasoning.value = '';
-        streamActive.value = false;
-        streamPending.value = false;
-        streamError.value = null;
     }
 
     async function getSystemPromptContent(): Promise<string | null> {
@@ -136,7 +124,9 @@ export function useChat(
             } catch {}
         }
 
-        // Normalize legacy params
+        // Prepare accumulator
+        streamAcc.reset();
+        // Normalize params
         let { files, model, file_hashes, extraTextParts, online } =
             sendMessagesParams as any;
         if (
@@ -181,11 +171,6 @@ export function useChat(
         } as any);
 
         loading.value = true;
-        streamActive.value = true;
-        streamPending.value = true;
-        streamError.value = null;
-        streamDisplayText.value = '';
-        streamReasoning.value = '';
         streamId.value = null;
 
         try {
@@ -298,9 +283,7 @@ export function useChat(
                     if (current.reasoning_text === null)
                         current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
-                    streamReasoning.value += ev.text;
-                    if (USE_NEW_STREAM)
-                        streamAcc!.append(ev.text, { kind: 'reasoning' });
+                    streamAcc.append(ev.text, { kind: 'reasoning' });
                     try {
                         await hooks.doAction(
                             'ai.chat.stream:action:reasoning',
@@ -317,11 +300,8 @@ export function useChat(
                 } else if (ev.type === 'text') {
                     if ((current as any).pending)
                         (current as any).pending = false;
-                    if (streamPending.value) streamPending.value = false;
                     const delta = ev.text;
-                    streamDisplayText.value += delta;
-                    if (USE_NEW_STREAM)
-                        streamAcc!.append(delta, { kind: 'text' });
+                    streamAcc.append(delta, { kind: 'text' });
                     await hooks.doAction('ai.chat.stream:action:delta', delta, {
                         threadId: threadIdRef.value,
                         assistantId: assistantDbMsg.id,
@@ -474,9 +454,7 @@ export function useChat(
                 },
                 aborted: false,
             });
-            streamActive.value = false;
-            streamPending.value = false;
-            if (USE_NEW_STREAM) streamAcc!.finalize();
+            streamAcc.finalize();
         } catch (err) {
             if (aborted.value) {
                 try {
@@ -530,19 +508,14 @@ export function useChat(
                         duration: 6000,
                     });
                 } catch {}
-                streamError.value =
-                    err instanceof Error ? err : new Error(String(err));
-                streamActive.value = false;
-                if (USE_NEW_STREAM)
-                    streamAcc!.finalize({
-                        error: streamError.value || undefined,
-                    });
+                const e = err instanceof Error ? err : new Error(String(err));
+                streamAcc.finalize({ error: e });
             }
         } finally {
             loading.value = false;
             abortController.value = null;
             setTimeout(() => {
-                if (!loading.value && !streamActive.value) resetStream();
+                if (!loading.value && streamState.finalized) resetStream();
             }, 0);
         }
     }
@@ -626,11 +599,6 @@ export function useChat(
         loading,
         threadId: threadIdRef,
         streamId,
-        streamDisplayText,
-        streamReasoning,
-        streamActive,
-        streamPending,
-        streamError,
         resetStream,
         streamState,
         abort: () => {
@@ -639,8 +607,7 @@ export function useChat(
             try {
                 abortController.value.abort();
             } catch {}
-            streamActive.value = false;
-            if (USE_NEW_STREAM) streamAcc!.finalize({ aborted: true });
+            streamAcc.finalize({ aborted: true });
         },
     };
 }

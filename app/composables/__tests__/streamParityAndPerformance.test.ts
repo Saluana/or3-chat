@@ -55,11 +55,9 @@ vi.mock('../../db', () => ({
     },
     create: { thread: vi.fn().mockResolvedValue({ id: 'thread-1' }) },
     tx: {
-        appendMessage: vi
-            .fn()
-            .mockResolvedValue({
-                id: 'm-' + Math.random().toString(36).slice(2, 6),
-            }),
+        appendMessage: vi.fn().mockResolvedValue({
+            id: 'm-' + Math.random().toString(36).slice(2, 6),
+        }),
     },
     upsert: { message: vi.fn().mockResolvedValue(undefined) },
 }));
@@ -99,7 +97,7 @@ describe('Streaming parity & performance', () => {
         vi.resetModules();
     });
 
-    it('5.1 pure text stream parity (legacy vs accumulator) (R9)', async () => {
+    it('5.1 pure text stream accumulator (R9)', async () => {
         const originalSetTimeout = global.setTimeout;
         const zeroTimeouts: any[] = [];
         (global as any).setTimeout = (fn: any, ms?: number, ...rest: any[]) => {
@@ -120,16 +118,13 @@ describe('Streaming parity & performance', () => {
         const chat = useChat([]);
         await chat.sendMessage('hi');
         await nextFrames();
-        // Legacy refs
-        const legacy = chat.streamDisplayText.value;
         const acc = chat.streamState?.text;
-        expect(legacy).toBe('Hello World');
         expect(acc).toBe('Hello World');
         expect(chat.streamState?.finalized).toBe(true);
         (global as any).setTimeout = originalSetTimeout;
     });
 
-    it('5.2 interleaved reasoning + text parity (R6,R9)', async () => {
+    it('5.2 interleaved reasoning + text (R6,R9)', async () => {
         const originalSetTimeout = global.setTimeout;
         const zeroTimeouts: any[] = [];
         (global as any).setTimeout = (fn: any, ms?: number, ...rest: any[]) => {
@@ -151,14 +146,12 @@ describe('Streaming parity & performance', () => {
         const chat = useChat([]);
         await chat.sendMessage('q');
         await nextFrames();
-        expect(chat.streamDisplayText.value).toBe('Answer Done');
         expect(chat.streamState?.text).toBe('Answer Done');
-        expect(chat.streamReasoning.value).toBe('[plan][more]');
         expect(chat.streamState?.reasoningText).toBe('[plan][more]');
         (global as any).setTimeout = originalSetTimeout;
     });
 
-    it('5.3 abort mid-stream parity (R4,R9)', async () => {
+    it('5.3 abort mid-stream (R4,R9)', async () => {
         const originalSetTimeout = global.setTimeout;
         const zeroTimeouts: any[] = [];
         (global as any).setTimeout = (fn: any, ms?: number, ...rest: any[]) => {
@@ -196,7 +189,6 @@ describe('Streaming parity & performance', () => {
         await p.catch(() => {}); // sendMessage handles abort internally; ignore errors
         await nextFrames();
         // Accumulator should be finalized with aborted flag (no error), legacy text should match prefix streamed
-        expect(chat.streamDisplayText.value.startsWith('Part1')).toBe(true);
         expect(chat.streamState?.text?.startsWith('Part1')).toBe(true);
         expect(chat.streamState?.error).toBeNull();
         expect(chat.streamState?.finalized).toBe(true);
@@ -217,11 +209,20 @@ describe('Streaming parity & performance', () => {
         const { useChat } = await import('../useAi');
         const chat = useChat([]);
         await chat.sendMessage('perf');
-        // Allow several frames so accumulator flushes
-        await nextFrames(5);
+        await nextFrames(3);
         const versions = chat.streamState?.version ?? 0;
-        // Expect batching reduces version bumps (< 10% of tokens)
         expect(versions).toBeLessThanOrEqual(20);
-        expect(chat.streamState?.text.length).toBe(200);
+        // Assistant message persisted should have 200 chars
+        const last = (chat as any).messages.value.find(
+            (m: any) => m.role === 'assistant'
+        );
+        const len =
+            typeof last?.content === 'string'
+                ? last.content.length
+                : Array.isArray(last?.content)
+                ? (last.content.find((p: any) => p.type === 'text')?.text || '')
+                      .length
+                : 0;
+        expect(len).toBe(200);
     });
 });
