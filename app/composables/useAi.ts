@@ -592,6 +592,36 @@ export function useChat(
         }
     }
 
+    /** Free all in-memory message arrays (UI + raw) and abort any active stream. */
+    function clear() {
+        try {
+            if (abortController.value) {
+                aborted.value = true;
+                try {
+                    abortController.value.abort();
+                } catch {}
+                streamAcc.finalize({ aborted: true });
+                abortController.value = null;
+            }
+        } catch {}
+        rawMessages.value = [];
+        messages.value = [];
+        // Defensive: if any lingering refs still hold many messages, let GC reclaim by slicing to empty
+        if (
+            (rawMessages as any)._value &&
+            (rawMessages as any)._value.length > 1000
+        ) {
+            (rawMessages as any)._value = [];
+        }
+        if (
+            (messages as any)._value &&
+            (messages as any)._value.length > 1000
+        ) {
+            (messages as any)._value = [];
+        }
+        streamAcc.reset();
+    }
+
     return {
         messages,
         sendMessage,
@@ -609,5 +639,6 @@ export function useChat(
             } catch {}
             streamAcc.finalize({ aborted: true });
         },
+        clear,
     };
 }

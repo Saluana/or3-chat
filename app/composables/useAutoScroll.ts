@@ -87,10 +87,20 @@ export function useAutoScroll(
     function scrollToBottom({ smooth }: { smooth?: boolean } = {}) {
         const el = container.value;
         if (!el) return;
-        el.scrollTo({
-            top: el.scrollHeight,
-            behavior: smooth ? 'smooth' : behavior,
-        });
+        // Some test environments (jsdom) don't implement Element.scrollTo.
+        if (typeof (el as any).scrollTo === 'function') {
+            (el as any).scrollTo({
+                top: el.scrollHeight,
+                behavior: smooth ? 'smooth' : behavior,
+            });
+        } else {
+            // Fallback: direct assignment (no smooth behavior available).
+            try {
+                (el as any).scrollTop = el.scrollHeight;
+            } catch {
+                /* no-op */
+            }
+        }
         stick = true;
         atBottom.value = true;
         lastBottomAt.value = Date.now();

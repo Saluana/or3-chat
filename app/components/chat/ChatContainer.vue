@@ -178,6 +178,10 @@ watch(
         if (newId && currentId && newId === currentId) {
             return;
         }
+        // Free previous thread messages & abort any active stream before switching
+        try {
+            (chat.value as any)?.clear?.();
+        } catch {}
         chat.value = useChat(
             props.messageHistory,
             newId,

@@ -3,6 +3,7 @@
 
 import type { Ref } from 'vue';
 import type { MultiPaneState } from '~/composables/useMultiPane';
+import { releaseDocument } from '~/composables/useDocumentsStore';
 
 export interface UsePaneDocumentsOptions {
     panes: Ref<MultiPaneState[]>;
@@ -28,7 +29,9 @@ export function usePaneDocuments(
         if (!pane) return;
         try {
             if (pane.mode === 'doc' && pane.documentId) {
+                // Flush then release old document state to reclaim memory.
                 await flushDocument(pane.documentId);
+                await releaseDocument(pane.documentId, { flush: false });
             }
             const doc = await createNewDoc(initial);
             pane.mode = 'doc';
@@ -49,6 +52,8 @@ export function usePaneDocuments(
             try {
                 await flushDocument(pane.documentId);
             } catch {}
+            // Always release the previous doc state after switching.
+            await releaseDocument(pane.documentId, { flush: false });
         }
         pane.mode = 'doc';
         pane.documentId = id;

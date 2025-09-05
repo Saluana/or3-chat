@@ -115,3 +115,38 @@ export function useDocumentState(id: string) {
 export function useAllDocumentsState() {
     return documentsMap;
 }
+
+// Release a document's in-memory state (after ensuring pending changes flushed).
+// This lets GC reclaim large TipTap JSON payloads when switching away.
+export async function releaseDocument(
+    id: string,
+    opts: { flush?: boolean; deleteEntry?: boolean } = {}
+) {
+    // Rename to avoid shadowing the exported flush(id) function above.
+    const { flush: shouldFlush = true, deleteEntry = true } = opts;
+    const st = documentsMap.get(id);
+    if (!st) return;
+    if (st.timer) {
+        clearTimeout(st.timer);
+        st.timer = undefined;
+    }
+    if (shouldFlush) {
+        try {
+            await flush(id);
+        } catch {}
+    }
+    // Null record to drop heavy content reference; then optionally drop entry entirely.
+    if (st.record) {
+        try {
+            // Remove large nested content tree reference if present.
+            if ((st.record as any).content)
+                (st.record as any).content = undefined;
+        } catch {}
+        st.record = null;
+    }
+    st.pendingTitle = undefined;
+    st.pendingContent = undefined;
+    if (deleteEntry) {
+        documentsMap.delete(id);
+    }
+}

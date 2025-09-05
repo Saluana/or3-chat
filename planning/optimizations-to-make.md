@@ -124,7 +124,7 @@ Below is the detailed, intern-friendly task list with exact files, what to chang
 
 -   If you keep window listeners, **add** `onUnmounted(() => window.removeEventListener('resize', measure))`.
 
----
+## **DONE**
 
 ## 7) Normalize message content to a **single** shape (array of parts)
 
@@ -180,7 +180,7 @@ Below is the detailed, intern-friendly task list with exact files, what to chang
     **How:**
 -   In `package.json` remove: `"ai"`, `"@openrouter/ai-sdk-provider"`, `"highlight.js"`, `"marked-highlight"`, `"gpt-tokenizer"`.
 -   Move `@types/spark-md5` to `devDependencies`.
--   `pnpm i && pnpm build` to confirm no missing imports.
+-   `bun i && bun build` to confirm no missing imports.
 
 ---
 
