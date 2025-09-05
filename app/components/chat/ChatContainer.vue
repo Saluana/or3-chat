@@ -98,7 +98,7 @@
 // Refactored ChatContainer (Task 4) – orchestration only.
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref, nextTick } from 'vue';
+import { shallowRef, computed, watch, ref, nextTick, watchEffect } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
 import { useChat } from '~/composables/useAi';
 import type {
@@ -108,6 +108,7 @@ import type {
 import VirtualMessageList from './VirtualMessageList.vue';
 // (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
+import { useRafBatch } from '~/composables/useRafBatch';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 
@@ -357,10 +358,7 @@ const handoff = ref(false); // one-frame overlap flag; now only rendered if tail
 const assistantVisible = ref(false); // detection of assistant row presence post-stream
 const tailWrapper = ref<HTMLElement | null>(null);
 const FINALIZE_LEN_SINGLE_RAF = 4000;
-const FINALIZE_LEN_DOUBLE_RAF = 12000;
-let heightLockApplied = false;
-// Tail content: raw markdown only (no pre-render HTML)
-const tailContent = computed(() => tailDisplay.value || '');
+const FINALIZE_LEN_DOUBLE_RAF = 12000; // removed height lock tracking & tailContent
 
 // Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
 const RECENT_NON_VIRTUAL = 6;
@@ -401,13 +399,7 @@ const autoScroll = useAutoScroll(scrollParent, {
     thresholdPx: 64,
     disengageDeltaPx: 8,
 });
-watch(
-    () => messages.value.length,
-    async () => {
-        await nextTick();
-        autoScroll.onContentIncrease();
-    }
-);
+// Removed standalone messages.length watcher (handled in unified watchEffect)
 // Unified scroll scheduling for streaming updates.
 // Prior version stacked nextTick + rAF + nextTick creating visible lag.
 let scrollScheduled = false;
@@ -431,15 +423,46 @@ if (process.client) {
     });
 }
 
-// Consolidated scroll effect (8.4): watch version increments only
-watch(
-    () => streamState.value?.version,
-    () => {
+// Replace multiple tail / input / thread watchers with a single watchEffect.
+let prev = {
+    len: 0,
+    version: 0,
+    inputH: 0,
+    emittedH: 0,
+    thread: '' as string | undefined,
+    wasActive: false,
+};
+watchEffect(async () => {
+    const len = messages.value.length;
+    const version = streamState.value?.version || 0;
+    const inputH = chatInputHeight.value || 0;
+    const emittedH = emittedInputHeight.value || 0;
+    const thread = currentThreadId.value;
+    const active = streamActive.value;
+
+    const countChanged = len !== prev.len;
+    const versionChanged = version !== prev.version;
+    const inputChanged = inputH !== prev.inputH || emittedH !== prev.emittedH;
+    const threadChanged = thread !== prev.thread;
+    const activeChanged = active !== prev.wasActive;
+
+    // Scroll on new content tokens or structural changes if user at bottom.
+    if (autoScroll.atBottom.value && (countChanged || versionChanged)) {
+        await nextTick();
         scheduleScrollIfAtBottom();
     }
-);
-watch(streamActive, (active) => {
-    if (!active) {
+    // Input height adjustments: keep pinned without smooth snap.
+    if (autoScroll.atBottom.value && inputChanged) {
+        await nextTick();
+        autoScroll.scrollToBottom({ smooth: false });
+    }
+    // Thread switch: attempt to preserve bottom stick if user was at bottom.
+    if (threadChanged) {
+        await nextTick();
+        if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
+    }
+    // Stream finalize transition (active->inactive): previous logic moved here.
+    if (!active && prev.wasActive) {
         // Stream ended: start overlap (no pre-render HTML now)
         const sid = streamId.value;
         if (sid) {
@@ -476,7 +499,6 @@ watch(streamActive, (active) => {
             const performRemoval = () => {
                 handoff.value = false;
                 finalizedOnce.value = true; // prevent reasoning-only tail reappearing
-                heightLockApplied = false;
             };
             // Apply height lock to final assistant element if we captured and not yet applied
             if (tailHeight > 0) {
@@ -489,7 +511,6 @@ watch(streamActive, (active) => {
                         ) as HTMLElement | null;
                         if (finalEl) {
                             finalEl.style.minHeight = tailHeight + 'px';
-                            heightLockApplied = true;
                             requestAnimationFrame(() => {
                                 finalEl.style.removeProperty('min-height');
                             });
@@ -522,35 +543,11 @@ watch(streamActive, (active) => {
             });
         }
     }
-});
-// Reset finalized flag when a new stream starts
-watch(streamActive, (active, prev) => {
-    if (active && !prev) finalizedOnce.value = false;
-});
-watch(currentThreadId, () => {
-    // Clear computed tail when switching threads (stream refs reset inside useChat later)
-    scheduleScrollIfAtBottom();
-});
+    // New stream started: reset finalizedOnce.
+    if (active && !prev.wasActive) finalizedOnce.value = false;
 
-// When input height changes and user was at bottom, keep them pinned
-watch(
-    () => chatInputHeight.value,
-    async () => {
-        await nextTick();
-        if (autoScroll.atBottom.value) {
-            autoScroll.scrollToBottom({ smooth: false });
-        }
-    }
-);
-watch(
-    () => emittedInputHeight.value,
-    async () => {
-        await nextTick();
-        if (autoScroll.atBottom.value) {
-            autoScroll.scrollToBottom({ smooth: false });
-        }
-    }
-);
+    prev = { len, version, inputH, emittedH, thread, wasActive: active };
+});
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)

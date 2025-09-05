@@ -228,6 +228,7 @@ import {
     onBeforeUnmount,
     nextTick,
     onMounted,
+    watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import { parseFileHashes } from '~/db/files-util';
@@ -237,6 +238,7 @@ import { useMessageEditing } from '~/composables/useMessageEditing';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import { StreamMarkdown } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
+import { useRafBatch } from '~/composables/useRafBatch';
 
 // UI message content is plain markdown string now
 type UIMessage = Omit<ChatMessageType, 'content'> & {
@@ -338,44 +340,7 @@ const currentShikiTheme = computed(() => {
     }
     return String(t).startsWith('dark') ? 'github-dark' : 'github-light';
 });
-// Debug watchers for content lifecycle
-watch(
-    () => (props.message as any).content,
-    (val, old) => {
-        const typeOld = Array.isArray(old) ? 'array' : typeof old;
-        const typeNew = Array.isArray(val) ? 'array' : typeof val;
-        console.debug(
-            '[ChatMessage] content changed',
-            props.message.id,
-            typeOld,
-            '=>',
-            typeNew,
-            typeNew === 'string'
-                ? (val as string).slice(0, 120)
-                : Array.isArray(val)
-                ? val.length + ' parts'
-                : ''
-        );
-    },
-    { deep: false }
-);
-onMounted(() => {
-    const c: any = (props.message as any).content;
-    const type = Array.isArray(c) ? 'array' : typeof c;
-    console.debug(
-        '[ChatMessage] mounted',
-        props.message.id,
-        props.message.role,
-        'content type=',
-        type,
-        type === 'string'
-            ? (c as string).slice(0, 120)
-            : Array.isArray(c)
-            ? c.length + ' parts'
-            : ''
-    );
-});
-// Removed debug hydration wrappers.
+// Debug watchers removed (can reintroduce with import.meta.dev guards if needed)
 // Patch ensureThumb with logs if not already
 // NOTE: ensureThumb already defined above; add debug via wrapper pattern not reassignment.
 // (Could also inline logs inside original definition; keeping wrapper commented for reference.)
@@ -589,10 +554,19 @@ async function hydrateInlineImages() {
         }
     });
 }
-// Legacy hydration comments removed
-watch(assistantMarkdown, () => hydrateInlineImages());
-watch(hashList, () => hydrateInlineImages());
-onMounted(() => hydrateInlineImages());
+// Consolidated hydration + thumbnail readiness effect
+const scheduleHydrate = useRafBatch(() => hydrateInlineImages());
+watchEffect(() => {
+    if (props.message.role !== 'assistant') return; // only assistants hydrate
+    // reactive deps: markdown text, hash list, thumb states
+    void assistantMarkdown.value;
+    void hashList.value.length;
+    void Object.keys(thumbnails)
+        .map((h) => thumbnails[h]?.status + (thumbnails[h]?.url || ''))
+        .join('|');
+    scheduleHydrate();
+});
+onMounted(() => scheduleHydrate());
 
 // Mark oversized code blocks and add copy buttons
 onMounted(() => {
@@ -695,14 +669,7 @@ onMounted(() => {
     });
 });
 
-watch(
-    () =>
-        Object.keys(thumbnails).map((h) => {
-            const t = thumbnails[h]!; // state always initialized before use
-            return t.status + ':' + (t.url || '');
-        }),
-    () => hydrateInlineImages()
-);
+// Thumbnail status watcher removed (covered by consolidated watchEffect)
 import { useToast } from '#imports';
 function copyMessage() {
     navigator.clipboard.writeText(props.message.content);
