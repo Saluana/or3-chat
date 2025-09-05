@@ -98,7 +98,7 @@
 // Refactored ChatContainer (Task 4) – orchestration only.
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref, nextTick, watchEffect } from 'vue';
+import { shallowRef, computed, watch, ref, nextTick } from 'vue';
 import { parseFileHashes } from '~/db/files-util';
 import { useChat } from '~/composables/useAi';
 import type {
@@ -108,7 +108,6 @@ import type {
 import VirtualMessageList from './VirtualMessageList.vue';
 // (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
-import { useRafBatch } from '~/composables/useRafBatch';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 
@@ -323,47 +322,29 @@ const tailDisplay = computed(() => streamState.value?.text || '');
 // Removed tail char delta logging.
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value.threadId?.value);
-// Tail active means: actively streaming OR (reasoning still present and not finalized)
-const finalizedOnce = ref(false);
+// Tail active means stream not finalized
 const streamActive = computed(() => !streamState.value?.finalized);
-// Unified streaming message (8.2)
+// Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
 const streamingMessage = computed<RenderMessage | null>(() => {
-    const anyMsgs = messages.value.length > 0;
+    if (!streamActive.value) return null;
+    if (!streamId.value) return null;
     const rawTail = tailDisplay.value || '';
     const reasoningTail = streamReasoning.value || '';
-    const hasTail = rawTail.length > 0 || reasoningTail.length > 0;
-
-    // Active stream: show if we have a stream id and either some tail tokens OR at least one prior message (user just sent one).
-    if (streamActive.value) {
-        if (!streamId.value) return null;
-        if (!hasTail && !anyMsgs) return null; // blank brand-new chat before first token
-    } else if (handoff.value) {
-        // One-frame overlap after finalize; only if there was content and not already fully removed.
-        if (!hasTail || finalizedOnce.value) return null;
-    } else {
-        return null; // neither active nor handoff
-    }
-
+    if (!rawTail && !reasoningTail && messages.value.length === 0) return null;
     return {
         role: 'assistant',
         content: rawTail,
-        id: streamId.value ? 'tail-' + streamId.value : 'tail-stream',
+        id: 'tail-' + streamId.value,
         stream_id: streamId.value || undefined,
-        pending: streamActive.value,
+        pending: true,
         reasoning_text: reasoningTail,
     } as RenderMessage;
 });
-// Pre-render support for seamless handoff
-const handoff = ref(false); // one-frame overlap flag; now only rendered if tail had content
-const assistantVisible = ref(false); // detection of assistant row presence post-stream
-const tailWrapper = ref<HTMLElement | null>(null);
-const FINALIZE_LEN_SINGLE_RAF = 4000;
-const FINALIZE_LEN_DOUBLE_RAF = 12000; // removed height lock tracking & tailContent
 
 // Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
 const RECENT_NON_VIRTUAL = 6;
 function filterStreaming(arr: RenderMessage[]) {
-    if (streamActive.value && streamId.value && !handoff.value) {
+    if (streamActive.value && streamId.value) {
         return arr.filter((m) => m.stream_id !== streamId.value);
     }
     return arr;
@@ -380,16 +361,7 @@ const virtualStableMessages = computed<RenderMessage[]>(() => {
 });
 // Removed size change logging for virtual/recent message groups.
 
-// Track when the assistant streaming message (by stream_id) is actually present in virtual list
-watch([virtualStableMessages, recentMessages, streamId, streamActive], () => {
-    if (!streamId.value) return;
-    const present =
-        recentMessages.value.some((m: any) => m.stream_id === streamId.value) ||
-        virtualStableMessages.value.some(
-            (m: any) => m.stream_id === streamId.value
-        );
-    if (present !== assistantVisible.value) assistantVisible.value = present;
-});
+// Removed assistantVisible tracking (no handoff overlap needed)
 
 // Scroll handling (Req 3.3) via useAutoScroll
 const scrollParent = ref<HTMLElement | null>(null);
@@ -399,9 +371,7 @@ const autoScroll = useAutoScroll(scrollParent, {
     thresholdPx: 64,
     disengageDeltaPx: 8,
 });
-// Removed standalone messages.length watcher (handled in unified watchEffect)
 // Unified scroll scheduling for streaming updates.
-// Prior version stacked nextTick + rAF + nextTick creating visible lag.
 let scrollScheduled = false;
 function scheduleScrollIfAtBottom() {
     if (!autoScroll.atBottom.value) {
@@ -423,131 +393,35 @@ if (process.client) {
     });
 }
 
-// Replace multiple tail / input / thread watchers with a single watchEffect.
-let prev = {
-    len: 0,
-    version: 0,
-    inputH: 0,
-    emittedH: 0,
-    thread: '' as string | undefined,
-    wasActive: false,
-};
-watchEffect(async () => {
-    const len = messages.value.length;
-    const version = streamState.value?.version || 0;
-    const inputH = chatInputHeight.value || 0;
-    const emittedH = emittedInputHeight.value || 0;
-    const thread = currentThreadId.value;
-    const active = streamActive.value;
-
-    const countChanged = len !== prev.len;
-    const versionChanged = version !== prev.version;
-    const inputChanged = inputH !== prev.inputH || emittedH !== prev.emittedH;
-    const threadChanged = thread !== prev.thread;
-    const activeChanged = active !== prev.wasActive;
-
-    // Scroll on new content tokens or structural changes if user at bottom.
-    if (autoScroll.atBottom.value && (countChanged || versionChanged)) {
+// Basic scroll reactions
+watch(
+    () => messages.value.length,
+    async () => {
         await nextTick();
         scheduleScrollIfAtBottom();
     }
-    // Input height adjustments: keep pinned without smooth snap.
-    if (autoScroll.atBottom.value && inputChanged) {
-        await nextTick();
-        autoScroll.scrollToBottom({ smooth: false });
+);
+watch(
+    () => streamState.value?.version,
+    () => {
+        scheduleScrollIfAtBottom();
     }
-    // Thread switch: attempt to preserve bottom stick if user was at bottom.
-    if (threadChanged) {
+);
+watch(
+    () => [chatInputHeight.value, emittedInputHeight.value],
+    async () => {
+        await nextTick();
+        if (autoScroll.atBottom.value)
+            autoScroll.scrollToBottom({ smooth: false });
+    }
+);
+watch(
+    () => currentThreadId.value,
+    async () => {
         await nextTick();
         if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
     }
-    // Stream finalize transition (active->inactive): previous logic moved here.
-    if (!active && prev.wasActive) {
-        // Stream ended: start overlap (no pre-render HTML now)
-        const sid = streamId.value;
-        if (sid) {
-            const target = (chat.value.messages.value as any[])
-                .slice()
-                .reverse()
-                .find((m) => m.stream_id === sid);
-            if (target) {
-                // We deliberately do NOT set pre_html anymore; ChatMessage consumes raw markdown
-            }
-        }
-        // If user is not truly at bottom (released stick via upward scroll) ensure
-        // we don't force snap during handoff. Release sticky just in case.
-        if (!autoScroll.atBottom.value) {
-            autoScroll.release();
-        }
-        handoff.value = true; // keep tail while assistant row enters
-
-        // Decide finalize strategy
-        const len = (tailDisplay.value || '').length;
-        let strategy: 'sync' | 'single-raf' | 'double-raf' = 'single-raf';
-        if (assistantVisible.value) strategy = 'sync';
-        else if (len >= FINALIZE_LEN_DOUBLE_RAF) strategy = 'double-raf';
-        else if (len < FINALIZE_LEN_SINGLE_RAF) strategy = 'single-raf';
-
-        // Capture tail height for smooth swap (prevents collapse flash)
-        let tailHeight = 0;
-        if (tailWrapper.value) {
-            tailHeight = tailWrapper.value.offsetHeight;
-        }
-
-        // Wait until assistant row detected, then allow two frames before removing tail
-        const finalize = () => {
-            const performRemoval = () => {
-                handoff.value = false;
-                finalizedOnce.value = true; // prevent reasoning-only tail reappearing
-            };
-            // Apply height lock to final assistant element if we captured and not yet applied
-            if (tailHeight > 0) {
-                requestAnimationFrame(() => {
-                    const container = containerRoot.value;
-                    if (container) {
-                        const selector = `[data-stream-id="${sid}"]`;
-                        const finalEl = container.querySelector(
-                            selector
-                        ) as HTMLElement | null;
-                        if (finalEl) {
-                            finalEl.style.minHeight = tailHeight + 'px';
-                            requestAnimationFrame(() => {
-                                finalEl.style.removeProperty('min-height');
-                            });
-                        }
-                    }
-                });
-            }
-            if (strategy === 'sync') {
-                performRemoval();
-            } else if (strategy === 'single-raf') {
-                requestAnimationFrame(() => {
-                    performRemoval();
-                });
-            } else {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        performRemoval();
-                    });
-                });
-            }
-        };
-        if (assistantVisible.value) {
-            finalize();
-        } else {
-            const stopWatch = watch(assistantVisible, (v) => {
-                if (v) {
-                    stopWatch();
-                    finalize();
-                }
-            });
-        }
-    }
-    // New stream started: reset finalizedOnce.
-    if (active && !prev.wasActive) finalizedOnce.value = false;
-
-    prev = { len, version, inputH, emittedH, thread, wasActive: active };
-});
+);
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)
