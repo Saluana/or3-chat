@@ -49,6 +49,9 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         error: null,
         version: 0,
     });
+    // TODO(normalization): Future message normalization pass will consolidate assistant
+    // message text assembly so accumulator text piping can directly hydrate persisted
+    // message content without duplicate string concatenation in useChat.
 
     let pendingMain: string[] = [];
     let pendingReasoning: string[] = [];
@@ -79,15 +82,24 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         frame = _raf(flush);
     }
 
-    function append(delta: string, { kind }: { kind: AppendKind }) {
+    /** Ensure stream not already finalized. Returns false if already finalized. */
+    function ensureNotFinalized(op: string): boolean {
         if (_finalized) {
-            if (import.meta.dev)
-                console.warn('[stream] append after finalize ignored');
-            return;
+            if (import.meta.dev) {
+                console.warn(`[stream] ${op} after finalize ignored`);
+            }
+            return false;
         }
+        return true;
+    }
+
+    function append(delta: string, { kind }: { kind: AppendKind }) {
+        if (!ensureNotFinalized('append')) return;
         if (!delta) {
             if (import.meta.dev && ++emptyAppendWarnings <= 3) {
-                console.warn('[stream] empty delta append ignored');
+                console.warn(
+                    '[stream] empty delta append ignored (possible upstream tokenization issue)'
+                );
             }
             return;
         }
@@ -97,7 +109,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     }
 
     function finalize(opts?: { error?: Error; aborted?: boolean }) {
-        if (_finalized) return;
+        if (!ensureNotFinalized('finalize')) return;
         _finalized = true;
         if (frame != null) {
             _caf(frame); // cancel pending frame then immediate flush

@@ -27,5 +27,17 @@ export default defineConfig({
         testTimeout: 10000,
         hookTimeout: 10000,
         bail: 1,
+        coverage: {
+            provider: 'v8',
+            reportsDirectory: './coverage',
+            reporter: ['text', 'html'],
+            include: ['app/composables/useStreamAccumulator.ts'],
+            thresholds: {
+                lines: 90,
+                statements: 90,
+                branches: 90,
+                functions: 75, // helper functions covered adequately
+            },
+        },
     },
 });

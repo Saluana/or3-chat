@@ -109,4 +109,53 @@ describe('createStreamAccumulator', () => {
         expect(acc.state.text).toBe('');
         warnSpy.mockRestore();
     });
+
+    it('finalize without any pending tokens still increments version (branch)', () => {
+        const acc = createStreamAccumulator();
+        const v0 = acc.state.version;
+        acc.finalize();
+        expect(acc.state.finalized).toBe(true);
+        expect(acc.state.version).toBeGreaterThan(v0);
+    });
+
+    it('reset mid-stream cancels scheduled frame and clears buffers', async () => {
+        const acc = createStreamAccumulator();
+        acc.append('hello', { kind: 'text' }); // queued but not yet flushed
+        acc.reset(); // should cancel pending flush and wipe text
+        await nextFrame();
+        expect(acc.state.text).toBe('');
+        expect(acc.state.isActive).toBe(true);
+        // New append works after reset
+        acc.append('X', { kind: 'text' });
+        await nextFrame();
+        expect(acc.state.text).toBe('X');
+    });
+
+    it('append ignores after finalize and does not schedule new frame', async () => {
+        const acc = createStreamAccumulator();
+        acc.append('A', { kind: 'text' });
+        await nextFrame();
+        const v1 = acc.state.version;
+        acc.finalize();
+        acc.append('B', { kind: 'text' });
+        await nextFrame();
+        expect(acc.state.text).toBe('A');
+        expect(acc.state.version).toBe(v1 + 1); // only finalize bump
+    });
+
+    it('fallback no-raf path flushes via timeout (simulated)', async () => {
+        const realRaf = (global as any).requestAnimationFrame;
+        const realCaf = (global as any).cancelAnimationFrame;
+        (global as any).requestAnimationFrame = undefined;
+        (global as any).cancelAnimationFrame = undefined;
+        // Re-import module so HAS_RAF snapshot is false
+        vi.resetModules();
+        const mod = await import('../useStreamAccumulator');
+        const acc = mod.createStreamAccumulator();
+        acc.append('Z', { kind: 'text' });
+        await new Promise((r) => setTimeout(r, 2));
+        expect(acc.state.text).toBe('Z');
+        (global as any).requestAnimationFrame = realRaf;
+        (global as any).cancelAnimationFrame = realCaf;
+    });
 });
