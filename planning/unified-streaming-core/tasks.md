@@ -31,17 +31,17 @@ Req Mapping: R# refers to requirements in `requirements.md`.
 
 ## 3. Hook Order Snapshot (Pre-change)
 
--   [ ] 3.1 Add instrumentation test capturing current hook invocation order (R12)
-    -   [ ] 3.1.1 Record baseline array in snapshot file
-    -   [ ] 3.1.2 Commit snapshot before integrating accumulator
+-   [x] 3.1 Add instrumentation test capturing current hook invocation order (R12)
+    -   [x] 3.1.1 Record baseline array in snapshot file
+    -   [x] 3.1.2 Commit snapshot before integrating accumulator
 
 ## 4. Dual-Write Integration (Feature Flag Phase)
 
--   [ ] 4.1 Import accumulator into `useAi.ts` (R1,R2)
-    -   [ ] 4.1.1 Add `const USE_NEW_STREAM = true` (temporary flag) (R12 safeguard)
-    -   [ ] 4.1.2 Replace manual concatenations with `append` while still updating legacy fields (`streamDisplayText`, etc.) (R9)
-    -   [ ] 4.1.3 Call `finalize()` on completion, error, abort (R4,R5)
-    -   [ ] 4.1.4 Expose `streamState` to components (R1)
+-   [x] 4.1 Import accumulator into `useAi.ts` (R1,R2)
+    -   [x] 4.1.1 Add `const USE_NEW_STREAM = true` (temporary flag) (R12 safeguard)
+    -   [x] 4.1.2 Replace manual concatenations with `append` while still updating legacy fields (`streamDisplayText`, etc.) (R9)
+    -   [x] 4.1.3 Call `finalize()` on completion, error, abort (R4,R5)
+    -   [x] 4.1.4 Expose `streamState` to components (R1)
 
 ## 5. Regression Snapshot Tests
 

@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { createStreamAccumulator } from './useStreamAccumulator';
 import { useToast } from '#imports';
 import { nowSec, newId } from '~/db/util';
 
@@ -53,7 +54,11 @@ export function useChat(
         }
     }
 
-    // Integrated streaming tail state
+    // Unified streaming accumulator (dual-write phase)
+    const USE_NEW_STREAM = true; // Task 4.1.1 feature flag
+    const streamAcc = USE_NEW_STREAM ? createStreamAccumulator() : null;
+    const streamState = streamAcc?.state;
+    // Legacy integrated streaming tail state (to be removed after parity)
     const streamId = ref<string | null>(null);
     const streamDisplayText = ref('');
     const streamReasoning = ref('');
@@ -294,6 +299,8 @@ export function useChat(
                         current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
                     streamReasoning.value += ev.text;
+                    if (USE_NEW_STREAM)
+                        streamAcc!.append(ev.text, { kind: 'reasoning' });
                     try {
                         await hooks.doAction(
                             'ai.chat.stream:action:reasoning',
@@ -313,6 +320,8 @@ export function useChat(
                     if (streamPending.value) streamPending.value = false;
                     const delta = ev.text;
                     streamDisplayText.value += delta;
+                    if (USE_NEW_STREAM)
+                        streamAcc!.append(delta, { kind: 'text' });
                     await hooks.doAction('ai.chat.stream:action:delta', delta, {
                         threadId: threadIdRef.value,
                         assistantId: assistantDbMsg.id,
@@ -467,6 +476,7 @@ export function useChat(
             });
             streamActive.value = false;
             streamPending.value = false;
+            if (USE_NEW_STREAM) streamAcc!.finalize();
         } catch (err) {
             if (aborted.value) {
                 try {
@@ -523,6 +533,10 @@ export function useChat(
                 streamError.value =
                     err instanceof Error ? err : new Error(String(err));
                 streamActive.value = false;
+                if (USE_NEW_STREAM)
+                    streamAcc!.finalize({
+                        error: streamError.value || undefined,
+                    });
             }
         } finally {
             loading.value = false;
@@ -618,6 +632,7 @@ export function useChat(
         streamPending,
         streamError,
         resetStream,
+        streamState,
         abort: () => {
             if (!loading.value || !abortController.value) return;
             aborted.value = true;
@@ -625,6 +640,7 @@ export function useChat(
                 abortController.value.abort();
             } catch {}
             streamActive.value = false;
+            if (USE_NEW_STREAM) streamAcc!.finalize({ aborted: true });
         },
     };
 }
