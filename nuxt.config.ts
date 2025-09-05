@@ -1,4 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
     devtools: { enabled: true },
@@ -13,4 +14,6 @@ export default defineNuxtConfig({
             { name: 'VT323', provider: 'google' },
         ],
     },
+    // Exclude test artifacts from scanning and server bundle (saves build time & size)
+    ignore: ['**/*.test.*', '**/__tests__/**', 'tests/**'],
 });

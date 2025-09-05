@@ -59,7 +59,7 @@ interface ChatMessage {
 
 const props = defineProps({
     messages: { type: Array as PropType<ChatMessage[]>, required: true },
-    itemSizeEstimation: { type: Number, default: 72 }, // heuristic average row height
+    itemSizeEstimation: { type: Number, default: 500 }, // heuristic average row height
     overscan: { type: Number, default: 4 },
     wrapperClass: { type: String, default: '' },
     scrollParent: {

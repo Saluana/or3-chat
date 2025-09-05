@@ -90,7 +90,7 @@
                                 isUserMessageCollapsed && shouldCollapse,
                         }"
                     >
-                        {{ props.message.content }}
+                        {{ props.message.text }}
                     </div>
                     <button
                         v-if="shouldCollapse"
@@ -103,10 +103,10 @@
                 <StreamMarkdown
                     :key="props.message.id"
                     v-else
-                    :content="assistantMarkdown"
+                    :content="processedAssistantMarkdown"
                     :shiki-theme="currentShikiTheme"
                     :class="streamMdClasses"
-                    :allowed-image-prefixes="['data:image/', 'file-hash:']"
+                    :allowed-image-prefixes="['data:image/']"
                 />
                 <!-- legacy rendered html path removed -->
             </div>
@@ -228,24 +228,20 @@ import {
     onBeforeUnmount,
     nextTick,
     onMounted,
+    watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
-import { parseFileHashes } from '~/db/files-util';
+import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
+import { useRafBatch } from '~/composables/useRafBatch';
 
-// UI message content is plain markdown string now
-type UIMessage = Omit<ChatMessageType, 'content'> & {
-    content: string;
-    pending?: boolean;
-    reasoning_text?: string | null;
-    pre_html?: string; // optional pre-rendered HTML supplied by container (skips local markdown parse)
-};
-
+// UI message now exposed as UiChatMessage with .text field
+type UIMessage = UiChatMessage & { pre_html?: string };
 const props = defineProps<{ message: UIMessage; threadId?: string }>();
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
@@ -261,7 +257,7 @@ const isStreamingReasoning = computed(() => {
 const isUserMessageCollapsed = ref(true);
 const shouldCollapse = computed(() => {
     if (props.message.role !== 'user') return false;
-    const lines = (props.message.content || '').split('\n').length;
+    const lines = (props.message.text || '').split('\n').length;
     return lines > 6;
 });
 
@@ -283,47 +279,25 @@ const innerClass = computed(() => ({
 }));
 
 // Detect if assistant message currently has any textual content yet
-const hasContent = computed(() => {
-    const c: any = props.message.content;
-    if (typeof c === 'string') return c.trim().length > 0;
-    if (Array.isArray(c))
-        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
-    return false;
-});
+const hasContent = computed(() => (props.message.text || '').trim().length > 0);
 
 // Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => {
-    const raw = (props.message as any).file_hashes;
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as string[];
-    if (typeof raw === 'string') return parseFileHashes(raw);
-    return [];
-});
+const hashList = computed<string[]>(() =>
+    parseHashes((props.message as any).file_hashes)
+);
 
-// Unified markdown (text + inline base64 images) for StreamMarkdown.
-// Keeps streaming reactive even if underlying message.content mutates from string to array.
-const assistantMarkdown = computed(() => {
+// Unified markdown already provided via UiChatMessage.text -> transform file-hash placeholders to inert spans
+const assistantMarkdown = computed(() =>
+    props.message.role === 'assistant' ? props.message.text || '' : ''
+);
+const FILE_HASH_IMG_RE = /!\[[^\]]*]\(file-hash:([a-f0-9]{6,})\)/gi;
+const processedAssistantMarkdown = computed(() => {
     if (props.message.role !== 'assistant') return '';
-    // ChatContainer now supplies raw markdown string in message.content
-    const raw = props.message.content;
-    if (typeof raw === 'string') return raw;
-    // Fallback: If an unexpected parts array slips through (shouldn't with UIMessage typing)
-    if (Array.isArray(raw)) {
-        const arr = raw as any[];
-        return arr
-            .map((p: any) => {
-                if (p?.type === 'text') return p.text || '';
-                if (p?.type === 'image') {
-                    const src = p.image || p.image_url?.url || p.image_url;
-                    if (typeof src === 'string')
-                        return `![generated image](${src})`;
-                }
-                return '';
-            })
-            .filter(Boolean)
-            .join('\n\n');
-    }
-    return '';
+    return (assistantMarkdown.value || '').replace(
+        FILE_HASH_IMG_RE,
+        (_m, h) =>
+            `<span class=\"or3-img-ph inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] border-2 border-[var(--md-inverse-surface)] retro-shadow opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
+    );
 });
 
 // Dynamic Shiki theme: map current theme (light/dark*/light*) to github-light / github-dark
@@ -338,44 +312,7 @@ const currentShikiTheme = computed(() => {
     }
     return String(t).startsWith('dark') ? 'github-dark' : 'github-light';
 });
-// Debug watchers for content lifecycle
-watch(
-    () => (props.message as any).content,
-    (val, old) => {
-        const typeOld = Array.isArray(old) ? 'array' : typeof old;
-        const typeNew = Array.isArray(val) ? 'array' : typeof val;
-        console.debug(
-            '[ChatMessage] content changed',
-            props.message.id,
-            typeOld,
-            '=>',
-            typeNew,
-            typeNew === 'string'
-                ? (val as string).slice(0, 120)
-                : Array.isArray(val)
-                ? val.length + ' parts'
-                : ''
-        );
-    },
-    { deep: false }
-);
-onMounted(() => {
-    const c: any = (props.message as any).content;
-    const type = Array.isArray(c) ? 'array' : typeof c;
-    console.debug(
-        '[ChatMessage] mounted',
-        props.message.id,
-        props.message.role,
-        'content type=',
-        type,
-        type === 'string'
-            ? (c as string).slice(0, 120)
-            : Array.isArray(c)
-            ? c.length + ' parts'
-            : ''
-    );
-});
-// Removed debug hydration wrappers.
+// Debug watchers removed (can reintroduce with import.meta.dev guards if needed)
 // Patch ensureThumb with logs if not already
 // NOTE: ensureThumb already defined above; add debug via wrapper pattern not reassignment.
 // (Could also inline logs inside original definition; keeping wrapper commented for reference.)
@@ -476,10 +413,15 @@ function toggleExpanded() {
 
 async function ensureThumb(h: string) {
     // If we already know it's a PDF just ensure meta exists.
-    if (pdfMeta[h]) return;
+    if (pdfMeta[h]) {
+        if (import.meta.dev) console.debug('[thumb] pdf meta cached', h);
+        return;
+    }
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
     const cached = thumbCache.get(h);
     if (cached) {
+        if (import.meta.dev)
+            console.debug('[thumb] cache hit', h, cached.status);
         thumbnails[h] = cached;
         return;
     }
@@ -500,22 +442,28 @@ async function ensureThumb(h: string) {
                 pdfMeta[h] = { name: meta.name, kind: meta.kind };
                 // Remove the temporary loading state since we won't have an image thumb
                 delete thumbnails[h];
+                if (import.meta.dev)
+                    console.debug('[thumb] pdf meta loaded', h);
                 return;
             }
             if (!blob) throw new Error('missing');
             if (blob.type === 'application/pdf') {
                 pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
                 delete thumbnails[h];
+                if (import.meta.dev) console.debug('[thumb] blob is pdf', h);
                 return;
             }
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };
             thumbCache.set(h, ready);
             thumbnails[h] = ready;
+            if (import.meta.dev)
+                console.debug('[thumb] ready', h, url.slice(0, 40));
         } catch {
             const err: ThumbState = { status: 'error' };
             thumbCache.set(h, err);
             thumbnails[h] = err;
+            if (import.meta.dev) console.debug('[thumb] error', h);
         } finally {
             thumbLoadPromises.delete(h);
         }
@@ -557,7 +505,7 @@ onBeforeUnmount(() => {
     for (const h of currentHashes) releaseThumb(h);
     currentHashes.clear();
 });
-// Inline image hydration: replace <img data-file-hash> with object URL once ready
+// Inline image hydration: replace <span data-file-hash> markers with <img> once ready
 const contentEl = ref<HTMLElement | null>(null);
 async function hydrateInlineImages() {
     // Only hydrate assistant messages (users have inline images stripped).
@@ -565,147 +513,59 @@ async function hydrateInlineImages() {
     await nextTick();
     const root = contentEl.value;
     if (!root) return;
-    // 1. Markdown placeholders turned into <img src="file-hash:HASH"> by marked? (depends on custom renderer); handle both src and data-file-hash forms.
-    const srcImgs = root.querySelectorAll(
-        'img[src^="file-hash:"]:not([data-hydrated])'
+    const spans = root.querySelectorAll(
+        'span.or3-img-ph[data-file-hash]:not([data-hydrated])'
     );
-    srcImgs.forEach((imgEl) => {
-        const src = imgEl.getAttribute('src') || '';
-        const hash = src.replace('file-hash:', '');
-        if (!hash) return;
-        imgEl.setAttribute('data-file-hash', hash);
-    });
-    const imgs = root.querySelectorAll(
-        'img[data-file-hash]:not([data-hydrated])'
-    );
-    imgs.forEach((imgEl) => {
-        const hash = imgEl.getAttribute('data-file-hash') || '';
+    spans.forEach((span) => {
+        const hash = span.getAttribute('data-file-hash') || '';
         if (!hash) return;
         const state = thumbCache.get(hash) || thumbnails[hash];
         if (state && state.status === 'ready' && state.url) {
-            (imgEl as HTMLImageElement).src = state.url;
-            imgEl.setAttribute('data-hydrated', 'true');
-            imgEl.classList.remove('opacity-60');
+            const img = document.createElement('img');
+            img.setAttribute('data-file-hash', hash);
+            img.setAttribute('data-hydrated', 'true');
+            img.src = state.url;
+            img.alt = 'generated image';
+            img.className = span.className.replace('opacity-60', '');
+            span.replaceWith(img);
+            if (import.meta.dev) console.debug('[hydrate] span->img', hash);
         }
     });
 }
-// Legacy hydration comments removed
-watch(assistantMarkdown, () => hydrateInlineImages());
-watch(hashList, () => hydrateInlineImages());
-onMounted(() => hydrateInlineImages());
-
-// Mark oversized code blocks and add copy buttons
-onMounted(() => {
-    nextTick(() => {
-        const root = contentEl.value;
-        if (!root) return;
-        root.querySelectorAll('pre').forEach((el) => {
-            if (el.scrollHeight > 380) el.classList.add('code-overflow');
-
-            // Add copy button if not already present
-            if (!el.querySelector('.copy-btn')) {
-                const btn = document.createElement('button');
-                const container = document.createElement('div');
-                container.className =
-                    'flex items-center justify-between w-full border-b-2 py-2 px-3 border-[var(--md-inverse-surface)]';
-                const langName = document.createElement('span');
-                langName.className = 'text-xs text-[var(--md-on-surface)]';
-                // Detect language from nested <code> classes: language-xyz | lang-xyz | hljs language-xyz
-                const codeBlock = el.querySelector('code');
-                let detected: string = '';
-                if (codeBlock) {
-                    const cls = codeBlock.className || '';
-                    const m = cls.match(/(?:language|lang)-([a-z0-9#+._-]+)/i);
-                    if (m && m[1]) detected = m[1];
-                    else if (/\bjson\b/i.test(cls)) detected = 'json';
-                }
-                if (!detected) {
-                    // Secondary: data-lang on <code> or <pre>
-                    detected = (
-                        codeBlock?.getAttribute('data-lang') ||
-                        el.getAttribute('data-lang') ||
-                        ''
-                    ).trim();
-                }
-                if (!detected && codeBlock) {
-                    // Heuristic fallback based on content
-                    const sample = (codeBlock.textContent || '')
-                        .trim()
-                        .slice(0, 200);
-                    if (/^\{[\s\n]*"/.test(sample)) detected = 'json';
-                    else if (/^<[^>]+>/.test(sample)) detected = 'html';
-                    else if (/^#include\s+</.test(sample)) detected = 'c++';
-                    else if (/^import\s+[^;]+from\s+['"]/m.test(sample))
-                        detected = 'js';
-                    else if (/^def\s+\w+\(/.test(sample)) detected = 'python';
-                }
-                if (!detected) detected = 'plaintext';
-                langName.innerText = 'Language: ' + detected.toLowerCase();
-                container.appendChild(langName);
-                btn.className =
-                    ' px-1 h-6 rounded-[3px] bg-[var(--md-surface-container)]  text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-high)] active:bg-elevated transition-colors text-sm flex items-center justify-center retro-btn';
-                btn.innerHTML =
-                    '<div class="flex items-center justify-center space-x-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><!-- Icon from Pixelarticons by Gerrit Halfmann - https://github.com/halfmage/pixelarticons/blob/master/LICENSE --><path fill="currentColor" d="M4 2h11v2H6v13H4zm4 4h12v16H8zm2 2v12h8V8z"/></svg> <p>Copy</p></div>';
-                btn.setAttribute('aria-label', 'Copy code');
-                btn.onclick = () => {
-                    const code =
-                        el.querySelector('code')?.textContent ||
-                        el.textContent ||
-                        '';
-                    navigator.clipboard.writeText(code);
-                    useToast().add({ title: 'Code copied', duration: 1500 });
-                };
-                // Re-reference codeBlock (already declared) for styling
-                if (codeBlock) {
-                    // Preserve any existing language classes (e.g. language-js, lang-ts)
-                    codeBlock.classList.add(
-                        'overflow-x-scroll',
-                        'px-3',
-                        'pt-2'
-                    );
-                }
-
-                // Preserve any existing classes on <pre> (don't wipe language-...)
-                el.classList.add(
-                    'flex',
-                    'flex-col',
-                    'overflow-x-hidden',
-                    'pt-0',
-                    'px-0'
-                );
-
-                container.appendChild(btn);
-                el.prepend(container);
-            }
-        });
-        // Ensure wide tables can scroll horizontally without custom CSS.
-        // Wrap each table in a div with Tailwind utilities (idempotent by data attr).
-        /*
-        if (root) {
-            root.querySelectorAll('table').forEach((tbl) => {
-                if (tbl.getAttribute('data-or3-table-wrapped') === 'y') return;
-                const wrapper = document.createElement('div');
-                wrapper.className = 'overflow-x-auto -mx-1 sm:mx-0';
-                tbl.parentElement?.insertBefore(wrapper, tbl);
-                wrapper.appendChild(tbl);
-                tbl.setAttribute('data-or3-table-wrapped', 'y');
-            });
-        }
-            */
-    });
+// Consolidated hydration + thumbnail readiness effect
+const scheduleHydrate = useRafBatch(() => hydrateInlineImages());
+watchEffect(() => {
+    if (props.message.role !== 'assistant') return; // only assistants hydrate
+    // reactive deps: markdown text, hash list, thumb states
+    void assistantMarkdown.value;
+    void hashList.value.length;
+    void Object.keys(thumbnails)
+        .map((h) => thumbnails[h]?.status + (thumbnails[h]?.url || ''))
+        .join('|');
+    scheduleHydrate();
 });
 
-watch(
-    () =>
-        Object.keys(thumbnails).map((h) => {
-            const t = thumbnails[h]!; // state always initialized before use
-            return t.status + ':' + (t.url || '');
-        }),
-    () => hydrateInlineImages()
-);
+onMounted(() => scheduleHydrate());
+onMounted(() => {
+    if (import.meta.dev) {
+        const hashes = hashList.value;
+        console.debug('[ChatMessage.mounted]', {
+            id: (props.message as any).id,
+            role: props.message.role,
+            hashCount: hashes.length,
+            firstHash: hashes[0],
+            hasFileHashMarkdown: hashes.some((h) =>
+                (props.message.text || '').includes(`file-hash:${h}`)
+            ),
+            textPreview: (props.message.text || '').slice(0, 140),
+        });
+    }
+});
+
+// Thumbnail status watcher removed (covered by consolidated watchEffect)
 import { useToast } from '#imports';
 function copyMessage() {
-    navigator.clipboard.writeText(props.message.content);
+    navigator.clipboard.writeText(props.message.text || '');
 
     useToast().add({
         title: 'Message copied',
@@ -721,7 +581,6 @@ function onRetry() {
 }
 
 import { forkThread } from '~/db/branching';
-import themeClient from '~/plugins/theme.client';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');
