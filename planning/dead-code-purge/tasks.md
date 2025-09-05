@@ -51,9 +51,9 @@ artifact_id: a28c7ab7-0d3c-43b8-8d8f-7cb82ac3383a
 
 ## 8. CSS Selector Cleanup
 
--   [ ] 8.1 Enumerate candidate orphan selectors from inventory (Req 6).
--   [ ] 8.2 Grep usage for each; if zero, delete (Req 6).
--   [ ] 8.3 Rebuild to ensure no missing class references (Req 6,9).
+-   [x] 8.1 Enumerate candidate orphan selectors from inventory (Req 6) — candidates: `.scrollbar-hidden`, `.header-pattern`, `.header-pattern-flipped`, `.active-element`, `.font-ps2`, `.font-vt323`, `.retro-shadow` plus theme scope classes.
+-   [x] 8.2 Grep usage for each; if zero, delete (Req 6) — all candidates in active use across sidebar/chat components; no orphan selectors; no deletions (0 LOC delta).
+-   [x] 8.3 Rebuild to ensure no missing class references (Req 6,9) — build & tests previously green; no missing style warnings.
 
 ## 9. ESLint Restriction Rule
 
