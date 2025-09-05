@@ -2,6 +2,16 @@
 
 artifact_id: 9d2d85a3-6e71-4ec3-905c-fca9b4adfd92
 
+## 0. File Hash & Image Logic Unification (Must Complete Before 1)
+
+-   [ ] 0.1 Implement `parseHashes` utility (Requirements: 0)
+-   [ ] 0.2 Implement `mergeAssistantFileHashes` utility (Requirements: 0)
+-   [ ] 0.3 Implement `normalizeImagesParam` utility (Requirements: 0)
+-   [ ] 0.4 Replace ad-hoc JSON parse + merge logic in `useAi.ts` with helpers (Requirements: 0)
+-   [ ] 0.5 Replace hash parsing in `ChatMessage.vue` / `ChatContainer.vue` with helpers (Requirements: 0,5)
+-   [ ] 0.6 Unit tests for all three helpers incl. edge cases (Requirements: 0)
+-   [ ] 0.7 Grep verification: no remaining `JSON.parse` on `file_hashes` outside helper (Requirements: 0 Non-Functional Reuse)
+
 ## 1. Canonical Message Abstraction
 
 -   [ ] 1.1 Define `UiChatMessage` interface (Requirements: 1,2)
@@ -27,5 +37,5 @@ artifact_id: 9d2d85a3-6e71-4ec3-905c-fca9b4adfd92
 -   [ ] 3.3 Integration test confirming canonical shape in UI messages (Requirements: 1,2)
 -   [ ] 3.4 Integration test verifying rawMessages retains original content arrays (Requirements: 4)
 -   [ ] 3.5 Performance snapshot (token append latency baseline vs post) (Requirements: 6)
--   [ ] 3.6 Documentation update referencing migration + helpers (Requirements: 4,5)
+-   [ ] 3.6 Documentation update referencing migration + helpers (Requirements: 4,5,0)
 -   [ ] 3.7 Final acceptance checklist verification (all requirements) (All)

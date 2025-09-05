@@ -6,7 +6,23 @@ artifact_id: 4a9e5a02-9d07-4c6c-bbb5-2f5f3f8bb0f0
 
 Early Message Normalization introduces a single canonical internal representation for chat messages to eliminate oscillation between string and parts-array formats. This reduces conditional rendering logic, watcher proliferation, and cognitive overhead while preserving all existing external behaviors and plugin compatibility.
 
+This plan is extended to FIRST perform File Hash / Image Logic Unification so that every subsequent normalization step operates on already‑standardized attachment metadata, preventing duplicate tolerant parsing utilities from proliferating inside the message helpers. Attachment / image normalization is therefore the entry point to the refactor sequence.
+
 ## Functional Requirements (User Stories)
+
+### 0. File Hash & Image Logic Unification (Must Happen First)
+
+As a developer, I want a single tolerant utility layer for parsing, merging, and normalizing image / file hash inputs so that message normalization and UI components can rely on pre-parsed arrays without repeating JSON parsing or ad-hoc merging rules.
+Acceptance Criteria:
+
+-   WHEN legacy serialized hashes (JSON string, comma string, or array) are passed to `parseHashes` THEN it SHALL return a clean `string[]` or `[]` on error without throwing.
+-   IF previous assistant message has `file_hashes` AND the current assistant placeholder supplies new `file_hashes` THEN `mergeAssistantFileHashes(prev, current)` SHALL return a de-duplicated ordered union (previous order preserved; new unique hashes appended).
+-   WHEN images parameter variants (string URL, array of URLs, objects with `{ url | data | mime }`) are passed to `normalizeImagesParam` THEN it SHALL return an array of `NormalizedAttachment { kind: 'image', hash?: string, src: string, mime?: string }` with invalid entries skipped.
+-   IF malformed input (null, undefined, non-iterables) is provided to any helper THEN it SHALL return an empty array safely.
+-   Helpers SHALL be pure (no side-effects, no global mutation) and tree-shakeable.
+-   Unit tests SHALL cover: mixed hash formats, duplicate merges, malformed JSON, large arrays (>100 items trimmed only if future limits imposed — current behavior: do not trim), image object variants.
+
+Rationale: Eliminates scattered `try { JSON.parse } catch {}` and merging branches that would otherwise have to be updated again after normalization, and ensures the canonical `UiChatMessage.file_hashes` field is consistently shaped from the start.
 
 ### 1. Canonical UI Message Shape
 
@@ -64,16 +80,19 @@ Acceptance Criteria:
 
 ## Non-Functional Requirements
 
--   Simplicity: Helpers ≤ ~40 LOC combined.
+-   Simplicity: Message helpers ≤ ~40 LOC combined (hash/image helpers may extend total but remain individually < 25 LOC each).
 -   Safety: 100% unit test coverage for helper edge cases (empty parts, mixed types, nulls).
 -   Backward Compat Duration: Layer retained until separate deprecation plan; no direct removal in this refactor.
 -   Documentation: Added brief usage section in planning docs (design) describing migration path.
+-   Reuse: All code performing file hash parsing or merging MUST call the new helpers (grep for previous patterns eliminated in final diff).
 
 ## Out of Scope
 
 -   Streaming architecture overhaul (covered by separate item #1 doc).
--   Attachment composable extraction.
+-   Attachment composable extraction (beyond normalization utilities here).
 -   Reasoning channel refactor (future item).
+
+Note: File hash / image logic IS NOW IN SCOPE (moved from other refactor item) to unblock early normalization.
 
 ## Acceptance / Sign-off Checklist
 

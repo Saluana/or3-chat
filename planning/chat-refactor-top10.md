@@ -22,37 +22,6 @@ Goal: Remove ≥1000 lines of chat-related code (without loss of features) by co
 
 ---
 
-## 1. Unified Streaming Core (Eliminate legacy `useTailStream` + inline duplicates)
-
-**Where**: `useTailStream.ts`, streaming state slices in `useAi.ts`, tail handling & watchers in `ChatContainer.vue`.
-
-**Current**: We have a legacy `useTailStream` composable (push/flush interval) while `useChat` already embeds a bespoke streaming accumulator (`streamDisplayText`, `streamReasoning`, manual loop with write interval constants). `ChatContainer.vue` duplicates tail gating logic (recent vs virtual lists, `handoff`, multiple watchers to sync scroll). This double abstraction adds branching & state surfaces.
-
-**Proposal**: Create a single minimal streaming state manager inside `useChat` (or extract `useStreamAccumulator`) that:
-
--   Maintains `text` + optional `reasoning` + `isActive` + `error`.
--   Provides `append(delta, { kind: 'reasoning' | 'text' })` and internal micro-batching with `requestAnimationFrame` (drop interval timer & buffer array complexity).
--   Emits a unified reactive object consumed directly by UI components.
--   Remove `useTailStream.ts` entirely and the placeholder integration logic in `ChatContainer.vue` (handoff, height lock branches, finalize heuristics).
-
-**Why**: Cuts parallel buffering logic & watchers; reduces cognitive load (one source of truth). Avoids double flush semantics and reduces reactivity churn.
-
-**How**: Inline simplified accumulator into `useChat` (≈40 LOC). Delete `useTailStream.ts` (≈90 LOC) + remove tail wrapper watchers (≈120+ LOC). Renormalize `ChatContainer.vue` streaming message omission logic to a single computed that either shows the in-progress assistant stub or the tail overlay.
-
-**Est. Lines Saved**: 220–260.
-
-**Perf Impact**: Fewer timers & watchers → less GC pressure, fewer string concatenations. Using rAF flush keeps UI responsive.
-
-**Risks**: Subtle ordering differences for final flush; potential race on finalization. Mitigate with a dedicated `finalize()` call after stream iteration completes.
-
-**Steps**:
-
-1. Extract minimal accumulator interface.
-2. Replace existing loop writes with `append` API.
-3. Remove `useTailStream.ts`; update imports.
-4. Simplify UI tail overlay/handoff logic.
-5. Add regression test: streamed tokens accumulate identically to legacy path.
-
 ---
 
 ## 2. Early Message Normalization (Single internal representation)
