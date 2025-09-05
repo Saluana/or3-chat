@@ -72,8 +72,8 @@ Req Mapping: R# refers to requirements in `requirements.md`.
 
 ## 9. Scroll Behavior Test
 
--   [ ] 9.1 Integration test verifying no auto-scroll when user scrolled up (R8)
--   [ ] 9.2 Integration test verifying auto-scroll when at bottom (R8)
+-   [x] 9.1 Integration test verifying no auto-scroll when user scrolled up (R8)
+-   [x] 9.2 Integration test verifying auto-scroll when at bottom (R8)
 
 ## 10. Cleanup & Validation
 
