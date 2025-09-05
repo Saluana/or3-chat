@@ -197,7 +197,7 @@ const showSettingsModal = ref(false);
 
 function onConnectButtonClick() {
     if (orIsConnected.value) {
-        console.log(orIsConnected);
+        if (import.meta.dev) console.debug(orIsConnected);
         // Logic to disconnect
         state.value.openrouterKey = null;
         openrouter.logoutOpenRouter();

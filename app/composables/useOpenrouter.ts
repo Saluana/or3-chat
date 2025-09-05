@@ -95,10 +95,11 @@ export function useOpenRouterAuth() {
             }
         } catch {}
 
-        // Debug: log the final URL so devs can confirm params/authUrl are correct
-        // This helps when runtime config is missing or incorrect.
-        // eslint-disable-next-line no-console
-        console.debug('OpenRouter PKCE redirect URL:', url);
+        // Debug (dev only): final URL for parameter inspection
+        if (import.meta.dev) {
+            // eslint-disable-next-line no-console
+            console.debug('OpenRouter PKCE redirect URL:', url);
+        }
 
         // Use assign to ensure history behaves consistently across mobile browsers
         window.location.assign(url);

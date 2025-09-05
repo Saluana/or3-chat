@@ -11,15 +11,17 @@ export default defineNuxtPlugin(() => {
             async handler({ message }) {
                 console.group('[message-actions-test] handler invoked');
                 try {
-                    console.log('message id:', message?.id);
-                    console.log('message role:', message?.role);
-                    console.log(
-                        'message content (preview):',
-                        typeof message?.content === 'string'
-                            ? message.content.slice(0, 300)
-                            : message?.content
-                    );
-                    console.log('full message object:', message);
+                    if (import.meta.dev) {
+                        console.debug('message id:', message?.id);
+                        console.debug('message role:', message?.role);
+                        console.debug(
+                            'message content (preview):',
+                            typeof message?.content === 'string'
+                                ? message.content.slice(0, 300)
+                                : message?.content
+                        );
+                        console.debug('full message object:', message);
+                    }
                 } catch (e) {
                     console.error('[message-actions-test] logging error', e);
                 }

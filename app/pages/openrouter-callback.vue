@@ -60,8 +60,10 @@ const subtitle = computed(() => {
 
 function log(...args) {
     try {
-        // eslint-disable-next-line no-console
-        console.log('[openrouter-callback]', ...args);
+        if (import.meta.dev) {
+            // eslint-disable-next-line no-console
+            console.debug('[openrouter-callback]', ...args);
+        }
     } catch {}
 }
 

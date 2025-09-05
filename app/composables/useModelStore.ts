@@ -56,13 +56,14 @@ export function useModelStore() {
                 ? rec.updated_at * 1000
                 : undefined;
             if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
-                console.debug(
-                    '[models-cache] dexie record stale or missing timestamp',
-                    {
-                        updatedAtMs,
-                        ttl,
-                    }
-                );
+                if (import.meta.dev)
+                    console.debug(
+                        '[models-cache] dexie record stale or missing timestamp',
+                        {
+                            updatedAtMs,
+                            ttl,
+                        }
+                    );
                 return null;
             }
             const raw = rec?.value;
@@ -72,13 +73,14 @@ export function useModelStore() {
                 if (!Array.isArray(parsed)) return null;
                 catalog.value = parsed;
                 lastLoadedAt.value = updatedAtMs;
-                console.debug(
-                    '[models-cache] dexie hit — hydrated catalog from cache',
-                    {
-                        updatedAtMs,
-                        count: parsed.length,
-                    }
-                );
+                if (import.meta.dev)
+                    console.debug(
+                        '[models-cache] dexie hit — hydrated catalog from cache',
+                        {
+                            updatedAtMs,
+                            count: parsed.length,
+                        }
+                    );
                 // Removed dexie source console.log
                 return parsed;
             } catch (e) {
@@ -102,9 +104,10 @@ export function useModelStore() {
         if (!canUseDexie()) return;
         try {
             await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
-            console.debug('[models-cache] saved catalog to Dexie', {
-                count: list.length,
-            });
+            if (import.meta.dev)
+                console.debug('[models-cache] saved catalog to Dexie', {
+                    count: list.length,
+                });
         } catch (e) {
             console.warn('[models-cache] Dexie save failed', e);
         }
@@ -119,7 +122,8 @@ export function useModelStore() {
         if (!canUseDexie()) return;
         try {
             await kv.delete(MODELS_CACHE_KEY);
-            console.debug('[models-cache] Dexie record deleted');
+            if (import.meta.dev)
+                console.debug('[models-cache] Dexie record deleted');
         } catch (e) {
             console.warn('[models-cache] Dexie delete failed', e);
         }
@@ -134,13 +138,14 @@ export function useModelStore() {
             catalog.value.length &&
             isFresh(lastLoadedAt.value, ttl)
         ) {
-            console.debug(
-                '[models-cache] memory hit — returning in-memory catalog',
-                {
-                    lastLoadedAt: lastLoadedAt.value,
-                    count: catalog.value.length,
-                }
-            );
+            if (import.meta.dev)
+                console.debug(
+                    '[models-cache] memory hit — returning in-memory catalog',
+                    {
+                        lastLoadedAt: lastLoadedAt.value,
+                        count: catalog.value.length,
+                    }
+                );
             // Removed memory source console.log
             return catalog.value;
         }
@@ -149,9 +154,10 @@ export function useModelStore() {
         if (!opts?.force) {
             const dexieHit = await loadFromDexie(ttl);
             if (dexieHit) return dexieHit;
-            console.debug(
-                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
-            );
+            if (import.meta.dev)
+                console.debug(
+                    '[models-cache] no fresh Dexie hit; proceeding to network fetch'
+                );
         }
 
         // Dedupe in-flight network requests

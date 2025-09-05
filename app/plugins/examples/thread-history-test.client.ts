@@ -14,15 +14,17 @@ export default defineNuxtPlugin(() => {
                 const t = ctx?.thread ?? ctx?.document ?? ctx;
                 console.group('[thread-history-test] Inspect Thread');
                 try {
-                    console.log('id:', t?.id);
-                    console.log('title:', t?.title);
-                    console.log(
-                        'snippet (messages or content):',
-                        Array.isArray(t?.messages)
-                            ? t.messages.slice(0, 5)
-                            : t?.content
-                    );
-                    console.log('full thread object:', t);
+                    if (import.meta.dev) {
+                        console.debug('id:', t?.id);
+                        console.debug('title:', t?.title);
+                        console.debug(
+                            'snippet (messages or content):',
+                            Array.isArray(t?.messages)
+                                ? t.messages.slice(0, 5)
+                                : t?.content
+                        );
+                        console.debug('full thread object:', t);
+                    }
                 } catch (e) {
                     console.error('[thread-history-test] logging error', e);
                 }
