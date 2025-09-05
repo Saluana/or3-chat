@@ -56,19 +56,19 @@ Req Mapping: R# refers to requirements in `requirements.md`.
 
 ## 7. Remove Legacy Tail Stream
 
--   [ ] 7.1 Delete `useTailStream.ts` (R7)
--   [ ] 7.2 Remove all imports referencing it (R7)
--   [ ] 7.3 Delete legacy constants (R7)
--   [ ] 7.4 Remove dual-write paths inside `useAi.ts` (R7,R1)
--   [ ] 7.5 Drop feature flag (R7)
+-   [x] 7.1 Delete `useTailStream.ts` (R7)
+-   [x] 7.2 Remove all imports referencing it (R7)
+-   [x] 7.3 Delete legacy constants (R7)
+-   [x] 7.4 Remove dual-write paths inside `useAi.ts` (R7,R1)
+-   [x] 7.5 Drop feature flag (R7)
 
 ## 8. Simplify `ChatContainer.vue`
 
--   [ ] 8.1 Remove tail/handoff watchers (R8)
--   [ ] 8.2 Implement single `streamingMessage` computed (R8)
--   [ ] 8.3 Update template to render placeholder based on `streamState.isActive` (R8)
--   [ ] 8.4 Consolidate auto-scroll effect to watch `messages.length` and `streamState.version` (R8,R1)
--   [ ] 8.5 Ensure reasoning text displayed if present (R6,R8)
+-   [x] 8.1 Remove tail/handoff watchers (R8)
+-   [x] 8.2 Implement single `streamingMessage` computed (R8)
+-   [x] 8.3 Update template to render placeholder based on `streamState.isActive` (R8)
+-   [x] 8.4 Consolidate auto-scroll effect to watch `messages.length` and `streamState.version` (R8,R1)
+-   [x] 8.5 Ensure reasoning text displayed if present (R6,R8)
 
 ## 9. Scroll Behavior Test
 

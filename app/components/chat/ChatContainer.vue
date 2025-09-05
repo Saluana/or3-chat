@@ -56,21 +56,13 @@
                         </div>
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
-                            v-if="streamActive || handoff"
+                            v-if="streamingMessage"
                             class=""
                             style="overflow-anchor: none"
                             ref="tailWrapper"
                         >
                             <ChatMessage
-                                :message="{
-                                    // Provide stable id so StreamMarkdown retains component instance during tail streaming
-                                    id: streamId ? 'tail-' + streamId : 'tail-stream',
-                                    role: 'assistant',
-                                    content: tailContent,
-                                    stream_id: streamId,
-                                    pending: true,
-                                    reasoning_text: streamReasoning || '',
-                                } as any"
+                                :message="streamingMessage as any"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
@@ -333,6 +325,18 @@ const currentThreadId = computed(() => chat.value.threadId?.value);
 // Tail active means: actively streaming OR (reasoning still present and not finalized)
 const finalizedOnce = ref(false);
 const streamActive = computed(() => !streamState.value?.finalized);
+// Unified streaming message (8.2)
+const streamingMessage = computed<RenderMessage | null>(() => {
+    if (!(streamActive.value || handoff.value)) return null;
+    return {
+        role: 'assistant',
+        content: tailContent.value,
+        id: streamId.value ? 'tail-' + streamId.value : 'tail-stream',
+        stream_id: streamId.value || undefined,
+        pending: streamActive.value,
+        reasoning_text: streamReasoning.value || '',
+    } as RenderMessage;
+});
 // Pre-render support for seamless handoff
 const handoff = ref(false); // one-frame overlap flag
 const assistantVisible = ref(false); // detection of assistant row presence post-stream
@@ -412,18 +416,15 @@ if (process.client) {
     });
 }
 
-// Hook: streaming delta buffering
-// Hooks no longer needed for streaming tail display; scroll on reactive tail changes
+// Consolidated scroll effect (8.4): watch version increments only
 watch(
-    () => [tailDisplay.value, streamReasoning.value],
+    () => streamState.value?.version,
     () => {
         scheduleScrollIfAtBottom();
     }
 );
 watch(streamActive, (active) => {
-    if (active) {
-        scheduleScrollIfAtBottom();
-    } else {
+    if (!active) {
         // Stream ended: start overlap (no pre-render HTML now)
         const sid = streamId.value;
         if (sid) {
@@ -536,7 +537,7 @@ watch(
     }
 );
 
-// Auto-scroll as tailDisplay grows
+// (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)
 
 function onSend(payload: any) {
