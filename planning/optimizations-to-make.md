@@ -93,7 +93,7 @@ Below is the detailed, intern-friendly task list with exact files, what to chang
 
 -   Preserve minimal state across toggles (search text, selection) via a parent ref if needed.
 
----
+## **DONE BUT HYBRID**
 
 ## 5) Standardize on `useStreamAccumulator` and retire `TailStream`
 

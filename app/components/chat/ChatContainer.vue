@@ -99,14 +99,9 @@
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
 import { shallowRef, computed, watch, ref, nextTick, type Ref } from 'vue';
-import { parseHashes } from '~/utils/files/attachments';
 import { useChat } from '~/composables/useAi';
-import type {
-    ChatMessage as ChatMessageType,
-    ContentPart,
-} from '~/utils/chat/types';
+import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
-// (Tail streaming integrated into useChat; legacy useTailStream removed)
 import { useAutoScroll } from '../../composables/useAutoScroll';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
