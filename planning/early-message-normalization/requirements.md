@@ -78,6 +78,17 @@ Acceptance Criteria:
 -   Message sending, streaming, retrying, and attachment display continue to function as before.
 -   Performance (time to first streamed token shown) SHALL be unaffected (±5% tolerance) in measurement harness.
 
+### 7. Streaming Image Preservation
+
+As a user, I want images generated mid-stream by compatible models (emitting image chunks or `image_url` parts) to continue appearing inline in the chat without duplication or regression so that visual generation UX remains intact.
+Acceptance Criteria:
+
+-   WHEN an image chunk is received during streaming THEN a markdown placeholder line `![generated image](file-hash:HASH)` (or temporary data URL if hash not yet available) SHALL appear exactly once in correct sequence relative to surrounding text.
+-   IF the image is later hashed & stored THEN the placeholder SHALL hydrate (existing gallery/thumb logic) without introducing a duplicate.
+-   WHEN multiple images stream THEN they SHALL maintain arrival ordering in the rendered assistant message.
+-   IF hashing/persistence fails for an image THEN a single fallback placeholder (minimal "image unavailable" indicator) SHALL replace it; streaming continues.
+-   No existing image rendering scenarios (persisted history, retries, previously hashed attachments) SHALL regress.
+
 ## Non-Functional Requirements
 
 -   Simplicity: Message helpers ≤ ~40 LOC combined (hash/image helpers may extend total but remain individually < 25 LOC each).
@@ -101,3 +112,4 @@ Note: File hash / image logic IS NOW IN SCOPE (moved from other refactor item) t
 -   [ ] Redundant code removed (diff reviewed).
 -   [ ] Build & smoke test pass.
 -   [ ] Documentation updated.
+-   [ ] Streaming image events verified (simulated or real model) (Req 7).

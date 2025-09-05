@@ -90,7 +90,7 @@
                                 isUserMessageCollapsed && shouldCollapse,
                         }"
                     >
-                        {{ props.message.content }}
+                        {{ props.message.text }}
                     </div>
                     <button
                         v-if="shouldCollapse"
@@ -103,10 +103,10 @@
                 <StreamMarkdown
                     :key="props.message.id"
                     v-else
-                    :content="assistantMarkdown"
+                    :content="processedAssistantMarkdown"
                     :shiki-theme="currentShikiTheme"
                     :class="streamMdClasses"
-                    :allowed-image-prefixes="['data:image/', 'file-hash:']"
+                    :allowed-image-prefixes="['data:image/']"
                 />
                 <!-- legacy rendered html path removed -->
             </div>
@@ -231,23 +231,17 @@ import {
     watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
-import { parseFileHashes } from '~/db/files-util';
+import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafBatch } from '~/composables/useRafBatch';
 
-// UI message content is plain markdown string now
-type UIMessage = Omit<ChatMessageType, 'content'> & {
-    content: string;
-    pending?: boolean;
-    reasoning_text?: string | null;
-    pre_html?: string; // optional pre-rendered HTML supplied by container (skips local markdown parse)
-};
-
+// UI message now exposed as UiChatMessage with .text field
+type UIMessage = UiChatMessage & { pre_html?: string };
 const props = defineProps<{ message: UIMessage; threadId?: string }>();
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
@@ -263,7 +257,7 @@ const isStreamingReasoning = computed(() => {
 const isUserMessageCollapsed = ref(true);
 const shouldCollapse = computed(() => {
     if (props.message.role !== 'user') return false;
-    const lines = (props.message.content || '').split('\n').length;
+    const lines = (props.message.text || '').split('\n').length;
     return lines > 6;
 });
 
@@ -285,47 +279,25 @@ const innerClass = computed(() => ({
 }));
 
 // Detect if assistant message currently has any textual content yet
-const hasContent = computed(() => {
-    const c: any = props.message.content;
-    if (typeof c === 'string') return c.trim().length > 0;
-    if (Array.isArray(c))
-        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
-    return false;
-});
+const hasContent = computed(() => (props.message.text || '').trim().length > 0);
 
 // Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => {
-    const raw = (props.message as any).file_hashes;
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as string[];
-    if (typeof raw === 'string') return parseFileHashes(raw);
-    return [];
-});
+const hashList = computed<string[]>(() =>
+    parseHashes((props.message as any).file_hashes)
+);
 
-// Unified markdown (text + inline base64 images) for StreamMarkdown.
-// Keeps streaming reactive even if underlying message.content mutates from string to array.
-const assistantMarkdown = computed(() => {
+// Unified markdown already provided via UiChatMessage.text -> transform file-hash placeholders to inert spans
+const assistantMarkdown = computed(() =>
+    props.message.role === 'assistant' ? props.message.text || '' : ''
+);
+const FILE_HASH_IMG_RE = /!\[[^\]]*]\(file-hash:([a-f0-9]{6,})\)/gi;
+const processedAssistantMarkdown = computed(() => {
     if (props.message.role !== 'assistant') return '';
-    // ChatContainer now supplies raw markdown string in message.content
-    const raw = props.message.content;
-    if (typeof raw === 'string') return raw;
-    // Fallback: If an unexpected parts array slips through (shouldn't with UIMessage typing)
-    if (Array.isArray(raw)) {
-        const arr = raw as any[];
-        return arr
-            .map((p: any) => {
-                if (p?.type === 'text') return p.text || '';
-                if (p?.type === 'image') {
-                    const src = p.image || p.image_url?.url || p.image_url;
-                    if (typeof src === 'string')
-                        return `![generated image](${src})`;
-                }
-                return '';
-            })
-            .filter(Boolean)
-            .join('\n\n');
-    }
-    return '';
+    return (assistantMarkdown.value || '').replace(
+        FILE_HASH_IMG_RE,
+        (_m, h) =>
+            `<span class=\"or3-img-ph inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] border-2 border-[var(--md-inverse-surface)] retro-shadow opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
+    );
 });
 
 // Dynamic Shiki theme: map current theme (light/dark*/light*) to github-light / github-dark
@@ -441,10 +413,15 @@ function toggleExpanded() {
 
 async function ensureThumb(h: string) {
     // If we already know it's a PDF just ensure meta exists.
-    if (pdfMeta[h]) return;
+    if (pdfMeta[h]) {
+        if (import.meta.dev) console.debug('[thumb] pdf meta cached', h);
+        return;
+    }
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
     const cached = thumbCache.get(h);
     if (cached) {
+        if (import.meta.dev)
+            console.debug('[thumb] cache hit', h, cached.status);
         thumbnails[h] = cached;
         return;
     }
@@ -465,22 +442,28 @@ async function ensureThumb(h: string) {
                 pdfMeta[h] = { name: meta.name, kind: meta.kind };
                 // Remove the temporary loading state since we won't have an image thumb
                 delete thumbnails[h];
+                if (import.meta.dev)
+                    console.debug('[thumb] pdf meta loaded', h);
                 return;
             }
             if (!blob) throw new Error('missing');
             if (blob.type === 'application/pdf') {
                 pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
                 delete thumbnails[h];
+                if (import.meta.dev) console.debug('[thumb] blob is pdf', h);
                 return;
             }
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };
             thumbCache.set(h, ready);
             thumbnails[h] = ready;
+            if (import.meta.dev)
+                console.debug('[thumb] ready', h, url.slice(0, 40));
         } catch {
             const err: ThumbState = { status: 'error' };
             thumbCache.set(h, err);
             thumbnails[h] = err;
+            if (import.meta.dev) console.debug('[thumb] error', h);
         } finally {
             thumbLoadPromises.delete(h);
         }
@@ -522,7 +505,7 @@ onBeforeUnmount(() => {
     for (const h of currentHashes) releaseThumb(h);
     currentHashes.clear();
 });
-// Inline image hydration: replace <img data-file-hash> with object URL once ready
+// Inline image hydration: replace <span data-file-hash> markers with <img> once ready
 const contentEl = ref<HTMLElement | null>(null);
 async function hydrateInlineImages() {
     // Only hydrate assistant messages (users have inline images stripped).
@@ -530,27 +513,22 @@ async function hydrateInlineImages() {
     await nextTick();
     const root = contentEl.value;
     if (!root) return;
-    // 1. Markdown placeholders turned into <img src="file-hash:HASH"> by marked? (depends on custom renderer); handle both src and data-file-hash forms.
-    const srcImgs = root.querySelectorAll(
-        'img[src^="file-hash:"]:not([data-hydrated])'
+    const spans = root.querySelectorAll(
+        'span.or3-img-ph[data-file-hash]:not([data-hydrated])'
     );
-    srcImgs.forEach((imgEl) => {
-        const src = imgEl.getAttribute('src') || '';
-        const hash = src.replace('file-hash:', '');
-        if (!hash) return;
-        imgEl.setAttribute('data-file-hash', hash);
-    });
-    const imgs = root.querySelectorAll(
-        'img[data-file-hash]:not([data-hydrated])'
-    );
-    imgs.forEach((imgEl) => {
-        const hash = imgEl.getAttribute('data-file-hash') || '';
+    spans.forEach((span) => {
+        const hash = span.getAttribute('data-file-hash') || '';
         if (!hash) return;
         const state = thumbCache.get(hash) || thumbnails[hash];
         if (state && state.status === 'ready' && state.url) {
-            (imgEl as HTMLImageElement).src = state.url;
-            imgEl.setAttribute('data-hydrated', 'true');
-            imgEl.classList.remove('opacity-60');
+            const img = document.createElement('img');
+            img.setAttribute('data-file-hash', hash);
+            img.setAttribute('data-hydrated', 'true');
+            img.src = state.url;
+            img.alt = 'generated image';
+            img.className = span.className.replace('opacity-60', '');
+            span.replaceWith(img);
+            if (import.meta.dev) console.debug('[hydrate] span->img', hash);
         }
     });
 }
@@ -568,11 +546,26 @@ watchEffect(() => {
 });
 
 onMounted(() => scheduleHydrate());
+onMounted(() => {
+    if (import.meta.dev) {
+        const hashes = hashList.value;
+        console.debug('[ChatMessage.mounted]', {
+            id: (props.message as any).id,
+            role: props.message.role,
+            hashCount: hashes.length,
+            firstHash: hashes[0],
+            hasFileHashMarkdown: hashes.some((h) =>
+                (props.message.text || '').includes(`file-hash:${h}`)
+            ),
+            textPreview: (props.message.text || '').slice(0, 140),
+        });
+    }
+});
 
 // Thumbnail status watcher removed (covered by consolidated watchEffect)
 import { useToast } from '#imports';
 function copyMessage() {
-    navigator.clipboard.writeText(props.message.content);
+    navigator.clipboard.writeText(props.message.text || '');
 
     useToast().add({
         title: 'Message copied',
@@ -588,7 +581,6 @@ function onRetry() {
 }
 
 import { forkThread } from '~/db/branching';
-import themeClient from '~/plugins/theme.client';
 
 // Branch popover state
 const branchMode = ref<'reference' | 'copy'>('copy');

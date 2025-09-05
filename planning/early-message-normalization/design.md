@@ -6,7 +6,7 @@ artifact_id: 0f8e1ade-1c2a-4b8d-9e16-4e995bc7f0f2
 
 Introduce a canonical UI-facing message representation (`UiChatMessage`) to eliminate dual shapes (string vs array parts). Normalization occurs once at message creation (user send, assistant placeholder, retry). Raw legacy structures remain available through a non-reactive side channel for hooks until deprecated.
 
-This updated design prioritizes unifying file hash & image normalization utilities BEFORE message shape normalization so that `UiChatMessage.file_hashes` is populated from already-standardized arrays, preventing rework and eliminating scattered tolerant JSON parsing.
+This updated design prioritizes unifying file hash & image normalization utilities BEFORE message shape normalization so that `UiChatMessage.file_hashes` is populated from already-standardized arrays, preventing rework and eliminating scattered tolerant JSON parsing. It also preserves streaming image behavior: image events produce exactly one inline markdown placeholder in sequence.
 
 ## Architecture & Flow
 
@@ -24,6 +24,7 @@ flowchart TD
     C --> D[(messages[] UiChatMessage)]
     B --> E[(rawMessages store - non reactive)]
     Streaming -->|token append| D
+    Streaming Images -->|image event→placeholder + hash| D
     Retry --> B
     Hooks --> E
     UI --> D --> Render
@@ -133,6 +134,18 @@ export function normalizeImagesParam(images: any): NormalizedAttachment[] {
 
 These utilities are pure, side-effect free, and reused by `ensureUiMessage` (for `file_hashes` extraction) and any send/assistant merge logic.
 
+### Streaming Image Handling
+
+Flow when an image event arrives mid-stream:
+
+1. Receive image event (URL or data URI) from stream.
+2. Append a markdown placeholder line to assistant `.text` immediately (preserves ordering with text tokens).
+3. Begin async hashing/persistence; once hash ready, update `file_hashes` (already normalized); UI hydration swaps displayed image source seamlessly.
+4. Maintain a Set of emitted image URLs/hashes for the active assistant message to avoid duplicate placeholders.
+5. On hashing failure, update placeholder alt text / small badge instead of removal.
+
+No structured attachment array is added at this stage— inline markdown + `file_hashes` field remain sufficient and simplest.
+
 ### Message Content Utilities
 
 ```ts
@@ -193,6 +206,7 @@ Message Shape Stage (after above complete):
 
 -   `useAi.ts`: wrap user message creation, assistant placeholder, retry path with `ensureUiMessage`.
 -   Streaming: when a token arrives, mutate `currentAssistant.text += delta`.
+-   Streaming images: on image event append newline + placeholder once; update hash list when available.
 -   `ChatContainer.vue`: remove mapping; directly iterate `messages`.
 -   `ChatMessage.vue`: delete array defensive code; assume `.text`.
 

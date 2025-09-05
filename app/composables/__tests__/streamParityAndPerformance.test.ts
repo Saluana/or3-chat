@@ -216,13 +216,7 @@ describe('Streaming parity & performance', () => {
         const last = (chat as any).messages.value.find(
             (m: any) => m.role === 'assistant'
         );
-        const len =
-            typeof last?.content === 'string'
-                ? last.content.length
-                : Array.isArray(last?.content)
-                ? (last.content.find((p: any) => p.type === 'text')?.text || '')
-                      .length
-                : 0;
+        const len = last?.text ? last.text.length : 0;
         expect(len).toBe(200);
     });
 });

@@ -8,7 +8,11 @@ import { useActivePrompt } from './useActivePrompt';
 import { getDefaultPromptId } from './useDefaultPrompt';
 import { create, db, tx, upsert } from '~/db';
 import { createOrRefFile } from '~/db/files';
-import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
+import { serializeFileHashes } from '~/db/files-util';
+import {
+    parseHashes,
+    mergeAssistantFileHashes,
+} from '~/utils/files/attachments';
 import { getThreadSystemPrompt } from '~/db/threads';
 import { getPrompt } from '~/db/prompts';
 import type {
@@ -17,12 +21,14 @@ import type {
     SendMessageParams,
     TextPart,
 } from '~/utils/chat/types';
+import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
-    getTextFromContent,
     mergeFileHashes,
     trimOrMessagesImages,
 } from '~/utils/chat/messages';
+// getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
@@ -37,7 +43,18 @@ export function useChat(
     pendingPromptId?: string
 ) {
     // Messages and basic state
-    const messages = ref<ChatMessage[]>([...msgs]);
+    // UI-facing normalized messages
+    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
+    // Raw legacy messages (content parts / strings) used for history & hooks
+    const rawMessages = ref<ChatMessage[]>([...msgs]);
+    const getRawMessages = () => {
+        if (import.meta.dev) {
+            console.warn(
+                '[useChat] getRawMessages() is deprecated; prefer UiChatMessage via messages ref'
+            );
+        }
+        return rawMessages.value;
+    }; // transitional
     const loading = ref(false);
     const abortController = ref<AbortController | null>(null);
     const aborted = ref(false);
@@ -109,20 +126,19 @@ export function useChat(
         await ensureThreadHistoryLoaded(
             threadIdRef,
             historyLoadedFor,
-            messages
+            rawMessages as any
         );
 
         // Prior assistant hashes for image carry-over
-        const prevAssistant = [...messages.value]
+        const prevAssistantRaw = [...rawMessages.value]
             .reverse()
             .find((m) => m.role === 'assistant');
-        let assistantHashes: string[] = [];
-        if (prevAssistant?.file_hashes) {
-            try {
-                assistantHashes =
-                    parseFileHashes(prevAssistant.file_hashes) || [];
-            } catch {}
-        }
+        const prevAssistant = prevAssistantRaw
+            ? messages.value.find((m) => m.id === prevAssistantRaw.id)
+            : null;
+        const assistantHashes = prevAssistantRaw?.file_hashes
+            ? parseHashes(prevAssistantRaw.file_hashes)
+            : [];
 
         // Prepare accumulator
         streamAcc.reset();
@@ -147,7 +163,7 @@ export function useChat(
             content
         );
 
-        file_hashes = mergeFileHashes(file_hashes, assistantHashes);
+        file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
         const userDbMsg = await tx.appendMessage({
             thread_id: threadIdRef.value!,
             role: 'user',
@@ -157,18 +173,20 @@ export function useChat(
                     ? (file_hashes as any)
                     : undefined,
         });
-
         const parts: ContentPart[] = buildParts(
             outgoing,
             files,
             extraTextParts
         );
-        messages.value.push({
+        const rawUser: ChatMessage = {
             role: 'user',
             content: parts,
             id: (userDbMsg as any).id,
             file_hashes: userDbMsg.file_hashes,
-        } as any);
+        };
+        recordRawMessage(rawUser);
+        rawMessages.value.push(rawUser);
+        messages.value.push(ensureUiMessage(rawUser));
 
         loading.value = true;
         streamId.value = null;
@@ -181,10 +199,10 @@ export function useChat(
             );
 
             // Inject system message
-            let messagesWithSystem = [...messages.value];
+            let messagesWithSystemRaw = [...rawMessages.value];
             const systemText = await getSystemPromptContent();
             if (systemText && systemText.trim()) {
-                messagesWithSystem.unshift({
+                messagesWithSystemRaw.unshift({
                     role: 'system',
                     content: systemText,
                     id: `system-${newId()}`,
@@ -193,7 +211,7 @@ export function useChat(
 
             const effectiveMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:input',
-                messagesWithSystem
+                messagesWithSystemRaw
             );
 
             const { buildOpenRouterMessages } = await import(
@@ -263,16 +281,19 @@ export function useChat(
                 signal: abortController.value.signal,
             });
 
-            const idx =
-                messages.value.push({
-                    role: 'assistant',
-                    content: '',
-                    id: (assistantDbMsg as any).id,
-                    stream_id: newStreamId,
-                    pending: true,
-                    reasoning_text: null,
-                } as any) - 1;
-            const current = messages.value[idx]!;
+            const rawAssistant: ChatMessage = {
+                role: 'assistant',
+                content: '',
+                id: (assistantDbMsg as any).id,
+                stream_id: newStreamId,
+                reasoning_text: null,
+            } as any;
+            recordRawMessage(rawAssistant);
+            rawMessages.value.push(rawAssistant);
+            const uiAssistant = ensureUiMessage(rawAssistant);
+            uiAssistant.pending = true;
+            const idx = messages.value.push(uiAssistant) - 1;
+            const current = messages.value[idx]!; // UiChatMessage
             let chunkIndex = 0;
             const WRITE_INTERVAL_MS = 100;
             let lastPersistAt = 0;
@@ -298,8 +319,7 @@ export function useChat(
                         );
                     } catch {}
                 } else if (ev.type === 'text') {
-                    if ((current as any).pending)
-                        (current as any).pending = false;
+                    if (current.pending) current.pending = false;
                     const delta = ev.text;
                     streamAcc.append(delta, { kind: 'text' });
                     await hooks.doAction('ai.chat.stream:action:delta', delta, {
@@ -308,42 +328,25 @@ export function useChat(
                         streamId: newStreamId,
                         deltaLength: String(delta ?? '').length,
                         totalLength:
-                            getTextFromContent(current.content)!.length +
-                            String(delta ?? '').length,
+                            current.text.length + String(delta ?? '').length,
                         chunkIndex: chunkIndex++,
                     });
-                    if (typeof current.content === 'string') {
-                        current.content = (current.content as string) + delta;
-                    } else if (Array.isArray(current.content)) {
-                        const firstText = (
-                            current.content as ContentPart[]
-                        ).find((p) => p.type === 'text') as
-                            | TextPart
-                            | undefined;
-                        if (firstText) firstText.text += delta;
-                        else
-                            (current.content as ContentPart[]).push({
-                                type: 'text',
-                                text: delta,
-                            });
-                    }
+                    current.text += delta;
                 } else if (ev.type === 'image') {
-                    if ((current as any).pending)
-                        (current as any).pending = false;
-                    if (typeof current.content === 'string') {
-                        current.content = [
-                            { type: 'text', text: current.content as string },
-                            {
-                                type: 'image',
-                                image: ev.url,
-                                mediaType: 'image/png',
-                            },
-                        ];
-                    } else {
-                        (current.content as ContentPart[]).push({
-                            type: 'image',
-                            image: ev.url,
-                            mediaType: 'image/png',
+                    if (current.pending) current.pending = false;
+                    // Append markdown placeholder exactly once per image URL
+                    const placeholder = `![generated image](${ev.url})`;
+                    const already = current.text.includes(placeholder);
+                    if (!already) {
+                        current.text +=
+                            (current.text ? '\n\n' : '') + placeholder;
+                    }
+                    if (import.meta.dev) {
+                        console.debug('[stream:image:event]', {
+                            url: ev.url?.slice(0, 80),
+                            placeholderInserted: !already,
+                            currentLength: current.text.length,
+                            fileHashes: assistantFileHashes.slice(),
                         });
                     }
                     if (assistantFileHashes.length < 6) {
@@ -377,6 +380,13 @@ export function useChat(
                                 } as any;
                                 await upsert.message(updatedMsg);
                                 (current as any).file_hashes = serialized;
+                                if (import.meta.dev) {
+                                    console.debug('[stream:image:persist]', {
+                                        hash: meta.hash,
+                                        total: assistantFileHashes.length,
+                                        serialized,
+                                    });
+                                }
                             } catch {}
                         }
                     }
@@ -384,8 +394,7 @@ export function useChat(
 
                 const now = Date.now();
                 if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent =
-                        getTextFromContent(current.content) || '';
+                    const textContent = current.text;
                     const updated = {
                         ...assistantDbMsg,
                         data: {
@@ -406,26 +415,14 @@ export function useChat(
                 }
             }
 
-            const fullText = getTextFromContent(current.content) || '';
+            const fullText = current.text;
             const incoming = await hooks.applyFilters(
                 'ui.chat.message:filter:incoming',
                 fullText,
                 threadIdRef.value
             );
-            if ((current as any).pending) (current as any).pending = false;
-            if (typeof current.content === 'string')
-                current.content = incoming as string;
-            else {
-                const firstText = (current.content as ContentPart[]).find(
-                    (p) => p.type === 'text'
-                ) as TextPart | undefined;
-                if (firstText) firstText.text = incoming as string;
-                else
-                    (current.content as ContentPart[]).unshift({
-                        type: 'text',
-                        text: incoming as string,
-                    });
-            }
+            if (current.pending) current.pending = false;
+            current.text = incoming as string;
             const finalized = {
                 ...assistantDbMsg,
                 data: {
@@ -562,7 +559,10 @@ export function useChat(
                 await db.messages.delete(userMsg.id);
                 if (assistant) await db.messages.delete(assistant.id);
             });
-            (messages as any).value = (messages as any).value.filter(
+            rawMessages.value = rawMessages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            messages.value = messages.value.filter(
                 (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
             );
             const originalText = (userMsg.data as any)?.content || '';
@@ -577,7 +577,7 @@ export function useChat(
                 files: [],
                 online: false,
             });
-            const tail = (messages as any).value.slice(-2);
+            const tail = messages.value.slice(-2);
             const newUser = tail.find((m: any) => m.role === 'user');
             const newAssistant = tail.find((m: any) => m.role === 'assistant');
             await hooks.doAction('ai.chat.retry:action:after', {

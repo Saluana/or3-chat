@@ -28,7 +28,7 @@
                             :data-stream-id="message.stream_id"
                         >
                             <ChatMessage
-                                :message="message as RenderMessage"
+                                :message="message"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
@@ -47,7 +47,7 @@
                             :data-stream-id="rm.stream_id"
                         >
                             <ChatMessage
-                                :message="rm as RenderMessage"
+                                :message="rm"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
                                 @branch="onBranch"
@@ -98,8 +98,8 @@
 // Refactored ChatContainer (Task 4) – orchestration only.
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref, nextTick } from 'vue';
-import { parseFileHashes } from '~/db/files-util';
+import { shallowRef, computed, watch, ref, nextTick, type Ref } from 'vue';
+import { parseHashes } from '~/utils/files/attachments';
 import { useChat } from '~/composables/useAi';
 import type {
     ChatMessage as ChatMessageType,
@@ -110,6 +110,7 @@ import VirtualMessageList from './VirtualMessageList.vue';
 import { useAutoScroll } from '../../composables/useAutoScroll';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
+import { onMounted, watchEffect } from 'vue';
 
 // Debug utilities removed per request.
 
@@ -117,10 +118,10 @@ const model = ref('openai/gpt-oss-120b');
 const pendingPromptId = ref<string | null>(null);
 
 // Resize (Req 3.4): useElementSize -> reactive width
-const containerRoot = ref<HTMLElement | null>(null);
+const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
 // Dynamic chat input height to compute scroll padding
-const chatInputEl = ref<HTMLElement | null>(null);
+const chatInputEl: Ref<HTMLElement | null> = ref(null);
 const { height: chatInputHeight } = useElementSize(chatInputEl);
 // Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
 const emittedInputHeight = ref<number | null>(null);
@@ -200,7 +201,11 @@ watch(
             return;
         }
         // Prefer to update the internal messages array directly to avoid remount flicker
-        chat.value.messages.value = [...(mh || [])];
+        import('~/utils/chat/uiMessages').then(({ ensureUiMessage }) => {
+            chat.value!.messages.value = (mh || []).map((m: any) =>
+                ensureUiMessage(m)
+            );
+        });
     }
 );
 
@@ -217,100 +222,35 @@ watch(
 );
 
 // Render messages with content narrowed to string for ChatMessage.vue
-type RenderMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    // Required id for virtualization; fallback synthesized if source missing
-    id: string;
-    stream_id?: string;
-    file_hashes?: string | null;
-    pending?: boolean;
-    reasoning_text?: string | null;
-};
-
-const messages = computed<RenderMessage[]>(() =>
-    (chat.value.messages.value || []).map(
-        (m: ChatMessageType & any, i: number) => {
-            let contentStr = '';
-            if (typeof m.content === 'string') {
-                contentStr = m.content; // already markdown or plain text
-                // If this is an assistant message with persisted images (file_hashes) but
-                // the stored content is only text (no inline images), append markdown placeholders
-                // so ChatMessage can hydrate them.
-                if (
-                    m.role === 'assistant' &&
-                    (m as any).file_hashes &&
-                    !/file-hash:/i.test(contentStr)
-                ) {
-                    try {
-                        const hashes =
-                            parseFileHashes((m as any).file_hashes) || [];
-                        if (hashes.length) {
-                            const placeholders = hashes.map(
-                                (h: string) =>
-                                    `![generated image](file-hash:${h})`
-                            );
-                            // Only append if no existing image markdown already present
-                            const hasImageMarkdown =
-                                /!\[[^\]]*\]\((?:data:image|file-hash:|https?:)/i.test(
-                                    contentStr
-                                );
-                            if (!hasImageMarkdown) {
-                                contentStr +=
-                                    (contentStr ? '\n\n' : '') +
-                                    placeholders.join('\n\n');
-                            }
-                        }
-                    } catch {}
-                }
-            } else if (Array.isArray(m.content)) {
-                const segs: string[] = [];
-                let imageCount = 0;
-                for (const p of m.content as ContentPart[]) {
-                    if (p.type === 'text') {
-                        segs.push(p.text);
-                    } else if (p.type === 'image') {
-                        const src = typeof p.image === 'string' ? p.image : '';
-                        if (src) {
-                            // Always inject as markdown image so ChatMessage StreamMarkdown handles it.
-                            segs.push(`![generated image](${src})`);
-                            imageCount++;
-                        }
-                    } else if (p.type === 'file') {
-                        const label = (p as any).name || p.mediaType || 'file';
-                        segs.push(`**[file:${label}]**`);
-                    }
-                }
-                // If no actual image parts present but we have stored file hashes (persisted images), add markdown placeholders so hydration can swap later.
-                if (imageCount === 0 && (m as any).file_hashes) {
-                    const hashes =
-                        parseFileHashes((m as any).file_hashes) || [];
-                    if (hashes.length) {
-                        hashes.forEach((h: string) => {
-                            segs.push(`![generated image](file-hash:${h})`);
-                        });
-                    }
-                }
-                contentStr = segs.join('\n\n');
-            } else {
-                contentStr = String((m as any).content ?? '');
-            }
-            const rawReasoning =
-                (m as any).reasoning_text ||
-                (m as any).data?.reasoning_text ||
-                null;
-            return {
-                role: m.role,
-                content: contentStr,
-                id: (m.id || m.stream_id || 'm' + i) + '',
-                stream_id: m.stream_id,
-                file_hashes: (m as any).file_hashes,
-                pending: (m as any).pending,
-                reasoning_text: rawReasoning,
-            } as RenderMessage;
-        }
-    )
-);
+// messages already normalized to UiChatMessage with .text in useChat composable
+const messages = computed(() => chat.value.messages.value || []);
+onMounted(() => {
+    if (import.meta.dev) {
+        const withHashes = messages.value.filter(
+            (m: any) => m.file_hashes && m.file_hashes.length
+        );
+        console.debug('[ChatContainer.mounted] messages', {
+            total: messages.value.length,
+            withHashes: withHashes.length,
+            sample: withHashes.slice(0, 3).map((m: any) => ({
+                id: m.id,
+                hashes: m.file_hashes,
+                hasMarkdown: (m.text || '').includes('file-hash:'),
+                textPreview: (m.text || '').slice(0, 120),
+            })),
+        });
+    }
+});
+watchEffect(() => {
+    if (!import.meta.dev) return;
+    const count = messages.value.filter(
+        (m: any) => m.file_hashes && m.file_hashes.length
+    ).length;
+    console.debug('[ChatContainer.watchEffect] message/hash state', {
+        total: messages.value.length,
+        withHashes: count,
+    });
+});
 // Removed length logging watcher.
 const loading = computed(() => chat.value.loading.value);
 
@@ -325,7 +265,7 @@ const currentThreadId = computed(() => chat.value.threadId?.value);
 // Tail active means stream not finalized
 const streamActive = computed(() => !streamState.value?.finalized);
 // Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
-const streamingMessage = computed<RenderMessage | null>(() => {
+const streamingMessage = computed<any | null>(() => {
     if (!streamActive.value) return null;
     if (!streamId.value) return null;
     const rawTail = tailDisplay.value || '';
@@ -333,28 +273,28 @@ const streamingMessage = computed<RenderMessage | null>(() => {
     if (!rawTail && !reasoningTail && messages.value.length === 0) return null;
     return {
         role: 'assistant',
-        content: rawTail,
+        text: rawTail,
         id: 'tail-' + streamId.value,
         stream_id: streamId.value || undefined,
         pending: true,
         reasoning_text: reasoningTail,
-    } as RenderMessage;
+    } as any;
 });
 
 // Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
 const RECENT_NON_VIRTUAL = 6;
-function filterStreaming(arr: RenderMessage[]) {
+function filterStreaming(arr: any[]) {
     if (streamActive.value && streamId.value) {
         return arr.filter((m) => m.stream_id !== streamId.value);
     }
     return arr;
 }
-const recentMessages = computed<RenderMessage[]>(() => {
+const recentMessages = computed<any[]>(() => {
     const base = filterStreaming(messages.value);
     if (base.length <= RECENT_NON_VIRTUAL) return base;
     return base.slice(-RECENT_NON_VIRTUAL);
 });
-const virtualStableMessages = computed<RenderMessage[]>(() => {
+const virtualStableMessages = computed<any[]>(() => {
     const base = filterStreaming(messages.value);
     if (base.length <= RECENT_NON_VIRTUAL) return [];
     return base.slice(0, -RECENT_NON_VIRTUAL);
@@ -364,10 +304,11 @@ const virtualStableMessages = computed<RenderMessage[]>(() => {
 // Removed assistantVisible tracking (no handoff overlap needed)
 
 // Scroll handling (Req 3.3) via useAutoScroll
-const scrollParent = ref<HTMLElement | null>(null);
+const scrollParent: Ref<HTMLElement | null> = ref(null);
 // Add disengageDeltaPx so a small upward scroll (8px) releases stickiness
 // preventing jump-to-bottom when stream finalizes while user is reading.
-const autoScroll = useAutoScroll(scrollParent, {
+// Explicit cast ensures consistent HTMLElement | null Ref type for the composable
+const autoScroll = useAutoScroll(scrollParent as Ref<HTMLElement | null>, {
     thresholdPx: 64,
     disengageDeltaPx: 8,
 });
@@ -482,19 +423,7 @@ function onEdited(payload: { id: string; content: string }) {
     if (idx === -1) return;
     const msg = arr[idx];
     if (!msg) return;
-    // If message content is a parts array, update the first text part; else update string directly
-    if (Array.isArray(msg.content)) {
-        const firstText = (msg.content as any[]).find((p) => p.type === 'text');
-        if (firstText) firstText.text = payload.content;
-        else
-            (msg.content as any[]).unshift({
-                type: 'text',
-                text: payload.content,
-            });
-    } else {
-        msg.content = payload.content;
-    }
-    // Trigger reactivity for computed messages mapping
+    msg.text = payload.content;
     chat.value.messages.value = [...arr];
 }
 
