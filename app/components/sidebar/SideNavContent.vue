@@ -1,5 +1,8 @@
 <template>
-    <div class="flex flex-col h-full relative overflow-hidden">
+    <div
+        ref="containerRef"
+        class="flex flex-col h-full relative overflow-hidden"
+    >
         <SideNavHeader
             :sidebar-query="sidebarQuery"
             :active-sections="activeSections"
@@ -398,6 +401,7 @@
 </template>
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
+import { useElementSize } from '@vueuse/core';
 import { useHooks } from '~/composables/useHooks';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
@@ -423,6 +427,8 @@ const projects = ref<any[]>([]);
 const expandedProjects = ref<string[]>([]);
 const scrollAreaRef = ref<HTMLElement | null>(null);
 const bottomNavRef = ref<HTMLElement | null>(null);
+// Root container (for height observation instead of window resize listener)
+const containerRef = ref<HTMLElement | null>(null);
 // Dynamic bottom padding to avoid content hidden under absolute bottom nav
 const bottomPad = ref(140); // fallback
 const listHeight = ref(400);
@@ -522,22 +528,27 @@ let subProjects: { unsubscribe: () => void } | null = null;
 
 // Virtualization removed — always render the simple list for chats.
 
+// Observe container + bottom nav heights (ResizeObserver via VueUse) and recompute list height.
+// NOTE: TS plugin was over-narrowing DOM element types; cast refs to any to satisfy MaybeElementRef.
+const _containerSize = useElementSize(containerRef as any);
+const _bottomSize = useElementSize(bottomNavRef as any);
+const containerHeight = _containerSize.height;
+const bottomNavHeight = _bottomSize.height;
+
+function recomputeListHeight() {
+    const container = containerRef.value; // full sidebar container
+    if (!container) return;
+    const headerEl = container.querySelector('header');
+    const total = container.clientHeight || 0;
+    const headerH = (headerEl as HTMLElement | null)?.offsetHeight || 0;
+    const bottomH = bottomNavRef.value?.offsetHeight || 0; // also tracked separately but read directly for safety
+    const available = total - headerH - bottomH - 8; // small gap
+    listHeight.value = available > 100 ? available : 100;
+}
+
 onMounted(async () => {
-    const measure = () => {
-        const container = scrollAreaRef.value
-            ?.parentElement as HTMLElement | null; // full sidebar container
-        const headerEl = container?.querySelector('header');
-        const bottomEl = bottomNavRef.value as HTMLElement | null;
-        const total = container?.clientHeight || 0;
-        const headerH = headerEl?.offsetHeight || 0;
-        const bottomH = bottomEl?.offsetHeight || 0;
-        const available = total - headerH - bottomH - 8; // extra small gap
-        listHeight.value = available > 100 ? available : 100;
-    };
     await nextTick();
-    measure();
-    window.addEventListener('resize', measure);
-    (onUnmounted as any)._measureHandler = measure;
+    recomputeListHeight();
     // Threads subscription (sorted by last opened, excluding deleted)
     sub = liveQuery(() =>
         db.threads
@@ -593,6 +604,11 @@ onMounted(async () => {
     // (virtualization removed — nothing to lazy-load here)
 });
 
+// Recompute when container or bottom nav size changes (ResizeObserver driven)
+watch([containerHeight, bottomNavHeight], () => {
+    recomputeListHeight();
+});
+
 // (virtualization removed — no watcher required)
 
 // Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
@@ -612,8 +628,6 @@ onUnmounted(() => {
     sub?.unsubscribe();
     subProjects?.unsubscribe();
     subDocs?.unsubscribe();
-    const mh = (onUnmounted as any)._measureHandler;
-    if (mh) window.removeEventListener('resize', mh);
 });
 
 const emit = defineEmits<{
