@@ -28,7 +28,7 @@ The content is organized as follows:
 ## Notes
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching these patterns are excluded: **.md
+- Files matching these patterns are excluded: **.md, **.test.ts
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -54,8 +54,6 @@ app/
       theme.css
   components/
     chat/
-      __tests__/
-        VirtualMessageList.test.ts
       ChatContainer.vue
       ChatInputDropper.vue
       ChatMessage.vue
@@ -91,6 +89,10 @@ app/
     ResizableSidebarLayout.vue
     RetroGlassBtn.vue
   composables/
+    __tests__/
+      __snapshots__/
+        hookOrder.test.ts.snap
+        hookOrderSnapshot.test.ts.snap
     ui-extensions/
       documents/
         useDocumentHistoryActions.ts
@@ -116,7 +118,9 @@ app/
     useObservedElementSize.ts
     useOpenrouter.ts
     usePaneDocuments.ts
+    useRafBatch.ts
     useSidebarSearch.ts
+    useStreamAccumulator.ts
     useTailStream.ts
     useThreadSearch.ts
     useUserApiKey.ts
@@ -166,6 +170,9 @@ app/
       messages.ts
       openrouterStream.ts
       types.ts
+      uiMessages.ts
+    files/
+      attachments.ts
     files-constants.ts
     hash.ts
     hooks.ts
@@ -177,12 +184,16 @@ app/
 public/
   robots.txt
 tests/
+  stubs/
+    nuxt-app.ts
+    nuxt-imports.ts
   setup.ts
 types/
   nuxt.d.ts
   orama.d.ts
 .gitignore
 app.config.ts
+LICENSE
 nuxt.config.ts
 package.json
 tsconfig.json
@@ -1505,6 +1516,69 @@ Use Cases
 }
 ```
 
+## File: app/assets/css/dark.css
+```css
+.dark {
+  --md-primary: rgb(153 204 249);
+  --md-surface-tint: rgb(153 204 249);
+  --md-on-primary: rgb(0 51 81);
+  --md-primary-container: rgb(7 75 114);
+  --md-on-primary-container: rgb(204 229 255);
+  --md-secondary: rgb(184 200 218);
+  --md-on-secondary: rgb(35 50 63);
+  --md-secondary-container: rgb(57 72 87);
+  --md-on-secondary-container: rgb(212 228 246);
+  --md-tertiary: rgb(209 191 231);
+  --md-on-tertiary: rgb(55 42 74);
+  --md-tertiary-container: rgb(78 65 97);
+  --md-on-tertiary-container: rgb(237 220 255);
+  --md-error: rgb(255 180 171);
+  --md-on-error: rgb(105 0 5);
+  --md-error-container: rgb(147 0 10);
+  --md-on-error-container: rgb(255 218 214);
+  --md-background: rgb(16 20 24);
+  --md-on-background: rgb(224 226 232);
+  --md-surface: rgb(16 20 24);
+  --md-on-surface: rgb(224 226 232);
+  --md-surface-variant: rgb(66 71 78);
+  --md-on-surface-variant: rgb(194 199 206);
+  --md-outline: rgb(140 145 152);
+  --md-outline-variant: rgb(66 71 78);
+  --md-shadow: rgb(0 0 0);
+  --md-scrim: rgb(0 0 0);
+  --md-inverse-surface: #5A7D96;
+  --md-inverse-on-surface: rgb(45 49 53);
+  --md-inverse-primary: rgb(44 99 139);
+  --md-primary-fixed: rgb(204 229 255);
+  --md-on-primary-fixed: rgb(0 29 49);
+  --md-primary-fixed-dim: rgb(153 204 249);
+  --md-on-primary-fixed-variant: rgb(7 75 114);
+  --md-secondary-fixed: rgb(212 228 246);
+  --md-on-secondary-fixed: rgb(13 29 42);
+  --md-secondary-fixed-dim: rgb(184 200 218);
+  --md-on-secondary-fixed-variant: rgb(57 72 87);
+  --md-tertiary-fixed: rgb(237 220 255);
+  --md-on-tertiary-fixed: rgb(34 21 52);
+  --md-tertiary-fixed-dim: rgb(209 191 231);
+  --md-on-tertiary-fixed-variant: rgb(78 65 97);
+  --md-surface-dim: rgb(16 20 24);
+  --md-surface-bright: rgb(54 57 62);
+  --md-surface-container-lowest: rgb(11 15 18);
+  --md-surface-container-low: rgb(24 28 32);
+  --md-surface-container: rgb(28 32 36);
+  --md-surface-container-high: rgb(39 42 46);
+  --md-surface-container-highest: rgb(49 53 57);
+  --md-extended-color-success-color: rgb(140 213 180);
+  --md-extended-color-success-on-color: rgb(0 56 39);
+  --md-extended-color-success-color-container: rgb(0 81 58);
+  --md-extended-color-success-on-color-container: rgb(167 242 207);
+  --md-extended-color-warning-color: rgb(255 182 142);
+  --md-extended-color-warning-on-color: rgb(83 34 1);
+  --md-extended-color-warning-color-container: rgb(111 56 19);
+  --md-extended-color-warning-on-color-container: rgb(255 219 202);
+}
+```
+
 ## File: app/assets/css/light-hc.css
 ```css
 .light-high-contrast {
@@ -1694,154 +1768,6 @@ Use Cases
 }
 ```
 
-## File: app/assets/css/main.css
-```css
-/* Tailwind v4: single import includes preflight + utilities */
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-
-/* Nuxt UI base styles (load first so we can override its tokens below) */
-@import "@nuxt/ui";
-
-/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
-	so classes used in Nuxt UI theme overrides are generated. */
-@source "../../../app.config.ts";
-
-
-/* Your Material theme variable files (scoped: .light, .dark, etc.) */
-@import "./theme.css";
-
-/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
-@import "~/assets/css/nuxt-ui-map.css";
-
-/* Font setup: body uses VT323, headings use Press Start 2P */
-:root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
-    --ui-radius: 3px;
-}
-
-html, body {
-	font-family: var(--font-sans) !important;
-    font-size: 20px; 
-}
-
-/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
-.scrollbars {
-	scrollbar-width: thin;
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
-.scrollbar-hidden {
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE/Edge legacy */
-}
-.scrollbar-hidden::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
-
-h1, h2, h3, h4, h5, h6, .font-heading {
-	font-family: var(--font-heading) !important;
-}
-
-.retro-btn { 
-	display: inline-flex;
-	line-height: 1; /* avoid extra vertical space from font metrics */
-	position: relative;
-	border-radius: 3px;                               /* default */
-	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-
-/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
-.retro-btn.aspect-square {
-	padding: 0; /* our button variant already sets px-0, this enforces it */
-	place-items: center;
-}
-
-/* Physical press: move button into its shadow and add subtle inner bevel */
-.retro-btn:active {
-	transform: translate(2px, 2px);
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-.active-element {
-		box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-/* Keyboard accessibility: preserve pixel look while focused */
-.retro-btn:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-/* Global thin colored scrollbars (WebKit + Firefox) */
-/* Firefox */
-html {
-	scrollbar-width: thin;
-	/* thumb color, then track color */
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit (Chromium, Safari) */
-/* Apply to all scrollable elements */
-*::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
-}
-*::-webkit-scrollbar-track {
-	background: transparent;
-	border-radius: 9999px;
-}
-*::-webkit-scrollbar-thumb {
-	background: var(--md-primary);
-	border-radius: 9999px;
-	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
-	background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-*::-webkit-scrollbar-corner { background: transparent; }
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern-flipped {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    rotate: 180deg;
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
-.dark .prose strong,
-.dark .prosemirror-host :where(.ProseMirror) strong {
-	color: var(--md-on-surface);
-}
-```
-
 ## File: app/assets/css/nuxt-ui-map.css
 ```css
 /* Map Material Design variables to Nuxt UI CSS tokens.
@@ -1950,6 +1876,141 @@ html {
 @import "./dark-mc.css";
 ```
 
+## File: app/components/chat/MessageAttachmentsGallery.vue
+```vue
+<template>
+    <div v-if="hashes.length" class="mt-3">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            <div
+                v-for="h in hashes"
+                :key="h"
+                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
+            >
+                <!-- PDF Placeholder if mime/kind indicates pdf -->
+                <template v-if="meta[h]?.kind === 'pdf'">
+                    <div
+                        class="w-full h-full flex flex-col items-center justify-center gap-1 bg-[var(--md-surface-container-low)] text-center p-1"
+                    >
+                        <span
+                            class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded"
+                            >PDF</span
+                        >
+                        <span
+                            class="text-[9px] leading-snug line-clamp-3 break-words px-1"
+                            :title="fileNames[h] || h.slice(0, 8)"
+                            >{{ fileNames[h] || 'document.pdf' }}</span
+                        >
+                    </div>
+                </template>
+                <template v-else-if="thumbs[h]?.status === 'ready'">
+                    <img
+                        :src="thumbs[h].url"
+                        :alt="'file ' + h.slice(0, 8)"
+                        class="object-cover w-full h-full"
+                        draggable="false"
+                    />
+                </template>
+                <template v-else-if="thumbs[h]?.status === 'error'">
+                    <div class="text-[10px] text-center px-1 text-error">
+                        failed
+                    </div>
+                </template>
+                <template v-else>
+                    <div class="animate-pulse text-[10px] opacity-70">
+                        loading
+                    </div>
+                </template>
+            </div>
+        </div>
+        <button
+            class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
+            type="button"
+            @click="$emit('collapse')"
+            aria-label="Hide attachments"
+        >
+            Hide attachments
+        </button>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { reactive, watch } from 'vue';
+import { getFileBlob, getFileMeta } from '~/db/files';
+
+interface ThumbState {
+    status: 'loading' | 'ready' | 'error';
+    url?: string;
+}
+const props = defineProps<{ hashes: string[] }>();
+defineEmits<{ (e: 'collapse'): void }>();
+
+// Reuse global caches so virtualization doesn't thrash
+const cache = ((globalThis as any).__or3ThumbCache ||= new Map<
+    string,
+    ThumbState
+>());
+const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
+    string,
+    Promise<void>
+>());
+const thumbs = reactive<Record<string, ThumbState>>({});
+const meta = reactive<Record<string, any>>({});
+const fileNames = reactive<Record<string, string>>({});
+
+async function ensure(h: string) {
+    if (thumbs[h] && thumbs[h].status === 'ready') return;
+    const cached = cache.get(h);
+    if (cached) {
+        thumbs[h] = cached;
+        return;
+    }
+    if (inflight.has(h)) {
+        await inflight.get(h);
+        const after = cache.get(h);
+        if (after) thumbs[h] = after;
+        return;
+    }
+    thumbs[h] = { status: 'loading' };
+    const p = (async () => {
+        try {
+            const [blob, m] = await Promise.all([
+                getFileBlob(h),
+                getFileMeta(h).catch(() => undefined),
+            ]);
+            if (m) {
+                meta[h] = m;
+                if (m.name) fileNames[h] = m.name;
+            }
+            if (!blob) throw new Error('missing');
+            const url = URL.createObjectURL(blob);
+            const ready: ThumbState = { status: 'ready', url };
+            cache.set(h, ready);
+            thumbs[h] = ready;
+        } catch {
+            const err: ThumbState = { status: 'error' };
+            cache.set(h, err);
+            thumbs[h] = err;
+        } finally {
+            inflight.delete(h);
+        }
+    })();
+    inflight.set(h, p);
+    await p;
+}
+
+watch(
+    () => props.hashes,
+    (list) => {
+        list.forEach(ensure);
+    },
+    { immediate: true }
+);
+defineExpose({ thumbs });
+</script>
+
+<style scoped></style>
+```
+
 ## File: app/components/chat/ModelSelect.vue
 ```vue
 <template>
@@ -2029,6 +2090,58 @@ const searchInput = {
 </script>
 
 <style scoped></style>
+```
+
+## File: app/components/chat/TailStream.vue
+```vue
+<template>
+    <div
+        v-if="active && hasContent"
+        class="px-3 py-2 whitespace-pre-wrap font-mono text-sm transition-opacity duration-300"
+        :class="{ 'opacity-70': finalized && !isStreaming }"
+    >
+        <slot>{{ displayText }}</slot>
+        <span v-if="showCaret" class="animate-pulse">▌</span>
+    </div>
+</template>
+
+<script setup lang="ts">
+/**
+ * TailStream component
+ * Requirement: 3.2 streaming tail UI extracted
+ * Renders the incremental streaming text from useTailStream composable.
+ */
+import { computed, watchEffect } from 'vue';
+import {
+    useTailStream,
+    type TailStreamController,
+    type UseTailStreamOptions,
+} from '../../composables/useTailStream';
+
+const props = defineProps<{
+    controller?: TailStreamController; // externally managed controller (optional)
+    options?: UseTailStreamOptions; // options if internal controller created
+    active?: boolean;
+    finalized?: boolean; // parent can signal finalization animation point
+}>();
+
+const internal = props.controller || useTailStream(props.options);
+const displayText = internal.displayText;
+const isStreaming = internal.isStreaming;
+const hasContent = computed(() => !!displayText.value.length);
+const showCaret = computed(() => isStreaming.value && props.active !== false);
+
+// Finalization side-effect (Task 3.3): can be extended for sound or confetti.
+watchEffect(() => {
+    if (props.finalized && !isStreaming.value) {
+        // Minimal hook: currently handled via opacity class binding above.
+    }
+});
+</script>
+
+<style scoped>
+/* Retro caret blink via animate-pulse (Tailwind). Customize if needed. */
+</style>
 ```
 
 ## File: app/components/documents/ToolbarButton.vue
@@ -2133,6 +2246,135 @@ function onHandleKeydown(e: KeyboardEvent) {
 </style>
 ```
 
+## File: app/components/sidebar/SideNavContentCollapsed.vue
+```vue
+<template>
+    <div class="flex flex-col justify-between h-full relative">
+        <div class="px-1 pt-2 flex flex-col space-y-2">
+            <UTooltip :delay-duration="0" text="New chat">
+                <UButton
+                    @click="onNewChat"
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:message-plus"
+                    :ui="{
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                ></UButton>
+                <UButton
+                    size="md"
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:search"
+                    :ui="{
+                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="emit('focusSearch')"
+                ></UButton>
+            </UTooltip>
+        </div>
+        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
+            <UButton
+                size="md"
+                class="flex item-center justify-center"
+                icon="pixelarticons:sliders-2"
+                :ui="{
+                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
+                    leadingIcon: 'w-5 h-5',
+                }"
+            ></UButton>
+        </div>
+    </div>
+</template>
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
+import { liveQuery } from 'dexie';
+import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { VList } from 'virtua/vue';
+
+const props = defineProps<{
+    activeThread?: string;
+}>();
+
+const items = ref<any[]>([]);
+import { useThreadSearch } from '~/composables/useThreadSearch';
+const { query: threadSearchQuery, results: threadSearchResults } =
+    useThreadSearch(items as any);
+const displayThreads = computed(() =>
+    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
+);
+let sub: { unsubscribe: () => void } | null = null;
+
+onMounted(() => {
+    // Sort by last opened using updated_at index; filter out deleted
+    sub = liveQuery(() =>
+        db.threads
+            .orderBy('updated_at')
+            .reverse()
+            .filter((t) => !t.deleted)
+            .toArray()
+    ).subscribe({
+        next: (results) => (items.value = results),
+        error: (err) => console.error('liveQuery error', err),
+    });
+});
+
+watch(
+    () => items.value,
+    () => {
+        /* silent: removed Items updated log */
+    }
+);
+
+onUnmounted(() => {
+    sub?.unsubscribe();
+});
+
+const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+
+const showDeleteModal = ref(false);
+const deleteId = ref<string | null>(null);
+
+function openRename(thread: any) {
+    renameId.value = thread.id;
+    renameTitle.value = thread.title ?? '';
+    showRenameModal.value = true;
+}
+
+async function saveRename() {
+    if (!renameId.value) return;
+    const t = await db.threads.get(renameId.value);
+    if (!t) return;
+    const now = Math.floor(Date.now() / 1000);
+    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+}
+
+function confirmDelete(thread: any) {
+    deleteId.value = thread.id as string;
+    showDeleteModal.value = true;
+}
+
+async function deleteThread() {
+    if (!deleteId.value) return;
+    await dbDel.hard.thread(deleteId.value);
+    showDeleteModal.value = false;
+    deleteId.value = null;
+}
+
+function onNewChat() {
+    emit('newChat');
+}
+</script>
+```
+
 ## File: app/components/RetroGlassBtn.vue
 ```vue
 <template>
@@ -2144,6 +2386,136 @@ function onHandleKeydown(e: KeyboardEvent) {
 </template>
 
 <script setup></script>
+```
+
+## File: app/composables/useActivePrompt.ts
+```typescript
+import { ref, readonly } from 'vue';
+import { getPrompt } from '~/db/prompts';
+import { useHooks } from './useHooks';
+
+export interface ActivePromptState {
+    activePromptId: string | null;
+    activePromptContent: any | null;
+}
+
+// NOTE: Must be module-singleton so different composables/components share state.
+// Previously each invocation created new refs, so selection in modal was not
+// visible to chat sending logic. We lift refs to module scope.
+const _activePromptId = ref<string | null>(null);
+const _activePromptContent = ref<any | null>(null);
+
+export function useActivePrompt() {
+    const hooks = useHooks();
+
+    async function setActivePrompt(id: string | null): Promise<void> {
+        if (!id) {
+            _activePromptId.value = null;
+            _activePromptContent.value = null;
+            return;
+        }
+
+        const prompt = await getPrompt(id);
+        if (prompt) {
+            _activePromptId.value = prompt.id;
+            _activePromptContent.value = prompt.content;
+            await hooks.doAction('chat.systemPrompt.select:action:after', {
+                id: prompt.id,
+                content: prompt.content,
+            });
+        } else {
+            _activePromptId.value = null;
+            _activePromptContent.value = null;
+        }
+    }
+
+    function clearActivePrompt(): void {
+        setActivePrompt(null);
+    }
+
+    function getActivePromptContent(): any | null {
+        return _activePromptContent.value;
+    }
+
+    return {
+        activePromptId: readonly(_activePromptId),
+        activePromptContent: readonly(_activePromptContent),
+        setActivePrompt,
+        clearActivePrompt,
+        getActivePromptContent,
+    };
+}
+```
+
+## File: app/composables/useDefaultPrompt.ts
+```typescript
+import { ref, readonly } from 'vue';
+import { db } from '~/db';
+import { setKvByName } from '~/db/kv';
+import { useHooks } from './useHooks';
+
+// Singleton state (module scope) so all importers share
+const _defaultPromptId = ref<string | null>(null);
+let _loaded = false;
+
+async function loadOnce() {
+    if (_loaded) return;
+    _loaded = true;
+    try {
+        const rec = await db.kv
+            .where('name')
+            .equals('default_system_prompt_id')
+            .first();
+        if (rec && typeof rec.value === 'string' && rec.value) {
+            _defaultPromptId.value = rec.value;
+        } else {
+            _defaultPromptId.value = null;
+        }
+    } catch {
+        _defaultPromptId.value = null;
+    }
+}
+
+export function useDefaultPrompt() {
+    const hooks = useHooks();
+    if (import.meta.client) loadOnce();
+
+    async function setDefaultPrompt(id: string | null) {
+        await loadOnce();
+        const newId = id || null;
+        _defaultPromptId.value = newId;
+        await setKvByName('default_system_prompt_id', newId);
+        await hooks.doAction('chat.systemPrompt.default:action:update', newId);
+    }
+
+    async function clearDefaultPrompt() {
+        await setDefaultPrompt(null);
+    }
+
+    const defaultPromptId = readonly(_defaultPromptId);
+
+    return {
+        defaultPromptId,
+        setDefaultPrompt,
+        clearDefaultPrompt,
+        // low-level ensure load (mainly for SSR safety guards)
+        ensureLoaded: loadOnce,
+    };
+}
+
+export async function getDefaultPromptId(): Promise<string | null> {
+    try {
+        const rec = await db.kv
+            .where('name')
+            .equals('default_system_prompt_id')
+            .first();
+        return rec && typeof rec.value === 'string' && rec.value
+            ? rec.value
+            : null;
+    } catch {
+        return null;
+    }
+}
 ```
 
 ## File: app/composables/useDocumentsStore.ts
@@ -2312,6 +2684,69 @@ export function useHooks(): HookEngine {
 }
 ```
 
+## File: app/composables/useMessageEditing.ts
+```typescript
+import { ref } from 'vue';
+import { upsert } from '~/db';
+import { nowSec } from '~/db/util';
+
+// Lightweight composable for editing a chat message (assistant/user)
+export function useMessageEditing(message: any) {
+    const editing = ref(false);
+    const draft = ref('');
+    const original = ref('');
+    const saving = ref(false);
+
+    function beginEdit() {
+        if (editing.value) return;
+        original.value = message.content;
+        draft.value = message.content;
+        editing.value = true;
+    }
+    function cancelEdit() {
+        if (saving.value) return;
+        editing.value = false;
+        draft.value = '';
+        original.value = '';
+    }
+    async function saveEdit() {
+        if (saving.value) return;
+        const id = message.id;
+        if (!id) return;
+        const trimmed = draft.value.trim();
+        if (!trimmed) {
+            cancelEdit();
+            return;
+        }
+        try {
+            saving.value = true;
+            const existing: any = await (
+                await import('~/db/client')
+            ).db.messages.get(id);
+            if (!existing) throw new Error('Message not found');
+            await upsert.message({
+                ...existing,
+                data: { ...(existing.data || {}), content: trimmed },
+                updated_at: nowSec(),
+            });
+            message.content = trimmed;
+            editing.value = false;
+        } finally {
+            saving.value = false;
+        }
+    }
+    return {
+        editing,
+        draft,
+        original,
+        saving,
+        beginEdit,
+        cancelEdit,
+        saveEdit,
+    };
+}
+```
+
 ## File: app/composables/useModelSearch.ts
 ```typescript
 import { ref, watch, type Ref } from 'vue';
@@ -2472,6 +2907,311 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
 export default useModelSearch;
 ```
 
+## File: app/composables/useModelStore.ts
+```typescript
+import { kv } from '~/db';
+import modelsService, {
+    type OpenRouterModel,
+    type PriceBucket,
+} from '~/utils/models-service';
+
+// Module-level in-flight promise for deduping parallel fetches across composable instances
+let inFlight: Promise<OpenRouterModel[]> | null = null;
+
+export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
+export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function canUseDexie() {
+    try {
+        return (
+            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
+        );
+    } catch {
+        return false;
+    }
+}
+
+// --- Singleton reactive state (shared across all composable callers) ---
+// These are intentionally hoisted so that different components (e.g. SettingsModal
+// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
+// useModelStore() created new refs, so favoriting a model in the modal did not
+// propagate to the chat input until a full reload re-hydrated from KV.
+const favoriteModels = ref<OpenRouterModel[]>([]);
+const catalog = ref<OpenRouterModel[]>([]);
+const searchQuery = ref('');
+const filters = ref<{
+    input?: string[];
+    output?: string[];
+    minContext?: number;
+    parameters?: string[];
+    price?: PriceBucket;
+}>({});
+// Reactive timestamp (ms) of when catalog was last loaded into memory
+const lastLoadedAt = ref<number | undefined>(undefined);
+
+export function useModelStore() {
+    function isFresh(ts: number | undefined, ttl: number) {
+        if (!ts) return false;
+        return Date.now() - ts < ttl;
+    }
+
+    async function loadFromDexie(
+        ttl: number
+    ): Promise<OpenRouterModel[] | null> {
+        if (!canUseDexie()) return null;
+        try {
+            const rec: any = await kv.get(MODELS_CACHE_KEY);
+            if (!rec) return null;
+            // rec.updated_at is seconds in Kv schema; convert to ms
+            const updatedAtMs = rec.updated_at
+                ? rec.updated_at * 1000
+                : undefined;
+            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
+                console.debug(
+                    '[models-cache] dexie record stale or missing timestamp',
+                    {
+                        updatedAtMs,
+                        ttl,
+                    }
+                );
+                return null;
+            }
+            const raw = rec?.value;
+            if (!raw || typeof raw !== 'string') return null;
+            try {
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed)) return null;
+                catalog.value = parsed;
+                lastLoadedAt.value = updatedAtMs;
+                console.debug(
+                    '[models-cache] dexie hit — hydrated catalog from cache',
+                    {
+                        updatedAtMs,
+                        count: parsed.length,
+                    }
+                );
+                // Removed dexie source console.log
+                return parsed;
+            } catch (e) {
+                console.warn(
+                    '[models-cache] JSON parse failed; deleting corrupt record',
+                    e
+                );
+                // best-effort cleanup
+                try {
+                    await kv.delete(MODELS_CACHE_KEY);
+                } catch {}
+                return null;
+            }
+        } catch (e) {
+            console.warn('[models-cache] Dexie load failed', e);
+            return null;
+        }
+    }
+
+    async function saveToDexie(list: OpenRouterModel[]) {
+        if (!canUseDexie()) return;
+        try {
+            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
+            console.debug('[models-cache] saved catalog to Dexie', {
+                count: list.length,
+            });
+        } catch (e) {
+            console.warn('[models-cache] Dexie save failed', e);
+        }
+    }
+
+    async function invalidate() {
+        console.info(
+            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
+        );
+        catalog.value = [];
+        lastLoadedAt.value = undefined;
+        if (!canUseDexie()) return;
+        try {
+            await kv.delete(MODELS_CACHE_KEY);
+            console.debug('[models-cache] Dexie record deleted');
+        } catch (e) {
+            console.warn('[models-cache] Dexie delete failed', e);
+        }
+    }
+
+    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
+        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
+
+        // Memory fast-path
+        if (
+            !opts?.force &&
+            catalog.value.length &&
+            isFresh(lastLoadedAt.value, ttl)
+        ) {
+            console.debug(
+                '[models-cache] memory hit — returning in-memory catalog',
+                {
+                    lastLoadedAt: lastLoadedAt.value,
+                    count: catalog.value.length,
+                }
+            );
+            // Removed memory source console.log
+            return catalog.value;
+        }
+
+        // Try Dexie if available and not forced
+        if (!opts?.force) {
+            const dexieHit = await loadFromDexie(ttl);
+            if (dexieHit) return dexieHit;
+            console.debug(
+                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
+            );
+        }
+
+        // Dedupe in-flight network requests
+        if (inFlight && !opts?.force) return inFlight;
+
+        const fetchPromise = (async () => {
+            console.info('[models-cache] fetching models from network');
+            try {
+                const list = await modelsService.fetchModels(opts);
+                catalog.value = list;
+                lastLoadedAt.value = Date.now();
+                console.info(
+                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
+                );
+                // Removed network source console.log
+                // persist async (don't block response)
+                saveToDexie(list).catch(() => {});
+                return list;
+            } catch (err) {
+                console.warn('[models-cache] network fetch failed', err);
+                // On network failure, attempt to serve stale Dexie record (even if expired)
+                if (canUseDexie()) {
+                    try {
+                        const rec: any = await kv.get(MODELS_CACHE_KEY);
+                        const raw = rec?.value;
+                        if (raw && typeof raw === 'string') {
+                            try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length) {
+                                    console.warn(
+                                        '[models-cache] network failed; serving stale cached models',
+                                        { count: parsed.length }
+                                    );
+                                    // Removed stale dexie fallback console.log
+                                    return parsed;
+                                }
+                            } catch (e) {
+                                // corrupted; best-effort delete
+                                try {
+                                    await kv.delete(MODELS_CACHE_KEY);
+                                } catch {}
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(
+                            '[models-cache] Dexie read during network failure failed',
+                            e
+                        );
+                    }
+                }
+                throw err;
+            }
+        })();
+
+        if (!opts?.force) {
+            inFlight = fetchPromise.finally(() => {
+                inFlight = null;
+            });
+        }
+
+        return fetchPromise;
+    }
+
+    async function persist() {
+        try {
+            await kv.set(
+                'favorite_models',
+                JSON.stringify(favoriteModels.value)
+            );
+        } catch (e) {
+            console.warn('[useModelStore] persist favorites failed', e);
+        }
+    }
+
+    async function addFavoriteModel(model: OpenRouterModel) {
+        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
+        favoriteModels.value.push(model);
+        await persist();
+    }
+
+    async function removeFavoriteModel(model: OpenRouterModel) {
+        favoriteModels.value = favoriteModels.value.filter(
+            (m) => m.id !== model.id
+        );
+        await persist();
+    }
+
+    async function clearFavoriteModels() {
+        favoriteModels.value = [];
+        await persist();
+    }
+
+    async function getFavoriteModels() {
+        try {
+            const record: any = await kv.get('favorite_models');
+            const raw = record?.value;
+            if (raw && typeof raw === 'string') {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    favoriteModels.value = parsed;
+                } else {
+                    favoriteModels.value = [];
+                }
+            } else {
+                favoriteModels.value = [];
+            }
+        } catch {
+            favoriteModels.value = [];
+        }
+        return favoriteModels.value;
+    }
+
+    // Convenience wrapper to force network refresh
+    async function refreshModels() {
+        return fetchModels({ force: true });
+    }
+
+    return {
+        favoriteModels,
+        catalog,
+        searchQuery,
+        filters,
+        fetchModels,
+        refreshModels,
+        invalidate,
+        getFavoriteModels,
+        addFavoriteModel,
+        removeFavoriteModel,
+        clearFavoriteModels,
+        lastLoadedAt,
+    };
+}
+```
+
+## File: app/composables/useObservedElementSize.ts
+```typescript
+/**
+ * useObservedElementSize
+ * Thin wrapper over VueUse useElementSize for naming consistency.
+ * Requirement: 3.4 (Resize via VueUse), 3.11 (VueUse adoption), 4 (Docs)
+ */
+import { useElementSize } from '@vueuse/core';
+import type { Ref } from 'vue';
+
+export function useObservedElementSize(el: Ref<HTMLElement | null>) {
+    return useElementSize(el);
+}
+```
+
 ## File: app/composables/useOpenrouter.ts
 ```typescript
 import { ref } from 'vue';
@@ -2600,6 +3340,442 @@ export function useOpenRouterAuth() {
     };
 
     return { startLogin, logoutOpenRouter, isLoggingIn };
+}
+```
+
+## File: app/composables/usePaneDocuments.ts
+```typescript
+// Composable to manage per-pane document operations (create/select) abstracted from UI.
+// Assumes panes follow the PaneState contract from useMultiPane.
+
+import type { Ref } from 'vue';
+import type { MultiPaneState } from '~/composables/useMultiPane';
+
+export interface UsePaneDocumentsOptions {
+    panes: Ref<MultiPaneState[]>;
+    activePaneIndex: Ref<number>;
+    createNewDoc: (initial?: { title?: string }) => Promise<{ id: string }>;
+    flushDocument: (id: string) => Promise<void> | void;
+}
+
+export interface UsePaneDocumentsApi {
+    newDocumentInActive: (initial?: {
+        title?: string;
+    }) => Promise<{ id: string } | undefined>;
+    selectDocumentInActive: (id: string) => Promise<void>;
+}
+
+export function usePaneDocuments(
+    opts: UsePaneDocumentsOptions
+): UsePaneDocumentsApi {
+    const { panes, activePaneIndex, createNewDoc, flushDocument } = opts;
+
+    async function newDocumentInActive(initial?: { title?: string }) {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        try {
+            if (pane.mode === 'doc' && pane.documentId) {
+                await flushDocument(pane.documentId);
+            }
+            const doc = await createNewDoc(initial);
+            pane.mode = 'doc';
+            pane.documentId = doc.id;
+            pane.threadId = '';
+            pane.messages = [];
+            return doc;
+        } catch {
+            return undefined;
+        }
+    }
+
+    async function selectDocumentInActive(id: string) {
+        if (!id) return;
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
+            try {
+                await flushDocument(pane.documentId);
+            } catch {}
+        }
+        pane.mode = 'doc';
+        pane.documentId = id;
+        pane.threadId = '';
+        pane.messages = [];
+    }
+
+    return { newDocumentInActive, selectDocumentInActive };
+}
+```
+
+## File: app/composables/useSidebarSearch.ts
+```typescript
+// Unified sidebar search across threads, projects, and documents.
+// Modeled after useThreadSearch but merges all three domains into one Orama index
+// for a single fast query. Falls back to substring filtering if Orama fails.
+//
+// Exposed API mirrors existing pattern so integration stays minimal.
+import { ref, watch, type Ref } from 'vue';
+import type { Thread, Project, Post } from '~/db';
+
+interface IndexDoc {
+    id: string;
+    kind: 'thread' | 'project' | 'doc';
+    title: string;
+    updated_at: number;
+}
+
+type OramaInstance = any;
+let dbInstance: OramaInstance | null = null;
+let lastQueryToken = 0;
+let warnedFallback = false;
+
+async function importOrama() {
+    try {
+        return await import('@orama/orama');
+    } catch (e) {
+        throw new Error('Failed to load Orama');
+    }
+}
+
+async function createDb() {
+    const { create } = await importOrama();
+    return create({
+        schema: {
+            id: 'string',
+            kind: 'string',
+            title: 'string',
+            updated_at: 'number',
+        },
+    });
+}
+
+function toDocs(
+    threads: Thread[],
+    projects: Project[],
+    documents: Post[]
+): IndexDoc[] {
+    const threadDocs: IndexDoc[] = threads.map((t) => ({
+        id: t.id,
+        kind: 'thread',
+        title: (t.title || 'Untitled Thread').trim() || 'Untitled Thread',
+        updated_at: t.updated_at,
+    }));
+    const projectDocs: IndexDoc[] = projects.map((p) => ({
+        id: p.id,
+        kind: 'project',
+        title: (p.name || 'Untitled Project').trim() || 'Untitled Project',
+        updated_at: p.updated_at,
+    }));
+    const docDocs: IndexDoc[] = documents
+        .filter((d) => (d as any).postType === 'doc' && !(d as any).deleted)
+        .map((d) => ({
+            id: d.id,
+            kind: 'doc',
+            title: (d as any).title || 'Untitled',
+            updated_at: (d as any).updated_at,
+        }));
+    return [...threadDocs, ...projectDocs, ...docDocs];
+}
+
+async function buildIndex(
+    threads: Thread[],
+    projects: Project[],
+    documents: Post[]
+) {
+    const { insertMultiple } = await importOrama();
+    dbInstance = await createDb();
+    if (!dbInstance) return null;
+    const docs = toDocs(threads, projects, documents);
+    if (docs.length) await insertMultiple(dbInstance, docs);
+    return dbInstance;
+}
+
+// Signature helper to know when to rebuild (counts + latest updated_at)
+function computeSignature(
+    threads: Thread[],
+    projects: Project[],
+    documents: Post[]
+) {
+    let latest = 0;
+    for (const t of threads) if (t.updated_at > latest) latest = t.updated_at;
+    for (const p of projects) if (p.updated_at > latest) latest = p.updated_at;
+    for (const d of documents)
+        if ((d as any).updated_at > latest) latest = (d as any).updated_at;
+    return `${threads.length}:${projects.length}:${documents.length}:${latest}`;
+}
+
+export function useSidebarSearch(
+    threads: Ref<Thread[]>,
+    projects: Ref<Project[]>,
+    documents: Ref<Post[]>
+) {
+    const query = ref('');
+    const threadResults = ref<Thread[]>([]);
+    const projectResults = ref<Project[]>([]);
+    const documentResults = ref<Post[]>([]);
+    const ready = ref(false);
+    const busy = ref(false);
+    const lastIndexedSignature = ref('');
+    const idMaps = {
+        thread: ref<Record<string, Thread>>({}),
+        project: ref<Record<string, Project>>({}),
+        doc: ref<Record<string, Post>>({}),
+    };
+
+    async function ensureIndex() {
+        if (busy.value) return;
+        const sig = computeSignature(
+            threads.value,
+            projects.value,
+            documents.value
+        );
+        if (sig === lastIndexedSignature.value && dbInstance) return;
+        busy.value = true;
+        try {
+            idMaps.thread.value = Object.fromEntries(
+                threads.value.map((t) => [t.id, t])
+            );
+            idMaps.project.value = Object.fromEntries(
+                projects.value.map((p) => [p.id, p])
+            );
+            idMaps.doc.value = Object.fromEntries(
+                documents.value
+                    .filter(
+                        (d) =>
+                            (d as any).postType === 'doc' && !(d as any).deleted
+                    )
+                    .map((d) => [d.id, d])
+            );
+            await buildIndex(threads.value, projects.value, documents.value);
+            lastIndexedSignature.value = sig;
+            ready.value = true;
+        } finally {
+            busy.value = false;
+        }
+    }
+
+    function substringFallback(raw: string) {
+        const ql = raw.toLowerCase();
+        const threadHits = threads.value.filter((t) =>
+            (t.title || '').toLowerCase().includes(ql)
+        );
+        const projectHits = projects.value.filter((p) =>
+            (p.name || '').toLowerCase().includes(ql)
+        );
+        const docHits = documents.value.filter(
+            (d) =>
+                (d as any).postType === 'doc' &&
+                !(d as any).deleted &&
+                ((d as any).title || '').toLowerCase().includes(ql)
+        );
+        threadResults.value = threadHits;
+        projectResults.value = projectHits;
+        documentResults.value = docHits;
+        if (!warnedFallback) {
+            // eslint-disable-next-line no-console
+            console.warn('[useSidebarSearch] fallback substring search used');
+            warnedFallback = true;
+        }
+    }
+
+    async function runSearch() {
+        if (!dbInstance) await ensureIndex();
+        if (!dbInstance) return;
+        const raw = query.value.trim();
+        if (!raw) {
+            threadResults.value = threads.value;
+            projectResults.value = projects.value;
+            documentResults.value = documents.value.filter(
+                (d) => (d as any).postType === 'doc' && !(d as any).deleted
+            );
+            return;
+        }
+        const token = ++lastQueryToken;
+        try {
+            const { search } = await importOrama();
+            const res = await search(dbInstance, { term: raw, limit: 500 });
+            if (token !== lastQueryToken) return; // stale
+            const hits = Array.isArray(res?.hits) ? res.hits : [];
+            const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
+                thread: new Set(),
+                project: new Set(),
+                doc: new Set(),
+            };
+            for (const h of hits) {
+                const doc = h.document || h;
+                if (
+                    doc?.kind &&
+                    doc?.id &&
+                    byKind[doc.kind as keyof typeof byKind]
+                ) {
+                    byKind[doc.kind as keyof typeof byKind].add(doc.id);
+                }
+            }
+            // Apply sets
+            if (
+                !byKind.thread.size &&
+                !byKind.project.size &&
+                !byKind.doc.size
+            ) {
+                // Nothing matched -> fallback substring to provide any partials
+                substringFallback(raw);
+                return;
+            }
+            threadResults.value = threads.value.filter((t) =>
+                byKind.thread.has(t.id)
+            );
+            projectResults.value = projects.value.filter((p) =>
+                byKind.project.has(p.id)
+            );
+            documentResults.value = documents.value.filter((d) =>
+                byKind.doc.has(d.id)
+            );
+            // If a project contains matching threads/docs but project name itself didn't match, UI can choose to retain by containment; we leave that logic to integration to keep composable lean.
+        } catch (e) {
+            substringFallback(raw);
+        }
+    }
+
+    // Rebuild index & rerun search on data change
+    watch([threads, projects, documents], async () => {
+        await ensureIndex();
+        await runSearch();
+    });
+
+    // Debounce query changes (120ms like existing thread search)
+    let debounceTimer: any;
+    watch(query, () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(runSearch, 120);
+    });
+
+    // Initial population (pass-through until first build completes)
+    threadResults.value = threads.value;
+    projectResults.value = projects.value;
+    documentResults.value = documents.value.filter(
+        (d) => (d as any).postType === 'doc' && !(d as any).deleted
+    );
+
+    return {
+        query,
+        threadResults,
+        projectResults,
+        documentResults,
+        ready,
+        busy,
+        rebuild: ensureIndex,
+        runSearch,
+    };
+}
+
+export default useSidebarSearch;
+```
+
+## File: app/composables/useTailStream.ts
+```typescript
+/**
+ * useTailStream
+ * Incremental streaming text buffer with timed flushes.
+ * Requirements: 3.2 (Streaming Tail Extraction), 3.11 (VueUse adoption), 4 (Docs)
+ *
+ * Usage:
+ * const tail = useTailStream({ flushIntervalMs: 33, immediate: true });
+ * tail.push(chunk);
+ * tail.complete();
+ */
+import { ref, onBeforeUnmount } from 'vue';
+import { useIntervalFn } from '@vueuse/core';
+
+export interface TailStreamController {
+    displayText: Ref<string>;
+    isStreaming: Ref<boolean>;
+    done: Ref<boolean>;
+    error: Ref<Error | null>;
+    push: (chunk: string) => void;
+    complete: () => void;
+    fail: (err: unknown) => void;
+    reset: () => void;
+}
+
+export interface UseTailStreamOptions {
+    flushIntervalMs?: number; // default 33 (~30fps)
+    maxBuffer?: number; // optional cap of buffered (not yet flushed) characters
+    immediate?: boolean; // flush synchronously on first chunk
+}
+
+export function useTailStream(
+    opts: UseTailStreamOptions = {}
+): TailStreamController {
+    const { flushIntervalMs = 33, maxBuffer, immediate } = opts;
+    const displayText = ref('');
+    const buffer: string[] = [];
+    const isStreaming = ref(false);
+    const done = ref(false);
+    const error = ref<Error | null>(null);
+
+    const flush = () => {
+        if (!buffer.length) return;
+        displayText.value += buffer.join('');
+        buffer.length = 0;
+    };
+
+    const {
+        pause: pauseInterval,
+        resume: resumeInterval,
+        isActive,
+    } = useIntervalFn(
+        () => {
+            flush();
+        },
+        flushIntervalMs,
+        { immediate: false }
+    );
+
+    function push(chunk: string) {
+        if (done.value || error.value) return;
+        if (!chunk) return;
+        isStreaming.value = true;
+        buffer.push(chunk);
+        if (maxBuffer && buffer.reduce((n, c) => n + c.length, 0) >= maxBuffer)
+            flush();
+        if (immediate && displayText.value === '') flush();
+        if (!isActive.value) resumeInterval();
+    }
+
+    function complete() {
+        flush();
+        pauseInterval();
+        done.value = true;
+        isStreaming.value = false;
+    }
+
+    function fail(err: unknown) {
+        flush();
+        error.value = err instanceof Error ? err : new Error(String(err));
+        pauseInterval();
+    }
+
+    function reset() {
+        pauseInterval();
+        displayText.value = '';
+        buffer.length = 0;
+        done.value = false;
+        error.value = null;
+        isStreaming.value = false;
+    }
+
+    onBeforeUnmount(() => pauseInterval());
+
+    return {
+        displayText,
+        isStreaming,
+        done,
+        error,
+        push,
+        complete,
+        fail,
+        reset,
+    };
 }
 ```
 
@@ -3069,6 +4245,63 @@ export async function buildContext({ threadId }: BuildContextParams) {
     });
     return combined;
 }
+```
+
+## File: app/db/client.ts
+```typescript
+import Dexie, { type Table } from 'dexie';
+import type {
+    Attachment,
+    Kv,
+    Message,
+    Project,
+    Thread,
+    FileMeta,
+    Post,
+} from './schema';
+
+export interface FileBlobRow {
+    hash: string; // primary key
+    blob: Blob; // actual binary Blob
+}
+
+// Dexie database versioning & schema
+export class Or3DB extends Dexie {
+    projects!: Table<Project, string>;
+    threads!: Table<Thread, string>;
+    messages!: Table<Message, string>;
+    kv!: Table<Kv, string>;
+    attachments!: Table<Attachment, string>;
+    file_meta!: Table<FileMeta, string>; // hash as primary key
+    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
+    posts!: Table<Post, string>;
+
+    constructor() {
+        super('or3-db');
+        // Simplified schema: collapse historical migrations into a single
+        // version to avoid full-table upgrade passes (which previously
+        // loaded entire tables into memory via toArray()). Since there are
+        // no external users / all data already upgraded, we can safely
+        // define only the latest structure.
+        // NOTE: Keep version number at 5 so existing local DBs at v5 open
+        // without triggering a downgrade. Future schema changes should bump.
+        this.version(5).stores({
+            projects: 'id, name, clock, created_at, updated_at',
+            threads:
+                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
+            messages:
+                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
+            kv: 'id, &name, clock, created_at, updated_at',
+            attachments: 'id, type, name, clock, created_at, updated_at',
+            file_meta:
+                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
+            file_blobs: 'hash',
+            posts: 'id, title, postType, deleted, created_at, updated_at',
+        });
+    }
+}
+
+export const db = new Or3DB();
 ```
 
 ## File: app/db/documents.ts
@@ -4333,6 +5566,633 @@ export async function getProject(id: string) {
 }
 ```
 
+## File: app/db/prompts.ts
+```typescript
+import { db } from './client';
+import { newId, nowSec } from './util';
+import { useHooks } from '../composables/useHooks';
+
+/**
+ * Internal stored row shape (reuses posts table with postType = 'prompt').
+ * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
+ * Content is persisted as a JSON string (TipTap JSON) for flexibility.
+ */
+export interface PromptRow {
+    id: string;
+    title: string; // non-empty trimmed
+    content: string; // JSON string
+    postType: string; // always 'prompt'
+    created_at: number; // seconds
+    updated_at: number; // seconds
+    deleted: boolean;
+}
+
+/** Public facing record with content already parsed. */
+export interface PromptRecord {
+    id: string;
+    title: string;
+    content: any; // TipTap JSON object
+    created_at: number;
+    updated_at: number;
+    deleted: boolean;
+}
+
+function emptyPromptJSON() {
+    return { type: 'doc', content: [] };
+}
+
+function normalizeTitle(
+    title?: string | null,
+    {
+        fallback = 'Untitled Prompt',
+        allowEmpty = true,
+    }: { fallback?: string; allowEmpty?: boolean } = {}
+): string {
+    const raw = title ?? '';
+    const trimmed = raw.trim();
+    if (!trimmed && !allowEmpty) return fallback;
+    return trimmed; // may be '' when allowEmpty true
+}
+
+function parseContent(raw: string | null | undefined): any {
+    if (!raw) return emptyPromptJSON();
+    try {
+        const parsed = JSON.parse(raw);
+        // Basic structural guard
+        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        return emptyPromptJSON();
+    } catch {
+        return emptyPromptJSON();
+    }
+}
+
+function rowToRecord(row: PromptRow): PromptRecord {
+    return {
+        id: row.id,
+        title: row.title,
+        content: parseContent(row.content),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted,
+    };
+}
+
+export interface CreatePromptInput {
+    title?: string | null;
+    content?: any; // TipTap JSON object
+}
+
+export async function createPrompt(
+    input: CreatePromptInput = {}
+): Promise<PromptRecord> {
+    const hooks = useHooks();
+    const prepared: PromptRow = {
+        id: newId(),
+        title: normalizeTitle(input.title, { allowEmpty: false }),
+        content: JSON.stringify(input.content ?? emptyPromptJSON()),
+        postType: 'prompt',
+        created_at: nowSec(),
+        updated_at: nowSec(),
+        deleted: false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.create:filter:input',
+        prepared
+    )) as PromptRow;
+    await hooks.doAction('db.prompts.create:action:before', filtered);
+    await db.posts.put(filtered as any); // reuse posts table
+    await hooks.doAction('db.prompts.create:action:after', filtered);
+    return rowToRecord(filtered);
+}
+
+export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
+    const hooks = useHooks();
+    const row = await db.posts.get(id);
+    if (!row || (row as any).postType !== 'prompt') return undefined;
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.get:filter:output',
+        row
+    )) as PromptRow | undefined;
+    return filtered ? rowToRecord(filtered) : undefined;
+}
+
+export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
+    const hooks = useHooks();
+    // Filter by postType (indexed) and non-deleted
+    const rows = await db.posts
+        .where('postType')
+        .equals('prompt')
+        .and((r) => !(r as any).deleted)
+        .reverse() // by primary key order soon? we'll sort manually after fetch
+        .toArray();
+    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
+    rows.sort((a, b) => b.updated_at - a.updated_at);
+    const sliced = rows.slice(0, limit) as unknown as PromptRow[];
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.list:filter:output',
+        sliced
+    )) as PromptRow[];
+    return filtered.map(rowToRecord);
+}
+
+export interface UpdatePromptPatch {
+    title?: string;
+    content?: any; // TipTap JSON object
+}
+
+export async function updatePrompt(
+    id: string,
+    patch: UpdatePromptPatch
+): Promise<PromptRecord | undefined> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'prompt') return undefined;
+    const updated: PromptRow = {
+        id: existing.id,
+        title:
+            patch.title !== undefined
+                ? normalizeTitle(patch.title, { allowEmpty: true })
+                : existing.title,
+        content: patch.content
+            ? JSON.stringify(patch.content)
+            : (existing as any).content,
+        postType: 'prompt',
+        created_at: existing.created_at,
+        updated_at: nowSec(),
+        deleted: (existing as any).deleted ?? false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.prompts.update:filter:input',
+        { existing, updated, patch }
+    )) as { updated: PromptRow } | PromptRow;
+    const row = (filtered as any).updated
+        ? (filtered as any).updated
+        : (filtered as any as PromptRow);
+    await hooks.doAction('db.prompts.update:action:before', row);
+    await db.posts.put(row as any);
+    await hooks.doAction('db.prompts.update:action:after', row);
+    return rowToRecord(row);
+}
+
+export async function softDeletePrompt(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'prompt') return;
+    const row = {
+        ...(existing as any),
+        deleted: true,
+        updated_at: nowSec(),
+    };
+    await hooks.doAction('db.prompts.delete:action:soft:before', row);
+    await db.posts.put(row);
+    await hooks.doAction('db.prompts.delete:action:soft:after', row);
+}
+
+export async function hardDeletePrompt(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.posts.get(id);
+    if (!existing || (existing as any).postType !== 'prompt') return;
+    await hooks.doAction('db.prompts.delete:action:hard:before', existing);
+    await db.posts.delete(id);
+    await hooks.doAction('db.prompts.delete:action:hard:after', id);
+}
+
+// Convenience for ensuring DB open (mirrors pattern in other modules)
+export async function ensureDbOpen() {
+    if (!db.isOpen()) await db.open();
+}
+
+export type { PromptRecord as Prompt };
+```
+
+## File: app/db/schema.ts
+```typescript
+import { z } from 'zod';
+import { newId } from './util';
+
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+export const ProjectSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    data: z.any(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type Project = z.infer<typeof ProjectSchema>;
+
+// threads
+export const ThreadSchema = z.object({
+    id: z.string(),
+    title: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    last_message_at: z.number().int().nullable().optional(),
+    parent_thread_id: z.string().nullable().optional(),
+    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
+    anchor_message_id: z.string().nullable().optional(),
+    anchor_index: z.number().int().nullable().optional(),
+    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
+    status: z.string().default('ready'),
+    deleted: z.boolean().default(false),
+    pinned: z.boolean().default(false),
+    clock: z.number().int(),
+    forked: z.boolean().default(false),
+    project_id: z.string().nullable().optional(),
+    system_prompt_id: z.string().nullable().optional(),
+});
+export type Thread = z.infer<typeof ThreadSchema>;
+
+// For incoming create payloads (apply defaults like the DB)
+export const ThreadCreateSchema = ThreadSchema.partial({
+    // Make a wide set of fields optional for input; we'll supply defaults below
+    id: true,
+    title: true,
+    last_message_at: true,
+    parent_thread_id: true,
+    status: true,
+    deleted: true,
+    pinned: true,
+    forked: true,
+    project_id: true,
+    system_prompt_id: true,
+})
+    // We'll re-add with defaults/derived values
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Dynamic defaults while keeping inputs optional
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use z.input so defaulted fields are optional for callers
+export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
+// messages
+export const MessageSchema = z.object({
+    id: z.string(),
+    data: z.unknown().nullable().optional(),
+    role: z.string(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    error: z.string().nullable().optional(),
+    deleted: z.boolean().default(false),
+    thread_id: z.string(),
+    index: z.number().int(),
+    clock: z.number().int(),
+    stream_id: z.string().nullable().optional(),
+    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
+    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
+    file_hashes: z.string().nullable().optional(),
+});
+
+export type Message = z.infer<typeof MessageSchema>;
+
+export const PostSchema = z.object({
+    id: z.string(),
+    // Title must be non-empty after trimming
+    title: z
+        .string()
+        .transform((s) => s.trim())
+        .refine((s) => s.length > 0, 'Title is required'),
+    content: z.string().default(''),
+    postType: z.string().default('markdown'),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    meta: z.union([
+        z.string(),
+        z.object({
+            key: z.string(),
+            value: z.string().nullable().optional(),
+        }),
+        z
+            .array(
+                z.object({
+                    key: z.string(),
+                    value: z.string().nullable().optional(),
+                })
+            )
+            .nullable()
+            .optional(),
+    ]),
+    file_hashes: z.string().nullable().optional(),
+});
+
+export type Post = z.infer<typeof PostSchema>;
+
+// Create schema for posts allowing omission of id/timestamps; meta may be provided as
+// string | object | array and will be normalized to string upstream before storage.
+export const PostCreateSchema = PostSchema.partial({
+    id: true,
+    created_at: true,
+    updated_at: true,
+}).extend({
+    id: z
+        .string()
+        .optional()
+        .transform((v) => v ?? newId()),
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type PostCreate = z.input<typeof PostCreateSchema>;
+
+export const MessageCreateSchema = MessageSchema.partial({ index: true })
+    .omit({ created_at: true, updated_at: true, id: true, clock: true })
+    .extend({
+        // Keep inputs minimal; generate missing id/clock
+        id: z
+            .string()
+            .optional()
+            .transform((v) => v ?? newId()),
+        clock: z
+            .number()
+            .int()
+            .optional()
+            .transform((v) => v ?? 0),
+        created_at: z.number().int().default(nowSec()),
+        updated_at: z.number().int().default(nowSec()),
+    });
+// Use input type so callers can omit defaulted fields
+export type MessageCreate = z.input<typeof MessageCreateSchema>;
+
+// kv
+export const KvSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    value: z.string().nullable().optional(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    clock: z.number().int(),
+});
+export type Kv = z.infer<typeof KvSchema>;
+
+export const KvCreateSchema = KvSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type KvCreate = z.infer<typeof KvCreateSchema>;
+
+// attachments
+export const AttachmentSchema = z.object({
+    id: z.string(),
+    type: z.string(),
+    name: z.string(),
+    url: z.url(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type Attachment = z.infer<typeof AttachmentSchema>;
+
+export const AttachmentCreateSchema = AttachmentSchema.omit({
+    created_at: true,
+    updated_at: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+});
+export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
+
+// file meta (metadata only; binary stored separately in file_blobs table)
+export const FileMetaSchema = z.object({
+    // Use hash as both primary key and lookup value for simplicity
+    hash: z.string(), // md5 hex lowercase
+    name: z.string(),
+    mime_type: z.string(),
+    kind: z.enum(['image', 'pdf']).default('image'),
+    size_bytes: z.number().int(),
+    width: z.number().int().optional(),
+    height: z.number().int().optional(),
+    page_count: z.number().int().optional(),
+    ref_count: z.number().int().default(0),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    deleted: z.boolean().default(false),
+    clock: z.number().int(),
+});
+export type FileMeta = z.infer<typeof FileMetaSchema>;
+
+export const FileMetaCreateSchema = FileMetaSchema.omit({
+    created_at: true,
+    updated_at: true,
+    ref_count: true,
+}).extend({
+    created_at: z.number().int().default(nowSec()),
+    updated_at: z.number().int().default(nowSec()),
+    ref_count: z.number().int().default(1),
+    clock: z.number().int().default(0),
+});
+export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
+```
+
+## File: app/db/threads.ts
+```typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { newId, nowSec, parseOrThrow } from './util';
+import {
+    ThreadCreateSchema,
+    ThreadSchema,
+    type Thread,
+    type ThreadCreate,
+} from './schema';
+
+export async function createThread(input: ThreadCreate): Promise<Thread> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.threads.create:filter:input',
+        input
+    );
+    // Apply create-time defaults (id/clock/timestamps, etc.)
+    const prepared = parseOrThrow(ThreadCreateSchema, filtered);
+    // Validate against full schema so required defaults (status/pinned/etc.) are present
+    const value = parseOrThrow(ThreadSchema, prepared);
+    await hooks.doAction('db.threads.create:action:before', value);
+    await db.threads.put(value);
+    await hooks.doAction('db.threads.create:action:after', value);
+    return value;
+}
+
+export async function upsertThread(value: Thread): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.threads.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.threads.upsert:action:before', filtered);
+    parseOrThrow(ThreadSchema, filtered);
+    await db.threads.put(filtered);
+    await hooks.doAction('db.threads.upsert:action:after', filtered);
+}
+
+export function threadsByProject(projectId: string) {
+    const hooks = useHooks();
+    const promise = db.threads.where('project_id').equals(projectId).toArray();
+    return promise.then((res) =>
+        hooks.applyFilters('db.threads.byProject:filter:output', res)
+    );
+}
+
+export function searchThreadsByTitle(term: string) {
+    const q = term.toLowerCase();
+    const hooks = useHooks();
+    return db.threads
+        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
+        .toArray()
+        .then((res) =>
+            hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
+        );
+}
+
+export function getThread(id: string) {
+    const hooks = useHooks();
+    return db.threads
+        .get(id)
+        .then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
+}
+
+export function childThreads(parentThreadId: string) {
+    const hooks = useHooks();
+    return db.threads
+        .where('parent_thread_id')
+        .equals(parentThreadId)
+        .toArray()
+        .then((res) =>
+            hooks.applyFilters('db.threads.children:filter:output', res)
+        );
+}
+
+export async function softDeleteThread(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.threads, async () => {
+        const t = await db.threads.get(id);
+        if (!t) return;
+        await hooks.doAction('db.threads.delete:action:soft:before', t);
+        await db.threads.put({
+            ...t,
+            deleted: true,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        await hooks.doAction('db.threads.delete:action:soft:after', t);
+    });
+}
+
+export async function hardDeleteThread(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await db.threads.get(id);
+    await db.transaction('rw', db.threads, db.messages, async () => {
+        await hooks.doAction(
+            'db.threads.delete:action:hard:before',
+            existing ?? id
+        );
+        await db.messages.where('thread_id').equals(id).delete();
+        await db.threads.delete(id);
+        await hooks.doAction('db.threads.delete:action:hard:after', id);
+    });
+}
+
+// Fork a thread: clone thread metadata and optionally copy messages
+export async function forkThread(
+    sourceThreadId: string,
+    overrides: Partial<ThreadCreate> = {},
+    options: { copyMessages?: boolean } = {}
+): Promise<Thread> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.threads, db.messages, async () => {
+        const src = await db.threads.get(sourceThreadId);
+        if (!src) throw new Error('Source thread not found');
+        const now = nowSec();
+        const forkId = newId();
+        const fork = parseOrThrow(ThreadSchema, {
+            ...src,
+            id: forkId,
+            forked: true,
+            parent_thread_id: src.id,
+            created_at: now,
+            updated_at: now,
+            last_message_at: null,
+            ...overrides,
+        });
+        await hooks.doAction('db.threads.fork:action:before', {
+            source: src,
+            fork,
+        });
+        await db.threads.put(fork);
+
+        if (options.copyMessages) {
+            const msgs = await db.messages
+                .where('thread_id')
+                .equals(src.id)
+                .sortBy('index');
+            for (const m of msgs) {
+                await db.messages.put({ ...m, id: newId(), thread_id: forkId });
+            }
+            if (msgs.length > 0) {
+                await db.threads.put({
+                    ...fork,
+                    last_message_at: now,
+                    updated_at: now,
+                });
+            }
+        }
+        await hooks.doAction('db.threads.fork:action:after', fork);
+        return fork;
+    });
+}
+
+export async function updateThreadSystemPrompt(
+    threadId: string,
+    promptId: string | null
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.threads, async () => {
+        const thread = await db.threads.get(threadId);
+        if (!thread) return;
+        const updated = {
+            ...thread,
+            system_prompt_id: promptId,
+            updated_at: nowSec(),
+        };
+        await hooks.doAction('db.threads.updateSystemPrompt:action:before', {
+            thread,
+            promptId,
+        });
+        await db.threads.put(updated);
+        await hooks.doAction('db.threads.updateSystemPrompt:action:after', {
+            thread: updated,
+            promptId,
+        });
+    });
+}
+
+export async function getThreadSystemPrompt(
+    threadId: string
+): Promise<string | null> {
+    const hooks = useHooks();
+    const thread = await db.threads.get(threadId);
+    const result = thread?.system_prompt_id ?? null;
+    return hooks.applyFilters(
+        'db.threads.getSystemPrompt:filter:output',
+        result
+    );
+}
+```
+
 ## File: app/db/util.ts
 ```typescript
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
@@ -4354,416 +6214,6 @@ export function newId(): string {
     if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
     return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
-```
-
-## File: app/pages/_test.vue
-```vue
-<template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <div class="flex flex-col h-full relative">
-                <div class="p-2 flex flex-col space-y-2">
-                    <UButton class="w-full flex items-center justify-center"
-                        >New Chat</UButton
-                    >
-                    <UInput
-                        icon="i-lucide-search"
-                        size="md"
-                        variant="outline"
-                        placeholder="Search..."
-                        class="w-full ml-[1px]"
-                    ></UInput>
-                </div>
-                <div class="flex flex-col p-2 space-y-1.5">
-                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about aids</UButton
-                    >
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about dogs</UButton
-                    >
-                </div>
-                <sidebar-side-bottom-nav />
-            </div>
-        </template>
-
-        <!-- Default slot = main content (right side) -->
-        <div class="h-screen overflow-y-scroll">
-            <div
-                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
-            ></div>
-
-            <div class="p-6 space-y-4">
-                <div class="flex flex-row space-x-2">
-                    <UButton @click="showToast" size="sm" color="primary"
-                        >Nuxt UI Button</UButton
-                    >
-                    <UButton color="success">Nuxt UI Button</UButton>
-                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
-                </div>
-                <div class="flex flex-row space-x-2">
-                    <UButtonGroup size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                    <UButtonGroup orientation="vertical" size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                </div>
-
-                <div class="flex space-x-2">
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="sm"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="md"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="lg"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button
-                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
-                        @click="toggle()"
-                    >
-                        Toggle Light/Dark
-                    </button>
-                    <span class="text-[var(--md-on-surface)]"
-                        >Current: {{ theme }}</span
-                    >
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div
-                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
-                    >
-                        Surface / On-Surface
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
-                    >
-                        Secondary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
-                    >
-                        Tertiary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
-                    >
-                        Error Container
-                    </div>
-                </div>
-
-                <chat-input-dropper />
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-
-const nuxtApp = useNuxtApp();
-const theme = computed(() => (nuxtApp.$theme as any).get());
-const toggle = () => (nuxtApp.$theme as any).toggle();
-const toast = useToast();
-
-function showToast() {
-    toast.add({
-        title: 'Success',
-        description: 'Your action was completed successfully.',
-        color: 'success',
-    });
-}
-</script>
-```
-
-## File: app/pages/openrouter-callback.vue
-```vue
-<template>
-    <div class="min-h-screen flex items-center justify-center p-6">
-        <div
-            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
-        >
-            <p class="text-base font-medium mb-2">
-                {{ title }}
-            </p>
-            <p class="text-sm text-neutral-500 mb-4">
-                {{ subtitle }}
-            </p>
-            <div class="flex items-center justify-center gap-3">
-                <div
-                    v-if="loading"
-                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
-                />
-                <button
-                    v-if="ready"
-                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
-                    @click="goHome"
-                >
-                    Continue
-                </button>
-                <button
-                    v-if="errorMessage"
-                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
-                    @click="goHome"
-                >
-                    Go Home
-                </button>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup>
-import { kv } from '~/db';
-
-const route = useRoute();
-const router = useRouter();
-const rc = useRuntimeConfig();
-
-const loading = ref(true);
-const ready = ref(false);
-const redirecting = ref(false);
-const errorMessage = ref('');
-const title = computed(() =>
-    errorMessage.value
-        ? 'Login completed with warnings'
-        : ready.value
-        ? 'Login complete'
-        : 'Completing login…'
-);
-const subtitle = computed(() => {
-    if (errorMessage.value) return errorMessage.value;
-    if (ready.value && !redirecting.value)
-        return 'If this page doesn’t redirect automatically, tap Continue.';
-    return 'Please wait while we finish setup.';
-});
-
-function log(...args) {
-    try {
-        // eslint-disable-next-line no-console
-        console.log('[openrouter-callback]', ...args);
-    } catch {}
-}
-
-async function setKVNonBlocking(key, value, timeoutMs = 300) {
-    try {
-        if (!kv?.set) return;
-        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
-        const result = await Promise.race([
-            kv.set(key, value),
-            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
-        ]);
-        if (result === 'timeout') log('setKV timed out; continuing');
-        else log('setKV resolved');
-    } catch (e) {
-        log('setKV failed', e?.message || e);
-    }
-}
-
-async function goHome() {
-    redirecting.value = true;
-    log("goHome() invoked. Trying router.replace('/').");
-    try {
-        await router.replace('/');
-        log("router.replace('/') resolved");
-    } catch (e) {
-        log("router.replace('/') failed:", e?.message || e);
-    }
-    try {
-        // Fallback to full document navigation
-        log("Attempting window.location.replace('/')");
-        window.location.replace('/');
-    } catch (e) {
-        log("window.location.replace('/') failed:", e?.message || e);
-    }
-    // Last-chance fallback on browsers that ignore replace
-    setTimeout(() => {
-        try {
-            log("Attempting final window.location.assign('/')");
-            window.location.assign('/');
-        } catch (e) {
-            log("window.location.assign('/') failed:", e?.message || e);
-        }
-    }, 150);
-}
-
-onMounted(async () => {
-    log('mounted at', window.location.href, 'referrer:', document.referrer);
-    const code = route.query.code;
-    const state = route.query.state;
-    const verifier = sessionStorage.getItem('openrouter_code_verifier');
-    const savedState = sessionStorage.getItem('openrouter_state');
-    const codeMethod =
-        sessionStorage.getItem('openrouter_code_method') || 'S256';
-    log('query params present:', {
-        code: Boolean(code),
-        state: Boolean(state),
-    });
-    log('session present:', {
-        verifier: Boolean(verifier),
-        savedState: Boolean(savedState),
-        codeMethod,
-    });
-
-    if (!code || !verifier) {
-        console.error('[openrouter-callback] Missing code or verifier');
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Missing code or verifier. Tap Continue to return.';
-        return;
-    }
-    if (savedState && state !== savedState) {
-        console.error('[openrouter-callback] State mismatch, potential CSRF', {
-            incoming: state,
-            savedState,
-        });
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value = 'State mismatch. Tap Continue to return.';
-        return;
-    }
-
-    try {
-        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
-        log('exchanging code with OpenRouter', {
-            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
-            codeLength: String(code).length,
-            method: codeMethod,
-            usingHTTPS: true,
-        });
-        const directResp = await fetch(
-            'https://openrouter.ai/api/v1/auth/keys',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: String(code),
-                    code_verifier: verifier,
-                    code_challenge_method: codeMethod,
-                }),
-            }
-        );
-        const directJson = await directResp.json().catch(async () => {
-            const text = await directResp.text().catch(() => '<no-body>');
-            log('non-JSON response body snippet:', text?.slice(0, 300));
-            return null;
-        });
-        if (!directResp.ok || !directJson) {
-            console.error(
-                '[openrouter-callback] Direct exchange failed',
-                directResp.status,
-                directJson
-            );
-            return;
-        }
-        const userKey = directJson.key || directJson.access_token;
-        if (!userKey) {
-            console.error(
-                '[openrouter-callback] Direct exchange returned no key',
-                {
-                    keys: Object.keys(directJson || {}),
-                }
-            );
-            return;
-        }
-        // store in localStorage for use by front-end
-        log('storing key in localStorage (length)', String(userKey).length);
-        // Save a human-readable name and the value; id/clock are handled
-        // inside the helper to match your schema
-        try {
-            await kv.set('openrouter_api_key', userKey);
-        } catch (e) {
-            log('kvByName.set failed', e?.message || e);
-        }
-        try {
-            log('dispatching openrouter:connected event');
-            window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            // Best-effort: also persist to synced KV
-            try {
-                await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch {}
-        } catch {}
-        log('clearing session markers (verifier/state/method)');
-        sessionStorage.removeItem('openrouter_code_verifier');
-        sessionStorage.removeItem('openrouter_state');
-        sessionStorage.removeItem('openrouter_code_method');
-        // Allow event loop to process storage events in other tabs/components
-        await new Promise((r) => setTimeout(r, 10));
-        loading.value = false;
-        ready.value = true;
-        log('ready to redirect');
-        // Attempt auto-redirect but keep the Continue button visible
-        setTimeout(() => {
-            // first SPA attempt
-            log("auto: router.replace('/')");
-            router.replace('/').catch((e) => {
-                log('auto: router.replace failed', e?.message || e);
-            });
-            // then a hard replace if SPA was blocked
-            setTimeout(() => {
-                try {
-                    log("auto: window.location.replace('/')");
-                    window.location.replace('/');
-                } catch (e) {
-                    log(
-                        'auto: window.location.replace failed',
-                        e?.message || e
-                    );
-                }
-            }, 250);
-        }, 50);
-    } catch (err) {
-        console.error('[openrouter-callback] Exchange failed', err);
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Authentication finished, but we couldn’t auto-redirect.';
-    }
-});
-</script>
 ```
 
 ## File: app/plugins/hooks.client.ts
@@ -4809,74 +6259,6 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
-## File: app/plugins/theme.client.ts
-```typescript
-export default defineNuxtPlugin((nuxtApp) => {
-    const THEME_CLASSES = [
-        'light',
-        'dark',
-        'light-high-contrast',
-        'dark-high-contrast',
-        'light-medium-contrast',
-        'dark-medium-contrast',
-    ];
-
-    const storageKey = 'theme';
-    const root = document.documentElement;
-
-    const getSystemPref = () =>
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-            ? 'dark'
-            : 'light';
-
-    const apply = (name: string) => {
-        for (const cls of THEME_CLASSES) root.classList.remove(cls);
-        root.classList.add(name);
-    };
-
-    const read = () => localStorage.getItem(storageKey) as string | null;
-
-    let current = read() || getSystemPref();
-    apply(current);
-
-    const set = (name: string) => {
-        current = name;
-        localStorage.setItem(storageKey, name);
-        apply(name);
-    };
-
-    const toggle = () => set(current === 'dark' ? 'light' : 'dark');
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => {
-        if (!read()) {
-            current = e.matches ? 'dark' : 'light';
-            apply(current);
-        }
-    };
-    media.addEventListener('change', onChange);
-
-    nuxtApp.hook('app:beforeMount', () => {
-        current = read() || getSystemPref();
-        apply(current);
-    });
-
-    // Cleanup for HMR in dev so we don't stack listeners
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            media.removeEventListener('change', onChange)
-        );
-    }
-
-    nuxtApp.provide('theme', {
-        set,
-        toggle,
-        get: () => current,
-        system: getSystemPref,
-    });
-});
-```
-
 ## File: app/state/global.ts
 ```typescript
 import { openrouter } from '@openrouter/ai-sdk-provider';
@@ -4887,6 +6269,490 @@ export const state = ref({
 });
 
 export const isMobile = ref<boolean>(false);
+```
+
+## File: app/utils/chat/files.ts
+```typescript
+// Small helpers around file/mime handling used by useChat
+
+export function dataUrlToBlob(dataUrl: string): Blob | null {
+    try {
+        const m: RegExpExecArray | null = /^data:([^;]+);base64,(.*)$/i.exec(
+            dataUrl
+        );
+        if (!m) return null;
+        const mime: string = m[1] as string;
+        const b64: string = m[2] as string;
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: mime });
+    } catch {
+        return null;
+    }
+}
+
+// Infer MIME from URL or provided type (favor provided)
+export function inferMimeFromUrl(u: string, provided?: string) {
+    if (provided && provided.startsWith('image/')) return provided;
+    const m = /^data:([^;]+);/i.exec(u);
+    if (m) return m[1];
+    const lower = (u.split('?')[0] || '').toLowerCase();
+    const ext = lower.substring(lower.lastIndexOf('.') + 1);
+    const map: Record<string, string> = {
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        webp: 'image/webp',
+        gif: 'image/gif',
+        svg: 'image/svg+xml',
+        avif: 'image/avif',
+        heic: 'image/heic',
+        heif: 'image/heif',
+        bmp: 'image/bmp',
+        tif: 'image/tiff',
+        tiff: 'image/tiff',
+        ico: 'image/x-icon',
+    };
+    return map[ext] || 'image/png';
+}
+```
+
+## File: app/utils/chat/history.ts
+```typescript
+import type { Ref } from 'vue';
+import type { ChatMessage } from './types';
+import { db } from '~/db';
+
+export async function ensureThreadHistoryLoaded(
+    threadIdRef: Ref<string | undefined>,
+    historyLoadedFor: Ref<string | null>,
+    messages: Ref<ChatMessage[]>
+) {
+    if (!threadIdRef.value) return;
+    if (historyLoadedFor.value === threadIdRef.value) return;
+
+    try {
+        const DexieMod = (await import('dexie')).default;
+        const all = await db.messages
+            .where('[thread_id+index]')
+            .between(
+                [threadIdRef.value, DexieMod.minKey],
+                [threadIdRef.value, DexieMod.maxKey]
+            )
+            .filter((m: any) => !m.deleted)
+            .toArray();
+
+        all.sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
+        const existingIds = new Set(messages.value.map((m) => m.id));
+        for (const m of all) {
+            if (existingIds.has(m.id)) continue;
+            messages.value.push({
+                role: m.role,
+                content: (m as any)?.data?.content || '',
+                id: m.id,
+                stream_id: (m as any).stream_id,
+                file_hashes: (m as any).file_hashes,
+            } as any);
+        }
+        historyLoadedFor.value = threadIdRef.value;
+    } catch (e) {
+        console.warn('[useChat.ensureThreadHistoryLoaded] failed', e);
+    }
+}
+```
+
+## File: app/utils/chat/messages.ts
+```typescript
+import type { ContentPart } from './types';
+
+// Build UI parts: text first, then extra text blocks, then attachments
+export function buildParts(
+    outgoing: string,
+    files?: { type: string; url: string }[],
+    extraTextParts?: string[]
+): ContentPart[] {
+    return [
+        { type: 'text', text: outgoing },
+        ...(extraTextParts || []).map<ContentPart>((t) => ({
+            type: 'text',
+            text: t,
+        })),
+        ...(files ?? []).map<ContentPart>((f) =>
+            (f.type ?? '').startsWith('image/')
+                ? { type: 'image', image: f.url, mediaType: f.type }
+                : { type: 'file', data: f.url, mediaType: f.type }
+        ),
+    ];
+}
+
+// Extract concatenated text from a ChatMessage.content
+export function getTextFromContent(
+    content: string | ContentPart[] | undefined | null
+) {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    return (content as ContentPart[])
+        .filter((p) => p.type === 'text')
+        .map((p: any) => p.text || '')
+        .join('');
+}
+
+// Merge and dedupe file-hash arrays
+export function mergeFileHashes(
+    existing?: string[] | null,
+    fromAssistant?: string[]
+) {
+    const a = Array.isArray(existing) ? existing : [];
+    const b = Array.isArray(fromAssistant) ? fromAssistant : [];
+    return Array.from(new Set([...a, ...b]));
+}
+
+// Drop oldest images across built OR messages, keeping `max`
+export function trimOrMessagesImages(orMessages: any[], max: number) {
+    try {
+        const totalImagesPre = orMessages.reduce(
+            (a: number, m: any) =>
+                a + m.content.filter((p: any) => p.type === 'image_url').length,
+            0
+        );
+        if (totalImagesPre <= max) return;
+
+        let toDrop = totalImagesPre - max;
+        for (const m of orMessages) {
+            if (toDrop <= 0) break;
+            const next: any[] = [];
+            for (const part of m.content) {
+                if (part.type === 'image_url' && toDrop > 0) {
+                    toDrop--;
+                    continue;
+                }
+                next.push(part);
+            }
+            m.content = next;
+        }
+    } catch {
+        // ignore trimming errors
+    }
+}
+```
+
+## File: app/utils/chat/openrouterStream.ts
+```typescript
+import type { ORStreamEvent } from './types';
+
+export async function* openRouterStream(params: {
+    apiKey: string;
+    model: string;
+    orMessages: any[];
+    modalities: string[];
+    signal?: AbortSignal;
+}): AsyncGenerator<ORStreamEvent, void, unknown> {
+    const { apiKey, model, orMessages, modalities, signal } = params;
+
+    const body = {
+        model,
+        messages: orMessages,
+        modalities,
+        stream: true,
+    } as any;
+
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal,
+    });
+
+    if (!resp.ok || !resp.body) {
+        // Read response text for diagnostics
+        let respText = '<no-body>';
+        try {
+            respText = await resp.text();
+        } catch (e) {
+            respText = `<error-reading-body:${(e as any)?.message || 'err'}>`;
+        }
+
+        // Produce a truncated preview of the outgoing body to help debug (truncate long strings)
+        let bodyPreview = '<preview-failed>';
+        try {
+            bodyPreview = JSON.stringify(
+                body,
+                (_key, value) => {
+                    if (typeof value === 'string') {
+                        if (value.length > 300)
+                            return value.slice(0, 300) + `...(${value.length})`;
+                    }
+                    return value;
+                },
+                2
+            );
+        } catch (e) {
+            bodyPreview = `<stringify-error:${(e as any)?.message || 'err'}>`;
+        }
+
+        console.warn('[openrouterStream] OpenRouter request failed', {
+            status: resp.status,
+            statusText: resp.statusText,
+            responseSnippet: respText?.slice
+                ? respText.slice(0, 2000)
+                : String(respText),
+            bodyPreview,
+        });
+
+        throw new Error(
+            `OpenRouter request failed ${resp.status} ${resp.statusText}: ${
+                respText?.slice ? respText.slice(0, 300) : String(respText)
+            }`
+        );
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const emittedImages = new Set<string>();
+    // Removed rawPackets accumulation to avoid unbounded memory growth on long streams.
+    // If debugging of raw packets is needed, consider adding a bounded ring buffer
+    // or an opt-in flag that logs selectively.
+
+    function emitImageCandidate(
+        url: string | undefined | null,
+        indexRef: { v: number },
+        final = false
+    ) {
+        if (!url) return;
+        if (emittedImages.has(url)) return;
+        emittedImages.add(url);
+        const idx = indexRef.v++;
+        // Yield image event
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        (async () => {
+            /* placeholder for async transforms if needed */
+        })();
+        imageQueue.push({ type: 'image', url, final, index: idx });
+    }
+
+    // Queue to preserve ordering between text and image parts inside a single chunk
+    const imageQueue: ORStreamEvent[] = [];
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const raw of lines) {
+            const line = raw.trim();
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data) continue;
+            if (data === '[DONE]') {
+                yield { type: 'done' };
+                continue;
+            }
+            try {
+                const parsed = JSON.parse(data);
+                const choices = parsed.choices || [];
+                for (const choice of choices) {
+                    const delta = choice.delta || {};
+
+                    // Handle model reasoning
+                    if (choice?.delta?.reasoning_details) {
+                        if (
+                            choice?.delta?.reasoning_details[0]?.type ===
+                            'reasoning.text'
+                        ) {
+                            if (choice?.delta?.reasoning_details[0]?.text) {
+                                yield {
+                                    type: 'reasoning',
+                                    text: choice.delta.reasoning_details[0]
+                                        .text,
+                                };
+                            }
+                        } else if (
+                            choice?.delta?.reasoning_details[0]?.type ===
+                            'reasoning.summary'
+                        ) {
+                            yield {
+                                type: 'reasoning',
+                                text: choice.delta.reasoning_details[0].summary,
+                            };
+                        }
+                    }
+
+                    // Text variants
+                    if (Array.isArray(delta.content)) {
+                        for (const part of delta.content) {
+                            if (part?.type === 'text' && part.text) {
+                                yield { type: 'text', text: part.text };
+                            }
+                        }
+                    }
+                    if (typeof delta.text === 'string') {
+                        yield { type: 'text', text: delta.text };
+                    }
+                    if (typeof delta.content === 'string') {
+                        yield { type: 'text', text: delta.content };
+                    }
+
+                    // Streaming images (legacy / OpenAI style delta.images array)
+                    if (Array.isArray(delta.images)) {
+                        let ixRef = { v: 0 };
+                        for (const img of delta.images) {
+                            const url = img?.image_url?.url || img?.url;
+                            emitImageCandidate(url, ixRef, false);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
+                    if (Array.isArray(delta.content)) {
+                        let ixRef = { v: 0 };
+                        for (const part of delta.content) {
+                            if (part && typeof part === 'object') {
+                                if (
+                                    part.type === 'image' &&
+                                    (part.url || part.image)
+                                ) {
+                                    emitImageCandidate(
+                                        part.url || part.image,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'image_url' &&
+                                    part.image_url?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.image_url.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (
+                                    part.type === 'media' &&
+                                    part.media?.url
+                                ) {
+                                    emitImageCandidate(
+                                        part.media.url,
+                                        ixRef,
+                                        false
+                                    );
+                                } else if (part.inline_data?.data) {
+                                    // Gemini style inline base64 data
+                                    const mime =
+                                        part.inline_data.mimeType ||
+                                        'image/png';
+                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                    emitImageCandidate(dataUrl, ixRef, false);
+                                }
+                            }
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Final message images
+                    // Final images may be in message.images array
+                    const finalImages = choice.message?.images;
+                    if (Array.isArray(finalImages)) {
+                        let fIxRef = { v: 0 };
+                        for (const img of finalImages) {
+                            const url = img?.image_url?.url || img?.url;
+                            emitImageCandidate(url, fIxRef, true);
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+
+                    // Or inside message.content array (Gemini style)
+                    const finalContent = choice.message?.content;
+                    if (Array.isArray(finalContent)) {
+                        let fIxRef2 = { v: 0 };
+                        for (const part of finalContent) {
+                            if (
+                                part?.type === 'image' &&
+                                (part.url || part.image)
+                            ) {
+                                emitImageCandidate(
+                                    part.url || part.image,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (
+                                part?.type === 'image_url' &&
+                                part.image_url?.url
+                            ) {
+                                emitImageCandidate(
+                                    part.image_url.url,
+                                    fIxRef2,
+                                    true
+                                );
+                            } else if (part?.inline_data?.data) {
+                                const mime =
+                                    part.inline_data.mimeType || 'image/png';
+                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
+                                emitImageCandidate(dataUrl, fIxRef2, true);
+                            }
+                        }
+                        while (imageQueue.length) yield imageQueue.shift()!;
+                    }
+                }
+            } catch {
+                // ignore invalid json segments
+            }
+        }
+    }
+
+    // Removed verbose final packet dump to prevent large memory retention.
+
+    yield { type: 'done' };
+}
+```
+
+## File: app/utils/chat/types.ts
+```typescript
+export type TextPart = { type: 'text'; text: string };
+
+export type ImagePart = {
+    type: 'image';
+    image: string | Uint8Array | Buffer;
+    mediaType?: string;
+};
+
+export type FilePart = {
+    type: 'file';
+    data: string | Uint8Array | Buffer;
+    mediaType: string;
+    name?: string;
+};
+
+export type ContentPart = TextPart | ImagePart | FilePart;
+
+export interface ChatMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: string | ContentPart[];
+    id?: string;
+    stream_id?: string;
+    file_hashes?: string | null;
+    reasoning_text?: string | null;
+}
+
+export interface SendMessageParams {
+    files?: { type: string; url: string }[];
+    model?: string;
+    file_hashes?: string[];
+    extraTextParts?: string[];
+    online: boolean;
+}
+
+export type ORStreamEvent =
+    | { type: 'text'; text: string }
+    | { type: 'image'; url: string; final?: boolean; index?: number }
+    | { type: 'reasoning'; text: string }
+    | { type: 'done' };
 ```
 
 ## File: app/utils/files-constants.ts
@@ -5672,6 +7538,601 @@ export const modelsService = {
 export default modelsService;
 ```
 
+## File: app/utils/openrouter-build.ts
+```typescript
+// Utility helpers to build OpenRouter payload messages including historical images.
+// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
+// produce OpenAI-compatible content arrays.
+
+import { parseFileHashes } from '~/db/files-util';
+
+export interface BuildImageCandidate {
+    hash: string;
+    role: 'user' | 'assistant';
+    messageIndex: number; // chronological index in original messages array
+}
+
+export interface ORContentPartText {
+    type: 'text';
+    text: string;
+}
+export interface ORContentPartImageUrl {
+    type: 'image_url';
+    image_url: { url: string };
+}
+export interface ORContentPartFile {
+    type: 'file';
+    file: { filename: string; file_data: string };
+}
+export type ORContentPart =
+    | ORContentPartText
+    | ORContentPartImageUrl
+    | ORContentPartFile;
+
+export interface ORMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: ORContentPart[];
+}
+
+// Caches on global scope to avoid repeated blob -> base64 conversions.
+const dataUrlCache: Map<string, string> = ((
+    globalThis as any
+).__or3ImageDataUrlCache ||= new Map());
+const inflight: Map<string, Promise<string | null>> = ((
+    globalThis as any
+).__or3ImageHydrateInflight ||= new Map());
+
+// Remote / blob URL hydration cache shares same map (keyed by original ref string)
+// We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
+// because a content hash would never start with http/blob.
+async function remoteRefToDataUrl(ref: string): Promise<string | null> {
+    if (ref.startsWith('data:image/')) return ref; // already data URL
+    if (!/^https?:|^blob:/.test(ref)) return null;
+    if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
+    if (inflight.has(ref)) return inflight.get(ref)!;
+    const p = (async () => {
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 8000); // 8s safety timeout
+            const resp = await fetch(ref, { signal: ctrl.signal });
+            clearTimeout(t);
+            if (!resp.ok) throw new Error('fetch-failed:' + resp.status);
+            const blob = await resp.blob();
+            // Basic guardrail: cap at ~5MB to avoid huge token usage
+            if (blob.size > 5 * 1024 * 1024) return null;
+            const dataUrl = await blobToDataUrl(blob);
+            dataUrlCache.set(ref, dataUrl);
+            return dataUrl;
+        } catch {
+            return null;
+        } finally {
+            inflight.delete(ref);
+        }
+    })();
+    inflight.set(ref, p);
+    return p;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(fr.error);
+        fr.onload = () => resolve(fr.result as string);
+        fr.readAsDataURL(blob);
+    });
+}
+
+async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
+    if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
+    if (inflight.has(hash)) return inflight.get(hash)!;
+    const p = (async () => {
+        try {
+            const { getFileBlob } = await import('~/db/files');
+            const blob = await getFileBlob(hash);
+            if (!blob) throw new Error('blob-missing');
+            const dataUrl = await blobToDataUrl(blob);
+            dataUrlCache.set(hash, dataUrl);
+            return dataUrl;
+        } catch {
+            return null;
+        } finally {
+            inflight.delete(hash);
+        }
+    })();
+    inflight.set(hash, p);
+    return p;
+}
+
+export interface BuildOptions {
+    maxImageInputs?: number; // total images across history
+    dedupeImages?: boolean; // skip duplicate hashes
+    imageInclusionPolicy?:
+        | 'all'
+        | 'recent'
+        | 'recent-user'
+        | 'recent-assistant';
+    recentWindow?: number; // number of most recent messages to scan when policy is recent*
+    // Hook like filter: (candidates) => filteredCandidates
+    filterIncludeImages?: (
+        candidates: BuildImageCandidate[]
+    ) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
+    debug?: boolean; // verbose logging
+}
+
+// Default heuristics constants
+const DEFAULT_MAX_IMAGE_INPUTS = 8;
+
+interface ChatMessageLike {
+    role: 'user' | 'assistant' | 'system';
+    content: any; // string | parts[]
+    file_hashes?: string | null;
+}
+
+// Build OpenRouter messages with hydrated images.
+export async function buildOpenRouterMessages(
+    messages: ChatMessageLike[],
+    opts: BuildOptions = {}
+): Promise<ORMessage[]> {
+    const {
+        maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS,
+        dedupeImages = true,
+        imageInclusionPolicy = 'all',
+        recentWindow = 12,
+        filterIncludeImages,
+        debug = false,
+    } = opts;
+
+    if (debug) {
+        // Debug logging suppressed (begin)
+    }
+
+    // Determine candidate messages for image inclusion under policy.
+    let candidateMessages: number[] = [];
+    if (imageInclusionPolicy === 'all') {
+        candidateMessages = messages.map((_, i) => i);
+    } else if (imageInclusionPolicy.startsWith('recent')) {
+        const start = Math.max(0, messages.length - recentWindow);
+        candidateMessages = [];
+        for (let i = start; i < messages.length; i++) candidateMessages.push(i);
+    }
+
+    // Collect hash candidates
+    const hashCandidates: BuildImageCandidate[] = [];
+    for (const idx of candidateMessages) {
+        const m = messages[idx];
+        if (!m) continue;
+        if (m.file_hashes) {
+            try {
+                const hashes = parseFileHashes(m.file_hashes) || [];
+                for (const h of hashes) {
+                    if (!h) continue;
+                    if (
+                        imageInclusionPolicy === 'recent-user' &&
+                        m.role !== 'user'
+                    )
+                        continue;
+                    if (
+                        imageInclusionPolicy === 'recent-assistant' &&
+                        m.role !== 'assistant'
+                    )
+                        continue;
+                    if (m.role === 'user' || m.role === 'assistant') {
+                        hashCandidates.push({
+                            hash: h,
+                            role: m.role,
+                            messageIndex: idx,
+                        });
+                    }
+                }
+            } catch {}
+        }
+        // Also inspect inline parts if array form
+        if (Array.isArray(m.content)) {
+            for (const p of m.content) {
+                if (p?.type === 'image' && typeof p.image === 'string') {
+                    if (
+                        p.image.startsWith('data:image/') ||
+                        /^https?:/i.test(p.image) ||
+                        /^blob:/i.test(p.image)
+                    ) {
+                        hashCandidates.push({
+                            hash: p.image,
+                            role: m.role as any,
+                            messageIndex: idx,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if (debug) {
+        // Debug logging suppressed (candidates)
+    }
+
+    // Optional external filter
+    let filtered = hashCandidates;
+    if (filterIncludeImages) {
+        try {
+            const res = await filterIncludeImages(hashCandidates);
+            if (Array.isArray(res)) filtered = res;
+        } catch {}
+    }
+
+    // Enforce max & dedupe
+    const seen = new Set<string>();
+    const selected: BuildImageCandidate[] = [];
+    for (const c of filtered) {
+        if (selected.length >= maxImageInputs) break;
+        if (dedupeImages && seen.has(c.hash)) continue;
+        seen.add(c.hash);
+        selected.push(c);
+    }
+
+    if (debug) {
+        // Debug logging suppressed (selected)
+    }
+
+    // Group selected hashes by message index for convenient inclusion
+    const byMessageIndex = new Map<number, BuildImageCandidate[]>();
+    for (const s of selected) {
+        const list = byMessageIndex.get(s.messageIndex) || [];
+        list.push(s);
+        byMessageIndex.set(s.messageIndex, list);
+    }
+
+    // Build ORMessage array preserving original order
+    const orMessages: ORMessage[] = [];
+    for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        if (!m) continue;
+        const parts: ORContentPart[] = [];
+        // Extract textual content
+        let text = '';
+        if (Array.isArray(m.content)) {
+            const textParts = m.content.filter((p: any) => p.type === 'text');
+            if (textParts.length)
+                text = textParts.map((p: any) => p.text || '').join('');
+            // Add files (PDFs etc) directly
+            const fileParts = m.content.filter((p: any) => p.type === 'file');
+            for (const fp of fileParts) {
+                if (!fp.data) continue;
+                const mediaType =
+                    fp.mediaType || fp.mime || 'application/octet-stream';
+                const isPdf = mediaType === 'application/pdf';
+                const filename =
+                    fp.filename || (isPdf ? 'document.pdf' : 'file');
+                let fileData: string | null | undefined = fp.data;
+
+                // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
+                if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
+                    try {
+                        const { getFileBlob, getFileMeta } = await import(
+                            '~/db/files'
+                        );
+                        const blob = await getFileBlob(String(fileData));
+                        if (blob) {
+                            const mime = blob.type || mediaType;
+                            const dataUrl = await blobToDataUrl(blob);
+                            fileData = dataUrl.replace(
+                                /^data:[^;]+;/,
+                                `data:${mime};`
+                            );
+                        } else {
+                            const hydrated = await hydrateHashToDataUrl(
+                                String(fileData)
+                            );
+                            if (hydrated) fileData = hydrated;
+                        }
+                        if (!fileData) {
+                            const remote = await remoteRefToDataUrl(
+                                String(fileData)
+                            );
+                            if (remote) fileData = remote;
+                        }
+                    } catch {
+                        fileData = null;
+                    }
+                }
+
+                // If still not a usable scheme and it's a blob: URL, we can't send blob: (server can't fetch) -> skip
+                if (fileData && /^blob:/i.test(String(fileData))) {
+                    if (debug)
+                        console.warn(
+                            '[or-build] skipping blob: URL (inaccessible server-side)',
+                            { filename }
+                        );
+                    fileData = null;
+                }
+                if (
+                    fileData &&
+                    isPdf &&
+                    !fileData.startsWith('data:application/pdf')
+                ) {
+                    // Normalize pdf data URL mime prefix if possible
+                    if (fileData.startsWith('data:')) {
+                        fileData = fileData.replace(
+                            /^data:[^;]+/,
+                            'data:application/pdf'
+                        );
+                    }
+                }
+                if (fileData && /^data:|^https?:/i.test(String(fileData))) {
+                    parts.push({
+                        type: 'file',
+                        file: { filename, file_data: String(fileData) },
+                    });
+                } else if (debug) {
+                    console.warn(
+                        '[or-build] skipping file part, could not hydrate',
+                        { ref: fp.data, filename, messageIndex: i }
+                    );
+                }
+            }
+        } else if (typeof m.content === 'string') {
+            text = m.content;
+        }
+        if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
+        parts.push({ type: 'text', text });
+
+        // Add images associated with this message index (only if truly images)
+        const imgs = byMessageIndex.get(i) || [];
+        for (const img of imgs) {
+            // Quick allow path: already a data image URL
+            if (img.hash.startsWith('data:image/')) {
+                parts.push({ type: 'image_url', image_url: { url: img.hash } });
+                continue;
+            }
+            // Remote URL that looks like an image (basic heuristic)
+            if (
+                /^https?:/i.test(img.hash) &&
+                /(\.png|\.jpe?g|\.gif|\.webp|\.avif|\?)/i.test(img.hash)
+            ) {
+                parts.push({ type: 'image_url', image_url: { url: img.hash } });
+                continue;
+            }
+            // If it's a local hash (not http/data/blob) inspect metadata to confirm mime starts with image/
+            const looksLocal = !/^https?:|^data:|^blob:/i.test(img.hash);
+            let isImage = false;
+            if (looksLocal) {
+                try {
+                    const { getFileMeta } = await import('~/db/files');
+                    const meta: any = await getFileMeta(img.hash).catch(
+                        () => null
+                    );
+                    if (
+                        meta &&
+                        typeof meta.mime === 'string' &&
+                        meta.mime.startsWith('image/')
+                    ) {
+                        isImage = true;
+                    }
+                } catch {}
+            }
+            if (!isImage && looksLocal) {
+                // Not an image (likely a PDF or other file) -> skip to avoid triggering image-capable endpoint routing
+                continue;
+            }
+            // At this point either it's declared an image or remote unknown -> attempt hydration
+            let dataUrl = await hydrateHashToDataUrl(img.hash);
+            if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
+            if (dataUrl && dataUrl.startsWith('data:image/')) {
+                parts.push({ type: 'image_url', image_url: { url: dataUrl } });
+            } else if (debug) {
+                console.warn('[or-build] hydrate-fail-or-non-image', {
+                    ref: img.hash,
+                    role: img.role,
+                    messageIndex: img.messageIndex,
+                });
+            }
+        }
+
+        orMessages.push({ role: m.role, content: parts });
+    }
+
+    if (debug) {
+        // Debug logging suppressed (done)
+    }
+
+    return orMessages;
+}
+
+// Decide modalities based on prepared ORMessages + heuristic prompt.
+export function decideModalities(
+    orMessages: ORMessage[],
+    requestedModel?: string
+): string[] {
+    const hasImageInput = orMessages.some((m) =>
+        m.content.some((p) => p.type === 'image_url')
+    );
+    const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
+    const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
+    const imageIntent =
+        /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
+            prompt
+        );
+    const modalities = ['text'];
+    if (hasImageInput || imageIntent) modalities.push('image');
+    return modalities;
+}
+```
+
+## File: app/utils/prompt-utils.ts
+```typescript
+/**
+ * Utility functions for system prompts
+ */
+
+/**
+ * Converts TipTap JSON content to plain text string for use as system message.
+ * Extracts text from paragraph nodes and joins with newlines.
+ */
+export function promptJsonToString(json: any): string {
+    if (!json) return '';
+    const lines: string[] = [];
+
+    function walk(node: any, collectLine = false) {
+        if (!node) return;
+        // Gather plain text from leaf text nodes
+        if (Array.isArray(node)) {
+            node.forEach((n) => walk(n));
+            return;
+        }
+        if (node.type === 'text') {
+            currentLine += node.text || '';
+            return;
+        }
+        const blockTypes = new Set([
+            'paragraph',
+            'heading',
+            'blockquote',
+            'codeBlock',
+            'orderedList',
+            'bulletList',
+            'listItem',
+        ]);
+        let isBlock = blockTypes.has(node.type);
+        if (isBlock) {
+            flushLine();
+        }
+        if (node.content) node.content.forEach((c: any) => walk(c));
+        if (isBlock) flushLine();
+    }
+
+    let currentLine = '';
+    function flushLine() {
+        if (currentLine.trim().length) lines.push(currentLine.trim());
+        currentLine = '';
+    }
+
+    walk(json.content || json);
+    flushLine();
+    return lines.join('\n');
+}
+```
+
+## File: app/app.config.ts
+```typescript
+export default defineAppConfig({
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
+        },
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
+                header: 'border-0',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
+    },
+});
+```
+
 ## File: public/robots.txt
 ```
 User-Agent: *
@@ -5776,26 +8237,6 @@ export default defineAppConfig({
 });
 ```
 
-## File: nuxt.config.ts
-```typescript
-// https://nuxt.com/docs/api/configuration/nuxt-config
-export default defineNuxtConfig({
-    compatibilityDate: '2025-07-15',
-    devtools: { enabled: true },
-    modules: ['@nuxt/ui', '@nuxt/fonts'],
-    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
-    srcDir: 'app',
-    // Load Tailwind + theme variables globally
-    css: ['~/assets/css/main.css'],
-    fonts: {
-        families: [
-            { name: 'Press Start 2P', provider: 'google' },
-            { name: 'VT323', provider: 'google' },
-        ],
-    },
-});
-```
-
 ## File: tsconfig.json
 ```json
 {
@@ -5816,101 +8257,6 @@ export default defineNuxtConfig({
     }
   ]
 }
-```
-
-## File: app/assets/css/dark.css
-```css
-.dark {
-  --md-primary: rgb(153 204 249);
-  --md-surface-tint: rgb(153 204 249);
-  --md-on-primary: rgb(0 51 81);
-  --md-primary-container: rgb(7 75 114);
-  --md-on-primary-container: rgb(204 229 255);
-  --md-secondary: rgb(184 200 218);
-  --md-on-secondary: rgb(35 50 63);
-  --md-secondary-container: rgb(57 72 87);
-  --md-on-secondary-container: rgb(212 228 246);
-  --md-tertiary: rgb(209 191 231);
-  --md-on-tertiary: rgb(55 42 74);
-  --md-tertiary-container: rgb(78 65 97);
-  --md-on-tertiary-container: rgb(237 220 255);
-  --md-error: rgb(255 180 171);
-  --md-on-error: rgb(105 0 5);
-  --md-error-container: rgb(147 0 10);
-  --md-on-error-container: rgb(255 218 214);
-  --md-background: rgb(16 20 24);
-  --md-on-background: rgb(224 226 232);
-  --md-surface: rgb(16 20 24);
-  --md-on-surface: rgb(224 226 232);
-  --md-surface-variant: rgb(66 71 78);
-  --md-on-surface-variant: rgb(194 199 206);
-  --md-outline: rgb(140 145 152);
-  --md-outline-variant: rgb(66 71 78);
-  --md-shadow: rgb(0 0 0);
-  --md-scrim: rgb(0 0 0);
-  --md-inverse-surface: #5A7D96;
-  --md-inverse-on-surface: rgb(45 49 53);
-  --md-inverse-primary: rgb(44 99 139);
-  --md-primary-fixed: rgb(204 229 255);
-  --md-on-primary-fixed: rgb(0 29 49);
-  --md-primary-fixed-dim: rgb(153 204 249);
-  --md-on-primary-fixed-variant: rgb(7 75 114);
-  --md-secondary-fixed: rgb(212 228 246);
-  --md-on-secondary-fixed: rgb(13 29 42);
-  --md-secondary-fixed-dim: rgb(184 200 218);
-  --md-on-secondary-fixed-variant: rgb(57 72 87);
-  --md-tertiary-fixed: rgb(237 220 255);
-  --md-on-tertiary-fixed: rgb(34 21 52);
-  --md-tertiary-fixed-dim: rgb(209 191 231);
-  --md-on-tertiary-fixed-variant: rgb(78 65 97);
-  --md-surface-dim: rgb(16 20 24);
-  --md-surface-bright: rgb(54 57 62);
-  --md-surface-container-lowest: rgb(11 15 18);
-  --md-surface-container-low: rgb(24 28 32);
-  --md-surface-container: rgb(28 32 36);
-  --md-surface-container-high: rgb(39 42 46);
-  --md-surface-container-highest: rgb(49 53 57);
-  --md-extended-color-success-color: rgb(140 213 180);
-  --md-extended-color-success-on-color: rgb(0 56 39);
-  --md-extended-color-success-color-container: rgb(0 81 58);
-  --md-extended-color-success-on-color-container: rgb(167 242 207);
-  --md-extended-color-warning-color: rgb(255 182 142);
-  --md-extended-color-warning-on-color: rgb(83 34 1);
-  --md-extended-color-warning-color-container: rgb(111 56 19);
-  --md-extended-color-warning-on-color-container: rgb(255 219 202);
-}
-```
-
-## File: app/components/chat/__tests__/VirtualMessageList.test.ts
-```typescript
-import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
-import VirtualMessageList from '../VirtualMessageList.vue';
-
-const factory = (messages: any[] = []) =>
-    mount(VirtualMessageList, {
-        props: { messages },
-        slots: { item: ({ message }: any) => message.content },
-    });
-
-describe('VirtualMessageList', () => {
-    it('emits visible-range-change on mount', () => {
-        const msgs = Array.from({ length: 3 }, (_, i) => ({
-            id: String(i),
-            content: `m${i}`,
-        }));
-        const wrapper = factory(msgs);
-        const ev = wrapper.emitted('visible-range-change');
-        expect(ev).toBeTruthy();
-        expect(ev?.[0]?.[0]).toEqual({ start: 0, end: 2 });
-    });
-
-    it('emits reached-bottom when last item visible', () => {
-        const msgs = [{ id: '1', content: 'a' }];
-        const wrapper = factory(msgs);
-        expect(wrapper.emitted('reached-bottom')).toBeTruthy();
-    });
-});
 ```
 
 ## File: app/components/chat/LoadingGenerating.vue
@@ -6222,415 +8568,6 @@ watch(
 </style>
 ```
 
-## File: app/components/chat/TailStream.vue
-```vue
-<template>
-    <div
-        v-if="active && hasContent"
-        class="px-3 py-2 whitespace-pre-wrap font-mono text-sm transition-opacity duration-300"
-        :class="{ 'opacity-70': finalized && !isStreaming }"
-    >
-        <slot>{{ displayText }}</slot>
-        <span v-if="showCaret" class="animate-pulse">▌</span>
-    </div>
-</template>
-
-<script setup lang="ts">
-/**
- * TailStream component
- * Requirement: 3.2 streaming tail UI extracted
- * Renders the incremental streaming text from useTailStream composable.
- */
-import { computed, watchEffect } from 'vue';
-import {
-    useTailStream,
-    type TailStreamController,
-    type UseTailStreamOptions,
-} from '../../composables/useTailStream';
-
-const props = defineProps<{
-    controller?: TailStreamController; // externally managed controller (optional)
-    options?: UseTailStreamOptions; // options if internal controller created
-    active?: boolean;
-    finalized?: boolean; // parent can signal finalization animation point
-}>();
-
-const internal = props.controller || useTailStream(props.options);
-const displayText = internal.displayText;
-const isStreaming = internal.isStreaming;
-const hasContent = computed(() => !!displayText.value.length);
-const showCaret = computed(() => isStreaming.value && props.active !== false);
-
-// Finalization side-effect (Task 3.3): can be extended for sound or confetti.
-watchEffect(() => {
-    if (props.finalized && !isStreaming.value) {
-        // Minimal hook: currently handled via opacity class binding above.
-    }
-});
-</script>
-
-<style scoped>
-/* Retro caret blink via animate-pulse (Tailwind). Customize if needed. */
-</style>
-```
-
-## File: app/components/documents/DocumentsPageShell.vue
-```vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
-                ref="sideNavExpandedRef"
-                :active-thread="''"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
-                @chatSelected="onSidebarChatSelected"
-                @new-chat="onSidebarNewChat"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
-                :active-thread="''"
-                @focusSearch="focusSidebarSearch"
-                @chatSelected="onSidebarChatSelected"
-                @new-chat="onSidebarNewChat"
-            />
-        </template>
-        <div class="flex-1 h-screen w-full relative">
-            <div
-                id="top-nav"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"
-            >
-                <div class="h-full flex items-center justify-center px-2">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <div
-                :class="[
-                    'pt-[46px]',
-                    'h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                >
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
-                    <LazyDocumentsDocumentEditor
-                        v-if="pane.documentId"
-                        :document-id="pane.documentId"
-                        class="flex-1 min-h-0"
-                    />
-                    <div
-                        v-else
-                        class="flex-1 flex items-center justify-center text-sm opacity-70"
-                    >
-                        No document.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-<script setup lang="ts">
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
-import { ensureDbOpen as ensureDocumentsDbOpen } from '~/db/documents';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
-import { db } from '~/db';
-
-const props = withDefaults(
-    defineProps<{
-        initialDocumentId?: string;
-        validateInitial?: boolean;
-        routeSync?: boolean;
-    }>(),
-    { validateInitial: false, routeSync: true }
-);
-
-// Multi-pane: we only use doc mode; thread related fields remain unused.
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-const {
-    panes,
-    activePaneIndex,
-    canAddPane,
-    newWindowTooltip,
-    addPane,
-    closePane,
-    setActive,
-    focusPrev,
-    focusNext,
-    setPaneThread,
-    ensureAtLeastOne,
-} = useMultiPane({ onFlushDocument: (id) => flushDocument(id) });
-
-// Convert first pane to doc mode when loading an existing document
-watch(
-    () => props.initialDocumentId,
-    (id) => {
-        if (!id) return;
-        const pane = panes.value[0];
-        if (pane) {
-            pane.mode = 'doc';
-            pane.documentId = id;
-            pane.threadId = '';
-        }
-    },
-    { immediate: true }
-);
-
-const router = useRouter();
-const toast = useToast();
-
-async function validateDocument(id: string): Promise<boolean> {
-    await ensureDocumentsDbOpen();
-    const ATTEMPTS = 5;
-    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        try {
-            const row = await db.posts.get(id);
-            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
-                return true;
-        } catch {}
-        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-function redirectNotFound() {
-    router.replace('/docs');
-    toast.add({
-        title: 'Not found',
-        description: 'This document does not exist.',
-        color: 'error',
-    });
-}
-
-let validateToken = 0;
-async function initInitialDocument() {
-    if (!process.client) return;
-    if (!props.initialDocumentId) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.validateInitial) {
-        pane.validating = true;
-        const token = ++validateToken;
-        const ok = await validateDocument(props.initialDocumentId);
-        if (token !== validateToken) return;
-        if (!ok) return redirectNotFound();
-    }
-    pane.mode = 'doc';
-    pane.documentId = props.initialDocumentId;
-    pane.threadId = '';
-    pane.validating = false;
-    updateUrlDocument(props.initialDocumentId);
-}
-
-function updateUrlDocument(id?: string) {
-    if (!process.client || !props.routeSync) return;
-    const newPath = id ? `/docs/${id}` : '/docs';
-    if (window.location.pathname === newPath) return;
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-// Watch active pane doc changes to sync URL
-watch(
-    () =>
-        panes.value
-            .map((p) => `${p.id}:${p.documentId || ''}:${p.mode}`)
-            .join(','),
-    () => {
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        if (pane.mode === 'doc') updateUrlDocument(pane.documentId);
-        else updateUrlDocument(undefined);
-    }
-);
-
-// Documents operations
-const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
-    panes,
-    activePaneIndex,
-    createNewDoc,
-    flushDocument: (id) => flushDocument(id),
-});
-
-async function onNewDocument(initial?: { title?: string }) {
-    const doc = await newDocumentInActive(initial);
-    if (doc) updateUrlDocument(doc.id);
-}
-async function onDocumentSelected(id: string) {
-    await selectDocumentInActive(id);
-    updateUrlDocument(id);
-}
-
-// If user picks a chat in sidebar, navigate to chat route (keeps consistent behavior with unified sidebar)
-function onSidebarChatSelected(id: string) {
-    if (!id) return;
-    router.push(`/chat/${id}`);
-}
-function onSidebarNewChat() {
-    router.push('/chat');
-}
-
-// Theme toggle (copied minimal from chat shell)
-const nuxtApp = useNuxtApp();
-const themeName = ref('light');
-function getThemeSafe() {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client)
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-    } catch {}
-    return 'light';
-}
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    (nuxtApp.$theme as any)?.toggle?.();
-    syncTheme();
-}
-if (process.client) {
-    onMounted(() => {
-        syncTheme();
-        const root = document.documentElement;
-        const observer = new MutationObserver(syncTheme);
-        observer.observe(root, {
-            attributes: true,
-            attributeFilter: ['class'],
-        });
-        if (import.meta.hot)
-            import.meta.hot.dispose(() => observer.disconnect());
-        else onUnmounted(() => observer.disconnect());
-    });
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// Sidebar focus (collapsed)
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-const sideNavExpandedRef = ref<any | null>(null);
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    requestAnimationFrame(() => sideNavExpandedRef.value?.focusSearchInput?.());
-}
-
-onMounted(() => {
-    ensureAtLeastOne();
-    initInitialDocument();
-});
-
-// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
-        }
-    };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot)
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    else onUnmounted(() => window.removeEventListener('keydown', down));
-}
-</script>
-<style scoped>
-.pane-active {
-    position: relative;
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    border: 1px solid var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
-```
-
 ## File: app/components/modal/SettingsModal.vue
 ```vue
 <template>
@@ -6721,7 +8658,7 @@ if (process.client) {
                 <div v-else class="flex-1 min-h-0">
                     <VList
                         :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 70vh"
+                        style="height: 70dvh"
                         class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
                         :overscan="4"
                         #default="{ item: row }"
@@ -6938,133 +8875,216 @@ function formatPerMillion(raw: unknown, currency = 'USD') {
 </script>
 ```
 
-## File: app/components/sidebar/SideNavContentCollapsed.vue
+## File: app/components/prompts/PromptEditor.vue
 ```vue
 <template>
-    <div class="flex flex-col justify-between h-full relative">
-        <div class="px-1 pt-2 flex flex-col space-y-2">
-            <UTooltip :delay-duration="0" text="New chat">
-                <UButton
-                    @click="onNewChat"
-                    size="md"
-                    class="flex item-center justify-center"
-                    icon="pixelarticons:message-plus"
-                    :ui="{
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                ></UButton>
-                <UButton
-                    size="md"
-                    class="flex item-center justify-center"
-                    icon="pixelarticons:search"
-                    :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="emit('focusSearch')"
-                ></UButton>
-            </UTooltip>
-        </div>
-        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
+    <div
+        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+    >
+        <div
+            class="flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
+        >
             <UButton
+                @click="emit('back')"
+                variant="outline"
+                class="flex items-center justify-center h-[40px] w-[40px] mr-3"
+                color="neutral"
+                icon="pixelarticons:arrow-left"
+                aria-label="Back to list"
+            />
+            <UInput
+                v-model="titleDraft"
+                placeholder="Untitled Prompt"
+                label="Prompt Title"
                 size="md"
-                class="flex item-center justify-center"
-                icon="pixelarticons:sliders-2"
                 :ui="{
-                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
-                    leadingIcon: 'w-5 h-5',
+                    base: 'retro-shadow',
                 }"
-            ></UButton>
+                class="flex-1"
+                @update:model-value="onTitleChange"
+            />
+            <div class="flex items-center gap-1">
+                <UTooltip :text="statusText">
+                    <span
+                        class="text-xs opacity-70 w-16 text-right select-none"
+                        >{{ statusText }}</span
+                    >
+                </UTooltip>
+            </div>
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto">
+            <div v-if="loading" class="p-6 text-sm text-neutral-500">
+                Loading…
+            </div>
+            <div v-else-if="!record" class="p-6 text-sm text-error">
+                Prompt not found.
+            </div>
+            <div
+                v-else
+                class="w-full max-h-[70dvh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
+            >
+                <EditorContent
+                    :editor="editor as Editor"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                />
+            </div>
         </div>
     </div>
 </template>
+
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
-import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
-import { VList } from 'virtua/vue';
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
+import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
 
-const props = defineProps<{
-    activeThread?: string;
-}>();
+const props = defineProps<{ promptId: string }>();
+const emit = defineEmits<{ (e: 'back'): void }>();
 
-const items = ref<any[]>([]);
-import { useThreadSearch } from '~/composables/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
-const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
-);
-let sub: { unsubscribe: () => void } | null = null;
+const record = ref<PromptRecord | null>(null);
+const loading = ref(true);
+const titleDraft = ref('');
+const editor = ref<Editor | null>(null);
+const pendingTitle = ref<string | undefined>();
+const pendingContent = ref<any | undefined>();
+const saveTimer = ref<any | null>(null);
+const status = ref<'idle' | 'saving' | 'error' | 'loading'>('loading');
 
-onMounted(() => {
-    // Sort by last opened using updated_at index; filter out deleted
-    sub = liveQuery(() =>
-        db.threads
-            .orderBy('updated_at')
-            .reverse()
-            .filter((t) => !t.deleted)
-            .toArray()
-    ).subscribe({
-        next: (results) => (items.value = results),
-        error: (err) => console.error('liveQuery error', err),
+async function load(id: string) {
+    loading.value = true;
+    status.value = 'loading';
+    try {
+        const rec = await getPrompt(id);
+        record.value = rec || null;
+        if (rec) {
+            titleDraft.value = rec.title;
+            if (editor.value) {
+                editor.value.commands.setContent(
+                    rec.content || { type: 'doc', content: [] },
+                    { emitUpdate: false }
+                );
+            }
+            status.value = 'idle';
+        } else {
+            status.value = 'error';
+        }
+    } catch (e) {
+        status.value = 'error';
+        console.warn('[PromptEditor] load failed', e);
+    } finally {
+        loading.value = false;
+    }
+}
+
+function scheduleSave() {
+    if (saveTimer.value) clearTimeout(saveTimer.value);
+    saveTimer.value = setTimeout(flush, 600);
+}
+
+async function flush() {
+    if (!record.value) return;
+    if (pendingTitle.value === undefined && pendingContent.value === undefined)
+        return;
+    status.value = 'saving';
+    try {
+        const patch: any = {};
+        if (pendingTitle.value !== undefined) patch.title = pendingTitle.value;
+        if (pendingContent.value !== undefined)
+            patch.content = pendingContent.value;
+        const updated = await updatePrompt(record.value.id, patch);
+        if (updated) {
+            record.value = updated;
+            titleDraft.value = updated.title;
+            status.value = 'idle';
+        } else {
+            status.value = 'error';
+        }
+    } catch (e) {
+        status.value = 'error';
+        console.warn('[PromptEditor] save failed', e);
+    } finally {
+        pendingTitle.value = undefined;
+        pendingContent.value = undefined;
+    }
+}
+
+function onTitleChange() {
+    pendingTitle.value = titleDraft.value;
+    scheduleSave();
+}
+
+function emitContent() {
+    if (!editor.value) return;
+    pendingContent.value = editor.value.getJSON();
+    scheduleSave();
+}
+
+function makeEditor() {
+    editor.value = new Editor({
+        extensions: [
+            StarterKit.configure({ heading: { levels: [1, 2] } }),
+            Placeholder.configure({
+                placeholder: 'Type your system instructions…',
+            }),
+        ],
+        content: record.value?.content || { type: 'doc', content: [] },
+        autofocus: false,
+        onUpdate: () => emitContent(),
     });
+}
+
+onMounted(async () => {
+    await load(props.promptId);
+    makeEditor();
 });
 
 watch(
-    () => items.value,
-    () => {
-        /* silent: removed Items updated log */
+    () => props.promptId,
+    async (id) => {
+        await load(id);
     }
 );
 
-onUnmounted(() => {
-    sub?.unsubscribe();
+onBeforeUnmount(() => {
+    editor.value?.destroy();
+    if (saveTimer.value) clearTimeout(saveTimer.value);
 });
 
-const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-
-const showDeleteModal = ref(false);
-const deleteId = ref<string | null>(null);
-
-function openRename(thread: any) {
-    renameId.value = thread.id;
-    renameTitle.value = thread.title ?? '';
-    showRenameModal.value = true;
-}
-
-async function saveRename() {
-    if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
-    const now = Math.floor(Date.now() / 1000);
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-}
-
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
-    showDeleteModal.value = true;
-}
-
-async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
-    showDeleteModal.value = false;
-    deleteId.value = null;
-}
-
-function onNewChat() {
-    emit('newChat');
-}
+const statusText = computed(() => {
+    switch (status.value) {
+        case 'saving':
+            return 'Saving…';
+        case 'idle':
+            return 'Ready';
+        case 'error':
+            return 'Error';
+        case 'loading':
+            return 'Loading…';
+    }
+});
 </script>
+
+<style scoped>
+.prose :where(h1, h2) {
+    font-family: 'Press Start 2P', monospace;
+}
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85;
+}
+</style>
 ```
 
 ## File: app/components/sidebar/SideNavHeader.vue
@@ -7662,590 +9682,32 @@ async function submitCreateDocument() {
 </script>
 ```
 
-## File: app/components/PageShell.vue
-```vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
-                ref="sideNavExpandedRef"
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
-            />
-        </template>
-        <div class="flex-1 h-screen w-full relative">
-            <div
-                id="top-nav"
-                :class="{
-                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
-                        panes.length > 1 || isMobile,
-                }"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
-            >
-                <div
-                    v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
-                >
-                    <UTooltip :delay-duration="0" text="Open sidebar">
-                        <UButton
-                            label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            aria-label="Open sidebar"
-                            title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
-                            @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div
-                    class="h-full items-center justify-center px-4 hidden md:flex"
-                >
-                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :disabled="!canAddPane"
-                            :class="
-                                'retro-btn pointer-events-auto mr-2 ' +
-                                (!canAddPane
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
-                            aria-label="New window"
-                            title="New window"
-                            @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div class="h-full flex items-center justify-center px-4">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <div
-                :class="[
-                    showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                    @keydown.left.prevent="focusPrev(i)"
-                    @keydown.right.prevent="focusNext(i)"
-                >
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
+## File: app/composables/__tests__/__snapshots__/hookOrder.test.ts.snap
+```
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-                    <template v-if="pane.mode === 'chat'">
-                        <ChatContainer
-                            class="flex-1 min-h-0"
-                            :message-history="pane.messages"
-                            :thread-id="pane.threadId"
-                            @thread-selected="
-                                (id: string) => onInternalThreadCreated(id, i)
-                            "
-                        />
-                    </template>
-                    <template v-else-if="pane.mode === 'doc'">
-                        <LazyDocumentsDocumentEditor
-                            v-if="pane.documentId"
-                            :document-id="pane.documentId"
-                            class="flex-1 min-h-0"
-                        ></LazyDocumentsDocumentEditor>
-                        <div
-                            v-else
-                            class="flex-1 flex items-center justify-center text-sm opacity-70"
-                        >
-                            No document.
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-<script setup lang="ts">
-// Generic PageShell merging chat + docs functionality.
-// Props allow initializing with a thread OR a document and choosing default mode.
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
-import { db } from '~/db';
-import { useHookEffect } from '~/composables/useHookEffect';
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
+exports[`Hook order snapshot (pre-accumulator integration) > records hook invocation order for a simple sendMessage 1`] = `
+[
+  "ai.chat.send:action:before",
+  "ai.chat.stream:action:delta",
+  "ai.chat.stream:action:delta",
+  "ai.chat.send:action:after",
+]
+`;
+```
 
-const props = withDefaults(
-    defineProps<{
-        initialThreadId?: string;
-        initialDocumentId?: string;
-        validateInitial?: boolean; // applies to whichever id is provided
-        routeSync?: boolean;
-        defaultMode?: 'chat' | 'doc'; // used when no initial id
-    }>(),
-    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
-);
+## File: app/composables/__tests__/__snapshots__/hookOrderSnapshot.test.ts.snap
+```
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-const router = useRouter();
-const toast = useToast();
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-const sideNavExpandedRef = ref<any | null>(null);
-
-// ---------------- Multi-pane ----------------
-const {
-    panes,
-    activePaneIndex,
-    canAddPane,
-    newWindowTooltip,
-    addPane,
-    closePane,
-    setActive,
-    focusPrev,
-    focusNext,
-    setPaneThread,
-    loadMessagesFor,
-    ensureAtLeastOne,
-} = useMultiPane({
-    initialThreadId: props.initialThreadId,
-    maxPanes: 3,
-    onFlushDocument: (id) => flushDocument(id),
-});
-
-// Active thread convenience (first pane for sidebar highlight)
-const activeChatThreadId = computed(() =>
-    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
-);
-
-// --------------- Initializers ---------------
-let validateToken = 0;
-
-async function validateThread(id: string): Promise<boolean> {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const t = await db.threads.get(id);
-            if (t && !t.deleted) return true;
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-async function validateDocument(id: string): Promise<boolean> {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const row = await db.posts.get(id);
-            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
-                return true;
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-async function initInitial() {
-    if (!process.client) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.initialThreadId) {
-        if (props.validateInitial) {
-            pane.validating = true;
-            const token = ++validateToken;
-            const ok = await validateThread(props.initialThreadId);
-            if (token !== validateToken) return;
-            if (!ok) {
-                redirectNotFound('chat');
-                return;
-            }
-        }
-        await setPaneThread(0, props.initialThreadId);
-        pane.mode = 'chat';
-        pane.validating = false;
-        updateUrl();
-        return;
-    }
-    if (props.initialDocumentId) {
-        if (props.validateInitial) {
-            pane.validating = true;
-            const token = ++validateToken;
-            const ok = await validateDocument(props.initialDocumentId);
-            if (token !== validateToken) return;
-            if (!ok) {
-                redirectNotFound('doc');
-                return;
-            }
-        }
-        pane.mode = 'doc';
-        pane.documentId = props.initialDocumentId;
-        pane.threadId = '';
-        pane.validating = false;
-        updateUrl();
-        return;
-    }
-    // No ids: set default mode
-    if (props.defaultMode === 'doc') {
-        pane.mode = 'doc';
-        pane.documentId = undefined;
-        pane.threadId = '';
-    } else {
-        pane.mode = 'chat';
-    }
-    updateUrl();
-}
-
-function redirectNotFound(kind: 'chat' | 'doc') {
-    if (kind === 'chat') router.replace('/chat');
-    else router.replace('/docs');
-    toast.add({
-        title: 'Not found',
-        description:
-            kind === 'chat'
-                ? 'This chat does not exist.'
-                : 'This document does not exist.',
-        color: 'error',
-    });
-}
-
-// --------------- URL Sync ---------------
-function updateUrl() {
-    if (!process.client || !props.routeSync) return;
-    const pane = panes.value[activePaneIndex.value];
-    if (!pane) return;
-    const base = pane.mode === 'doc' ? '/docs' : '/chat';
-    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
-    const newPath = id ? `${base}/${id}` : base;
-    if (window.location.pathname === newPath) return;
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-watch(
-    () =>
-        panes.value
-            .map(
-                (p) =>
-                    `${p.id}:${p.mode}:${p.threadId || ''}:${
-                        p.documentId || ''
-                    }`
-            )
-            .join(','),
-    () => updateUrl()
-);
-
-watch(
-    () => activePaneIndex.value,
-    () => updateUrl()
-);
-
-// --------------- Documents Integration ---------------
-const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
-    panes,
-    activePaneIndex,
-    createNewDoc,
-    flushDocument: (id) => flushDocument(id),
-});
-
-async function onNewDocument(initial?: { title?: string }) {
-    const doc = await newDocumentInActive(initial);
-    if (doc) updateUrl();
-}
-async function onDocumentSelected(id: string) {
-    await selectDocumentInActive(id);
-    updateUrl();
-}
-
-// Sidebar chat selection always puts pane in chat mode
-function onSidebarSelected(id: string) {
-    if (!id) return;
-    const target = activePaneIndex.value;
-    setPaneThread(target, id);
-    const pane = panes.value[target];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-    }
-    if (target === activePaneIndex.value) updateUrl();
-}
-function onInternalThreadCreated(id: string, paneIndex?: number) {
-    if (!id) return;
-    const idx =
-        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
-    const pane = panes.value[idx];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    if (pane.threadId !== id) setPaneThread(idx, id);
-    if (idx === activePaneIndex.value) updateUrl();
-}
-function onNewChat() {
-    const pane = panes.value[activePaneIndex.value];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-        pane.messages = [];
-        pane.threadId = '';
-    }
-    updateUrl();
-}
-
-// --------------- Theme ---------------
-const nuxtApp = useNuxtApp();
-const getThemeSafe = () => {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client) {
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-        }
-    } catch {}
-    return 'light';
-};
-const themeName = ref<string>(getThemeSafe());
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    (nuxtApp.$theme as any)?.toggle?.();
-    syncTheme();
-}
-if (process.client) {
-    const root = document.documentElement;
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => observer.disconnect());
-    } else {
-        onUnmounted(() => observer.disconnect());
-    }
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// --------------- Mobile + layout ---------------
-import { isMobile } from '~/state/global';
-if (process.client) {
-    onMounted(() => {
-        const mq = window.matchMedia('(max-width: 640px)');
-        const apply = () => (isMobile.value = mq.matches);
-        apply();
-        mq.addEventListener('change', apply);
-        if (import.meta.hot) {
-            import.meta.hot.dispose(() =>
-                mq.removeEventListener('change', apply)
-            );
-        } else {
-            onUnmounted(() => mq.removeEventListener('change', apply));
-        }
-    });
-}
-const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
-function openMobileSidebar() {
-    (layoutRef.value as any)?.openSidebar?.();
-}
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    requestAnimationFrame(() => {
-        sideNavExpandedRef.value?.focusSearchInput?.();
-    });
-}
-
-// --------------- Deletion auto-reset ---------------
-function resetPaneToBlank(paneIndex: number) {
-    const pane = panes.value[paneIndex];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    pane.threadId = '';
-    pane.messages = [];
-    if (paneIndex === activePaneIndex.value) updateUrl();
-}
-function handleThreadDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
-    });
-}
-function handleDocumentDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
-    });
-}
-useHookEffect(
-    'db.threads.delete:action:soft:after',
-    (t: any) => handleThreadDeletion(t),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.threads.delete:action:hard:after',
-    (id: any) => handleThreadDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:soft:after',
-    (row: any) => handleDocumentDeletion(row),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:hard:after',
-    (id: any) => handleDocumentDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-
-// --------------- Mount ---------------
-onMounted(() => {
-    initInitial();
-    syncTheme();
-    ensureAtLeastOne();
-});
-
-// --------------- Shortcuts ---------------
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
-        }
-    };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    } else {
-        onUnmounted(() => window.removeEventListener('keydown', down));
-    }
-}
-</script>
-<style scoped>
-body {
-    overflow-y: hidden;
-}
-.pane-active {
-    position: relative;
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    border: 1px solid var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
+exports[`Hook order snapshot (pre-accumulator integration) > captures sendMessage hook invocation order 1`] = `
+[
+  "ai.chat.send:action:before",
+  "ai.chat.stream:action:delta",
+  "ai.chat.stream:action:delta",
+  "ai.chat.send:action:after",
+]
+`;
 ```
 
 ## File: app/composables/ui-extensions/documents/useDocumentHistoryActions.ts
@@ -8526,1403 +9988,102 @@ export function listRegisteredThreadHistoryActionIds(): string[] {
 // external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
-## File: app/composables/useAutoScroll.ts
-```typescript
-/**
- * useAutoScroll
- * Scroll position tracking + conditional auto-stick logic.
- * Requirements: 3.3 (Auto-scroll), 3.11 (VueUse adoption), 4 (Docs)
- *
- * Usage:
- * const container = ref<HTMLElement|null>(null)
- * const auto = useAutoScroll(container, { thresholdPx: 64 })
- * auto.onContentIncrease() // call after DOM height increases
- */
-import { ref, onMounted, onBeforeUnmount, nextTick, type Ref } from 'vue';
-import { useEventListener, useThrottleFn } from '@vueuse/core';
-
-export interface AutoScrollApi {
-    atBottom: Ref<boolean>;
-    stickBottom: () => void;
-    scrollToBottom: (opts?: { smooth?: boolean }) => void;
-    onContentIncrease: () => void;
-    detach: () => void;
-    recompute: () => void; // explicit recompute (useful for tests/manual)
-}
-
-export interface UseAutoScrollOptions {
-    thresholdPx?: number;
-    behavior?: ScrollBehavior;
-    throttleMs?: number; // to avoid scroll thrash; default 50ms
-}
-
-export function useAutoScroll(
-    container: Ref<HTMLElement | null>,
-    opts: UseAutoScrollOptions = {}
-): AutoScrollApi {
-    const { thresholdPx = 64, behavior = 'auto', throttleMs = 50 } = opts;
-    const atBottom = ref(true);
-    let stick = true;
-
-    function compute() {
-        const el = container.value;
-        if (!el) return;
-        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-        const newAtBottom = dist <= thresholdPx;
-        if (!newAtBottom) stick = false;
-        atBottom.value = newAtBottom;
-    }
-
-    const throttledCompute = useThrottleFn(compute, throttleMs);
-
-    function scrollToBottom({ smooth }: { smooth?: boolean } = {}) {
-        const el = container.value;
-        if (!el) return;
-        el.scrollTo({
-            top: el.scrollHeight,
-            behavior: smooth ? 'smooth' : behavior,
-        });
-        stick = true;
-        atBottom.value = true;
-    }
-
-    function stickBottom() {
-        stick = true;
-        scrollToBottom({ smooth: true });
-    }
-
-    function onContentIncrease() {
-        if (stick) nextTick(() => scrollToBottom({ smooth: false }));
-        else compute();
-    }
-
-    let cleanup: (() => void) | null = null;
-    onMounted(() => {
-        compute();
-        cleanup = useEventListener(container, 'scroll', throttledCompute, {
-            passive: true,
-        });
-    });
-    function detach() {
-        if (cleanup) {
-            cleanup();
-            cleanup = null;
-        }
-    }
-    onBeforeUnmount(detach);
-
-    return {
-        atBottom,
-        stickBottom,
-        scrollToBottom,
-        onContentIncrease,
-        detach,
-        recompute: compute,
-    };
-}
-```
-
-## File: app/composables/useDefaultPrompt.ts
-```typescript
-import { ref, readonly } from 'vue';
-import { db } from '~/db';
-import { setKvByName } from '~/db/kv';
-import { useHooks } from './useHooks';
-
-// Singleton state (module scope) so all importers share
-const _defaultPromptId = ref<string | null>(null);
-let _loaded = false;
-
-async function loadOnce() {
-    if (_loaded) return;
-    _loaded = true;
-    try {
-        const rec = await db.kv
-            .where('name')
-            .equals('default_system_prompt_id')
-            .first();
-        if (rec && typeof rec.value === 'string' && rec.value) {
-            _defaultPromptId.value = rec.value;
-        } else {
-            _defaultPromptId.value = null;
-        }
-    } catch {
-        _defaultPromptId.value = null;
-    }
-}
-
-export function useDefaultPrompt() {
-    const hooks = useHooks();
-    if (import.meta.client) loadOnce();
-
-    async function setDefaultPrompt(id: string | null) {
-        await loadOnce();
-        const newId = id || null;
-        _defaultPromptId.value = newId;
-        await setKvByName('default_system_prompt_id', newId);
-        await hooks.doAction('chat.systemPrompt.default:action:update', newId);
-    }
-
-    async function clearDefaultPrompt() {
-        await setDefaultPrompt(null);
-    }
-
-    const defaultPromptId = readonly(_defaultPromptId);
-
-    return {
-        defaultPromptId,
-        setDefaultPrompt,
-        clearDefaultPrompt,
-        // low-level ensure load (mainly for SSR safety guards)
-        ensureLoaded: loadOnce,
-    };
-}
-
-export async function getDefaultPromptId(): Promise<string | null> {
-    try {
-        const rec = await db.kv
-            .where('name')
-            .equals('default_system_prompt_id')
-            .first();
-        return rec && typeof rec.value === 'string' && rec.value
-            ? rec.value
-            : null;
-    } catch {
-        return null;
-    }
-}
-```
-
-## File: app/composables/useMessageEditing.ts
+## File: app/composables/useDocumentsList.ts
 ```typescript
 import { ref } from 'vue';
-import { upsert } from '~/db';
-import { nowSec } from '~/db/util';
+import { listDocuments, type Document } from '~/db/documents';
+import { useToast } from '#imports';
+import { useHookEffect } from './useHookEffect';
 
-// Lightweight composable for editing a chat message (assistant/user)
-export function useMessageEditing(message: any) {
-    const editing = ref(false);
-    const draft = ref('');
-    const original = ref('');
-    const saving = ref(false);
+export function useDocumentsList(limit = 200) {
+    const docs = ref<Document[]>([]);
+    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
+    const loading = ref(true);
+    const error = ref<unknown>(null);
 
-    function beginEdit() {
-        if (editing.value) return;
-        original.value = message.content;
-        draft.value = message.content;
-        editing.value = true;
-    }
-    function cancelEdit() {
-        if (saving.value) return;
-        editing.value = false;
-        draft.value = '';
-        original.value = '';
-    }
-    async function saveEdit() {
-        if (saving.value) return;
-        const id = message.id;
-        if (!id) return;
-        const trimmed = draft.value.trim();
-        if (!trimmed) {
-            cancelEdit();
-            return;
-        }
-        try {
-            saving.value = true;
-            const existing: any = await (
-                await import('~/db/client')
-            ).db.messages.get(id);
-            if (!existing) throw new Error('Message not found');
-            await upsert.message({
-                ...existing,
-                data: { ...(existing.data || {}), content: trimmed },
-                updated_at: nowSec(),
-            });
-            message.content = trimmed;
-            editing.value = false;
-        } finally {
-            saving.value = false;
-        }
-    }
-    return {
-        editing,
-        draft,
-        original,
-        saving,
-        beginEdit,
-        cancelEdit,
-        saveEdit,
-    };
-}
-```
-
-## File: app/composables/useModelStore.ts
-```typescript
-import { kv } from '~/db';
-import modelsService, {
-    type OpenRouterModel,
-    type PriceBucket,
-} from '~/utils/models-service';
-
-// Module-level in-flight promise for deduping parallel fetches across composable instances
-let inFlight: Promise<OpenRouterModel[]> | null = null;
-
-export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
-export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
-
-function canUseDexie() {
-    try {
-        return (
-            typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
-        );
-    } catch {
-        return false;
-    }
-}
-
-// --- Singleton reactive state (shared across all composable callers) ---
-// These are intentionally hoisted so that different components (e.g. SettingsModal
-// and ChatInputDropper) mutate the SAME refs. Previously, each invocation of
-// useModelStore() created new refs, so favoriting a model in the modal did not
-// propagate to the chat input until a full reload re-hydrated from KV.
-const favoriteModels = ref<OpenRouterModel[]>([]);
-const catalog = ref<OpenRouterModel[]>([]);
-const searchQuery = ref('');
-const filters = ref<{
-    input?: string[];
-    output?: string[];
-    minContext?: number;
-    parameters?: string[];
-    price?: PriceBucket;
-}>({});
-// Reactive timestamp (ms) of when catalog was last loaded into memory
-const lastLoadedAt = ref<number | undefined>(undefined);
-
-export function useModelStore() {
-    function isFresh(ts: number | undefined, ttl: number) {
-        if (!ts) return false;
-        return Date.now() - ts < ttl;
-    }
-
-    async function loadFromDexie(
-        ttl: number
-    ): Promise<OpenRouterModel[] | null> {
-        if (!canUseDexie()) return null;
-        try {
-            const rec: any = await kv.get(MODELS_CACHE_KEY);
-            if (!rec) return null;
-            // rec.updated_at is seconds in Kv schema; convert to ms
-            const updatedAtMs = rec.updated_at
-                ? rec.updated_at * 1000
-                : undefined;
-            if (!updatedAtMs || !isFresh(updatedAtMs, ttl)) {
-                console.debug(
-                    '[models-cache] dexie record stale or missing timestamp',
-                    {
-                        updatedAtMs,
-                        ttl,
-                    }
-                );
-                return null;
-            }
-            const raw = rec?.value;
-            if (!raw || typeof raw !== 'string') return null;
-            try {
-                const parsed = JSON.parse(raw);
-                if (!Array.isArray(parsed)) return null;
-                catalog.value = parsed;
-                lastLoadedAt.value = updatedAtMs;
-                console.debug(
-                    '[models-cache] dexie hit — hydrated catalog from cache',
-                    {
-                        updatedAtMs,
-                        count: parsed.length,
-                    }
-                );
-                // Removed dexie source console.log
-                return parsed;
-            } catch (e) {
-                console.warn(
-                    '[models-cache] JSON parse failed; deleting corrupt record',
-                    e
-                );
-                // best-effort cleanup
-                try {
-                    await kv.delete(MODELS_CACHE_KEY);
-                } catch {}
-                return null;
-            }
-        } catch (e) {
-            console.warn('[models-cache] Dexie load failed', e);
-            return null;
-        }
-    }
-
-    async function saveToDexie(list: OpenRouterModel[]) {
-        if (!canUseDexie()) return;
-        try {
-            await kv.set(MODELS_CACHE_KEY, JSON.stringify(list));
-            console.debug('[models-cache] saved catalog to Dexie', {
-                count: list.length,
-            });
-        } catch (e) {
-            console.warn('[models-cache] Dexie save failed', e);
-        }
-    }
-
-    async function invalidate() {
-        console.info(
-            '[models-cache] invalidate called — clearing memory + Dexie (if available)'
-        );
-        catalog.value = [];
-        lastLoadedAt.value = undefined;
-        if (!canUseDexie()) return;
-        try {
-            await kv.delete(MODELS_CACHE_KEY);
-            console.debug('[models-cache] Dexie record deleted');
-        } catch (e) {
-            console.warn('[models-cache] Dexie delete failed', e);
-        }
-    }
-
-    async function fetchModels(opts?: { force?: boolean; ttlMs?: number }) {
-        const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
-
-        // Memory fast-path
-        if (
-            !opts?.force &&
-            catalog.value.length &&
-            isFresh(lastLoadedAt.value, ttl)
-        ) {
-            console.debug(
-                '[models-cache] memory hit — returning in-memory catalog',
-                {
-                    lastLoadedAt: lastLoadedAt.value,
-                    count: catalog.value.length,
-                }
-            );
-            // Removed memory source console.log
-            return catalog.value;
-        }
-
-        // Try Dexie if available and not forced
-        if (!opts?.force) {
-            const dexieHit = await loadFromDexie(ttl);
-            if (dexieHit) return dexieHit;
-            console.debug(
-                '[models-cache] no fresh Dexie hit; proceeding to network fetch'
-            );
-        }
-
-        // Dedupe in-flight network requests
-        if (inFlight && !opts?.force) return inFlight;
-
-        const fetchPromise = (async () => {
-            console.info('[models-cache] fetching models from network');
-            try {
-                const list = await modelsService.fetchModels(opts);
-                catalog.value = list;
-                lastLoadedAt.value = Date.now();
-                console.info(
-                    '[models-cache] network fetch successful — updated memory, persisting to Dexie'
-                );
-                // Removed network source console.log
-                // persist async (don't block response)
-                saveToDexie(list).catch(() => {});
-                return list;
-            } catch (err) {
-                console.warn('[models-cache] network fetch failed', err);
-                // On network failure, attempt to serve stale Dexie record (even if expired)
-                if (canUseDexie()) {
-                    try {
-                        const rec: any = await kv.get(MODELS_CACHE_KEY);
-                        const raw = rec?.value;
-                        if (raw && typeof raw === 'string') {
-                            try {
-                                const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length) {
-                                    console.warn(
-                                        '[models-cache] network failed; serving stale cached models',
-                                        { count: parsed.length }
-                                    );
-                                    // Removed stale dexie fallback console.log
-                                    return parsed;
-                                }
-                            } catch (e) {
-                                // corrupted; best-effort delete
-                                try {
-                                    await kv.delete(MODELS_CACHE_KEY);
-                                } catch {}
-                            }
-                        }
-                    } catch (e) {
-                        console.warn(
-                            '[models-cache] Dexie read during network failure failed',
-                            e
-                        );
-                    }
-                }
-                throw err;
-            }
-        })();
-
-        if (!opts?.force) {
-            inFlight = fetchPromise.finally(() => {
-                inFlight = null;
-            });
-        }
-
-        return fetchPromise;
-    }
-
-    async function persist() {
-        try {
-            await kv.set(
-                'favorite_models',
-                JSON.stringify(favoriteModels.value)
-            );
-        } catch (e) {
-            console.warn('[useModelStore] persist favorites failed', e);
-        }
-    }
-
-    async function addFavoriteModel(model: OpenRouterModel) {
-        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
-        favoriteModels.value.push(model);
-        await persist();
-    }
-
-    async function removeFavoriteModel(model: OpenRouterModel) {
-        favoriteModels.value = favoriteModels.value.filter(
-            (m) => m.id !== model.id
-        );
-        await persist();
-    }
-
-    async function clearFavoriteModels() {
-        favoriteModels.value = [];
-        await persist();
-    }
-
-    async function getFavoriteModels() {
-        try {
-            const record: any = await kv.get('favorite_models');
-            const raw = record?.value;
-            if (raw && typeof raw === 'string') {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    favoriteModels.value = parsed;
-                } else {
-                    favoriteModels.value = [];
-                }
-            } else {
-                favoriteModels.value = [];
-            }
-        } catch {
-            favoriteModels.value = [];
-        }
-        return favoriteModels.value;
-    }
-
-    // Convenience wrapper to force network refresh
-    async function refreshModels() {
-        return fetchModels({ force: true });
-    }
-
-    return {
-        favoriteModels,
-        catalog,
-        searchQuery,
-        filters,
-        fetchModels,
-        refreshModels,
-        invalidate,
-        getFavoriteModels,
-        addFavoriteModel,
-        removeFavoriteModel,
-        clearFavoriteModels,
-        lastLoadedAt,
-    };
-}
-```
-
-## File: app/composables/useObservedElementSize.ts
-```typescript
-/**
- * useObservedElementSize
- * Thin wrapper over VueUse useElementSize for naming consistency.
- * Requirement: 3.4 (Resize via VueUse), 3.11 (VueUse adoption), 4 (Docs)
- */
-import { useElementSize } from '@vueuse/core';
-import type { Ref } from 'vue';
-
-export function useObservedElementSize(el: Ref<HTMLElement | null>) {
-    return useElementSize(el);
-}
-```
-
-## File: app/composables/usePaneDocuments.ts
-```typescript
-// Composable to manage per-pane document operations (create/select) abstracted from UI.
-// Assumes panes follow the PaneState contract from useMultiPane.
-
-import type { Ref } from 'vue';
-import type { MultiPaneState } from '~/composables/useMultiPane';
-
-export interface UsePaneDocumentsOptions {
-    panes: Ref<MultiPaneState[]>;
-    activePaneIndex: Ref<number>;
-    createNewDoc: (initial?: { title?: string }) => Promise<{ id: string }>;
-    flushDocument: (id: string) => Promise<void> | void;
-}
-
-export interface UsePaneDocumentsApi {
-    newDocumentInActive: (initial?: {
-        title?: string;
-    }) => Promise<{ id: string } | undefined>;
-    selectDocumentInActive: (id: string) => Promise<void>;
-}
-
-export function usePaneDocuments(
-    opts: UsePaneDocumentsOptions
-): UsePaneDocumentsApi {
-    const { panes, activePaneIndex, createNewDoc, flushDocument } = opts;
-
-    async function newDocumentInActive(initial?: { title?: string }) {
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        try {
-            if (pane.mode === 'doc' && pane.documentId) {
-                await flushDocument(pane.documentId);
-            }
-            const doc = await createNewDoc(initial);
-            pane.mode = 'doc';
-            pane.documentId = doc.id;
-            pane.threadId = '';
-            pane.messages = [];
-            return doc;
-        } catch {
-            return undefined;
-        }
-    }
-
-    async function selectDocumentInActive(id: string) {
-        if (!id) return;
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
-            try {
-                await flushDocument(pane.documentId);
-            } catch {}
-        }
-        pane.mode = 'doc';
-        pane.documentId = id;
-        pane.threadId = '';
-        pane.messages = [];
-    }
-
-    return { newDocumentInActive, selectDocumentInActive };
-}
-```
-
-## File: app/composables/useSidebarSearch.ts
-```typescript
-// Unified sidebar search across threads, projects, and documents.
-// Modeled after useThreadSearch but merges all three domains into one Orama index
-// for a single fast query. Falls back to substring filtering if Orama fails.
-//
-// Exposed API mirrors existing pattern so integration stays minimal.
-import { ref, watch, type Ref } from 'vue';
-import type { Thread, Project, Post } from '~/db';
-
-interface IndexDoc {
-    id: string;
-    kind: 'thread' | 'project' | 'doc';
-    title: string;
-    updated_at: number;
-}
-
-type OramaInstance = any;
-let dbInstance: OramaInstance | null = null;
-let lastQueryToken = 0;
-let warnedFallback = false;
-
-async function importOrama() {
-    try {
-        return await import('@orama/orama');
-    } catch (e) {
-        throw new Error('Failed to load Orama');
-    }
-}
-
-async function createDb() {
-    const { create } = await importOrama();
-    return create({
-        schema: {
-            id: 'string',
-            kind: 'string',
-            title: 'string',
-            updated_at: 'number',
-        },
-    });
-}
-
-function toDocs(
-    threads: Thread[],
-    projects: Project[],
-    documents: Post[]
-): IndexDoc[] {
-    const threadDocs: IndexDoc[] = threads.map((t) => ({
-        id: t.id,
-        kind: 'thread',
-        title: (t.title || 'Untitled Thread').trim() || 'Untitled Thread',
-        updated_at: t.updated_at,
-    }));
-    const projectDocs: IndexDoc[] = projects.map((p) => ({
-        id: p.id,
-        kind: 'project',
-        title: (p.name || 'Untitled Project').trim() || 'Untitled Project',
-        updated_at: p.updated_at,
-    }));
-    const docDocs: IndexDoc[] = documents
-        .filter((d) => (d as any).postType === 'doc' && !(d as any).deleted)
-        .map((d) => ({
-            id: d.id,
-            kind: 'doc',
-            title: (d as any).title || 'Untitled',
-            updated_at: (d as any).updated_at,
-        }));
-    return [...threadDocs, ...projectDocs, ...docDocs];
-}
-
-async function buildIndex(
-    threads: Thread[],
-    projects: Project[],
-    documents: Post[]
-) {
-    const { insertMultiple } = await importOrama();
-    dbInstance = await createDb();
-    if (!dbInstance) return null;
-    const docs = toDocs(threads, projects, documents);
-    if (docs.length) await insertMultiple(dbInstance, docs);
-    return dbInstance;
-}
-
-// Signature helper to know when to rebuild (counts + latest updated_at)
-function computeSignature(
-    threads: Thread[],
-    projects: Project[],
-    documents: Post[]
-) {
-    let latest = 0;
-    for (const t of threads) if (t.updated_at > latest) latest = t.updated_at;
-    for (const p of projects) if (p.updated_at > latest) latest = p.updated_at;
-    for (const d of documents)
-        if ((d as any).updated_at > latest) latest = (d as any).updated_at;
-    return `${threads.length}:${projects.length}:${documents.length}:${latest}`;
-}
-
-export function useSidebarSearch(
-    threads: Ref<Thread[]>,
-    projects: Ref<Project[]>,
-    documents: Ref<Post[]>
-) {
-    const query = ref('');
-    const threadResults = ref<Thread[]>([]);
-    const projectResults = ref<Project[]>([]);
-    const documentResults = ref<Post[]>([]);
-    const ready = ref(false);
-    const busy = ref(false);
-    const lastIndexedSignature = ref('');
-    const idMaps = {
-        thread: ref<Record<string, Thread>>({}),
-        project: ref<Record<string, Project>>({}),
-        doc: ref<Record<string, Post>>({}),
-    };
-
-    async function ensureIndex() {
-        if (busy.value) return;
-        const sig = computeSignature(
-            threads.value,
-            projects.value,
-            documents.value
-        );
-        if (sig === lastIndexedSignature.value && dbInstance) return;
-        busy.value = true;
-        try {
-            idMaps.thread.value = Object.fromEntries(
-                threads.value.map((t) => [t.id, t])
-            );
-            idMaps.project.value = Object.fromEntries(
-                projects.value.map((p) => [p.id, p])
-            );
-            idMaps.doc.value = Object.fromEntries(
-                documents.value
-                    .filter(
-                        (d) =>
-                            (d as any).postType === 'doc' && !(d as any).deleted
-                    )
-                    .map((d) => [d.id, d])
-            );
-            await buildIndex(threads.value, projects.value, documents.value);
-            lastIndexedSignature.value = sig;
-            ready.value = true;
-        } finally {
-            busy.value = false;
-        }
-    }
-
-    function substringFallback(raw: string) {
-        const ql = raw.toLowerCase();
-        const threadHits = threads.value.filter((t) =>
-            (t.title || '').toLowerCase().includes(ql)
-        );
-        const projectHits = projects.value.filter((p) =>
-            (p.name || '').toLowerCase().includes(ql)
-        );
-        const docHits = documents.value.filter(
-            (d) =>
-                (d as any).postType === 'doc' &&
-                !(d as any).deleted &&
-                ((d as any).title || '').toLowerCase().includes(ql)
-        );
-        threadResults.value = threadHits;
-        projectResults.value = projectHits;
-        documentResults.value = docHits;
-        if (!warnedFallback) {
-            // eslint-disable-next-line no-console
-            console.warn('[useSidebarSearch] fallback substring search used');
-            warnedFallback = true;
-        }
-    }
-
-    async function runSearch() {
-        if (!dbInstance) await ensureIndex();
-        if (!dbInstance) return;
-        const raw = query.value.trim();
-        if (!raw) {
-            threadResults.value = threads.value;
-            projectResults.value = projects.value;
-            documentResults.value = documents.value.filter(
-                (d) => (d as any).postType === 'doc' && !(d as any).deleted
-            );
-            return;
-        }
-        const token = ++lastQueryToken;
-        try {
-            const { search } = await importOrama();
-            const res = await search(dbInstance, { term: raw, limit: 500 });
-            if (token !== lastQueryToken) return; // stale
-            const hits = Array.isArray(res?.hits) ? res.hits : [];
-            const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
-                thread: new Set(),
-                project: new Set(),
-                doc: new Set(),
-            };
-            for (const h of hits) {
-                const doc = h.document || h;
-                if (
-                    doc?.kind &&
-                    doc?.id &&
-                    byKind[doc.kind as keyof typeof byKind]
-                ) {
-                    byKind[doc.kind as keyof typeof byKind].add(doc.id);
-                }
-            }
-            // Apply sets
-            if (
-                !byKind.thread.size &&
-                !byKind.project.size &&
-                !byKind.doc.size
-            ) {
-                // Nothing matched -> fallback substring to provide any partials
-                substringFallback(raw);
-                return;
-            }
-            threadResults.value = threads.value.filter((t) =>
-                byKind.thread.has(t.id)
-            );
-            projectResults.value = projects.value.filter((p) =>
-                byKind.project.has(p.id)
-            );
-            documentResults.value = documents.value.filter((d) =>
-                byKind.doc.has(d.id)
-            );
-            // If a project contains matching threads/docs but project name itself didn't match, UI can choose to retain by containment; we leave that logic to integration to keep composable lean.
-        } catch (e) {
-            substringFallback(raw);
-        }
-    }
-
-    // Rebuild index & rerun search on data change
-    watch([threads, projects, documents], async () => {
-        await ensureIndex();
-        await runSearch();
-    });
-
-    // Debounce query changes (120ms like existing thread search)
-    let debounceTimer: any;
-    watch(query, () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(runSearch, 120);
-    });
-
-    // Initial population (pass-through until first build completes)
-    threadResults.value = threads.value;
-    projectResults.value = projects.value;
-    documentResults.value = documents.value.filter(
-        (d) => (d as any).postType === 'doc' && !(d as any).deleted
-    );
-
-    return {
-        query,
-        threadResults,
-        projectResults,
-        documentResults,
-        ready,
-        busy,
-        rebuild: ensureIndex,
-        runSearch,
-    };
-}
-
-export default useSidebarSearch;
-```
-
-## File: app/composables/useTailStream.ts
-```typescript
-/**
- * useTailStream
- * Incremental streaming text buffer with timed flushes.
- * Requirements: 3.2 (Streaming Tail Extraction), 3.11 (VueUse adoption), 4 (Docs)
- *
- * Usage:
- * const tail = useTailStream({ flushIntervalMs: 33, immediate: true });
- * tail.push(chunk);
- * tail.complete();
- */
-import { ref, onBeforeUnmount } from 'vue';
-import { useIntervalFn } from '@vueuse/core';
-
-export interface TailStreamController {
-    displayText: Ref<string>;
-    isStreaming: Ref<boolean>;
-    done: Ref<boolean>;
-    error: Ref<Error | null>;
-    push: (chunk: string) => void;
-    complete: () => void;
-    fail: (err: unknown) => void;
-    reset: () => void;
-}
-
-export interface UseTailStreamOptions {
-    flushIntervalMs?: number; // default 33 (~30fps)
-    maxBuffer?: number; // optional cap of buffered (not yet flushed) characters
-    immediate?: boolean; // flush synchronously on first chunk
-}
-
-export function useTailStream(
-    opts: UseTailStreamOptions = {}
-): TailStreamController {
-    const { flushIntervalMs = 33, maxBuffer, immediate } = opts;
-    const displayText = ref('');
-    const buffer: string[] = [];
-    const isStreaming = ref(false);
-    const done = ref(false);
-    const error = ref<Error | null>(null);
-
-    const flush = () => {
-        if (!buffer.length) return;
-        displayText.value += buffer.join('');
-        buffer.length = 0;
-    };
-
-    const {
-        pause: pauseInterval,
-        resume: resumeInterval,
-        isActive,
-    } = useIntervalFn(
-        () => {
-            flush();
-        },
-        flushIntervalMs,
-        { immediate: false }
-    );
-
-    function push(chunk: string) {
-        if (done.value || error.value) return;
-        if (!chunk) return;
-        isStreaming.value = true;
-        buffer.push(chunk);
-        if (maxBuffer && buffer.reduce((n, c) => n + c.length, 0) >= maxBuffer)
-            flush();
-        if (immediate && displayText.value === '') flush();
-        if (!isActive.value) resumeInterval();
-    }
-
-    function complete() {
-        flush();
-        pauseInterval();
-        done.value = true;
-        isStreaming.value = false;
-    }
-
-    function fail(err: unknown) {
-        flush();
-        error.value = err instanceof Error ? err : new Error(String(err));
-        pauseInterval();
-    }
-
-    function reset() {
-        pauseInterval();
-        displayText.value = '';
-        buffer.length = 0;
-        done.value = false;
+    async function refresh() {
+        loading.value = true;
         error.value = null;
-        isStreaming.value = false;
+        try {
+            // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
+            const full = await listDocuments(limit);
+            docs.value = full.map((d: any) => ({
+                // Keep lightweight/meta fields
+                id: d.id,
+                title: d.title,
+                postType: d.postType,
+                created_at: d.created_at,
+                updated_at: d.updated_at,
+                deleted: d.deleted,
+                meta: d.meta,
+                // Drop large content string; empty string placeholder keeps type happy
+                content: '',
+            }));
+        } catch (e) {
+            error.value = e;
+            useToast().add({ color: 'error', title: 'Document: list failed' });
+        } finally {
+            loading.value = false;
+        }
     }
 
-    onBeforeUnmount(() => pauseInterval());
+    // initial load + subscribe to document DB hook events (client only)
+    if (process.client) {
+        refresh();
+        // Auto-refresh on create/update/delete after actions complete
+        useHookEffect('db.documents.create:action:after', () => refresh(), {
+            kind: 'action',
+        });
+        useHookEffect('db.documents.update:action:after', () => refresh(), {
+            kind: 'action',
+        });
+        useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
+            kind: 'action',
+        });
+    }
 
-    return {
-        displayText,
-        isStreaming,
-        done,
-        error,
-        push,
-        complete,
-        fail,
-        reset,
-    };
+    return { docs, loading, error, refresh };
 }
 ```
 
-## File: app/db/schema.ts
+## File: app/composables/useRafBatch.ts
 ```typescript
-import { z } from 'zod';
-import { newId } from './util';
+/**
+ * useRafBatch
+ * Coalesce multiple synchronous invalidations into a single rAF callback.
+ * Returns a stable trigger function. Subsequent calls within the same frame
+ * are ignored. If called from within a rAF already scheduled, execution is
+ * still deferred to next frame to allow DOM to settle (post Vue flush).
+ */
+import { onBeforeUnmount } from 'vue';
 
-const nowSec = () => Math.floor(Date.now() / 1000);
-
-export const ProjectSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string().nullable().optional(),
-    data: z.any(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Project = z.infer<typeof ProjectSchema>;
-
-// threads
-export const ThreadSchema = z.object({
-    id: z.string(),
-    title: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    last_message_at: z.number().int().nullable().optional(),
-    parent_thread_id: z.string().nullable().optional(),
-    // Branching (minimal): anchor + mode (reference|copy). Optional for root threads.
-    anchor_message_id: z.string().nullable().optional(),
-    anchor_index: z.number().int().nullable().optional(),
-    branch_mode: z.enum(['reference', 'copy']).nullable().optional(),
-    status: z.string().default('ready'),
-    deleted: z.boolean().default(false),
-    pinned: z.boolean().default(false),
-    clock: z.number().int(),
-    forked: z.boolean().default(false),
-    project_id: z.string().nullable().optional(),
-    system_prompt_id: z.string().nullable().optional(),
-});
-export type Thread = z.infer<typeof ThreadSchema>;
-
-// For incoming create payloads (apply defaults like the DB)
-export const ThreadCreateSchema = ThreadSchema.partial({
-    // Make a wide set of fields optional for input; we'll supply defaults below
-    id: true,
-    title: true,
-    last_message_at: true,
-    parent_thread_id: true,
-    status: true,
-    deleted: true,
-    pinned: true,
-    forked: true,
-    project_id: true,
-    system_prompt_id: true,
-})
-    // We'll re-add with defaults/derived values
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Dynamic defaults while keeping inputs optional
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use z.input so defaulted fields are optional for callers
-export type ThreadCreate = z.input<typeof ThreadCreateSchema>;
-// messages
-export const MessageSchema = z.object({
-    id: z.string(),
-    data: z.unknown().nullable().optional(),
-    role: z.string(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    error: z.string().nullable().optional(),
-    deleted: z.boolean().default(false),
-    thread_id: z.string(),
-    index: z.number().int(),
-    clock: z.number().int(),
-    stream_id: z.string().nullable().optional(),
-    // JSON serialized array of file content hashes (md5) or null/undefined when absent.
-    // Kept as a string to avoid bloating indexed row size & allow lazy parsing.
-    file_hashes: z.string().nullable().optional(),
-});
-
-export type Message = z.infer<typeof MessageSchema>;
-
-export const PostSchema = z.object({
-    id: z.string(),
-    // Title must be non-empty after trimming
-    title: z
-        .string()
-        .transform((s) => s.trim())
-        .refine((s) => s.length > 0, 'Title is required'),
-    content: z.string().default(''),
-    postType: z.string().default('markdown'),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    meta: z.union([
-        z.string(),
-        z.object({
-            key: z.string(),
-            value: z.string().nullable().optional(),
-        }),
-        z
-            .array(
-                z.object({
-                    key: z.string(),
-                    value: z.string().nullable().optional(),
-                })
-            )
-            .nullable()
-            .optional(),
-    ]),
-    file_hashes: z.string().nullable().optional(),
-});
-
-export type Post = z.infer<typeof PostSchema>;
-
-// Create schema for posts allowing omission of id/timestamps; meta may be provided as
-// string | object | array and will be normalized to string upstream before storage.
-export const PostCreateSchema = PostSchema.partial({
-    id: true,
-    created_at: true,
-    updated_at: true,
-}).extend({
-    id: z
-        .string()
-        .optional()
-        .transform((v) => v ?? newId()),
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type PostCreate = z.input<typeof PostCreateSchema>;
-
-export const MessageCreateSchema = MessageSchema.partial({ index: true })
-    .omit({ created_at: true, updated_at: true, id: true, clock: true })
-    .extend({
-        // Keep inputs minimal; generate missing id/clock
-        id: z
-            .string()
-            .optional()
-            .transform((v) => v ?? newId()),
-        clock: z
-            .number()
-            .int()
-            .optional()
-            .transform((v) => v ?? 0),
-        created_at: z.number().int().default(nowSec()),
-        updated_at: z.number().int().default(nowSec()),
-    });
-// Use input type so callers can omit defaulted fields
-export type MessageCreate = z.input<typeof MessageCreateSchema>;
-
-// kv
-export const KvSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    value: z.string().nullable().optional(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    clock: z.number().int(),
-});
-export type Kv = z.infer<typeof KvSchema>;
-
-export const KvCreateSchema = KvSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type KvCreate = z.infer<typeof KvCreateSchema>;
-
-// attachments
-export const AttachmentSchema = z.object({
-    id: z.string(),
-    type: z.string(),
-    name: z.string(),
-    url: z.url(),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type Attachment = z.infer<typeof AttachmentSchema>;
-
-export const AttachmentCreateSchema = AttachmentSchema.omit({
-    created_at: true,
-    updated_at: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-});
-export type AttachmentCreate = z.infer<typeof AttachmentCreateSchema>;
-
-// file meta (metadata only; binary stored separately in file_blobs table)
-export const FileMetaSchema = z.object({
-    // Use hash as both primary key and lookup value for simplicity
-    hash: z.string(), // md5 hex lowercase
-    name: z.string(),
-    mime_type: z.string(),
-    kind: z.enum(['image', 'pdf']).default('image'),
-    size_bytes: z.number().int(),
-    width: z.number().int().optional(),
-    height: z.number().int().optional(),
-    page_count: z.number().int().optional(),
-    ref_count: z.number().int().default(0),
-    created_at: z.number().int(),
-    updated_at: z.number().int(),
-    deleted: z.boolean().default(false),
-    clock: z.number().int(),
-});
-export type FileMeta = z.infer<typeof FileMetaSchema>;
-
-export const FileMetaCreateSchema = FileMetaSchema.omit({
-    created_at: true,
-    updated_at: true,
-    ref_count: true,
-}).extend({
-    created_at: z.number().int().default(nowSec()),
-    updated_at: z.number().int().default(nowSec()),
-    ref_count: z.number().int().default(1),
-    clock: z.number().int().default(0),
-});
-export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
-```
-
-## File: app/db/threads.ts
-```typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
-import {
-    ThreadCreateSchema,
-    ThreadSchema,
-    type Thread,
-    type ThreadCreate,
-} from './schema';
-
-export async function createThread(input: ThreadCreate): Promise<Thread> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.threads.create:filter:input',
-        input
-    );
-    // Apply create-time defaults (id/clock/timestamps, etc.)
-    const prepared = parseOrThrow(ThreadCreateSchema, filtered);
-    // Validate against full schema so required defaults (status/pinned/etc.) are present
-    const value = parseOrThrow(ThreadSchema, prepared);
-    await hooks.doAction('db.threads.create:action:before', value);
-    await db.threads.put(value);
-    await hooks.doAction('db.threads.create:action:after', value);
-    return value;
-}
-
-export async function upsertThread(value: Thread): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.threads.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.threads.upsert:action:before', filtered);
-    parseOrThrow(ThreadSchema, filtered);
-    await db.threads.put(filtered);
-    await hooks.doAction('db.threads.upsert:action:after', filtered);
-}
-
-export function threadsByProject(projectId: string) {
-    const hooks = useHooks();
-    const promise = db.threads.where('project_id').equals(projectId).toArray();
-    return promise.then((res) =>
-        hooks.applyFilters('db.threads.byProject:filter:output', res)
-    );
-}
-
-export function searchThreadsByTitle(term: string) {
-    const q = term.toLowerCase();
-    const hooks = useHooks();
-    return db.threads
-        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
-        );
-}
-
-export function getThread(id: string) {
-    const hooks = useHooks();
-    return db.threads
-        .get(id)
-        .then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
-}
-
-export function childThreads(parentThreadId: string) {
-    const hooks = useHooks();
-    return db.threads
-        .where('parent_thread_id')
-        .equals(parentThreadId)
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.threads.children:filter:output', res)
-        );
-}
-
-export async function softDeleteThread(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.threads, async () => {
-        const t = await db.threads.get(id);
-        if (!t) return;
-        await hooks.doAction('db.threads.delete:action:soft:before', t);
-        await db.threads.put({
-            ...t,
-            deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        await hooks.doAction('db.threads.delete:action:soft:after', t);
-    });
-}
-
-export async function hardDeleteThread(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.threads.get(id);
-    await db.transaction('rw', db.threads, db.messages, async () => {
-        await hooks.doAction(
-            'db.threads.delete:action:hard:before',
-            existing ?? id
-        );
-        await db.messages.where('thread_id').equals(id).delete();
-        await db.threads.delete(id);
-        await hooks.doAction('db.threads.delete:action:hard:after', id);
-    });
-}
-
-// Fork a thread: clone thread metadata and optionally copy messages
-export async function forkThread(
-    sourceThreadId: string,
-    overrides: Partial<ThreadCreate> = {},
-    options: { copyMessages?: boolean } = {}
-): Promise<Thread> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.threads, db.messages, async () => {
-        const src = await db.threads.get(sourceThreadId);
-        if (!src) throw new Error('Source thread not found');
-        const now = nowSec();
-        const forkId = newId();
-        const fork = parseOrThrow(ThreadSchema, {
-            ...src,
-            id: forkId,
-            forked: true,
-            parent_thread_id: src.id,
-            created_at: now,
-            updated_at: now,
-            last_message_at: null,
-            ...overrides,
-        });
-        await hooks.doAction('db.threads.fork:action:before', {
-            source: src,
-            fork,
-        });
-        await db.threads.put(fork);
-
-        if (options.copyMessages) {
-            const msgs = await db.messages
-                .where('thread_id')
-                .equals(src.id)
-                .sortBy('index');
-            for (const m of msgs) {
-                await db.messages.put({ ...m, id: newId(), thread_id: forkId });
+export function useRafBatch(fn: () => void) {
+    let scheduled = false;
+    let cancelled = false;
+    let frame = -1;
+    function run() {
+        if (scheduled || cancelled) return;
+        scheduled = true;
+        frame = requestAnimationFrame(() => {
+            scheduled = false;
+            if (cancelled) return;
+            try {
+                fn();
+            } catch (e) {
+                // eslint-disable-next-line no-console
+                if (import.meta.dev)
+                    console.error('[useRafBatch] callback error', e);
             }
-            if (msgs.length > 0) {
-                await db.threads.put({
-                    ...fork,
-                    last_message_at: now,
-                    updated_at: now,
-                });
-            }
-        }
-        await hooks.doAction('db.threads.fork:action:after', fork);
-        return fork;
+        });
+    }
+    onBeforeUnmount(() => {
+        cancelled = true;
+        if (frame !== -1) cancelAnimationFrame(frame);
     });
+    return run;
 }
 
-export async function updateThreadSystemPrompt(
-    threadId: string,
-    promptId: string | null
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.threads, async () => {
-        const thread = await db.threads.get(threadId);
-        if (!thread) return;
-        const updated = {
-            ...thread,
-            system_prompt_id: promptId,
-            updated_at: nowSec(),
-        };
-        await hooks.doAction('db.threads.updateSystemPrompt:action:before', {
-            thread,
-            promptId,
-        });
-        await db.threads.put(updated);
-        await hooks.doAction('db.threads.updateSystemPrompt:action:after', {
-            thread: updated,
-            promptId,
-        });
-    });
-}
-
-export async function getThreadSystemPrompt(
-    threadId: string
-): Promise<string | null> {
-    const hooks = useHooks();
-    const thread = await db.threads.get(threadId);
-    const result = thread?.system_prompt_id ?? null;
-    return hooks.applyFilters(
-        'db.threads.getSystemPrompt:filter:output',
-        result
-    );
-}
+export default useRafBatch;
 ```
 
 ## File: app/pages/chat/[id].vue
@@ -9969,6 +10130,168 @@ import PageShell from '~/components/PageShell.vue';
 </script>
 ```
 
+## File: app/pages/_test.vue
+```vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar>
+            <div class="flex flex-col h-full relative">
+                <div class="p-2 flex flex-col space-y-2">
+                    <UButton class="w-full flex items-center justify-center"
+                        >New Chat</UButton
+                    >
+                    <UInput
+                        icon="i-lucide-search"
+                        size="md"
+                        variant="outline"
+                        placeholder="Search..."
+                        class="w-full ml-[1px]"
+                    ></UInput>
+                </div>
+                <div class="flex flex-col p-2 space-y-1.5">
+                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about aids</UButton
+                    >
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about dogs</UButton
+                    >
+                </div>
+                <sidebar-side-bottom-nav />
+            </div>
+        </template>
+
+        <!-- Default slot = main content (right side) -->
+        <div class="min-h-[100dvh] overflow-y-scroll">
+            <div
+                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
+            ></div>
+
+            <div class="p-6 space-y-4">
+                <div class="flex flex-row space-x-2">
+                    <UButton @click="showToast" size="sm" color="primary"
+                        >Nuxt UI Button</UButton
+                    >
+                    <UButton color="success">Nuxt UI Button</UButton>
+                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+                </div>
+                <div class="flex flex-row space-x-2">
+                    <UButtonGroup size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                    <UButtonGroup orientation="vertical" size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                </div>
+
+                <div class="flex space-x-2">
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="sm"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="md"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="lg"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
+                        @click="toggle()"
+                    >
+                        Toggle Light/Dark
+                    </button>
+                    <span class="text-[var(--md-on-surface)]"
+                        >Current: {{ theme }}</span
+                    >
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div
+                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
+                    >
+                        Surface / On-Surface
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
+                    >
+                        Secondary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
+                    >
+                        Tertiary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
+                    >
+                        Error Container
+                    </div>
+                </div>
+
+                <chat-input-dropper />
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+
+const nuxtApp = useNuxtApp();
+const theme = computed(() => (nuxtApp.$theme as any).get());
+const toggle = () => (nuxtApp.$theme as any).toggle();
+const toast = useToast();
+
+function showToast() {
+    toast.add({
+        title: 'Success',
+        description: 'Your action was completed successfully.',
+        color: 'success',
+    });
+}
+</script>
+```
+
 ## File: app/pages/index.vue
 ```vue
 <template>
@@ -9976,6 +10299,254 @@ import PageShell from '~/components/PageShell.vue';
 </template>
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';
+</script>
+```
+
+## File: app/pages/openrouter-callback.vue
+```vue
+<template>
+    <div class="min-h-[100dvh] flex items-center justify-center p-6">
+        <div
+            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
+        >
+            <p class="text-base font-medium mb-2">
+                {{ title }}
+            </p>
+            <p class="text-sm text-neutral-500 mb-4">
+                {{ subtitle }}
+            </p>
+            <div class="flex items-center justify-center gap-3">
+                <div
+                    v-if="loading"
+                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
+                />
+                <button
+                    v-if="ready"
+                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
+                    @click="goHome"
+                >
+                    Continue
+                </button>
+                <button
+                    v-if="errorMessage"
+                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
+                    @click="goHome"
+                >
+                    Go Home
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup>
+import { kv } from '~/db';
+
+const route = useRoute();
+const router = useRouter();
+const rc = useRuntimeConfig();
+
+const loading = ref(true);
+const ready = ref(false);
+const redirecting = ref(false);
+const errorMessage = ref('');
+const title = computed(() =>
+    errorMessage.value
+        ? 'Login completed with warnings'
+        : ready.value
+        ? 'Login complete'
+        : 'Completing login…'
+);
+const subtitle = computed(() => {
+    if (errorMessage.value) return errorMessage.value;
+    if (ready.value && !redirecting.value)
+        return 'If this page doesn’t redirect automatically, tap Continue.';
+    return 'Please wait while we finish setup.';
+});
+
+function log(...args) {
+    try {
+        // eslint-disable-next-line no-console
+        console.log('[openrouter-callback]', ...args);
+    } catch {}
+}
+
+async function setKVNonBlocking(key, value, timeoutMs = 300) {
+    try {
+        if (!kv?.set) return;
+        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
+        const result = await Promise.race([
+            kv.set(key, value),
+            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
+        ]);
+        if (result === 'timeout') log('setKV timed out; continuing');
+        else log('setKV resolved');
+    } catch (e) {
+        log('setKV failed', e?.message || e);
+    }
+}
+
+async function goHome() {
+    redirecting.value = true;
+    log("goHome() invoked. Trying router.replace('/').");
+    try {
+        await router.replace('/');
+        log("router.replace('/') resolved");
+    } catch (e) {
+        log("router.replace('/') failed:", e?.message || e);
+    }
+    try {
+        // Fallback to full document navigation
+        log("Attempting window.location.replace('/')");
+        window.location.replace('/');
+    } catch (e) {
+        log("window.location.replace('/') failed:", e?.message || e);
+    }
+    // Last-chance fallback on browsers that ignore replace
+    setTimeout(() => {
+        try {
+            log("Attempting final window.location.assign('/')");
+            window.location.assign('/');
+        } catch (e) {
+            log("window.location.assign('/') failed:", e?.message || e);
+        }
+    }, 150);
+}
+
+onMounted(async () => {
+    log('mounted at', window.location.href, 'referrer:', document.referrer);
+    const code = route.query.code;
+    const state = route.query.state;
+    const verifier = sessionStorage.getItem('openrouter_code_verifier');
+    const savedState = sessionStorage.getItem('openrouter_state');
+    const codeMethod =
+        sessionStorage.getItem('openrouter_code_method') || 'S256';
+    log('query params present:', {
+        code: Boolean(code),
+        state: Boolean(state),
+    });
+    log('session present:', {
+        verifier: Boolean(verifier),
+        savedState: Boolean(savedState),
+        codeMethod,
+    });
+
+    if (!code || !verifier) {
+        console.error('[openrouter-callback] Missing code or verifier');
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Missing code or verifier. Tap Continue to return.';
+        return;
+    }
+    if (savedState && state !== savedState) {
+        console.error('[openrouter-callback] State mismatch, potential CSRF', {
+            incoming: state,
+            savedState,
+        });
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value = 'State mismatch. Tap Continue to return.';
+        return;
+    }
+
+    try {
+        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
+        log('exchanging code with OpenRouter', {
+            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
+            codeLength: String(code).length,
+            method: codeMethod,
+            usingHTTPS: true,
+        });
+        const directResp = await fetch(
+            'https://openrouter.ai/api/v1/auth/keys',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: String(code),
+                    code_verifier: verifier,
+                    code_challenge_method: codeMethod,
+                }),
+            }
+        );
+        const directJson = await directResp.json().catch(async () => {
+            const text = await directResp.text().catch(() => '<no-body>');
+            log('non-JSON response body snippet:', text?.slice(0, 300));
+            return null;
+        });
+        if (!directResp.ok || !directJson) {
+            console.error(
+                '[openrouter-callback] Direct exchange failed',
+                directResp.status,
+                directJson
+            );
+            return;
+        }
+        const userKey = directJson.key || directJson.access_token;
+        if (!userKey) {
+            console.error(
+                '[openrouter-callback] Direct exchange returned no key',
+                {
+                    keys: Object.keys(directJson || {}),
+                }
+            );
+            return;
+        }
+        // store in localStorage for use by front-end
+        log('storing key in localStorage (length)', String(userKey).length);
+        // Save a human-readable name and the value; id/clock are handled
+        // inside the helper to match your schema
+        try {
+            await kv.set('openrouter_api_key', userKey);
+        } catch (e) {
+            log('kvByName.set failed', e?.message || e);
+        }
+        try {
+            log('dispatching openrouter:connected event');
+            window.dispatchEvent(new CustomEvent('openrouter:connected'));
+            // Best-effort: also persist to synced KV
+            try {
+                await setKVNonBlocking('openrouter_api_key', userKey, 300);
+            } catch {}
+        } catch {}
+        log('clearing session markers (verifier/state/method)');
+        sessionStorage.removeItem('openrouter_code_verifier');
+        sessionStorage.removeItem('openrouter_state');
+        sessionStorage.removeItem('openrouter_code_method');
+        // Allow event loop to process storage events in other tabs/components
+        await new Promise((r) => setTimeout(r, 10));
+        loading.value = false;
+        ready.value = true;
+        log('ready to redirect');
+        // Attempt auto-redirect but keep the Continue button visible
+        setTimeout(() => {
+            // first SPA attempt
+            log("auto: router.replace('/')");
+            router.replace('/').catch((e) => {
+                log('auto: router.replace failed', e?.message || e);
+            });
+            // then a hard replace if SPA was blocked
+            setTimeout(() => {
+                try {
+                    log("auto: window.location.replace('/')");
+                    window.location.replace('/');
+                } catch (e) {
+                    log(
+                        'auto: window.location.replace failed',
+                        e?.message || e
+                    );
+                }
+            }, 250);
+        }, 50);
+    } catch (err) {
+        console.error('[openrouter-callback] Exchange failed', err);
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Authentication finished, but we couldn’t auto-redirect.';
+    }
+});
 </script>
 ```
 
@@ -10236,1829 +10807,224 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
-## File: app/utils/chat/files.ts
+## File: app/utils/chat/uiMessages.ts
 ```typescript
-// Small helpers around file/mime handling used by useChat
+// Canonical UI message utilities (content part type no longer needed directly)
+import { parseHashes } from '~/utils/files/attachments';
 
-export function dataUrlToBlob(dataUrl: string): Blob | null {
-    try {
-        const m: RegExpExecArray | null = /^data:([^;]+);base64,(.*)$/i.exec(
-            dataUrl
-        );
-        if (!m) return null;
-        const mime: string = m[1] as string;
-        const b64: string = m[2] as string;
-        const bin = atob(b64);
-        const arr = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        return new Blob([arr], { type: mime });
-    } catch {
-        return null;
-    }
+export interface UiChatMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    text: string; // flattened text + markdown image placeholders
+    file_hashes?: string[];
+    reasoning_text?: string | null;
+    stream_id?: string;
+    pending?: boolean;
 }
 
-// Infer MIME from URL or provided type (favor provided)
-export function inferMimeFromUrl(u: string, provided?: string) {
-    if (provided && provided.startsWith('image/')) return provided;
-    const m = /^data:([^;]+);/i.exec(u);
-    if (m) return m[1];
-    const lower = (u.split('?')[0] || '').toLowerCase();
-    const ext = lower.substring(lower.lastIndexOf('.') + 1);
-    const map: Record<string, string> = {
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        png: 'image/png',
-        webp: 'image/webp',
-        gif: 'image/gif',
-        svg: 'image/svg+xml',
-        avif: 'image/avif',
-        heic: 'image/heic',
-        heif: 'image/heif',
-        bmp: 'image/bmp',
-        tif: 'image/tiff',
-        tiff: 'image/tiff',
-        ico: 'image/x-icon',
-    };
-    return map[ext] || 'image/png';
-}
-```
-
-## File: app/utils/chat/history.ts
-```typescript
-import type { Ref } from 'vue';
-import type { ChatMessage } from './types';
-import { db } from '~/db';
-
-export async function ensureThreadHistoryLoaded(
-    threadIdRef: Ref<string | undefined>,
-    historyLoadedFor: Ref<string | null>,
-    messages: Ref<ChatMessage[]>
-) {
-    if (!threadIdRef.value) return;
-    if (historyLoadedFor.value === threadIdRef.value) return;
-
-    try {
-        const DexieMod = (await import('dexie')).default;
-        const all = await db.messages
-            .where('[thread_id+index]')
-            .between(
-                [threadIdRef.value, DexieMod.minKey],
-                [threadIdRef.value, DexieMod.maxKey]
-            )
-            .filter((m: any) => !m.deleted)
-            .toArray();
-
-        all.sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
-        const existingIds = new Set(messages.value.map((m) => m.id));
-        for (const m of all) {
-            if (existingIds.has(m.id)) continue;
-            messages.value.push({
-                role: m.role,
-                content: (m as any)?.data?.content || '',
-                id: m.id,
-                stream_id: (m as any).stream_id,
-                file_hashes: (m as any).file_hashes,
-            } as any);
+export function partsToText(parts: any): string {
+    if (!parts) return '';
+    if (typeof parts === 'string') return parts;
+    if (!Array.isArray(parts)) return '';
+    let out = '';
+    for (const p of parts) {
+        if (!p) continue;
+        if (typeof p === 'string') {
+            out += p;
+            continue;
         }
-        historyLoadedFor.value = threadIdRef.value;
-    } catch (e) {
-        console.warn('[useChat.ensureThreadHistoryLoaded] failed', e);
-    }
-}
-```
-
-## File: app/utils/chat/messages.ts
-```typescript
-import type { ContentPart } from './types';
-
-// Build UI parts: text first, then extra text blocks, then attachments
-export function buildParts(
-    outgoing: string,
-    files?: { type: string; url: string }[],
-    extraTextParts?: string[]
-): ContentPart[] {
-    return [
-        { type: 'text', text: outgoing },
-        ...(extraTextParts || []).map<ContentPart>((t) => ({
-            type: 'text',
-            text: t,
-        })),
-        ...(files ?? []).map<ContentPart>((f) =>
-            (f.type ?? '').startsWith('image/')
-                ? { type: 'image', image: f.url, mediaType: f.type }
-                : { type: 'file', data: f.url, mediaType: f.type }
-        ),
-    ];
-}
-
-// Extract concatenated text from a ChatMessage.content
-export function getTextFromContent(
-    content: string | ContentPart[] | undefined | null
-) {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    return (content as ContentPart[])
-        .filter((p) => p.type === 'text')
-        .map((p: any) => p.text || '')
-        .join('');
-}
-
-// Merge and dedupe file-hash arrays
-export function mergeFileHashes(
-    existing?: string[] | null,
-    fromAssistant?: string[]
-) {
-    const a = Array.isArray(existing) ? existing : [];
-    const b = Array.isArray(fromAssistant) ? fromAssistant : [];
-    return Array.from(new Set([...a, ...b]));
-}
-
-// Drop oldest images across built OR messages, keeping `max`
-export function trimOrMessagesImages(orMessages: any[], max: number) {
-    try {
-        const totalImagesPre = orMessages.reduce(
-            (a: number, m: any) =>
-                a + m.content.filter((p: any) => p.type === 'image_url').length,
-            0
-        );
-        if (totalImagesPre <= max) return;
-
-        let toDrop = totalImagesPre - max;
-        for (const m of orMessages) {
-            if (toDrop <= 0) break;
-            const next: any[] = [];
-            for (const part of m.content) {
-                if (part.type === 'image_url' && toDrop > 0) {
-                    toDrop--;
-                    continue;
+        if (typeof p === 'object') {
+            if (p.type === 'text' && typeof p.text === 'string') out += p.text;
+            else if (p.type === 'image') {
+                const src = (p as any).image || (p as any).image_url?.url;
+                if (typeof src === 'string') {
+                    out += (out ? '\n\n' : '') + `![generated image](${src})`;
                 }
-                next.push(part);
             }
-            m.content = next;
-        }
-    } catch {
-        // ignore trimming errors
-    }
-}
-```
-
-## File: tests/setup.ts
-```typescript
-// Global test setup: mock heavy virtualization lib to avoid jsdom/Bun hangs.
-import { vi } from 'vitest';
-import { defineComponent, h } from 'vue';
-
-vi.mock('virtua/vue', () => {
-    return {
-        VList: defineComponent({
-            name: 'MockVList',
-            props: {
-                data: { type: Array, default: () => [] },
-                itemSize: { type: [Number, Function], default: 0 },
-                overscan: { type: Number, default: 0 },
-            },
-            setup(props, { slots }) {
-                return () =>
-                    h(
-                        'div',
-                        { class: 'mock-vlist' },
-                        props.data.map((item: any, index: number) =>
-                            slots.default
-                                ? slots.default({ item, index })
-                                : null
-                        )
-                    );
-            },
-        }),
-    };
-});
-```
-
-## File: app/components/chat/MessageAttachmentsGallery.vue
-```vue
-<template>
-    <div v-if="hashes.length" class="mt-3">
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            <div
-                v-for="h in hashes"
-                :key="h"
-                class="relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
-            >
-                <!-- PDF Placeholder if mime/kind indicates pdf -->
-                <template v-if="meta[h]?.kind === 'pdf'">
-                    <div
-                        class="w-full h-full flex flex-col items-center justify-center gap-1 bg-[var(--md-surface-container-low)] text-center p-1"
-                    >
-                        <span
-                            class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded"
-                            >PDF</span
-                        >
-                        <span
-                            class="text-[9px] leading-snug line-clamp-3 break-words px-1"
-                            :title="fileNames[h] || h.slice(0, 8)"
-                            >{{ fileNames[h] || 'document.pdf' }}</span
-                        >
-                    </div>
-                </template>
-                <template v-else-if="thumbs[h]?.status === 'ready'">
-                    <img
-                        :src="thumbs[h].url"
-                        :alt="'file ' + h.slice(0, 8)"
-                        class="object-cover w-full h-full"
-                        draggable="false"
-                    />
-                </template>
-                <template v-else-if="thumbs[h]?.status === 'error'">
-                    <div class="text-[10px] text-center px-1 text-error">
-                        failed
-                    </div>
-                </template>
-                <template v-else>
-                    <div class="animate-pulse text-[10px] opacity-70">
-                        loading
-                    </div>
-                </template>
-            </div>
-        </div>
-        <button
-            class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
-            type="button"
-            @click="$emit('collapse')"
-            aria-label="Hide attachments"
-        >
-            Hide attachments
-        </button>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { reactive, watch } from 'vue';
-import { getFileBlob, getFileMeta } from '~/db/files';
-
-interface ThumbState {
-    status: 'loading' | 'ready' | 'error';
-    url?: string;
-}
-const props = defineProps<{ hashes: string[] }>();
-defineEmits<{ (e: 'collapse'): void }>();
-
-// Reuse global caches so virtualization doesn't thrash
-const cache = ((globalThis as any).__or3ThumbCache ||= new Map<
-    string,
-    ThumbState
->());
-const inflight = ((globalThis as any).__or3ThumbInflight ||= new Map<
-    string,
-    Promise<void>
->());
-const thumbs = reactive<Record<string, ThumbState>>({});
-const meta = reactive<Record<string, any>>({});
-const fileNames = reactive<Record<string, string>>({});
-
-async function ensure(h: string) {
-    if (thumbs[h] && thumbs[h].status === 'ready') return;
-    const cached = cache.get(h);
-    if (cached) {
-        thumbs[h] = cached;
-        return;
-    }
-    if (inflight.has(h)) {
-        await inflight.get(h);
-        const after = cache.get(h);
-        if (after) thumbs[h] = after;
-        return;
-    }
-    thumbs[h] = { status: 'loading' };
-    const p = (async () => {
-        try {
-            const [blob, m] = await Promise.all([
-                getFileBlob(h),
-                getFileMeta(h).catch(() => undefined),
-            ]);
-            if (m) {
-                meta[h] = m;
-                if (m.name) fileNames[h] = m.name;
-            }
-            if (!blob) throw new Error('missing');
-            const url = URL.createObjectURL(blob);
-            const ready: ThumbState = { status: 'ready', url };
-            cache.set(h, ready);
-            thumbs[h] = ready;
-        } catch {
-            const err: ThumbState = { status: 'error' };
-            cache.set(h, err);
-            thumbs[h] = err;
-        } finally {
-            inflight.delete(h);
-        }
-    })();
-    inflight.set(h, p);
-    await p;
-}
-
-watch(
-    () => props.hashes,
-    (list) => {
-        list.forEach(ensure);
-    },
-    { immediate: true }
-);
-defineExpose({ thumbs });
-</script>
-
-<style scoped></style>
-```
-
-## File: app/components/prompts/PromptEditor.vue
-```vue
-<template>
-    <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
-    >
-        <div
-            class="flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
-        >
-            <UButton
-                @click="emit('back')"
-                variant="outline"
-                class="flex items-center justify-center h-[40px] w-[40px] mr-3"
-                color="neutral"
-                icon="pixelarticons:arrow-left"
-                aria-label="Back to list"
-            />
-            <UInput
-                v-model="titleDraft"
-                placeholder="Untitled Prompt"
-                label="Prompt Title"
-                size="md"
-                :ui="{
-                    base: 'retro-shadow',
-                }"
-                class="flex-1"
-                @update:model-value="onTitleChange"
-            />
-            <div class="flex items-center gap-1">
-                <UTooltip :text="statusText">
-                    <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
-                        >{{ statusText }}</span
-                    >
-                </UTooltip>
-            </div>
-        </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
-            <div v-if="loading" class="p-6 text-sm text-neutral-500">
-                Loading…
-            </div>
-            <div v-else-if="!record" class="p-6 text-sm text-error">
-                Prompt not found.
-            </div>
-            <div
-                v-else
-                class="w-full max-h-[70vh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
-            >
-                <EditorContent
-                    :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
-                />
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
-import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
-
-const props = defineProps<{ promptId: string }>();
-const emit = defineEmits<{ (e: 'back'): void }>();
-
-const record = ref<PromptRecord | null>(null);
-const loading = ref(true);
-const titleDraft = ref('');
-const editor = ref<Editor | null>(null);
-const pendingTitle = ref<string | undefined>();
-const pendingContent = ref<any | undefined>();
-const saveTimer = ref<any | null>(null);
-const status = ref<'idle' | 'saving' | 'error' | 'loading'>('loading');
-
-async function load(id: string) {
-    loading.value = true;
-    status.value = 'loading';
-    try {
-        const rec = await getPrompt(id);
-        record.value = rec || null;
-        if (rec) {
-            titleDraft.value = rec.title;
-            if (editor.value) {
-                editor.value.commands.setContent(
-                    rec.content || { type: 'doc', content: [] },
-                    { emitUpdate: false }
-                );
-            }
-            status.value = 'idle';
-        } else {
-            status.value = 'error';
-        }
-    } catch (e) {
-        status.value = 'error';
-        console.warn('[PromptEditor] load failed', e);
-    } finally {
-        loading.value = false;
-    }
-}
-
-function scheduleSave() {
-    if (saveTimer.value) clearTimeout(saveTimer.value);
-    saveTimer.value = setTimeout(flush, 600);
-}
-
-async function flush() {
-    if (!record.value) return;
-    if (pendingTitle.value === undefined && pendingContent.value === undefined)
-        return;
-    status.value = 'saving';
-    try {
-        const patch: any = {};
-        if (pendingTitle.value !== undefined) patch.title = pendingTitle.value;
-        if (pendingContent.value !== undefined)
-            patch.content = pendingContent.value;
-        const updated = await updatePrompt(record.value.id, patch);
-        if (updated) {
-            record.value = updated;
-            titleDraft.value = updated.title;
-            status.value = 'idle';
-        } else {
-            status.value = 'error';
-        }
-    } catch (e) {
-        status.value = 'error';
-        console.warn('[PromptEditor] save failed', e);
-    } finally {
-        pendingTitle.value = undefined;
-        pendingContent.value = undefined;
-    }
-}
-
-function onTitleChange() {
-    pendingTitle.value = titleDraft.value;
-    scheduleSave();
-}
-
-function emitContent() {
-    if (!editor.value) return;
-    pendingContent.value = editor.value.getJSON();
-    scheduleSave();
-}
-
-function makeEditor() {
-    editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2] } }),
-            Placeholder.configure({
-                placeholder: 'Type your system instructions…',
-            }),
-        ],
-        content: record.value?.content || { type: 'doc', content: [] },
-        autofocus: false,
-        onUpdate: () => emitContent(),
-    });
-}
-
-onMounted(async () => {
-    await load(props.promptId);
-    makeEditor();
-});
-
-watch(
-    () => props.promptId,
-    async (id) => {
-        await load(id);
-    }
-);
-
-onBeforeUnmount(() => {
-    editor.value?.destroy();
-    if (saveTimer.value) clearTimeout(saveTimer.value);
-});
-
-const statusText = computed(() => {
-    switch (status.value) {
-        case 'saving':
-            return 'Saving…';
-        case 'idle':
-            return 'Ready';
-        case 'error':
-            return 'Error';
-        case 'loading':
-            return 'Loading…';
-    }
-});
-</script>
-
-<style scoped>
-.prose :where(h1, h2) {
-    font-family: 'Press Start 2P', monospace;
-}
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
-}
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    opacity: 0.85;
-}
-</style>
-```
-
-## File: app/components/sidebar/SidebarDocumentItem.vue
-```vue
-<template>
-    <RetroGlassBtn
-        class="w-full flex items-center justify-between text-left"
-        :class="{ 'active-element bg-primary/25': active }"
-        @click="emit('select', doc.id)"
-        @mouseenter="onHoverDoc()"
-    >
-        <span class="truncate flex-1 min-w-0" :title="doc.title">{{
-            doc.title
-        }}</span>
-        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
-            <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                @click.stop
-            >
-                <UIcon
-                    name="pixelarticons:more-vertical"
-                    class="w-4 h-4 opacity-70"
-                />
-            </span>
-            <template #content>
-                <div class="p-1 w-44 space-y-1">
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:edit"
-                        @click="emit('rename', doc)"
-                        >Rename</UButton
-                    >
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:folder-plus"
-                        @click="emit('add-to-project', doc)"
-                        >Add to project</UButton
-                    >
-                    <UButton
-                        color="error"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:trash"
-                        @click="emit('delete', doc)"
-                        >Delete</UButton
-                    >
-                    <template v-for="action in extraActions" :key="action.id">
-                        <UButton
-                            :icon="action.icon"
-                            color="neutral"
-                            variant="ghost"
-                            size="sm"
-                            class="w-full justify-start"
-                            @click="() => runExtraAction(action)"
-                            >{{ action.label || '' }}</UButton
-                        >
-                    </template>
-                </div>
-            </template>
-        </UPopover>
-    </RetroGlassBtn>
-</template>
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-import type { Post } from '~/db';
-import { db } from '~/db';
-import { useThrottleFn } from '@vueuse/core';
-const props = defineProps<{ doc: any; active?: boolean }>();
-const emit = defineEmits<{
-    (e: 'select', id: string): void;
-    (e: 'rename', doc: any): void;
-    (e: 'delete', doc: any): void;
-    (e: 'add-to-project', doc: any): void;
-}>();
-const extraActions = useDocumentHistoryActions();
-const fullDocCache = new Map<string, Post>();
-const prefetching = new Set<string>();
-async function fetchFullDoc(id: string) {
-    if (fullDocCache.has(id)) return fullDocCache.get(id)!;
-    try {
-        const rec = await db.posts.get(id);
-        if (rec) {
-            fullDocCache.set(id, rec as Post);
-            return rec as Post;
-        }
-    } catch {}
-    return null;
-}
-const doPrefetch = useThrottleFn(async (id: string) => {
-    if (fullDocCache.has(id) || prefetching.has(id)) return;
-    prefetching.add(id);
-    await fetchFullDoc(id);
-    prefetching.delete(id);
-}, 300);
-function onHoverDoc() {
-    if (!props.doc?.id) return;
-    if (!fullDocCache.has(props.doc.id)) doPrefetch(props.doc.id);
-}
-async function runExtraAction(action: any) {
-    try {
-        let docToSend = props.doc;
-        if (!docToSend.content || docToSend.content.length === 0) {
-            const full = await fetchFullDoc(props.doc.id);
-            if (full) docToSend = full;
-            else {
-                try {
-                    useToast().add({
-                        title: 'Document not available',
-                        description: 'Failed to load full content',
-                        color: 'error',
-                        duration: 3000,
-                    });
-                } catch {}
-                return;
-            }
-        }
-        await action.handler({ document: docToSend });
-    } catch (e: any) {
-        try {
-            useToast().add({
-                title: 'Action failed',
-                description: e?.message || 'Error running action',
-                color: 'error',
-                duration: 3000,
-            });
-        } catch {}
-        console.error('Doc action error', action.id, e);
-    }
-}
-</script>
-```
-
-## File: app/components/sidebar/SidebarThreadItem.vue
-```vue
-<template>
-    <RetroGlassBtn
-        class="w-full flex items-center justify-between text-left"
-        :class="{ 'active-element bg-primary/25': active }"
-        @click="emit('select', thread.id)"
-    >
-        <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-            <UIcon
-                v-if="thread.forked"
-                name="pixelarticons:git-branch"
-                class="shrink-0"
-            />
-            <span
-                class="truncate flex-1 min-w-0"
-                :title="thread.title || 'New Thread'"
-                >{{ thread.title || 'New Thread' }}</span
-            >
-        </div>
-        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
-            <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                @click.stop
-            >
-                <UIcon
-                    name="pixelarticons:more-vertical"
-                    class="w-4 h-4 opacity-70"
-                />
-            </span>
-            <template #content>
-                <div class="p-1 w-44 space-y-1">
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:edit"
-                        @click="emit('rename', thread)"
-                        >Rename</UButton
-                    >
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:folder-plus"
-                        @click="emit('add-to-project', thread)"
-                        >Add to project</UButton
-                    >
-                    <UButton
-                        color="error"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:trash"
-                        @click="emit('delete', thread)"
-                        >Delete</UButton
-                    >
-                    <template v-for="action in extraActions" :key="action.id">
-                        <UButton
-                            :icon="action.icon"
-                            color="neutral"
-                            variant="ghost"
-                            size="sm"
-                            class="w-full justify-start"
-                            @click="() => runExtraAction(action, thread)"
-                            >{{ action.label || '' }}</UButton
-                        >
-                    </template>
-                </div>
-            </template>
-        </UPopover>
-    </RetroGlassBtn>
-</template>
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-import type { Thread } from '~/db';
-const props = defineProps<{ thread: Thread; active?: boolean }>();
-const emit = defineEmits<{
-    (e: 'select', id: string): void;
-    (e: 'rename', thread: Thread): void;
-    (e: 'delete', thread: Thread): void;
-    (e: 'add-to-project', thread: Thread): void;
-}>();
-// Plugin thread actions
-const extraActions = useThreadHistoryActions();
-async function runExtraAction(action: any, thread: Thread) {
-    try {
-        await action.handler({ thread });
-    } catch (e: any) {
-        try {
-            useToast().add({
-                title: 'Action failed',
-                description: e?.message || 'Error running action',
-                color: 'error',
-                duration: 3000,
-            });
-        } catch {}
-        console.error('Thread action error', action.id, e);
-    }
-}
-</script>
-```
-
-## File: app/components/sidebar/SidebarVirtualList.vue
-```vue
-<template>
-    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <VList
-            :data="flatItems"
-            :style="{ height: 'calc(100vh - 318px)' }"
-            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
-            #default="{ item, index }"
-        >
-            <div :key="item.key || index">
-                <h1
-                    v-if="item.type === 'sectionHeader'"
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
-                >
-                    {{ item.label }}
-                </h1>
-                <SidebarProjectTree
-                    v-else-if="item.type === 'projectsTree'"
-                    :projects="projects"
-                    v-model:expanded="expandedProjectsLocal"
-                    @chatSelected="emit('chatSelected', $event)"
-                    @documentSelected="emit('documentSelected', $event)"
-                    @addChat="emit('addChat', $event)"
-                    @addDocument="emit('addDocument', $event)"
-                    @renameProject="emit('renameProject', $event)"
-                    @deleteProject="emit('deleteProject', $event)"
-                    @renameEntry="emit('renameEntry', $event)"
-                    @removeFromProject="emit('removeFromProject', $event)"
-                />
-                <div v-else-if="item.type === 'thread'" class="mr-1">
-                    <SidebarThreadItem
-                        :thread="item.thread"
-                        :active="item.thread.id === activeThread"
-                        class="mb-2"
-                        @select="emit('selectThread', $event)"
-                        @rename="emit('renameThread', $event)"
-                        @delete="emit('deleteThread', $event)"
-                        @add-to-project="emit('addThreadToProject', $event)"
-                    />
-                </div>
-                <div v-else-if="item.type === 'doc'" class="mr-1">
-                    <SidebarDocumentItem
-                        :doc="item.doc"
-                        class="mb-2"
-                        :active="item.doc.id === activeDocument"
-                        @select="emit('selectDocument', $event)"
-                        @rename="emit('renameDocument', $event)"
-                        @delete="emit('deleteDocument', $event)"
-                        @add-to-project="emit('addDocumentToProject', $event)"
-                    />
-                </div>
-            </div>
-        </VList>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
-import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
-import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
-
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind: 'chat' | 'doc';
-}
-interface Project {
-    id: string;
-    name: string;
-    data?: any;
-}
-interface Thread {
-    id: string;
-    title?: string;
-    forked?: boolean;
-}
-interface DocLite {
-    id: string;
-    title: string;
-    updated_at?: number;
-    created_at?: number;
-    postType?: string;
-}
-
-// Row item discriminated union
-interface SectionHeaderItem {
-    type: 'sectionHeader';
-    key: string;
-    label: string;
-}
-interface ProjectsTreeItem {
-    type: 'projectsTree';
-    key: string;
-}
-interface ThreadItem {
-    type: 'thread';
-    key: string;
-    thread: Thread;
-}
-interface DocItem {
-    type: 'doc';
-    key: string;
-    doc: DocLite;
-}
-
-type SidebarRowItem =
-    | SectionHeaderItem
-    | ProjectsTreeItem
-    | ThreadItem
-    | DocItem;
-
-const props = defineProps<{
-    projects: Project[];
-    threads: Thread[];
-    documents: any[]; // possibly full posts containing heavy fields
-    displayDocuments?: any[]; // optional filtered docs from search
-    expandedProjects: string[]; // mutated in place (passed to tree)
-    activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
-    activeThread?: string;
-    activeDocument?: string;
-    height: number; // required external measured height
-}>();
-
-// Simplified emit typing (broad) to accommodate both legacy kebab-case and new camelCase events during transition
-// TODO: tighten types once integration finalized
-// eslint-disable-next-line @typescript-eslint/ban-types
-const emit = defineEmits<(e: string, ...args: any[]) => void>();
-
-// Lightweight docs mapping (strip heavy fields like content)
-const lightweightDocs = computed<DocLite[]>(() =>
-    (props.documents || []).map((d: any) => ({
-        id: d.id,
-        title: d.title || '(untitled document)',
-        updated_at: d.updated_at,
-        created_at: d.created_at,
-        postType: d.postType,
-    }))
-);
-
-const effectiveDocs = computed<DocLite[]>(() => {
-    if (props.displayDocuments && props.displayDocuments.length) {
-        return props.displayDocuments.map((d: any) => ({
-            id: d.id,
-            title: d.title || '(untitled document)',
-            updated_at: d.updated_at,
-            created_at: d.created_at,
-            postType: d.postType,
-        }));
-    }
-    return lightweightDocs.value;
-});
-
-// Local mirror for v-model with tree (keep reference semantics for parent array)
-const expandedProjectsLocal = computed({
-    get: () => props.expandedProjects,
-    set: (val: string[]) => {
-        // mutate original array for parent expectations
-        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
-    },
-});
-
-const flatItems = computed<SidebarRowItem[]>(() => {
-    const out: SidebarRowItem[] = [];
-    if (props.activeSections.projects && props.projects.length) {
-        out.push({ type: 'projectsTree', key: 'projectsTree' });
-    }
-    // Threads section
-    if (props.activeSections.threads && props.threads.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
-        for (const t of props.threads) {
-            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
-        }
-    }
-    // Docs section
-    if (props.activeSections.docs && effectiveDocs.value.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
-        for (const d of effectiveDocs.value) {
-            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
         }
     }
     return out;
-});
-
-// Constant row size estimate
-const rowSize = 36;
-</script>
-```
-
-## File: app/components/ResizableSidebarLayout.vue
-```vue
-<template>
-    <div
-        class="relative w-full h-screen border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
-    >
-        <!-- Backdrop on mobile when open -->
-        <Transition
-            enter-active-class="transition-opacity duration-150"
-            leave-active-class="transition-opacity duration-150"
-            enter-from-class="opacity-0"
-            leave-to-class="opacity-0"
-        >
-            <div
-                v-if="!isDesktop && open"
-                class="absolute inset-0 bg-black/40 z-30 md:hidden"
-                @click="close()"
-            />
-        </Transition>
-
-        <!-- Sidebar -->
-        <aside
-            :class="[
-                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-[var(--md-inverse-surface)] flex flex-col',
-                // width transition on desktop
-                initialized
-                    ? 'md:transition-[width] md:duration-200 md:ease-out'
-                    : 'hidden',
-                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
-                side === 'right' ? 'md:border-l md:border-r-0' : '',
-                // mobile overlay behavior
-                !isDesktop
-                    ? [
-                          'absolute top-0 bottom-0 w-[380px] max-w-[90vw] shadow-xl',
-                          // animated slide
-                          'transition-transform duration-200 ease-out',
-                          side === 'right'
-                              ? 'right-0 translate-x-full'
-                              : 'left-0 -translate-x-full',
-                          open ? 'translate-x-0' : '',
-                      ]
-                    : '',
-            ]"
-            :style="
-                Object.assign(
-                    isDesktop ? { width: computedWidth + 'px' } : {},
-                    {
-                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
-                        '--sidebar-rep-opacity': String(
-                            props.sidebarPatternOpacity
-                        ),
-                    }
-                )
-            "
-            @keydown.esc.stop.prevent="close()"
-        >
-            <div class="h-full flex flex-col">
-                <!-- Sidebar header -->
-                <SidebarHeader
-                    :collapsed="collapsed"
-                    :toggle-icon="toggleIcon"
-                    :toggle-aria="toggleAria"
-                    @toggle="toggleCollapse"
-                >
-                    <template #sidebar-header>
-                        <slot name="sidebar-header" />
-                    </template>
-                    <template #sidebar-toggle="slotProps">
-                        <slot name="sidebar-toggle" v-bind="slotProps" />
-                    </template>
-                </SidebarHeader>
-
-                <!-- Sidebar content -->
-                <div class="flex-1 overflow-auto">
-                    <div v-show="!collapsed" class="flex-1 h-full">
-                        <slot name="sidebar-expanded">
-                            <div class="p-3 space-y-2 text-sm opacity-80">
-                                <p>Add your nav here…</p>
-                                <ul class="space-y-1">
-                                    <li
-                                        v-for="i in 10"
-                                        :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
-                                    >
-                                        Item {{ i }}
-                                    </li>
-                                </ul>
-                            </div>
-                        </slot>
-                    </div>
-                    <div v-show="collapsed" class="flex-1 h-full">
-                        <slot name="sidebar-collapsed">
-                            <div class="p-3 space-y-2 text-sm opacity-80">
-                                <p>Add your nav here…</p>
-                                <ul class="space-y-1">
-                                    <li
-                                        v-for="i in 10"
-                                        :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
-                                    >
-                                        Item {{ i }}
-                                    </li>
-                                </ul>
-                            </div>
-                        </slot>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Resize handle (desktop only) -->
-            <ResizeHandle
-                :is-desktop="isDesktop"
-                :collapsed="collapsed"
-                :side="side"
-                :min-width="props.minWidth"
-                :max-width="props.maxWidth"
-                :computed-width="computedWidth"
-                @resize-start="onPointerDown"
-                @resize-keydown="onHandleKeydown"
-            />
-        </aside>
-
-        <!-- Main content -->
-        <div class="relative z-10 flex-1 h-full flex flex-col">
-            <div
-                class="flex-1 overflow-hidden content-bg"
-                :style="{
-                    '--content-bg-size': props.patternSize + 'px',
-                    '--content-bg-opacity': String(props.patternOpacity),
-                    '--content-overlay-size': props.overlaySize + 'px',
-                    '--content-overlay-opacity': String(props.overlayOpacity),
-                }"
-            >
-                <slot>
-                    <div class="p-4 space-y-2 text-sm opacity-80">
-                        <p>Put your main content here…</p>
-                        <p>
-                            Resize the sidebar on desktop by dragging the
-                            handle. On mobile, use the Menu button to open/close
-                            the overlay.
-                        </p>
-                    </div>
-                </slot>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import SidebarHeader from './sidebar/SidebarHeader.vue';
-import ResizeHandle from './sidebar/ResizeHandle.vue';
-
-type Side = 'left' | 'right';
-
-const props = defineProps({
-    modelValue: { type: Boolean, default: undefined },
-    defaultOpen: { type: Boolean, default: true },
-    side: { type: String as () => Side, default: 'left' },
-    minWidth: { type: Number, default: 320 },
-    maxWidth: { type: Number, default: 480 },
-    defaultWidth: { type: Number, default: 280 },
-    collapsedWidth: { type: Number, default: 56 },
-    storageKey: { type: String, default: 'sidebar:width' },
-    // Visual tuning for content pattern
-    patternOpacity: { type: Number, default: 0.05 }, // 0..1
-    patternSize: { type: Number, default: 150 }, // px
-    // Overlay pattern (renders above the base pattern)
-    overlayOpacity: { type: Number, default: 0.05 },
-    overlaySize: { type: Number, default: 120 },
-    // Sidebar repeating background
-    sidebarPatternOpacity: { type: Number, default: 0.09 },
-    sidebarPatternSize: { type: Number, default: 240 },
-});
-const emit = defineEmits<{
-    (e: 'update:modelValue', v: boolean): void;
-    (e: 'resize', width: number): void;
-}>();
-
-// helper
-const clamp = (w: number) =>
-    Math.min(props.maxWidth, Math.max(props.minWidth, w));
-
-// open state (controlled or uncontrolled)
-const openState = ref<boolean>(props.modelValue ?? props.defaultOpen);
-const open = computed({
-    get: () =>
-        props.modelValue === undefined ? openState.value : props.modelValue,
-    set: (v) => {
-        if (props.modelValue === undefined) openState.value = v;
-        emit('update:modelValue', v);
-    },
-});
-
-// collapsed toggle remembers last expanded width
-const collapsed = ref(false);
-const lastExpandedWidth = ref(props.defaultWidth);
-
-// width state with persistence
-const width = ref<number>(props.defaultWidth);
-const computedWidth = computed(() =>
-    collapsed.value ? props.collapsedWidth : width.value
-);
-
-// Attempt early (pre-mount) restoration to avoid post-mount jank
-if (import.meta.client) {
-    try {
-        const saved = localStorage.getItem(props.storageKey);
-        if (saved) width.value = clamp(parseInt(saved, 10));
-    } catch {}
 }
 
-// responsive
-const isDesktop = ref(false);
-let mq: MediaQueryList | undefined;
-const updateMq = () => {
-    if (typeof window === 'undefined') return;
-    mq = window.matchMedia('(min-width: 768px)');
-    isDesktop.value = mq.matches;
-};
-
-// Defer enabling transitions until after first paint so restored width doesn't animate
-const initialized = ref(false);
-
-onMounted(() => {
-    updateMq();
-    mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-    requestAnimationFrame(() => (initialized.value = true));
-});
-
-onBeforeUnmount(() => {
-    mq?.removeEventListener('change', () => {});
-});
-
-watch(width, (w) => {
-    try {
-        localStorage.setItem(props.storageKey, String(w));
-    } catch {}
-    emit('resize', w);
-});
-
-function toggle() {
-    open.value = !open.value;
-}
-function close() {
-    open.value = false;
-}
-function toggleCollapse() {
-    // On mobile, treat the collapse toggle as a full close of the overlay
-    if (!isDesktop.value) {
-        open.value = false;
-        return;
-    }
-    if (!collapsed.value) {
-        lastExpandedWidth.value = width.value;
-        collapsed.value = true;
-    } else {
-        collapsed.value = false;
-        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
-    }
-}
-
-// Resize logic (desktop only)
-let startX = 0;
-let startWidth = 0;
-function onPointerDown(e: PointerEvent) {
-    if (!isDesktop.value || collapsed.value) return;
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    startX = e.clientX;
-    startWidth = width.value;
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp, { once: true });
-}
-function onPointerMove(e: PointerEvent) {
-    const dx = e.clientX - startX;
-    const delta = props.side === 'right' ? -dx : dx;
-    width.value = clamp(startWidth + delta);
-}
-function onPointerUp() {
-    window.removeEventListener('pointermove', onPointerMove);
-}
-
-// Keyboard a11y for the resize handle
-function onHandleKeydown(e: KeyboardEvent) {
-    if (!isDesktop.value || collapsed.value) return;
-    const step = e.shiftKey ? 32 : 16;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        const dir = e.key === 'ArrowRight' ? 1 : -1;
-        // reverse on right side
-        const signed = props.side === 'right' ? -dir : dir;
-        width.value = clamp(width.value + signed * step);
-    } else if (e.key === 'Home') {
-        e.preventDefault();
-        width.value = props.minWidth;
-    } else if (e.key === 'End') {
-        e.preventDefault();
-        width.value = props.maxWidth;
-    } else if (e.key === 'PageUp') {
-        e.preventDefault();
-        const big = step * 2;
-        const signed = props.side === 'right' ? -1 : 1;
-        width.value = clamp(width.value + signed * big);
-    } else if (e.key === 'PageDown') {
-        e.preventDefault();
-        const big = step * 2;
-        const signed = props.side === 'right' ? 1 : -1;
-        width.value = clamp(width.value - signed * big);
-    }
-}
-
-// expose minimal API if needed
-function openSidebar() {
-    open.value = true;
-}
-function expand() {
-    // Ensure sidebar is open (mobile) and uncollapsed (desktop)
-    open.value = true;
-    if (collapsed.value) {
-        collapsed.value = false;
-        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
-    }
-}
-defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
-
-const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
-// Icon and aria label for collapse/expand button
-const toggleIcon = computed(() => {
-    // When collapsed, show the icon that suggests expanding back toward content area
-    if (collapsed.value) {
-        return side.value === 'right'
-            ? 'pixelarticons:arrow-bar-left'
-            : 'pixelarticons:arrow-bar-right';
-    }
-    // When expanded, show icon pointing into the sidebar to collapse it
-    return side.value === 'right'
-        ? 'pixelarticons:arrow-bar-right'
-        : 'pixelarticons:arrow-bar-left';
-});
-const toggleAria = computed(() =>
-    collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
-);
-</script>
-
-<style scoped>
-/* Optional: could add extra visual flair for the resize handle here */
-.content-bg {
-    position: relative;
-    /* Base matches sidebar/header */
-    background-color: var(--md-surface);
-}
-
-.content-bg::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/bg-repeat.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    /* Default variables; can be overridden via inline style */
-    --content-bg-size: 150px;
-    --content-bg-opacity: 0.08;
-    background-size: var(--content-bg-size) var(--content-bg-size);
-    opacity: var(--content-bg-opacity);
-    z-index: 0;
-}
-
-/* Ensure the real content sits above the pattern */
-.content-bg > * {
-    position: relative;
-    z-index: 1;
-}
-
-/* Overlay layer above base pattern but below content */
-.content-bg::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/bg-repeat-2.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    --content-overlay-size: 380px;
-    --content-overlay-opacity: 0.125;
-    background-size: var(--content-overlay-size) var(--content-overlay-size);
-    opacity: var(--content-overlay-opacity);
-    z-index: 0.5;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Sidebar repeating background layer */
-aside::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/sidebar-repeater.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
-    opacity: var(--sidebar-rep-opacity);
-    z-index: 0;
-}
-
-/* Ensure sidebar children render above the pattern, but keep handle on top */
-aside > *:not(.resize-handle-layer) {
-    position: relative;
-    z-index: 1;
-}
-</style>
-```
-
-## File: app/composables/useActivePrompt.ts
-```typescript
-import { ref, readonly } from 'vue';
-import { getPrompt } from '~/db/prompts';
-import { useHooks } from './useHooks';
-
-export interface ActivePromptState {
-    activePromptId: string | null;
-    activePromptContent: any | null;
-}
-
-// NOTE: Must be module-singleton so different composables/components share state.
-// Previously each invocation created new refs, so selection in modal was not
-// visible to chat sending logic. We lift refs to module scope.
-const _activePromptId = ref<string | null>(null);
-const _activePromptContent = ref<any | null>(null);
-
-export function useActivePrompt() {
-    const hooks = useHooks();
-
-    async function setActivePrompt(id: string | null): Promise<void> {
-        if (!id) {
-            _activePromptId.value = null;
-            _activePromptContent.value = null;
-            return;
-        }
-
-        const prompt = await getPrompt(id);
-        if (prompt) {
-            _activePromptId.value = prompt.id;
-            _activePromptContent.value = prompt.content;
-            await hooks.doAction('chat.systemPrompt.select:action:after', {
-                id: prompt.id,
-                content: prompt.content,
-            });
-        } else {
-            _activePromptId.value = null;
-            _activePromptContent.value = null;
-        }
-    }
-
-    function clearActivePrompt(): void {
-        setActivePrompt(null);
-    }
-
-    function getActivePromptContent(): any | null {
-        return _activePromptContent.value;
-    }
-
-    return {
-        activePromptId: readonly(_activePromptId),
-        activePromptContent: readonly(_activePromptContent),
-        setActivePrompt,
-        clearActivePrompt,
-        getActivePromptContent,
-    };
-}
-```
-
-## File: app/composables/useDocumentsList.ts
-```typescript
-import { ref } from 'vue';
-import { listDocuments, type Document } from '~/db/documents';
-import { useToast } from '#imports';
-import { useHookEffect } from './useHookEffect';
-
-export function useDocumentsList(limit = 200) {
-    const docs = ref<Document[]>([]);
-    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
-    const loading = ref(true);
-    const error = ref<unknown>(null);
-
-    async function refresh() {
-        loading.value = true;
-        error.value = null;
+export function ensureUiMessage(raw: any): UiChatMessage {
+    const id = raw.id || raw.stream_id || crypto.randomUUID();
+    const role = raw.role || 'user';
+    let file_hashes: string[] | undefined;
+    if (Array.isArray(raw.file_hashes)) file_hashes = raw.file_hashes.slice();
+    else if (typeof raw.file_hashes === 'string') {
         try {
-            // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
-            const full = await listDocuments(limit);
-            docs.value = full.map((d: any) => ({
-                // Keep lightweight/meta fields
-                id: d.id,
-                title: d.title,
-                postType: d.postType,
-                created_at: d.created_at,
-                updated_at: d.updated_at,
-                deleted: d.deleted,
-                meta: d.meta,
-                // Drop large content string; empty string placeholder keeps type happy
-                content: '',
-            }));
-        } catch (e) {
-            error.value = e;
-            useToast().add({ color: 'error', title: 'Document: list failed' });
-        } finally {
-            loading.value = false;
+            file_hashes = parseHashes(raw.file_hashes);
+        } catch {
+            // ignore
         }
     }
-
-    // initial load + subscribe to document DB hook events (client only)
-    if (process.client) {
-        refresh();
-        // Auto-refresh on create/update/delete after actions complete
-        useHookEffect('db.documents.create:action:after', () => refresh(), {
-            kind: 'action',
-        });
-        useHookEffect('db.documents.update:action:after', () => refresh(), {
-            kind: 'action',
-        });
-        useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
-            kind: 'action',
-        });
+    const reasoning_text =
+        typeof raw.reasoning_text === 'string' ? raw.reasoning_text : null;
+    let text: string;
+    if (typeof raw.text === 'string' && !Array.isArray(raw.text)) {
+        text = raw.text;
+    } else if (typeof raw.content === 'string') {
+        text = raw.content;
+    } else {
+        text = partsToText(raw.content);
     }
-
-    return { docs, loading, error, refresh };
-}
-```
-
-## File: app/db/client.ts
-```typescript
-import Dexie, { type Table } from 'dexie';
-import type {
-    Attachment,
-    Kv,
-    Message,
-    Project,
-    Thread,
-    FileMeta,
-    Post,
-} from './schema';
-
-export interface FileBlobRow {
-    hash: string; // primary key
-    blob: Blob; // actual binary Blob
-}
-
-// Dexie database versioning & schema
-export class Or3DB extends Dexie {
-    projects!: Table<Project, string>;
-    threads!: Table<Thread, string>;
-    messages!: Table<Message, string>;
-    kv!: Table<Kv, string>;
-    attachments!: Table<Attachment, string>;
-    file_meta!: Table<FileMeta, string>; // hash as primary key
-    file_blobs!: Table<FileBlobRow, string>; // hash as primary key -> Blob
-    posts!: Table<Post, string>;
-
-    constructor() {
-        super('or3-db');
-        // Simplified schema: collapse historical migrations into a single
-        // version to avoid full-table upgrade passes (which previously
-        // loaded entire tables into memory via toArray()). Since there are
-        // no external users / all data already upgraded, we can safely
-        // define only the latest structure.
-        // NOTE: Keep version number at 5 so existing local DBs at v5 open
-        // without triggering a downgrade. Future schema changes should bump.
-        this.version(5).stores({
-            projects: 'id, name, clock, created_at, updated_at',
-            threads:
-                'id, project_id, [project_id+updated_at], parent_thread_id, [parent_thread_id+anchor_index], status, pinned, deleted, last_message_at, clock, created_at, updated_at',
-            messages:
-                'id, [thread_id+index], thread_id, index, role, deleted, stream_id, clock, created_at, updated_at',
-            kv: 'id, &name, clock, created_at, updated_at',
-            attachments: 'id, type, name, clock, created_at, updated_at',
-            file_meta:
-                'hash, [kind+deleted], mime_type, clock, created_at, updated_at',
-            file_blobs: 'hash',
-            posts: 'id, title, postType, deleted, created_at, updated_at',
-        });
+    // Inject markdown placeholders for assistant file_hashes with de-duplication logic.
+    // Goal: avoid showing the same logical image twice when the model already emitted
+    // a markdown image (e.g. data: URL) for a hash we also have stored.
+    if (role === 'assistant' && file_hashes && file_hashes.length) {
+        const IMG_RE = /!\[[^\]]*]\(([^)]+)\)/g; // basic markdown image matcher
+        const existingImages = [...text.matchAll(IMG_RE)];
+        const existingCount = existingImages.length;
+        if (existingCount < file_hashes.length) {
+            // Determine how many placeholders we still need to represent each hash once.
+            const needed = file_hashes.length - existingCount;
+            // Candidate hashes: those not already present via a file-hash placeholder.
+            const candidate = file_hashes.filter(
+                (h) => h && !text.includes(`file-hash:${h}`)
+            );
+            // Only take up to the number we still need to avoid duplication.
+            const missing = candidate.slice(0, needed);
+            if (missing.length) {
+                const placeholders = missing.map(
+                    (h) => `![generated image](file-hash:${h})`
+                );
+                text += (text ? '\n\n' : '') + placeholders.join('\n\n');
+                if (import.meta.dev) {
+                    console.debug(
+                        '[uiMessages.ensureUiMessage] appended placeholders',
+                        {
+                            id,
+                            added: missing.length,
+                            totalHashes: file_hashes.length,
+                            existingCount,
+                        }
+                    );
+                }
+            } else if (import.meta.dev) {
+                console.debug(
+                    '[uiMessages.ensureUiMessage] no additional placeholders needed',
+                    { id, totalHashes: file_hashes.length, existingCount }
+                );
+            }
+        } else if (import.meta.dev) {
+            console.debug(
+                '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
+                { id, totalHashes: file_hashes.length, existingCount }
+            );
+        }
     }
-}
-
-export const db = new Or3DB();
-```
-
-## File: app/db/prompts.ts
-```typescript
-import { db } from './client';
-import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
-
-/**
- * Internal stored row shape (reuses posts table with postType = 'prompt').
- * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
- * Content is persisted as a JSON string (TipTap JSON) for flexibility.
- */
-export interface PromptRow {
-    id: string;
-    title: string; // non-empty trimmed
-    content: string; // JSON string
-    postType: string; // always 'prompt'
-    created_at: number; // seconds
-    updated_at: number; // seconds
-    deleted: boolean;
-}
-
-/** Public facing record with content already parsed. */
-export interface PromptRecord {
-    id: string;
-    title: string;
-    content: any; // TipTap JSON object
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
-}
-
-function emptyPromptJSON() {
-    return { type: 'doc', content: [] };
-}
-
-function normalizeTitle(
-    title?: string | null,
-    {
-        fallback = 'Untitled Prompt',
-        allowEmpty = true,
-    }: { fallback?: string; allowEmpty?: boolean } = {}
-): string {
-    const raw = title ?? '';
-    const trimmed = raw.trim();
-    if (!trimmed && !allowEmpty) return fallback;
-    return trimmed; // may be '' when allowEmpty true
-}
-
-function parseContent(raw: string | null | undefined): any {
-    if (!raw) return emptyPromptJSON();
-    try {
-        const parsed = JSON.parse(raw);
-        // Basic structural guard
-        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
-        return emptyPromptJSON();
-    } catch {
-        return emptyPromptJSON();
-    }
-}
-
-function rowToRecord(row: PromptRow): PromptRecord {
     return {
-        id: row.id,
-        title: row.title,
-        content: parseContent(row.content),
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        deleted: row.deleted,
+        id,
+        role,
+        text,
+        file_hashes,
+        reasoning_text,
+        stream_id: raw.stream_id,
+        pending: raw.pending,
     };
 }
 
-export interface CreatePromptInput {
-    title?: string | null;
-    content?: any; // TipTap JSON object
+// Legacy raw storage (non reactive). We expose accessor for plugins.
+const _rawMessages: any[] = [];
+export function recordRawMessage(m: any) {
+    _rawMessages.push(m);
 }
-
-export async function createPrompt(
-    input: CreatePromptInput = {}
-): Promise<PromptRecord> {
-    const hooks = useHooks();
-    const prepared: PromptRow = {
-        id: newId(),
-        title: normalizeTitle(input.title, { allowEmpty: false }),
-        content: JSON.stringify(input.content ?? emptyPromptJSON()),
-        postType: 'prompt',
-        created_at: nowSec(),
-        updated_at: nowSec(),
-        deleted: false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.create:filter:input',
-        prepared
-    )) as PromptRow;
-    await hooks.doAction('db.prompts.create:action:before', filtered);
-    await db.posts.put(filtered as any); // reuse posts table
-    await hooks.doAction('db.prompts.create:action:after', filtered);
-    return rowToRecord(filtered);
+export function getRawMessages(): readonly any[] {
+    return _rawMessages.slice();
 }
-
-export async function getPrompt(id: string): Promise<PromptRecord | undefined> {
-    const hooks = useHooks();
-    const row = await db.posts.get(id);
-    if (!row || (row as any).postType !== 'prompt') return undefined;
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.get:filter:output',
-        row
-    )) as PromptRow | undefined;
-    return filtered ? rowToRecord(filtered) : undefined;
-}
-
-export async function listPrompts(limit = 100): Promise<PromptRecord[]> {
-    const hooks = useHooks();
-    // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
-        .where('postType')
-        .equals('prompt')
-        .and((r) => !(r as any).deleted)
-        .reverse() // by primary key order soon? we'll sort manually after fetch
-        .toArray();
-    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
-    rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as PromptRow[];
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.list:filter:output',
-        sliced
-    )) as PromptRow[];
-    return filtered.map(rowToRecord);
-}
-
-export interface UpdatePromptPatch {
-    title?: string;
-    content?: any; // TipTap JSON object
-}
-
-export async function updatePrompt(
-    id: string,
-    patch: UpdatePromptPatch
-): Promise<PromptRecord | undefined> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return undefined;
-    const updated: PromptRow = {
-        id: existing.id,
-        title:
-            patch.title !== undefined
-                ? normalizeTitle(patch.title, { allowEmpty: true })
-                : existing.title,
-        content: patch.content
-            ? JSON.stringify(patch.content)
-            : (existing as any).content,
-        postType: 'prompt',
-        created_at: existing.created_at,
-        updated_at: nowSec(),
-        deleted: (existing as any).deleted ?? false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.prompts.update:filter:input',
-        { existing, updated, patch }
-    )) as { updated: PromptRow } | PromptRow;
-    const row = (filtered as any).updated
-        ? (filtered as any).updated
-        : (filtered as any as PromptRow);
-    await hooks.doAction('db.prompts.update:action:before', row);
-    await db.posts.put(row as any);
-    await hooks.doAction('db.prompts.update:action:after', row);
-    return rowToRecord(row);
-}
-
-export async function softDeletePrompt(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return;
-    const row = {
-        ...(existing as any),
-        deleted: true,
-        updated_at: nowSec(),
-    };
-    await hooks.doAction('db.prompts.delete:action:soft:before', row);
-    await db.posts.put(row);
-    await hooks.doAction('db.prompts.delete:action:soft:after', row);
-}
-
-export async function hardDeletePrompt(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'prompt') return;
-    await hooks.doAction('db.prompts.delete:action:hard:before', existing);
-    await db.posts.delete(id);
-    await hooks.doAction('db.prompts.delete:action:hard:after', id);
-}
-
-// Convenience for ensuring DB open (mirrors pattern in other modules)
-export async function ensureDbOpen() {
-    if (!db.isOpen()) await db.open();
-}
-
-export type { PromptRecord as Prompt };
 ```
 
-## File: app/utils/prompt-utils.ts
+## File: app/utils/files/attachments.ts
 ```typescript
-/**
- * Utility functions for system prompts
- */
+// Unified file hash & image normalization utilities (Task 0)
+// Keep minimal & pure for easy reuse and tree-shaking.
 
-/**
- * Converts TipTap JSON content to plain text string for use as system message.
- * Extracts text from paragraph nodes and joins with newlines.
- */
-export function promptJsonToString(json: any): string {
-    if (!json) return '';
-    const lines: string[] = [];
+export interface NormalizedImageAttachment {
+    kind: 'image';
+    src: string; // data URL or remote URL
+    hash?: string; // optional precomputed hash
+    mime?: string; // optional mime type
+}
 
-    function walk(node: any, collectLine = false) {
-        if (!node) return;
-        // Gather plain text from leaf text nodes
-        if (Array.isArray(node)) {
-            node.forEach((n) => walk(n));
-            return;
+// Tolerant hash parser: accepts array, JSON string, comma list, single hash.
+export function parseHashes(raw: unknown): string[] {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter((h) => typeof h === 'string');
+    if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return [];
+        // Try JSON array
+        if (s.startsWith('[')) {
+            try {
+                const arr = JSON.parse(s);
+                if (Array.isArray(arr))
+                    return arr.filter((h) => typeof h === 'string');
+            } catch {}
         }
-        if (node.type === 'text') {
-            currentLine += node.text || '';
-            return;
-        }
-        const blockTypes = new Set([
-            'paragraph',
-            'heading',
-            'blockquote',
-            'codeBlock',
-            'orderedList',
-            'bulletList',
-            'listItem',
-        ]);
-        let isBlock = blockTypes.has(node.type);
-        if (isBlock) {
-            flushLine();
-        }
-        if (node.content) node.content.forEach((c: any) => walk(c));
-        if (isBlock) flushLine();
+        // Comma separated fallback
+        if (s.includes(','))
+            return s
+                .split(',')
+                .map((x) => x.trim())
+                .filter((x) => x.length > 0);
+        return [s];
     }
+    // Non-supported types ignored
+    return [];
+}
 
-    let currentLine = '';
-    function flushLine() {
-        if (currentLine.trim().length) lines.push(currentLine.trim());
-        currentLine = '';
+// Merge previous assistant hashes with current (dedupe, preserve first-seen order)
+export function mergeAssistantFileHashes(
+    prev: string[] | null | undefined,
+    current: string[] | null | undefined
+): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const h of Array.isArray(prev) ? prev : []) {
+        if (typeof h === 'string' && !seen.has(h)) {
+            seen.add(h);
+            out.push(h);
+        }
     }
+    for (const h of Array.isArray(current) ? current : []) {
+        if (typeof h === 'string' && !seen.has(h)) {
+            seen.add(h);
+            out.push(h);
+        }
+    }
+    return out;
+}
 
-    walk(json.content || json);
-    flushLine();
-    return lines.join('\n');
+// Normalize images param variants -> attachment objects.
+export function normalizeImagesParam(
+    input: unknown
+): NormalizedImageAttachment[] {
+    if (!input) return [];
+    const arr = Array.isArray(input) ? input : [input];
+    const out: NormalizedImageAttachment[] = [];
+    for (const item of arr) {
+        if (!item) continue;
+        if (typeof item === 'string') {
+            out.push({ kind: 'image', src: item });
+            continue;
+        }
+        if (typeof item === 'object') {
+            const anyItem: any = item;
+            const src =
+                typeof anyItem.url === 'string'
+                    ? anyItem.url
+                    : typeof anyItem.data === 'string'
+                    ? anyItem.data
+                    : undefined;
+            if (!src) continue;
+            const mime =
+                typeof anyItem.mime === 'string' ? anyItem.mime : undefined;
+            const hash =
+                typeof anyItem.hash === 'string' ? anyItem.hash : undefined;
+            out.push({ kind: 'image', src, mime, hash });
+        }
+    }
+    return out;
 }
 ```
 
@@ -12097,147 +11063,825 @@ onMounted(() => {
 </script>
 ```
 
-## File: vitest.config.ts
+## File: tests/stubs/nuxt-app.ts
 ```typescript
-import { defineConfig } from 'vitest/config';
-import vue from '@vitejs/plugin-vue';
+// Minimal Nuxt app stub for Vitest
+import { createHookEngine } from '../../app/utils/hooks';
 
-// Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
-// We intentionally cast the plugin to any to bypass structural mismatch.
-// No dependency version changes per instruction.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const vueAny: any = vue;
+const engine = createHookEngine();
+// Expose globally for optional introspection
+(globalThis as any).__TEST_HOOK_ENGINE__ = engine;
 
-export default defineConfig({
-    // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
-    plugins: [vueAny()],
-    test: {
-        environment: 'jsdom',
-        globals: true,
-        include: ['app/**/__tests__/**/*.test.ts'],
-        exclude: ['node_modules', 'dist', '.nuxt'],
-        setupFiles: ['tests/setup.ts'],
-        testTimeout: 10000,
-        hookTimeout: 10000,
-        bail: 1,
-    },
+export function useNuxtApp() {
+    return { $hooks: engine } as any;
+}
+```
+
+## File: tests/stubs/nuxt-imports.ts
+```typescript
+// Stub for Nuxt auto-imports in Vitest context
+export function useToast() {
+    return { add: () => {} };
+}
+```
+
+## File: tests/setup.ts
+```typescript
+// Global test setup: mock heavy virtualization lib to avoid jsdom/Bun hangs.
+import { vi } from 'vitest';
+import { defineComponent, h } from 'vue';
+
+vi.mock('virtua/vue', () => {
+    const Base = defineComponent({
+        name: 'MockVirtualListBase',
+        props: {
+            data: { type: Array, default: () => [] },
+            itemSize: { type: [Number, Function], default: 0 },
+            itemSizeEstimation: { type: [Number, Function], default: 0 },
+            overscan: { type: Number, default: 0 },
+        },
+        setup(props, { slots }) {
+            return () =>
+                h(
+                    'div',
+                    { class: 'mock-virtualizer' },
+                    (props.data as any[]).map((item: any, index: number) =>
+                        slots.default ? slots.default({ item, index }) : null
+                    )
+                );
+        },
+    });
+    return {
+        VList: Base,
+        Virtualizer: Base,
+    };
 });
 ```
 
-## File: app/components/chat/VirtualMessageList.vue
+## File: LICENSE
+```
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2025 @Saluana
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+```
+
+## File: nuxt.config.ts
+```typescript
+// https://nuxt.com/docs/api/configuration/nuxt-config
+
+export default defineNuxtConfig({
+    compatibilityDate: '2025-07-15',
+    devtools: { enabled: true },
+    modules: ['@nuxt/ui', '@nuxt/fonts'],
+    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
+    srcDir: 'app',
+    // Load Tailwind + theme variables globally
+    css: ['~/assets/css/main.css'],
+    fonts: {
+        families: [
+            { name: 'Press Start 2P', provider: 'google' },
+            { name: 'VT323', provider: 'google' },
+        ],
+    },
+    // Exclude test artifacts from scanning and server bundle (saves build time & size)
+    ignore: ['**/*.test.*', '**/__tests__/**', 'tests/**'],
+});
+```
+
+## File: app/assets/css/main.css
+```css
+/* Tailwind v4: single import includes preflight + utilities */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Nuxt UI base styles (load first so we can override its tokens below) */
+@import "@nuxt/ui";
+
+/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
+	so classes used in Nuxt UI theme overrides are generated. */
+@source "../../../app.config.ts";
+
+
+/* Your Material theme variable files (scoped: .light, .dark, etc.) */
+@import "./theme.css";
+
+/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
+@import "~/assets/css/nuxt-ui-map.css";
+
+/* Font setup: body uses VT323, headings use Press Start 2P */
+:root {
+	/* Tailwind v4 token vars (optional for font utilities) */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+    --ui-radius: 3px;
+}
+
+.font-ps2 {
+	font-family: var(--font-heading) !important;
+}
+
+.font-vt323 {
+	font-family: var(--font-sans) !important;
+}
+
+html, body {
+	font-family: var(--font-sans) !important;
+    font-size: 20px; 
+}
+
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+	font-family: var(--font-heading) !important;
+}
+
+.retro-btn { 
+	display: inline-flex;
+	line-height: 1; /* avoid extra vertical space from font metrics */
+	position: relative;
+	border-radius: 3px;                               /* default */
+	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
+.retro-btn.aspect-square {
+	padding: 0; /* our button variant already sets px-0, this enforces it */
+	place-items: center;
+}
+
+/* Physical press: move button into its shadow and add subtle inner bevel */
+.retro-btn:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+.active-element {
+		box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Keyboard accessibility: preserve pixel look while focused */
+.retro-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Global thin colored scrollbars (WebKit + Firefox) */
+/* Firefox */
+html {
+	scrollbar-width: thin;
+	/* thumb color, then track color */
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit (Chromium, Safari) */
+/* Apply to all scrollable elements */
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+	border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--md-primary);
+	border-radius: 9999px;
+	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern-flipped {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    rotate: 180deg;
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
+.dark .prose strong,
+.dark .prosemirror-host :where(.ProseMirror) strong {
+	color: var(--md-on-surface);
+}
+
+.hljs {
+	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
+}
+```
+
+## File: app/components/chat/SystemPromptsModal.vue
 ```vue
 <template>
-    <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" class="flex flex-col" :class="wrapperClass">
-        <Virtualizer
-            :data="messages"
-            :itemSize="itemSizeEstimation || undefined"
-            :overscan="overscan"
-            :scrollRef="scrollParent || undefined"
-            @scroll="onScroll"
-            @scroll-end="onScrollEnd"
-            v-slot="{ item, index }"
-        >
-            <div :key="item.id || index">
-                <slot name="item" :message="item" :index="index" />
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-none',
+            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
+            body: 'p-0! border-b-0! overflow-hidden',
+        }"
+        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80dvh] max-h-[80dvh] overflow-hidden"
+    >
+        <template #header>
+            <div class="flex w-full items-center justify-between pr-2">
+                <h3 class="font-semibold text-sm pl-2 dark:text-black">
+                    System Prompts
+                </h3>
+                <UButton
+                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
+                    :square="true"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-heroicons-x-mark"
+                    @click="open = false"
+                />
             </div>
-        </Virtualizer>
-        <!-- Tail slot for streaming message appended after virtualized stable messages -->
-        <slot name="tail" />
-    </div>
+        </template>
+        <template #body>
+            <div class="flex flex-col h-full" @keydown="handleKeydown">
+                <div
+                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
+                >
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <UButton
+                            @click="createNewPrompt"
+                            size="sm"
+                            color="primary"
+                            class="retro-btn"
+                        >
+                            New Prompt
+                        </UButton>
+                        <UButton
+                            v-if="currentActivePromptId"
+                            @click="clearActivePrompt"
+                            size="sm"
+                            color="neutral"
+                            variant="outline"
+                        >
+                            Clear Active
+                        </UButton>
+                    </div>
+                    <UInput
+                        v-model="searchQuery"
+                        placeholder="Search prompts..."
+                        size="sm"
+                        class="max-w-xs"
+                        icon="i-heroicons-magnifying-glass"
+                    />
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <!-- List View -->
+                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
+                        <div
+                            v-if="filteredPrompts.length === 0"
+                            class="flex flex-col items-center justify-center h-full text-center p-8"
+                        >
+                            <UIcon
+                                name="pixelarticons:script-text"
+                                class="w-16 h-16 text-gray-400 mb-4"
+                            />
+                            <h3
+                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
+                            >
+                                No system prompts yet
+                            </h3>
+                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                                Create your first system prompt to customize AI
+                                behavior.
+                            </p>
+                            <UButton @click="createNewPrompt" color="primary">
+                                Create Your First Prompt
+                            </UButton>
+                        </div>
+
+                        <div v-else class="p-4 space-y-3">
+                            <div
+                                v-for="prompt in filteredPrompts"
+                                :key="prompt.id"
+                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
+                                :class="{
+                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
+                                        prompt.id === currentActivePromptId ||
+                                        prompt.id === defaultPromptId,
+                                }"
+                            >
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h4
+                                            class="font-medium text-gray-900 dark:text-white truncate"
+                                            :class="{
+                                                'italic opacity-60':
+                                                    !prompt.title,
+                                            }"
+                                        >
+                                            {{
+                                                prompt.title ||
+                                                'Untitled Prompt'
+                                            }}
+                                        </h4>
+                                        <span
+                                            v-if="prompt.id === defaultPromptId"
+                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            >Default</span
+                                        >
+                                    </div>
+                                    <p
+                                        class="text-sm text-gray-500 dark:text-gray-400"
+                                    >
+                                        Updated
+                                        {{ formatDate(prompt.updated_at) }} •
+                                        {{ tokenCounts[prompt.id] || 0 }} tokens
+                                    </p>
+                                </div>
+
+                                <div
+                                    class="flex items-center gap-2 ml-4 shrink-0"
+                                >
+                                    <UTooltip
+                                        :delay-duration="0"
+                                        :text="
+                                            prompt.id === defaultPromptId
+                                                ? 'Remove default prompt'
+                                                : 'Set as default prompt'
+                                        "
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            :variant="
+                                                prompt.id === defaultPromptId
+                                                    ? 'solid'
+                                                    : 'outline'
+                                            "
+                                            :color="
+                                                prompt.id === defaultPromptId
+                                                    ? 'primary'
+                                                    : 'neutral'
+                                            "
+                                            :square="true"
+                                            :ui="{
+                                                base: 'retro-btn px-1! text-nowrap',
+                                            }"
+                                            class="retro-btn"
+                                            aria-label="Toggle default prompt"
+                                            @click.stop="
+                                                toggleDefault(prompt.id)
+                                            "
+                                            >{{
+                                                prompt.id === defaultPromptId
+                                                    ? 'default'
+                                                    : 'set default'
+                                            }}</UButton
+                                        >
+                                    </UTooltip>
+                                    <UButton
+                                        @click="selectPrompt(prompt.id)"
+                                        size="sm"
+                                        :color="
+                                            prompt.id === currentActivePromptId
+                                                ? 'primary'
+                                                : 'neutral'
+                                        "
+                                        :variant="
+                                            prompt.id === currentActivePromptId
+                                                ? 'solid'
+                                                : 'outline'
+                                        "
+                                    >
+                                        {{
+                                            prompt.id === currentActivePromptId
+                                                ? 'Selected'
+                                                : 'Select'
+                                        }}
+                                    </UButton>
+                                    <UPopover
+                                        :popper="{ placement: 'bottom-end' }"
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            variant="outline"
+                                            color="neutral"
+                                            class="flex items-center justify-center"
+                                            :square="true"
+                                            icon="pixelarticons:more-vertical"
+                                            aria-label="More actions"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex flex-col py-1 w-36 text-sm"
+                                            >
+                                                <button
+                                                    @click="
+                                                        startEditing(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:edit"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button
+                                                    @click="
+                                                        deletePrompt(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:trash"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editor View -->
+                    <div v-else class="h-full overflow-hidden flex flex-col">
+                        <div class="flex-1 p-4 overflow-hidden">
+                            <LazyPromptsPromptEditor
+                                :prompt-id="editingPrompt.id"
+                                @back="stopEditing"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </UModal>
 </template>
 
 <script setup lang="ts">
-/**
- * VirtualMessageList
- * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
- * Thin abstraction over virtua's <VList>. Purpose:
- *  - Decouple higher-level chat code from 3p library specifics (swap easier).
- *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
- *    auto-scroll + lazy fetch triggers without leaking scroll math.
- *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
- *    don't sprinkle magic numbers.
- *
- * Performance Notes (Task 2.4):
- *  - itemSizeEstimation is a heuristic avg row height (px). Virtua benefits
- *    from closer estimates for jump accuracy. We'll measure once real message
- *    mix known; keep default conservative (72) to reduce under-estimation.
- *  - overscan kept small (4) to balance DOM churn vs. rapid wheel scroll.
- *  - computeRange() currently returns full range because virtua's public API
- *    doesn't expose internal first/last indices directly. This is acceptable
- *    for now since downstream consumers only need edge detection. If/when we
- *    require partial range (e.g. transcript minimap) we can either:
- *      a) Contribute an API upstream, or
- *      b) Probe DOM for rendered children & derive indices (slower fallback).
- *  - Scroll events: we coalesce logic via onInternalUpdate() — cheap constant
- *    operations (no layout thrash) so safe each scroll tick.
- *  - Future optimization hooks: dynamic itemSizeEstimation sampling (median of
- *    first N rendered rows) and throttled range emission if CPU hotspots seen.
- */
-import { onMounted, ref, watch, type PropType } from 'vue';
-// eslint-disable-next-line import/no-unresolved
-import { Virtualizer } from 'virtua/vue';
+import { ref, onMounted, computed, watch } from 'vue';
+import {
+    listPrompts,
+    createPrompt,
+    softDeletePrompt,
+    type PromptRecord,
+} from '~/db/prompts';
+import { useActivePrompt } from '~/composables/useActivePrompt';
+import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
+import { encode } from 'gpt-tokenizer';
+import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
 
-interface ChatMessage {
-    id: string;
-    role?: string;
-    content?: string;
-    [k: string]: any;
-}
-
-const props = defineProps({
-    messages: { type: Array as PropType<ChatMessage[]>, required: true },
-    itemSizeEstimation: { type: Number, default: 72 }, // heuristic average row height
-    overscan: { type: Number, default: 4 },
-    wrapperClass: { type: String, default: '' },
-    scrollParent: {
-        type: Object as PropType<HTMLElement | null>,
-        default: null,
-    },
+// Props & modal open bridging (like SettingsModal pattern)
+const props = defineProps<{
+    showModal: boolean;
+    threadId?: string;
+}>();
+const emit = defineEmits({
+    'update:showModal': (value: boolean) => typeof value === 'boolean',
+    selected: (id: string) => typeof id === 'string',
+    closed: () => true,
+    threadCreated: (threadId: string, promptId: string | null) => true,
 });
 
-const emit = defineEmits<{
-    (e: 'visible-range-change', range: { start: number; end: number }): void;
-    (e: 'reached-top'): void;
-    (e: 'reached-bottom'): void;
-}>();
-
-const root = ref<HTMLElement | null>(null);
-
-// Track visible range heuristically via scroll metrics
-function computeRange(): { start: number; end: number } {
-    // virtua does not expose direct API here; fallback simplistic approach:
-    // We rely on overscan as smoothing; refine later if library offers hooks.
-    const total = props.messages.length;
-    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
-    // Placeholder: without internal indices, emit full range.
-    return { start: 0, end: total - 1 };
-}
-
-function onInternalUpdate() {
-    const range = computeRange();
-    emit('visible-range-change', range);
-    if (range.start === 0) emit('reached-top');
-    if (range.end >= props.messages.length - 1) emit('reached-bottom');
-}
-
-function onScroll() {
-    onInternalUpdate();
-}
-function onScrollEnd() {
-    onInternalUpdate();
-}
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
+});
 
 watch(
-    () => props.messages.length,
-    () => onInternalUpdate()
+    () => props.showModal,
+    (v, ov) => {
+        if (!v && ov) emit('closed');
+    }
 );
 
-onMounted(() => onInternalUpdate());
+const {
+    activePromptId,
+    setActivePrompt,
+    clearActivePrompt: clearGlobalActivePrompt,
+} = useActivePrompt();
+
+const prompts = ref<PromptRecord[]>([]);
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
+const editingPrompt = ref<PromptRecord | null>(null);
+const showDeleteConfirm = ref<string | null>(null);
+
+const searchQuery = ref('');
+const filteredPrompts = computed(() => {
+    if (!searchQuery.value) return prompts.value;
+    return prompts.value.filter((p) =>
+        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+});
+
+// Thread-specific system prompt handling
+const threadSystemPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
+
+// Computed for current active prompt (thread-specific or global)
+const currentActivePromptId = computed(() => {
+    if (props.threadId) {
+        return threadSystemPromptId.value;
+    }
+    return activePromptId.value;
+});
+
+// Extract plain text from TipTap JSON recursively
+function extractText(node: any): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    const type = node.type;
+    let acc = '';
+    if (type === 'text') {
+        acc += node.text || '';
+    }
+    if (node.content && Array.isArray(node.content)) {
+        const inner = node.content.map(extractText).join('');
+        acc += inner;
+    }
+    // Block separators to avoid word merging
+    if (
+        [
+            'paragraph',
+            'heading',
+            'bulletList',
+            'orderedList',
+            'listItem',
+        ].includes(type)
+    ) {
+        acc += '\n';
+    }
+    return acc;
+}
+
+function contentToText(content: any): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    // TipTap root usually { type: 'doc', content: [...] }
+    if (content.type === 'doc' && Array.isArray(content.content)) {
+        return extractText(content)
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+    }
+    if (Array.isArray(content.content)) return extractText(content).trim();
+    return '';
+}
+
+// Cached token counts per prompt id (recomputed when prompts list changes)
+const tokenCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of prompts.value) {
+        try {
+            const text = contentToText(p.content);
+            map[p.id] = text ? encode(text).length : 0;
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token encode failed', e);
+            map[p.id] = 0;
+        }
+    }
+    return map;
+});
+
+// Totals derived from cached counts
+const totalTokens = computed(() =>
+    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
+);
+const filteredTokens = computed(() =>
+    filteredPrompts.value.reduce(
+        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
+        0
+    )
+);
+
+// (Events moved above with prop bridging)
+
+const loadPrompts = async () => {
+    try {
+        prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.find((p) => p.id === defaultPromptId.value)
+        ) {
+            await clearDefaultPrompt();
+        }
+    } catch (error) {
+        console.error('Failed to load prompts:', error);
+    }
+};
+
+const loadThreadSystemPrompt = async () => {
+    if (props.threadId) {
+        try {
+            threadSystemPromptId.value = await getThreadSystemPrompt(
+                props.threadId
+            );
+        } catch (error) {
+            console.error('Failed to load thread system prompt:', error);
+            threadSystemPromptId.value = null;
+        }
+    } else {
+        threadSystemPromptId.value = null;
+    }
+};
+
+const createNewPrompt = async () => {
+    try {
+        const newPrompt = await createPrompt();
+        prompts.value.unshift(newPrompt);
+        startEditing(newPrompt.id);
+    } catch (error) {
+        console.error('Failed to create prompt:', error);
+    }
+};
+
+const selectPrompt = async (id: string) => {
+    try {
+        if (props.threadId) {
+            // Update thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, id);
+            threadSystemPromptId.value = id;
+        } else {
+            // Store as pending for when thread is created
+            pendingPromptId.value = id;
+            // Also update global for immediate feedback
+            await setActivePrompt(id);
+        }
+        emit('selected', id);
+    } catch (error) {
+        console.error('Failed to select prompt:', error);
+    }
+};
+
+const clearActivePrompt = async () => {
+    try {
+        if (props.threadId) {
+            // Clear thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadSystemPromptId.value = null;
+        } else {
+            // Clear pending and global active prompt
+            pendingPromptId.value = null;
+            await clearGlobalActivePrompt();
+        }
+    } catch (error) {
+        console.error('Failed to clear active prompt:', error);
+    }
+};
+
+const startEditing = (id: string) => {
+    const prompt = prompts.value.find((p) => p.id === id);
+    if (prompt) {
+        editingPrompt.value = prompt;
+    }
+};
+
+const stopEditing = () => {
+    editingPrompt.value = null;
+    loadPrompts(); // Refresh list in case of changes
+};
+
+const applyPendingPromptToThread = async (threadId: string) => {
+    if (pendingPromptId.value) {
+        try {
+            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
+            emit('threadCreated', threadId, pendingPromptId.value);
+            pendingPromptId.value = null;
+        } catch (error) {
+            console.error('Failed to apply pending prompt to thread:', error);
+        }
+    }
+};
+
+const deletePrompt = async (id: string) => {
+    if (confirm('Are you sure you want to delete this prompt?')) {
+        try {
+            await softDeletePrompt(id);
+            if (activePromptId.value === id) {
+                clearActivePrompt();
+            }
+            if (defaultPromptId.value === id) {
+                await clearDefaultPrompt();
+            }
+            loadPrompts();
+        } catch (error) {
+            console.error('Failed to delete prompt:', error);
+        }
+    }
+};
+
+const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (editingPrompt.value) return;
+    const key = event.key;
+    if (key >= '1' && key <= '9') {
+        const index = parseInt(key) - 1;
+        if (index < filteredPrompts.value.length) {
+            const prompt = filteredPrompts.value[index];
+            if (prompt) {
+                selectPrompt(prompt.id);
+                event.preventDefault();
+            }
+        }
+    }
+};
+
+onMounted(() => {
+    loadPrompts();
+    loadThreadSystemPrompt();
+});
+
+// Watch for threadId changes to reload thread-specific prompt
+watch(
+    () => props.threadId,
+    () => {
+        loadThreadSystemPrompt();
+    }
+);
+
+function toggleDefault(id: string) {
+    if (defaultPromptId.value === id) {
+        clearDefaultPrompt();
+    } else {
+        setDefaultPrompt(id);
+    }
+}
 </script>
 
 <style scoped>
-/* Keep retro feel: no extra styling here; rely on parent theme utilities */
+/* Mobile full-screen adjustments */
+@media (max-width: 640px) {
+    .sp-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-width: 0 !important;
+    }
+}
+
+/* Smooth scrolling area */
+.sp-modal :deep(.n-modal-body),
+.sp-modal :deep(.n-card__content) {
+    /* ensure body grows */
+    height: 100%;
+}
 </style>
 ```
 
@@ -12509,6 +12153,500 @@ const statusText = computed(() => {
 </style>
 ```
 
+## File: app/components/documents/DocumentsPageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="''"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+                @chatSelected="onSidebarChatSelected"
+                @new-chat="onSidebarNewChat"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="''"
+                @focusSearch="focusSidebarSearch"
+                @chatSelected="onSidebarChatSelected"
+                @new-chat="onSidebarNewChat"
+            />
+        </template>
+        <div class="flex-1 min-h-[100dvh] w-full relative">
+            <div
+                id="top-nav"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"
+            >
+                <div class="h-full flex items-center justify-center px-2">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    'pt-[46px]',
+                    'h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+                    <LazyDocumentsDocumentEditor
+                        v-if="pane.documentId"
+                        :document-id="pane.documentId"
+                        class="flex-1 min-h-0"
+                    />
+                    <div
+                        v-else
+                        class="flex-1 flex items-center justify-center text-sm opacity-70"
+                    >
+                        No document.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { ensureDbOpen as ensureDocumentsDbOpen } from '~/db/documents';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+import { db } from '~/db';
+
+const props = withDefaults(
+    defineProps<{
+        initialDocumentId?: string;
+        validateInitial?: boolean;
+        routeSync?: boolean;
+    }>(),
+    { validateInitial: false, routeSync: true }
+);
+
+// Multi-pane: we only use doc mode; thread related fields remain unused.
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    ensureAtLeastOne,
+} = useMultiPane({ onFlushDocument: (id) => flushDocument(id) });
+
+// Convert first pane to doc mode when loading an existing document
+watch(
+    () => props.initialDocumentId,
+    (id) => {
+        if (!id) return;
+        const pane = panes.value[0];
+        if (pane) {
+            pane.mode = 'doc';
+            pane.documentId = id;
+            pane.threadId = '';
+        }
+    },
+    { immediate: true }
+);
+
+const router = useRouter();
+const toast = useToast();
+
+async function validateDocument(id: string): Promise<boolean> {
+    await ensureDocumentsDbOpen();
+    const ATTEMPTS = 5;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+function redirectNotFound() {
+    router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description: 'This document does not exist.',
+        color: 'error',
+    });
+}
+
+let validateToken = 0;
+async function initInitialDocument() {
+    if (!process.client) return;
+    if (!props.initialDocumentId) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.validateInitial) {
+        pane.validating = true;
+        const token = ++validateToken;
+        const ok = await validateDocument(props.initialDocumentId);
+        if (token !== validateToken) return;
+        if (!ok) return redirectNotFound();
+    }
+    pane.mode = 'doc';
+    pane.documentId = props.initialDocumentId;
+    pane.threadId = '';
+    pane.validating = false;
+    updateUrlDocument(props.initialDocumentId);
+}
+
+function updateUrlDocument(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/docs/${id}` : '/docs';
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+// Watch active pane doc changes to sync URL
+watch(
+    () =>
+        panes.value
+            .map((p) => `${p.id}:${p.documentId || ''}:${p.mode}`)
+            .join(','),
+    () => {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        if (pane.mode === 'doc') updateUrlDocument(pane.documentId);
+        else updateUrlDocument(undefined);
+    }
+);
+
+// Documents operations
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrlDocument(doc.id);
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrlDocument(id);
+}
+
+// If user picks a chat in sidebar, navigate to chat route (keeps consistent behavior with unified sidebar)
+function onSidebarChatSelected(id: string) {
+    if (!id) return;
+    router.push(`/chat/${id}`);
+}
+function onSidebarNewChat() {
+    router.push('/chat');
+}
+
+// Theme toggle (copied minimal from chat shell)
+const nuxtApp = useNuxtApp();
+const themeName = ref('light');
+function getThemeSafe() {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client)
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+    } catch {}
+    return 'light';
+}
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    onMounted(() => {
+        syncTheme();
+        const root = document.documentElement;
+        const observer = new MutationObserver(syncTheme);
+        observer.observe(root, {
+            attributes: true,
+            attributeFilter: ['class'],
+        });
+        if (import.meta.hot)
+            import.meta.hot.dispose(() => observer.disconnect());
+        else onUnmounted(() => observer.disconnect());
+    });
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// Sidebar focus (collapsed)
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => sideNavExpandedRef.value?.focusSearchInput?.());
+}
+
+onMounted(() => {
+    ensureAtLeastOne();
+    initInitialDocument();
+});
+
+// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot)
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    else onUnmounted(() => window.removeEventListener('keydown', down));
+}
+</script>
+<style scoped>
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
+```
+
+## File: app/components/sidebar/SidebarDocumentItem.vue
+```vue
+<template>
+    <RetroGlassBtn
+        class="w-full flex items-center justify-between text-left"
+        :class="{ 'active-element bg-primary/25': active }"
+        @click="emit('select', doc.id)"
+        @mouseenter="onHoverDoc()"
+    >
+        <span class="truncate flex-1 min-w-0" :title="doc.title">{{
+            doc.title
+        }}</span>
+        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+            <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                @click.stop
+            >
+                <UIcon
+                    name="pixelarticons:more-vertical"
+                    class="w-4 h-4 opacity-70"
+                />
+            </span>
+            <template #content>
+                <div class="p-1 w-44 space-y-1">
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:edit"
+                        @click="emit('rename', doc)"
+                        >Rename</UButton
+                    >
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:folder-plus"
+                        @click="emit('add-to-project', doc)"
+                        >Add to project</UButton
+                    >
+                    <UButton
+                        color="error"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:trash"
+                        @click="emit('delete', doc)"
+                        >Delete</UButton
+                    >
+                    <template v-for="action in extraActions" :key="action.id">
+                        <UButton
+                            :icon="action.icon"
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            class="w-full justify-start"
+                            @click="() => runExtraAction(action)"
+                            >{{ action.label || '' }}</UButton
+                        >
+                    </template>
+                </div>
+            </template>
+        </UPopover>
+    </RetroGlassBtn>
+</template>
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import type { Post } from '~/db';
+import { db } from '~/db';
+import { useThrottleFn } from '@vueuse/core';
+const props = defineProps<{ doc: any; active?: boolean }>();
+const emit = defineEmits<{
+    (e: 'select', id: string): void;
+    (e: 'rename', doc: any): void;
+    (e: 'delete', doc: any): void;
+    (e: 'add-to-project', doc: any): void;
+}>();
+const extraActions = useDocumentHistoryActions();
+const fullDocCache = new Map<string, Post>();
+const prefetching = new Set<string>();
+async function fetchFullDoc(id: string) {
+    if (fullDocCache.has(id)) return fullDocCache.get(id)!;
+    try {
+        const rec = await db.posts.get(id);
+        if (rec) {
+            fullDocCache.set(id, rec as Post);
+            return rec as Post;
+        }
+    } catch {}
+    return null;
+}
+const doPrefetch = useThrottleFn(async (id: string) => {
+    if (fullDocCache.has(id) || prefetching.has(id)) return;
+    prefetching.add(id);
+    await fetchFullDoc(id);
+    prefetching.delete(id);
+}, 300);
+function onHoverDoc() {
+    if (!props.doc?.id) return;
+    if (!fullDocCache.has(props.doc.id)) doPrefetch(props.doc.id);
+}
+async function runExtraAction(action: any) {
+    try {
+        let docToSend = props.doc;
+        if (!docToSend.content || docToSend.content.length === 0) {
+            const full = await fetchFullDoc(props.doc.id);
+            if (full) docToSend = full;
+            else {
+                try {
+                    useToast().add({
+                        title: 'Document not available',
+                        description: 'Failed to load full content',
+                        color: 'error',
+                        duration: 3000,
+                    });
+                } catch {}
+                return;
+            }
+        }
+        await action.handler({ document: docToSend });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Doc action error', action.id, e);
+    }
+}
+</script>
+```
+
 ## File: app/components/sidebar/SidebarHeader.vue
 ```vue
 <template>
@@ -12517,14 +12655,25 @@ const statusText = computed(() => {
             'px-0 justify-center': collapsed,
             'px-3 justify-between': !collapsed,
         }"
-        class="flex items-center header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
                 <div class="flex items-center space-x-2">
-                    <h1 class="text-[14px] font-medium uppercase tracking-wide">
-                        or3-chat
-                    </h1>
+                    <div
+                        class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
+                    >
+                        <div
+                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
+                        >
+                            <div>Or</div>
+                            <div class="text-[17px]">3</div>
+                        </div>
+                        <span
+                            class="text-[18px] pb-[1.5px] -ml-0.5 font-vt323 font-bold text-primary"
+                            >.chat</span
+                        >
+                    </div>
                 </div>
             </slot>
         </div>
@@ -12575,6 +12724,25 @@ function onToggle() {
     background-color: var(--md-surface-container-high) !important;
 }
 
+/* Retro logo title: pixel shadow + underline accent (no stroke) */
+.header-title {
+    font-family: 'Press Start 2P', monospace;
+
+    letter-spacing: 1px;
+    color: var(--md-primary);
+    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
+    padding: 2px 4px 3px 4px; /* subtle padding for readability */
+}
+
+.dark .header-title {
+    color: var(--md-on-primary-container);
+    text-shadow: 2px 2px 0 var(--md-primary);
+}
+.dark .header-title::after {
+    background: var(--md-on-primary-container);
+    box-shadow: 2px 2px 0 var(--md-primary);
+}
+
 /* Logo rendering tweaks */
 .logo {
     width: 20px; /* lock display size */
@@ -12590,6 +12758,111 @@ function onToggle() {
    src="/logo-20.png"
    srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
 </style>
+```
+
+## File: app/components/sidebar/SidebarThreadItem.vue
+```vue
+<template>
+    <RetroGlassBtn
+        class="w-full flex items-center justify-between text-left"
+        :class="{ 'active-element bg-primary/25': active }"
+        @click="emit('select', thread.id)"
+    >
+        <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+            <UIcon
+                v-if="thread.forked"
+                name="pixelarticons:git-branch"
+                class="shrink-0"
+            />
+            <span
+                class="truncate flex-1 min-w-0"
+                :title="thread.title || 'New Thread'"
+                >{{ thread.title || 'New Thread' }}</span
+            >
+        </div>
+        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+            <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                @click.stop
+            >
+                <UIcon
+                    name="pixelarticons:more-vertical"
+                    class="w-4 h-4 opacity-70"
+                />
+            </span>
+            <template #content>
+                <div class="p-1 w-44 space-y-1">
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:edit"
+                        @click="emit('rename', thread)"
+                        >Rename</UButton
+                    >
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:folder-plus"
+                        @click="emit('add-to-project', thread)"
+                        >Add to project</UButton
+                    >
+                    <UButton
+                        color="error"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:trash"
+                        @click="emit('delete', thread)"
+                        >Delete</UButton
+                    >
+                    <template v-for="action in extraActions" :key="action.id">
+                        <UButton
+                            :icon="action.icon"
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            class="w-full justify-start"
+                            @click="() => runExtraAction(action, thread)"
+                            >{{ action.label || '' }}</UButton
+                        >
+                    </template>
+                </div>
+            </template>
+        </UPopover>
+    </RetroGlassBtn>
+</template>
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import type { Thread } from '~/db';
+const props = defineProps<{ thread: Thread; active?: boolean }>();
+const emit = defineEmits<{
+    (e: 'select', id: string): void;
+    (e: 'rename', thread: Thread): void;
+    (e: 'delete', thread: Thread): void;
+    (e: 'add-to-project', thread: Thread): void;
+}>();
+// Plugin thread actions
+const extraActions = useThreadHistoryActions();
+async function runExtraAction(action: any, thread: Thread) {
+    try {
+        await action.handler({ thread });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Thread action error', action.id, e);
+    }
+}
+</script>
 ```
 
 ## File: app/components/sidebar/SideBottomNav.vue
@@ -12864,1049 +13137,6 @@ function navigateToCredits() {
 </style>
 ```
 
-## File: app/plugins/message-actions.client.ts
-```typescript
-export default defineNuxtPlugin(() => {
-    registerMessageAction({
-        id: 'Create document', // unique id
-        icon: 'pixelarticons:notes-plus', // any icon name supported by <UButton>
-        tooltip: 'Create document',
-        showOn: 'assistant', // 'user' | 'assistant' | 'both'
-        order: 300, // optional; after built-ins ( <200 reserved )
-        async handler({ message }) {
-            console.log('Create document action invoked', message);
-
-            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
-            async function markdownToTipTapDoc(md: string) {
-                const markdown = (md || '').trim();
-                if (!markdown) return { type: 'doc', content: [] };
-                try {
-                    const [{ Editor }] = await Promise.all([
-                        import('@tiptap/core'),
-                    ]);
-                    const StarterKit = (await import('@tiptap/starter-kit'))
-                        .default;
-                    // tiptap-markdown exports markdownToProseMirror function
-                    const { Markdown } = await import('tiptap-markdown');
-
-                    const editor = new Editor({
-                        extensions: [StarterKit, Markdown],
-                        content: '',
-                    });
-
-                    editor.commands.setContent(markdown);
-                    return editor.getJSON();
-                } catch (e) {
-                    alert('error!!!');
-                }
-            }
-
-            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
-
-            const doc = await newDocument({
-                title: (message as any).title || 'Untitled',
-                content: tiptapDoc,
-            });
-
-            console.log('Created document record', doc);
-
-            // Attempt to open in a new pane (if capacity) else reuse active pane
-            const mp: any = (globalThis as any).__or3MultiPaneApi;
-            try {
-                if (mp) {
-                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
-                    if (couldAdd && typeof mp.addPane === 'function') {
-                        mp.addPane(); // sets new pane active
-                    }
-                    const panes = mp.panes?.value;
-
-                    const activeIndex = mp.activePaneIndex?.value ?? 0;
-
-                    if (Array.isArray(panes)) {
-                        const pane = panes[activeIndex];
-                        if (pane) {
-                            pane.mode = 'doc';
-                            pane.documentId = doc.id;
-                            // Reset chat-related fields when switching
-                            pane.threadId =
-                                pane.mode === 'doc'
-                                    ? pane.threadId
-                                    : pane.threadId;
-                        }
-                    }
-                }
-            } catch (e) {
-                // non-fatal; fallback is just created doc without auto-open
-                console.warn('Open document in pane failed', e);
-            }
-
-            useToast().add({
-                title: 'Document created',
-                description: `Opened in ${
-                    mp?.canAddPane?.value ? 'new' : 'current'
-                } pane: ${doc.id}`,
-                duration: 2600,
-            });
-        },
-    });
-});
-```
-
-## File: app/app.config.ts
-```typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
-                header: 'border-0',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                color: {
-                    'inverse-primary':
-                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
-    },
-});
-```
-
-## File: package.json
-```json
-{
-    "name": "nuxt-app",
-    "type": "module",
-    "private": true,
-    "scripts": {
-        "build": "nuxt build",
-        "dev": "nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
-        "test": "vitest run",
-        "test:watch": "vitest"
-    },
-    "dependencies": {
-        "@nuxt/ui": "^3.3.2",
-        "@openrouter/ai-sdk-provider": "^1.1.2",
-        "@orama/orama": "^3.1.11",
-        "@tiptap/extension-placeholder": "^3.3.0",
-        "@tiptap/pm": "^3.3.0",
-        "@tiptap/starter-kit": "^3.3.0",
-        "@tiptap/vue-3": "^3.3.0",
-        "@types/spark-md5": "^3.0.5",
-        "@vueuse/core": "^13.7.0",
-        "ai": "^5.0.17",
-        "dexie": "^4.0.11",
-        "gpt-tokenizer": "^3.0.1",
-        "highlight.js": "^11.11.1",
-        "marked-highlight": "^2.2.2",
-        "nuxt": "^4.0.3",
-        "spark-md5": "^3.0.2",
-        "tiptap-markdown": "^0.8.10",
-        "turndown": "^7.2.1",
-        "typescript": "^5.6.3",
-        "virtua": "^0.41.5",
-        "vue": "^3.5.18",
-        "vue-router": "^4.5.1",
-        "zod": "^4.0.17"
-    },
-    "devDependencies": {
-        "@tailwindcss/typography": "^0.5.16",
-        "vitest": "^2.1.2",
-        "@vitest/ui": "^2.1.2",
-        "jsdom": "^25.0.0",
-        "@vue/test-utils": "^2.4.6",
-        "@vitejs/plugin-vue": "^5.1.4",
-        "vite": "^5.4.8"
-    }
-}
-```
-
-## File: app/components/sidebar/SidebarProjectTree.vue
-```vue
-<!-- DEPRECATED: Superseded by SidebarVirtualList + item components. Retain temporarily for compatibility. -->
-<template>
-    <div v-if="projects.length" class="space-y-1">
-        <h1 class="text-xs uppercase opacity-70 px-1 py-3 select-none">
-            Projects
-        </h1>
-        <UTree
-            v-model:expanded="internalExpanded"
-            :items="treeItems"
-            color="neutral"
-            size="sm"
-            :ui="ui"
-        >
-            <template #item-trailing="{ item, level }">
-                <div class="flex items-center gap-1">
-                    <!-- Root-level quick add buttons (appear on hover) -->
-                    <template v-if="level === 0">
-                        <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop="emit('addChat', item.value)"
-                            aria-label="Add chat to project"
-                        >
-                            <UIcon
-                                name="pixelarticons:message-plus"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </button>
-                        <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop="emit('addDocument', item.value)"
-                            aria-label="Add document to project"
-                        >
-                            <UIcon
-                                name="pixelarticons:note-plus"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </button>
-                    </template>
-                    <UPopover
-                        :content="{
-                            side: 'right',
-                            align: 'start',
-                            sideOffset: 6,
-                        }"
-                    >
-                        <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop
-                            :aria-label="
-                                level === 0
-                                    ? 'Project actions'
-                                    : 'Entry actions'
-                            "
-                        >
-                            <UIcon
-                                name="pixelarticons:more-vertical"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </span>
-                        <template #content>
-                            <div class="p-1 w-48 space-y-1">
-                                <template v-if="level === 0">
-                                    <UButton
-                                        color="neutral"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start cursor-pointer"
-                                        icon="pixelarticons:edit"
-                                        @click.stop.prevent="
-                                            emit('renameProject', item.value)
-                                        "
-                                        >Rename Project</UButton
-                                    >
-                                    <UButton
-                                        color="error"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start cursor-pointer"
-                                        icon="pixelarticons:trash"
-                                        @click.stop.prevent="
-                                            emit('deleteProject', item.value)
-                                        "
-                                        >Delete Project</UButton
-                                    >
-                                    <template
-                                        v-for="action in extraActions"
-                                        :key="action.id"
-                                    >
-                                        <UButton
-                                            v-if="
-                                                !action.showOn ||
-                                                action.showOn.includes('root')
-                                            "
-                                            :icon="action.icon"
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            @click="
-                                                () =>
-                                                    runExtraAction(action, {
-                                                        root: item,
-                                                    })
-                                            "
-                                            >{{ action.label || '' }}</UButton
-                                        >
-                                    </template>
-                                </template>
-                                <template v-else>
-                                    <UButton
-                                        color="neutral"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="pixelarticons:edit"
-                                        @click.stop.prevent="
-                                            emit('renameEntry', {
-                                                projectId: item.parentId!,
-                                                entryId: item.value,
-                                                kind: item.kind as ProjectEntryKind,
-                                            })
-                                        "
-                                        >Rename</UButton
-                                    >
-                                    <UButton
-                                        color="error"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="pixelarticons:trash"
-                                        @click.stop.prevent="
-                                            emit('removeFromProject', {
-                                                projectId: item.parentId!,
-                                                entryId: item.value,
-                                                kind: item.kind as ProjectEntryKind,
-                                            })
-                                        "
-                                        >Remove from Project</UButton
-                                    >
-                                    <template
-                                        v-for="action in extraActions"
-                                        :key="action.id"
-                                    >
-                                        <UButton
-                                            v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
-                                            :icon="action.icon"
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            @click="
-                                                () =>
-                                                    runExtraAction(action, {
-                                                        child: item,
-                                                    })
-                                            "
-                                            >{{ action.label || '' }}</UButton
-                                        >
-                                    </template>
-                                </template>
-                            </div>
-                        </template>
-                    </UPopover>
-                </div>
-            </template>
-        </UTree>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed, watch, ref } from 'vue';
-
-// Distinct kinds of entries that can live under a project.
-// Extend here if we introduce more entry types in the future.
-export type ProjectEntryKind = 'chat' | 'doc';
-
-// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
-}
-
-interface ProjectRow {
-    id: string;
-    name: string;
-    // The backing data that encodes the project entries. Can be
-    //  - an already parsed array of ProjectEntry objects
-    //  - a JSON string representing that array
-    //  - anything else (ignored)
-    data?: unknown;
-}
-
-// Shape consumed by UTree. (We only type the properties we actually use.)
-interface TreeItem {
-    label: string;
-    value: string;
-    icon?: string;
-    kind?: ProjectEntryKind; // Only for non-root items
-    parentId?: string; // Only set for child entries
-    defaultExpanded?: boolean;
-    children?: TreeItem[];
-    onSelect?: (e: Event) => void;
-}
-
-const props = defineProps<{
-    projects: ProjectRow[];
-    expanded?: string[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'update:expanded', value: string[]): void;
-    (e: 'chatSelected', id: string): void;
-    (e: 'documentSelected', id: string): void;
-    (e: 'addChat', projectId: string): void;
-    (e: 'addDocument', projectId: string): void;
-    (e: 'deleteProject', projectId: string): void;
-    (e: 'renameProject', projectId: string): void;
-    (
-        e: 'renameEntry',
-        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
-    ): void;
-    (
-        e: 'removeFromProject',
-        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
-    ): void;
-}>();
-
-// Local mirror for v-model:expanded
-const internalExpanded = ref<string[]>(
-    props.expanded ? [...props.expanded] : []
-);
-watch(
-    () => props.expanded,
-    (val) => {
-        if (val && val !== internalExpanded.value)
-            internalExpanded.value = [...val];
-    }
-);
-watch(internalExpanded, (val) => emit('update:expanded', val));
-
-function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
-    const raw = p?.data;
-    if (Array.isArray(raw)) return raw as ProjectEntry[];
-    if (typeof raw === 'string') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
-        } catch {
-            // Silently ignore malformed JSON
-        }
-    }
-    return [];
-}
-
-const treeItems = computed<TreeItem[]>(() =>
-    props.projects.map<TreeItem>((p) => {
-        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
-            (entry) => {
-                // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
-                const kind: ProjectEntryKind =
-                    entry.kind === 'doc' ? 'doc' : 'chat';
-                return {
-                    label: entry.name || '(untitled)',
-                    value: entry.id,
-                    icon:
-                        kind === 'doc'
-                            ? 'pixelarticons:note'
-                            : 'pixelarticons:chat',
-                    kind,
-                    parentId: p.id,
-                    onSelect: (e: Event) => {
-                        if (kind === 'chat') emit('chatSelected', entry.id);
-                        else emit('documentSelected', entry.id);
-                        // Prevent default selection behavior if needed by UTree (not sure), otherwise leave.
-                    },
-                };
-            }
-        );
-        return {
-            label: p.name,
-            value: p.id,
-            defaultExpanded: false,
-            children,
-            onSelect: (e: Event) => e.preventDefault(), // Root projects themselves aren't selectable
-        };
-    })
-);
-
-const ui = {
-    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
-    link: 'group/addchat text-[13px] rounded-[4px] py-1',
-    item: 'cursor-pointer ',
-};
-
-// Plugin project tree actions
-const extraActions = useProjectTreeActions();
-async function runExtraAction(action: any, data: { root?: any; child?: any }) {
-    try {
-        await action.handler(data);
-    } catch (e: any) {
-        try {
-            useToast().add({
-                title: 'Action failed',
-                description: e?.message || 'Error running action',
-                color: 'error',
-                duration: 3000,
-            });
-        } catch {}
-        console.error('Project tree action error', action.id, e);
-    }
-}
-</script>
-
-<style scoped></style>
-```
-
-## File: app/utils/chat/types.ts
-```typescript
-export type TextPart = { type: 'text'; text: string };
-
-export type ImagePart = {
-    type: 'image';
-    image: string | Uint8Array | Buffer;
-    mediaType?: string;
-};
-
-export type FilePart = {
-    type: 'file';
-    data: string | Uint8Array | Buffer;
-    mediaType: string;
-    name?: string;
-};
-
-export type ContentPart = TextPart | ImagePart | FilePart;
-
-export interface ChatMessage {
-    role: 'user' | 'assistant' | 'system';
-    content: string | ContentPart[];
-    id?: string;
-    stream_id?: string;
-    file_hashes?: string | null;
-    reasoning_text?: string | null;
-}
-
-export interface SendMessageParams {
-    files?: { type: string; url: string }[];
-    model?: string;
-    file_hashes?: string[];
-    extraTextParts?: string[];
-    online: boolean;
-}
-
-export type ORStreamEvent =
-    | { type: 'text'; text: string }
-    | { type: 'image'; url: string; final?: boolean; index?: number }
-    | { type: 'reasoning'; text: string }
-    | { type: 'done' };
-```
-
-## File: app/utils/openrouter-build.ts
-```typescript
-// Utility helpers to build OpenRouter payload messages including historical images.
-// Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
-// produce OpenAI-compatible content arrays.
-
-import { parseFileHashes } from '~/db/files-util';
-
-export interface BuildImageCandidate {
-    hash: string;
-    role: 'user' | 'assistant';
-    messageIndex: number; // chronological index in original messages array
-}
-
-export interface ORContentPartText {
-    type: 'text';
-    text: string;
-}
-export interface ORContentPartImageUrl {
-    type: 'image_url';
-    image_url: { url: string };
-}
-export interface ORContentPartFile {
-    type: 'file';
-    file: { filename: string; file_data: string };
-}
-export type ORContentPart =
-    | ORContentPartText
-    | ORContentPartImageUrl
-    | ORContentPartFile;
-
-export interface ORMessage {
-    role: 'user' | 'assistant' | 'system';
-    content: ORContentPart[];
-}
-
-// Caches on global scope to avoid repeated blob -> base64 conversions.
-const dataUrlCache: Map<string, string> = ((
-    globalThis as any
-).__or3ImageDataUrlCache ||= new Map());
-const inflight: Map<string, Promise<string | null>> = ((
-    globalThis as any
-).__or3ImageHydrateInflight ||= new Map());
-
-// Remote / blob URL hydration cache shares same map (keyed by original ref string)
-// We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
-// because a content hash would never start with http/blob.
-async function remoteRefToDataUrl(ref: string): Promise<string | null> {
-    if (ref.startsWith('data:image/')) return ref; // already data URL
-    if (!/^https?:|^blob:/.test(ref)) return null;
-    if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
-    if (inflight.has(ref)) return inflight.get(ref)!;
-    const p = (async () => {
-        try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 8000); // 8s safety timeout
-            const resp = await fetch(ref, { signal: ctrl.signal });
-            clearTimeout(t);
-            if (!resp.ok) throw new Error('fetch-failed:' + resp.status);
-            const blob = await resp.blob();
-            // Basic guardrail: cap at ~5MB to avoid huge token usage
-            if (blob.size > 5 * 1024 * 1024) return null;
-            const dataUrl = await blobToDataUrl(blob);
-            dataUrlCache.set(ref, dataUrl);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(ref);
-        }
-    })();
-    inflight.set(ref, p);
-    return p;
-}
-
-async function blobToDataUrl(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(fr.error);
-        fr.onload = () => resolve(fr.result as string);
-        fr.readAsDataURL(blob);
-    });
-}
-
-async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
-    if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
-    if (inflight.has(hash)) return inflight.get(hash)!;
-    const p = (async () => {
-        try {
-            const { getFileBlob } = await import('~/db/files');
-            const blob = await getFileBlob(hash);
-            if (!blob) throw new Error('blob-missing');
-            const dataUrl = await blobToDataUrl(blob);
-            dataUrlCache.set(hash, dataUrl);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(hash);
-        }
-    })();
-    inflight.set(hash, p);
-    return p;
-}
-
-export interface BuildOptions {
-    maxImageInputs?: number; // total images across history
-    dedupeImages?: boolean; // skip duplicate hashes
-    imageInclusionPolicy?:
-        | 'all'
-        | 'recent'
-        | 'recent-user'
-        | 'recent-assistant';
-    recentWindow?: number; // number of most recent messages to scan when policy is recent*
-    // Hook like filter: (candidates) => filteredCandidates
-    filterIncludeImages?: (
-        candidates: BuildImageCandidate[]
-    ) => Promise<BuildImageCandidate[]> | BuildImageCandidate[];
-    debug?: boolean; // verbose logging
-}
-
-// Default heuristics constants
-const DEFAULT_MAX_IMAGE_INPUTS = 8;
-
-interface ChatMessageLike {
-    role: 'user' | 'assistant' | 'system';
-    content: any; // string | parts[]
-    file_hashes?: string | null;
-}
-
-// Build OpenRouter messages with hydrated images.
-export async function buildOpenRouterMessages(
-    messages: ChatMessageLike[],
-    opts: BuildOptions = {}
-): Promise<ORMessage[]> {
-    const {
-        maxImageInputs = DEFAULT_MAX_IMAGE_INPUTS,
-        dedupeImages = true,
-        imageInclusionPolicy = 'all',
-        recentWindow = 12,
-        filterIncludeImages,
-        debug = false,
-    } = opts;
-
-    if (debug) {
-        // Debug logging suppressed (begin)
-    }
-
-    // Determine candidate messages for image inclusion under policy.
-    let candidateMessages: number[] = [];
-    if (imageInclusionPolicy === 'all') {
-        candidateMessages = messages.map((_, i) => i);
-    } else if (imageInclusionPolicy.startsWith('recent')) {
-        const start = Math.max(0, messages.length - recentWindow);
-        candidateMessages = [];
-        for (let i = start; i < messages.length; i++) candidateMessages.push(i);
-    }
-
-    // Collect hash candidates
-    const hashCandidates: BuildImageCandidate[] = [];
-    for (const idx of candidateMessages) {
-        const m = messages[idx];
-        if (!m) continue;
-        if (m.file_hashes) {
-            try {
-                const hashes = parseFileHashes(m.file_hashes) || [];
-                for (const h of hashes) {
-                    if (!h) continue;
-                    if (
-                        imageInclusionPolicy === 'recent-user' &&
-                        m.role !== 'user'
-                    )
-                        continue;
-                    if (
-                        imageInclusionPolicy === 'recent-assistant' &&
-                        m.role !== 'assistant'
-                    )
-                        continue;
-                    if (m.role === 'user' || m.role === 'assistant') {
-                        hashCandidates.push({
-                            hash: h,
-                            role: m.role,
-                            messageIndex: idx,
-                        });
-                    }
-                }
-            } catch {}
-        }
-        // Also inspect inline parts if array form
-        if (Array.isArray(m.content)) {
-            for (const p of m.content) {
-                if (p?.type === 'image' && typeof p.image === 'string') {
-                    if (
-                        p.image.startsWith('data:image/') ||
-                        /^https?:/i.test(p.image) ||
-                        /^blob:/i.test(p.image)
-                    ) {
-                        hashCandidates.push({
-                            hash: p.image,
-                            role: m.role as any,
-                            messageIndex: idx,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    if (debug) {
-        // Debug logging suppressed (candidates)
-    }
-
-    // Optional external filter
-    let filtered = hashCandidates;
-    if (filterIncludeImages) {
-        try {
-            const res = await filterIncludeImages(hashCandidates);
-            if (Array.isArray(res)) filtered = res;
-        } catch {}
-    }
-
-    // Enforce max & dedupe
-    const seen = new Set<string>();
-    const selected: BuildImageCandidate[] = [];
-    for (const c of filtered) {
-        if (selected.length >= maxImageInputs) break;
-        if (dedupeImages && seen.has(c.hash)) continue;
-        seen.add(c.hash);
-        selected.push(c);
-    }
-
-    if (debug) {
-        // Debug logging suppressed (selected)
-    }
-
-    // Group selected hashes by message index for convenient inclusion
-    const byMessageIndex = new Map<number, BuildImageCandidate[]>();
-    for (const s of selected) {
-        const list = byMessageIndex.get(s.messageIndex) || [];
-        list.push(s);
-        byMessageIndex.set(s.messageIndex, list);
-    }
-
-    // Build ORMessage array preserving original order
-    const orMessages: ORMessage[] = [];
-    for (let i = 0; i < messages.length; i++) {
-        const m = messages[i];
-        if (!m) continue;
-        const parts: ORContentPart[] = [];
-        // Extract textual content
-        let text = '';
-        if (Array.isArray(m.content)) {
-            const textParts = m.content.filter((p: any) => p.type === 'text');
-            if (textParts.length)
-                text = textParts.map((p: any) => p.text || '').join('');
-            // Add files (PDFs etc) directly
-            const fileParts = m.content.filter((p: any) => p.type === 'file');
-            for (const fp of fileParts) {
-                if (!fp.data) continue;
-                const mediaType =
-                    fp.mediaType || fp.mime || 'application/octet-stream';
-                const isPdf = mediaType === 'application/pdf';
-                const filename =
-                    fp.filename || (isPdf ? 'document.pdf' : 'file');
-                let fileData: string | null | undefined = fp.data;
-
-                // Local hash or opaque ref -> hydrate via blob to data URL preserving mime
-                if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
-                    try {
-                        const { getFileBlob, getFileMeta } = await import(
-                            '~/db/files'
-                        );
-                        const blob = await getFileBlob(String(fileData));
-                        if (blob) {
-                            const mime = blob.type || mediaType;
-                            const dataUrl = await blobToDataUrl(blob);
-                            fileData = dataUrl.replace(
-                                /^data:[^;]+;/,
-                                `data:${mime};`
-                            );
-                        } else {
-                            const hydrated = await hydrateHashToDataUrl(
-                                String(fileData)
-                            );
-                            if (hydrated) fileData = hydrated;
-                        }
-                        if (!fileData) {
-                            const remote = await remoteRefToDataUrl(
-                                String(fileData)
-                            );
-                            if (remote) fileData = remote;
-                        }
-                    } catch {
-                        fileData = null;
-                    }
-                }
-
-                // If still not a usable scheme and it's a blob: URL, we can't send blob: (server can't fetch) -> skip
-                if (fileData && /^blob:/i.test(String(fileData))) {
-                    if (debug)
-                        console.warn(
-                            '[or-build] skipping blob: URL (inaccessible server-side)',
-                            { filename }
-                        );
-                    fileData = null;
-                }
-                if (
-                    fileData &&
-                    isPdf &&
-                    !fileData.startsWith('data:application/pdf')
-                ) {
-                    // Normalize pdf data URL mime prefix if possible
-                    if (fileData.startsWith('data:')) {
-                        fileData = fileData.replace(
-                            /^data:[^;]+/,
-                            'data:application/pdf'
-                        );
-                    }
-                }
-                if (fileData && /^data:|^https?:/i.test(String(fileData))) {
-                    parts.push({
-                        type: 'file',
-                        file: { filename, file_data: String(fileData) },
-                    });
-                } else if (debug) {
-                    console.warn(
-                        '[or-build] skipping file part, could not hydrate',
-                        { ref: fp.data, filename, messageIndex: i }
-                    );
-                }
-            }
-        } else if (typeof m.content === 'string') {
-            text = m.content;
-        }
-        if (text.trim().length === 0) text = ''; // keep empty string part to anchor order
-        parts.push({ type: 'text', text });
-
-        // Add images associated with this message index (only if truly images)
-        const imgs = byMessageIndex.get(i) || [];
-        for (const img of imgs) {
-            // Quick allow path: already a data image URL
-            if (img.hash.startsWith('data:image/')) {
-                parts.push({ type: 'image_url', image_url: { url: img.hash } });
-                continue;
-            }
-            // Remote URL that looks like an image (basic heuristic)
-            if (
-                /^https?:/i.test(img.hash) &&
-                /(\.png|\.jpe?g|\.gif|\.webp|\.avif|\?)/i.test(img.hash)
-            ) {
-                parts.push({ type: 'image_url', image_url: { url: img.hash } });
-                continue;
-            }
-            // If it's a local hash (not http/data/blob) inspect metadata to confirm mime starts with image/
-            const looksLocal = !/^https?:|^data:|^blob:/i.test(img.hash);
-            let isImage = false;
-            if (looksLocal) {
-                try {
-                    const { getFileMeta } = await import('~/db/files');
-                    const meta: any = await getFileMeta(img.hash).catch(
-                        () => null
-                    );
-                    if (
-                        meta &&
-                        typeof meta.mime === 'string' &&
-                        meta.mime.startsWith('image/')
-                    ) {
-                        isImage = true;
-                    }
-                } catch {}
-            }
-            if (!isImage && looksLocal) {
-                // Not an image (likely a PDF or other file) -> skip to avoid triggering image-capable endpoint routing
-                continue;
-            }
-            // At this point either it's declared an image or remote unknown -> attempt hydration
-            let dataUrl = await hydrateHashToDataUrl(img.hash);
-            if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
-            if (dataUrl && dataUrl.startsWith('data:image/')) {
-                parts.push({ type: 'image_url', image_url: { url: dataUrl } });
-            } else if (debug) {
-                console.warn('[or-build] hydrate-fail-or-non-image', {
-                    ref: img.hash,
-                    role: img.role,
-                    messageIndex: img.messageIndex,
-                });
-            }
-        }
-
-        orMessages.push({ role: m.role, content: parts });
-    }
-
-    if (debug) {
-        // Debug logging suppressed (done)
-    }
-
-    return orMessages;
-}
-
-// Decide modalities based on prepared ORMessages + heuristic prompt.
-export function decideModalities(
-    orMessages: ORMessage[],
-    requestedModel?: string
-): string[] {
-    const hasImageInput = orMessages.some((m) =>
-        m.content.some((p) => p.type === 'image_url')
-    );
-    const lastUser = [...orMessages].reverse().find((m) => m.role === 'user');
-    const prompt = lastUser?.content.find((p) => p.type === 'text')?.text || '';
-    const imageIntent =
-        /(generate|create|make|produce|draw)\s+(an?\s+)?(image|picture|photo|logo|scene|illustration)/i.test(
-            prompt
-        );
-    const modalities = ['text'];
-    if (hasImageInput || imageIntent) modalities.push('image');
-    return modalities;
-}
-```
-
 ## File: app/composables/useMultiPane.ts
 ```typescript
 // Multi-pane state management composable for chat & documents
@@ -14126,423 +13356,51 @@ export function useMultiPane(
 export type { PaneState as MultiPaneState };
 ```
 
-## File: app/components/chat/ReasoningAccordion.vue
-```vue
-<template>
-    <!--
-    Reusable reasoning display component.
-    Requirements: R2 (display), R4 (streaming), R5 (reusable), NFR4 (accessible), NFR6 (no layout shift)
-  -->
-    <div v-if="visible" class="reasoning-wrap">
-        <button
-            class="reasoning-toggle"
-            @click="expanded = !expanded"
-            :aria-expanded="expanded"
-            :aria-controls="`reasoning-${id}`"
-            type="button"
-        >
-            <UIcon name="pixelarticons:lightbulb-on" class="mr-1" />
-            <span v-if="!pending || content">
-                {{
-                    expanded
-                        ? expandedLabel || 'Hide reasoning'
-                        : collapsedLabel || 'Show reasoning'
-                }}
-            </span>
-            <span v-else class="inline-flex items-center gap-1">
-                <LoadingGenerating style="width: 120px; min-height: 28px" />
-            </span>
-            <span
-                v-if="!expanded && content && !streaming"
-                class="count text-xs opacity-70 ml-2"
-            >
-                ({{ charCount }} chars)
-            </span>
-            <span v-if="streaming" class="pulse ml-2" aria-hidden="true"></span>
-        </button>
-        <pre
-            :id="`reasoning-${id}`"
-            :class="[
-                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden bg-[var(--md-surface-container-low)] border-2 border-[var(--md-inverse-surface)] rounded-sm',
-                'transition-all duration-200 ease-in-out',
-                expanded
-                    ? 'opacity-100 max-h-72 mt-2 overflow-y-auto px-3'
-                    : 'opacity-0 max-h-0 p-0 -mt-0 overflow-hidden pointer-events-none',
-            ]"
-            tabindex="0"
-            v-text="content"
-        ></pre>
-        <slot name="footer" />
-    </div>
-</template>
-
-<script setup lang="ts">
-import { ref, computed } from 'vue';
-import LoadingGenerating from './LoadingGenerating.vue';
-
-interface Props {
-    content?: string;
-    streaming?: boolean;
-    pending?: boolean;
-    collapsedLabel?: string;
-    expandedLabel?: string;
-}
-
-const props = withDefaults(defineProps<Props>(), {
-    streaming: false,
-    pending: false,
-    collapsedLabel: 'Show reasoning',
-    expandedLabel: 'Hide reasoning',
-});
-
-const expanded = ref(false);
-const id = Math.random().toString(36).substr(2, 9);
-
-const visible = computed(() => !!props.content || props.pending);
-const charCount = computed(() => (props.content || '').length);
-</script>
-
-<style scoped>
-.reasoning-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-
-    font-size: 16px;
-    padding: 4px 8px;
-    border: 2px solid var(--md-inverse-surface);
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-high),
-        var(--md-surface-container-low)
-    );
-    border-radius: 4px;
-    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
-    min-height: 32px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.reasoning-toggle:hover {
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-low),
-        var(--md-surface-container-high)
-    );
-}
-
-.reasoning-toggle:focus {
-    outline: 2px solid var(--md-inverse-primary);
-    outline-offset: 2px;
-}
-
-.pulse {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--md-primary);
-    animation: pulse 1.2s infinite ease-in-out;
-}
-
-@keyframes pulse {
-    0%,
-    100% {
-        opacity: 0.25;
-    }
-    50% {
-        opacity: 1;
-    }
-}
-
-/* Vue transition classes removed in favor of Tailwind utility transitions */
-</style>
-```
-
-## File: app/composables/index.ts
+## File: vitest.config.ts
 ```typescript
-/** Barrel export for chat-related composables (Task 1.6) */
-export * from './useTailStream';
-export * from './useAutoScroll';
-export * from './useObservedElementSize';
-export * from './ui-extensions/messages/useMessageActions';
-export * from './ui-extensions/documents/useDocumentHistoryActions';
-export * from './ui-extensions/threads/useThreadHistoryActions';
-export * from './ui-extensions/projects/useProjectTreeActions';
-```
+import { defineConfig } from 'vitest/config';
+import path from 'path';
+import vue from '@vitejs/plugin-vue';
 
-## File: app/utils/chat/openrouterStream.ts
-```typescript
-import type { ORStreamEvent } from './types';
+// Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
+// We intentionally cast the plugin to any to bypass structural mismatch.
+// No dependency version changes per instruction.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const vueAny: any = vue;
 
-export async function* openRouterStream(params: {
-    apiKey: string;
-    model: string;
-    orMessages: any[];
-    modalities: string[];
-    signal?: AbortSignal;
-}): AsyncGenerator<ORStreamEvent, void, unknown> {
-    const { apiKey, model, orMessages, modalities, signal } = params;
-
-    const body = {
-        model,
-        messages: orMessages,
-        modalities,
-        stream: true,
-    } as any;
-
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+export default defineConfig({
+    // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
+    plugins: [vueAny()],
+    resolve: {
+        alias: {
+            '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
+            '~': path.resolve(__dirname, 'app'),
+            '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
         },
-        body: JSON.stringify(body),
-        signal,
-    });
-
-    if (!resp.ok || !resp.body) {
-        // Read response text for diagnostics
-        let respText = '<no-body>';
-        try {
-            respText = await resp.text();
-        } catch (e) {
-            respText = `<error-reading-body:${(e as any)?.message || 'err'}>`;
-        }
-
-        // Produce a truncated preview of the outgoing body to help debug (truncate long strings)
-        let bodyPreview = '<preview-failed>';
-        try {
-            bodyPreview = JSON.stringify(
-                body,
-                (_key, value) => {
-                    if (typeof value === 'string') {
-                        if (value.length > 300)
-                            return value.slice(0, 300) + `...(${value.length})`;
-                    }
-                    return value;
-                },
-                2
-            );
-        } catch (e) {
-            bodyPreview = `<stringify-error:${(e as any)?.message || 'err'}>`;
-        }
-
-        console.warn('[openrouterStream] OpenRouter request failed', {
-            status: resp.status,
-            statusText: resp.statusText,
-            responseSnippet: respText?.slice
-                ? respText.slice(0, 2000)
-                : String(respText),
-            bodyPreview,
-        });
-
-        throw new Error(
-            `OpenRouter request failed ${resp.status} ${resp.statusText}: ${
-                respText?.slice ? respText.slice(0, 300) : String(respText)
-            }`
-        );
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const emittedImages = new Set<string>();
-    // Removed rawPackets accumulation to avoid unbounded memory growth on long streams.
-    // If debugging of raw packets is needed, consider adding a bounded ring buffer
-    // or an opt-in flag that logs selectively.
-
-    function emitImageCandidate(
-        url: string | undefined | null,
-        indexRef: { v: number },
-        final = false
-    ) {
-        if (!url) return;
-        if (emittedImages.has(url)) return;
-        emittedImages.add(url);
-        const idx = indexRef.v++;
-        // Yield image event
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        (async () => {
-            /* placeholder for async transforms if needed */
-        })();
-        imageQueue.push({ type: 'image', url, final, index: idx });
-    }
-
-    // Queue to preserve ordering between text and image parts inside a single chunk
-    const imageQueue: ORStreamEvent[] = [];
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const raw of lines) {
-            const line = raw.trim();
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            if (!data) continue;
-            if (data === '[DONE]') {
-                yield { type: 'done' };
-                continue;
-            }
-            try {
-                const parsed = JSON.parse(data);
-                const choices = parsed.choices || [];
-                for (const choice of choices) {
-                    const delta = choice.delta || {};
-
-                    // Handle model reasoning
-                    if (choice?.delta?.reasoning_details) {
-                        if (
-                            choice?.delta?.reasoning_details[0]?.type ===
-                            'reasoning.text'
-                        ) {
-                            if (choice?.delta?.reasoning_details[0]?.text) {
-                                yield {
-                                    type: 'reasoning',
-                                    text: choice.delta.reasoning_details[0]
-                                        .text,
-                                };
-                            }
-                        } else if (
-                            choice?.delta?.reasoning_details[0]?.type ===
-                            'reasoning.summary'
-                        ) {
-                            yield {
-                                type: 'reasoning',
-                                text: choice.delta.reasoning_details[0].summary,
-                            };
-                        }
-                    }
-
-                    // Text variants
-                    if (Array.isArray(delta.content)) {
-                        for (const part of delta.content) {
-                            if (part?.type === 'text' && part.text) {
-                                yield { type: 'text', text: part.text };
-                            }
-                        }
-                    }
-                    if (typeof delta.text === 'string') {
-                        yield { type: 'text', text: delta.text };
-                    }
-                    if (typeof delta.content === 'string') {
-                        yield { type: 'text', text: delta.content };
-                    }
-
-                    // Streaming images (legacy / OpenAI style delta.images array)
-                    if (Array.isArray(delta.images)) {
-                        let ixRef = { v: 0 };
-                        for (const img of delta.images) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, ixRef, false);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
-                    if (Array.isArray(delta.content)) {
-                        let ixRef = { v: 0 };
-                        for (const part of delta.content) {
-                            if (part && typeof part === 'object') {
-                                if (
-                                    part.type === 'image' &&
-                                    (part.url || part.image)
-                                ) {
-                                    emitImageCandidate(
-                                        part.url || part.image,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'image_url' &&
-                                    part.image_url?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.image_url.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'media' &&
-                                    part.media?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.media.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (part.inline_data?.data) {
-                                    // Gemini style inline base64 data
-                                    const mime =
-                                        part.inline_data.mimeType ||
-                                        'image/png';
-                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                    emitImageCandidate(dataUrl, ixRef, false);
-                                }
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Final message images
-                    // Final images may be in message.images array
-                    const finalImages = choice.message?.images;
-                    if (Array.isArray(finalImages)) {
-                        let fIxRef = { v: 0 };
-                        for (const img of finalImages) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, fIxRef, true);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Or inside message.content array (Gemini style)
-                    const finalContent = choice.message?.content;
-                    if (Array.isArray(finalContent)) {
-                        let fIxRef2 = { v: 0 };
-                        for (const part of finalContent) {
-                            if (
-                                part?.type === 'image' &&
-                                (part.url || part.image)
-                            ) {
-                                emitImageCandidate(
-                                    part.url || part.image,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (
-                                part?.type === 'image_url' &&
-                                part.image_url?.url
-                            ) {
-                                emitImageCandidate(
-                                    part.image_url.url,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (part?.inline_data?.data) {
-                                const mime =
-                                    part.inline_data.mimeType || 'image/png';
-                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                emitImageCandidate(dataUrl, fIxRef2, true);
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-                }
-            } catch {
-                // ignore invalid json segments
-            }
-        }
-    }
-
-    // Removed verbose final packet dump to prevent large memory retention.
-
-    yield { type: 'done' };
-}
+    },
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        include: ['app/**/__tests__/**/*.test.ts'],
+        exclude: ['node_modules', 'dist', '.nuxt'],
+        setupFiles: ['tests/setup.ts'],
+        testTimeout: 10000,
+        hookTimeout: 10000,
+        bail: 1,
+        coverage: {
+            provider: 'v8',
+            reportsDirectory: './coverage',
+            reporter: ['text', 'html'],
+            include: ['app/composables/useStreamAccumulator.ts'],
+            thresholds: {
+                lines: 90,
+                statements: 90,
+                branches: 90,
+                functions: 75, // helper functions covered adequately
+            },
+        },
+    },
+});
 ```
 
 ## File: app/components/chat/ChatPageShell.vue
@@ -14567,7 +13425,7 @@ export async function* openRouterStream(params: {
                 @focusSearch="focusSidebarSearch"
             />
         </template>
-        <div class="flex-1 h-screen w-full relative">
+        <div class="flex-1 min-h-[100dvh] w-full relative">
             <div
                 id="top-nav"
                 :class="{
@@ -15123,567 +13981,2829 @@ body {
 </style>
 ```
 
-## File: app/components/chat/SystemPromptsModal.vue
+## File: app/components/chat/ReasoningAccordion.vue
 ```vue
 <template>
-    <UModal
-        v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-none',
-            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0! border-b-0! overflow-hidden',
-        }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80vh] max-h-[80vh] overflow-hidden"
-    >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    System Prompts
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="sm"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-        </template>
-        <template #body>
-            <div class="flex flex-col h-full" @keydown="handleKeydown">
-                <div
-                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
-                >
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <UButton
-                            @click="createNewPrompt"
-                            size="sm"
-                            color="primary"
-                            class="retro-btn"
-                        >
-                            New Prompt
-                        </UButton>
-                        <UButton
-                            v-if="currentActivePromptId"
-                            @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
-                        >
-                            Clear Active
-                        </UButton>
-                    </div>
-                    <UInput
-                        v-model="searchQuery"
-                        placeholder="Search prompts..."
-                        size="sm"
-                        class="max-w-xs"
-                        icon="i-heroicons-magnifying-glass"
-                    />
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <!-- List View -->
-                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
-                        <div
-                            v-if="filteredPrompts.length === 0"
-                            class="flex flex-col items-center justify-center h-full text-center p-8"
-                        >
-                            <UIcon
-                                name="pixelarticons:script-text"
-                                class="w-16 h-16 text-gray-400 mb-4"
-                            />
-                            <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
-                            >
-                                No system prompts yet
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
-                                Create your first system prompt to customize AI
-                                behavior.
-                            </p>
-                            <UButton @click="createNewPrompt" color="primary">
-                                Create Your First Prompt
-                            </UButton>
-                        </div>
-
-                        <div v-else class="p-4 space-y-3">
-                            <div
-                                v-for="prompt in filteredPrompts"
-                                :key="prompt.id"
-                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
-                                :class="{
-                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
-                                        prompt.id === currentActivePromptId ||
-                                        prompt.id === defaultPromptId,
-                                }"
-                            >
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h4
-                                            class="font-medium text-gray-900 dark:text-white truncate"
-                                            :class="{
-                                                'italic opacity-60':
-                                                    !prompt.title,
-                                            }"
-                                        >
-                                            {{
-                                                prompt.title ||
-                                                'Untitled Prompt'
-                                            }}
-                                        </h4>
-                                        <span
-                                            v-if="prompt.id === defaultPromptId"
-                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
-                                            >Default</span
-                                        >
-                                    </div>
-                                    <p
-                                        class="text-sm text-gray-500 dark:text-gray-400"
-                                    >
-                                        Updated
-                                        {{ formatDate(prompt.updated_at) }} •
-                                        {{ tokenCounts[prompt.id] || 0 }} tokens
-                                    </p>
-                                </div>
-
-                                <div
-                                    class="flex items-center gap-2 ml-4 shrink-0"
-                                >
-                                    <UTooltip
-                                        :delay-duration="0"
-                                        :text="
-                                            prompt.id === defaultPromptId
-                                                ? 'Remove default prompt'
-                                                : 'Set as default prompt'
-                                        "
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            :variant="
-                                                prompt.id === defaultPromptId
-                                                    ? 'solid'
-                                                    : 'outline'
-                                            "
-                                            :color="
-                                                prompt.id === defaultPromptId
-                                                    ? 'primary'
-                                                    : 'neutral'
-                                            "
-                                            :square="true"
-                                            :ui="{
-                                                base: 'retro-btn px-1! text-nowrap',
-                                            }"
-                                            class="retro-btn"
-                                            aria-label="Toggle default prompt"
-                                            @click.stop="
-                                                toggleDefault(prompt.id)
-                                            "
-                                            >{{
-                                                prompt.id === defaultPromptId
-                                                    ? 'default'
-                                                    : 'set default'
-                                            }}</UButton
-                                        >
-                                    </UTooltip>
-                                    <UButton
-                                        @click="selectPrompt(prompt.id)"
-                                        size="sm"
-                                        :color="
-                                            prompt.id === currentActivePromptId
-                                                ? 'primary'
-                                                : 'neutral'
-                                        "
-                                        :variant="
-                                            prompt.id === currentActivePromptId
-                                                ? 'solid'
-                                                : 'outline'
-                                        "
-                                    >
-                                        {{
-                                            prompt.id === currentActivePromptId
-                                                ? 'Selected'
-                                                : 'Select'
-                                        }}
-                                    </UButton>
-                                    <UPopover
-                                        :popper="{ placement: 'bottom-end' }"
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            variant="outline"
-                                            color="neutral"
-                                            class="flex items-center justify-center"
-                                            :square="true"
-                                            icon="pixelarticons:more-vertical"
-                                            aria-label="More actions"
-                                        />
-                                        <template #content>
-                                            <div
-                                                class="flex flex-col py-1 w-36 text-sm"
-                                            >
-                                                <button
-                                                    @click="
-                                                        startEditing(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:edit"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Edit</span>
-                                                </button>
-                                                <button
-                                                    @click="
-                                                        deletePrompt(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:trash"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Delete</span>
-                                                </button>
-                                            </div>
-                                        </template>
-                                    </UPopover>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Editor View -->
-                    <div v-else class="h-full overflow-hidden flex flex-col">
-                        <div class="flex-1 p-4 overflow-hidden">
-                            <LazyPromptsPromptEditor
-                                :prompt-id="editingPrompt.id"
-                                @back="stopEditing"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
-    </UModal>
+    <!--
+    Reusable reasoning display component.
+    Requirements: R2 (display), R4 (streaming), R5 (reusable), NFR4 (accessible), NFR6 (no layout shift)
+  -->
+    <div v-if="visible" class="reasoning-wrap">
+        <button
+            class="reasoning-toggle"
+            @click="expanded = !expanded"
+            :aria-expanded="expanded"
+            :aria-controls="`reasoning-${id}`"
+            type="button"
+        >
+            <UIcon name="pixelarticons:lightbulb-on" class="mr-1" />
+            <span v-if="!pending || content">
+                {{
+                    expanded
+                        ? expandedLabel || 'Hide reasoning'
+                        : collapsedLabel || 'Show reasoning'
+                }}
+            </span>
+            <span v-else class="inline-flex items-center gap-1">
+                <LoadingGenerating style="width: 120px; min-height: 28px" />
+            </span>
+            <span
+                v-if="!expanded && content && !streaming"
+                class="count text-xs opacity-70 ml-2"
+            >
+                ({{ charCount }} chars)
+            </span>
+            <span v-if="streaming" class="pulse ml-2" aria-hidden="true"></span>
+        </button>
+        <pre
+            :id="`reasoning-${id}`"
+            :class="[
+                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden bg-[var(--md-surface-container-low)] border-2 border-[var(--md-inverse-surface)] rounded-sm',
+                'transition-all duration-200 ease-in-out',
+                expanded
+                    ? 'opacity-100 max-h-72 mt-2 overflow-y-auto px-3'
+                    : 'opacity-0 max-h-0 p-0 -mt-0 overflow-hidden pointer-events-none',
+            ]"
+            tabindex="0"
+            v-text="content"
+        ></pre>
+        <slot name="footer" />
+    </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import {
-    listPrompts,
-    createPrompt,
-    softDeletePrompt,
-    type PromptRecord,
-} from '~/db/prompts';
-import { useActivePrompt } from '~/composables/useActivePrompt';
-import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-import { encode } from 'gpt-tokenizer';
-import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+import { ref, computed } from 'vue';
+import LoadingGenerating from './LoadingGenerating.vue';
 
-// Props & modal open bridging (like SettingsModal pattern)
-const props = defineProps<{
-    showModal: boolean;
-    threadId?: string;
+interface Props {
+    content?: string;
+    streaming?: boolean;
+    pending?: boolean;
+    collapsedLabel?: string;
+    expandedLabel?: string;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    streaming: false,
+    pending: false,
+    collapsedLabel: 'Show reasoning',
+    expandedLabel: 'Hide reasoning',
+});
+
+const expanded = ref(false);
+const id = Math.random().toString(36).substr(2, 9);
+
+const visible = computed(() => !!props.content || props.pending);
+const charCount = computed(() => (props.content || '').length);
+</script>
+
+<style scoped>
+.reasoning-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    font-size: 16px;
+    padding: 4px 8px;
+    border: 2px solid var(--md-inverse-surface);
+    background: linear-gradient(
+        180deg,
+        var(--md-surface-container-high),
+        var(--md-surface-container-low)
+    );
+    border-radius: 4px;
+    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+    min-height: 32px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reasoning-toggle:hover {
+    background: linear-gradient(
+        180deg,
+        var(--md-surface-container-low),
+        var(--md-surface-container-high)
+    );
+}
+
+.reasoning-toggle:focus {
+    outline: 2px solid var(--md-inverse-primary);
+    outline-offset: 2px;
+}
+
+.pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--md-primary);
+    animation: pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0%,
+    100% {
+        opacity: 0.25;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Vue transition classes removed in favor of Tailwind utility transitions */
+</style>
+```
+
+## File: app/components/chat/VirtualMessageList.vue
+```vue
+<template>
+    <!-- Wrapper around virtua's virtual list for messages -->
+    <div ref="root" class="flex flex-col min-w-0" :class="wrapperClass">
+        <Virtualizer
+            :data="messages"
+            :itemSize="itemSizeEstimation || undefined"
+            :overscan="overscan"
+            :scrollRef="scrollParent || undefined"
+            @scroll="onScroll"
+            @scroll-end="onScrollEnd"
+            v-slot="{ item, index }"
+        >
+            <div :key="item.id || index">
+                <slot name="item" :message="item" :index="index" />
+            </div>
+        </Virtualizer>
+        <!-- Tail slot for streaming message appended after virtualized stable messages -->
+        <slot name="tail" />
+    </div>
+</template>
+
+<script setup lang="ts">
+/**
+ * VirtualMessageList
+ * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
+ * Thin abstraction over virtua's <VList>. Purpose:
+ *  - Decouple higher-level chat code from 3p library specifics (swap easier).
+ *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
+ *    auto-scroll + lazy fetch triggers without leaking scroll math.
+ *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
+ *    don't sprinkle magic numbers.
+ *
+ * Performance Notes (Task 2.4):
+ *  - itemSizeEstimation is a heuristic avg row height (px). Virtua benefits
+ *    from closer estimates for jump accuracy. We'll measure once real message
+ *    mix known; keep default conservative (72) to reduce under-estimation.
+ *  - overscan kept small (4) to balance DOM churn vs. rapid wheel scroll.
+ *  - computeRange() currently returns full range because virtua's public API
+ *    doesn't expose internal first/last indices directly. This is acceptable
+ *    for now since downstream consumers only need edge detection. If/when we
+ *    require partial range (e.g. transcript minimap) we can either:
+ *      a) Contribute an API upstream, or
+ *      b) Probe DOM for rendered children & derive indices (slower fallback).
+ *  - Scroll events: we coalesce logic via onInternalUpdate() — cheap constant
+ *    operations (no layout thrash) so safe each scroll tick.
+ *  - Future optimization hooks: dynamic itemSizeEstimation sampling (median of
+ *    first N rendered rows) and throttled range emission if CPU hotspots seen.
+ */
+import { onMounted, ref, watch, type PropType } from 'vue';
+// eslint-disable-next-line import/no-unresolved
+import { Virtualizer } from 'virtua/vue';
+
+interface ChatMessage {
+    id: string;
+    role?: string;
+    content?: string;
+    [k: string]: any;
+}
+
+const props = defineProps({
+    messages: { type: Array as PropType<ChatMessage[]>, required: true },
+    itemSizeEstimation: { type: Number, default: 500 }, // heuristic average row height
+    overscan: { type: Number, default: 4 },
+    wrapperClass: { type: String, default: '' },
+    scrollParent: {
+        type: Object as PropType<HTMLElement | null>,
+        default: null,
+    },
+});
+
+const emit = defineEmits<{
+    (e: 'visible-range-change', range: { start: number; end: number }): void;
+    (e: 'reached-top'): void;
+    (e: 'reached-bottom'): void;
 }>();
-const emit = defineEmits({
-    'update:showModal': (value: boolean) => typeof value === 'boolean',
-    selected: (id: string) => typeof id === 'string',
-    closed: () => true,
-    threadCreated: (threadId: string, promptId: string | null) => true,
-});
 
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
+const root = ref<HTMLElement | null>(null);
+
+// Debug/logging removed per request.
+
+// Track visible range heuristically via scroll metrics
+function computeRange(): { start: number; end: number } {
+    // virtua does not expose direct API here; fallback simplistic approach:
+    // We rely on overscan as smoothing; refine later if library offers hooks.
+    const total = props.messages.length;
+    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
+    // Placeholder: without internal indices, emit full range.
+    return { start: 0, end: total - 1 };
+}
+
+function onInternalUpdate() {
+    const range = computeRange();
+    emit('visible-range-change', range);
+    if (range.start === 0) emit('reached-top');
+    if (range.end >= props.messages.length - 1) emit('reached-bottom');
+}
+
+function onScroll() {
+    onInternalUpdate();
+}
+function onScrollEnd() {
+    onInternalUpdate();
+}
 
 watch(
-    () => props.showModal,
-    (v, ov) => {
-        if (!v && ov) emit('closed');
+    () => props.messages.length,
+    () => {
+        onInternalUpdate();
     }
 );
-
-const {
-    activePromptId,
-    setActivePrompt,
-    clearActivePrompt: clearGlobalActivePrompt,
-} = useActivePrompt();
-
-const prompts = ref<PromptRecord[]>([]);
-const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
-    useDefaultPrompt();
-const editingPrompt = ref<PromptRecord | null>(null);
-const showDeleteConfirm = ref<string | null>(null);
-
-const searchQuery = ref('');
-const filteredPrompts = computed(() => {
-    if (!searchQuery.value) return prompts.value;
-    return prompts.value.filter((p) =>
-        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    );
-});
-
-// Thread-specific system prompt handling
-const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
-
-// Computed for current active prompt (thread-specific or global)
-const currentActivePromptId = computed(() => {
-    if (props.threadId) {
-        return threadSystemPromptId.value;
-    }
-    return activePromptId.value;
-});
-
-// Extract plain text from TipTap JSON recursively
-function extractText(node: any): string {
-    if (!node) return '';
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    const type = node.type;
-    let acc = '';
-    if (type === 'text') {
-        acc += node.text || '';
-    }
-    if (node.content && Array.isArray(node.content)) {
-        const inner = node.content.map(extractText).join('');
-        acc += inner;
-    }
-    // Block separators to avoid word merging
-    if (
-        [
-            'paragraph',
-            'heading',
-            'bulletList',
-            'orderedList',
-            'listItem',
-        ].includes(type)
-    ) {
-        acc += '\n';
-    }
-    return acc;
-}
-
-function contentToText(content: any): string {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    // TipTap root usually { type: 'doc', content: [...] }
-    if (content.type === 'doc' && Array.isArray(content.content)) {
-        return extractText(content)
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-    }
-    if (Array.isArray(content.content)) return extractText(content).trim();
-    return '';
-}
-
-// Cached token counts per prompt id (recomputed when prompts list changes)
-const tokenCounts = computed<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const p of prompts.value) {
-        try {
-            const text = contentToText(p.content);
-            map[p.id] = text ? encode(text).length : 0;
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token encode failed', e);
-            map[p.id] = 0;
-        }
-    }
-    return map;
-});
-
-// Totals derived from cached counts
-const totalTokens = computed(() =>
-    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
-);
-const filteredTokens = computed(() =>
-    filteredPrompts.value.reduce(
-        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
-        0
-    )
-);
-
-// (Events moved above with prop bridging)
-
-const loadPrompts = async () => {
-    try {
-        prompts.value = await listPrompts();
-        if (
-            defaultPromptId.value &&
-            !prompts.value.find((p) => p.id === defaultPromptId.value)
-        ) {
-            await clearDefaultPrompt();
-        }
-    } catch (error) {
-        console.error('Failed to load prompts:', error);
-    }
-};
-
-const loadThreadSystemPrompt = async () => {
-    if (props.threadId) {
-        try {
-            threadSystemPromptId.value = await getThreadSystemPrompt(
-                props.threadId
-            );
-        } catch (error) {
-            console.error('Failed to load thread system prompt:', error);
-            threadSystemPromptId.value = null;
-        }
-    } else {
-        threadSystemPromptId.value = null;
-    }
-};
-
-const createNewPrompt = async () => {
-    try {
-        const newPrompt = await createPrompt();
-        prompts.value.unshift(newPrompt);
-        startEditing(newPrompt.id);
-    } catch (error) {
-        console.error('Failed to create prompt:', error);
-    }
-};
-
-const selectPrompt = async (id: string) => {
-    try {
-        if (props.threadId) {
-            // Update thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, id);
-            threadSystemPromptId.value = id;
-        } else {
-            // Store as pending for when thread is created
-            pendingPromptId.value = id;
-            // Also update global for immediate feedback
-            await setActivePrompt(id);
-        }
-        emit('selected', id);
-    } catch (error) {
-        console.error('Failed to select prompt:', error);
-    }
-};
-
-const clearActivePrompt = async () => {
-    try {
-        if (props.threadId) {
-            // Clear thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, null);
-            threadSystemPromptId.value = null;
-        } else {
-            // Clear pending and global active prompt
-            pendingPromptId.value = null;
-            await clearGlobalActivePrompt();
-        }
-    } catch (error) {
-        console.error('Failed to clear active prompt:', error);
-    }
-};
-
-const startEditing = (id: string) => {
-    const prompt = prompts.value.find((p) => p.id === id);
-    if (prompt) {
-        editingPrompt.value = prompt;
-    }
-};
-
-const stopEditing = () => {
-    editingPrompt.value = null;
-    loadPrompts(); // Refresh list in case of changes
-};
-
-const applyPendingPromptToThread = async (threadId: string) => {
-    if (pendingPromptId.value) {
-        try {
-            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
-            emit('threadCreated', threadId, pendingPromptId.value);
-            pendingPromptId.value = null;
-        } catch (error) {
-            console.error('Failed to apply pending prompt to thread:', error);
-        }
-    }
-};
-
-const deletePrompt = async (id: string) => {
-    if (confirm('Are you sure you want to delete this prompt?')) {
-        try {
-            await softDeletePrompt(id);
-            if (activePromptId.value === id) {
-                clearActivePrompt();
-            }
-            if (defaultPromptId.value === id) {
-                await clearDefaultPrompt();
-            }
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to delete prompt:', error);
-        }
-    }
-};
-
-const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-    if (editingPrompt.value) return;
-    const key = event.key;
-    if (key >= '1' && key <= '9') {
-        const index = parseInt(key) - 1;
-        if (index < filteredPrompts.value.length) {
-            const prompt = filteredPrompts.value[index];
-            if (prompt) {
-                selectPrompt(prompt.id);
-                event.preventDefault();
-            }
-        }
-    }
-};
 
 onMounted(() => {
-    loadPrompts();
-    loadThreadSystemPrompt();
+    onInternalUpdate();
 });
+</script>
 
-// Watch for threadId changes to reload thread-specific prompt
+<style scoped>
+/* Keep retro feel: no extra styling here; rely on parent theme utilities */
+</style>
+```
+
+## File: app/components/sidebar/SidebarProjectTree.vue
+```vue
+<!-- DEPRECATED: Superseded by SidebarVirtualList + item components. Retain temporarily for compatibility. -->
+<template>
+    <div v-if="projects.length" class="space-y-1">
+        <h1 class="text-xs uppercase opacity-70 px-1 py-3 select-none">
+            Projects
+        </h1>
+        <UTree
+            v-model:expanded="internalExpanded"
+            :items="treeItems"
+            color="neutral"
+            size="sm"
+            :ui="ui"
+        >
+            <template #item-trailing="{ item, level }">
+                <div class="flex items-center gap-1">
+                    <!-- Root-level quick add buttons (appear on hover) -->
+                    <template v-if="level === 0">
+                        <button
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addChat', item.value)"
+                            aria-label="Add chat to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:message-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                        <button
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addDocument', item.value)"
+                            aria-label="Add document to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:note-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                    </template>
+                    <UPopover
+                        :content="{
+                            side: 'right',
+                            align: 'start',
+                            sideOffset: 6,
+                        }"
+                    >
+                        <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop
+                            :aria-label="
+                                level === 0
+                                    ? 'Project actions'
+                                    : 'Entry actions'
+                            "
+                        >
+                            <UIcon
+                                name="pixelarticons:more-vertical"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </span>
+                        <template #content>
+                            <div class="p-1 w-48 space-y-1">
+                                <template v-if="level === 0">
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:edit"
+                                        @click.stop.prevent="
+                                            emit('renameProject', item.value)
+                                        "
+                                        >Rename Project</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:trash"
+                                        @click.stop.prevent="
+                                            emit('deleteProject', item.value)
+                                        "
+                                        >Delete Project</UButton
+                                    >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="
+                                                !action.showOn ||
+                                                action.showOn.includes('root')
+                                            "
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        root: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
+                                </template>
+                                <template v-else>
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="pixelarticons:edit"
+                                        @click.stop.prevent="
+                                            emit('renameEntry', {
+                                                projectId: item.parentId!,
+                                                entryId: item.value,
+                                                kind: item.kind as ProjectEntryKind,
+                                            })
+                                        "
+                                        >Rename</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="pixelarticons:trash"
+                                        @click.stop.prevent="
+                                            emit('removeFromProject', {
+                                                projectId: item.parentId!,
+                                                entryId: item.value,
+                                                kind: item.kind as ProjectEntryKind,
+                                            })
+                                        "
+                                        >Remove from Project</UButton
+                                    >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        child: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
+                                </template>
+                            </div>
+                        </template>
+                    </UPopover>
+                </div>
+            </template>
+        </UTree>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed, watch, ref } from 'vue';
+
+// Distinct kinds of entries that can live under a project.
+// Extend here if we introduce more entry types in the future.
+export type ProjectEntryKind = 'chat' | 'doc';
+
+// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
+interface ProjectEntry {
+    id: string;
+    name?: string;
+    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
+}
+
+interface ProjectRow {
+    id: string;
+    name: string;
+    // The backing data that encodes the project entries. Can be
+    //  - an already parsed array of ProjectEntry objects
+    //  - a JSON string representing that array
+    //  - anything else (ignored)
+    data?: unknown;
+}
+
+// Shape consumed by UTree. (We only type the properties we actually use.)
+interface TreeItem {
+    label: string;
+    value: string;
+    icon?: string;
+    kind?: ProjectEntryKind; // Only for non-root items
+    parentId?: string; // Only set for child entries
+    defaultExpanded?: boolean;
+    children?: TreeItem[];
+    onSelect?: (e: Event) => void;
+}
+
+const props = defineProps<{
+    projects: ProjectRow[];
+    expanded?: string[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'update:expanded', value: string[]): void;
+    (e: 'chatSelected', id: string): void;
+    (e: 'documentSelected', id: string): void;
+    (e: 'addChat', projectId: string): void;
+    (e: 'addDocument', projectId: string): void;
+    (e: 'deleteProject', projectId: string): void;
+    (e: 'renameProject', projectId: string): void;
+    (
+        e: 'renameEntry',
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
+    ): void;
+    (
+        e: 'removeFromProject',
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
+    ): void;
+}>();
+
+// Local mirror for v-model:expanded
+const internalExpanded = ref<string[]>(
+    props.expanded ? [...props.expanded] : []
+);
 watch(
-    () => props.threadId,
-    () => {
-        loadThreadSystemPrompt();
+    () => props.expanded,
+    (val) => {
+        if (val && val !== internalExpanded.value)
+            internalExpanded.value = [...val];
     }
 );
+watch(internalExpanded, (val) => emit('update:expanded', val));
 
-function toggleDefault(id: string) {
-    if (defaultPromptId.value === id) {
-        clearDefaultPrompt();
-    } else {
-        setDefaultPrompt(id);
+function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
+    const raw = p?.data;
+    if (Array.isArray(raw)) return raw as ProjectEntry[];
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
+        } catch {
+            // Silently ignore malformed JSON
+        }
+    }
+    return [];
+}
+
+const treeItems = computed<TreeItem[]>(() =>
+    props.projects.map<TreeItem>((p) => {
+        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
+            (entry) => {
+                // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
+                const kind: ProjectEntryKind =
+                    entry.kind === 'doc' ? 'doc' : 'chat';
+                return {
+                    label: entry.name || '(untitled)',
+                    value: entry.id,
+                    icon:
+                        kind === 'doc'
+                            ? 'pixelarticons:note'
+                            : 'pixelarticons:chat',
+                    kind,
+                    parentId: p.id,
+                    onSelect: (e: Event) => {
+                        if (kind === 'chat') emit('chatSelected', entry.id);
+                        else emit('documentSelected', entry.id);
+                        // Prevent default selection behavior if needed by UTree (not sure), otherwise leave.
+                    },
+                };
+            }
+        );
+        return {
+            label: p.name,
+            value: p.id,
+            defaultExpanded: false,
+            children,
+            onSelect: (e: Event) => e.preventDefault(), // Root projects themselves aren't selectable
+        };
+    })
+);
+
+const ui = {
+    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
+    link: 'group/addchat text-[13px] rounded-[4px] py-1',
+    item: 'cursor-pointer ',
+};
+
+// Plugin project tree actions
+const extraActions = useProjectTreeActions();
+async function runExtraAction(action: any, data: { root?: any; child?: any }) {
+    try {
+        await action.handler(data);
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Project tree action error', action.id, e);
     }
 }
 </script>
 
+<style scoped></style>
+```
+
+## File: app/components/PageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 h-[100dvh] w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 min-w-0 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            @thread-selected="
+                                (id: string) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <LazyDocumentsDocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        ></LazyDocumentsDocumentEditor>
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+// Generic PageShell merging chat + docs functionality.
+// Props allow initializing with a thread OR a document and choosing default mode.
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        initialDocumentId?: string;
+        validateInitial?: boolean; // applies to whichever id is provided
+        routeSync?: boolean;
+        defaultMode?: 'chat' | 'doc'; // used when no initial id
+    }>(),
+    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+
+// ---------------- Multi-pane ----------------
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
+
+// Active thread convenience (first pane for sidebar highlight)
+const activeChatThreadId = computed(() =>
+    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
+);
+
+// --------------- Initializers ---------------
+let validateToken = 0;
+
+async function validateThread(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t && !t.deleted) return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function validateDocument(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function initInitial() {
+    if (!process.client) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.initialThreadId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateThread(props.initialThreadId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('chat');
+                return;
+            }
+        }
+        await setPaneThread(0, props.initialThreadId);
+        pane.mode = 'chat';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    if (props.initialDocumentId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateDocument(props.initialDocumentId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('doc');
+                return;
+            }
+        }
+        pane.mode = 'doc';
+        pane.documentId = props.initialDocumentId;
+        pane.threadId = '';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    // No ids: set default mode
+    if (props.defaultMode === 'doc') {
+        pane.mode = 'doc';
+        pane.documentId = undefined;
+        pane.threadId = '';
+    } else {
+        pane.mode = 'chat';
+    }
+    updateUrl();
+}
+
+function redirectNotFound(kind: 'chat' | 'doc') {
+    if (kind === 'chat') router.replace('/chat');
+    else router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description:
+            kind === 'chat'
+                ? 'This chat does not exist.'
+                : 'This document does not exist.',
+        color: 'error',
+    });
+}
+
+// --------------- URL Sync ---------------
+function updateUrl() {
+    if (!process.client || !props.routeSync) return;
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    const base = pane.mode === 'doc' ? '/docs' : '/chat';
+    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
+    const newPath = id ? `${base}/${id}` : base;
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+watch(
+    () =>
+        panes.value
+            .map(
+                (p) =>
+                    `${p.id}:${p.mode}:${p.threadId || ''}:${
+                        p.documentId || ''
+                    }`
+            )
+            .join(','),
+    () => updateUrl()
+);
+
+watch(
+    () => activePaneIndex.value,
+    () => updateUrl()
+);
+
+// --------------- Documents Integration ---------------
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrl();
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrl();
+}
+
+// Sidebar chat selection always puts pane in chat mode
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrl();
+}
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrl();
+}
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrl();
+}
+
+// --------------- Theme ---------------
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// --------------- Mobile + layout ---------------
+import { isMobile } from '~/state/global';
+if (process.client) {
+    onMounted(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        const apply = () => (isMobile.value = mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() =>
+                mq.removeEventListener('change', apply)
+            );
+        } else {
+            onUnmounted(() => mq.removeEventListener('change', apply));
+        }
+    });
+}
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+function openMobileSidebar() {
+    (layoutRef.value as any)?.openSidebar?.();
+}
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => {
+        sideNavExpandedRef.value?.focusSearchInput?.();
+    });
+}
+
+// --------------- Deletion auto-reset ---------------
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    if (paneIndex === activePaneIndex.value) updateUrl();
+}
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
+    });
+}
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
+    });
+}
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+
+// --------------- Mount ---------------
+onMounted(() => {
+    initInitial();
+    syncTheme();
+    ensureAtLeastOne();
+});
+
+// --------------- Shortcuts ---------------
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+</script>
 <style scoped>
-/* Mobile full-screen adjustments */
-@media (max-width: 640px) {
-    .sp-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh !important;
-        max-height: 100dvh !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border-width: 0 !important;
+body {
+    overflow-y: hidden;
+}
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
+```
+
+## File: app/components/ResizableSidebarLayout.vue
+```vue
+<template>
+    <div
+        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+    >
+        <!-- Backdrop on mobile when open -->
+        <Transition
+            enter-active-class="transition-opacity duration-150"
+            leave-active-class="transition-opacity duration-150"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="!isDesktop && open"
+                class="absolute inset-0 bg-black/40 z-30 md:hidden"
+                @click="close()"
+            />
+        </Transition>
+
+        <!-- Sidebar -->
+        <aside
+            :class="[
+                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-[var(--md-inverse-surface)] flex flex-col',
+                // width transition on desktop
+                initialized
+                    ? 'md:transition-[width] md:duration-200 md:ease-out'
+                    : 'hidden',
+                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
+                side === 'right' ? 'md:border-l md:border-r-0' : '',
+                // mobile overlay behavior
+                !isDesktop
+                    ? [
+                          'absolute top-0 bottom-0 w-[380px] max-w-[90vw] shadow-xl',
+                          // animated slide
+                          'transition-transform duration-200 ease-out',
+                          side === 'right'
+                              ? 'right-0 translate-x-full'
+                              : 'left-0 -translate-x-full',
+                          open ? 'translate-x-0' : '',
+                      ]
+                    : '',
+            ]"
+            :style="
+                Object.assign(
+                    isDesktop ? { width: computedWidth + 'px' } : {},
+                    {
+                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
+                        '--sidebar-rep-opacity': String(
+                            props.sidebarPatternOpacity
+                        ),
+                    }
+                )
+            "
+            @keydown.esc.stop.prevent="close()"
+        >
+            <div class="h-full flex flex-col">
+                <!-- Sidebar header -->
+                <SidebarHeader
+                    :collapsed="collapsed"
+                    :toggle-icon="toggleIcon"
+                    :toggle-aria="toggleAria"
+                    @toggle="toggleCollapse"
+                >
+                    <template #sidebar-header>
+                        <slot name="sidebar-header" />
+                    </template>
+                    <template #sidebar-toggle="slotProps">
+                        <slot name="sidebar-toggle" v-bind="slotProps" />
+                    </template>
+                </SidebarHeader>
+
+                <!-- Sidebar content -->
+                <div class="flex-1 overflow-auto">
+                    <div v-show="!collapsed" class="flex-1 h-full">
+                        <slot name="sidebar-expanded">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
+                    <div v-show="collapsed" class="flex-1 h-full">
+                        <slot name="sidebar-collapsed">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resize handle (desktop only) -->
+            <ResizeHandle
+                :is-desktop="isDesktop"
+                :collapsed="collapsed"
+                :side="side"
+                :min-width="props.minWidth"
+                :max-width="props.maxWidth"
+                :computed-width="computedWidth"
+                @resize-start="onPointerDown"
+                @resize-keydown="onHandleKeydown"
+            />
+        </aside>
+
+        <!-- Main content -->
+        <div class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
+            <div
+                class="flex-1 overflow-hidden content-bg"
+                :style="{
+                    '--content-bg-size': props.patternSize + 'px',
+                    '--content-bg-opacity': String(props.patternOpacity),
+                    '--content-overlay-size': props.overlaySize + 'px',
+                    '--content-overlay-opacity': String(props.overlayOpacity),
+                }"
+            >
+                <slot>
+                    <div class="p-4 space-y-2 text-sm opacity-80">
+                        <p>Put your main content here…</p>
+                        <p>
+                            Resize the sidebar on desktop by dragging the
+                            handle. On mobile, use the Menu button to open/close
+                            the overlay.
+                        </p>
+                    </div>
+                </slot>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import SidebarHeader from './sidebar/SidebarHeader.vue';
+import ResizeHandle from './sidebar/ResizeHandle.vue';
+
+type Side = 'left' | 'right';
+
+const props = defineProps({
+    modelValue: { type: Boolean, default: undefined },
+    defaultOpen: { type: Boolean, default: true },
+    side: { type: String as () => Side, default: 'left' },
+    minWidth: { type: Number, default: 320 },
+    maxWidth: { type: Number, default: 480 },
+    defaultWidth: { type: Number, default: 280 },
+    collapsedWidth: { type: Number, default: 56 },
+    storageKey: { type: String, default: 'sidebar:width' },
+    // Visual tuning for content pattern
+    patternOpacity: { type: Number, default: 0.05 }, // 0..1
+    patternSize: { type: Number, default: 150 }, // px
+    // Overlay pattern (renders above the base pattern)
+    overlayOpacity: { type: Number, default: 0.05 },
+    overlaySize: { type: Number, default: 120 },
+    // Sidebar repeating background
+    sidebarPatternOpacity: { type: Number, default: 0.09 },
+    sidebarPatternSize: { type: Number, default: 240 },
+});
+const emit = defineEmits<{
+    (e: 'update:modelValue', v: boolean): void;
+    (e: 'resize', width: number): void;
+}>();
+
+// helper
+const clamp = (w: number) =>
+    Math.min(props.maxWidth, Math.max(props.minWidth, w));
+
+// open state (controlled or uncontrolled)
+const openState = ref<boolean>(props.modelValue ?? props.defaultOpen);
+const open = computed({
+    get: () =>
+        props.modelValue === undefined ? openState.value : props.modelValue,
+    set: (v) => {
+        if (props.modelValue === undefined) openState.value = v;
+        emit('update:modelValue', v);
+    },
+});
+
+// collapsed toggle remembers last expanded width
+const collapsed = ref(false);
+const lastExpandedWidth = ref(props.defaultWidth);
+
+// width state with persistence
+const width = ref<number>(props.defaultWidth);
+const computedWidth = computed(() =>
+    collapsed.value ? props.collapsedWidth : width.value
+);
+
+// Attempt early (pre-mount) restoration to avoid post-mount jank
+if (import.meta.client) {
+    try {
+        const saved = localStorage.getItem(props.storageKey);
+        if (saved) width.value = clamp(parseInt(saved, 10));
+    } catch {}
+}
+
+// responsive
+const isDesktop = ref(false);
+let mq: MediaQueryList | undefined;
+const updateMq = () => {
+    if (typeof window === 'undefined') return;
+    mq = window.matchMedia('(min-width: 768px)');
+    isDesktop.value = mq.matches;
+};
+
+// Defer enabling transitions until after first paint so restored width doesn't animate
+const initialized = ref(false);
+
+onMounted(() => {
+    updateMq();
+    mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
+    requestAnimationFrame(() => (initialized.value = true));
+});
+
+onBeforeUnmount(() => {
+    mq?.removeEventListener('change', () => {});
+});
+
+watch(width, (w) => {
+    try {
+        localStorage.setItem(props.storageKey, String(w));
+    } catch {}
+    emit('resize', w);
+});
+
+function toggle() {
+    open.value = !open.value;
+}
+function close() {
+    open.value = false;
+}
+function toggleCollapse() {
+    // On mobile, treat the collapse toggle as a full close of the overlay
+    if (!isDesktop.value) {
+        open.value = false;
+        return;
+    }
+    if (!collapsed.value) {
+        lastExpandedWidth.value = width.value;
+        collapsed.value = true;
+    } else {
+        collapsed.value = false;
+        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
     }
 }
 
-/* Smooth scrolling area */
-.sp-modal :deep(.n-modal-body),
-.sp-modal :deep(.n-card__content) {
-    /* ensure body grows */
-    height: 100%;
+// Resize logic (desktop only)
+let startX = 0;
+let startWidth = 0;
+function onPointerDown(e: PointerEvent) {
+    if (!isDesktop.value || collapsed.value) return;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    startX = e.clientX;
+    startWidth = width.value;
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp, { once: true });
+}
+function onPointerMove(e: PointerEvent) {
+    const dx = e.clientX - startX;
+    const delta = props.side === 'right' ? -dx : dx;
+    width.value = clamp(startWidth + delta);
+}
+function onPointerUp() {
+    window.removeEventListener('pointermove', onPointerMove);
+}
+
+// Keyboard a11y for the resize handle
+function onHandleKeydown(e: KeyboardEvent) {
+    if (!isDesktop.value || collapsed.value) return;
+    const step = e.shiftKey ? 32 : 16;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        // reverse on right side
+        const signed = props.side === 'right' ? -dir : dir;
+        width.value = clamp(width.value + signed * step);
+    } else if (e.key === 'Home') {
+        e.preventDefault();
+        width.value = props.minWidth;
+    } else if (e.key === 'End') {
+        e.preventDefault();
+        width.value = props.maxWidth;
+    } else if (e.key === 'PageUp') {
+        e.preventDefault();
+        const big = step * 2;
+        const signed = props.side === 'right' ? -1 : 1;
+        width.value = clamp(width.value + signed * big);
+    } else if (e.key === 'PageDown') {
+        e.preventDefault();
+        const big = step * 2;
+        const signed = props.side === 'right' ? 1 : -1;
+        width.value = clamp(width.value - signed * big);
+    }
+}
+
+// expose minimal API if needed
+function openSidebar() {
+    open.value = true;
+}
+function expand() {
+    // Ensure sidebar is open (mobile) and uncollapsed (desktop)
+    open.value = true;
+    if (collapsed.value) {
+        collapsed.value = false;
+        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
+    }
+}
+defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
+
+const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
+// Icon and aria label for collapse/expand button
+const toggleIcon = computed(() => {
+    // When collapsed, show the icon that suggests expanding back toward content area
+    if (collapsed.value) {
+        return side.value === 'right'
+            ? 'pixelarticons:arrow-bar-left'
+            : 'pixelarticons:arrow-bar-right';
+    }
+    // When expanded, show icon pointing into the sidebar to collapse it
+    return side.value === 'right'
+        ? 'pixelarticons:arrow-bar-right'
+        : 'pixelarticons:arrow-bar-left';
+});
+const toggleAria = computed(() =>
+    collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
+);
+</script>
+
+<style scoped>
+/* Optional: could add extra visual flair for the resize handle here */
+.content-bg {
+    position: relative;
+    /* Base matches sidebar/header */
+    background-color: var(--md-surface);
+}
+
+.content-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    /* Default variables; can be overridden via inline style */
+    --content-bg-size: 150px;
+    --content-bg-opacity: 0.08;
+    background-size: var(--content-bg-size) var(--content-bg-size);
+    opacity: var(--content-bg-opacity);
+    z-index: 0;
+}
+
+/* Ensure the real content sits above the pattern */
+.content-bg > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Overlay layer above base pattern but below content */
+.content-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat-2.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    --content-overlay-size: 380px;
+    --content-overlay-opacity: 0.125;
+    background-size: var(--content-overlay-size) var(--content-overlay-size);
+    opacity: var(--content-overlay-opacity);
+    z-index: 0.5;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Sidebar repeating background layer */
+aside::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/sidebar-repeater.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
+    opacity: var(--sidebar-rep-opacity);
+    z-index: 0;
+}
+
+/* Ensure sidebar children render above the pattern, but keep handle on top */
+aside > *:not(.resize-handle-layer) {
+    position: relative;
+    z-index: 1;
 }
 </style>
+```
+
+## File: app/composables/useAutoScroll.ts
+```typescript
+/**
+ * useAutoScroll
+ * Scroll position tracking + conditional auto-stick logic.
+ * Requirements: 3.3 (Auto-scroll), 3.11 (VueUse adoption), 4 (Docs)
+ *
+ * Usage:
+ * const container = ref<HTMLElement|null>(null)
+ * const auto = useAutoScroll(container, { thresholdPx: 64 })
+ * auto.onContentIncrease() // call after DOM height increases
+ */
+import { ref, onMounted, onBeforeUnmount, type Ref } from 'vue';
+import { useEventListener, useThrottleFn } from '@vueuse/core';
+
+export interface AutoScrollApi {
+    atBottom: Ref<boolean>;
+    stickBottom: () => void;
+    scrollToBottom: (opts?: { smooth?: boolean }) => void;
+    onContentIncrease: () => void;
+    detach: () => void;
+    recompute: () => void; // explicit recompute (useful for tests/manual)
+    userScrolling: Ref<boolean>;
+    /** Epoch ms when we were last within NEAR_BOTTOM_PX */
+    lastBottomAt: Ref<number>;
+    /** Forcibly disable sticky behavior until user explicitly sticks again */
+    release: () => void;
+}
+
+export interface UseAutoScrollOptions {
+    thresholdPx?: number;
+    behavior?: ScrollBehavior;
+    throttleMs?: number; // to avoid scroll thrash; default 50ms
+    /**
+     * Minimum upward scroll (px) while inside the bottom threshold that will
+     * disengage sticky auto-scroll. Fixes the "end-of-stream jump" when user
+     * scrolls a little bit up to read but still remains within thresholdPx.
+     * Default 12px – small deliberate nudge.
+     */
+    disengageDeltaPx?: number;
+}
+
+export function useAutoScroll(
+    container: Ref<HTMLElement | null>,
+    opts: UseAutoScrollOptions = {}
+): AutoScrollApi {
+    const {
+        thresholdPx = 64,
+        behavior = 'auto',
+        throttleMs = 50,
+        disengageDeltaPx = 12,
+    } = opts;
+    const atBottom = ref(true);
+    // Internal sticky intent (cleared when user scrolls away from bottom)
+    let stick = true;
+    // User actively interacting with scroll (wheel/touch) recently
+    const userScrolling = ref(false);
+    // Timestamp (ms) last time viewport was near the very bottom
+    const lastBottomAt = ref(Date.now());
+    const NEAR_BOTTOM_PX = 24; // threshold for considering user "at bottom" for snap eligibility window
+    const USER_SCROLL_INACTIVE_TIMEOUT = 800; // ms
+    let userScrollTimer: any = null;
+    // Track previous scrollTop to detect upward user scroll even while still
+    // considered "at bottom" by threshold heuristics.
+    let lastScrollTop = 0;
+
+    function compute() {
+        const el = container.value;
+        if (!el) return;
+        const currentTop = el.scrollTop;
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        const newAtBottom = dist <= thresholdPx;
+        // Detect deliberate upward scroll (negative delta beyond disengageDeltaPx)
+        // while still inside bottom threshold window. This means user intends
+        // to read earlier content; release sticky so finalize delta won't snap.
+        if (currentTop < lastScrollTop - disengageDeltaPx) {
+            stick = false;
+        }
+        if (!newAtBottom) stick = false;
+        atBottom.value = newAtBottom;
+        if (dist <= NEAR_BOTTOM_PX) {
+            lastBottomAt.value = Date.now();
+        }
+        lastScrollTop = currentTop;
+    }
+
+    const throttledCompute = useThrottleFn(compute, throttleMs);
+
+    function scrollToBottom({ smooth }: { smooth?: boolean } = {}) {
+        const el = container.value;
+        if (!el) return;
+        el.scrollTo({
+            top: el.scrollHeight,
+            behavior: smooth ? 'smooth' : behavior,
+        });
+        stick = true;
+        atBottom.value = true;
+        lastBottomAt.value = Date.now();
+    }
+
+    function stickBottom() {
+        stick = true;
+        scrollToBottom({ smooth: true });
+    }
+
+    function onContentIncrease() {
+        // Safe auto-scroll gate: only snap if user recently at bottom and not scrolling.
+        const now = Date.now();
+        const recentlyAtBottom = now - lastBottomAt.value < 1200; // 1.2s window
+        if (stick && !userScrolling.value && recentlyAtBottom) {
+            scrollToBottom({ smooth: false });
+        } else {
+            compute();
+        }
+    }
+
+    let cleanup: (() => void) | null = null;
+    function markUserScroll() {
+        userScrolling.value = true;
+        if (userScrollTimer) clearTimeout(userScrollTimer);
+        userScrollTimer = setTimeout(() => {
+            userScrolling.value = false;
+        }, USER_SCROLL_INACTIVE_TIMEOUT);
+    }
+
+    onMounted(() => {
+        compute();
+        cleanup = useEventListener(container, 'scroll', throttledCompute, {
+            passive: true,
+        });
+        // Interaction listeners (wheel & touchstart) to gate auto-scroll
+        useEventListener(
+            container,
+            'wheel',
+            () => {
+                markUserScroll();
+            },
+            { passive: true }
+        );
+        useEventListener(
+            container,
+            'touchstart',
+            () => {
+                markUserScroll();
+            },
+            { passive: true }
+        );
+        useEventListener(
+            container,
+            'touchmove',
+            () => {
+                markUserScroll();
+            },
+            { passive: true }
+        );
+    });
+    function detach() {
+        if (cleanup) {
+            cleanup();
+            cleanup = null;
+        }
+    }
+    onBeforeUnmount(detach);
+
+    return {
+        atBottom,
+        stickBottom,
+        scrollToBottom,
+        onContentIncrease,
+        detach,
+        recompute: compute,
+        userScrolling,
+        lastBottomAt,
+        release: () => {
+            stick = false;
+        },
+    };
+}
+```
+
+## File: app/composables/useStreamAccumulator.ts
+```typescript
+/**
+ * Unified streaming accumulator (Task 1 – Unified Streaming Core)
+ * Minimal rAF‑batched token buffer replacing legacy useTailStream + ad hoc refs.
+ *
+ * Responsibilities:
+ *  - Collect incoming text / reasoning deltas via append()
+ *  - Batch DOM/reactive writes to ≤1 per animation frame
+ *  - Provide finalize() with success / error / abort semantics (idempotent)
+ *  - Expose readonly reactive StreamingState for UI consumption
+ */
+import { reactive, toRefs } from 'vue';
+
+export interface StreamingState {
+    text: string;
+    reasoningText: string;
+    isActive: boolean;
+    finalized: boolean;
+    error: Error | null;
+    version: number; // increments on each flush for lightweight watchers
+}
+
+export type AppendKind = 'text' | 'reasoning';
+
+export interface StreamAccumulatorApi {
+    state: Readonly<StreamingState>;
+    append(delta: string, options: { kind: AppendKind }): void;
+    finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent
+    reset(): void; // prepare for a fresh stream
+}
+
+// Fallback rAF for SSR / test environments
+const HAS_RAF = typeof requestAnimationFrame !== 'undefined';
+const _raf:
+    | typeof requestAnimationFrame
+    | ((cb: FrameRequestCallback) => number) = HAS_RAF
+    ? requestAnimationFrame
+    : (cb: FrameRequestCallback) =>
+          setTimeout(() => cb(performance.now()), 0) as any;
+const _caf: typeof cancelAnimationFrame | ((id: number) => void) = HAS_RAF
+    ? cancelAnimationFrame
+    : (id: number) => clearTimeout(id);
+
+export function createStreamAccumulator(): StreamAccumulatorApi {
+    const state = reactive<StreamingState>({
+        text: '',
+        reasoningText: '',
+        isActive: true,
+        finalized: false,
+        error: null,
+        version: 0,
+    });
+    // TODO(normalization): Future message normalization pass will consolidate assistant
+    // message text assembly so accumulator text piping can directly hydrate persisted
+    // message content without duplicate string concatenation in useChat.
+
+    let pendingMain: string[] = [];
+    let pendingReasoning: string[] = [];
+    let frame: number | null = null;
+    let _finalized = false;
+    let emptyAppendWarnings = 0;
+
+    function flush() {
+        frame = null;
+        if (pendingMain.length) {
+            state.text += pendingMain.join('');
+            pendingMain = [];
+        }
+        if (pendingReasoning.length) {
+            state.reasoningText += pendingReasoning.join('');
+            pendingReasoning = [];
+        }
+        state.version++;
+    }
+
+    function schedule() {
+        if (frame != null || _finalized) return;
+        if (!HAS_RAF) {
+            // In test / SSR environments without rAF, schedule a microtask-ish flush quickly
+            frame = _raf(() => flush());
+            return;
+        }
+        frame = _raf(flush);
+    }
+
+    /** Ensure stream not already finalized. Returns false if already finalized. */
+    function ensureNotFinalized(op: string): boolean {
+        if (_finalized) {
+            if (import.meta.dev) {
+                console.warn(`[stream] ${op} after finalize ignored`);
+            }
+            return false;
+        }
+        return true;
+    }
+
+    function append(delta: string, { kind }: { kind: AppendKind }) {
+        if (!ensureNotFinalized('append')) return;
+        if (!delta) {
+            if (import.meta.dev && ++emptyAppendWarnings <= 3) {
+                console.warn(
+                    '[stream] empty delta append ignored (possible upstream tokenization issue)'
+                );
+            }
+            return;
+        }
+        if (kind === 'reasoning') pendingReasoning.push(delta);
+        else pendingMain.push(delta);
+        schedule();
+    }
+
+    function finalize(opts?: { error?: Error; aborted?: boolean }) {
+        if (!ensureNotFinalized('finalize')) return;
+        _finalized = true;
+        if (frame != null) {
+            _caf(frame); // cancel pending frame then immediate flush
+            frame = null;
+        }
+        if (pendingMain.length || pendingReasoning.length) flush();
+        else state.version++;
+        if (opts?.error) state.error = opts.error;
+        state.isActive = false;
+        state.finalized = true;
+    }
+
+    function reset() {
+        if (frame != null) {
+            _caf(frame);
+            frame = null;
+        }
+        pendingMain = [];
+        pendingReasoning = [];
+        _finalized = false;
+        emptyAppendWarnings = 0;
+        state.text = '';
+        state.reasoningText = '';
+        state.error = null;
+        state.isActive = true;
+        state.finalized = false;
+        state.version++;
+    }
+
+    return { state, append, finalize, reset };
+}
+
+// Convenience factory (future usage) - could be extended to support options
+export function useStreamAccumulator() {
+    return createStreamAccumulator();
+}
+
+export type { StreamingState as UnifiedStreamingState };
+```
+
+## File: app/plugins/message-actions.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    registerMessageAction({
+        id: 'Create document', // unique id
+        icon: 'pixelarticons:notes-plus', // any icon name supported by <UButton>
+        tooltip: 'Create document',
+        showOn: 'assistant', // 'user' | 'assistant' | 'both'
+        order: 300, // optional; after built-ins ( <200 reserved )
+        async handler({ message }) {
+            console.log('Create document action invoked', message);
+
+            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
+            async function markdownToTipTapDoc(md: string) {
+                const markdown = (md || '').trim();
+                if (!markdown) return { type: 'doc', content: [] };
+                try {
+                    const [{ Editor }] = await Promise.all([
+                        import('@tiptap/core'),
+                    ]);
+                    const StarterKit = (await import('@tiptap/starter-kit'))
+                        .default;
+                    // tiptap-markdown exports markdownToProseMirror function
+                    const { Markdown } = await import('tiptap-markdown');
+
+                    const editor = new Editor({
+                        extensions: [StarterKit, Markdown],
+                        content: '',
+                    });
+
+                    editor.commands.setContent(markdown);
+                    return editor.getJSON();
+                } catch (e) {
+                    alert('error!!!');
+                }
+            }
+
+            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
+
+            const doc = await newDocument({
+                title: (message as any).title || 'Untitled',
+                content: tiptapDoc,
+            });
+
+            console.log('Created document record', doc);
+
+            // Attempt to open in a new pane (if capacity) else reuse active pane
+            const mp: any = (globalThis as any).__or3MultiPaneApi;
+            try {
+                if (mp) {
+                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
+                    if (couldAdd && typeof mp.addPane === 'function') {
+                        mp.addPane(); // sets new pane active
+                    }
+                    const panes = mp.panes?.value;
+
+                    const activeIndex = mp.activePaneIndex?.value ?? 0;
+
+                    if (Array.isArray(panes)) {
+                        const pane = panes[activeIndex];
+                        if (pane) {
+                            pane.mode = 'doc';
+                            pane.documentId = doc.id;
+                            // Reset chat-related fields when switching
+                            pane.threadId =
+                                pane.mode === 'doc'
+                                    ? pane.threadId
+                                    : pane.threadId;
+                        }
+                    }
+                }
+            } catch (e) {
+                // non-fatal; fallback is just created doc without auto-open
+                console.warn('Open document in pane failed', e);
+            }
+
+            useToast().add({
+                title: 'Document created',
+                description: `Opened in ${
+                    mp?.canAddPane?.value ? 'new' : 'current'
+                } pane: ${doc.id}`,
+                duration: 2600,
+            });
+        },
+    });
+});
+```
+
+## File: app/components/sidebar/SidebarVirtualList.vue
+```vue
+<template>
+    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <VList
+            :data="flatItems"
+            :style="{ height: 'calc(100dvh - 318px)' }"
+            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
+            #default="{ item, index }"
+        >
+            <div :key="item.key || index">
+                <h1
+                    v-if="item.type === 'sectionHeader'"
+                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
+                >
+                    {{ item.label }}
+                </h1>
+                <SidebarProjectTree
+                    v-else-if="item.type === 'projectsTree'"
+                    :projects="projects"
+                    v-model:expanded="expandedProjectsLocal"
+                    @chatSelected="emit('chatSelected', $event)"
+                    @documentSelected="emit('documentSelected', $event)"
+                    @addChat="emit('addChat', $event)"
+                    @addDocument="emit('addDocument', $event)"
+                    @renameProject="emit('renameProject', $event)"
+                    @deleteProject="emit('deleteProject', $event)"
+                    @renameEntry="emit('renameEntry', $event)"
+                    @removeFromProject="emit('removeFromProject', $event)"
+                />
+                <div v-else-if="item.type === 'thread'" class="mr-1">
+                    <SidebarThreadItem
+                        :thread="item.thread"
+                        :active="activeThreadSet.has(item.thread.id)"
+                        class="mb-2"
+                        @select="emit('selectThread', $event)"
+                        @rename="emit('renameThread', $event)"
+                        @delete="emit('deleteThread', $event)"
+                        @add-to-project="emit('addThreadToProject', $event)"
+                    />
+                </div>
+                <div v-else-if="item.type === 'doc'" class="mr-1">
+                    <SidebarDocumentItem
+                        :doc="item.doc"
+                        class="mb-2"
+                        :active="activeDocumentSet.has(item.doc.id)"
+                        @select="emit('selectDocument', $event)"
+                        @rename="emit('renameDocument', $event)"
+                        @delete="emit('deleteDocument', $event)"
+                        @add-to-project="emit('addDocumentToProject', $event)"
+                    />
+                </div>
+            </div>
+        </VList>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
+import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
+import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+
+interface ProjectEntry {
+    id: string;
+    name?: string;
+    kind: 'chat' | 'doc';
+}
+interface Project {
+    id: string;
+    name: string;
+    data?: any;
+}
+interface Thread {
+    id: string;
+    title?: string;
+    forked?: boolean;
+}
+interface DocLite {
+    id: string;
+    title: string;
+    updated_at?: number;
+    created_at?: number;
+    postType?: string;
+}
+
+// Row item discriminated union
+interface SectionHeaderItem {
+    type: 'sectionHeader';
+    key: string;
+    label: string;
+}
+interface ProjectsTreeItem {
+    type: 'projectsTree';
+    key: string;
+}
+interface ThreadItem {
+    type: 'thread';
+    key: string;
+    thread: Thread;
+}
+interface DocItem {
+    type: 'doc';
+    key: string;
+    doc: DocLite;
+}
+
+type SidebarRowItem =
+    | SectionHeaderItem
+    | ProjectsTreeItem
+    | ThreadItem
+    | DocItem;
+
+const props = defineProps<{
+    projects: Project[];
+    threads: Thread[];
+    documents: any[]; // possibly full posts containing heavy fields
+    displayDocuments?: any[]; // optional filtered docs from search
+    expandedProjects: string[]; // mutated in place (passed to tree)
+    activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
+    activeThread?: string; // legacy single selection
+    activeDocument?: string; // legacy single selection
+    activeThreads?: string[]; // new multi-active selection
+    activeDocuments?: string[]; // new multi-active selection
+    height: number; // required external measured height
+}>();
+
+// Simplified emit typing (broad) to accommodate both legacy kebab-case and new camelCase events during transition
+// TODO: tighten types once integration finalized
+// eslint-disable-next-line @typescript-eslint/ban-types
+const emit = defineEmits<(e: string, ...args: any[]) => void>();
+
+// Lightweight docs mapping (strip heavy fields like content)
+const lightweightDocs = computed<DocLite[]>(() =>
+    (props.documents || []).map((d: any) => ({
+        id: d.id,
+        title: d.title || '(untitled document)',
+        updated_at: d.updated_at,
+        created_at: d.created_at,
+        postType: d.postType,
+    }))
+);
+
+const effectiveDocs = computed<DocLite[]>(() => {
+    if (props.displayDocuments && props.displayDocuments.length) {
+        return props.displayDocuments.map((d: any) => ({
+            id: d.id,
+            title: d.title || '(untitled document)',
+            updated_at: d.updated_at,
+            created_at: d.created_at,
+            postType: d.postType,
+        }));
+    }
+    return lightweightDocs.value;
+});
+
+// Local mirror for v-model with tree (keep reference semantics for parent array)
+const expandedProjectsLocal = computed({
+    get: () => props.expandedProjects,
+    set: (val: string[]) => {
+        // mutate original array for parent expectations
+        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
+    },
+});
+
+const flatItems = computed<SidebarRowItem[]>(() => {
+    const out: SidebarRowItem[] = [];
+    if (props.activeSections.projects && props.projects.length) {
+        out.push({ type: 'projectsTree', key: 'projectsTree' });
+    }
+    // Threads section
+    if (props.activeSections.threads && props.threads.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
+        for (const t of props.threads) {
+            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
+        }
+    }
+    // Docs section
+    if (props.activeSections.docs && effectiveDocs.value.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
+        for (const d of effectiveDocs.value) {
+            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
+        }
+    }
+    return out;
+});
+
+// Constant row size estimate
+const rowSize = 36;
+
+// ---- Multi-active support ----
+const activeThreadSet = computed(() => {
+    if (Array.isArray(props.activeThreads))
+        return new Set(props.activeThreads.filter(Boolean));
+    return new Set(props.activeThread ? [props.activeThread] : []);
+});
+const activeDocumentSet = computed(() => {
+    if (Array.isArray(props.activeDocuments))
+        return new Set(props.activeDocuments.filter(Boolean));
+    return new Set(props.activeDocument ? [props.activeDocument] : []);
+});
+</script>
+```
+
+## File: app/composables/useAi.ts
+```typescript
+import { ref } from 'vue';
+import { createStreamAccumulator } from './useStreamAccumulator';
+import { useToast } from '#imports';
+import { nowSec, newId } from '~/db/util';
+import { useUserApiKey } from './useUserApiKey';
+import { useHooks } from './useHooks';
+import { useActivePrompt } from './useActivePrompt';
+import { getDefaultPromptId } from './useDefaultPrompt';
+import { create, db, tx, upsert } from '~/db';
+import { createOrRefFile } from '~/db/files';
+import { serializeFileHashes } from '~/db/files-util';
+import {
+    parseHashes,
+    mergeAssistantFileHashes,
+} from '~/utils/files/attachments';
+import { getThreadSystemPrompt } from '~/db/threads';
+import { getPrompt } from '~/db/prompts';
+import type {
+    ContentPart,
+    ChatMessage,
+    SendMessageParams,
+    TextPart,
+} from '~/utils/chat/types';
+import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import {
+    buildParts,
+    mergeFileHashes,
+    trimOrMessagesImages,
+} from '~/utils/chat/messages';
+// getTextFromContent removed for UI messages; raw messages maintain original parts if needed
+import { openRouterStream } from '~/utils/chat/openrouterStream';
+import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
+import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
+import { promptJsonToString } from '~/utils/prompt-utils';
+import { state } from '~/state/global';
+
+const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+export function useChat(
+    msgs: ChatMessage[] = [],
+    initialThreadId?: string,
+    pendingPromptId?: string
+) {
+    // Messages and basic state
+    // UI-facing normalized messages
+    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
+    // Raw legacy messages (content parts / strings) used for history & hooks
+    const rawMessages = ref<ChatMessage[]>([...msgs]);
+    const getRawMessages = () => {
+        if (import.meta.dev) {
+            console.warn(
+                '[useChat] getRawMessages() is deprecated; prefer UiChatMessage via messages ref'
+            );
+        }
+        return rawMessages.value;
+    }; // transitional
+    const loading = ref(false);
+    const abortController = ref<AbortController | null>(null);
+    const aborted = ref(false);
+    let { apiKey, setKey } = useUserApiKey();
+    const hooks = useHooks();
+    const { activePromptContent } = useActivePrompt();
+    const threadIdRef = ref<string | undefined>(initialThreadId);
+    const historyLoadedFor = ref<string | null>(null);
+
+    if (import.meta.dev) {
+        if (state.value.openrouterKey && apiKey) {
+            setKey(state.value.openrouterKey);
+        }
+    }
+
+    // Unified streaming accumulator only (legacy removed)
+    const streamAcc = createStreamAccumulator();
+    const streamState = streamAcc.state;
+    const streamId = ref<string | null>(null);
+    function resetStream() {
+        streamAcc.reset();
+        streamId.value = null;
+    }
+
+    async function getSystemPromptContent(): Promise<string | null> {
+        if (!threadIdRef.value) return null;
+        try {
+            const promptId = await getThreadSystemPrompt(threadIdRef.value);
+            if (promptId) {
+                const prompt = await getPrompt(promptId);
+                if (prompt) return promptJsonToString(prompt.content);
+            }
+        } catch (e) {
+            console.warn('Failed to load thread system prompt', e);
+        }
+        return activePromptContent.value
+            ? promptJsonToString(activePromptContent.value)
+            : null;
+    }
+
+    async function sendMessage(
+        content: string,
+        sendMessagesParams: SendMessageParams = {
+            files: [],
+            model: DEFAULT_AI_MODEL,
+            file_hashes: [],
+            online: false,
+        }
+    ) {
+        if (!apiKey.value) return;
+
+        if (!threadIdRef.value) {
+            // Resolve system prompt: pending > default
+            let effectivePromptId: string | null = pendingPromptId || null;
+            if (!effectivePromptId) {
+                try {
+                    effectivePromptId = await getDefaultPromptId();
+                } catch {}
+            }
+            const newThread = await create.thread({
+                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
+                last_message_at: nowSec(),
+                parent_thread_id: null,
+                system_prompt_id: effectivePromptId || null,
+            });
+            threadIdRef.value = newThread.id;
+        }
+
+        await ensureThreadHistoryLoaded(
+            threadIdRef,
+            historyLoadedFor,
+            rawMessages as any
+        );
+
+        // Prior assistant hashes for image carry-over
+        const prevAssistantRaw = [...rawMessages.value]
+            .reverse()
+            .find((m) => m.role === 'assistant');
+        const prevAssistant = prevAssistantRaw
+            ? messages.value.find((m) => m.id === prevAssistantRaw.id)
+            : null;
+        const assistantHashes = prevAssistantRaw?.file_hashes
+            ? parseHashes(prevAssistantRaw.file_hashes)
+            : [];
+
+        // Prepare accumulator
+        streamAcc.reset();
+        // Normalize params
+        let { files, model, file_hashes, extraTextParts, online } =
+            sendMessagesParams as any;
+        if (
+            (!files || files.length === 0) &&
+            Array.isArray((sendMessagesParams as any)?.images)
+        ) {
+            files = (sendMessagesParams as any).images.map((img: any) => {
+                const url = typeof img === 'string' ? img : img.url;
+                const provided = typeof img === 'object' ? img.type : undefined;
+                return { type: inferMimeFromUrl(url, provided), url } as any;
+            });
+        }
+        if (!model) model = DEFAULT_AI_MODEL;
+        if (online === true) model = model + ':online';
+
+        const outgoing = await hooks.applyFilters(
+            'ui.chat.message:filter:outgoing',
+            content
+        );
+
+        file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
+        const userDbMsg = await tx.appendMessage({
+            thread_id: threadIdRef.value!,
+            role: 'user',
+            data: { content: outgoing, attachments: files ?? [] },
+            file_hashes:
+                file_hashes && file_hashes.length
+                    ? (file_hashes as any)
+                    : undefined,
+        });
+        const parts: ContentPart[] = buildParts(
+            outgoing,
+            files,
+            extraTextParts
+        );
+        const rawUser: ChatMessage = {
+            role: 'user',
+            content: parts,
+            id: (userDbMsg as any).id,
+            file_hashes: userDbMsg.file_hashes,
+        };
+        recordRawMessage(rawUser);
+        rawMessages.value.push(rawUser);
+        messages.value.push(ensureUiMessage(rawUser));
+
+        loading.value = true;
+        streamId.value = null;
+
+        try {
+            const startedAt = Date.now();
+            const modelId = await hooks.applyFilters(
+                'ai.chat.model:filter:select',
+                model
+            );
+
+            // Inject system message
+            let messagesWithSystemRaw = [...rawMessages.value];
+            const systemText = await getSystemPromptContent();
+            if (systemText && systemText.trim()) {
+                messagesWithSystemRaw.unshift({
+                    role: 'system',
+                    content: systemText,
+                    id: `system-${newId()}`,
+                });
+            }
+
+            const effectiveMessages = await hooks.applyFilters(
+                'ai.chat.messages:filter:input',
+                messagesWithSystemRaw
+            );
+
+            const { buildOpenRouterMessages } = await import(
+                '~/utils/openrouter-build'
+            );
+
+            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
+            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
+                (m: any) => ({ ...m })
+            );
+            if (assistantHashes.length && prevAssistant?.id) {
+                const target = modelInputMessages.find(
+                    (m) => m.id === prevAssistant.id
+                );
+                if (target) target.file_hashes = null;
+            }
+            const orMessages = await buildOpenRouterMessages(
+                modelInputMessages as any,
+                {
+                    maxImageInputs: 16,
+                    imageInclusionPolicy: 'all',
+                    debug: false,
+                }
+            );
+            trimOrMessagesImages(orMessages, 5);
+
+            const hasImageInput = (modelInputMessages as any[]).some((m) =>
+                Array.isArray(m.content)
+                    ? (m.content as any[]).some(
+                          (p) =>
+                              p?.type === 'image_url' ||
+                              p?.type === 'image' ||
+                              p?.mediaType?.startsWith('image/')
+                      )
+                    : false
+            );
+            const modelImageHint = /image|vision|flash/i.test(modelId);
+            const modalities =
+                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+
+            const newStreamId = newId();
+            streamId.value = newStreamId;
+            const assistantDbMsg = await tx.appendMessage({
+                thread_id: threadIdRef.value!,
+                role: 'assistant',
+                stream_id: newStreamId,
+                data: { content: '', attachments: [], reasoning_text: null },
+            });
+
+            await hooks.doAction('ai.chat.send:action:before', {
+                threadId: threadIdRef.value,
+                modelId,
+                user: { id: userDbMsg.id, length: outgoing.length },
+                assistant: { id: assistantDbMsg.id, streamId: newStreamId },
+                messagesCount: Array.isArray(effectiveMessages)
+                    ? (effectiveMessages as any[]).length
+                    : undefined,
+            });
+
+            aborted.value = false;
+            abortController.value = new AbortController();
+            const stream = openRouterStream({
+                apiKey: apiKey.value!,
+                model: modelId,
+                orMessages,
+                modalities,
+                signal: abortController.value.signal,
+            });
+
+            const rawAssistant: ChatMessage = {
+                role: 'assistant',
+                content: '',
+                id: (assistantDbMsg as any).id,
+                stream_id: newStreamId,
+                reasoning_text: null,
+            } as any;
+            recordRawMessage(rawAssistant);
+            rawMessages.value.push(rawAssistant);
+            const uiAssistant = ensureUiMessage(rawAssistant);
+            uiAssistant.pending = true;
+            const idx = messages.value.push(uiAssistant) - 1;
+            const current = messages.value[idx]!; // UiChatMessage
+            let chunkIndex = 0;
+            const WRITE_INTERVAL_MS = 100;
+            let lastPersistAt = 0;
+            const assistantFileHashes: string[] = [];
+
+            for await (const ev of stream) {
+                if (ev.type === 'reasoning') {
+                    if (current.reasoning_text === null)
+                        current.reasoning_text = ev.text;
+                    else current.reasoning_text += ev.text;
+                    streamAcc.append(ev.text, { kind: 'reasoning' });
+                    try {
+                        await hooks.doAction(
+                            'ai.chat.stream:action:reasoning',
+                            ev.text,
+                            {
+                                threadId: threadIdRef.value,
+                                assistantId: assistantDbMsg.id,
+                                streamId: newStreamId,
+                                reasoningLength:
+                                    current.reasoning_text?.length || 0,
+                            }
+                        );
+                    } catch {}
+                } else if (ev.type === 'text') {
+                    if (current.pending) current.pending = false;
+                    const delta = ev.text;
+                    streamAcc.append(delta, { kind: 'text' });
+                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
+                        threadId: threadIdRef.value,
+                        assistantId: assistantDbMsg.id,
+                        streamId: newStreamId,
+                        deltaLength: String(delta ?? '').length,
+                        totalLength:
+                            current.text.length + String(delta ?? '').length,
+                        chunkIndex: chunkIndex++,
+                    });
+                    current.text += delta;
+                } else if (ev.type === 'image') {
+                    if (current.pending) current.pending = false;
+                    // Append markdown placeholder exactly once per image URL
+                    const placeholder = `![generated image](${ev.url})`;
+                    const already = current.text.includes(placeholder);
+                    if (!already) {
+                        current.text +=
+                            (current.text ? '\n\n' : '') + placeholder;
+                    }
+                    if (import.meta.dev) {
+                        console.debug('[stream:image:event]', {
+                            url: ev.url?.slice(0, 80),
+                            placeholderInserted: !already,
+                            currentLength: current.text.length,
+                            fileHashes: assistantFileHashes.slice(),
+                        });
+                    }
+                    if (assistantFileHashes.length < 6) {
+                        let blob: Blob | null = null;
+                        if (ev.url.startsWith('data:image/'))
+                            blob = dataUrlToBlob(ev.url);
+                        else if (/^https?:/.test(ev.url)) {
+                            try {
+                                const r = await fetch(ev.url);
+                                if (r.ok) blob = await r.blob();
+                            } catch {}
+                        }
+                        if (blob) {
+                            try {
+                                const meta = await createOrRefFile(
+                                    blob,
+                                    'gen-image'
+                                );
+                                assistantFileHashes.push(meta.hash);
+                                const serialized =
+                                    serializeFileHashes(assistantFileHashes);
+                                const updatedMsg = {
+                                    ...assistantDbMsg,
+                                    data: {
+                                        ...((assistantDbMsg as any).data || {}),
+                                        reasoning_text:
+                                            current.reasoning_text ?? null,
+                                    },
+                                    file_hashes: serialized,
+                                    updated_at: nowSec(),
+                                } as any;
+                                await upsert.message(updatedMsg);
+                                (current as any).file_hashes = serialized;
+                                if (import.meta.dev) {
+                                    console.debug('[stream:image:persist]', {
+                                        hash: meta.hash,
+                                        total: assistantFileHashes.length,
+                                        serialized,
+                                    });
+                                }
+                            } catch {}
+                        }
+                    }
+                }
+
+                const now = Date.now();
+                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                    const textContent = current.text;
+                    const updated = {
+                        ...assistantDbMsg,
+                        data: {
+                            ...((assistantDbMsg as any).data || {}),
+                            content: textContent,
+                            reasoning_text: current.reasoning_text ?? null,
+                        },
+                        file_hashes: assistantFileHashes.length
+                            ? serializeFileHashes(assistantFileHashes)
+                            : (assistantDbMsg as any).file_hashes,
+                        updated_at: nowSec(),
+                    } as any;
+                    await upsert.message(updated);
+                    if (assistantFileHashes.length)
+                        (current as any).file_hashes =
+                            serializeFileHashes(assistantFileHashes);
+                    lastPersistAt = now;
+                }
+            }
+
+            const fullText = current.text;
+            const incoming = await hooks.applyFilters(
+                'ui.chat.message:filter:incoming',
+                fullText,
+                threadIdRef.value
+            );
+            if (current.pending) current.pending = false;
+            current.text = incoming as string;
+            const finalized = {
+                ...assistantDbMsg,
+                data: {
+                    ...((assistantDbMsg as any).data || {}),
+                    content: incoming,
+                    reasoning_text: current.reasoning_text ?? null,
+                },
+                file_hashes: assistantFileHashes.length
+                    ? serializeFileHashes(assistantFileHashes)
+                    : (assistantDbMsg as any).file_hashes,
+                updated_at: nowSec(),
+            } as any;
+            await upsert.message(finalized);
+            const endedAt = Date.now();
+            await hooks.doAction('ai.chat.send:action:after', {
+                threadId: threadIdRef.value,
+                request: { modelId, userId: userDbMsg.id },
+                response: {
+                    assistantId: assistantDbMsg.id,
+                    length: (incoming as string).length,
+                },
+                timings: {
+                    startedAt,
+                    endedAt,
+                    durationMs: endedAt - startedAt,
+                },
+                aborted: false,
+            });
+            streamAcc.finalize();
+        } catch (err) {
+            if (aborted.value) {
+                try {
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        (last as any).pending = false;
+                    }
+                } catch {}
+                await hooks.doAction('ai.chat.send:action:after', {
+                    threadId: threadIdRef.value,
+                    aborted: true,
+                });
+            } else {
+                await hooks.doAction('ai.chat.error:action', {
+                    threadId: threadIdRef.value,
+                    stage: 'stream',
+                    error: err,
+                });
+                try {
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        messages.value.pop();
+                    }
+                    const lastUser = [...messages.value]
+                        .reverse()
+                        .find((m) => m.role === 'user');
+                    const toast = useToast();
+                    toast.add({
+                        title: 'Message failed',
+                        description: (err as any)?.message || 'Request failed',
+                        color: 'error',
+                        actions: lastUser
+                            ? [
+                                  {
+                                      label: 'Retry',
+                                      onClick: () => {
+                                          if (lastUser?.id)
+                                              retryMessage(lastUser.id as any);
+                                      },
+                                  },
+                              ]
+                            : undefined,
+                        duration: 6000,
+                    });
+                } catch {}
+                const e = err instanceof Error ? err : new Error(String(err));
+                streamAcc.finalize({ error: e });
+            }
+        } finally {
+            loading.value = false;
+            abortController.value = null;
+            setTimeout(() => {
+                if (!loading.value && streamState.finalized) resetStream();
+            }, 0);
+        }
+    }
+
+    async function retryMessage(messageId: string, modelOverride?: string) {
+        if (loading.value || !threadIdRef.value) return;
+        try {
+            const target: any = await db.messages.get(messageId);
+            if (!target || target.thread_id !== threadIdRef.value) return;
+            let userMsg: any = target.role === 'user' ? target : null;
+            if (!userMsg && target.role === 'assistant') {
+                const DexieMod = (await import('dexie')).default;
+                userMsg = await db.messages
+                    .where('[thread_id+index]')
+                    .between(
+                        [target.thread_id, DexieMod.minKey],
+                        [target.thread_id, target.index]
+                    )
+                    .filter(
+                        (m: any) =>
+                            m.role === 'user' &&
+                            !m.deleted &&
+                            m.index < target.index
+                    )
+                    .last();
+            }
+            if (!userMsg) return;
+            const DexieMod2 = (await import('dexie')).default;
+            const assistant = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [userMsg.thread_id, userMsg.index + 1],
+                    [userMsg.thread_id, DexieMod2.maxKey]
+                )
+                .filter((m: any) => m.role === 'assistant' && !m.deleted)
+                .first();
+            await hooks.doAction('ai.chat.retry:action:before', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                triggeredBy: target.role,
+            });
+            await db.transaction('rw', db.messages, async () => {
+                await db.messages.delete(userMsg.id);
+                if (assistant) await db.messages.delete(assistant.id);
+            });
+            rawMessages.value = rawMessages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            messages.value = messages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            const originalText = (userMsg.data as any)?.content || '';
+            let hashes: string[] = [];
+            if (userMsg.file_hashes) {
+                const { parseFileHashes } = await import('~/db/files-util');
+                hashes = parseFileHashes(userMsg.file_hashes);
+            }
+            await sendMessage(originalText, {
+                model: modelOverride || DEFAULT_AI_MODEL,
+                file_hashes: hashes,
+                files: [],
+                online: false,
+            });
+            const tail = messages.value.slice(-2);
+            const newUser = tail.find((m: any) => m.role === 'user');
+            const newAssistant = tail.find((m: any) => m.role === 'assistant');
+            await hooks.doAction('ai.chat.retry:action:after', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                newUserId: newUser?.id,
+                newAssistantId: newAssistant?.id,
+            });
+        } catch (e) {
+            console.error('[useChat.retryMessage] failed', e);
+        }
+    }
+
+    return {
+        messages,
+        sendMessage,
+        retryMessage,
+        loading,
+        threadId: threadIdRef,
+        streamId,
+        resetStream,
+        streamState,
+        abort: () => {
+            if (!loading.value || !abortController.value) return;
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch {}
+            streamAcc.finalize({ aborted: true });
+        },
+    };
+}
 ```
 
 ## File: app/components/chat/ChatInputDropper.vue
@@ -15705,7 +16825,7 @@ function toggleDefault(id: string) {
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="max-h-96 w-full overflow-y-auto break-words min-h-[3rem]"
+                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
@@ -16007,16 +17127,21 @@ import {
     onMounted,
     onBeforeUnmount,
     watch,
+    getCurrentInstance,
 } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
 import type { FileMeta } from '~/db/schema';
 import { useModelStore } from '~/composables/useModelStore';
 import { Editor, EditorContent } from '@tiptap/vue-3';
+import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
-import { isMobile } from '~/state/global';
+import { isMobile, state } from '~/state/global';
+import { useUserApiKey } from '~/composables/useUserApiKey';
+import { useOpenRouterAuth } from '~/composables/useOpenrouter';
+import { useToast } from '#imports';
 const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
@@ -16046,8 +17171,27 @@ onMounted(async () => {
 onMounted(() => {
     if (!process.client) return;
     try {
+        // Minimal shortcut: Enter sends, Shift+Enter = newline
+        const enterToSend = Extension.create({
+            name: 'enterToSend',
+            addKeyboardShortcuts() {
+                return {
+                    Enter: () => {
+                        // Disable auto-send on mobile; allow normal newline
+                        if (isMobile.value) return false;
+                        // Respect Shift+Enter for newline
+                        const ev = window.event as KeyboardEvent | undefined;
+                        if (ev?.shiftKey) return false;
+                        handleSend();
+                        return true; // prevent default newline
+                    },
+                    'Shift-Enter': () => false, // explicit newline
+                };
+            },
+        });
         editor.value = new Editor({
             extensions: [
+                enterToSend,
                 Placeholder.configure({
                     // Use a placeholder:
                     placeholder: 'Write something …',
@@ -16134,6 +17278,7 @@ const emit = defineEmits<{
     (e: 'trigger-file-input'): void;
     (e: 'pending-prompt-selected', promptId: string | null): void;
     (e: 'stop-stream'): void; // New event for stopping the stream
+    (e: 'resize', payload: { height: number }): void;
 }>();
 
 const promptText = ref('');
@@ -16370,6 +17515,42 @@ const removeTextBlock = (index: number) => {
 
 const handleSend = () => {
     if (props.loading) return;
+    // Require OpenRouter connection (api key) before sending
+    const { apiKey } = useUserApiKey();
+    if (!apiKey.value) {
+        const { startLogin } = useOpenRouterAuth();
+        // Show toast with action to initiate login
+        useToast().add({
+            id: 'need-openrouter-login',
+            title: 'Connect to OpenRouter',
+            description: 'You need to log in before sending messages.',
+            color: 'primary',
+            duration: 5000,
+            actions: [
+                {
+                    label: 'Login',
+                    onClick: () => startLogin(),
+                    size: 'sm',
+                },
+                {
+                    label: 'Manually enter key',
+                    onClick: (toast) => {
+                        const apiKey = prompt(
+                            'Please enter your OpenRouter API key:'
+                        );
+
+                        if (apiKey && apiKey.trim()) {
+                            // Save the API key
+                            state.value.openrouterKey = apiKey.trim();
+                        }
+                    },
+                    size: 'sm',
+                    variant: 'link',
+                },
+            ],
+        });
+        return;
+    }
     if (
         promptText.value.trim() ||
         uploadedImages.value.length > 0 ||
@@ -16404,6 +17585,27 @@ const handlePromptSelected = (id: string) => {
 const handlePromptModalClosed = () => {
     /* modal closed */
 };
+
+// Emit live height via ResizeObserver (debounced with rAF)
+let __resizeRaf: number | null = null;
+onMounted(() => {
+    if (!process.client) return;
+    const rootEl = (getCurrentInstance()?.proxy?.$el as HTMLElement) || null;
+    if (!rootEl || !('ResizeObserver' in window)) return;
+    const ro = new ResizeObserver(() => {
+        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
+        __resizeRaf = requestAnimationFrame(() => {
+            emit('resize', { height: rootEl.offsetHeight });
+        });
+    });
+    ro.observe(rootEl);
+    onBeforeUnmount(() => {
+        try {
+            ro.disconnect();
+        } catch {}
+        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
+    });
+});
 </script>
 
 <style scoped>
@@ -16470,630 +17672,71 @@ textarea::-webkit-scrollbar-thumb:hover {
 </style>
 ```
 
-## File: app/composables/useAi.ts
+## File: app/composables/index.ts
 ```typescript
-import { ref } from 'vue';
-import { useToast } from '#imports';
-import { nowSec, newId } from '~/db/util';
+/** Barrel export for chat-related composables (Task 1.6) */
+export * from './useStreamAccumulator';
+export * from './useAutoScroll';
+export * from './useObservedElementSize';
+export * from './ui-extensions/messages/useMessageActions';
+export * from './ui-extensions/documents/useDocumentHistoryActions';
+export * from './ui-extensions/threads/useThreadHistoryActions';
+export * from './ui-extensions/projects/useProjectTreeActions';
+```
 
-import { useUserApiKey } from './useUserApiKey';
-import { useHooks } from './useHooks';
-import { useActivePrompt } from './useActivePrompt';
-import { getDefaultPromptId } from './useDefaultPrompt';
-import { create, db, tx, upsert } from '~/db';
-import { createOrRefFile } from '~/db/files';
-import { serializeFileHashes, parseFileHashes } from '~/db/files-util';
-import { getThreadSystemPrompt } from '~/db/threads';
-import { getPrompt } from '~/db/prompts';
-
-import type {
-    ContentPart,
-    ChatMessage,
-    SendMessageParams,
-    TextPart,
-} from '~/utils/chat/types';
-import {
-    buildParts,
-    getTextFromContent,
-    mergeFileHashes,
-    trimOrMessagesImages,
-} from '~/utils/chat/messages';
-import { openRouterStream } from '~/utils/chat/openrouterStream';
-import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
-import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
-import { promptJsonToString } from '~/utils/prompt-utils';
-
-const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
-
-export function useChat(
-    msgs: ChatMessage[] = [],
-    initialThreadId?: string,
-    pendingPromptId?: string
-) {
-    const messages = ref<ChatMessage[]>([...msgs]);
-    const loading = ref(false);
-    const abortController = ref<AbortController | null>(null);
-    const aborted = ref(false);
-    const { apiKey } = useUserApiKey();
-    const hooks = useHooks();
-    const { activePromptContent } = useActivePrompt();
-    const threadIdRef = ref<string | undefined>(initialThreadId);
-    const historyLoadedFor = ref<string | null>(null);
-
-    // Integrated streaming tail state
-    const streamId = ref<string | null>(null);
-    const streamDisplayText = ref('');
-    const streamReasoning = ref('');
-    const streamActive = ref(false);
-    const streamPending = ref(false);
-    const streamError = ref<Error | null>(null);
-    function resetStream() {
-        streamId.value = null;
-        streamDisplayText.value = '';
-        streamReasoning.value = '';
-        streamActive.value = false;
-        streamPending.value = false;
-        streamError.value = null;
+## File: package.json
+```json
+{
+    "name": "or3-chat",
+    "type": "module",
+    "private": false,
+    "version": "0.1.0",
+    "license": "GPL-3.0",
+    "scripts": {
+        "build": "nuxt build",
+        "dev": "nuxt dev",
+        "generate": "nuxt generate",
+        "preview": "nuxt preview",
+        "postinstall": "nuxt prepare",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@nuxt/ui": "^3.3.2",
+        "@openrouter/ai-sdk-provider": "^1.1.2",
+        "@orama/orama": "^3.1.11",
+        "@tiptap/extension-placeholder": "^3.3.0",
+        "@tiptap/pm": "^3.3.0",
+        "@tiptap/starter-kit": "^3.3.0",
+        "@tiptap/vue-3": "^3.3.0",
+        "@types/spark-md5": "^3.0.5",
+        "@vueuse/core": "^13.7.0",
+        "ai": "^5.0.17",
+        "dexie": "^4.0.11",
+        "gpt-tokenizer": "^3.0.1",
+        "highlight.js": "^11.11.1",
+        "marked-highlight": "^2.2.2",
+        "nuxt": "^4.0.3",
+        "spark-md5": "^3.0.2",
+        "streamdown-vue": "^1.0.12",
+        "tiptap-markdown": "^0.8.10",
+        "turndown": "^7.2.1",
+        "typescript": "^5.6.3",
+        "virtua": "^0.41.5",
+        "vue": "^3.5.18",
+        "vue-router": "^4.5.1",
+        "zod": "^4.0.17"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.16",
+        "@vitejs/plugin-vue": "^5.1.4",
+        "@vitest/coverage-v8": "2.1.9",
+        "@vitest/ui": "^2.1.2",
+        "@vue/test-utils": "^2.4.6",
+        "jsdom": "^25.0.0",
+        "vite": "^5.4.8",
+        "vitest": "^2.1.2"
     }
-
-    async function getSystemPromptContent(): Promise<string | null> {
-        if (!threadIdRef.value) return null;
-        try {
-            const promptId = await getThreadSystemPrompt(threadIdRef.value);
-            if (promptId) {
-                const prompt = await getPrompt(promptId);
-                if (prompt) return promptJsonToString(prompt.content);
-            }
-        } catch (e) {
-            console.warn('Failed to load thread system prompt', e);
-        }
-        return activePromptContent.value
-            ? promptJsonToString(activePromptContent.value)
-            : null;
-    }
-
-    async function sendMessage(
-        content: string,
-        sendMessagesParams: SendMessageParams = {
-            files: [],
-            model: DEFAULT_AI_MODEL,
-            file_hashes: [],
-            online: false,
-        }
-    ) {
-        if (!apiKey.value) return;
-
-        if (!threadIdRef.value) {
-            // Resolve system prompt: pending > default
-            let effectivePromptId: string | null = pendingPromptId || null;
-            if (!effectivePromptId) {
-                try {
-                    effectivePromptId = await getDefaultPromptId();
-                } catch {}
-            }
-            const newThread = await create.thread({
-                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
-                last_message_at: nowSec(),
-                parent_thread_id: null,
-                system_prompt_id: effectivePromptId || null,
-            });
-            threadIdRef.value = newThread.id;
-        }
-
-        await ensureThreadHistoryLoaded(
-            threadIdRef,
-            historyLoadedFor,
-            messages
-        );
-
-        // Prior assistant hashes for image carry-over
-        const prevAssistant = [...messages.value]
-            .reverse()
-            .find((m) => m.role === 'assistant');
-        let assistantHashes: string[] = [];
-        if (prevAssistant?.file_hashes) {
-            try {
-                assistantHashes =
-                    parseFileHashes(prevAssistant.file_hashes) || [];
-            } catch {}
-        }
-
-        // Normalize legacy params
-        let { files, model, file_hashes, extraTextParts, online } =
-            sendMessagesParams as any;
-        if (
-            (!files || files.length === 0) &&
-            Array.isArray((sendMessagesParams as any)?.images)
-        ) {
-            files = (sendMessagesParams as any).images.map((img: any) => {
-                const url = typeof img === 'string' ? img : img.url;
-                const provided = typeof img === 'object' ? img.type : undefined;
-                return { type: inferMimeFromUrl(url, provided), url } as any;
-            });
-        }
-        if (!model) model = DEFAULT_AI_MODEL;
-        if (online === true) model = model + ':online';
-
-        const outgoing = await hooks.applyFilters(
-            'ui.chat.message:filter:outgoing',
-            content
-        );
-
-        file_hashes = mergeFileHashes(file_hashes, assistantHashes);
-        const userDbMsg = await tx.appendMessage({
-            thread_id: threadIdRef.value!,
-            role: 'user',
-            data: { content: outgoing, attachments: files ?? [] },
-            file_hashes:
-                file_hashes && file_hashes.length
-                    ? (file_hashes as any)
-                    : undefined,
-        });
-
-        const parts: ContentPart[] = buildParts(
-            outgoing,
-            files,
-            extraTextParts
-        );
-        messages.value.push({
-            role: 'user',
-            content: parts,
-            id: (userDbMsg as any).id,
-            file_hashes: userDbMsg.file_hashes,
-        } as any);
-
-        loading.value = true;
-        streamActive.value = true;
-        streamPending.value = true;
-        streamError.value = null;
-        streamDisplayText.value = '';
-        streamReasoning.value = '';
-        streamId.value = null;
-
-        try {
-            const startedAt = Date.now();
-            const modelId = await hooks.applyFilters(
-                'ai.chat.model:filter:select',
-                model
-            );
-
-            // Inject system message
-            let messagesWithSystem = [...messages.value];
-            const systemText = await getSystemPromptContent();
-            if (systemText && systemText.trim()) {
-                messagesWithSystem.unshift({
-                    role: 'system',
-                    content: systemText,
-                    id: `system-${newId()}`,
-                });
-            }
-
-            const effectiveMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:input',
-                messagesWithSystem
-            );
-
-            const { buildOpenRouterMessages } = await import(
-                '~/utils/openrouter-build'
-            );
-
-            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
-            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
-                (m: any) => ({ ...m })
-            );
-            if (assistantHashes.length && prevAssistant?.id) {
-                const target = modelInputMessages.find(
-                    (m) => m.id === prevAssistant.id
-                );
-                if (target) target.file_hashes = null;
-            }
-            const orMessages = await buildOpenRouterMessages(
-                modelInputMessages as any,
-                {
-                    maxImageInputs: 16,
-                    imageInclusionPolicy: 'all',
-                    debug: false,
-                }
-            );
-            trimOrMessagesImages(orMessages, 5);
-
-            const hasImageInput = (modelInputMessages as any[]).some((m) =>
-                Array.isArray(m.content)
-                    ? (m.content as any[]).some(
-                          (p) =>
-                              p?.type === 'image_url' ||
-                              p?.type === 'image' ||
-                              p?.mediaType?.startsWith('image/')
-                      )
-                    : false
-            );
-            const modelImageHint = /image|vision|flash/i.test(modelId);
-            const modalities =
-                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
-
-            const newStreamId = newId();
-            streamId.value = newStreamId;
-            const assistantDbMsg = await tx.appendMessage({
-                thread_id: threadIdRef.value!,
-                role: 'assistant',
-                stream_id: newStreamId,
-                data: { content: '', attachments: [], reasoning_text: null },
-            });
-
-            await hooks.doAction('ai.chat.send:action:before', {
-                threadId: threadIdRef.value,
-                modelId,
-                user: { id: userDbMsg.id, length: outgoing.length },
-                assistant: { id: assistantDbMsg.id, streamId: newStreamId },
-                messagesCount: Array.isArray(effectiveMessages)
-                    ? (effectiveMessages as any[]).length
-                    : undefined,
-            });
-
-            aborted.value = false;
-            abortController.value = new AbortController();
-            const stream = openRouterStream({
-                apiKey: apiKey.value!,
-                model: modelId,
-                orMessages,
-                modalities,
-                signal: abortController.value.signal,
-            });
-
-            const idx =
-                messages.value.push({
-                    role: 'assistant',
-                    content: '',
-                    id: (assistantDbMsg as any).id,
-                    stream_id: newStreamId,
-                    pending: true,
-                    reasoning_text: null,
-                } as any) - 1;
-            const current = messages.value[idx]!;
-            let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 100;
-            let lastPersistAt = 0;
-            const assistantFileHashes: string[] = [];
-
-            for await (const ev of stream) {
-                if (ev.type === 'reasoning') {
-                    if (current.reasoning_text === null)
-                        current.reasoning_text = ev.text;
-                    else current.reasoning_text += ev.text;
-                    streamReasoning.value += ev.text;
-                    try {
-                        await hooks.doAction(
-                            'ai.chat.stream:action:reasoning',
-                            ev.text,
-                            {
-                                threadId: threadIdRef.value,
-                                assistantId: assistantDbMsg.id,
-                                streamId: newStreamId,
-                                reasoningLength:
-                                    current.reasoning_text?.length || 0,
-                            }
-                        );
-                    } catch {}
-                } else if (ev.type === 'text') {
-                    if ((current as any).pending)
-                        (current as any).pending = false;
-                    if (streamPending.value) streamPending.value = false;
-                    const delta = ev.text;
-                    streamDisplayText.value += delta;
-                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                        threadId: threadIdRef.value,
-                        assistantId: assistantDbMsg.id,
-                        streamId: newStreamId,
-                        deltaLength: String(delta ?? '').length,
-                        totalLength:
-                            getTextFromContent(current.content)!.length +
-                            String(delta ?? '').length,
-                        chunkIndex: chunkIndex++,
-                    });
-                    if (typeof current.content === 'string') {
-                        current.content = (current.content as string) + delta;
-                    } else if (Array.isArray(current.content)) {
-                        const firstText = (
-                            current.content as ContentPart[]
-                        ).find((p) => p.type === 'text') as
-                            | TextPart
-                            | undefined;
-                        if (firstText) firstText.text += delta;
-                        else
-                            (current.content as ContentPart[]).push({
-                                type: 'text',
-                                text: delta,
-                            });
-                    }
-                } else if (ev.type === 'image') {
-                    if ((current as any).pending)
-                        (current as any).pending = false;
-                    if (typeof current.content === 'string') {
-                        current.content = [
-                            { type: 'text', text: current.content as string },
-                            {
-                                type: 'image',
-                                image: ev.url,
-                                mediaType: 'image/png',
-                            },
-                        ];
-                    } else {
-                        (current.content as ContentPart[]).push({
-                            type: 'image',
-                            image: ev.url,
-                            mediaType: 'image/png',
-                        });
-                    }
-                    if (assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/'))
-                            blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            try {
-                                const r = await fetch(ev.url);
-                                if (r.ok) blob = await r.blob();
-                            } catch {}
-                        }
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(
-                                    blob,
-                                    'gen-image'
-                                );
-                                assistantFileHashes.push(meta.hash);
-                                const serialized =
-                                    serializeFileHashes(assistantFileHashes);
-                                const updatedMsg = {
-                                    ...assistantDbMsg,
-                                    data: {
-                                        ...((assistantDbMsg as any).data || {}),
-                                        reasoning_text:
-                                            current.reasoning_text ?? null,
-                                    },
-                                    file_hashes: serialized,
-                                    updated_at: nowSec(),
-                                } as any;
-                                await upsert.message(updatedMsg);
-                                (current as any).file_hashes = serialized;
-                            } catch {}
-                        }
-                    }
-                }
-
-                const now = Date.now();
-                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent =
-                        getTextFromContent(current.content) || '';
-                    const updated = {
-                        ...assistantDbMsg,
-                        data: {
-                            ...((assistantDbMsg as any).data || {}),
-                            content: textContent,
-                            reasoning_text: current.reasoning_text ?? null,
-                        },
-                        file_hashes: assistantFileHashes.length
-                            ? serializeFileHashes(assistantFileHashes)
-                            : (assistantDbMsg as any).file_hashes,
-                        updated_at: nowSec(),
-                    } as any;
-                    await upsert.message(updated);
-                    if (assistantFileHashes.length)
-                        (current as any).file_hashes =
-                            serializeFileHashes(assistantFileHashes);
-                    lastPersistAt = now;
-                }
-            }
-
-            const fullText = getTextFromContent(current.content) || '';
-            const incoming = await hooks.applyFilters(
-                'ui.chat.message:filter:incoming',
-                fullText,
-                threadIdRef.value
-            );
-            if ((current as any).pending) (current as any).pending = false;
-            if (typeof current.content === 'string')
-                current.content = incoming as string;
-            else {
-                const firstText = (current.content as ContentPart[]).find(
-                    (p) => p.type === 'text'
-                ) as TextPart | undefined;
-                if (firstText) firstText.text = incoming as string;
-                else
-                    (current.content as ContentPart[]).unshift({
-                        type: 'text',
-                        text: incoming as string,
-                    });
-            }
-            const finalized = {
-                ...assistantDbMsg,
-                data: {
-                    ...((assistantDbMsg as any).data || {}),
-                    content: incoming,
-                    reasoning_text: current.reasoning_text ?? null,
-                },
-                file_hashes: assistantFileHashes.length
-                    ? serializeFileHashes(assistantFileHashes)
-                    : (assistantDbMsg as any).file_hashes,
-                updated_at: nowSec(),
-            } as any;
-            await upsert.message(finalized);
-            const endedAt = Date.now();
-            await hooks.doAction('ai.chat.send:action:after', {
-                threadId: threadIdRef.value,
-                request: { modelId, userId: userDbMsg.id },
-                response: {
-                    assistantId: assistantDbMsg.id,
-                    length: (incoming as string).length,
-                },
-                timings: {
-                    startedAt,
-                    endedAt,
-                    durationMs: endedAt - startedAt,
-                },
-                aborted: false,
-            });
-            streamActive.value = false;
-            streamPending.value = false;
-        } catch (err) {
-            if (aborted.value) {
-                try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        (last as any).pending = false;
-                    }
-                } catch {}
-                await hooks.doAction('ai.chat.send:action:after', {
-                    threadId: threadIdRef.value,
-                    aborted: true,
-                });
-            } else {
-                await hooks.doAction('ai.chat.error:action', {
-                    threadId: threadIdRef.value,
-                    stage: 'stream',
-                    error: err,
-                });
-                try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        messages.value.pop();
-                    }
-                    const lastUser = [...messages.value]
-                        .reverse()
-                        .find((m) => m.role === 'user');
-                    const toast = useToast();
-                    toast.add({
-                        title: 'Message failed',
-                        description: (err as any)?.message || 'Request failed',
-                        color: 'error',
-                        actions: lastUser
-                            ? [
-                                  {
-                                      label: 'Retry',
-                                      onClick: () => {
-                                          if (lastUser?.id)
-                                              retryMessage(lastUser.id as any);
-                                      },
-                                  },
-                              ]
-                            : undefined,
-                        duration: 6000,
-                    });
-                } catch {}
-                streamError.value =
-                    err instanceof Error ? err : new Error(String(err));
-                streamActive.value = false;
-            }
-        } finally {
-            loading.value = false;
-            abortController.value = null;
-            setTimeout(() => {
-                if (!loading.value && !streamActive.value) resetStream();
-            }, 0);
-        }
-    }
-
-    async function retryMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || !threadIdRef.value) return;
-        try {
-            const target: any = await db.messages.get(messageId);
-            if (!target || target.thread_id !== threadIdRef.value) return;
-            let userMsg: any = target.role === 'user' ? target : null;
-            if (!userMsg && target.role === 'assistant') {
-                const DexieMod = (await import('dexie')).default;
-                userMsg = await db.messages
-                    .where('[thread_id+index]')
-                    .between(
-                        [target.thread_id, DexieMod.minKey],
-                        [target.thread_id, target.index]
-                    )
-                    .filter(
-                        (m: any) =>
-                            m.role === 'user' &&
-                            !m.deleted &&
-                            m.index < target.index
-                    )
-                    .last();
-            }
-            if (!userMsg) return;
-            const DexieMod2 = (await import('dexie')).default;
-            const assistant = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [userMsg.thread_id, userMsg.index + 1],
-                    [userMsg.thread_id, DexieMod2.maxKey]
-                )
-                .filter((m: any) => m.role === 'assistant' && !m.deleted)
-                .first();
-            await hooks.doAction('ai.chat.retry:action:before', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                triggeredBy: target.role,
-            });
-            await db.transaction('rw', db.messages, async () => {
-                await db.messages.delete(userMsg.id);
-                if (assistant) await db.messages.delete(assistant.id);
-            });
-            (messages as any).value = (messages as any).value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-            const originalText = (userMsg.data as any)?.content || '';
-            let hashes: string[] = [];
-            if (userMsg.file_hashes) {
-                const { parseFileHashes } = await import('~/db/files-util');
-                hashes = parseFileHashes(userMsg.file_hashes);
-            }
-            await sendMessage(originalText, {
-                model: modelOverride || DEFAULT_AI_MODEL,
-                file_hashes: hashes,
-                files: [],
-                online: false,
-            });
-            const tail = (messages as any).value.slice(-2);
-            const newUser = tail.find((m: any) => m.role === 'user');
-            const newAssistant = tail.find((m: any) => m.role === 'assistant');
-            await hooks.doAction('ai.chat.retry:action:after', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                newUserId: newUser?.id,
-                newAssistantId: newAssistant?.id,
-            });
-        } catch (e) {
-            console.error('[useChat.retryMessage] failed', e);
-        }
-    }
-
-    return {
-        messages,
-        sendMessage,
-        retryMessage,
-        loading,
-        threadId: threadIdRef,
-        streamId,
-        streamDisplayText,
-        streamReasoning,
-        streamActive,
-        streamPending,
-        streamError,
-        resetStream,
-        abort: () => {
-            if (!loading.value || !abortController.value) return;
-            aborted.value = true;
-            try {
-                abortController.value.abort();
-            } catch {}
-            streamActive.value = false;
-        },
-    };
 }
 ```
 
@@ -17129,7 +17772,9 @@ export function useChat(
                     docs: activeSections.docs,
                 }"
                 :active-thread="props.activeThread"
-                :active-document="activeDocumentId"
+                :active-document="activeDocumentIds[0]"
+                :active-threads="activeThreadIds"
+                :active-documents="activeDocumentIds"
                 @addChat="(id:any) => handleAddChatToProject(id)"
                 @addDocument="(id:any) => handleAddDocumentToProject(id)"
                 @renameProject="(id:any) => openRenameProject(id)"
@@ -17530,8 +18175,27 @@ import { useSidebarSearch } from '~/composables/useSidebarSearch';
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
 
-// Active document id (placeholder until wiring exists elsewhere)
-const activeDocumentId = ref<string | undefined>(undefined);
+// Active item tracking (multi-pane aware). Uses global multi-pane API if present.
+const activeDocumentIds = computed<string[]>(() => {
+    const api: any = (globalThis as any).__or3MultiPaneApi;
+    if (api && api.panes && Array.isArray(api.panes.value)) {
+        return api.panes.value
+            .filter((p: any) => p.mode === 'doc' && p.documentId)
+            .map((p: any) => p.documentId as string);
+    }
+    return [];
+});
+const activeThreadIds = computed<string[]>(() => {
+    const api: any = (globalThis as any).__or3MultiPaneApi;
+    if (api && api.panes && Array.isArray(api.panes.value)) {
+        const ids = api.panes.value
+            .filter((p: any) => p.mode === 'chat' && p.threadId)
+            .map((p: any) => p.threadId as string)
+            .filter(Boolean);
+        if (ids.length) return ids;
+    }
+    return props.activeThread ? [props.activeThread] : [];
+});
 
 const {
     query: sidebarQuery,
@@ -18350,6 +19014,534 @@ async function submitCreateDocument() {
 </script>
 ```
 
+## File: app/plugins/theme.client.ts
+```typescript
+import 'katex/dist/katex.min.css';
+import { useShikiHighlighter } from 'streamdown-vue';
+import { ref } from 'vue';
+useShikiHighlighter();
+
+export default defineNuxtPlugin((nuxtApp) => {
+    const THEME_CLASSES = [
+        'light',
+        'dark',
+        'light-high-contrast',
+        'dark-high-contrast',
+        'light-medium-contrast',
+        'dark-medium-contrast',
+    ];
+
+    const storageKey = 'theme';
+    const root = document.documentElement;
+
+    const getSystemPref = () =>
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+
+    const apply = (name: string) => {
+        for (const cls of THEME_CLASSES) root.classList.remove(cls);
+        root.classList.add(name);
+    };
+
+    const read = () => localStorage.getItem(storageKey) as string | null;
+
+    const current = ref(read() || getSystemPref());
+    apply(current.value);
+
+    const set = (name: string) => {
+        current.value = name;
+        localStorage.setItem(storageKey, name);
+        apply(name);
+    };
+
+    const toggle = () =>
+        set(current.value.startsWith('dark') ? 'light' : 'dark');
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => {
+        if (!read()) {
+            current.value = e.matches ? 'dark' : 'light';
+            apply(current.value);
+        }
+    };
+    media.addEventListener('change', onChange);
+
+    nuxtApp.hook('app:beforeMount', () => {
+        current.value = read() || getSystemPref();
+        apply(current.value);
+    });
+
+    // Cleanup for HMR in dev so we don't stack listeners
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            media.removeEventListener('change', onChange)
+        );
+    }
+
+    nuxtApp.provide('theme', {
+        set,
+        toggle,
+        get: () => current.value,
+        system: getSystemPref,
+        current, // expose ref for reactivity if needed
+    });
+});
+```
+
+## File: app/components/chat/ChatContainer.vue
+```vue
+<template>
+    <main
+        ref="containerRoot"
+        class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
+    >
+        <!-- Scroll viewport -->
+        <div
+            ref="scrollParent"
+            class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            :style="{ paddingBottom: bottomPad + 'px', overflowAnchor: 'auto' }"
+        >
+            <div
+                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
+            >
+                <!-- Virtualized stable messages (Req 3.1) -->
+                <VirtualMessageList
+                    :messages="virtualStableMessages"
+                    :item-size-estimation="520"
+                    :overscan="5"
+                    :scroll-parent="scrollParent"
+                    wrapper-class="flex flex-col"
+                >
+                    <template #item="{ message, index }">
+                        <div
+                            :key="message.id || message.stream_id || index"
+                            class="group relative w-full max-w-full min-w-0 space-y-4 break-words"
+                            :data-msg-id="message.id"
+                            :data-stream-id="message.stream_id"
+                        >
+                            <ChatMessage
+                                :message="message"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                            />
+                        </div>
+                    </template>
+                    <template #tail>
+                        <!-- Stable virtualization ends here -->
+                        <!-- Recently active (non-virtual) messages -->
+                        <div
+                            v-for="rm in recentMessages"
+                            :key="rm.id"
+                            class="min-w-0"
+                            :data-msg-id="rm.id"
+                            :data-stream-id="rm.stream_id"
+                        >
+                            <ChatMessage
+                                :message="rm"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                            />
+                        </div>
+                        <!-- Streaming tail appended (Req 3.2) -->
+                        <div
+                            v-if="streamingMessage"
+                            class=""
+                            style="overflow-anchor: none"
+                            ref="tailWrapper"
+                        >
+                            <ChatMessage
+                                :message="streamingMessage as any"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                            />
+                        </div>
+                    </template>
+                </VirtualMessageList>
+            </div>
+        </div>
+        <!-- Input area overlay -->
+        <div :class="inputWrapperClass" :style="inputWrapperStyle">
+            <div :class="innerInputContainerClass">
+                <chat-input-dropper
+                    ref="chatInputEl"
+                    :loading="loading"
+                    :streaming="loading"
+                    :container-width="containerWidth"
+                    :thread-id="currentThreadId"
+                    @send="onSend"
+                    @model-change="onModelChange"
+                    @stop-stream="onStopStream"
+                    @pending-prompt-selected="onPendingPromptSelected"
+                    @resize="onInputResize"
+                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
+                />
+            </div>
+        </div>
+    </main>
+</template>
+
+<script setup lang="ts">
+// Refactored ChatContainer (Task 4) – orchestration only.
+// Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
+import ChatMessage from './ChatMessage.vue';
+import { shallowRef, computed, watch, ref, nextTick, type Ref } from 'vue';
+import { parseHashes } from '~/utils/files/attachments';
+import { useChat } from '~/composables/useAi';
+import type {
+    ChatMessage as ChatMessageType,
+    ContentPart,
+} from '~/utils/chat/types';
+import VirtualMessageList from './VirtualMessageList.vue';
+// (Tail streaming integrated into useChat; legacy useTailStream removed)
+import { useAutoScroll } from '../../composables/useAutoScroll';
+import { useElementSize } from '@vueuse/core';
+import { isMobile } from '~/state/global';
+import { onMounted, watchEffect } from 'vue';
+
+// Debug utilities removed per request.
+
+const model = ref('openai/gpt-oss-120b');
+const pendingPromptId = ref<string | null>(null);
+
+// Resize (Req 3.4): useElementSize -> reactive width
+const containerRoot: Ref<HTMLElement | null> = ref(null);
+const { width: containerWidth } = useElementSize(containerRoot);
+// Dynamic chat input height to compute scroll padding
+const chatInputEl: Ref<HTMLElement | null> = ref(null);
+const { height: chatInputHeight } = useElementSize(chatInputEl);
+// Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
+const emittedInputHeight = ref<number | null>(null);
+const effectiveInputHeight = computed(
+    () => emittedInputHeight.value || chatInputHeight.value || 140
+);
+// Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
+const bottomPad = computed(() => {
+    const base = Math.round(effectiveInputHeight.value + 36);
+    return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
+});
+
+// Mobile fixed wrapper classes/styles
+// Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
+const inputWrapperClass = computed(() =>
+    isMobile.value
+        ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
+        : // Desktop: keep input scoped to its pane container
+          'pointer-events-none absolute inset-x-0 bottom-0 z-10'
+);
+const inputWrapperStyle = computed(() => ({}));
+const innerInputContainerClass = computed(() =>
+    isMobile.value
+        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
+        : 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2'
+);
+function onInputResize(e: { height: number }) {
+    emittedInputHeight.value = e?.height || null;
+}
+
+function onModelChange(newModel: string) {
+    model.value = newModel;
+    // Silenced model change log.
+}
+
+const props = defineProps<{
+    threadId?: string;
+    messageHistory?: ChatMessageType[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'thread-selected', id: string): void;
+}>();
+
+// Initialize chat composable and make it refresh when threadId changes
+const chat = shallowRef(
+    useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    )
+);
+
+watch(
+    () => props.threadId,
+    (newId) => {
+        const currentId = chat.value?.threadId?.value;
+        // Avoid re-initializing if the composable already set the same id (first-send case)
+        if (newId && currentId && newId === currentId) {
+            return;
+        }
+        chat.value = useChat(
+            props.messageHistory,
+            newId,
+            pendingPromptId.value || undefined
+        );
+    }
+);
+
+// Keep composable messages in sync when parent provides an updated messageHistory
+watch(
+    () => props.messageHistory,
+    (mh) => {
+        if (!chat.value) return;
+        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
+        if (chat.value.loading.value) {
+            return;
+        }
+        // Prefer to update the internal messages array directly to avoid remount flicker
+        import('~/utils/chat/uiMessages').then(({ ensureUiMessage }) => {
+            chat.value!.messages.value = (mh || []).map((m: any) =>
+                ensureUiMessage(m)
+            );
+        });
+    }
+);
+
+// When a new thread id is created internally (first send), propagate upward once
+watch(
+    () => chat.value?.threadId?.value,
+    (id, prev) => {
+        if (!prev && id) {
+            emit('thread-selected', id);
+            // Clear pending prompt since it's now applied to the thread
+            pendingPromptId.value = null;
+        }
+    }
+);
+
+// Render messages with content narrowed to string for ChatMessage.vue
+// messages already normalized to UiChatMessage with .text in useChat composable
+const messages = computed(() => chat.value.messages.value || []);
+onMounted(() => {
+    if (import.meta.dev) {
+        const withHashes = messages.value.filter(
+            (m: any) => m.file_hashes && m.file_hashes.length
+        );
+        console.debug('[ChatContainer.mounted] messages', {
+            total: messages.value.length,
+            withHashes: withHashes.length,
+            sample: withHashes.slice(0, 3).map((m: any) => ({
+                id: m.id,
+                hashes: m.file_hashes,
+                hasMarkdown: (m.text || '').includes('file-hash:'),
+                textPreview: (m.text || '').slice(0, 120),
+            })),
+        });
+    }
+});
+watchEffect(() => {
+    if (!import.meta.dev) return;
+    const count = messages.value.filter(
+        (m: any) => m.file_hashes && m.file_hashes.length
+    ).length;
+    console.debug('[ChatContainer.watchEffect] message/hash state', {
+        total: messages.value.length,
+        withHashes: count,
+    });
+});
+// Removed length logging watcher.
+const loading = computed(() => chat.value.loading.value);
+
+// Tail streaming now provided directly by useChat composable
+const streamId = computed(() => chat.value.streamId.value);
+const streamState = computed(() => chat.value.streamState);
+const streamReasoning = computed(() => streamState.value?.reasoningText || '');
+const tailDisplay = computed(() => streamState.value?.text || '');
+// Removed tail char delta logging.
+// Current thread id for this container (reactive)
+const currentThreadId = computed(() => chat.value.threadId?.value);
+// Tail active means stream not finalized
+const streamActive = computed(() => !streamState.value?.finalized);
+// Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
+const streamingMessage = computed<any | null>(() => {
+    if (!streamActive.value) return null;
+    if (!streamId.value) return null;
+    const rawTail = tailDisplay.value || '';
+    const reasoningTail = streamReasoning.value || '';
+    if (!rawTail && !reasoningTail && messages.value.length === 0) return null;
+    return {
+        role: 'assistant',
+        text: rawTail,
+        id: 'tail-' + streamId.value,
+        stream_id: streamId.value || undefined,
+        pending: true,
+        reasoning_text: reasoningTail,
+    } as any;
+});
+
+// Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
+const RECENT_NON_VIRTUAL = 6;
+function filterStreaming(arr: any[]) {
+    if (streamActive.value && streamId.value) {
+        return arr.filter((m) => m.stream_id !== streamId.value);
+    }
+    return arr;
+}
+const recentMessages = computed<any[]>(() => {
+    const base = filterStreaming(messages.value);
+    if (base.length <= RECENT_NON_VIRTUAL) return base;
+    return base.slice(-RECENT_NON_VIRTUAL);
+});
+const virtualStableMessages = computed<any[]>(() => {
+    const base = filterStreaming(messages.value);
+    if (base.length <= RECENT_NON_VIRTUAL) return [];
+    return base.slice(0, -RECENT_NON_VIRTUAL);
+});
+// Removed size change logging for virtual/recent message groups.
+
+// Removed assistantVisible tracking (no handoff overlap needed)
+
+// Scroll handling (Req 3.3) via useAutoScroll
+const scrollParent: Ref<HTMLElement | null> = ref(null);
+// Add disengageDeltaPx so a small upward scroll (8px) releases stickiness
+// preventing jump-to-bottom when stream finalizes while user is reading.
+// Explicit cast ensures consistent HTMLElement | null Ref type for the composable
+const autoScroll = useAutoScroll(scrollParent as Ref<HTMLElement | null>, {
+    thresholdPx: 64,
+    disengageDeltaPx: 8,
+});
+// Unified scroll scheduling for streaming updates.
+let scrollScheduled = false;
+function scheduleScrollIfAtBottom() {
+    if (!autoScroll.atBottom.value) {
+        return;
+    }
+    if (scrollScheduled) return;
+    scrollScheduled = true;
+    requestAnimationFrame(() => {
+        scrollScheduled = false;
+        autoScroll.onContentIncrease();
+    });
+}
+
+// Initial bottom stick (client only; SSR lacks requestAnimationFrame)
+if (process.client) {
+    requestAnimationFrame(() => {
+        if (autoScroll.atBottom.value)
+            autoScroll.scrollToBottom({ smooth: false });
+    });
+}
+
+// Basic scroll reactions
+watch(
+    () => messages.value.length,
+    async () => {
+        await nextTick();
+        scheduleScrollIfAtBottom();
+    }
+);
+watch(
+    () => streamState.value?.version,
+    () => {
+        scheduleScrollIfAtBottom();
+    }
+);
+watch(
+    () => [chatInputHeight.value, emittedInputHeight.value],
+    async () => {
+        await nextTick();
+        if (autoScroll.atBottom.value)
+            autoScroll.scrollToBottom({ smooth: false });
+    }
+);
+watch(
+    () => currentThreadId.value,
+    async () => {
+        await nextTick();
+        if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
+    }
+);
+
+// (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
+// Chat send abstraction (Req 3.5)
+
+function onSend(payload: any) {
+    if (loading.value) return;
+    const readyImages = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'ready')
+        : [];
+    const pendingCount = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'pending')
+              .length
+        : 0;
+    if (pendingCount > 0 && readyImages.length === 0) {
+        // Defer sending until at least one image hashed (user can click again shortly)
+        console.warn(
+            '[ChatContainer.onSend] images still hashing; delaying send'
+        );
+        return;
+    }
+    const files = readyImages.map((img: any) => ({
+        type: img.file?.type || 'image/png',
+        url: img.url,
+    }));
+    const file_hashes = readyImages
+        .map((img: any) => img.hash)
+        .filter((h: any) => typeof h === 'string');
+    const extraTextParts = Array.isArray(payload.largeTexts)
+        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
+        : [];
+
+    // Send message via useChat composable
+    chat.value
+        .sendMessage(payload.text, {
+            model: model.value,
+            files,
+            file_hashes,
+            extraTextParts,
+            online: !!payload.webSearchEnabled,
+        })
+        .catch(() => {});
+}
+
+function onRetry(messageId: string) {
+    if (!chat.value || chat.value.loading.value) return;
+    // Provide current model so retry uses same selection
+    (chat.value as any).retryMessage(messageId, model.value);
+}
+
+function onBranch(newThreadId: string) {
+    if (newThreadId) emit('thread-selected', newThreadId);
+}
+
+function onEdited(payload: { id: string; content: string }) {
+    if (!chat.value) return;
+    const arr = chat.value.messages.value;
+    const idx = arr.findIndex((m: any) => m.id === payload.id);
+    if (idx === -1) return;
+    const msg = arr[idx];
+    if (!msg) return;
+    msg.text = payload.content;
+    chat.value.messages.value = [...arr];
+}
+
+function onPendingPromptSelected(promptId: string | null) {
+    pendingPromptId.value = promptId;
+    // Reinitialize chat with the pending prompt
+    chat.value = useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    );
+}
+
+function onStopStream() {
+    try {
+        (chat.value as any)?.abort?.();
+    } catch {}
+}
+</script>
+
+<style>
+/* Optional custom styles placeholder */
+</style>
+```
+
 ## File: app/components/chat/ChatMessage.vue
 ```vue
 <template>
@@ -18430,7 +19622,40 @@ async function submitCreateDocument() {
                     :pending="(props.message as any).pending"
                 />
             </div>
-            <div v-if="hasContent" v-html="rendered"></div>
+            <div
+                v-if="hasContent"
+                class="message-body min-w-0 max-w-full overflow-x-hidden"
+            >
+                <div
+                    v-if="props.message.role === 'user'"
+                    class="whitespace-pre-wrap relative"
+                >
+                    <div
+                        :class="{
+                            'line-clamp-6 overflow-hidden':
+                                isUserMessageCollapsed && shouldCollapse,
+                        }"
+                    >
+                        {{ props.message.text }}
+                    </div>
+                    <button
+                        v-if="shouldCollapse"
+                        @click="toggleUserMessage"
+                        class="mt-2 text-sm underline hover:no-underline opacity-80 hover:opacity-100 transition-opacity"
+                    >
+                        {{ isUserMessageCollapsed ? 'Read more' : 'Show less' }}
+                    </button>
+                </div>
+                <StreamMarkdown
+                    :key="props.message.id"
+                    v-else
+                    :content="processedAssistantMarkdown"
+                    :shiki-theme="currentShikiTheme"
+                    :class="streamMdClasses"
+                    :allowed-image-prefixes="['data:image/']"
+                />
+                <!-- legacy rendered html path removed -->
+            </div>
         </div>
         <!-- Editing surface -->
         <div v-else class="w-full">
@@ -18549,23 +19774,20 @@ import {
     onBeforeUnmount,
     nextTick,
     onMounted,
+    watchEffect,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
-import { parseFileHashes } from '~/db/files-util';
+import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
-import { marked } from 'marked';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import { StreamMarkdown } from 'streamdown-vue';
+import { useNuxtApp } from '#app';
+import { useRafBatch } from '~/composables/useRafBatch';
 
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
-
-// Local UI message expects content to be a string (rendered markdown/html)
-type UIMessage = Omit<ChatMessageType, 'content'> & {
-    content: string;
-    pending?: boolean;
-    reasoning_text?: string | null;
-};
-
+// UI message now exposed as UiChatMessage with .text field
+type UIMessage = UiChatMessage & { pre_html?: string };
 const props = defineProps<{ message: UIMessage; threadId?: string }>();
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
@@ -18577,57 +19799,70 @@ const isStreamingReasoning = computed(() => {
     return props.message.reasoning_text && !hasContent.value;
 });
 
+// User message collapse/expand
+const isUserMessageCollapsed = ref(true);
+const shouldCollapse = computed(() => {
+    if (props.message.role !== 'user') return false;
+    const lines = (props.message.text || '').split('\n').length;
+    return lines > 6;
+});
+
+function toggleUserMessage() {
+    isUserMessageCollapsed.value = !isUserMessageCollapsed.value;
+}
+
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5':
+    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm':
+    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',
 }));
 
 const innerClass = computed(() => ({
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5':
+    // Added Tailwind Typography per-element utilities for tables (no custom CSS)
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-2 prose-pre:border-[var(--md-inverse-surface)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
         props.message.role === 'assistant',
 }));
 
 // Detect if assistant message currently has any textual content yet
-const hasContent = computed(() => {
-    const c: any = props.message.content;
-    if (typeof c === 'string') return c.trim().length > 0;
-    if (Array.isArray(c))
-        return c.some((p: any) => p?.type === 'text' && p.text.trim().length);
-    return false;
-});
+const hasContent = computed(() => (props.message.text || '').trim().length > 0);
 
 // Extract hash list (serialized JSON string or array already?)
-const hashList = computed<string[]>(() => {
-    const raw = (props.message as any).file_hashes;
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as string[];
-    if (typeof raw === 'string') return parseFileHashes(raw);
-    return [];
+const hashList = computed<string[]>(() =>
+    parseHashes((props.message as any).file_hashes)
+);
+
+// Unified markdown already provided via UiChatMessage.text -> transform file-hash placeholders to inert spans
+const assistantMarkdown = computed(() =>
+    props.message.role === 'assistant' ? props.message.text || '' : ''
+);
+const FILE_HASH_IMG_RE = /!\[[^\]]*]\(file-hash:([a-f0-9]{6,})\)/gi;
+const processedAssistantMarkdown = computed(() => {
+    if (props.message.role !== 'assistant') return '';
+    return (assistantMarkdown.value || '').replace(
+        FILE_HASH_IMG_RE,
+        (_m, h) =>
+            `<span class=\"or3-img-ph inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] border-2 border-[var(--md-inverse-surface)] retro-shadow opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
+    );
 });
 
-// Render markdown/text. For assistant messages keep existing inline images during live stream.
-// After reload (no inline imgs) we append placeholders from hashes so hydration can restore.
-const rendered = computed(() => {
-    const raw = props.message.content || '';
-    const parsed = (marked.parse(raw) as string) || '';
-    if (props.message.role === 'user') {
-        return parsed.replace(/<img\b[^>]*>/gi, '');
+// Dynamic Shiki theme: map current theme (light/dark*/light*) to github-light / github-dark
+const nuxtApp = useNuxtApp() as any;
+const currentShikiTheme = computed(() => {
+    const themeObj = nuxtApp?.$theme;
+    let t: any = 'light';
+    if (themeObj) {
+        if (themeObj.current && 'value' in themeObj.current)
+            t = themeObj.current.value;
+        else if (typeof themeObj.get === 'function') t = themeObj.get();
     }
-    const hasAnyImg = /<img\b/i.test(parsed);
-    if (hasAnyImg) return parsed; // live streaming case retains inline imgs
-    if (hashList.value.length) {
-        const placeholders = hashList.value
-            .map(
-                (h) =>
-                    `<div class=\"my-3\"><img data-file-hash=\"${h}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" loading=\"lazy\" decoding=\"async\" /></div>`
-            )
-            .join('');
-        return parsed + placeholders;
-    }
-    return parsed;
+    return String(t).startsWith('dark') ? 'github-dark' : 'github-light';
 });
+// Debug watchers removed (can reintroduce with import.meta.dev guards if needed)
+// Patch ensureThumb with logs if not already
+// NOTE: ensureThumb already defined above; add debug via wrapper pattern not reassignment.
+// (Could also inline logs inside original definition; keeping wrapper commented for reference.)
+// console.debug('[ChatMessage] debug hook installed for ensureThumb');
 
 // Editing (extracted)
 const {
@@ -18724,10 +19959,15 @@ function toggleExpanded() {
 
 async function ensureThumb(h: string) {
     // If we already know it's a PDF just ensure meta exists.
-    if (pdfMeta[h]) return;
+    if (pdfMeta[h]) {
+        if (import.meta.dev) console.debug('[thumb] pdf meta cached', h);
+        return;
+    }
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
     const cached = thumbCache.get(h);
     if (cached) {
+        if (import.meta.dev)
+            console.debug('[thumb] cache hit', h, cached.status);
         thumbnails[h] = cached;
         return;
     }
@@ -18748,22 +19988,28 @@ async function ensureThumb(h: string) {
                 pdfMeta[h] = { name: meta.name, kind: meta.kind };
                 // Remove the temporary loading state since we won't have an image thumb
                 delete thumbnails[h];
+                if (import.meta.dev)
+                    console.debug('[thumb] pdf meta loaded', h);
                 return;
             }
             if (!blob) throw new Error('missing');
             if (blob.type === 'application/pdf') {
                 pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
                 delete thumbnails[h];
+                if (import.meta.dev) console.debug('[thumb] blob is pdf', h);
                 return;
             }
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };
             thumbCache.set(h, ready);
             thumbnails[h] = ready;
+            if (import.meta.dev)
+                console.debug('[thumb] ready', h, url.slice(0, 40));
         } catch {
             const err: ThumbState = { status: 'error' };
             thumbCache.set(h, err);
             thumbnails[h] = err;
+            if (import.meta.dev) console.debug('[thumb] error', h);
         } finally {
             thumbLoadPromises.delete(h);
         }
@@ -18805,7 +20051,7 @@ onBeforeUnmount(() => {
     for (const h of currentHashes) releaseThumb(h);
     currentHashes.clear();
 });
-// Inline image hydration: replace <img data-file-hash> with object URL once ready
+// Inline image hydration: replace <span data-file-hash> markers with <img> once ready
 const contentEl = ref<HTMLElement | null>(null);
 async function hydrateInlineImages() {
     // Only hydrate assistant messages (users have inline images stripped).
@@ -18813,36 +20059,59 @@ async function hydrateInlineImages() {
     await nextTick();
     const root = contentEl.value;
     if (!root) return;
-    const imgs = root.querySelectorAll(
-        'img[data-file-hash]:not([data-hydrated])'
+    const spans = root.querySelectorAll(
+        'span.or3-img-ph[data-file-hash]:not([data-hydrated])'
     );
-    imgs.forEach((imgEl) => {
-        const hash = imgEl.getAttribute('data-file-hash') || '';
+    spans.forEach((span) => {
+        const hash = span.getAttribute('data-file-hash') || '';
         if (!hash) return;
         const state = thumbCache.get(hash) || thumbnails[hash];
         if (state && state.status === 'ready' && state.url) {
-            (imgEl as HTMLImageElement).src = state.url;
-            imgEl.setAttribute('data-hydrated', 'true');
-            imgEl.classList.remove('opacity-60');
+            const img = document.createElement('img');
+            img.setAttribute('data-file-hash', hash);
+            img.setAttribute('data-hydrated', 'true');
+            img.src = state.url;
+            img.alt = 'generated image';
+            img.className = span.className.replace('opacity-60', '');
+            span.replaceWith(img);
+            if (import.meta.dev) console.debug('[hydrate] span->img', hash);
         }
     });
 }
-// Re-run hydration when rendered HTML changes or thumbnails update
-watch(rendered, () => hydrateInlineImages());
-watch(hashList, () => hydrateInlineImages());
-onMounted(() => hydrateInlineImages());
+// Consolidated hydration + thumbnail readiness effect
+const scheduleHydrate = useRafBatch(() => hydrateInlineImages());
+watchEffect(() => {
+    if (props.message.role !== 'assistant') return; // only assistants hydrate
+    // reactive deps: markdown text, hash list, thumb states
+    void assistantMarkdown.value;
+    void hashList.value.length;
+    void Object.keys(thumbnails)
+        .map((h) => thumbnails[h]?.status + (thumbnails[h]?.url || ''))
+        .join('|');
+    scheduleHydrate();
+});
 
-watch(
-    () =>
-        Object.keys(thumbnails).map((h) => {
-            const t = thumbnails[h]!; // state always initialized before use
-            return t.status + ':' + (t.url || '');
-        }),
-    () => hydrateInlineImages()
-);
+onMounted(() => scheduleHydrate());
+onMounted(() => {
+    if (import.meta.dev) {
+        const hashes = hashList.value;
+        console.debug('[ChatMessage.mounted]', {
+            id: (props.message as any).id,
+            role: props.message.role,
+            hashCount: hashes.length,
+            firstHash: hashes[0],
+            hasFileHashMarkdown: hashes.some((h) =>
+                (props.message.text || '').includes(`file-hash:${h}`)
+            ),
+            textPreview: (props.message.text || '').slice(0, 140),
+        });
+    }
+});
+
+// Thumbnail status watcher removed (covered by consolidated watchEffect)
 import { useToast } from '#imports';
 function copyMessage() {
-    navigator.clipboard.writeText(props.message.content);
+    navigator.clipboard.writeText(props.message.text || '');
 
     useToast().add({
         title: 'Message copied',
@@ -18924,9 +20193,118 @@ async function runExtraAction(action: ChatMessageAction) {
         console.error('Message action error', action.id, e);
     }
 }
+
+// Classes applied to <StreamMarkdown> (joined string for TS friendliness)
+const streamMdClasses = [
+    'w-full min-w-0',
+    'prose-table:!w-auto prose-table:table-auto',
+    'sm:prose-table:!min-w-max',
+    'max-[639px]:prose-table:min-w-[560px]',
+    'prose-table:break-normal prose-td:whitespace-nowrap prose-th:whitespace-nowrap',
+    "[&_[data-streamdown='table']_td:nth-child(2)]:whitespace-normal",
+    "[&_[data-streamdown='table']_td:nth-child(2)]:max-w-[32rem]",
+    "[&_div[data-streamdown='table-wrapper']]:block",
+    "[&_div[data-streamdown='table-wrapper']]:max-w-full",
+    "[&_div[data-streamdown='table-wrapper']]:overflow-x-auto",
+    "[&_div[data-streamdown='table-wrapper']]:w-full",
+    "[&_div[data-streamdown='table-wrapper']]:min-w-0",
+    "[&_div[data-streamdown='table-wrapper']]:shrink",
+].join(' ');
 </script>
 
 <style scoped>
+/* Large code block/layout guard */
+.message-body pre {
+    max-height: 380px;
+    overflow: auto;
+
+    padding: 0.75rem 0.85rem;
+    line-height: 1.3;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        'Liberation Mono', 'Courier New', monospace;
+}
+.message-body {
+    /* Allow long unbroken words (e.g., headers like "considerations") to wrap and avoid horizontal scroll */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+}
+.message-body h1,
+.message-body h2,
+.message-body h3,
+.message-body h4,
+.message-body h5,
+.message-body h6 {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+/* Prevent accidental horizontal scroll on message container */
+:host,
+.message-body {
+    overflow-x: visible;
+}
+.message-body pre code {
+    white-space: pre;
+    word-break: normal;
+    font-size: 0.78rem;
+    tab-size: 4;
+}
+.message-body pre::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+.message-body pre::-webkit-scrollbar-thumb {
+    background: var(--md-inverse-surface);
+    border-radius: 0;
+}
+.message-body pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+.message-body :not(pre) > code {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.78rem;
+    padding: 2px 4px;
+    border: 1px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    background: var(--md-surface-container-lowest);
+}
+.message-body pre::after {
+    content: '';
+    position: sticky;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 14px;
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0),
+        rgba(0, 0, 0, 0.45)
+    );
+    display: block;
+    pointer-events: none;
+}
+
+.retro-shadow {
+    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+}
+
+.line-clamp-6 {
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    line-clamp: 6; /* standard property for compatibility */
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+@media (prefers-color-scheme: light) {
+    .message-body pre::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0),
+            rgba(255, 255, 255, 0.85)
+        );
+    }
+}
 /* PDF compact thumb */
 .pdf-thumb {
     position: relative;
@@ -18997,448 +20375,113 @@ async function runExtraAction(action: ChatMessageAction) {
     clip-path: polygon(0 0, 100% 0, 100% 100%);
     box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
 }
-</style>
-```
-
-## File: app/components/chat/ChatContainer.vue
-```vue
-<template>
-    <main
-        ref="containerRoot"
-        class="flex w-full flex-1 flex-col overflow-hidden"
-    >
-        <!-- Scroll viewport -->
-        <div
-            ref="scrollParent"
-            class="absolute w-full h-screen overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
-            :style="{ paddingBottom: bottomPad + 'px' }"
-        >
-            <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
-            >
-                <!-- Virtualized stable messages (Req 3.1) -->
-                <VirtualMessageList
-                    :messages="virtualMessages"
-                    :item-size-estimation="520"
-                    :overscan="5"
-                    :scroll-parent="scrollParent"
-                    wrapper-class="flex flex-col"
-                >
-                    <template #item="{ message, index }">
-                        <div
-                            :key="message.id || message.stream_id || index"
-                            class="first:mt-0 mt-10"
-                        >
-                            <ChatMessage
-                                :message="message as RenderMessage"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                            />
-                        </div>
-                    </template>
-                    <template #tail>
-                        <!-- Streaming tail appended (Req 3.2) -->
-                        <div v-if="tailActive" class="mt-10 first:mt-0">
-                            <ChatMessage
-                                :message="{
-                                    role: 'assistant',
-                                    content: tailContent,
-                                    stream_id: tailStreamId,
-                                    pending: true,
-                                    reasoning_text: tailReasoning || '',
-                                } as any"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                            />
-                        </div>
-                    </template>
-                </VirtualMessageList>
-            </div>
-        </div>
-        <!-- Input area overlay -->
-        <div class="pointer-events-none absolute bottom-0 top-0 w-full">
-            <div
-                class="pointer-events-none absolute bottom-0 z-30 w-full flex justify-center sm:pr-[11px] px-1"
-            >
-                <chat-input-dropper
-                    ref="chatInputEl"
-                    :loading="loading"
-                    :streaming="loading"
-                    :container-width="containerWidth"
-                    :thread-id="currentThreadId"
-                    @send="onSend"
-                    @model-change="onModelChange"
-                    @stop-stream="onStopStream"
-                    @pending-prompt-selected="onPendingPromptSelected"
-                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
-                />
-            </div>
-        </div>
-    </main>
-</template>
-
-<script setup lang="ts">
-// Refactored ChatContainer (Task 4) – orchestration only.
-// Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
-import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref, nextTick } from 'vue';
-import { parseFileHashes } from '~/db/files-util';
-import { db } from '~/db';
-import { useChat } from '~/composables/useAi';
-import type {
-    ChatMessage as ChatMessageType,
-    ContentPart,
-} from '~/utils/chat/types';
-import { useHookEffect } from '~/composables/useHookEffect';
-import { marked } from 'marked';
-import VirtualMessageList from './VirtualMessageList.vue';
-// (Tail streaming integrated into useChat; legacy useTailStream removed)
-import { useAutoScroll } from '../../composables/useAutoScroll';
-import { useElementSize } from '@vueuse/core';
-
-const model = ref('openai/gpt-oss-120b');
-const pendingPromptId = ref<string | null>(null);
-
-// Resize (Req 3.4): useElementSize -> reactive width
-const containerRoot = ref<HTMLElement | null>(null);
-const { width: containerWidth } = useElementSize(containerRoot);
-// Dynamic chat input height to compute scroll padding
-const chatInputEl = ref<HTMLElement | null>(null);
-const { height: chatInputHeight } = useElementSize(chatInputEl);
-const bottomPad = computed(() => {
-    // Add extra breathing space so last message sits above input slightly
-    const h = chatInputHeight.value || 140; // fallback similar to prior fixed 165
-    return Math.round(h + 36); // 36px buffer
-});
-
-function onModelChange(newModel: string) {
-    model.value = newModel;
-    // Silenced model change log.
+/* Safety net for table layout */
+.message-body :deep([data-streamdown='table-wrapper']) {
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    margin-top: 32px !important;
+    margin-bottom: 32px;
 }
 
-const props = defineProps<{
-    threadId?: string;
-    messageHistory?: ChatMessageType[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'thread-selected', id: string): void;
-}>();
-
-// Initialize chat composable and make it refresh when threadId changes
-const chat = shallowRef(
-    useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined
-    )
-);
-
-watch(
-    () => props.threadId,
-    (newId) => {
-        const currentId = chat.value?.threadId?.value;
-        // Avoid re-initializing if the composable already set the same id (first-send case)
-        if (newId && currentId && newId === currentId) return;
-        chat.value = useChat(
-            props.messageHistory,
-            newId,
-            pendingPromptId.value || undefined
-        );
-    }
-);
-
-// Keep composable messages in sync when parent provides an updated messageHistory
-watch(
-    () => props.messageHistory,
-    (mh) => {
-        if (!chat.value) return;
-        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
-        if (chat.value.loading.value) return;
-        // Prefer to update the internal messages array directly to avoid remount flicker
-        chat.value.messages.value = [...(mh || [])];
-    }
-);
-
-// When a new thread id is created internally (first send), propagate upward once
-watch(
-    () => chat.value?.threadId?.value,
-    (id, prev) => {
-        if (!prev && id) {
-            emit('thread-selected', id);
-            // Clear pending prompt since it's now applied to the thread
-            pendingPromptId.value = null;
-        }
-    }
-);
-
-// Render messages with content narrowed to string for ChatMessage.vue
-type RenderMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    id?: string;
-    stream_id?: string;
-    file_hashes?: string | null;
-    pending?: boolean;
-    reasoning_text?: string | null;
-};
-
-function escapeAttr(v: string) {
-    return v
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-const messages = computed<RenderMessage[]>(() =>
-    (chat.value.messages.value || []).map((m: ChatMessageType & any) => {
-        let contentStr = '';
-        if (typeof m.content === 'string') {
-            contentStr = m.content;
-        } else if (Array.isArray(m.content)) {
-            const segs: string[] = [];
-            for (const p of m.content as ContentPart[]) {
-                if (p.type === 'text') {
-                    segs.push(p.text);
-                } else if (p.type === 'image') {
-                    const src = typeof p.image === 'string' ? p.image : '';
-                    if (src.startsWith('data:image/')) {
-                        segs.push(
-                            `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                src
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\"/></div>`
-                        );
-                    } else if (src) {
-                        segs.push(
-                            `<div class=\"my-3\"><img src=\"${escapeAttr(
-                                src
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full\" loading=\"lazy\" decoding=\"async\" referrerpolicy=\"no-referrer\"/></div>`
-                        );
-                    }
-                } else if (p.type === 'file') {
-                    const label = (p as any).name || p.mediaType || 'file';
-                    segs.push(`**[file:${escapeAttr(label)}]**`);
-                }
-            }
-            contentStr = segs.join('\n\n');
-        } else {
-            contentStr = String((m as any).content ?? '');
-        }
-        // If no inline image tags generated but file_hashes exist (assistant persisted images), append placeholders that resolve via thumbs/gallery
-        const hasImgTag = /<img\s/i.test(contentStr);
-        if (!hasImgTag && (m as any).file_hashes) {
-            const hashes = parseFileHashes((m as any).file_hashes);
-            if (hashes.length) {
-                const gallery = hashes
-                    .map(
-                        (h) =>
-                            `<div class=\"my-3\"><img data-file-hash=\"${escapeAttr(
-                                h
-                            )}\" alt=\"generated image\" class=\"rounded-md border-2 border-[var(--md-inverse-surface)] retro-shadow max-w-full opacity-60\" /></div>`
-                    )
-                    .join('');
-                contentStr += (contentStr ? '\n\n' : '') + gallery;
-            }
-        }
-        const rawReasoning =
-            (m as any).reasoning_text ??
-            (m as any).data?.reasoning_text ??
-            null;
-
-        return {
-            role: m.role,
-            content: contentStr,
-            id: m.id,
-            stream_id: m.stream_id,
-            file_hashes: (m as any).file_hashes,
-            pending: (m as any).pending,
-            reasoning_text: rawReasoning,
-        } as RenderMessage;
-    })
-);
-const loading = computed(() => chat.value.loading.value);
-
-// Tail streaming now provided directly by useChat composable
-const tailStreamId = computed(() => chat.value.streamId.value);
-const tailReasoning = computed(() => chat.value.streamReasoning.value);
-const tailDisplay = computed(() => chat.value.streamDisplayText.value);
-// Current thread id for this container (reactive)
-const currentThreadId = computed(() => chat.value.threadId?.value);
-const tailActive = computed(
-    () => chat.value.streamActive.value || !!tailReasoning.value
-);
-// Single content computed for tail ChatMessage
-const tailContent = computed(() => {
-    if (tailDisplay.value) return marked.parse(tailDisplay.value);
-    // When no display text yet, leave content empty so ChatMessage shows loader component
-    return '';
-});
-
-// Virtual list data excludes streaming assistant (Req 3.2 separation)
-const virtualMessages = computed(() => {
-    if (!tailActive.value || !tailStreamId.value) {
-        return messages.value.map((m, i) => ({ ...m, id: m.id || String(i) }));
-    }
-    return messages.value
-        .filter((m) => m.stream_id !== tailStreamId.value)
-        .map((m, i) => ({ ...m, id: m.id || String(i) }));
-});
-
-// Scroll handling (Req 3.3) via useAutoScroll
-const scrollParent = ref<HTMLElement | null>(null);
-const autoScroll = useAutoScroll(scrollParent, { thresholdPx: 64 });
-watch(
-    () => messages.value.length,
-    async () => {
-        await nextTick();
-        autoScroll.onContentIncrease();
-    }
-);
-// Unified scroll scheduling for tail updates
-let scrollScheduled = false;
-function scheduleScrollIfAtBottom() {
-    if (!autoScroll.atBottom.value) return;
-    if (scrollScheduled) return;
-    scrollScheduled = true;
-    requestAnimationFrame(() => {
-        scrollScheduled = false;
-        nextTick(() => autoScroll.onContentIncrease());
-    });
+.message-body :deep([data-streamdown='table']) {
+    margin-bottom: 0px;
+    margin-top: 0px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    border-left: none;
+    border-right: none;
 }
 
-// Initial bottom stick after mount (defer to allow user immediate scroll cancel)
-nextTick(() => {
-    setTimeout(() => {
-        if (autoScroll.atBottom.value)
-            autoScroll.scrollToBottom({ smooth: false });
-    }, 0);
-});
-
-// Hook: streaming delta buffering
-// Hooks no longer needed for streaming tail display; scroll on reactive tail changes
-watch(
-    () => [tailDisplay.value, tailReasoning.value],
-    () => scheduleScrollIfAtBottom()
-);
-watch(
-    () => chat.value.streamActive.value,
-    (active) => active && scheduleScrollIfAtBottom()
-);
-watch(currentThreadId, () => {
-    // Clear computed tail when switching threads (stream refs reset inside useChat later)
-    scheduleScrollIfAtBottom();
-});
-
-// When input height changes and user was at bottom, keep them pinned
-watch(
-    () => chatInputHeight.value,
-    async () => {
-        await nextTick();
-        if (autoScroll.atBottom.value) {
-            autoScroll.scrollToBottom({ smooth: false });
-        }
-    }
-);
-
-// Auto-scroll as tailDisplay grows
-// Chat send abstraction (Req 3.5)
-
-function onSend(payload: any) {
-    if (loading.value) return;
-    const readyImages = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'ready')
-        : [];
-    const pendingCount = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'pending')
-              .length
-        : 0;
-    if (pendingCount > 0 && readyImages.length === 0) {
-        // Defer sending until at least one image hashed (user can click again shortly)
-        console.warn(
-            '[ChatContainer.onSend] images still hashing; delaying send'
-        );
-        return;
-    }
-    const files = readyImages.map((img: any) => ({
-        type: img.file?.type || 'image/png',
-        url: img.url,
-    }));
-    const file_hashes = readyImages
-        .map((img: any) => img.hash)
-        .filter((h: any) => typeof h === 'string');
-    const extraTextParts = Array.isArray(payload.largeTexts)
-        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
-        : [];
-
-    // Send message via useChat composable
-    chat.value
-        .sendMessage(payload.text, {
-            model: model.value,
-            files,
-            file_hashes,
-            extraTextParts,
-            online: !!payload.webSearchEnabled,
-        })
-        .catch((e: any) =>
-            console.error('[ChatContainer.onSend] sendMessage error', e)
-        );
+.message-body :deep([data-streamdown='th']) {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    font-weight: 600;
+    border-top: none;
 }
 
-function onRetry(messageId: string) {
-    if (!chat.value || chat.value.loading.value) return;
-    // Provide current model so retry uses same selection
-    (chat.value as any).retryMessage(messageId, model.value);
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='th']:first-child
+    ),
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='td']:first-child
+    ) {
+    border-left: 0;
+}
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='th']:last-child
+    ),
+.message-body
+    :deep(
+        [data-streamdown='table']
+            [data-streamdown='tr']
+            > [data-streamdown='td']:last-child
+    ) {
+    border-right: 0;
 }
 
-function onBranch(newThreadId: string) {
-    if (newThreadId) emit('thread-selected', newThreadId);
+.message-body :deep([data-streamdown='td']) {
+    max-width: 50ch;
+}
+/* Zebra striping for table body rows (every 2nd data row) */
+.message-body
+    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even)) {
+    background: var(--md-surface-container-low);
+}
+.message-body
+    :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd)) {
+    background: var(--md-surface-container-lowest);
+}
+/* Optional hover highlight */
+.message-body :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
+    background: var(--md-surface-container-high);
 }
 
-function onEdited(payload: { id: string; content: string }) {
-    if (!chat.value) return;
-    const arr = chat.value.messages.value;
-    const idx = arr.findIndex((m: any) => m.id === payload.id);
-    if (idx === -1) return;
-    const msg = arr[idx];
-    if (!msg) return;
-    // If message content is a parts array, update the first text part; else update string directly
-    if (Array.isArray(msg.content)) {
-        const firstText = (msg.content as any[]).find((p) => p.type === 'text');
-        if (firstText) firstText.text = payload.content;
-        else
-            (msg.content as any[]).unshift({
-                type: 'text',
-                text: payload.content,
-            });
-    } else {
-        msg.content = payload.content;
-    }
-    // Trigger reactivity for computed messages mapping
-    chat.value.messages.value = [...arr];
+.message-body :deep([data-streamdown='code-block']) {
+    padding: 0;
+    margin-top: 32px;
+    margin-bottom: 32px;
+    border: none;
+    border-radius: 3px;
+    height: fit-content;
+    overflow-y: hidden;
+    overflow-x: auto;
+    white-space: nowrap;
+    background: var(--md-surface-container-lowest);
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.message-body :deep([data-streamdown='code-block-header']) {
+    border-bottom: 2px solid var(--md-inverse-surface);
+    padding-left: 15px;
+    padding-right: 15px;
 }
 
-function onPendingPromptSelected(promptId: string | null) {
-    pendingPromptId.value = promptId;
-    // Reinitialize chat with the pending prompt
-    chat.value = useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined
-    );
+.message-body :deep([data-streamdown='code-body']) {
+    padding: 0;
+    padding-left: 15px;
+    padding-right: 15px;
+    margin: 0;
+    border: none;
 }
 
-function onStopStream() {
-    try {
-        (chat.value as any)?.abort?.();
-    } catch {}
+.message-body :deep([data-streamdown='code-body']) pre {
+    border: none;
+    margin-bottom: 0;
+    padding-bottom: 30px;
+    background: var(--md-surface-container-lowest) !important;
 }
-</script>
-
-<style>
-/* Optional custom styles placeholder */
+.message-body :deep([data-streamdown='code-lang']) {
+    font: inherit;
+}
 </style>
 ```
