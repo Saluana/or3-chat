@@ -96,10 +96,11 @@ export function ensureUiMessage(raw: any): UiChatMessage {
                 );
             }
         } else if (import.meta.dev) {
-            console.debug(
-                '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
-                { id, totalHashes: file_hashes.length, existingCount }
-            );
+            if (import.meta.dev)
+                console.debug(
+                    '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
+                    { id, totalHashes: file_hashes.length, existingCount }
+                );
         }
     }
     return {

@@ -13,14 +13,17 @@ export default defineNuxtPlugin(() => {
                 // Detailed console output for inspection
                 console.group('[doc-history-test] Inspect Document');
                 try {
-                    console.log('document.id:', document?.id);
-                    console.log('document.title:', document?.title);
-                    console.log('document.content (snippet):',
-                        typeof document?.content === 'string'
-                            ? document.content.slice(0, 200)
-                            : document?.content
-                    );
-                    console.log('full document object:', document);
+                    if (import.meta.dev) {
+                        console.debug('document.id:', document?.id);
+                        console.debug('document.title:', document?.title);
+                        console.debug(
+                            'document.content (snippet):',
+                            typeof document?.content === 'string'
+                                ? document.content.slice(0, 200)
+                                : document?.content
+                        );
+                        console.debug('full document object:', document);
+                    }
                 } catch (e) {
                     console.error('[doc-history-test] logging error', e);
                 }
@@ -30,7 +33,9 @@ export default defineNuxtPlugin(() => {
                 try {
                     useToast().add({
                         title: 'Inspect Document',
-                        description: `id: ${document?.id ?? 'unknown'} — title: ${document?.title ?? 'Untitled'}`,
+                        description: `id: ${
+                            document?.id ?? 'unknown'
+                        } — title: ${document?.title ?? 'Untitled'}`,
                         duration: 4000,
                     });
                 } catch (e) {

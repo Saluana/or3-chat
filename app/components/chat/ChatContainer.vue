@@ -315,7 +315,11 @@ const autoScroll = useAutoScroll(scrollParent as Ref<HTMLElement | null>, {
 // Unified scroll scheduling for streaming updates.
 let scrollScheduled = false;
 function scheduleScrollIfAtBottom() {
-    if (!autoScroll.atBottom.value) {
+    if (!autoScroll.atBottom.value) return;
+    // SSR safeguard: requestAnimationFrame not available server-side
+    if (typeof requestAnimationFrame !== 'function') {
+        // Fallback: run immediately (server render won't actually scroll but avoids crash)
+        autoScroll.onContentIncrease();
         return;
     }
     if (scrollScheduled) return;
@@ -334,35 +338,21 @@ if (process.client) {
     });
 }
 
-// Basic scroll reactions
-watch(
-    () => messages.value.length,
-    async () => {
-        await nextTick();
-        scheduleScrollIfAtBottom();
-    }
-);
-watch(
-    () => streamState.value?.version,
-    () => {
-        scheduleScrollIfAtBottom();
-    }
-);
-watch(
-    () => [chatInputHeight.value, emittedInputHeight.value],
-    async () => {
-        await nextTick();
-        if (autoScroll.atBottom.value)
-            autoScroll.scrollToBottom({ smooth: false });
-    }
-);
-watch(
-    () => currentThreadId.value,
-    async () => {
-        await nextTick();
-        if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
-    }
-);
+// Consolidated scroll reactions (messages length, streaming version, input height changes, thread switch)
+watchEffect(async () => {
+    // Skip scroll scheduling during SSR (no DOM / rAF)
+    if (typeof window === 'undefined') return;
+    const deps = [
+        messages.value.length,
+        streamState.value?.version,
+        chatInputHeight.value,
+        emittedInputHeight.value,
+        currentThreadId.value,
+    ];
+    void deps; // register dependencies
+    await nextTick();
+    if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
+});
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)

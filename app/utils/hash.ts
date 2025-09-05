@@ -84,14 +84,15 @@ function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
             .getEntriesByName(`hash:md5:${mode}:bytes=${size}`)
             .slice(-1)[0];
         if (entry && entry.duration && entry.duration > 0) {
-            // Lightweight dev log (guarded by dev compile flag outside caller)
-            // eslint-disable-next-line no-console
-            console.debug(
-                '[perf] computeFileHash',
-                mode,
-                `${(size / 1024).toFixed(1)}KB`,
-                `${entry.duration.toFixed(1)}ms`
-            );
+            if ((import.meta as any).dev) {
+                // eslint-disable-next-line no-console
+                console.debug(
+                    '[perf] computeFileHash',
+                    mode,
+                    `${(size / 1024).toFixed(1)}KB`,
+                    `${entry.duration.toFixed(1)}ms`
+                );
+            }
         }
     } catch {}
 }

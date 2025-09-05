@@ -6,7 +6,8 @@ export default defineNuxtPlugin(() => {
         showOn: 'assistant', // 'user' | 'assistant' | 'both'
         order: 300, // optional; after built-ins ( <200 reserved )
         async handler({ message }) {
-            console.log('Create document action invoked', message);
+            if (import.meta.dev)
+                console.debug('Create document action invoked', message);
 
             // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
             async function markdownToTipTapDoc(md: string) {
@@ -22,6 +23,7 @@ export default defineNuxtPlugin(() => {
                     const { Markdown } = await import('tiptap-markdown');
 
                     const editor = new Editor({
+                        // @ts-ignore
                         extensions: [StarterKit, Markdown],
                         content: '',
                     });
@@ -40,7 +42,7 @@ export default defineNuxtPlugin(() => {
                 content: tiptapDoc,
             });
 
-            console.log('Created document record', doc);
+            if (import.meta.dev) console.debug('Created document record', doc);
 
             // Attempt to open in a new pane (if capacity) else reuse active pane
             const mp: any = (globalThis as any).__or3MultiPaneApi;
