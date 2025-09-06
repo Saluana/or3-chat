@@ -180,7 +180,19 @@ const clamp = (w: number) =>
     Math.min(props.maxWidth, Math.max(props.minWidth, w));
 
 // open state (controlled or uncontrolled)
-const openState = ref<boolean>(props.modelValue ?? props.defaultOpen);
+// Minimal tweak: start closed on mobile to avoid initial empty sidebar flash.
+const openState = ref<boolean>(
+    (() => {
+        if (props.modelValue !== undefined) return props.modelValue;
+        if (import.meta.client) {
+            try {
+                const desktop = window.matchMedia('(min-width: 768px)').matches;
+                return desktop ? props.defaultOpen : false;
+            } catch {}
+        }
+        return false; // SSR fallback (prevents mobile flash)
+    })()
+);
 const open = computed({
     get: () =>
         props.modelValue === undefined ? openState.value : props.modelValue,
