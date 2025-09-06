@@ -444,20 +444,17 @@ const themeAriaLabel = computed(() =>
 
 // --------------- Mobile + layout ---------------
 import { isMobile } from '~/state/global';
+// Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
 if (process.client) {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const apply = () => (isMobile.value = mq.matches);
     onMounted(() => {
-        const mq = window.matchMedia('(max-width: 640px)');
-        const apply = () => (isMobile.value = mq.matches);
         apply();
         mq.addEventListener('change', apply);
-        if (import.meta.hot) {
-            import.meta.hot.dispose(() =>
-                mq.removeEventListener('change', apply)
-            );
-        } else {
-            onUnmounted(() => mq.removeEventListener('change', apply));
-        }
     });
+    const dispose = () => mq.removeEventListener('change', apply);
+    onUnmounted(dispose);
+    if (import.meta.hot) import.meta.hot.dispose(dispose);
 }
 const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
 function openMobileSidebar() {

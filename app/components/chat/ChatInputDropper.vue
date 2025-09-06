@@ -778,24 +778,31 @@ const handlePromptModalClosed = () => {
 
 // Emit live height via ResizeObserver (debounced with rAF)
 let __resizeRaf: number | null = null;
-onMounted(() => {
-    if (!process.client) return;
-    const rootEl = (getCurrentInstance()?.proxy?.$el as HTMLElement) || null;
-    if (!rootEl || !('ResizeObserver' in window)) return;
-    const ro = new ResizeObserver(() => {
-        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
-        __resizeRaf = requestAnimationFrame(() => {
-            emit('resize', { height: rootEl.offsetHeight });
+// Flattened observer setup (avoids build transform splitting issues)
+if (process.client && 'ResizeObserver' in window) {
+    let ro: ResizeObserver | null = null;
+    onMounted(() => {
+        const inst = getCurrentInstance();
+        const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
+        if (!rootEl) return;
+        ro = new ResizeObserver(() => {
+            if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
+            __resizeRaf = requestAnimationFrame(() => {
+                emit('resize', { height: rootEl.offsetHeight });
+            });
         });
+        ro.observe(rootEl);
     });
-    ro.observe(rootEl);
-    onBeforeUnmount(() => {
+    const dispose = () => {
         try {
-            ro.disconnect();
+            ro?.disconnect();
         } catch {}
         if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
-    });
-});
+        ro = null;
+    };
+    onBeforeUnmount(dispose);
+    if (import.meta.hot) import.meta.hot.dispose(dispose);
+}
 </script>
 
 <style scoped>
