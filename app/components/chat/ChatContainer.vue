@@ -7,7 +7,7 @@
         <div
             ref="scrollParent"
             class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
-            :style="{ paddingBottom: bottomPad + 'px', overflowAnchor: 'auto' }"
+            :style="scrollParentStyle"
         >
             <div
                 class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
@@ -98,7 +98,15 @@
 // Refactored ChatContainer (Task 4) – orchestration only.
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref, nextTick, type Ref } from 'vue';
+import {
+    shallowRef,
+    computed,
+    watch,
+    ref,
+    nextTick,
+    type Ref,
+    type CSSProperties,
+} from 'vue';
 import { useChat } from '~/composables/useAi';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
@@ -128,6 +136,24 @@ const bottomPad = computed(() => {
     const base = Math.round(effectiveInputHeight.value + 0);
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
+
+// Disable browser scroll anchoring in short windows (e.g., finalization) to avoid fight with manual anchors
+const anchorSuppressed = ref(false);
+// Use typed CSSProperties for template binding; overflowAnchor uses the proper union type
+const scrollParentStyle = computed<CSSProperties>(() => ({
+    paddingBottom: bottomPad.value + 'px',
+    overflowAnchor: (anchorSuppressed.value
+        ? 'none'
+        : 'auto') as CSSProperties['overflowAnchor'],
+}));
+
+// Small wrapper to schedule a bottom-stick when appropriate. Kept minimal so tests can stub timings.
+function scheduleScrollIfAtBottom() {
+    if (Date.now() < skipAutoScrollUntil) return;
+    if (autoScroll.atBottom.value) {
+        autoScroll.scrollToBottom({ smooth: false });
+    }
+}
 
 // Mobile fixed wrapper classes/styles
 // Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
@@ -224,45 +250,36 @@ watch(
 // messages already normalized to UiChatMessage with .text in useChat composable
 const messages = computed(() => chat.value.messages.value || []);
 onMounted(() => {
-    if (import.meta.dev) {
-        const withHashes = messages.value.filter(
-            (m: any) => m.file_hashes && m.file_hashes.length
-        );
-        console.debug('[ChatContainer.mounted] messages', {
-            total: messages.value.length,
-            withHashes: withHashes.length,
-            sample: withHashes.slice(0, 3).map((m: any) => ({
-                id: m.id,
-                hashes: m.file_hashes,
-                hasMarkdown: (m.text || '').includes('file-hash:'),
-                textPreview: (m.text || '').slice(0, 120),
-            })),
-        });
-    }
+    // mounted debug logging removed
 });
-watchEffect(() => {
-    if (!import.meta.dev) return;
-    const count = messages.value.filter(
-        (m: any) => m.file_hashes && m.file_hashes.length
-    ).length;
-    console.debug('[ChatContainer.watchEffect] message/hash state', {
-        total: messages.value.length,
-        withHashes: count,
-    });
-});
+// watchEffect debug logging removed
+watchEffect(() => {});
 // Removed length logging watcher.
 const loading = computed(() => chat.value.loading.value);
 
 // Tail streaming now provided directly by useChat composable
-const streamId = computed(() => chat.value.streamId.value);
-const streamState = computed(() => chat.value.streamState);
-const streamReasoning = computed(() => streamState.value?.reasoningText || '');
-const tailDisplay = computed(() => streamState.value?.text || '');
+// `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
+const streamId = computed(() => {
+    const s = chat.value?.streamId;
+    return s && 'value' in s ? s.value : s;
+});
+const streamState: any = computed(() => {
+    const s = chat.value?.streamState;
+    return s && 'value' in s ? s.value : s;
+});
+const streamReasoning = computed(
+    () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
+);
+const tailDisplay = computed(
+    () => streamState?.value?.text || streamState?.text || ''
+);
 // Removed tail char delta logging.
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value.threadId?.value);
 // Tail active means stream not finalized
-const streamActive = computed(() => !streamState.value?.finalized);
+const streamActive = computed(
+    () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
+);
 // Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
 const streamingMessage = computed<any | null>(() => {
     if (!streamActive.value) return null;
@@ -304,29 +321,60 @@ const virtualStableMessages = computed<any[]>(() => {
 
 // Scroll handling (Req 3.3) via useAutoScroll
 const scrollParent: Ref<HTMLElement | null> = ref(null);
-// Add disengageDeltaPx so a small upward scroll (8px) releases stickiness
-// preventing jump-to-bottom when stream finalizes while user is reading.
-// Explicit cast ensures consistent HTMLElement | null Ref type for the composable
 const autoScroll = useAutoScroll(scrollParent as Ref<HTMLElement | null>, {
-    thresholdPx: 64,
+    thresholdPx: 20,
     disengageDeltaPx: 8,
 });
-// Unified scroll scheduling for streaming updates.
-let scrollScheduled = false;
-function scheduleScrollIfAtBottom() {
-    if (!autoScroll.atBottom.value) return;
-    // SSR safeguard: requestAnimationFrame not available server-side
-    if (typeof requestAnimationFrame !== 'function') {
-        // Fallback: run immediately (server render won't actually scroll but avoids crash)
-        autoScroll.onContentIncrease();
-        return;
+const STRICT_BOTTOM_PX = 8;
+function isTrulyAtBottom() {
+    const el = scrollParent.value;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= STRICT_BOTTOM_PX;
+}
+let pendingAnchor: { bottomDist: number } | null = null;
+let skipAutoScrollUntil = 0;
+// Sticky anchor stabilization data
+let desiredBottom = 0;
+let lastAppliedHeight = 0;
+let anchorAttempts = 0;
+// Tunables for stabilization (made slightly more aggressive for mobile slow reflows)
+const ANCHOR_MAX_ATTEMPTS = 6;
+const ANCHOR_HEIGHT_CHANGE_PX = 8; // smaller threshold to catch subtle mobile layout shifts
+const ANCHOR_DIST_DRIFT_PX = 1; // strict drift tolerance
+const ANCHOR_SUPPRESSION_MS = 1200; // how long to keep overflow-anchor disabled to avoid browser fight
+
+function reanchorIfDrift() {
+    const node = scrollParent.value;
+    if (!node) return;
+    // Stop if too many attempts
+    if (anchorAttempts >= ANCHOR_MAX_ATTEMPTS) return;
+    const currentDist = node.scrollHeight - node.scrollTop - node.clientHeight;
+    const heightChanged =
+        Math.abs(node.scrollHeight - lastAppliedHeight) >
+        ANCHOR_HEIGHT_CHANGE_PX;
+    const distDrift =
+        Math.abs(currentDist - desiredBottom) > ANCHOR_DIST_DRIFT_PX;
+    if (heightChanged || distDrift) {
+        const target = node.scrollHeight - node.clientHeight - desiredBottom;
+        node.scrollTop = Math.max(0, target);
+        lastAppliedHeight = node.scrollHeight;
+        anchorAttempts++;
     }
-    if (scrollScheduled) return;
-    scrollScheduled = true;
-    requestAnimationFrame(() => {
-        scrollScheduled = false;
-        autoScroll.onContentIncrease();
-    });
+    // Schedule one more pass if we still have attempts left
+    if (anchorAttempts < ANCHOR_MAX_ATTEMPTS) {
+        requestAnimationFrame(() => reanchorIfDrift());
+    }
+}
+
+// Detect cases where we thought we were at bottom, but virtualization or late content height expansion
+// increased scrollHeight creating a large bottom gap without a scroll event (stale atBottomFlag true).
+function verifyBottomDrift() {
+    const el = scrollParent.value;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (autoScroll.atBottom.value && dist > STRICT_BOTTOM_PX) {
+        autoScroll.release();
+    }
 }
 
 // Initial bottom stick (client only; SSR lacks requestAnimationFrame)
@@ -337,13 +385,12 @@ if (process.client) {
     });
 }
 
-// Consolidated scroll reactions (messages length, streaming version, input height changes, thread switch)
+// Consolidated scroll reactions (messages length, input height changes, thread switch)
 watchEffect(async () => {
     // Skip scroll scheduling during SSR (no DOM / rAF)
     if (typeof window === 'undefined') return;
     const deps = [
         messages.value.length,
-        streamState.value?.version,
         chatInputHeight.value,
         emittedInputHeight.value,
         currentThreadId.value,
@@ -352,6 +399,71 @@ watchEffect(async () => {
     await nextTick();
     if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
 });
+
+// Release sticky auto-scroll if messages grow while user not at true bottom
+watch(
+    () => messages.value.length,
+    () => {
+        if (!isTrulyAtBottom()) autoScroll.release();
+    }
+);
+// Release on tail finalization if user scrolled up even slightly
+watch(
+    () => streamActive.value,
+    (now, was) => {
+        if (was && !now) {
+            const el = scrollParent.value;
+            const atBottomNow = isTrulyAtBottom();
+            if (el && !atBottomNow) {
+                // Suppress browser anchoring so it doesn't fight our manual anchor.
+                anchorSuppressed.value = true;
+                setTimeout(
+                    () => (anchorSuppressed.value = false),
+                    ANCHOR_SUPPRESSION_MS
+                );
+
+                // pre-anchor
+                // Capture distance from bottom before layout settles.
+                pendingAnchor = {
+                    bottomDist:
+                        el.scrollHeight - el.scrollTop - el.clientHeight,
+                };
+                // immediate post-anchor (no-op for production)
+                // Seed stabilization
+                desiredBottom = pendingAnchor.bottomDist;
+                lastAppliedHeight = el.scrollHeight;
+                anchorAttempts = 0;
+
+                autoScroll.release();
+                // Suppress auto-scroll scheduling for a longer safety window to handle slow mobile reflows
+                skipAutoScrollUntil = Date.now() + 1200; // ~1.2s safety window
+                // Wait a tick to let DOM updates settle, then perform the manual re-anchor inside rAF
+                nextTick(() => {
+                    requestAnimationFrame(() => {
+                        const node = scrollParent.value;
+                        if (!node || !pendingAnchor) return;
+                        const target =
+                            node.scrollHeight -
+                            node.clientHeight -
+                            pendingAnchor.bottomDist;
+                        // Maintain previous visual position relative to bottom.
+                        node.scrollTop = Math.max(0, target);
+                        pendingAnchor = null;
+                        // One rAF later, verify and re-apply if virtua reflow changed heights
+                        requestAnimationFrame(() => {
+                            verifyBottomDrift();
+                            reanchorIfDrift();
+                        });
+                    });
+                });
+            } else {
+                requestAnimationFrame(() => {
+                    verifyBottomDrift();
+                });
+            }
+        }
+    }
+);
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)

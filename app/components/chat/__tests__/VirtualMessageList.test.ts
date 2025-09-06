@@ -25,4 +25,21 @@ describe('VirtualMessageList', () => {
         const wrapper = factory(msgs);
         expect(wrapper.emitted('reached-bottom')).toBeTruthy();
     });
+
+    it('re-emits range when messages length changes', async () => {
+        const msgs = [{ id: '1', content: 'a' }];
+        const wrapper = factory(msgs);
+        // clear existing emissions for clarity
+        (wrapper.emitted()['visible-range-change'] || []).length;
+        await wrapper.setProps({
+            messages: [
+                { id: '1', content: 'a' },
+                { id: '2', content: 'b' },
+                { id: '3', content: 'c' },
+                { id: '4', content: 'd' },
+            ],
+        });
+        const evs = wrapper.emitted('visible-range-change');
+        expect(evs?.at(-1)?.[0]).toEqual({ start: 0, end: 3 });
+    });
 });
