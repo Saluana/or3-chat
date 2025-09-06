@@ -10,7 +10,7 @@
             :style="{ paddingBottom: bottomPad + 'px', overflowAnchor: 'auto' }"
         >
             <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
+                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
             >
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
@@ -125,7 +125,7 @@ const effectiveInputHeight = computed(
 );
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
 const bottomPad = computed(() => {
-    const base = Math.round(effectiveInputHeight.value + 36);
+    const base = Math.round(effectiveInputHeight.value + 0);
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
 
