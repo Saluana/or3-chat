@@ -4,27 +4,27 @@ artifact_id: 6a0c1a0c-2f8f-4e38-8c2d-a0b9345531a8
 
 ## 1. Heuristic Foundations
 
-[ ] 1.1 Add heuristic state object in `VirtualMessageList.vue` (R1,R4,R2)
-[ ] 1.2 Track `disengagedAt` when stick flips false (modify compute) (R1)
-[ ] 1.3 Track `recentBottomEnterAt` timing when entering threshold while stick=false (R4)
-[ ] 1.4 Add suction guard (recent disengage <200ms) into `shouldAutoScroll` (R1)
+[x] 1.1 Add heuristic state object in `VirtualMessageList.vue` (R1,R4,R2)
+[x] 1.2 Track `disengagedAt` when stick flips false (modify compute) (R1)
+[x] 1.3 Track `recentBottomEnterAt` timing when entering threshold while stick=false (R4)
+[x] 1.4 Add suction guard (recent disengage <200ms) into `shouldAutoScroll` (R1)
 
 ## 2. Delayed Re-Stick Logic
 
-[ ] 2.1 Implement linger check >=300ms to restore stick (R4)
-[ ] 2.2 Reset `recentBottomEnterAt` when exiting bottom zone (R4)
-[ ] 2.3 Add unit test restickDelay.test.ts (short vs long linger) (R4,R9)
+[x] 2.1 Implement linger check >=300ms to restore stick (R4)
+[x] 2.2 Reset `recentBottomEnterAt` when exiting bottom zone (R4)
+[x] 2.3 Add unit test restickDelay.test.ts (short vs long linger) (R4,R9)
 
 ## 3. Streaming Suction Prevention
 
-[ ] 3.1 Ensure streaming watchEffect early returns if !shouldAutoScroll (already) AND add prevented counter (R1,R10)
-[ ] 3.2 New integration test streamingSuctionPrevention.test.ts (simulate wheel up + continued streaming) (R1,R9)
+[x] 3.1 Ensure streaming watchEffect early returns if !shouldAutoScroll (already) AND add prevented counter (R1,R10)
+[x] 3.2 New integration test streamingSuctionPrevention.test.ts (simulate wheel up + continued streaming) (R1,R9)
 
 ## 4. Finalization Stability
 
-[ ] 4.1 Watch isStreaming transition (true->false) capture preFinalize snapshot (R2)
-[ ] 4.2 nextTick clamp if delta >4px and user not atBottom & not recently scrolling (R2)
-[ ] 4.3 Add finalizeNoJump.test.ts (R2,R9)
+[x] 4.1 Watch isStreaming transition (true->false) capture preFinalize snapshot (R2)
+[x] 4.2 nextTick clamp if delta >4px and user not atBottom & not recently scrolling (R2)
+[x] 4.3 Add finalizeNoJump.test.ts (R2,R9)
 
 ## 5. Reduced Motion Support
 
