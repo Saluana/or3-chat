@@ -1,0 +1,263 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ref } from 'vue';
+import { createHookEngine } from '../../utils/hooks';
+
+// Primary hook engine mock for useHooks()
+const hookEngine = createHookEngine();
+vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
+
+// ---- Mocks ----
+vi.mock('../useUserApiKey', () => ({
+    useUserApiKey: () => ({ apiKey: ref('test-key'), setKey: vi.fn() }),
+}));
+vi.mock('../useActivePrompt', () => ({
+    useActivePrompt: () => ({ activePromptContent: ref(null) }),
+}));
+vi.mock('../useDefaultPrompt', () => ({
+    getDefaultPromptId: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('~/db/threads', () => ({
+    getThreadSystemPrompt: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('~/db/prompts', () => ({ getPrompt: vi.fn().mockResolvedValue(null) }));
+vi.mock('~/state/global', () => ({ state: ref({ openrouterKey: '' }) }));
+vi.mock('../useStreamAccumulator', () => ({
+    createStreamAccumulator: () => {
+        const state = ref({ finalized: false });
+        return {
+            state,
+            reset: () => {},
+            append: () => {},
+            finalize: () => {
+                state.value.finalized = true;
+            },
+        };
+    },
+}));
+
+// DB layer minimal mocks
+let msgCounter = 0;
+vi.mock('~/db', () => ({
+    create: { thread: vi.fn().mockResolvedValue({ id: 'thread-new' }) },
+    db: {
+        messages: {
+            get: vi.fn(),
+            where: () => ({
+                between: () => ({
+                    filter: () => ({ first: () => null, last: () => null }),
+                }),
+            }),
+        },
+    },
+    tx: {
+        appendMessage: vi.fn(async (m: any) => ({
+            ...m,
+            id: 'm' + ++msgCounter,
+            file_hashes: m.file_hashes || null,
+        })),
+    },
+    upsert: { message: vi.fn(async () => {}) },
+}));
+
+vi.mock('~/utils/chat/history', () => ({
+    ensureThreadHistoryLoaded: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Stream mock (assistant will emit two text chunks then end)
+vi.mock('~/utils/chat/openrouterStream', () => ({
+    openRouterStream: () => ({
+        async *[Symbol.asyncIterator]() {
+            yield { type: 'text', text: 'Hello' };
+            yield { type: 'text', text: ' World' };
+        },
+    }),
+}));
+
+// File / attachments helpers used indirectly
+vi.mock('~/utils/files/attachments', () => ({
+    parseHashes: () => [],
+    mergeAssistantFileHashes: (_a: any, _b: any) => _b || [],
+}));
+vi.mock('~/db/files', () => ({ createOrRefFile: vi.fn() }));
+vi.mock('~/db/files-util', () => ({
+    serializeFileHashes: (arr: string[]) => arr.join(','),
+}));
+vi.mock('~/utils/chat/messages', () => ({
+    buildParts: (t: string) => [{ type: 'text', text: t }],
+    mergeFileHashes: (a: any) => a,
+    trimOrMessagesImages: () => {},
+}));
+vi.mock('~/utils/chat/uiMessages', () => ({
+    ensureUiMessage: (m: any) => ({
+        id: m.id,
+        role: m.role,
+        text: m.content?.[0]?.text || '',
+        content: m.content,
+        reasoning_text: m.reasoning_text || null,
+    }),
+    recordRawMessage: () => {},
+}));
+vi.mock('~/utils/openrouter-build', () => ({
+    buildOpenRouterMessages: (msgs: any) => msgs,
+}));
+vi.mock('#imports', () => ({ useToast: () => ({ add: vi.fn() }) }));
+
+// Document store state mock (configurable per test via mutable map)
+const docState: Record<string, any> = {};
+vi.mock('../useDocumentsStore', () => ({
+    releaseDocument: vi.fn(),
+    useDocumentState: (id: string) => docState[id],
+}));
+
+// ---- Imports under test ----
+import { useMultiPane } from '../useMultiPane';
+import { usePaneDocuments } from '../usePaneDocuments';
+import { useChat } from '../useAi';
+
+// Helper to await microtasks
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+describe('extended pane hooks coverage', () => {
+    beforeEach(() => {
+        hookEngine.removeAllCallbacks();
+        msgCounter = 0;
+        for (const k of Object.keys(docState)) delete docState[k];
+    });
+
+    it('thread changed provides message count & veto works', async () => {
+        const { setPaneThread, panes } = useMultiPane({
+            loadMessagesFor: async () =>
+                [
+                    { role: 'user', content: 'a' },
+                    { role: 'assistant', content: 'b' },
+                ] as any,
+        });
+        let changedPayload: any = null;
+        hookEngine.addAction(
+            'ui.pane.thread:action:changed',
+            (_pane: any, _old: string, _new: string, count: number) => {
+                changedPayload = { _old, _new, count };
+            }
+        );
+        // Veto first
+        hookEngine.addFilter('ui.pane.thread:filter:select', (req: string) =>
+            req === 'veto' ? false : req
+        );
+        await setPaneThread(0, 'veto');
+        expect(changedPayload).toBeNull();
+        await setPaneThread(0, 'thread-ABC');
+        expect(changedPayload).toEqual({
+            _old: '',
+            _new: 'thread-ABC',
+            count: 2,
+        });
+        expect(panes.value[0]!.messages.length).toBe(2);
+    });
+
+    it('document saved fires when switching from pending doc', async () => {
+        const panes = ref([
+            {
+                id: 'p1',
+                mode: 'doc',
+                threadId: '',
+                documentId: 'doc-old',
+                messages: [],
+                validating: false,
+            } as any,
+        ]);
+        const activePaneIndex = ref(0);
+        docState['doc-old'] = {
+            id: 'doc-old',
+            pendingTitle: 'T',
+            pendingContent: 'Body',
+        }; // simulate pending changes
+        const createNewDoc = vi.fn().mockResolvedValue({ id: 'doc-new' });
+        const flushDocument = vi.fn().mockResolvedValue(undefined);
+        const { newDocumentInActive } = usePaneDocuments({
+            panes,
+            activePaneIndex,
+            createNewDoc,
+            flushDocument,
+        });
+        let saved: any = null;
+        let changed: any = null;
+        hookEngine.addAction(
+            'ui.pane.doc:action:saved',
+            (_pane: any, id: string) => {
+                saved = id;
+            }
+        );
+        hookEngine.addAction(
+            'ui.pane.doc:action:changed',
+            (_pane: any, oldId: string, newId: string) => {
+                changed = { oldId, newId };
+            }
+        );
+        await newDocumentInActive({ title: 'New' });
+        expect(saved).toBe('doc-old');
+        expect(changed).toEqual({ oldId: 'doc-old', newId: 'doc-new' });
+    });
+
+    it('document filter transform & veto respected', async () => {
+        const panes = ref([
+            {
+                id: 'p1',
+                mode: 'chat',
+                threadId: '',
+                documentId: undefined,
+                messages: [],
+                validating: false,
+            } as any,
+        ]);
+        const activePaneIndex = ref(0);
+        const createNewDoc = vi.fn().mockResolvedValue({ id: 'doc-B' });
+        const flushDocument = vi.fn();
+        const { newDocumentInActive, selectDocumentInActive } =
+            usePaneDocuments({
+                panes,
+                activePaneIndex,
+                createNewDoc,
+                flushDocument,
+            });
+        hookEngine.addFilter('ui.pane.doc:filter:select', (req: string) =>
+            req === 'doc-B' ? 'doc-B-TRANS' : req
+        );
+        await newDocumentInActive();
+        // after new doc created, filter should have transformed id
+        expect(panes.value[0]!.documentId).toBe('doc-B-TRANS');
+        let changedCount = 0;
+        hookEngine.addAction('ui.pane.doc:action:changed', () => {
+            changedCount++;
+        });
+        hookEngine.addFilter('ui.pane.doc:filter:select', (req: string) =>
+            req === 'doc-C' ? false : req
+        );
+        await selectDocumentInActive('doc-C'); // veto
+        expect(changedCount).toBe(0);
+    });
+
+    it('message sent & received hooks fire with lengths', async () => {
+        const { panes } = useMultiPane({ initialThreadId: 't1' });
+        let sent: any = null;
+        let received: any = null;
+        hookEngine.addAction(
+            'ui.pane.msg:action:sent',
+            (_pane: any, payload: any) => {
+                sent = payload;
+            }
+        );
+        hookEngine.addAction(
+            'ui.pane.msg:action:received',
+            (_pane: any, payload: any) => {
+                received = payload;
+            }
+        );
+        const chat = useChat([], 't1');
+        await chat.sendMessage('Hello AI');
+        await flush();
+        expect(sent).toBeTruthy();
+        expect(received).toBeTruthy();
+        expect(sent.length).toBe(8); // 'Hello AI'.length
+        expect(received.length).toBeGreaterThan(0); // from mock stream text accumulation
+    });
+});

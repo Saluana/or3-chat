@@ -2,6 +2,7 @@
 // Keeps pane logic outside of UI components for easier testing & extension.
 
 import Dexie from 'dexie';
+import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { db } from '~/db';
 import { useHooks } from './useHooks';
 
@@ -115,18 +116,55 @@ export function useMultiPane(
     async function setPaneThread(index: number, threadId: string) {
         const pane = panes.value[index];
         if (!pane) return;
-        pane.threadId = threadId;
-        pane.messages = await loadMessagesFor(threadId);
+        const oldId = pane.threadId;
+        let requested: string | '' | false = threadId;
+        // Allow external transform / veto
+        try {
+            requested = (await hooks.applyFilters(
+                'ui.pane.thread:filter:select',
+                requested,
+                pane,
+                oldId
+            )) as string | '' | false;
+        } catch {}
+        if (requested === false) return; // veto
+        // Clear association
+        if (requested === '') {
+            pane.threadId = '';
+            pane.messages = [];
+            if (oldId !== '')
+                hooks.doAction(
+                    'ui.pane.thread:action:changed',
+                    pane,
+                    oldId,
+                    '',
+                    0
+                );
+            return;
+        }
+        pane.threadId = requested;
+        pane.messages = await loadMessagesFor(requested);
+        if (oldId !== requested)
+            hooks.doAction(
+                'ui.pane.thread:action:changed',
+                pane,
+                oldId,
+                requested,
+                pane.messages.length
+            );
     }
 
     function setActive(i: number) {
-        if (i >= 0 && i < panes.value.length) {
-            if (i !== activePaneIndex.value) {
-                activePaneIndex.value = i;
-                // Emit switch action with new pane state
-                hooks.doAction('ui.pane.switch:action', panes.value[i], i);
-            }
-        }
+        if (i < 0 || i >= panes.value.length) return;
+        if (i === activePaneIndex.value) return;
+        const prevIndex = activePaneIndex.value;
+        const prevPane = panes.value[prevIndex];
+        activePaneIndex.value = i;
+        if (prevPane)
+            hooks.doAction('ui.pane.blur:action', prevPane, prevIndex);
+        // Preserve existing switch hook for compatibility
+        hooks.doAction('ui.pane.switch:action', panes.value[i], i);
+        hooks.doAction('ui.pane.active:action', panes.value[i], i, prevIndex);
     }
 
     function addPane() {

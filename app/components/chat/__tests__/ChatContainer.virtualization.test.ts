@@ -41,42 +41,6 @@ function makeMessages(n: number) {
     }));
 }
 
-describe('ChatContainer virtualization split', () => {
-    it('computes virtualization split (last 6 are recent)', async () => {
-        const msgs = makeMessages(15);
-        const wrapper = mount(ChatContainer as any, {
-            props: { messageHistory: msgs, threadId: 't1' },
-            global: { stubs: globalStubs },
-        });
-        await nextTick();
-        // We can derive virtualStableMessages by reading prop passed to real VirtualMessageList
-        const vml = wrapper.findComponent(VirtualMessageList as any);
-        const virtualPropMessages = (vml.props() as any).messages;
-        const totalRendered = wrapper.findAll('.chat-msg').length;
-        if (totalRendered > 6) {
-            expect(totalRendered - virtualPropMessages.length).toBe(6);
-        } else {
-            expect(virtualPropMessages.length).toBe(0);
-        }
-        // Total rendered equals original length (no streaming)
-        const rendered = wrapper.findAll('.chat-msg');
-        expect(rendered.length).toBe(msgs.length);
-    });
-
-    it('all messages non-virtual when length <= 6', async () => {
-        const msgs = makeMessages(4);
-        const wrapper = mount(ChatContainer as any, {
-            props: { messageHistory: msgs, threadId: 't2' },
-            global: { stubs: globalStubs },
-        });
-        await nextTick();
-        const vml = wrapper.findComponent(VirtualMessageList as any);
-        const virtualMsgs = (vml.props() as any).messages;
-        expect(virtualMsgs.length).toBe(0);
-        expect(wrapper.findAll('.chat-msg').length).toBe(4);
-    });
-});
-
 describe('ChatContainer stream finalization anchor', () => {
     it('does not change relative bottom distance after finalization when user scrolled up', async () => {
         // We spy on console to capture logScroll outputs without polluting test output

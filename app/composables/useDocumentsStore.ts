@@ -116,6 +116,24 @@ export function useAllDocumentsState() {
     return documentsMap;
 }
 
+// ---- Minimal internal peek helpers for multi-pane hook integration ----
+// Whether there are staged (pending) changes that would trigger a save on flush.
+export function __hasPendingDocumentChanges(id: string): boolean {
+    const st = documentsMap.get(id);
+    return !!(
+        st &&
+        st.record &&
+        (st.pendingTitle !== undefined || st.pendingContent !== undefined)
+    );
+}
+
+// Read current status (used to confirm a flush produced a saved state).
+export function __peekDocumentStatus(
+    id: string
+): DocState['status'] | undefined {
+    return documentsMap.get(id)?.status;
+}
+
 // Release a document's in-memory state (after ensuring pending changes flushed).
 // This lets GC reclaim large TipTap JSON payloads when switching away.
 export async function releaseDocument(

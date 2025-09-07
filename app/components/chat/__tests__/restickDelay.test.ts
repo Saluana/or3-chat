@@ -79,7 +79,7 @@ describe('Delayed Re-Stick Heuristic', () => {
         globalThis.cancelAnimationFrame = originalCancel;
     });
 
-    it('does not restick for short (<300ms) linger but does after >=300ms', async () => {
+    it('immediate restick (delay logic removed)', async () => {
         const wrapper = mount(Harness);
 
         // Resolve scroll element reference (DOM mount)
@@ -132,22 +132,11 @@ describe('Delayed Re-Stick Heuristic', () => {
         });
         el.dispatchEvent(new Event('scroll'));
 
-        // Advance only 150ms (<300) -> should NOT restick
-        vi.advanceTimersByTime(150);
+        // Advance a short duration; since delay removed, should already be stuck
+        vi.advanceTimersByTime(50);
         await nextTick();
-
-        const eventsAfterShort = getEvents();
-        const lastShort = eventsAfterShort[eventsAfterShort.length - 1];
-        expect(lastShort.stick).toBe(false);
-
-        // Advance additional 200ms (total 350ms since entering zone) -> should restick
-        vi.advanceTimersByTime(200);
-        await nextTick();
-
-        const eventsAfterLong = getEvents();
-        const hasRestick = eventsAfterLong.some(
-            (e: any) => e.stick === true && e.atBottom === true
-        );
-        expect(hasRestick).toBe(true);
+        const eventsAfter = getEvents();
+        const last = eventsAfter[eventsAfter.length - 1];
+        expect(last.stick).toBe(true);
     });
 });

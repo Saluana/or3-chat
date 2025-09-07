@@ -463,6 +463,46 @@ Hook names:
 -   `ui.pane.close:action:before` — before a pane is removed (after any pending doc flush attempt). - Args: `(pane: PaneState, index: number)`
 -   `ui.pane.switch:action` — when the active pane index changes. - Args: `(pane: PaneState, index: number)`
 
+### New minimal pane extension hooks
+
+Added for multi-pane extensibility (see planning/multipane-hooks-minimal/plan.md):
+
+-   `ui.pane.active:action` — pane becomes active; Args: `(pane, index, previousIndex)`
+-   `ui.pane.blur:action` — previous active pane loses focus; Args: `(pane, previousIndex)`
+-   `ui.pane.thread:filter:select` — mutate / veto thread selection; Args: `(requestedThreadId, pane, oldThreadId)` Return `string|''|false` (false cancels, '' clears)
+-   `ui.pane.thread:action:changed` — after thread + messages loaded; Args: `(pane, oldThreadId, newThreadId, messageCount)`
+-   `ui.pane.doc:filter:select` — mutate / veto doc selection; Args: `(requestedDocId, pane, oldDocId)` Return `string|''|false`
+-   `ui.pane.doc:action:changed` — after document id bound; Args: `(pane, oldDocId, newDocId)`
+-   `ui.pane.doc:action:saved` — after pending changes flushed; Args: `(pane, documentId, meta)`
+-   `ui.pane.msg:action:sent` — user message appended (pane context); Args: `(pane, { id, threadId, length, fileHashes })`
+-   `ui.pane.msg:action:received` — assistant message finalized; Args: `(pane, { id, threadId, length, fileHashes, reasoningLength })`
+
+Ordering note: on activation change sequence is `blur(previous) -> ui.pane.switch -> active(new)`.
+
+### New minimal pane/message/document hooks
+
+Added for per-pane extensibility (see planning doc). All are optional to subscribe.
+
+| Hook                            | Kind   | Description                                  | Args / Return                                                     |
+| ------------------------------- | ------ | -------------------------------------------- | ----------------------------------------------------------------- | --- | --------------------------------- |
+| `ui.pane.active:action`         | action | Pane became active (after switch)            | `(pane, index, previousIndex)`                                    |
+| `ui.pane.blur:action`           | action | Previously active pane lost focus            | `(pane, previousIndex)`                                           |
+| `ui.pane.thread:filter:select`  | filter | Transform / veto thread change               | `(pane, oldThreadId, requestedThreadId)` → `string                | ''  | false` (false cancels, '' clears) |
+| `ui.pane.thread:action:changed` | action | Thread association updated & messages loaded | `(pane, oldThreadId, newThreadId, messageCount)`                  |
+| `ui.pane.doc:filter:select`     | filter | Transform / veto doc change                  | `(pane, oldDocId, requestedDocId)` → `string                      | ''  | false`                            |
+| `ui.pane.doc:action:changed`    | action | Document association updated                 | `(pane, oldDocId, newDocId)`                                      |
+| `ui.pane.doc:action:saved`      | action | Document changes flushed (pane context)      | `(pane, documentId, meta)`                                        |
+| `ui.pane.msg:action:sent`       | action | User message appended in pane's thread       | `(pane, { id, threadId, length, fileHashes? })`                   |
+| `ui.pane.msg:action:received`   | action | Assistant message finalized                  | `(pane, { id, threadId, length, fileHashes?, reasoningLength? })` |
+
+Ordering notes:
+
+1. Switching panes emits `ui.pane.blur:action` (old) → existing `ui.pane.switch:action` (compat) → `ui.pane.active:action` (new).
+2. Thread/doc filters run before state mutation; returning `false` aborts, returning `''` clears association.
+3. `ui.pane.doc:action:saved` only fires when pending title/content existed before flush.
+
+These complement existing global chat hooks (`ai.chat.*`, `ui.chat.*`) by adding pane context.
+
 Notes:
 
 -   `PaneState` shape: `{ id, mode: 'chat'|'doc', threadId, documentId?, messages[], validating }`.

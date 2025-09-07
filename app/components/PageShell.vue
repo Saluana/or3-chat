@@ -353,11 +353,25 @@ watch(
 );
 
 // --------------- Documents Integration ---------------
+const { useDocumentState } = await import('~/composables/useDocumentsStore');
+const hooks = useHooks();
 const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
     panes,
     activePaneIndex,
     createNewDoc,
-    flushDocument: (id) => flushDocument(id),
+    flushDocument: async (id) => {
+        const stBefore: any = useDocumentState(id);
+        const hadPending = !!(
+            stBefore?.pendingTitle || stBefore?.pendingContent
+        );
+        await flushDocument(id);
+        if (hadPending) {
+            const pane = panes.value.find(
+                (p) => p.mode === 'doc' && p.documentId === id
+            );
+            if (pane) hooks.doAction('ui.pane.doc:action:saved', pane, id, {});
+        }
+    },
 });
 
 async function onNewDocument(initial?: { title?: string }) {

@@ -188,6 +188,24 @@ export function useChat(
         rawMessages.value.push(rawUser);
         messages.value.push(ensureUiMessage(rawUser));
 
+        // Pane-scoped message sent hook (after append)
+        try {
+            const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+            if (mpApi && mpApi.panes?.value) {
+                const pane = mpApi.panes.value.find(
+                    (p: any) =>
+                        p.mode === 'chat' && p.threadId === threadIdRef.value
+                );
+                if (pane)
+                    hooks.doAction('ui.pane.msg:action:sent', pane, {
+                        id: userDbMsg.id,
+                        threadId: threadIdRef.value,
+                        length: outgoing.length,
+                        fileHashes: userDbMsg.file_hashes || null,
+                    });
+            }
+        } catch {}
+
         loading.value = true;
         streamId.value = null;
 
@@ -436,6 +454,26 @@ export function useChat(
                 updated_at: nowSec(),
             } as any;
             await upsert.message(finalized);
+            // Pane-scoped assistant received hook
+            try {
+                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                if (mpApi && mpApi.panes?.value) {
+                    const pane = mpApi.panes.value.find(
+                        (p: any) =>
+                            p.mode === 'chat' &&
+                            p.threadId === threadIdRef.value
+                    );
+                    if (pane)
+                        hooks.doAction('ui.pane.msg:action:received', pane, {
+                            id: finalized.id,
+                            threadId: threadIdRef.value,
+                            length: (incoming as string).length,
+                            fileHashes: finalized.file_hashes || null,
+                            reasoningLength: (current.reasoning_text || '')
+                                .length,
+                        });
+                }
+            } catch {}
             const endedAt = Date.now();
             await hooks.doAction('ai.chat.send:action:after', {
                 threadId: threadIdRef.value,
