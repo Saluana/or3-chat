@@ -180,17 +180,16 @@ const clamp = (w: number) =>
     Math.min(props.maxWidth, Math.max(props.minWidth, w));
 
 // open state (controlled or uncontrolled)
-// Minimal tweak: start closed on mobile to avoid initial empty sidebar flash.
+// Hydration note:
+// We intentionally start CLOSED for both SSR and initial client render to avoid
+// class / node mismatches between server HTML (which cannot know viewport width)
+// and the hydrated client (which previously opened immediately on desktop).
+// After mount we detect desktop and apply defaultOpen. This removes the
+// hydration warnings about missing backdrop / translate-x-0 classes.
 const openState = ref<boolean>(
     (() => {
         if (props.modelValue !== undefined) return props.modelValue;
-        if (import.meta.client) {
-            try {
-                const desktop = window.matchMedia('(min-width: 768px)').matches;
-                return desktop ? props.defaultOpen : false;
-            } catch {}
-        }
-        return false; // SSR fallback (prevents mobile flash)
+        return false; // unified deterministic initial state
     })()
 );
 const open = computed({
@@ -235,6 +234,16 @@ const initialized = ref(false);
 onMounted(() => {
     updateMq();
     mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
+    // Apply defaultOpen only AFTER we know if we're on desktop so SSR & first client
+    // render remain consistent.
+    if (
+        props.modelValue === undefined &&
+        isDesktop.value &&
+        props.defaultOpen &&
+        !openState.value
+    ) {
+        openState.value = true;
+    }
     requestAnimationFrame(() => (initialized.value = true));
 });
 

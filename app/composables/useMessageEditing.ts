@@ -11,8 +11,15 @@ export function useMessageEditing(message: any) {
 
     function beginEdit() {
         if (editing.value) return;
-        original.value = message.content;
-        draft.value = message.content;
+        // Some message objects use .text (UiChatMessage), others .content; fall back gracefully.
+        const base =
+            typeof message.content === 'string'
+                ? message.content
+                : typeof message.text === 'string'
+                ? message.text
+                : '';
+        original.value = base;
+        draft.value = base;
         editing.value = true;
     }
     function cancelEdit() {
@@ -41,7 +48,9 @@ export function useMessageEditing(message: any) {
                 data: { ...(existing.data || {}), content: trimmed },
                 updated_at: nowSec(),
             });
+            // Persist to both fields so renderers using either stay in sync
             message.content = trimmed;
+            if ('text' in message) message.text = trimmed;
             editing.value = false;
         } finally {
             saving.value = false;
