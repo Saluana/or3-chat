@@ -14,7 +14,7 @@
             >
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
-                    :messages="virtualStableMessages"
+                    :messages="stableMessages"
                     :item-size-estimation="520"
                     :overscan="5"
                     :scroll-parent="scrollParent"
@@ -43,26 +43,6 @@
                         </div>
                     </template>
                     <template #tail>
-                        <!-- Stable virtualization ends here -->
-                        <!-- Recently active (non-virtual) messages -->
-                        <div
-                            v-for="rm in recentMessages"
-                            :key="rm.id"
-                            class="min-w-0"
-                            :data-msg-id="rm.id"
-                            :data-stream-id="rm.stream_id"
-                        >
-                            <ChatMessage
-                                :message="rm"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                                @begin-edit="onBeginEdit(rm.id)"
-                                @cancel-edit="onEndEdit(rm.id)"
-                                @save-edit="onEndEdit(rm.id)"
-                            />
-                        </div>
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
                             v-if="streamingMessage"
@@ -294,24 +274,14 @@ const streamingMessage = computed<any | null>(() => {
     } as any;
 });
 
-// Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
-const RECENT_NON_VIRTUAL = 6;
+// All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
 function filterStreaming(arr: any[]) {
     if (streamActive.value && streamId.value) {
         return arr.filter((m) => m.stream_id !== streamId.value);
     }
     return arr;
 }
-const recentMessages = computed<any[]>(() => {
-    const base = filterStreaming(messages.value);
-    if (base.length <= RECENT_NON_VIRTUAL) return base;
-    return base.slice(-RECENT_NON_VIRTUAL);
-});
-const virtualStableMessages = computed<any[]>(() => {
-    const base = filterStreaming(messages.value);
-    if (base.length <= RECENT_NON_VIRTUAL) return [];
-    return base.slice(0, -RECENT_NON_VIRTUAL);
-});
+const stableMessages = computed<any[]>(() => filterStreaming(messages.value));
 // Removed size change logging for virtual/recent message groups.
 
 // Removed assistantVisible tracking (no handoff overlap needed)
