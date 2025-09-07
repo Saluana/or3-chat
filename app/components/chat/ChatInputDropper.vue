@@ -303,6 +303,7 @@
             hydrate-on-visible
             v-model:showModal="showSystemPrompts"
             :thread-id="props.threadId"
+            :pane-id="props.paneId"
             @selected="handlePromptSelected"
             @closed="handlePromptModalClosed"
         />
@@ -332,11 +333,16 @@ import { isMobile, state } from '~/state/global';
 import { useUserApiKey } from '~/composables/useUserApiKey';
 import { useOpenRouterAuth } from '~/composables/useOpenrouter';
 import { useToast } from '#imports';
+import {
+    registerPaneInput,
+    unregisterPaneInput,
+} from '~/composables/useChatInputBridge';
 const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
     threadId?: string;
     streaming?: boolean; // assistant response streaming
+    paneId?: string; // provided by ChatContainer so the bridge can key this input
 }>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
@@ -767,6 +773,30 @@ const handleSend = () => {
         autoResize();
     }
 };
+
+// Imperative bridge API (used by programmatic pane plugin sends)
+function setText(t: string) {
+    promptText.value = t;
+    try {
+        if (editor.value) {
+            editor.value.commands.setContent(t, { emitUpdate: true });
+        }
+    } catch {}
+    autoResize();
+}
+function triggerSend() {
+    handleSend();
+}
+defineExpose({ setText, triggerSend });
+
+onMounted(() => {
+    if (props.paneId) {
+        registerPaneInput(props.paneId, { setText, triggerSend });
+    }
+});
+onBeforeUnmount(() => {
+    if (props.paneId) unregisterPaneInput(props.paneId);
+});
 
 const handlePromptSelected = (id: string) => {
     if (!props.threadId) emit('pending-prompt-selected', id);
