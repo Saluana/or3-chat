@@ -360,17 +360,7 @@ const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
     activePaneIndex,
     createNewDoc,
     flushDocument: async (id) => {
-        const stBefore: any = useDocumentState(id);
-        const hadPending = !!(
-            stBefore?.pendingTitle || stBefore?.pendingContent
-        );
-        await flushDocument(id);
-        if (hadPending) {
-            const pane = panes.value.find(
-                (p) => p.mode === 'doc' && p.documentId === id
-            );
-            if (pane) hooks.doAction('ui.pane.doc:action:saved', pane, id, {});
-        }
+        await flushDocument(id); // central flush now emits saved
     },
 });
 

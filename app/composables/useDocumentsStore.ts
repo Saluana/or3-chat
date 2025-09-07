@@ -1,4 +1,5 @@
 import { ref, reactive } from 'vue';
+import { useNuxtApp } from '#app';
 import {
     createDocument,
     updateDocument,
@@ -58,6 +59,27 @@ export async function flush(id: string) {
     } finally {
         st.pendingTitle = undefined;
         st.pendingContent = undefined;
+        // Emit pane-scoped saved hook for any panes displaying this doc.
+        try {
+            if (typeof window !== 'undefined') {
+                const nuxt = useNuxtApp();
+                const hooks: any = (nuxt as any)?.$hooks;
+                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                const panes = mpApi?.panes?.value || [];
+                if (hooks && panes.length) {
+                    for (const p of panes) {
+                        if (p?.mode === 'doc' && p?.documentId === id) {
+                            hooks.doAction(
+                                'ui.pane.doc:action:saved',
+                                p,
+                                id,
+                                {}
+                            );
+                        }
+                    }
+                }
+            }
+        } catch {}
     }
 }
 
