@@ -1,29 +1,14 @@
 <template>
     <UModal
         v-model:open="open"
-        title="Rename thread"
         :ui="{
             footer: 'justify-end border-t-2',
-            header: 'border-b-2  border-black bg-primary p-0 min-h-[50px] text-white',
             body: 'p-0!',
         }"
+        title="Model settings"
+        description="Browse and favorite models from the OpenRouter catalog."
         class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
     >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    Settings
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="xs"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-        </template>
         <template #body>
             <div class="flex flex-col h-full">
                 <div

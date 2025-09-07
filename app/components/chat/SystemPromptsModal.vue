@@ -3,13 +3,16 @@
         v-model:open="open"
         :ui="{
             footer: 'justify-end border-none',
-            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
             body: 'p-0! border-b-0! overflow-hidden',
         }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80dvh] max-h-[80dvh] overflow-hidden"
+        title="System Prompts"
+        description="Manage and select system prompts to customize AI behavior."
+        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
+        <!--
         <template #header>
             <div class="flex w-full items-center justify-between pr-2">
+                
                 <h3 class="font-semibold text-sm pl-2 dark:text-black">
                     System Prompts
                 </h3>
@@ -22,13 +25,18 @@
                     @click="open = false"
                 />
             </div>
+            
         </template>
+        -->
         <template #body>
             <div class="flex flex-col h-full" @keydown="handleKeydown">
                 <div
-                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
+                    v-show="!editingPrompt"
+                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
                 >
-                    <div class="flex items-center gap-2 flex-wrap">
+                    <div
+                        class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
+                    >
                         <UButton
                             @click="createNewPrompt"
                             size="sm"
@@ -50,14 +58,17 @@
                     <UInput
                         v-model="searchQuery"
                         placeholder="Search prompts..."
-                        size="sm"
-                        class="max-w-xs"
+                        :size="isMobile ? 'md' : 'sm'"
+                        class="w-full my-2 sm:my-0 sm:max-w-xs"
                         icon="i-heroicons-magnifying-glass"
                     />
                 </div>
                 <div class="flex-1 overflow-hidden">
                     <!-- List View -->
-                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
+                    <div
+                        v-if="!editingPrompt"
+                        class="max-h-full overflow-y-auto"
+                    >
                         <div
                             v-if="filteredPrompts.length === 0"
                             class="flex flex-col items-center justify-center h-full text-center p-8"
@@ -84,17 +95,20 @@
                             <div
                                 v-for="prompt in filteredPrompts"
                                 :key="prompt.id"
-                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
-                                :class="{
-                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
-                                        prompt.id === currentActivePromptId ||
-                                        prompt.id === defaultPromptId,
-                                }"
+                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
+                                :data-active="
+                                    prompt.id === currentActivePromptId
+                                        ? 'true'
+                                        : 'false'
+                                "
                             >
+                                <!-- Left / Main meta -->
                                 <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1">
+                                    <div
+                                        class="flex flex-wrap items-center gap-2 mb-1"
+                                    >
                                         <h4
-                                            class="font-medium text-gray-900 dark:text-white truncate"
+                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
                                             :class="{
                                                 'italic opacity-60':
                                                     !prompt.title,
@@ -107,21 +121,48 @@
                                         </h4>
                                         <span
                                             v-if="prompt.id === defaultPromptId"
-                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
                                             >Default</span
                                         >
+                                        <span
+                                            v-if="
+                                                prompt.id ===
+                                                    currentActivePromptId &&
+                                                prompt.id !== defaultPromptId
+                                            "
+                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
+                                            >Active</span
+                                        >
                                     </div>
-                                    <p
-                                        class="text-sm text-gray-500 dark:text-gray-400"
+                                    <div
+                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
                                     >
-                                        Updated
-                                        {{ formatDate(prompt.updated_at) }} •
-                                        {{ tokenCounts[prompt.id] || 0 }} tokens
-                                    </p>
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:clock"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            Updated
+                                            {{ formatDate(prompt.updated_at) }}
+                                        </span>
+                                        <span
+                                            class="hidden sm:inline opacity-40"
+                                            >|</span
+                                        >
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:chart-bar"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            {{ tokenCounts[prompt.id] || 0 }}
+                                            tokens
+                                        </span>
+                                    </div>
                                 </div>
 
+                                <!-- Actions -->
                                 <div
-                                    class="flex items-center gap-2 ml-4 shrink-0"
+                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
                                 >
                                     <UTooltip
                                         :delay-duration="0"
@@ -171,6 +212,9 @@
                                             prompt.id === currentActivePromptId
                                                 ? 'solid'
                                                 : 'outline'
+                                        "
+                                        :aria-pressed="
+                                            prompt.id === currentActivePromptId
                                         "
                                     >
                                         {{
@@ -254,6 +298,7 @@ import { useActivePrompt } from '~/composables/useActivePrompt';
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 import { encode } from 'gpt-tokenizer';
 import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+import { isMobile } from '~/state/global';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{

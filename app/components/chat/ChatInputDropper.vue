@@ -299,14 +299,10 @@
             </div>
         </div>
         <lazy-modal-settings-modal v-model:showModal="showModelCatalog" />
-        <LazyChatSystemPromptsModal
-            hydrate-on-visible
-            v-model:showModal="showSystemPrompts"
-            :thread-id="props.threadId"
-            :pane-id="props.paneId"
-            @selected="handlePromptSelected"
-            @closed="handlePromptModalClosed"
-        />
+        <LazyChatSystemPromptsModal hydrate-on-visible
+        v-model:showModal="showSystemPrompts" :thread-id="props.threadId" "
+        :pane-id="props.paneId" @selected="handlePromptSelected"
+        @closed="handlePromptModalClosed" />
     </div>
 </template>
 
