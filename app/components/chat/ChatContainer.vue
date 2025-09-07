@@ -95,7 +95,6 @@ import {
     computed,
     watch,
     ref,
-    nextTick,
     type Ref,
     type CSSProperties,
 } from 'vue';
@@ -104,13 +103,13 @@ import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
-import { onMounted, watchEffect } from 'vue';
+// Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
 
 const model = ref('openai/gpt-oss-120b');
 const pendingPromptId = ref<string | null>(null);
-
+//yoooolo
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
@@ -228,10 +227,7 @@ watch(
 // Render messages with content narrowed to string for ChatMessage.vue
 // messages already normalized to UiChatMessage with .text in useChat composable
 const messages = computed(() => chat.value.messages.value || []);
-onMounted(() => {
-    // mounted
-});
-// Removed length logging watcher.
+
 const loading = computed(() => chat.value.loading.value);
 
 // Tail streaming now provided directly by useChat composable

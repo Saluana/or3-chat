@@ -51,7 +51,6 @@ import {
     useResizeObserver,
     useRafFn,
     useEventListener,
-    useThrottleFn,
 } from '@vueuse/core';
 
 interface ChatMessage {
@@ -97,18 +96,22 @@ const scrollParentRef = computed<HTMLElement | null>(() => {
 // Tunables (defined BEFORE any immediate watchers that call compute to avoid TDZ during HMR)
 // Use provided threshold for deciding auto-scroll near-bottom detection (Req 1.1/3.1.3)
 const thresholdPx = computed(() => props.autoScrollThreshold);
-const NEAR_BOTTOM_PX = 24; // update "recently at bottom" window
 const disengageDeltaPx = 12; // small intentional upward scroll disengages
-const throttleMs = 50;
 const USER_SCROLL_INACTIVE_TIMEOUT = 800;
 
-// Initialize scroll metrics once scroll parent becomes available (after tunables defined)
+// Scroll / stick state
+let stick = true; // whether we are willing to auto-scroll
+const atBottom = ref(true); // updated by compute(); default true so first append snaps
+let lastScrollTop = 0;
+let lastScrollHeight = 0;
+let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Initialize scroll metrics once scroll parent becomes available (after variables above are defined)
 watch(
     scrollParentRef,
     (el) => {
         if (!el) return;
         try {
-            // seed previous metrics so onContentIncrease can detect prior bottom
             lastScrollHeight = (el as any).scrollHeight || 0;
             lastScrollTop = (el as any).scrollTop || 0;
         } catch {}
@@ -117,19 +120,11 @@ watch(
     { immediate: true }
 );
 
-// Sticky intent (simple): true only if user currently within threshold bottom zone.
-let stick = true;
-const userScrolling = ref(false);
-let lastScrollTop = 0;
-let lastScrollHeight = 0;
-let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
-
 // Scroll state emission tracking (Task 5.1.2)
 let lastEmittedStick: boolean | null = null;
 let lastEmittedAtBottom: boolean | null = null;
 function maybeEmitScrollState() {
-    const a = atBottom?.value; // may be undefined early
-    if (a === undefined) return;
+    const a = atBottom.value;
     if (a !== lastEmittedAtBottom || stick !== lastEmittedStick) {
         try {
             emit('scroll-state', { atBottom: a, stick });
@@ -148,7 +143,6 @@ function compute() {
     const el =
         (props.scrollParent as any) || scrollParentRef.value || root.value;
     if (!el) return;
-    if (!thresholdPx) return;
     const currentTop = el.scrollTop;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
     const atBottomNow = dist <= thresholdPx.value;
@@ -160,22 +154,18 @@ function compute() {
         // Only (re)enable stick when user actively scrolled downward into bottom zone.
         stick = true;
     }
+    atBottom.value = atBottomNow;
     lastScrollTop = currentTop;
     lastScrollHeight = el.scrollHeight;
     maybeEmitScrollState();
 }
 
-const throttledCompute = compute;
-
 function markUserScroll() {
-    userScrolling.value = true;
     if (userScrollTimer) clearTimeout(userScrollTimer);
-    userScrollTimer = setTimeout(() => {
-        userScrolling.value = false;
-    }, USER_SCROLL_INACTIVE_TIMEOUT);
+    userScrollTimer = setTimeout(() => {}, USER_SCROLL_INACTIVE_TIMEOUT);
 }
 
-useEventListener(scrollParentRef, 'scroll', throttledCompute, {
+useEventListener(scrollParentRef, 'scroll', compute, {
     passive: true,
 });
 useEventListener(scrollParentRef, 'wheel', markUserScroll, { passive: true });
@@ -186,14 +176,6 @@ useEventListener(scrollParentRef, 'touchmove', markUserScroll, {
     passive: true,
 });
 
-const atBottom = computed(() => {
-    const el = scrollParentRef.value || root.value;
-    if (!el) return true;
-    return (
-        el.scrollHeight - el.scrollTop - el.clientHeight <= thresholdPx.value
-    );
-});
-
 // Minimal: auto-scroll only if user is at bottom and not editing.
 const shouldAutoScroll = computed(
     () => stick && atBottom.value && !props.editingActive
@@ -202,39 +184,31 @@ const shouldAutoScroll = computed(
 // (Restick delay removed for simplicity.)
 
 function scrollToBottom(opts: { smooth?: boolean } = {}) {
-    if (!stick) return; // honor disengaged state: never force-scroll while user reading
+    if (!stick) return; // respect disengaged reading state
     const baseEl = scrollParentRef.value || root.value;
     if (!baseEl) return;
     const smooth = opts.smooth === true;
-
     const targets: any[] = [];
     if (baseEl) targets.push(baseEl);
     if (root.value && root.value !== baseEl) targets.push(root.value);
-
     for (const t of targets) {
         try {
-            const bottomPos = (t as any).scrollHeight - (t as any).clientHeight;
-            if (typeof (t as any).scrollTo === 'function') {
-                (t as any).scrollTo({
+            const bottomPos = t.scrollHeight - t.clientHeight;
+            if (typeof t.scrollTo === 'function') {
+                t.scrollTo({
                     top: bottomPos,
                     behavior: (smooth ? 'smooth' : 'auto') as ScrollBehavior,
                 });
+            } else {
+                t.scrollTop = bottomPos;
             }
-            (t as any).scrollTop = bottomPos;
-        } catch {
-            try {
-                const bottomPos =
-                    (t as any).scrollHeight - (t as any).clientHeight;
-                (t as any).scrollTop = bottomPos;
-            } catch {}
-        }
+        } catch {}
     }
-
     stick = true;
     (scrollToBottom as any)._count = ((scrollToBottom as any)._count || 0) + 1;
     try {
-        lastScrollTop = (baseEl as any).scrollTop ?? lastScrollTop;
-        lastScrollHeight = (baseEl as any).scrollHeight ?? lastScrollHeight;
+        lastScrollTop = baseEl.scrollTop ?? lastScrollTop;
+        lastScrollHeight = baseEl.scrollHeight ?? lastScrollHeight;
     } catch {}
 }
 
