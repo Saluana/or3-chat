@@ -1,21 +1,34 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { nextTick, ref } from 'vue';
+
+// Mock useChat BEFORE importing ChatContainer so component uses deterministic state
+vi.mock('~/composables/useAi', () => {
+    const { ref } = require('vue');
+    const state: any = {
+        messages: ref([]),
+        loading: ref(false),
+        streamId: ref(null),
+        streamState: ref({ text: '', reasoningText: '', finalized: true }),
+        threadId: ref('mock-thread'),
+        sendMessage: vi.fn(),
+        retryMessage: vi.fn(),
+        abort: vi.fn(),
+        clear: vi.fn(),
+    };
+    function useChat(history?: any[], threadId?: string) {
+        if (history && history.length) state.messages.value = [...history];
+        if (threadId) state.threadId.value = threadId;
+        return state;
+    }
+    return { useChat, __chatState: state };
+});
+
 import ChatContainer from '../ChatContainer.vue';
+import VirtualMessageList from '../VirtualMessageList.vue';
 
 // Stubs for heavy child components so we only test orchestration logic.
 const globalStubs = {
-    VirtualMessageList: {
-        template:
-            '<div><slot name="item" v-for="(m,i) in messages" :message="m" :index="i" /><slot name="tail" /></div>',
-        props: [
-            'messages',
-            'itemSizeEstimation',
-            'overscan',
-            'scrollParent',
-            'wrapperClass',
-        ],
-    },
     ChatMessage: { template: '<div class="chat-msg" />' },
     'chat-input-dropper': { template: '<div />' },
 };
@@ -29,23 +42,25 @@ function makeMessages(n: number) {
 }
 
 describe('ChatContainer virtualization split', () => {
-    it('computes virtualization split (virtualStableMessages = total-6)', async () => {
+    it('computes virtualization split (last 6 are recent)', async () => {
         const msgs = makeMessages(15);
         const wrapper = mount(ChatContainer as any, {
             props: { messageHistory: msgs, threadId: 't1' },
             global: { stubs: globalStubs },
         });
         await nextTick();
-        const virtualPropMessages = (
-            wrapper
-                .findComponent(globalStubs.VirtualMessageList as any)
-                .props() as any
-        ).messages;
-        expect(virtualPropMessages.length).toBe(15 - 6);
-        // ChatMessage stubs render BOTH virtual + recent because our stub VirtualMessageList just iterates all.
-        // So ensure total rendered equals original length.
+        // We can derive virtualStableMessages by reading prop passed to real VirtualMessageList
+        const vml = wrapper.findComponent(VirtualMessageList as any);
+        const virtualPropMessages = (vml.props() as any).messages;
+        const totalRendered = wrapper.findAll('.chat-msg').length;
+        if (totalRendered > 6) {
+            expect(totalRendered - virtualPropMessages.length).toBe(6);
+        } else {
+            expect(virtualPropMessages.length).toBe(0);
+        }
+        // Total rendered equals original length (no streaming)
         const rendered = wrapper.findAll('.chat-msg');
-        expect(rendered.length).toBe(15);
+        expect(rendered.length).toBe(msgs.length);
     });
 
     it('all messages non-virtual when length <= 6', async () => {
@@ -55,11 +70,8 @@ describe('ChatContainer virtualization split', () => {
             global: { stubs: globalStubs },
         });
         await nextTick();
-        const virtualMsgs = (
-            wrapper
-                .findComponent(globalStubs.VirtualMessageList as any)
-                .props() as any
-        ).messages;
+        const vml = wrapper.findComponent(VirtualMessageList as any);
+        const virtualMsgs = (vml.props() as any).messages;
         expect(virtualMsgs.length).toBe(0);
         expect(wrapper.findAll('.chat-msg').length).toBe(4);
     });
@@ -127,5 +139,133 @@ describe('ChatContainer stream finalization anchor', () => {
         const postDist =
             el.scrollHeight - (el as any).scrollTop - el.clientHeight;
         expect(postDist).toBe(preDist);
+    });
+});
+
+// Task 6.2.2: Position preservation & virtualization stability integration tests
+describe('ChatContainer virtualization position preservation (Task 6.2.2)', () => {
+    // Mock useChat to control message ref growth incrementally
+    // we reuse earlier global mock; prepare a fresh large message set each test
+
+    function setScroll(
+        el: HTMLElement,
+        top: number,
+        height: number,
+        client: number
+    ) {
+        Object.defineProperty(el, 'scrollTop', {
+            value: top,
+            configurable: true,
+            writable: true,
+        });
+        Object.defineProperty(el, 'scrollHeight', {
+            value: height,
+            configurable: true,
+        });
+        Object.defineProperty(el, 'clientHeight', {
+            value: client,
+            configurable: true,
+        });
+    }
+
+    it('does not shift scrollTop when user is mid-list and messages appended', async () => {
+        const mod: any = await import('~/composables/useAi');
+        const __chatState = mod.__chatState;
+        __chatState.messages.value = makeMessages(40); // ensure large set
+        const wrapper = mount(ChatContainer as any, {
+            props: {
+                messageHistory: __chatState.messages.value,
+                threadId: 'virt-thread',
+            },
+            global: { stubs: globalStubs },
+        });
+        await nextTick();
+        const el = wrapper.element.querySelector(
+            '.scrollbars'
+        ) as HTMLElement | null;
+        if (!el) throw new Error('scroll element missing');
+        // mid position (not bottom)
+        setScroll(el, 1500, 8000, 800); // bottom would be 7200
+        el.dispatchEvent(new Event('scroll'));
+        const baseline = el.scrollTop;
+        // append batch
+        for (let i = 0; i < 5; i++)
+            __chatState.messages.value.push({
+                id: 'add' + i,
+                role: 'assistant',
+                text: 'x',
+            });
+        // simulate growth
+        setScroll(el, baseline, 8600, 800);
+        // trigger content increase on VirtualMessageList
+        const vml = wrapper.findComponent(VirtualMessageList as any);
+        (vml.vm as any).onContentIncrease();
+        await nextTick();
+        expect(el.scrollTop).toBe(baseline); // unchanged while disengaged
+    });
+
+    it('auto-scrolls when at bottom and messages appended', async () => {
+        const mod: any = await import('~/composables/useAi');
+        const __chatState = mod.__chatState;
+        __chatState.messages.value = makeMessages(40);
+        const wrapper = mount(ChatContainer as any, {
+            props: {
+                messageHistory: __chatState.messages.value,
+                threadId: 'virt-thread',
+            },
+            global: { stubs: globalStubs },
+        });
+        await nextTick();
+        const el = wrapper.element.querySelector(
+            '.scrollbars'
+        ) as HTMLElement | null;
+        if (!el) throw new Error('scroll element missing');
+        // at bottom
+        setScroll(el, 7200, 8000, 800); // 8000-800=7200
+        el.dispatchEvent(new Event('scroll'));
+        for (let i = 0; i < 3; i++)
+            __chatState.messages.value.push({
+                id: 'tail' + i,
+                role: 'user',
+                text: 'y',
+            });
+        setScroll(el, 7200, 8360, 800); // growth 360
+        const vml = wrapper.findComponent(VirtualMessageList as any);
+        (vml.vm as any).onContentIncrease();
+        await nextTick();
+        expect(el.scrollTop).toBe(8360 - 800);
+    });
+
+    it('boundary shift (virtual vs recent) does not cause jump mid-list', async () => {
+        const mod: any = await import('~/composables/useAi');
+        const __chatState = mod.__chatState;
+        __chatState.messages.value = makeMessages(40);
+        const wrapper = mount(ChatContainer as any, {
+            props: {
+                messageHistory: __chatState.messages.value,
+                threadId: 'virt-thread',
+            },
+            global: { stubs: globalStubs },
+        });
+        await nextTick();
+        const el = wrapper.element.querySelector(
+            '.scrollbars'
+        ) as HTMLElement | null;
+        if (!el) throw new Error('scroll element missing');
+        setScroll(el, 1000, 7000, 800);
+        el.dispatchEvent(new Event('scroll'));
+        const baseline = el.scrollTop;
+        // Add enough messages to shift boundary several steps
+        for (let i = 0; i < 10; i++)
+            __chatState.messages.value.push({
+                id: 'shift' + i,
+                role: 'user',
+                text: 'z',
+            });
+        setScroll(el, baseline, 7600, 800);
+        const vml = wrapper.findComponent(VirtualMessageList as any);
+        (vml.vm as any).onContentIncrease();
+        await nextTick();
+        expect(el.scrollTop).toBe(baseline);
     });
 });

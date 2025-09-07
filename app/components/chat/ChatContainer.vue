@@ -18,6 +18,9 @@
                     :item-size-estimation="520"
                     :overscan="5"
                     :scroll-parent="scrollParent"
+                    :is-streaming="streamActive"
+                    :editing-active="anyEditing"
+                    @scroll-state="onScrollState"
                     wrapper-class="flex flex-col"
                 >
                     <template #item="{ message, index }">
@@ -33,6 +36,9 @@
                                 @retry="onRetry"
                                 @branch="onBranch"
                                 @edited="onEdited"
+                                @begin-edit="onBeginEdit(message.id)"
+                                @cancel-edit="onEndEdit(message.id)"
+                                @save-edit="onEndEdit(message.id)"
                             />
                         </div>
                     </template>
@@ -52,6 +58,9 @@
                                 @retry="onRetry"
                                 @branch="onBranch"
                                 @edited="onEdited"
+                                @begin-edit="onBeginEdit(rm.id)"
+                                @cancel-edit="onEndEdit(rm.id)"
+                                @save-edit="onEndEdit(rm.id)"
                             />
                         </div>
                         <!-- Streaming tail appended (Req 3.2) -->
@@ -67,6 +76,9 @@
                                 @retry="onRetry"
                                 @branch="onBranch"
                                 @edited="onEdited"
+                                @begin-edit="onBeginEdit(streamingMessage.id)"
+                                @cancel-edit="onEndEdit(streamingMessage.id)"
+                                @save-edit="onEndEdit(streamingMessage.id)"
                             />
                         </div>
                     </template>
@@ -110,7 +122,6 @@ import {
 import { useChat } from '~/composables/useAi';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
-import { useAutoScroll } from '../../composables/useAutoScroll';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { onMounted, watchEffect } from 'vue';
@@ -137,23 +148,11 @@ const bottomPad = computed(() => {
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
 
-// Disable browser scroll anchoring in short windows (e.g., finalization) to avoid fight with manual anchors
-const anchorSuppressed = ref(false);
 // Use typed CSSProperties for template binding; overflowAnchor uses the proper union type
 const scrollParentStyle = computed<CSSProperties>(() => ({
     paddingBottom: bottomPad.value + 'px',
-    overflowAnchor: (anchorSuppressed.value
-        ? 'none'
-        : 'auto') as CSSProperties['overflowAnchor'],
+    overflowAnchor: 'auto' as CSSProperties['overflowAnchor'],
 }));
-
-// Small wrapper to schedule a bottom-stick when appropriate. Kept minimal so tests can stub timings.
-function scheduleScrollIfAtBottom() {
-    if (Date.now() < skipAutoScrollUntil) return;
-    if (autoScroll.atBottom.value) {
-        autoScroll.scrollToBottom({ smooth: false });
-    }
-}
 
 // Mobile fixed wrapper classes/styles
 // Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
@@ -250,10 +249,8 @@ watch(
 // messages already normalized to UiChatMessage with .text in useChat composable
 const messages = computed(() => chat.value.messages.value || []);
 onMounted(() => {
-    // mounted debug logging removed
+    // mounted
 });
-// watchEffect debug logging removed
-watchEffect(() => {});
 // Removed length logging watcher.
 const loading = computed(() => chat.value.loading.value);
 
@@ -319,151 +316,32 @@ const virtualStableMessages = computed<any[]>(() => {
 
 // Removed assistantVisible tracking (no handoff overlap needed)
 
-// Scroll handling (Req 3.3) via useAutoScroll
+// Scroll handling centralized in VirtualMessageList
 const scrollParent: Ref<HTMLElement | null> = ref(null);
-const autoScroll = useAutoScroll(scrollParent as Ref<HTMLElement | null>, {
-    thresholdPx: 20,
-    disengageDeltaPx: 8,
-});
-const STRICT_BOTTOM_PX = 8;
-function isTrulyAtBottom() {
-    const el = scrollParent.value;
-    if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight <= STRICT_BOTTOM_PX;
-}
-let pendingAnchor: { bottomDist: number } | null = null;
-let skipAutoScrollUntil = 0;
-// Sticky anchor stabilization data
-let desiredBottom = 0;
-let lastAppliedHeight = 0;
-let anchorAttempts = 0;
-// Tunables for stabilization (made slightly more aggressive for mobile slow reflows)
-const ANCHOR_MAX_ATTEMPTS = 6;
-const ANCHOR_HEIGHT_CHANGE_PX = 8; // smaller threshold to catch subtle mobile layout shifts
-const ANCHOR_DIST_DRIFT_PX = 1; // strict drift tolerance
-const ANCHOR_SUPPRESSION_MS = 1200; // how long to keep overflow-anchor disabled to avoid browser fight
-
-function reanchorIfDrift() {
-    const node = scrollParent.value;
-    if (!node) return;
-    // Stop if too many attempts
-    if (anchorAttempts >= ANCHOR_MAX_ATTEMPTS) return;
-    const currentDist = node.scrollHeight - node.scrollTop - node.clientHeight;
-    const heightChanged =
-        Math.abs(node.scrollHeight - lastAppliedHeight) >
-        ANCHOR_HEIGHT_CHANGE_PX;
-    const distDrift =
-        Math.abs(currentDist - desiredBottom) > ANCHOR_DIST_DRIFT_PX;
-    if (heightChanged || distDrift) {
-        const target = node.scrollHeight - node.clientHeight - desiredBottom;
-        node.scrollTop = Math.max(0, target);
-        lastAppliedHeight = node.scrollHeight;
-        anchorAttempts++;
-    }
-    // Schedule one more pass if we still have attempts left
-    if (anchorAttempts < ANCHOR_MAX_ATTEMPTS) {
-        requestAnimationFrame(() => reanchorIfDrift());
+// Track editing state across child messages for scroll suppression (Task 5.2.2)
+const editingIds = ref<Set<string>>(new Set());
+const anyEditing = computed(() => editingIds.value.size > 0);
+function onBeginEdit(id: string) {
+    if (!id) return;
+    if (!editingIds.value.has(id)) {
+        editingIds.value = new Set(editingIds.value).add(id);
     }
 }
-
-// Detect cases where we thought we were at bottom, but virtualization or late content height expansion
-// increased scrollHeight creating a large bottom gap without a scroll event (stale atBottomFlag true).
-function verifyBottomDrift() {
-    const el = scrollParent.value;
-    if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (autoScroll.atBottom.value && dist > STRICT_BOTTOM_PX) {
-        autoScroll.release();
+function onEndEdit(id: string) {
+    if (!id) return;
+    if (editingIds.value.has(id)) {
+        const next = new Set(editingIds.value);
+        next.delete(id);
+        editingIds.value = next;
     }
 }
-
-// Initial bottom stick (client only; SSR lacks requestAnimationFrame)
-if (process.client) {
-    requestAnimationFrame(() => {
-        if (autoScroll.atBottom.value)
-            autoScroll.scrollToBottom({ smooth: false });
-    });
+// Scroll state from VirtualMessageList (Task 5.1.2)
+const atBottom = ref(true);
+const stick = ref(true);
+function onScrollState(s: { atBottom: boolean; stick: boolean }) {
+    atBottom.value = s.atBottom;
+    stick.value = s.stick;
 }
-
-// Consolidated scroll reactions (messages length, input height changes, thread switch)
-watchEffect(async () => {
-    // Skip scroll scheduling during SSR (no DOM / rAF)
-    if (typeof window === 'undefined') return;
-    const deps = [
-        messages.value.length,
-        chatInputHeight.value,
-        emittedInputHeight.value,
-        currentThreadId.value,
-    ];
-    void deps; // register dependencies
-    await nextTick();
-    if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
-});
-
-// Release sticky auto-scroll if messages grow while user not at true bottom
-watch(
-    () => messages.value.length,
-    () => {
-        if (!isTrulyAtBottom()) autoScroll.release();
-    }
-);
-// Release on tail finalization if user scrolled up even slightly
-watch(
-    () => streamActive.value,
-    (now, was) => {
-        if (was && !now) {
-            const el = scrollParent.value;
-            const atBottomNow = isTrulyAtBottom();
-            if (el && !atBottomNow) {
-                // Suppress browser anchoring so it doesn't fight our manual anchor.
-                anchorSuppressed.value = true;
-                setTimeout(
-                    () => (anchorSuppressed.value = false),
-                    ANCHOR_SUPPRESSION_MS
-                );
-
-                // pre-anchor
-                // Capture distance from bottom before layout settles.
-                pendingAnchor = {
-                    bottomDist:
-                        el.scrollHeight - el.scrollTop - el.clientHeight,
-                };
-                // immediate post-anchor (no-op for production)
-                // Seed stabilization
-                desiredBottom = pendingAnchor.bottomDist;
-                lastAppliedHeight = el.scrollHeight;
-                anchorAttempts = 0;
-
-                autoScroll.release();
-                // Suppress auto-scroll scheduling for a longer safety window to handle slow mobile reflows
-                skipAutoScrollUntil = Date.now() + 1200; // ~1.2s safety window
-                // Wait a tick to let DOM updates settle, then perform the manual re-anchor inside rAF
-                nextTick(() => {
-                    requestAnimationFrame(() => {
-                        const node = scrollParent.value;
-                        if (!node || !pendingAnchor) return;
-                        const target =
-                            node.scrollHeight -
-                            node.clientHeight -
-                            pendingAnchor.bottomDist;
-                        // Maintain previous visual position relative to bottom.
-                        node.scrollTop = Math.max(0, target);
-                        pendingAnchor = null;
-                        // One rAF later, verify and re-apply if virtua reflow changed heights
-                        requestAnimationFrame(() => {
-                            verifyBottomDrift();
-                            reanchorIfDrift();
-                        });
-                    });
-                });
-            } else {
-                requestAnimationFrame(() => {
-                    verifyBottomDrift();
-                });
-            }
-        }
-    }
-);
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)

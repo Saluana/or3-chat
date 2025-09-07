@@ -27,9 +27,22 @@ acc.append('[plan]', { kind: 'reasoning' });
 acc.finalize();
 ```
 
-### Scroll Behavior
+### Scroll / Auto-Scroll Behavior
 
-`useAutoScroll` gates snapping: only scrolls if user recently at bottom & not actively scrolling. Integration tests (Task 9) cover both stick & non-stick paths.
+Scrolling logic is now centralized in `VirtualMessageList.vue` (legacy `useAutoScroll` + `useRafBatch` removed). Snapping is gated by three conditions (`shouldAutoScroll`):
+
+1. `stick` intent flag (cleared on deliberate upward user scroll >12px or leaving bottom threshold)
+2. `atBottom` (distance to bottom <= configurable `autoScrollThreshold`, default 100px)
+3. `!editingActive` (external suppression during in–place message editing)
+
+Additional nuances:
+
+-   Streaming maintenance: while `isStreaming` and `shouldAutoScroll` are true, we rAF‑batch `scrollToBottom` micro-adjusts (non-smooth) to keep the tail pinned without jank.
+-   New message additions while auto-scroll eligible use a smooth scroll (batched) for better perceived continuity; markdown expansion / layout growth uses an immediate snap.
+-   Dynamic average item size blending (70/30) refines virtualization estimation for large heterogeneous message sets.
+-   Component emits `scroll-state { atBottom, stick }`, `reached-top`, `reached-bottom`, enabling higher-level orchestration without duplicating math.
+
+Integration tests (Section 6.1 & 6.2) cover: streaming jank prevention, disengagement & re‑engagement, editing suppression, dynamic item size convergence, and virtualization stability during rapid appends.
 
 ### Testing
 
