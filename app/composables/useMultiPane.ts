@@ -118,6 +118,15 @@ export function useMultiPane(
         if (!pane) return;
         const oldId = pane.threadId;
         let requested: string | '' | false = threadId;
+        if (import.meta.dev) {
+            try {
+                console.debug('[multiPane] setPaneThread:request', {
+                    index,
+                    oldId,
+                    incoming: threadId,
+                });
+            } catch {}
+        }
         // Allow external transform / veto
         try {
             requested = (await hooks.applyFilters(
@@ -140,6 +149,14 @@ export function useMultiPane(
                     '',
                     0
                 );
+            if (import.meta.dev) {
+                try {
+                    console.debug('[multiPane] setPaneThread:cleared', {
+                        index,
+                        oldId,
+                    });
+                } catch {}
+            }
             return;
         }
         pane.threadId = requested;
@@ -152,6 +169,16 @@ export function useMultiPane(
                 requested,
                 pane.messages.length
             );
+        if (import.meta.dev) {
+            try {
+                console.debug('[multiPane] setPaneThread:applied', {
+                    index,
+                    oldId,
+                    newId: requested,
+                    messages: pane.messages.length,
+                });
+            } catch {}
+        }
     }
 
     function setActive(i: number) {
@@ -160,6 +187,16 @@ export function useMultiPane(
         const prevIndex = activePaneIndex.value;
         const prevPane = panes.value[prevIndex];
         activePaneIndex.value = i;
+        if (import.meta.dev) {
+            try {
+                console.debug('[multiPane] setActive', {
+                    prevIndex,
+                    nextIndex: i,
+                    prevThread: prevPane?.threadId,
+                    nextThread: panes.value[i]?.threadId,
+                });
+            } catch {}
+        }
         if (prevPane)
             hooks.doAction('ui.pane.blur:action', prevPane, prevIndex);
         // Preserve existing switch hook for compatibility
@@ -245,6 +282,19 @@ export function useMultiPane(
     // This is intentionally lightweight; if multiple instances are created the latest wins.
     try {
         (globalThis as any).__or3MultiPaneApi = api;
+        if (import.meta.dev) {
+            try {
+                console.info('[multiPane] global api exposed', {
+                    panes: panes.value.map((p, i) => ({
+                        i,
+                        id: p.id,
+                        mode: p.mode,
+                        threadId: p.threadId,
+                        messages: p.messages.length,
+                    })),
+                });
+            } catch {}
+        }
     } catch {}
 
     return api;

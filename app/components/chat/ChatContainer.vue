@@ -166,7 +166,8 @@ const emit = defineEmits<{
 }>();
 
 // Initialize chat composable and make it refresh when threadId changes
-const chat = shallowRef(
+// Initialized defensively (HMR can briefly leave it null in re-eval window)
+const chat = shallowRef<any>(
     useChat(
         props.messageHistory,
         props.threadId,
@@ -226,19 +227,19 @@ watch(
 
 // Render messages with content narrowed to string for ChatMessage.vue
 // messages already normalized to UiChatMessage with .text in useChat composable
-const messages = computed(() => chat.value.messages.value || []);
+const messages = computed(() => chat.value?.messages?.value || []);
 
-const loading = computed(() => chat.value.loading.value);
+const loading = computed(() => chat.value?.loading?.value || false);
 
 // Tail streaming now provided directly by useChat composable
 // `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
 const streamId = computed(() => {
     const s = chat.value?.streamId;
-    return s && 'value' in s ? s.value : s;
+    return s && 'value' in s ? (s as any).value : s;
 });
 const streamState: any = computed(() => {
     const s = chat.value?.streamState;
-    return s && 'value' in s ? s.value : s;
+    return s && 'value' in s ? (s as any).value : s;
 });
 const streamReasoning = computed(
     () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
@@ -248,7 +249,7 @@ const tailDisplay = computed(
 );
 // Removed tail char delta logging.
 // Current thread id for this container (reactive)
-const currentThreadId = computed(() => chat.value.threadId?.value);
+const currentThreadId = computed(() => chat.value?.threadId?.value);
 // Tail active means stream not finalized
 const streamActive = computed(
     () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
@@ -341,18 +342,18 @@ function onSend(payload: any) {
 
     // Send message via useChat composable
     chat.value
-        .sendMessage(payload.text, {
+        ?.sendMessage(payload.text, {
             model: model.value,
             files,
             file_hashes,
             extraTextParts,
             online: !!payload.webSearchEnabled,
         })
-        .catch(() => {});
+        ?.catch(() => {});
 }
 
 function onRetry(messageId: string) {
-    if (!chat.value || chat.value.loading.value) return;
+    if (!chat.value || chat.value?.loading?.value) return;
     // Provide current model so retry uses same selection
     (chat.value as any).retryMessage(messageId, model.value);
 }
@@ -363,7 +364,8 @@ function onBranch(newThreadId: string) {
 
 function onEdited(payload: { id: string; content: string }) {
     if (!chat.value) return;
-    const arr = chat.value.messages.value;
+    const arr = chat.value?.messages?.value;
+    if (!arr) return;
     const idx = arr.findIndex((m: any) => m.id === payload.id);
     if (idx === -1) return;
     const msg = arr[idx];
