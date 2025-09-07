@@ -14,6 +14,14 @@ export default defineNuxtConfig({
             { name: 'VT323', provider: 'google' },
         ],
     },
-    // Exclude test artifacts from scanning and server bundle (saves build time & size)
-    ignore: ['**/*.test.*', '**/__tests__/**', 'tests/**'],
+    // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
+    ignore: [
+        '**/*.test.*',
+        '**/__tests__/**',
+        'tests/**',
+        // Example plugins (dev only); keep them out of production build
+        process.env.NODE_ENV === 'production'
+            ? 'app/plugins/examples/**'
+            : undefined,
+    ].filter(Boolean) as string[],
 });

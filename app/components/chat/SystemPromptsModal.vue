@@ -259,6 +259,7 @@ import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
 const props = defineProps<{
     showModal: boolean;
     threadId?: string;
+    paneId?: string; // isolate pending selection per pane (before thread exists)
 }>();
 const emit = defineEmits({
     'update:showModal': (value: boolean) => typeof value === 'boolean',
@@ -301,14 +302,13 @@ const filteredPrompts = computed(() => {
 
 // Thread-specific system prompt handling
 const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet (pane scoped)
 
 // Computed for current active prompt (thread-specific or global)
 const currentActivePromptId = computed(() => {
-    if (props.threadId) {
-        return threadSystemPromptId.value;
-    }
-    return activePromptId.value;
+    if (props.threadId) return threadSystemPromptId.value;
+    // If no thread yet use pane-scoped pending first, else fall back to global active
+    return pendingPromptId.value || activePromptId.value;
 });
 
 // Extract plain text from TipTap JSON recursively
@@ -430,7 +430,7 @@ const selectPrompt = async (id: string) => {
             // Store as pending for when thread is created
             pendingPromptId.value = id;
             // Also update global for immediate feedback
-            await setActivePrompt(id);
+            // Do NOT override global active prompt; keep pane scoped selection only
         }
         emit('selected', id);
     } catch (error) {
@@ -447,7 +447,7 @@ const clearActivePrompt = async () => {
         } else {
             // Clear pending and global active prompt
             pendingPromptId.value = null;
-            await clearGlobalActivePrompt();
+            // Don't clear global active prompt automatically (leave global state untouched)
         }
     } catch (error) {
         console.error('Failed to clear active prompt:', error);

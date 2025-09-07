@@ -13,38 +13,12 @@ Type shape (simplified):
 
 ```ts
 interface PanePluginApi {
-    sendMessage(opts: {
-        paneId: string;
-        text: string;
-        role?: 'user' | 'assistant';
-        createIfMissing?: boolean;
-        source: string;
-    }): Promise<{ ok: true; messageId: string; threadId: string } | Err>;
-    updateDocumentContent(opts: {
-        paneId: string;
-        content: unknown;
-        source: string;
-    }): Ok | Err;
-    patchDocumentContent(opts: {
-        paneId: string;
-        patch: unknown;
-        source: string;
-    }): Ok | Err;
-    setDocumentTitle(opts: {
-        paneId: string;
-        title: string;
-        source: string;
-    }): Ok | Err;
-    getActivePaneData():
-        | {
-              ok: true;
-              paneId: string;
-              mode: string;
-              threadId?: string;
-              documentId?: string;
-              contentSnapshot?: unknown;
-          }
-        | Err;
+    sendMessage(opts: SendMessageOptions): Promise<SendMessageResult>;
+    updateDocumentContent(opts: UpdateDocumentOptions): Result;
+    patchDocumentContent(opts: PatchDocumentOptions): Result;
+    setDocumentTitle(opts: SetDocumentTitleOptions): Result;
+    getActivePaneData(): Result<ActivePaneInfo>;
+    getPanes(): Result<{ panes: PaneDescriptor[]; activeIndex: number }>;
 }
 ```
 
@@ -67,13 +41,14 @@ The plugin registers once. If you hot-reload in dev, the same instance is reused
 
 ## Pane & Mode Requirements
 
-| Method                | Pane Mode | Requires Thread? | Auto-create Thread?       | Requires Document?    |
-| --------------------- | --------- | ---------------- | ------------------------- | --------------------- |
-| sendMessage           | `chat`    | Yes              | If `createIfMissing:true` | No                    |
-| updateDocumentContent | `doc`     | No               | N/A                       | Yes                   |
-| patchDocumentContent  | `doc`     | No               | N/A                       | Yes                   |
-| setDocumentTitle      | `doc`     | No               | N/A                       | Yes                   |
-| getActivePaneData     | any       | N/A              | N/A                       | If active pane is doc |
+| Method                | Pane Mode | Requires Thread? | Auto-create Thread?       | Requires Document?    | Notes                          |
+| --------------------- | --------- | ---------------- | ------------------------- | --------------------- | ------------------------------ |
+| sendMessage           | `chat`    | Yes              | If `createIfMissing:true` | No                    | Creates thread optionally      |
+| updateDocumentContent | `doc`     | No               | N/A                       | Yes                   | Full replace                   |
+| patchDocumentContent  | `doc`     | No               | N/A                       | Yes                   | Shallow merge, arrays append   |
+| setDocumentTitle      | `doc`     | No               | N/A                       | Yes                   | Title only                     |
+| getActivePaneData     | any       | N/A              | N/A                       | If active pane is doc | Includes optional content copy |
+| getPanes              | any       | N/A              | N/A                       | No                    | Lightweight pane descriptors   |
 
 If conditions are not met an error object is returned.
 
@@ -107,6 +82,8 @@ Check `ok` first.
 | `no_thread_bind` | Internal inability to bind a new thread (multi-pane API missing) |
 | `append_failed`  | DB append failed (Dexie / storage error)                         |
 | `no_document`    | Doc operation requested but pane has no `documentId`             |
+| `no_active_pane` | Active pane not resolvable                                       |
+| `no_panes`       | Multi-pane system not ready / empty                              |
 
 ---
 
@@ -114,7 +91,7 @@ Check `ok` first.
 
 ### sendMessage
 
-Inject a user (or assistant) message directly into the pane's thread.
+Inject a user (or assistant) message directly into the pane's thread. When `role==='user'` and `stream !== false`, the API attempts to route through the live Chat Input (via an internal bridge) so the normal UI pipeline (filters, streaming, model selection, hooks) runs without duplicating history.
 
 ```js
 await api.sendMessage({
@@ -128,8 +105,9 @@ await api.sendMessage({
 Notes:
 
 -   If the pane has no thread yet and `createIfMissing` is `true`, a new thread is created with a title derived from the first ~6 words of the message.
--   Emits hook: `ui.pane.thread:action:changed` (on new thread) and `ui.pane.msg:action:sent` after DB append.
--   Only persists a basic message payload (`content` string + empty attachments). Streaming is not triggered here.
+-   Bridge path (streaming): If the target chat pane's input component is mounted, the text is injected into its editor and a native send is triggered. The returned `messageId` will be the placeholder value `'bridge'` (the real DB id is produced internally and emitted via hooks / UI state).
+-   Fallback path (no bridge or `stream:false` or `role==='assistant'`): Direct DB append; emits `ui.pane.msg:action:sent`. No assistant streaming is started.
+-   Assistant messages sent via the API are appended verbatim; the assistant generation _pipeline_ is not invoked externally—plugins should send only user messages to trigger model replies.
 
 ### updateDocumentContent
 
@@ -179,6 +157,29 @@ api.setDocumentTitle({
 ```
 
 ### getActivePaneData
+
+### getPanes
+
+Enumerate all current panes + active index.
+
+```js
+const r = api.getPanes();
+if (r.ok) {
+    console.table(
+        r.panes.map((p) => ({
+            id: p.paneId,
+            mode: p.mode,
+            thread: p.threadId,
+            doc: p.documentId,
+        }))
+    );
+    console.log('Active index', r.activeIndex);
+}
+```
+
+Use this to dynamically discover pane IDs instead of hardcoding.
+
+---
 
 Returns current active pane lightweight metadata. For a doc pane includes a deep-cloned `contentSnapshot` (shallow JSON clone of `record.content`).
 
@@ -255,10 +256,11 @@ base.forEach((p) =>
 
 ## Limitations
 
--   No streaming / tool-call support (use internal chat flow for that).
--   Attachments array always empty for injected messages.
+-   Streaming only occurs for `role==='user'` when the chat input bridge is present; otherwise falls back to non-streaming append.
+-   Attachments currently unsupported in bridge path (editor injection only sets plain text).
 -   No automatic thread summarization; UI handles that asynchronously.
 -   Document patch merge is intentionally shallow & simple.
+-   Direct assistant injection bypasses model reasoning/tools (treat as plain persisted message).
 
 ---
 
@@ -276,9 +278,11 @@ If you do not see logs:
 
 ## Changelog
 
-| Date       | Change                       |
-| ---------- | ---------------------------- |
-| 2025-09-06 | Initial public documentation |
+| Date       | Change                                                      |
+| ---------- | ----------------------------------------------------------- |
+| 2025-09-06 | Initial public documentation                                |
+| 2025-09-07 | Added getPanes + exported type aliases                      |
+| 2025-09-07 | Integrated streaming bridge for user messages (sendMessage) |
 
 ---
 

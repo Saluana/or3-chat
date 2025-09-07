@@ -144,8 +144,12 @@
 import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
 
 const nuxtApp = useNuxtApp();
-const theme = computed(() => (nuxtApp.$theme as any).get());
-const toggle = () => (nuxtApp.$theme as any).toggle();
+// Theme plugin is client-only (theme.client.ts). During SSR/prerender $theme is undefined.
+// Guard with optional chaining so SSR does not crash trying to read .get on undefined.
+const theme = computed(
+    () => (nuxtApp.$theme as any)?.get?.() ?? 'light'
+);
+const toggle = () => (nuxtApp.$theme as any)?.toggle?.();
 const toast = useToast();
 
 function showToast() {

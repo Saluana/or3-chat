@@ -9,8 +9,32 @@ import {
 import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/useMultiPane';
 
-type Ok<T extends object = {}> = { ok: true } & T;
-type Err = { ok: false; code: string; message: string };
+/** All error codes emitted by the Pane Plugin API */
+export type PaneApiErrorCode =
+    | 'missing_source'
+    | 'missing_pane'
+    | 'invalid_text'
+    | 'not_found'
+    | 'pane_not_chat'
+    | 'pane_not_doc'
+    | 'no_thread'
+    | 'no_thread_bind'
+    | 'append_failed'
+    | 'no_document'
+    | 'no_active_pane'
+    | 'no_panes';
+
+/** Success result helper */
+export type Ok<T extends object = {}> = { ok: true } & T;
+/** Error result helper */
+export interface Err<C extends PaneApiErrorCode = PaneApiErrorCode> {
+    ok: false;
+    code: C;
+    message: string;
+}
+
+/** Unified result type */
+export type Result<T extends object = {}> = Ok<T> | Err;
 interface MultiPaneApi {
     panes: Ref<PaneState[]>;
     activePaneIndex: Ref<number>;
@@ -19,40 +43,74 @@ interface MultiPaneApi {
 interface HookBus {
     doAction?(name: string, ...a: unknown[]): void;
 }
-export interface PanePluginApi {
-    sendMessage(o: {
-        paneId: string;
-        text: string;
-        role?: 'user' | 'assistant';
-        createIfMissing?: boolean;
-        source: string;
-    }): Promise<Ok<{ messageId: string; threadId: string }> | Err>;
-    updateDocumentContent(o: {
-        paneId: string;
-        content: unknown;
-        source: string;
-    }): Ok | Err;
-    patchDocumentContent(o: {
-        paneId: string;
-        patch: unknown;
-        source: string;
-    }): Ok | Err;
-    setDocumentTitle(o: {
-        paneId: string;
-        title: string;
-        source: string;
-    }): Ok | Err;
-    getActivePaneData():
-        | Ok<{
-              paneId: string;
-              mode: string;
-              threadId?: string;
-              documentId?: string;
-              contentSnapshot?: unknown;
-          }>
-        | Err;
+
+/** Input options for sendMessage */
+export interface SendMessageOptions {
+    paneId: string;
+    text: string;
+    role?: 'user' | 'assistant';
+    createIfMissing?: boolean; // when true, auto-creates a thread for chat panes without one
+    source: string; // required identifier for auditing
+    stream?: boolean; // if true (default) trigger assistant streaming for chat pane
 }
-const err = (code: string, message: string): Err => ({
+export type SendMessageResult = Result<{ messageId: string; threadId: string }>;
+
+/** Document replace options */
+export interface UpdateDocumentOptions {
+    paneId: string;
+    content: unknown; // caller supplies fully replaced doc JSON
+    source: string;
+}
+/** Document patch options */
+export interface PatchDocumentOptions {
+    paneId: string;
+    patch: unknown; // shallow merge rules (arrays concatenated)
+    source: string;
+}
+/** Set document title options */
+export interface SetDocumentTitleOptions {
+    paneId: string;
+    title: string;
+    source: string;
+}
+
+export interface ActivePaneInfo {
+    paneId: string;
+    mode: string;
+    threadId?: string;
+    documentId?: string;
+    contentSnapshot?: unknown;
+}
+
+export interface PaneDescriptor {
+    paneId: string;
+    mode: PaneState['mode'];
+    threadId?: string;
+    documentId?: string;
+}
+export interface PanePluginApi {
+    /**
+     * Append a new message into a chat pane's thread. Optionally creates a thread if missing.
+     * Returns message & thread identifiers on success.
+     */
+    sendMessage(opts: SendMessageOptions): Promise<SendMessageResult>;
+
+    /** Replace the full document content for a doc pane. */
+    updateDocumentContent(opts: UpdateDocumentOptions): Result;
+
+    /** Shallow patch merge into a document (arrays concatenated, other keys overwritten). */
+    patchDocumentContent(opts: PatchDocumentOptions): Result;
+
+    /** Update the document title associated with a doc pane. */
+    setDocumentTitle(opts: SetDocumentTitleOptions): Result;
+
+    /** Retrieve metadata + optional cloned content for the active pane. */
+    getActivePaneData(): Result<ActivePaneInfo>;
+
+    /** List all panes (lightweight descriptors) and the current active index. */
+    getPanes(): Result<{ panes: PaneDescriptor[]; activeIndex: number }>;
+}
+const err = <C extends PaneApiErrorCode>(code: C, message: string): Err<C> => ({
     ok: false,
     code,
     message,
@@ -123,7 +181,8 @@ async function makeApi(): Promise<PanePluginApi> {
             role = 'user',
             createIfMissing,
             source,
-        }) {
+            stream = true,
+        }: SendMessageOptions) {
             if (!source) return err('missing_source', 'source required');
             if (!paneId) return err('missing_pane', 'paneId required');
             if (typeof text !== 'string' || !text.trim())
@@ -140,6 +199,28 @@ async function makeApi(): Promise<PanePluginApi> {
                 threadId = t;
             }
             try {
+                // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
+                if (role === 'user' && stream) {
+                    const { programmaticSend, hasPane } = await import(
+                        '~/composables/useChatInputBridge'
+                    );
+                    if (hasPane(p.id)) {
+                        const okBridge = programmaticSend(p.id, text);
+                        if (okBridge) {
+                            log('sendMessage-bridge', {
+                                source,
+                                paneId,
+                                threadId,
+                            });
+                            return {
+                                ok: true,
+                                messageId: 'bridge',
+                                threadId,
+                            } as any;
+                        }
+                    }
+                }
+                // Fallback: direct append (no streaming)
                 const dbMsg = await tx.appendMessage({
                     thread_id: threadId,
                     role: role === 'assistant' ? 'assistant' : 'user',
@@ -151,9 +232,16 @@ async function makeApi(): Promise<PanePluginApi> {
                         threadId,
                         length: text.length,
                         fileHashes: null,
+                        paneIndex: -1,
+                        source,
                     });
                 } catch {}
-                log('sendMessage', { source, paneId, threadId, id: dbMsg.id });
+                log('sendMessage-fallback', {
+                    source,
+                    paneId,
+                    threadId,
+                    id: dbMsg.id,
+                });
                 return { ok: true, messageId: dbMsg.id, threadId };
             } catch (e: unknown) {
                 return err(
@@ -162,7 +250,11 @@ async function makeApi(): Promise<PanePluginApi> {
                 );
             }
         },
-        updateDocumentContent({ paneId, content, source }) {
+        updateDocumentContent({
+            paneId,
+            content,
+            source,
+        }: UpdateDocumentOptions) {
             if (!source) return err('missing_source', 'source required');
             const entry = getPaneEntry(paneId);
             if (!entry) return err('not_found', 'pane not found');
@@ -173,7 +265,7 @@ async function makeApi(): Promise<PanePluginApi> {
             log('updateDocumentContent', { source, paneId });
             return { ok: true };
         },
-        patchDocumentContent({ paneId, patch, source }) {
+        patchDocumentContent({ paneId, patch, source }: PatchDocumentOptions) {
             if (!source) return err('missing_source', 'source required');
             const entry = getPaneEntry(paneId);
             if (!entry) return err('not_found', 'pane not found');
@@ -188,7 +280,7 @@ async function makeApi(): Promise<PanePluginApi> {
             log('patchDocumentContent', { source, paneId });
             return { ok: true };
         },
-        setDocumentTitle({ paneId, title, source }) {
+        setDocumentTitle({ paneId, title, source }: SetDocumentTitleOptions) {
             if (!source) return err('missing_source', 'source required');
             const entry = getPaneEntry(paneId);
             if (!entry) return err('not_found', 'pane not found');
@@ -207,13 +299,7 @@ async function makeApi(): Promise<PanePluginApi> {
                 return err('no_active_pane', 'no active pane');
             const p = panes[idx];
             if (!p) return err('no_active_pane', 'no active pane');
-            const base: {
-                paneId: string;
-                mode: string;
-                threadId?: string;
-                documentId?: string;
-                contentSnapshot?: unknown;
-            } = { paneId: p.id, mode: p.mode };
+            const base: ActivePaneInfo = { paneId: p.id, mode: p.mode };
             if (p.mode === 'chat' && p.threadId) base.threadId = p.threadId;
             if (p.mode === 'doc' && p.documentId) {
                 base.documentId = p.documentId;
@@ -228,6 +314,19 @@ async function makeApi(): Promise<PanePluginApi> {
                 } catch {}
             }
             return { ok: true, ...base };
+        },
+        getPanes() {
+            const m = mp();
+            const panes = m?.panes?.value;
+            if (!panes) return err('no_panes', 'no panes');
+            const activeIndex = m?.activePaneIndex?.value ?? -1;
+            const mapped: PaneDescriptor[] = panes.map((p) => ({
+                paneId: p.id,
+                mode: p.mode,
+                threadId: p.threadId || undefined,
+                documentId: p.documentId || undefined,
+            }));
+            return { ok: true, panes: mapped, activeIndex };
         },
     };
 }

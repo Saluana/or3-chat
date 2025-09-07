@@ -74,6 +74,7 @@
                     :streaming="loading"
                     :container-width="containerWidth"
                     :thread-id="currentThreadId"
+                    :pane-id="paneId"
                     @send="onSend"
                     @model-change="onModelChange"
                     @stop-stream="onStopStream"
@@ -99,6 +100,10 @@ import {
     type CSSProperties,
 } from 'vue';
 import { useChat } from '~/composables/useAi';
+import {
+    getPanePendingPrompt,
+    clearPanePendingPrompt,
+} from '~/composables/usePanePrompt';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
 import { useElementSize } from '@vueuse/core';
@@ -159,6 +164,7 @@ function onModelChange(newModel: string) {
 const props = defineProps<{
     threadId?: string;
     messageHistory?: ChatMessageType[];
+    paneId?: string; // forwarded so ChatInputDropper can register with bridge
 }>();
 
 const emit = defineEmits<{
@@ -167,6 +173,11 @@ const emit = defineEmits<{
 
 // Initialize chat composable and make it refresh when threadId changes
 // Initialized defensively (HMR can briefly leave it null in re-eval window)
+// If pane has a pending prompt selection (chosen before thread exists) seed it
+if (props.paneId) {
+    const pre = getPanePendingPrompt(props.paneId);
+    if (pre) pendingPromptId.value = pre;
+}
 const chat = shallowRef<any>(
     useChat(
         props.messageHistory,
@@ -219,7 +230,8 @@ watch(
     (id, prev) => {
         if (!prev && id) {
             emit('thread-selected', id);
-            // Clear pending prompt since it's now applied to the thread
+            // Clear pending prompt (and pane-level cached) since it's applied
+            if (props.paneId) clearPanePendingPrompt(props.paneId);
             pendingPromptId.value = null;
         }
     }
@@ -376,6 +388,13 @@ function onEdited(payload: { id: string; content: string }) {
 
 function onPendingPromptSelected(promptId: string | null) {
     pendingPromptId.value = promptId;
+    // Store pane-level until thread creation
+    if (props.paneId) {
+        // dynamic import to avoid circular
+        import('~/composables/usePanePrompt').then((m) =>
+            m.setPanePendingPrompt(props.paneId!, promptId)
+        );
+    }
     // Reinitialize chat with the pending prompt
     chat.value = useChat(
         props.messageHistory,
