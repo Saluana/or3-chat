@@ -282,19 +282,6 @@ export function useMultiPane(
     // This is intentionally lightweight; if multiple instances are created the latest wins.
     try {
         (globalThis as any).__or3MultiPaneApi = api;
-        if (import.meta.dev) {
-            try {
-                console.info('[multiPane] global api exposed', {
-                    panes: panes.value.map((p, i) => ({
-                        i,
-                        id: p.id,
-                        mode: p.mode,
-                        threadId: p.threadId,
-                        messages: p.messages.length,
-                    })),
-                });
-            } catch {}
-        }
     } catch {}
 
     return api;

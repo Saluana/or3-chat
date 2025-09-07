@@ -12,7 +12,7 @@
 // - Debounce rapid duplicate forwards (simple last-message-id memory).
 import { useNuxtApp } from '#app';
 import type { PaneState } from '~/composables/useMultiPane';
-import type { PanePluginApi } from './pane-plugin-api.client';
+import type { PanePluginApi } from '../pane-plugin-api.client';
 import { getMessage } from '~/db/messages';
 
 const MAX_HOPS = 3; // prevent runaway ping-pong
