@@ -7,17 +7,20 @@
         <div
             ref="scrollParent"
             class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
-            :style="{ paddingBottom: bottomPad + 'px', overflowAnchor: 'auto' }"
+            :style="scrollParentStyle"
         >
             <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-10 pt-safe-offset-10 flex flex-col"
+                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
             >
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
-                    :messages="virtualStableMessages"
+                    :messages="stableMessages"
                     :item-size-estimation="520"
                     :overscan="5"
                     :scroll-parent="scrollParent"
+                    :is-streaming="streamActive"
+                    :editing-active="anyEditing"
+                    @scroll-state="onScrollState"
                     wrapper-class="flex flex-col"
                 >
                     <template #item="{ message, index }">
@@ -33,27 +36,13 @@
                                 @retry="onRetry"
                                 @branch="onBranch"
                                 @edited="onEdited"
+                                @begin-edit="onBeginEdit(message.id)"
+                                @cancel-edit="onEndEdit(message.id)"
+                                @save-edit="onEndEdit(message.id)"
                             />
                         </div>
                     </template>
                     <template #tail>
-                        <!-- Stable virtualization ends here -->
-                        <!-- Recently active (non-virtual) messages -->
-                        <div
-                            v-for="rm in recentMessages"
-                            :key="rm.id"
-                            class="min-w-0"
-                            :data-msg-id="rm.id"
-                            :data-stream-id="rm.stream_id"
-                        >
-                            <ChatMessage
-                                :message="rm"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                            />
-                        </div>
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
                             v-if="streamingMessage"
@@ -67,6 +56,9 @@
                                 @retry="onRetry"
                                 @branch="onBranch"
                                 @edited="onEdited"
+                                @begin-edit="onBeginEdit(streamingMessage.id)"
+                                @cancel-edit="onEndEdit(streamingMessage.id)"
+                                @save-edit="onEndEdit(streamingMessage.id)"
                             />
                         </div>
                     </template>
@@ -98,20 +90,26 @@
 // Refactored ChatContainer (Task 4) – orchestration only.
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import ChatMessage from './ChatMessage.vue';
-import { shallowRef, computed, watch, ref, nextTick, type Ref } from 'vue';
+import {
+    shallowRef,
+    computed,
+    watch,
+    ref,
+    type Ref,
+    type CSSProperties,
+} from 'vue';
 import { useChat } from '~/composables/useAi';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
-import { useAutoScroll } from '../../composables/useAutoScroll';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
-import { onMounted, watchEffect } from 'vue';
+// Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
 
 const model = ref('openai/gpt-oss-120b');
 const pendingPromptId = ref<string | null>(null);
-
+//yoooolo
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
@@ -125,9 +123,15 @@ const effectiveInputHeight = computed(
 );
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
 const bottomPad = computed(() => {
-    const base = Math.round(effectiveInputHeight.value + 36);
+    const base = Math.round(effectiveInputHeight.value + 0);
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
+
+// Use typed CSSProperties for template binding; overflowAnchor uses the proper union type
+const scrollParentStyle = computed<CSSProperties>(() => ({
+    paddingBottom: bottomPad.value + 'px',
+    overflowAnchor: 'auto' as CSSProperties['overflowAnchor'],
+}));
 
 // Mobile fixed wrapper classes/styles
 // Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
@@ -223,46 +227,32 @@ watch(
 // Render messages with content narrowed to string for ChatMessage.vue
 // messages already normalized to UiChatMessage with .text in useChat composable
 const messages = computed(() => chat.value.messages.value || []);
-onMounted(() => {
-    if (import.meta.dev) {
-        const withHashes = messages.value.filter(
-            (m: any) => m.file_hashes && m.file_hashes.length
-        );
-        console.debug('[ChatContainer.mounted] messages', {
-            total: messages.value.length,
-            withHashes: withHashes.length,
-            sample: withHashes.slice(0, 3).map((m: any) => ({
-                id: m.id,
-                hashes: m.file_hashes,
-                hasMarkdown: (m.text || '').includes('file-hash:'),
-                textPreview: (m.text || '').slice(0, 120),
-            })),
-        });
-    }
-});
-watchEffect(() => {
-    if (!import.meta.dev) return;
-    const count = messages.value.filter(
-        (m: any) => m.file_hashes && m.file_hashes.length
-    ).length;
-    console.debug('[ChatContainer.watchEffect] message/hash state', {
-        total: messages.value.length,
-        withHashes: count,
-    });
-});
-// Removed length logging watcher.
+
 const loading = computed(() => chat.value.loading.value);
 
 // Tail streaming now provided directly by useChat composable
-const streamId = computed(() => chat.value.streamId.value);
-const streamState = computed(() => chat.value.streamState);
-const streamReasoning = computed(() => streamState.value?.reasoningText || '');
-const tailDisplay = computed(() => streamState.value?.text || '');
+// `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
+const streamId = computed(() => {
+    const s = chat.value?.streamId;
+    return s && 'value' in s ? s.value : s;
+});
+const streamState: any = computed(() => {
+    const s = chat.value?.streamState;
+    return s && 'value' in s ? s.value : s;
+});
+const streamReasoning = computed(
+    () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
+);
+const tailDisplay = computed(
+    () => streamState?.value?.text || streamState?.text || ''
+);
 // Removed tail char delta logging.
 // Current thread id for this container (reactive)
 const currentThreadId = computed(() => chat.value.threadId?.value);
 // Tail active means stream not finalized
-const streamActive = computed(() => !streamState.value?.finalized);
+const streamActive = computed(
+    () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
+);
 // Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
 const streamingMessage = computed<any | null>(() => {
     if (!streamActive.value) return null;
@@ -280,78 +270,44 @@ const streamingMessage = computed<any | null>(() => {
     } as any;
 });
 
-// Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
-const RECENT_NON_VIRTUAL = 6;
+// All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
 function filterStreaming(arr: any[]) {
     if (streamActive.value && streamId.value) {
         return arr.filter((m) => m.stream_id !== streamId.value);
     }
     return arr;
 }
-const recentMessages = computed<any[]>(() => {
-    const base = filterStreaming(messages.value);
-    if (base.length <= RECENT_NON_VIRTUAL) return base;
-    return base.slice(-RECENT_NON_VIRTUAL);
-});
-const virtualStableMessages = computed<any[]>(() => {
-    const base = filterStreaming(messages.value);
-    if (base.length <= RECENT_NON_VIRTUAL) return [];
-    return base.slice(0, -RECENT_NON_VIRTUAL);
-});
+const stableMessages = computed<any[]>(() => filterStreaming(messages.value));
 // Removed size change logging for virtual/recent message groups.
 
 // Removed assistantVisible tracking (no handoff overlap needed)
 
-// Scroll handling (Req 3.3) via useAutoScroll
+// Scroll handling centralized in VirtualMessageList
 const scrollParent: Ref<HTMLElement | null> = ref(null);
-// Add disengageDeltaPx so a small upward scroll (8px) releases stickiness
-// preventing jump-to-bottom when stream finalizes while user is reading.
-// Explicit cast ensures consistent HTMLElement | null Ref type for the composable
-const autoScroll = useAutoScroll(scrollParent as Ref<HTMLElement | null>, {
-    thresholdPx: 64,
-    disengageDeltaPx: 8,
-});
-// Unified scroll scheduling for streaming updates.
-let scrollScheduled = false;
-function scheduleScrollIfAtBottom() {
-    if (!autoScroll.atBottom.value) return;
-    // SSR safeguard: requestAnimationFrame not available server-side
-    if (typeof requestAnimationFrame !== 'function') {
-        // Fallback: run immediately (server render won't actually scroll but avoids crash)
-        autoScroll.onContentIncrease();
-        return;
+// Track editing state across child messages for scroll suppression (Task 5.2.2)
+const editingIds = ref<Set<string>>(new Set());
+const anyEditing = computed(() => editingIds.value.size > 0);
+function onBeginEdit(id: string) {
+    if (!id) return;
+    if (!editingIds.value.has(id)) {
+        editingIds.value = new Set(editingIds.value).add(id);
     }
-    if (scrollScheduled) return;
-    scrollScheduled = true;
-    requestAnimationFrame(() => {
-        scrollScheduled = false;
-        autoScroll.onContentIncrease();
-    });
 }
-
-// Initial bottom stick (client only; SSR lacks requestAnimationFrame)
-if (process.client) {
-    requestAnimationFrame(() => {
-        if (autoScroll.atBottom.value)
-            autoScroll.scrollToBottom({ smooth: false });
-    });
+function onEndEdit(id: string) {
+    if (!id) return;
+    if (editingIds.value.has(id)) {
+        const next = new Set(editingIds.value);
+        next.delete(id);
+        editingIds.value = next;
+    }
 }
-
-// Consolidated scroll reactions (messages length, streaming version, input height changes, thread switch)
-watchEffect(async () => {
-    // Skip scroll scheduling during SSR (no DOM / rAF)
-    if (typeof window === 'undefined') return;
-    const deps = [
-        messages.value.length,
-        streamState.value?.version,
-        chatInputHeight.value,
-        emittedInputHeight.value,
-        currentThreadId.value,
-    ];
-    void deps; // register dependencies
-    await nextTick();
-    if (autoScroll.atBottom.value) scheduleScrollIfAtBottom();
-});
+// Scroll state from VirtualMessageList (Task 5.1.2)
+const atBottom = ref(true);
+const stick = ref(true);
+function onScrollState(s: { atBottom: boolean; stick: boolean }) {
+    atBottom.value = s.atBottom;
+    stick.value = s.stick;
+}
 
 // (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
 // Chat send abstraction (Req 3.5)

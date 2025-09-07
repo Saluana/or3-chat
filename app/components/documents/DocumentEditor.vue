@@ -2,7 +2,9 @@
     <div
         class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
-        <div class="flex items-center justify-center gap-3 px-3 pt-2 pb-2">
+        <div
+            class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
+        >
             <UInput
                 v-model="titleDraft"
                 placeholder="Untitled"
@@ -20,7 +22,7 @@
             </div>
         </div>
         <div
-            class="flex flex-row items-stretch border-b-2 px-2 py-1 gap-1 flex-wrap"
+            class="flex flex-row items-stretch border-b-2 px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
         >
             <ToolbarButton
                 icon="carbon:text-bold"

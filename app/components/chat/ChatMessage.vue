@@ -132,7 +132,7 @@
                     size="sm"
                     color="error"
                     class="retro-btn"
-                    @click="cancelEdit"
+                    @click="wrappedCancelEdit"
                     >Cancel</UButton
                 >
             </div>
@@ -195,7 +195,7 @@
                         color="info"
                         size="sm"
                         class="text-black dark:text-white/95 flex items-center justify-center"
-                        @click="beginEdit"
+                        @click="wrappedBeginEdit"
                     ></UButton>
                 </UTooltip>
                 <!-- Dynamically registered plugin actions -->
@@ -238,7 +238,7 @@ import { useMessageEditing } from '~/composables/useMessageEditing';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
-import { useRafBatch } from '~/composables/useRafBatch';
+import { useRafFn } from '@vueuse/core';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -247,6 +247,9 @@ const emit = defineEmits<{
     (e: 'retry', id: string): void;
     (e: 'branch', id: string): void;
     (e: 'edited', payload: { id: string; content: string }): void;
+    (e: 'begin-edit', id: string): void;
+    (e: 'cancel-edit', id: string): void;
+    (e: 'save-edit', id: string): void;
 }>();
 
 const isStreamingReasoning = computed(() => {
@@ -327,11 +330,23 @@ const {
     cancelEdit,
     saveEdit: internalSaveEdit,
 } = useMessageEditing(props.message);
+// Wrap begin/cancel/save to emit lifecycle events for container scroll suppression
+function wrappedBeginEdit() {
+    const id = (props.message as any).id;
+    beginEdit();
+    if (editing.value && id) emit('begin-edit', id);
+}
+function wrappedCancelEdit() {
+    const id = (props.message as any).id;
+    cancelEdit();
+    if (id) emit('cancel-edit', id);
+}
 async function saveEdit() {
     await internalSaveEdit();
     if (!editing.value) {
         const id = (props.message as any).id;
         if (id) emit('edited', { id, content: draft.value });
+        if (id) emit('save-edit', id);
     }
 }
 
@@ -533,7 +548,14 @@ async function hydrateInlineImages() {
     });
 }
 // Consolidated hydration + thumbnail readiness effect
-const scheduleHydrate = useRafBatch(() => hydrateInlineImages());
+const rafHydrate = useRafFn(
+    async () => {
+        // run once per frame, then pause until explicitly resumed
+        rafHydrate.pause();
+        await hydrateInlineImages();
+    },
+    { immediate: false }
+);
 watchEffect(() => {
     if (props.message.role !== 'assistant') return; // only assistants hydrate
     // reactive deps: markdown text, hash list, thumb states
@@ -542,10 +564,12 @@ watchEffect(() => {
     void Object.keys(thumbnails)
         .map((h) => thumbnails[h]?.status + (thumbnails[h]?.url || ''))
         .join('|');
-    scheduleHydrate();
+    rafHydrate.resume();
 });
 
-onMounted(() => scheduleHydrate());
+onMounted(() => {
+    rafHydrate.resume();
+});
 onMounted(() => {
     if (import.meta.dev) {
         const hashes = hashList.value;

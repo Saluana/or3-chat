@@ -1,30 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { defineComponent, ref, nextTick } from 'vue';
-import { useAutoScroll } from '~/composables/useAutoScroll';
+import VirtualMessageList from '../VirtualMessageList.vue';
 
-// Simple test harness component simulating a scroll container whose height grows.
-const Harness = defineComponent({
-    name: 'AutoScrollHarness',
-    setup() {
-        const scrollEl = ref<HTMLElement | null>(null);
-        const items = ref<string[]>(['a', 'b', 'c']);
-        const auto = useAutoScroll(scrollEl, {
-            thresholdPx: 64,
-            disengageDeltaPx: 8,
-        });
-        function addMany(n: number) {
-            for (let i = 0; i < n; i++) items.value.push('x' + i);
-            // simulate height growth; jsdom doesn't layout, so manually bump scroll metrics
-            // We'll mutate scrollHeight via property override on the element in tests.
-            auto.onContentIncrease();
-        }
-        return { scrollEl, items, addMany, auto };
-    },
-    template: `
-    <div ref="scrollEl" style="height:200px; overflow:auto;">
-      <div v-for="(i,idx) in items" :key="idx" style="height:40px;">{{i}}</div>
-    </div>`,
+// Polyfill rAF to run immediately in tests (for useRafFn)
+const originalRAF = globalThis.requestAnimationFrame as any;
+const originalCancelRAF = globalThis.cancelAnimationFrame as any;
+
+beforeAll(() => {
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+        cb(0 as any);
+        return 1 as any;
+    }) as any;
+    globalThis.cancelAnimationFrame = (() => {}) as any;
+});
+
+afterAll(() => {
+    globalThis.requestAnimationFrame = originalRAF;
+    globalThis.cancelAnimationFrame = originalCancelRAF;
 });
 
 // Utility to fake scroll metrics on the container element (jsdom has no real layout)
@@ -51,65 +44,147 @@ function setScrollMetrics(
     });
 }
 
-describe('AutoScroll integration (Chat scroll behavior)', () => {
-    it('9.1 does NOT auto-scroll when user scrolled up (R8)', async () => {
+const Harness = defineComponent({
+    name: 'VMLHarness',
+    components: { VirtualMessageList },
+    setup() {
+        const scrollEl = ref<HTMLElement | null>(null);
+        const items = ref<any[]>([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+        return { scrollEl, items };
+    },
+    template: `
+    <div>
+      <div ref="scrollEl" style="height:200px; overflow:auto;"></div>
+      <VirtualMessageList
+        :messages="items"
+        :scroll-parent="scrollEl"
+        :item-size-estimation="120"
+        :overscan="2"
+        v-slot="{ item }"
+      >
+        <div>{{ item.id }}</div>
+      </VirtualMessageList>
+    </div>
+  `,
+});
+
+describe('AutoScroll behavior centralized in VirtualMessageList', () => {
+    it('does NOT auto-scroll when user scrolled up (manual disengage)', async () => {
         const wrapper = mount(Harness);
-        const el = wrapper.vm.scrollEl!;
+        await nextTick();
+        const resolveEl = () => {
+            const raw: any = (wrapper.vm as any).scrollEl;
+            if (raw && raw.nodeType === 1) return raw as HTMLElement; // already unwrapped element
+            if (raw && raw.value && raw.value.nodeType === 1)
+                return raw.value as HTMLElement; // underlying ref value
+            return null;
+        };
+        let el = resolveEl();
+        for (let i = 0; i < 5 && !el; i++) {
+            await nextTick();
+            el = resolveEl();
+        }
+        expect(el).toBeTruthy();
+        el = el as HTMLElement;
+
+        // Polyfill scrollTo for jsdom (clamp to max scrollable position)
+        (el as any).scrollTo = ({ top }: { top: number }) => {
+            const maxTop = el.scrollHeight - el.clientHeight;
+            const clampedTop = Math.max(0, Math.min(top, maxTop));
+            Object.defineProperty(el, 'scrollTop', {
+                value: clampedTop,
+                configurable: true,
+                writable: true,
+            });
+        };
+
+        // Get the VML instance (first component of that type)
+        const vml = wrapper.findComponent(VirtualMessageList);
+        expect(vml.exists()).toBe(true);
+
         // Initial metrics: at bottom
         setScrollMetrics(el, {
-            scrollTop: 0,
+            scrollTop: 200,
             scrollHeight: 400,
             clientHeight: 200,
         });
-        wrapper.vm.auto.recompute();
-        // Simulate user scroll up (away from bottom). scrollTop lower than max triggers release logic.
+        el.dispatchEvent(new Event('scroll')); // establish baseline
+
+        // Simulate user scroll up (away from bottom)
         setScrollMetrics(el, {
             scrollTop: 50,
             scrollHeight: 400,
             clientHeight: 200,
         });
-        wrapper.vm.auto.recompute();
-        // Add new content increasing height significantly
+        el.dispatchEvent(new Event('scroll'));
+
+        // Height growth due to new items being appended
         setScrollMetrics(el, {
             scrollTop: 50,
             scrollHeight: 800,
             clientHeight: 200,
         });
-        wrapper.vm.addMany(5);
+
+        // Trigger content increase handler exposed by VML
+        (vml.vm as any).onContentIncrease();
         await nextTick();
-        // Should not stick to bottom
-        expect(wrapper.vm.auto.atBottom.value).toBe(false);
-        expect(el.scrollTop).toBe(50); // no forced jump
+
+        // Should not stick to bottom; position unchanged
+        expect(el.scrollTop).toBe(50);
     });
 
-    it('9.2 auto-scrolls when at bottom (R8)', async () => {
+    it('auto-scrolls when at bottom', async () => {
         const wrapper = mount(Harness);
-        const el = wrapper.vm.scrollEl!;
-        // Polyfill scrollTo for jsdom
+        await nextTick();
+        const resolveEl = () => {
+            const raw: any = (wrapper.vm as any).scrollEl;
+            if (raw && raw.nodeType === 1) return raw as HTMLElement;
+            if (raw && raw.value && raw.value.nodeType === 1)
+                return raw.value as HTMLElement;
+            return null;
+        };
+        let el = resolveEl();
+        for (let i = 0; i < 5 && !el; i++) {
+            await nextTick();
+            el = resolveEl();
+        }
+        expect(el).toBeTruthy();
+        el = el as HTMLElement;
+
+        // Polyfill scrollTo for jsdom (clamp to max scrollable position)
         (el as any).scrollTo = ({ top }: { top: number }) => {
+            const maxTop = el.scrollHeight - el.clientHeight;
+            const clampedTop = Math.max(0, Math.min(top, maxTop));
             Object.defineProperty(el, 'scrollTop', {
-                value: top,
+                value: clampedTop,
                 configurable: true,
                 writable: true,
             });
         };
+
+        const vml = wrapper.findComponent(VirtualMessageList);
+        expect(vml.exists()).toBe(true);
+
         // Start at bottom: scrollTop = scrollHeight - clientHeight
         setScrollMetrics(el, {
             scrollTop: 200,
             scrollHeight: 400,
             clientHeight: 200,
         });
-        wrapper.vm.auto.recompute();
-        // Add content; maintain scrollTop pre-increase to mimic natural DOM growth before snap
+        el.dispatchEvent(new Event('scroll')); // baseline
+
+        // Increase height (new content); keep scrollTop until snap
         setScrollMetrics(el, {
             scrollTop: 200,
             scrollHeight: 600,
             clientHeight: 200,
         });
-        wrapper.vm.addMany(5);
+
+        // Call onContentIncrease immediately after metric change to simulate resize before internal compute
+        (vml.vm as any).onContentIncrease();
         await nextTick();
+
         // Auto-scroll should have snapped: scrollTop == scrollHeight - clientHeight
-        expect(wrapper.vm.auto.atBottom.value).toBe(true);
-        expect(el.scrollTop).toBe(600); // our scrollToBottom sets top to full scrollHeight
+        expect(el.scrollTop).toBe(400);
     });
 });

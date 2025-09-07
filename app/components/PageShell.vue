@@ -363,10 +363,12 @@ const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
 async function onNewDocument(initial?: { title?: string }) {
     const doc = await newDocumentInActive(initial);
     if (doc) updateUrl();
+    closeSidebarIfMobile();
 }
 async function onDocumentSelected(id: string) {
     await selectDocumentInActive(id);
     updateUrl();
+    closeSidebarIfMobile();
 }
 
 // Sidebar chat selection always puts pane in chat mode
@@ -380,6 +382,7 @@ function onSidebarSelected(id: string) {
         pane.documentId = undefined;
     }
     if (target === activePaneIndex.value) updateUrl();
+    closeSidebarIfMobile();
 }
 function onInternalThreadCreated(id: string, paneIndex?: number) {
     if (!id) return;
@@ -391,6 +394,7 @@ function onInternalThreadCreated(id: string, paneIndex?: number) {
     pane.documentId = undefined;
     if (pane.threadId !== id) setPaneThread(idx, id);
     if (idx === activePaneIndex.value) updateUrl();
+    closeSidebarIfMobile();
 }
 function onNewChat() {
     const pane = panes.value[activePaneIndex.value];
@@ -401,6 +405,7 @@ function onNewChat() {
         pane.threadId = '';
     }
     updateUrl();
+    closeSidebarIfMobile();
 }
 
 // --------------- Theme ---------------
@@ -466,6 +471,9 @@ function focusSidebarSearch() {
     requestAnimationFrame(() => {
         sideNavExpandedRef.value?.focusSearchInput?.();
     });
+}
+function closeSidebarIfMobile() {
+    if (isMobile.value) (layoutRef.value as any)?.close?.();
 }
 
 // --------------- Deletion auto-reset ---------------

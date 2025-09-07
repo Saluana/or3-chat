@@ -1,11 +1,11 @@
 <template>
     <button
-        class="retro-btn h-8 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm"
+        class="retro-btn h-[32px] md:h-[40px] py-0 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm leading-none"
         :class="[
             active
                 ? 'bg-primary/40 aria-[pressed=true]:outline'
                 : 'opacity-80 hover:opacity-100',
-            square ? 'aspect-square w-8 p-0' : 'px-2',
+            square ? 'w-[32px] md:w-[40px] p-0' : 'p-0', // no padding; explicit heights control vertical size
         ]"
         :title="label"
         :aria-pressed="active ? 'true' : 'false'"
