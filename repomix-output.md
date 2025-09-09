@@ -3,7 +3,7 @@ This file is a merged representation of a subset of the codebase, containing fil
 # File Summary
 
 ## Purpose
-This file contains a packed representation of the entire repository's contents.
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
 It is designed to be easily consumable by AI systems for analysis, code review,
 or other automated processes.
 
@@ -28,7 +28,7 @@ The content is organized as follows:
 ## Notes
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching these patterns are excluded: **.test.ts, **.md
+- Files matching these patterns are excluded: **.md, **.test.ts
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -104,6 +104,7 @@ app/
     index.ts
     useActivePrompt.ts
     useAi.ts
+    useChatInputBridge.ts
     useDefaultPrompt.ts
     useDocumentsList.ts
     useDocumentsStore.ts
@@ -116,6 +117,7 @@ app/
     useObservedElementSize.ts
     useOpenrouter.ts
     usePaneDocuments.ts
+    usePanePrompt.ts
     useSidebarSearch.ts
     useStreamAccumulator.ts
     useThreadSearch.ts
@@ -149,13 +151,17 @@ app/
     openrouter-callback.vue
   plugins/
     examples/
+      dev-debug-console.client.ts
       document-history-test.client.ts
+      dual-llm-relay.client.ts
       message-actions-test.client.ts
+      pane-hooks-test.client.ts
       project-tree-actions.client.ts
       thread-history-test.client.ts
     hooks.client.ts
     hooks.server.ts
     message-actions.client.ts
+    pane-plugin-api.client.ts
     theme.client.ts
   state/
     global.ts
@@ -187,6 +193,8 @@ tests/
 types/
   nuxt.d.ts
   orama.d.ts
+  pane-plugin-api.d.ts
+  pwa.d.ts
 .gitignore
 app.config.ts
 LICENSE
@@ -2585,6 +2593,248 @@ function onHandleKeydown(e: KeyboardEvent) {
 </style>
 ```
 
+## File: app/components/sidebar/SidebarDocumentItem.vue
+```vue
+<template>
+    <RetroGlassBtn
+        class="w-full flex items-center justify-between text-left"
+        :class="{ 'active-element bg-primary/25': active }"
+        @click="emit('select', doc.id)"
+        @mouseenter="onHoverDoc()"
+    >
+        <span class="truncate flex-1 min-w-0" :title="doc.title">{{
+            doc.title
+        }}</span>
+        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+            <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                @click.stop
+            >
+                <UIcon
+                    name="pixelarticons:more-vertical"
+                    class="w-4 h-4 opacity-70"
+                />
+            </span>
+            <template #content>
+                <div class="p-1 w-44 space-y-1">
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:edit"
+                        @click="emit('rename', doc)"
+                        >Rename</UButton
+                    >
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:folder-plus"
+                        @click="emit('add-to-project', doc)"
+                        >Add to project</UButton
+                    >
+                    <UButton
+                        color="error"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:trash"
+                        @click="emit('delete', doc)"
+                        >Delete</UButton
+                    >
+                    <template v-for="action in extraActions" :key="action.id">
+                        <UButton
+                            :icon="action.icon"
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            class="w-full justify-start"
+                            @click="() => runExtraAction(action)"
+                            >{{ action.label || '' }}</UButton
+                        >
+                    </template>
+                </div>
+            </template>
+        </UPopover>
+    </RetroGlassBtn>
+</template>
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import type { Post } from '~/db';
+import { db } from '~/db';
+import { useThrottleFn } from '@vueuse/core';
+const props = defineProps<{ doc: any; active?: boolean }>();
+const emit = defineEmits<{
+    (e: 'select', id: string): void;
+    (e: 'rename', doc: any): void;
+    (e: 'delete', doc: any): void;
+    (e: 'add-to-project', doc: any): void;
+}>();
+const extraActions = useDocumentHistoryActions();
+const fullDocCache = new Map<string, Post>();
+const prefetching = new Set<string>();
+async function fetchFullDoc(id: string) {
+    if (fullDocCache.has(id)) return fullDocCache.get(id)!;
+    try {
+        const rec = await db.posts.get(id);
+        if (rec) {
+            fullDocCache.set(id, rec as Post);
+            return rec as Post;
+        }
+    } catch {}
+    return null;
+}
+const doPrefetch = useThrottleFn(async (id: string) => {
+    if (fullDocCache.has(id) || prefetching.has(id)) return;
+    prefetching.add(id);
+    await fetchFullDoc(id);
+    prefetching.delete(id);
+}, 300);
+function onHoverDoc() {
+    if (!props.doc?.id) return;
+    if (!fullDocCache.has(props.doc.id)) doPrefetch(props.doc.id);
+}
+async function runExtraAction(action: any) {
+    try {
+        let docToSend = props.doc;
+        if (!docToSend.content || docToSend.content.length === 0) {
+            const full = await fetchFullDoc(props.doc.id);
+            if (full) docToSend = full;
+            else {
+                try {
+                    useToast().add({
+                        title: 'Document not available',
+                        description: 'Failed to load full content',
+                        color: 'error',
+                        duration: 3000,
+                    });
+                } catch {}
+                return;
+            }
+        }
+        await action.handler({ document: docToSend });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Doc action error', action.id, e);
+    }
+}
+</script>
+```
+
+## File: app/components/sidebar/SidebarThreadItem.vue
+```vue
+<template>
+    <RetroGlassBtn
+        class="w-full flex items-center justify-between text-left"
+        :class="{ 'active-element bg-primary/25': active }"
+        @click="emit('select', thread.id)"
+    >
+        <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+            <UIcon
+                v-if="thread.forked"
+                name="pixelarticons:git-branch"
+                class="shrink-0"
+            />
+            <span
+                class="truncate flex-1 min-w-0"
+                :title="thread.title || 'New Thread'"
+                >{{ thread.title || 'New Thread' }}</span
+            >
+        </div>
+        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+            <span
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                @click.stop
+            >
+                <UIcon
+                    name="pixelarticons:more-vertical"
+                    class="w-4 h-4 opacity-70"
+                />
+            </span>
+            <template #content>
+                <div class="p-1 w-44 space-y-1">
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:edit"
+                        @click="emit('rename', thread)"
+                        >Rename</UButton
+                    >
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:folder-plus"
+                        @click="emit('add-to-project', thread)"
+                        >Add to project</UButton
+                    >
+                    <UButton
+                        color="error"
+                        variant="ghost"
+                        size="sm"
+                        class="w-full justify-start"
+                        icon="pixelarticons:trash"
+                        @click="emit('delete', thread)"
+                        >Delete</UButton
+                    >
+                    <template v-for="action in extraActions" :key="action.id">
+                        <UButton
+                            :icon="action.icon"
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            class="w-full justify-start"
+                            @click="() => runExtraAction(action, thread)"
+                            >{{ action.label || '' }}</UButton
+                        >
+                    </template>
+                </div>
+            </template>
+        </UPopover>
+    </RetroGlassBtn>
+</template>
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import type { Thread } from '~/db';
+const props = defineProps<{ thread: Thread; active?: boolean }>();
+const emit = defineEmits<{
+    (e: 'select', id: string): void;
+    (e: 'rename', thread: Thread): void;
+    (e: 'delete', thread: Thread): void;
+    (e: 'add-to-project', thread: Thread): void;
+}>();
+// Plugin thread actions
+const extraActions = useThreadHistoryActions();
+async function runExtraAction(action: any, thread: Thread) {
+    try {
+        await action.handler({ thread });
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Thread action error', action.id, e);
+    }
+}
+</script>
+```
+
 ## File: app/components/sidebar/SideNavContentCollapsed.vue
 ```vue
 <template>
@@ -2714,6 +2964,601 @@ function onNewChat() {
 </script>
 ```
 
+## File: app/components/sidebar/SideNavHeader.vue
+```vue
+<template>
+    <div class="px-2 pt-2 flex flex-col space-y-2">
+        <div class="flex">
+            <UButton
+                @click="$emit('new-chat')"
+                class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
+                >New Chat</UButton
+            >
+            <UTooltip :delay-duration="0" text="Create project">
+                <UButton
+                    color="inverse-primary"
+                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                    icon="pixelarticons:folder-plus"
+                    :ui="{
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="openCreateProject"
+                />
+            </UTooltip>
+            <UTooltip :delay-duration="0" text="Create document">
+                <UButton
+                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                    icon="pixelarticons:note-plus"
+                    :ui="{
+                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="openCreateDocumentModal"
+                />
+            </UTooltip>
+        </div>
+        <div class="relative w-full ml-[1px]">
+            <UInput
+                ref="searchInputWrapper"
+                v-model="sidebarQuery"
+                icon="pixelarticons:search"
+                size="md"
+                :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
+                variant="outline"
+                placeholder="Search..."
+                aria-label="Search"
+                class="w-full"
+                @keydown.escape.prevent.stop="onEscapeClear"
+            >
+                <template v-if="sidebarQuery.length > 0" #trailing>
+                    <UButton
+                        color="neutral"
+                        variant="subtle"
+                        size="xs"
+                        class="flex items-center justify-center p-0"
+                        icon="pixelarticons:close-box"
+                        aria-label="Clear input"
+                        @click="sidebarQuery = ''"
+                    />
+                </template>
+            </UInput>
+        </div>
+
+        <div
+            class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
+            role="group"
+            aria-label="Sidebar sections"
+        >
+            <UButton
+                v-for="seg in sectionToggles"
+                :key="seg.value"
+                size="sm"
+                :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
+                :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
+                class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
+                :class="
+                    activeSections[seg.value]
+                        ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
+                        : 'opacity-70 hover:bg-primary/15'
+                "
+                :aria-pressed="activeSections[seg.value]"
+                @click="toggleSection(seg.value)"
+            >
+                {{ seg.label }}
+            </UButton>
+        </div>
+
+        <!-- Rename modal -->
+        <UModal
+            v-model:open="showRenameModal"
+            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
+            :ui="{
+                footer: 'justify-end ',
+            }"
+        >
+            <template #header>
+                <h3>
+                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
+                </h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameTitle"
+                        :placeholder="
+                            isRenamingDoc ? 'Document title' : 'Thread title'
+                        "
+                        icon="pixelarticons:edit"
+                        @keyup.enter="saveRename"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="primary" @click="saveRename">Save</UButton>
+            </template>
+        </UModal>
+
+        <!-- Rename Project Modal -->
+        <UModal
+            v-model:open="showRenameProjectModal"
+            title="Rename project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header><h3>Rename project?</h3></template>
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameProjectName"
+                        placeholder="Project name"
+                        icon="pixelarticons:folder"
+                        @keyup.enter="saveRenameProject"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameProjectModal = false"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="!renameProjectName.trim()"
+                    @click="saveRenameProject"
+                    >Save</UButton
+                >
+            </template>
+        </UModal>
+
+        <!-- Create Project Modal -->
+        <UModal
+            v-model:open="showCreateProjectModal"
+            title="New Project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Create project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="createProjectState"
+                        @submit.prevent="submitCreateProject"
+                    >
+                        <div class="flex flex-col space-y-3">
+                            <UFormField
+                                label="Title"
+                                name="name"
+                                :error="createProjectErrors.name"
+                            >
+                                <UInput
+                                    v-model="createProjectState.name"
+                                    required
+                                    placeholder="Project title"
+                                    icon="pixelarticons:folder"
+                                    class="w-full"
+                                    @keyup.enter="submitCreateProject"
+                                />
+                            </UFormField>
+                            <UFormField label="Description" name="description">
+                                <UTextarea
+                                    class="w-full border-2 rounded-[6px]"
+                                    v-model="createProjectState.description"
+                                    :rows="3"
+                                    placeholder="Optional description"
+                                />
+                            </UFormField>
+                        </div>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    :disabled="
+                        !createProjectState.name.trim() || creatingProject
+                    "
+                    color="primary"
+                    @click="submitCreateProject"
+                >
+                    <span v-if="!creatingProject">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+
+        <!-- Add To Project Modal -->
+        <UModal
+            v-model:open="showAddToProjectModal"
+            title="Add to project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Add thread to project</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <div class="flex gap-2 text-xs font-mono">
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'select'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'select'"
+                        >
+                            Select Existing
+                        </button>
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'create'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'create'"
+                        >
+                            Create New
+                        </button>
+                    </div>
+                    <div v-if="addMode === 'select'" class="space-y-3">
+                        <UFormField label="Project" name="project">
+                            <USelectMenu
+                                v-model="selectedProjectId"
+                                :items="projectSelectOptions"
+                                :value-key="'value'"
+                                searchable
+                                placeholder="Select project"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                    <div v-else class="space-y-3">
+                        <UFormField label="Project Title" name="newProjectName">
+                            <UInput
+                                v-model="newProjectName"
+                                placeholder="Project name"
+                                icon="pixelarticons:folder"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <UFormField
+                            label="Description"
+                            name="newProjectDescription"
+                        >
+                            <UTextarea
+                                v-model="newProjectDescription"
+                                :rows="3"
+                                placeholder="Optional description"
+                                class="w-full border-2 rounded-[6px]"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeAddToProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        addingToProject ||
+                        (addMode === 'select'
+                            ? !selectedProjectId
+                            : !newProjectName.trim())
+                    "
+                    @click="submitAddToProject"
+                >
+                    <span v-if="!addingToProject">Add</span>
+                    <span v-else class="inline-flex items-center gap-1"
+                        ><UIcon
+                            name="i-lucide-loader"
+                            class="animate-spin"
+                        />Adding</span
+                    >
+                </UButton>
+            </template>
+        </UModal>
+
+        <!-- New Document Naming Modal -->
+        <UModal
+            v-model:open="showCreateDocumentModal"
+            title="New Document"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #header>
+                <h3>Name new document</h3>
+            </template>
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="newDocumentState"
+                        @submit.prevent="submitCreateDocument"
+                    >
+                        <UFormField
+                            label="Title"
+                            name="title"
+                            :error="newDocumentErrors.title"
+                        >
+                            <UInput
+                                v-model="newDocumentState.title"
+                                required
+                                placeholder="Document title"
+                                icon="pixelarticons:note"
+                                class="w-full"
+                                @keyup.enter="submitCreateDocument"
+                            />
+                        </UFormField>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateDocumentModal"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        creatingDocument || !newDocumentState.title.trim()
+                    "
+                    @click="submitCreateDocument"
+                >
+                    <span v-if="!creatingDocument">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+    </div>
+</template>
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import { db, upsert, create } from '~/db';
+
+const props = defineProps<{
+    sidebarQuery: string;
+    activeSections: {
+        projects: boolean;
+        chats: boolean;
+        docs: boolean;
+    };
+    projects: any[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'update:sidebarQuery', value: string): void;
+    (e: 'update:activeSections', value: typeof props.activeSections): void;
+    (e: 'new-chat'): void;
+    (e: 'new-document', initial?: { title?: string }): void;
+    (e: 'open-rename', target: any): void;
+    (e: 'open-rename-project', projectId: string): void;
+    (e: 'add-to-project', thread: any): void;
+    (e: 'add-document-to-project', doc: any): void;
+}>();
+
+// Section visibility (multi-select) defaults to all on
+const sectionToggles = [
+    { label: 'Proj', value: 'projects' as const },
+    { label: 'Chats', value: 'chats' as const },
+    { label: 'Docs', value: 'docs' as const },
+];
+
+function toggleSection(v: 'projects' | 'chats' | 'docs') {
+    const next = { ...props.activeSections, [v]: !props.activeSections[v] };
+    emit('update:activeSections', next);
+}
+
+// Direct focus support for external callers
+const searchInputWrapper = ref<any | null>(null);
+function focusSearchInput() {
+    // Access underlying input inside UInput component
+    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
+        searchInputWrapper.value) as HTMLElement | null;
+    if (!root) return;
+    const input = root.querySelector('input');
+    if (input) (input as HTMLInputElement).focus();
+}
+defineExpose({ focusSearchInput });
+
+const sidebarQuery = computed({
+    get: () => props.sidebarQuery,
+    set: (value) => emit('update:sidebarQuery', value),
+});
+
+function onEscapeClear() {
+    if (sidebarQuery.value) sidebarQuery.value = '';
+}
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+const renameMetaKind = ref<'chat' | 'doc' | null>(null);
+const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
+
+async function openRename(target: any) {
+    emit('open-rename', target);
+}
+
+async function saveRename() {
+    emit('open-rename', {
+        id: renameId.value,
+        title: renameTitle.value,
+        kind: renameMetaKind.value,
+    });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+    renameMetaKind.value = null;
+}
+
+// ---- Project Rename Modal Logic ----
+const showRenameProjectModal = ref(false);
+const renameProjectId = ref<string | null>(null);
+const renameProjectName = ref('');
+
+async function openRenameProject(projectId: string) {
+    emit('open-rename-project', projectId);
+}
+
+async function saveRenameProject() {
+    if (!renameProjectId.value) return;
+    const name = renameProjectName.value.trim();
+    if (!name) return;
+    const project = await db.projects.get(renameProjectId.value);
+    if (!project) return;
+    try {
+        await upsert.project({
+            ...project,
+            name,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        showRenameProjectModal.value = false;
+        renameProjectId.value = null;
+        renameProjectName.value = '';
+    } catch (e) {
+        console.error('rename project failed', e);
+    }
+}
+
+// ---- Project Creation ----
+const showCreateProjectModal = ref(false);
+const creatingProject = ref(false);
+const createProjectState = ref<{ name: string; description: string }>({
+    name: '',
+    description: '',
+});
+const createProjectErrors = ref<{ name?: string }>({});
+
+function openCreateProject() {
+    showCreateProjectModal.value = true;
+    createProjectState.value = { name: '', description: '' };
+    createProjectErrors.value = {};
+}
+function closeCreateProject() {
+    showCreateProjectModal.value = false;
+}
+
+async function submitCreateProject() {
+    if (creatingProject.value) return;
+    const name = createProjectState.value.name.trim();
+    if (!name) {
+        createProjectErrors.value.name = 'Title required';
+        return;
+    }
+    creatingProject.value = true;
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        // data holds ordered list of entities (chat/doc) we include kind now per request
+        const newId = crypto.randomUUID();
+        await create.project({
+            id: newId,
+            name,
+            description: createProjectState.value.description?.trim() || null,
+            data: [], // store as array; schema allows any
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+        } as any);
+        closeCreateProject();
+    } catch (e) {
+        console.error('Failed to create project', e);
+    } finally {
+        creatingProject.value = false;
+    }
+}
+
+// ---- Add To Project Flow ----
+const showAddToProjectModal = ref(false);
+const addToProjectThreadId = ref<string | null>(null);
+// Support documents
+const addToProjectDocumentId = ref<string | null>(null);
+const addMode = ref<'select' | 'create'>('select');
+const selectedProjectId = ref<string | null>(null);
+const newProjectName = ref('');
+const newProjectDescription = ref('');
+const addingToProject = ref(false);
+const addToProjectError = ref<string | null>(null);
+
+const projectSelectOptions = computed(() =>
+    props.projects.map((p) => ({ label: p.name, value: p.id }))
+);
+
+function openAddToProject(thread: any) {
+    emit('add-to-project', thread);
+}
+
+function openAddDocumentToProject(doc: any) {
+    emit('add-document-to-project', doc);
+}
+
+function closeAddToProject() {
+    showAddToProjectModal.value = false;
+    addToProjectThreadId.value = null;
+    addToProjectDocumentId.value = null;
+}
+
+async function submitAddToProject() {
+    emit('add-to-project', {
+        threadId: addToProjectThreadId.value,
+        documentId: addToProjectDocumentId.value,
+        mode: addMode.value,
+        selectedProjectId: selectedProjectId.value,
+        newProjectName: newProjectName.value,
+        newProjectDescription: newProjectDescription.value,
+    });
+    closeAddToProject();
+}
+
+// ---- New Document Flow (naming modal) ----
+const showCreateDocumentModal = ref(false);
+const creatingDocument = ref(false);
+const newDocumentState = ref<{ title: string }>({ title: '' });
+const newDocumentErrors = ref<{ title?: string }>({});
+
+function openCreateDocumentModal() {
+    showCreateDocumentModal.value = true;
+    newDocumentState.value = { title: '' };
+    newDocumentErrors.value = {};
+}
+function closeCreateDocumentModal() {
+    showCreateDocumentModal.value = false;
+}
+async function submitCreateDocument() {
+    if (creatingDocument.value) return;
+    const title = newDocumentState.value.title.trim();
+    if (!title) {
+        newDocumentErrors.value.title = 'Title required';
+        return;
+    }
+    creatingDocument.value = true;
+    try {
+        emit('new-document', { title });
+        closeCreateDocumentModal();
+    } finally {
+        creatingDocument.value = false;
+    }
+}
+</script>
+```
+
 ## File: app/components/RetroGlassBtn.vue
 ```vue
 <template>
@@ -2725,6 +3570,190 @@ function onNewChat() {
 </template>
 
 <script setup></script>
+```
+
+## File: app/composables/ui-extensions/documents/useDocumentHistoryActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+import type { Post } from '~/db';
+
+/** Definition for an extendable chat message action button. */
+export interface DocumentHistoryAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Label text. */
+    label: string;
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    /** Handler invoked on click. */
+    handler: (ctx: { document: Post }) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, DocumentHistoryAction> =
+    g.__or3DocumentHistoryActionsRegistry ||
+    (g.__or3DocumentHistoryActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: DocumentHistoryAction[] }>({
+    items: [],
+});
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerDocumentHistoryAction(action: DocumentHistoryAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterDocumentHistoryAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useDocumentHistoryActions() {
+    return computed(() =>
+        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredDocumentHistoryActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatDocumentHistory.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+```
+
+## File: app/composables/ui-extensions/messages/useMessageActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+
+/** Definition for an extendable chat message action button. */
+export interface ChatMessageAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Tooltip text. */
+    tooltip: string;
+    /** Where to show the action. */
+    showOn: 'user' | 'assistant' | 'both';
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    /** Handler invoked on click. */
+    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, ChatMessageAction> =
+    g.__or3MessageActionsRegistry ||
+    (g.__or3MessageActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerMessageAction(action: ChatMessageAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterMessageAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useMessageActions(message: { role: 'user' | 'assistant' }) {
+    return computed(() =>
+        reactiveList.items
+            .filter((a) => a.showOn === 'both' || a.showOn === message.role)
+            .sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredMessageActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+```
+
+## File: app/composables/ui-extensions/threads/useThreadHistoryActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+import type { Post, Thread } from '~/db';
+
+/** Definition for an extendable chat message action button. */
+export interface ThreadHistoryAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Label text. */
+    label: string;
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    /** Handler invoked on click. */
+    handler: (ctx: { document: Thread }) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, ThreadHistoryAction> =
+    g.__or3ThreadHistoryActionsRegistry ||
+    (g.__or3ThreadHistoryActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: ThreadHistoryAction[] }>({
+    items: [],
+});
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerThreadHistoryAction(action: ThreadHistoryAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterThreadHistoryAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useThreadHistoryActions() {
+    return computed(() =>
+        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredThreadHistoryActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatThreadHistory.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
 ## File: app/composables/useActivePrompt.ts
@@ -2857,6 +3886,64 @@ export async function getDefaultPromptId(): Promise<string | null> {
 }
 ```
 
+## File: app/composables/useDocumentsList.ts
+```typescript
+import { ref } from 'vue';
+import { listDocuments, type Document } from '~/db/documents';
+import { useToast } from '#imports';
+import { useHookEffect } from './useHookEffect';
+
+export function useDocumentsList(limit = 200) {
+    const docs = ref<Document[]>([]);
+    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
+    const loading = ref(true);
+    const error = ref<unknown>(null);
+
+    async function refresh() {
+        loading.value = true;
+        error.value = null;
+        try {
+            // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
+            const full = await listDocuments(limit);
+            docs.value = full.map((d: any) => ({
+                // Keep lightweight/meta fields
+                id: d.id,
+                title: d.title,
+                postType: d.postType,
+                created_at: d.created_at,
+                updated_at: d.updated_at,
+                deleted: d.deleted,
+                meta: d.meta,
+                // Drop large content string; empty string placeholder keeps type happy
+                content: '',
+            }));
+        } catch (e) {
+            error.value = e;
+            useToast().add({ color: 'error', title: 'Document: list failed' });
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    // initial load + subscribe to document DB hook events (client only)
+    if (process.client) {
+        refresh();
+        // Auto-refresh on create/update/delete after actions complete
+        useHookEffect('db.documents.create:action:after', () => refresh(), {
+            kind: 'action',
+        });
+        useHookEffect('db.documents.update:action:after', () => refresh(), {
+            kind: 'action',
+        });
+        useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
+            kind: 'action',
+        });
+    }
+
+    return { docs, loading, error, refresh };
+}
+```
+
 ## File: app/composables/useHookEffect.ts
 ```typescript
 import { onBeforeUnmount } from 'vue';
@@ -2899,69 +3986,6 @@ import type { HookEngine } from '../utils/hooks';
 
 export function useHooks(): HookEngine {
     return useNuxtApp().$hooks as HookEngine;
-}
-```
-
-## File: app/composables/useMessageEditing.ts
-```typescript
-import { ref } from 'vue';
-import { upsert } from '~/db';
-import { nowSec } from '~/db/util';
-
-// Lightweight composable for editing a chat message (assistant/user)
-export function useMessageEditing(message: any) {
-    const editing = ref(false);
-    const draft = ref('');
-    const original = ref('');
-    const saving = ref(false);
-
-    function beginEdit() {
-        if (editing.value) return;
-        original.value = message.content;
-        draft.value = message.content;
-        editing.value = true;
-    }
-    function cancelEdit() {
-        if (saving.value) return;
-        editing.value = false;
-        draft.value = '';
-        original.value = '';
-    }
-    async function saveEdit() {
-        if (saving.value) return;
-        const id = message.id;
-        if (!id) return;
-        const trimmed = draft.value.trim();
-        if (!trimmed) {
-            cancelEdit();
-            return;
-        }
-        try {
-            saving.value = true;
-            const existing: any = await (
-                await import('~/db/client')
-            ).db.messages.get(id);
-            if (!existing) throw new Error('Message not found');
-            await upsert.message({
-                ...existing,
-                data: { ...(existing.data || {}), content: trimmed },
-                updated_at: nowSec(),
-            });
-            message.content = trimmed;
-            editing.value = false;
-        } finally {
-            saving.value = false;
-        }
-    }
-    return {
-        editing,
-        draft,
-        original,
-        saving,
-        beginEdit,
-        cancelEdit,
-        saveEdit,
-    };
 }
 ```
 
@@ -3123,225 +4147,6 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
 }
 
 export default useModelSearch;
-```
-
-## File: app/composables/useMultiPane.ts
-```typescript
-// Multi-pane state management composable for chat & documents
-// Keeps pane logic outside of UI components for easier testing & extension.
-
-import Dexie from 'dexie';
-import { db } from '~/db';
-import { useHooks } from './useHooks';
-
-// Narrow pane message representation (always flattened string content)
-export type MultiPaneMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-    id?: string;
-    stream_id?: string;
-};
-
-export interface PaneState {
-    id: string;
-    mode: 'chat' | 'doc';
-    threadId: string; // '' indicates unsaved/new chat
-    documentId?: string;
-    messages: MultiPaneMessage[];
-    validating: boolean;
-}
-
-export interface UseMultiPaneOptions {
-    initialThreadId?: string;
-    maxPanes?: number; // default 3
-    onFlushDocument?: (id: string) => void | Promise<void>;
-    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
-}
-
-export interface UseMultiPaneApi {
-    panes: Ref<PaneState[]>;
-    activePaneIndex: Ref<number>;
-    canAddPane: ComputedRef<boolean>;
-    newWindowTooltip: ComputedRef<string>;
-    addPane: () => void;
-    closePane: (index: number) => Promise<void> | void;
-    setActive: (index: number) => void;
-    focusPrev: (current: number) => void;
-    focusNext: (current: number) => void;
-    setPaneThread: (index: number, threadId: string) => Promise<void>;
-    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;
-    ensureAtLeastOne: () => void;
-}
-
-function genId() {
-    try {
-        if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-            // @ts-ignore
-            return crypto.randomUUID();
-        }
-    } catch {}
-    return 'pane-' + Math.random().toString(36).slice(2);
-}
-
-function createEmptyPane(initialThreadId = ''): PaneState {
-    return {
-        id: genId(),
-        mode: 'chat',
-        threadId: initialThreadId,
-        messages: [],
-        validating: false,
-    };
-}
-
-async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
-    if (!id) return [];
-    try {
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([id, Dexie.minKey], [id, Dexie.maxKey])
-            .filter((m: any) => !m.deleted)
-            .toArray();
-        return (msgs || []).map((msg: any) => {
-            const data = msg.data as {
-                content?: string;
-                reasoning_text?: string | null;
-            };
-            const content =
-                typeof data === 'object' && data !== null && 'content' in data
-                    ? String((data as any).content ?? '')
-                    : String((msg.content as any) ?? '');
-            return {
-                role: msg.role as 'user' | 'assistant',
-                content,
-                file_hashes: msg.file_hashes,
-                id: msg.id,
-                stream_id: msg.stream_id,
-                reasoning_text: data?.reasoning_text || null,
-            } as MultiPaneMessage;
-        });
-    } catch (e) {
-        return [];
-    }
-}
-
-export function useMultiPane(
-    options: UseMultiPaneOptions = {}
-): UseMultiPaneApi {
-    const { initialThreadId = '', maxPanes = 3 } = options;
-
-    const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
-    const activePaneIndex = ref(0);
-    const hooks = useHooks();
-
-    const canAddPane = computed(() => panes.value.length < maxPanes);
-    const newWindowTooltip = computed(() =>
-        canAddPane.value ? 'New window' : `Max ${maxPanes} windows`
-    );
-
-    const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
-
-    async function setPaneThread(index: number, threadId: string) {
-        const pane = panes.value[index];
-        if (!pane) return;
-        pane.threadId = threadId;
-        pane.messages = await loadMessagesFor(threadId);
-    }
-
-    function setActive(i: number) {
-        if (i >= 0 && i < panes.value.length) {
-            if (i !== activePaneIndex.value) {
-                activePaneIndex.value = i;
-                // Emit switch action with new pane state
-                hooks.doAction('ui.pane.switch:action', panes.value[i], i);
-            }
-        }
-    }
-
-    function addPane() {
-        if (!canAddPane.value) return;
-        const pane = createEmptyPane();
-        panes.value.push(pane);
-        setActive(panes.value.length - 1);
-        hooks.doAction(
-            'ui.pane.open:action:after',
-            pane,
-            panes.value.length - 1
-        );
-    }
-
-    async function closePane(i: number) {
-        if (panes.value.length <= 1) return; // never close last
-        const closing = panes.value[i];
-        // Pre-close hook
-        hooks.doAction('ui.pane.close:action:before', closing, i);
-        if (
-            closing?.mode === 'doc' &&
-            closing.documentId &&
-            options.onFlushDocument
-        ) {
-            try {
-                await options.onFlushDocument(closing.documentId);
-            } catch {}
-        }
-        const wasActive = i === activePaneIndex.value;
-        panes.value.splice(i, 1);
-        if (!panes.value.length) {
-            panes.value.push(createEmptyPane());
-            activePaneIndex.value = 0;
-            return;
-        }
-        if (wasActive) {
-            const newIndex = Math.min(i, panes.value.length - 1);
-            setActive(newIndex);
-        } else if (i < activePaneIndex.value) {
-            activePaneIndex.value -= 1; // shift left
-        }
-    }
-
-    function focusPrev(current: number) {
-        if (panes.value.length < 2) return;
-        const target = current - 1;
-        if (target >= 0) setActive(target);
-    }
-    function focusNext(current: number) {
-        if (panes.value.length < 2) return;
-        const target = current + 1;
-        if (target < panes.value.length) setActive(target);
-    }
-
-    function ensureAtLeastOne() {
-        if (!panes.value.length) {
-            panes.value.push(createEmptyPane());
-            activePaneIndex.value = 0;
-        }
-    }
-
-    const api: UseMultiPaneApi = {
-        panes,
-        activePaneIndex,
-        canAddPane,
-        newWindowTooltip,
-        addPane,
-        closePane,
-        setActive,
-        focusPrev,
-        focusNext,
-        setPaneThread,
-        loadMessagesFor,
-        ensureAtLeastOne,
-    };
-
-    // Expose globally so plugins (message action handlers etc.) can interact.
-    // This is intentionally lightweight; if multiple instances are created the latest wins.
-    try {
-        (globalThis as any).__or3MultiPaneApi = api;
-    } catch {}
-
-    return api;
-}
-
-export type { PaneState as MultiPaneState };
 ```
 
 ## File: app/composables/useObservedElementSize.ts
@@ -7784,128 +8589,6 @@ export function promptJsonToString(json: any): string {
 }
 ```
 
-## File: app/app.config.ts
-```typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
-                header: 'border-0',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                color: {
-                    'inverse-primary':
-                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
-    },
-});
-```
-
 ## File: public/robots.txt
 ```
 User-Agent: *
@@ -8610,565 +9293,272 @@ body {
 </style>
 ```
 
-## File: app/components/chat/SystemPromptsModal.vue
+## File: app/components/documents/DocumentEditor.vue
 ```vue
 <template>
-    <UModal
-        v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-none',
-            header: 'border-b-2 border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0! border-b-0! overflow-hidden',
-        }"
-        class="sp-modal border-2 w-full sm:min-w-[720px]! min-h-[80dvh] max-h-[80dvh] overflow-hidden"
+    <div
+        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    System Prompts
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="sm"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
+        <div
+            class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
+        >
+            <UInput
+                v-model="titleDraft"
+                placeholder="Untitled"
+                size="md"
+                class="flex-1 max-w-[60%]"
+                @update:model-value="onTitleChange"
+            />
+            <div class="flex items-center gap-1">
+                <UTooltip :text="statusText">
+                    <span
+                        class="text-xs opacity-70 w-16 text-right select-none"
+                        >{{ statusText }}</span
+                    >
+                </UTooltip>
             </div>
-        </template>
-        <template #body>
-            <div class="flex flex-col h-full" @keydown="handleKeydown">
-                <div
-                    class="px-4 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10"
-                >
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <UButton
-                            @click="createNewPrompt"
-                            size="sm"
-                            color="primary"
-                            class="retro-btn"
-                        >
-                            New Prompt
-                        </UButton>
-                        <UButton
-                            v-if="currentActivePromptId"
-                            @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
-                        >
-                            Clear Active
-                        </UButton>
-                    </div>
-                    <UInput
-                        v-model="searchQuery"
-                        placeholder="Search prompts..."
-                        size="sm"
-                        class="max-w-xs"
-                        icon="i-heroicons-magnifying-glass"
-                    />
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <!-- List View -->
-                    <div v-if="!editingPrompt" class="h-full overflow-y-auto">
-                        <div
-                            v-if="filteredPrompts.length === 0"
-                            class="flex flex-col items-center justify-center h-full text-center p-8"
-                        >
-                            <UIcon
-                                name="pixelarticons:script-text"
-                                class="w-16 h-16 text-gray-400 mb-4"
-                            />
-                            <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
-                            >
-                                No system prompts yet
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
-                                Create your first system prompt to customize AI
-                                behavior.
-                            </p>
-                            <UButton @click="createNewPrompt" color="primary">
-                                Create Your First Prompt
-                            </UButton>
-                        </div>
-
-                        <div v-else class="p-4 space-y-3">
-                            <div
-                                v-for="prompt in filteredPrompts"
-                                :key="prompt.id"
-                                class="flex items-center justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 dark:bg-neutral-900/70 hover:bg-white dark:hover:bg-neutral-800 transition-colors retro-shadow"
-                                :class="{
-                                    'ring-2 ring-primary-500 bg-primary-50 dark:bg-primary-900/20':
-                                        prompt.id === currentActivePromptId ||
-                                        prompt.id === defaultPromptId,
-                                }"
-                            >
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h4
-                                            class="font-medium text-gray-900 dark:text-white truncate"
-                                            :class="{
-                                                'italic opacity-60':
-                                                    !prompt.title,
-                                            }"
-                                        >
-                                            {{
-                                                prompt.title ||
-                                                'Untitled Prompt'
-                                            }}
-                                        </h4>
-                                        <span
-                                            v-if="prompt.id === defaultPromptId"
-                                            class="text-[12px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
-                                            >Default</span
-                                        >
-                                    </div>
-                                    <p
-                                        class="text-sm text-gray-500 dark:text-gray-400"
-                                    >
-                                        Updated
-                                        {{ formatDate(prompt.updated_at) }} •
-                                        {{ tokenCounts[prompt.id] || 0 }} tokens
-                                    </p>
-                                </div>
-
-                                <div
-                                    class="flex items-center gap-2 ml-4 shrink-0"
-                                >
-                                    <UTooltip
-                                        :delay-duration="0"
-                                        :text="
-                                            prompt.id === defaultPromptId
-                                                ? 'Remove default prompt'
-                                                : 'Set as default prompt'
-                                        "
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            :variant="
-                                                prompt.id === defaultPromptId
-                                                    ? 'solid'
-                                                    : 'outline'
-                                            "
-                                            :color="
-                                                prompt.id === defaultPromptId
-                                                    ? 'primary'
-                                                    : 'neutral'
-                                            "
-                                            :square="true"
-                                            :ui="{
-                                                base: 'retro-btn px-1! text-nowrap',
-                                            }"
-                                            class="retro-btn"
-                                            aria-label="Toggle default prompt"
-                                            @click.stop="
-                                                toggleDefault(prompt.id)
-                                            "
-                                            >{{
-                                                prompt.id === defaultPromptId
-                                                    ? 'default'
-                                                    : 'set default'
-                                            }}</UButton
-                                        >
-                                    </UTooltip>
-                                    <UButton
-                                        @click="selectPrompt(prompt.id)"
-                                        size="sm"
-                                        :color="
-                                            prompt.id === currentActivePromptId
-                                                ? 'primary'
-                                                : 'neutral'
-                                        "
-                                        :variant="
-                                            prompt.id === currentActivePromptId
-                                                ? 'solid'
-                                                : 'outline'
-                                        "
-                                    >
-                                        {{
-                                            prompt.id === currentActivePromptId
-                                                ? 'Selected'
-                                                : 'Select'
-                                        }}
-                                    </UButton>
-                                    <UPopover
-                                        :popper="{ placement: 'bottom-end' }"
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            variant="outline"
-                                            color="neutral"
-                                            class="flex items-center justify-center"
-                                            :square="true"
-                                            icon="pixelarticons:more-vertical"
-                                            aria-label="More actions"
-                                        />
-                                        <template #content>
-                                            <div
-                                                class="flex flex-col py-1 w-36 text-sm"
-                                            >
-                                                <button
-                                                    @click="
-                                                        startEditing(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:edit"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Edit</span>
-                                                </button>
-                                                <button
-                                                    @click="
-                                                        deletePrompt(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:trash"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Delete</span>
-                                                </button>
-                                            </div>
-                                        </template>
-                                    </UPopover>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Editor View -->
-                    <div v-else class="h-full overflow-hidden flex flex-col">
-                        <div class="flex-1 p-4 overflow-hidden">
-                            <LazyPromptsPromptEditor
-                                :prompt-id="editingPrompt.id"
-                                @back="stopEditing"
-                            />
-                        </div>
-                    </div>
-                </div>
+        </div>
+        <div
+            class="flex flex-row items-stretch border-b-2 px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
+        >
+            <ToolbarButton
+                icon="carbon:text-bold"
+                :active="isActive('bold')"
+                label="Bold (⌘B)"
+                @activate="cmd('toggleBold')"
+            />
+            <ToolbarButton
+                icon="carbon:text-italic"
+                :active="isActive('italic')"
+                label="Italic (⌘I)"
+                @activate="cmd('toggleItalic')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:code"
+                :active="isActive('code')"
+                label="Code"
+                @activate="cmd('toggleCode')"
+            />
+            <ToolbarButton
+                text="H1"
+                :active="isActiveHeading(1)"
+                label="H1"
+                @activate="toggleHeading(1)"
+            />
+            <ToolbarButton
+                text="H2"
+                :active="isActiveHeading(2)"
+                label="H2"
+                @activate="toggleHeading(2)"
+            />
+            <ToolbarButton
+                text="H3"
+                :active="isActiveHeading(3)"
+                label="H3"
+                @activate="toggleHeading(3)"
+            />
+            <ToolbarButton
+                icon="pixelarticons:list"
+                :active="isActive('bulletList')"
+                label="Bullets"
+                @activate="cmd('toggleBulletList')"
+            />
+            <ToolbarButton
+                icon="carbon:list-numbered"
+                :active="isActive('orderedList')"
+                label="Ordered"
+                @activate="cmd('toggleOrderedList')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:minus"
+                label="HR"
+                @activate="cmd('setHorizontalRule')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:undo"
+                label="Undo"
+                @activate="cmd('undo')"
+            />
+            <ToolbarButton
+                icon="pixelarticons:redo"
+                label="Redo"
+                @activate="cmd('redo')"
+            />
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto">
+            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
+                <EditorContent
+                    :editor="editor as Editor"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                ></EditorContent>
             </div>
-        </template>
-    </UModal>
+        </div>
+    </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
+import ToolbarButton from './ToolbarButton.vue';
 import {
-    listPrompts,
-    createPrompt,
-    softDeletePrompt,
-    type PromptRecord,
-} from '~/db/prompts';
-import { useActivePrompt } from '~/composables/useActivePrompt';
-import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-import { encode } from 'gpt-tokenizer';
-import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+    useDocumentState,
+    setDocumentContent,
+    setDocumentTitle,
+    loadDocument,
+} from '~/composables/useDocumentsStore';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import type { JSONContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
 
-// Props & modal open bridging (like SettingsModal pattern)
-const props = defineProps<{
-    showModal: boolean;
-    threadId?: string;
-}>();
-const emit = defineEmits({
-    'update:showModal': (value: boolean) => typeof value === 'boolean',
-    selected: (id: string) => typeof id === 'string',
-    closed: () => true,
-    threadCreated: (threadId: string, promptId: string | null) => true,
-});
+const props = defineProps<{ documentId: string }>();
 
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
+// Reactive state wrapper (computed to always fetch current map entry)
+const state = computed(() => useDocumentState(props.documentId));
+const titleDraft = ref(state.value.record?.title || '');
 
 watch(
-    () => props.showModal,
-    (v, ov) => {
-        if (!v && ov) emit('closed');
-    }
-);
-
-const {
-    activePromptId,
-    setActivePrompt,
-    clearActivePrompt: clearGlobalActivePrompt,
-} = useActivePrompt();
-
-const prompts = ref<PromptRecord[]>([]);
-const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
-    useDefaultPrompt();
-const editingPrompt = ref<PromptRecord | null>(null);
-const showDeleteConfirm = ref<string | null>(null);
-
-const searchQuery = ref('');
-const filteredPrompts = computed(() => {
-    if (!searchQuery.value) return prompts.value;
-    return prompts.value.filter((p) =>
-        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    );
-});
-
-// Thread-specific system prompt handling
-const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet
-
-// Computed for current active prompt (thread-specific or global)
-const currentActivePromptId = computed(() => {
-    if (props.threadId) {
-        return threadSystemPromptId.value;
-    }
-    return activePromptId.value;
-});
-
-// Extract plain text from TipTap JSON recursively
-function extractText(node: any): string {
-    if (!node) return '';
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    const type = node.type;
-    let acc = '';
-    if (type === 'text') {
-        acc += node.text || '';
-    }
-    if (node.content && Array.isArray(node.content)) {
-        const inner = node.content.map(extractText).join('');
-        acc += inner;
-    }
-    // Block separators to avoid word merging
-    if (
-        [
-            'paragraph',
-            'heading',
-            'bulletList',
-            'orderedList',
-            'listItem',
-        ].includes(type)
-    ) {
-        acc += '\n';
-    }
-    return acc;
-}
-
-function contentToText(content: any): string {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    // TipTap root usually { type: 'doc', content: [...] }
-    if (content.type === 'doc' && Array.isArray(content.content)) {
-        return extractText(content)
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-    }
-    if (Array.isArray(content.content)) return extractText(content).trim();
-    return '';
-}
-
-// Cached token counts per prompt id (recomputed when prompts list changes)
-const tokenCounts = computed<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const p of prompts.value) {
-        try {
-            const text = contentToText(p.content);
-            map[p.id] = text ? encode(text).length : 0;
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token encode failed', e);
-            map[p.id] = 0;
+    () => props.documentId,
+    async (id, _old, onCleanup) => {
+        // Switch to new state object from map
+        const currentLoadId = id;
+        await loadDocument(id);
+        if (props.documentId !== currentLoadId) return; // prop changed again
+        titleDraft.value = state.value.record?.title || '';
+        if (editor.value && state.value.record) {
+            const json = state.value.record.content as JSONContent;
+            editor.value.commands.setContent(json, { emitUpdate: false });
         }
     }
-    return map;
-});
-
-// Totals derived from cached counts
-const totalTokens = computed(() =>
-    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
-);
-const filteredTokens = computed(() =>
-    filteredPrompts.value.reduce(
-        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
-        0
-    )
 );
 
-// (Events moved above with prop bridging)
+const editor = ref<Editor | null>(null);
 
-const loadPrompts = async () => {
-    try {
-        prompts.value = await listPrompts();
+function onTitleChange() {
+    setDocumentTitle(props.documentId, titleDraft.value);
+}
+
+// Reflect external title updates (e.g., sidebar rename) into the input when
+// we're not currently staging a local pendingTitle.
+watch(
+    () => state.value.record?.title,
+    (newTitle) => {
         if (
-            defaultPromptId.value &&
-            !prompts.value.find((p) => p.id === defaultPromptId.value)
+            typeof newTitle === 'string' &&
+            newTitle.length > 0 &&
+            newTitle !== titleDraft.value &&
+            state.value.pendingTitle === undefined // don't clobber local edits
         ) {
-            await clearDefaultPrompt();
+            titleDraft.value = newTitle;
         }
-    } catch (error) {
-        console.error('Failed to load prompts:', error);
-    }
-};
-
-const loadThreadSystemPrompt = async () => {
-    if (props.threadId) {
-        try {
-            threadSystemPromptId.value = await getThreadSystemPrompt(
-                props.threadId
-            );
-        } catch (error) {
-            console.error('Failed to load thread system prompt:', error);
-            threadSystemPromptId.value = null;
-        }
-    } else {
-        threadSystemPromptId.value = null;
-    }
-};
-
-const createNewPrompt = async () => {
-    try {
-        const newPrompt = await createPrompt();
-        prompts.value.unshift(newPrompt);
-        startEditing(newPrompt.id);
-    } catch (error) {
-        console.error('Failed to create prompt:', error);
-    }
-};
-
-const selectPrompt = async (id: string) => {
-    try {
-        if (props.threadId) {
-            // Update thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, id);
-            threadSystemPromptId.value = id;
-        } else {
-            // Store as pending for when thread is created
-            pendingPromptId.value = id;
-            // Also update global for immediate feedback
-            await setActivePrompt(id);
-        }
-        emit('selected', id);
-    } catch (error) {
-        console.error('Failed to select prompt:', error);
-    }
-};
-
-const clearActivePrompt = async () => {
-    try {
-        if (props.threadId) {
-            // Clear thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, null);
-            threadSystemPromptId.value = null;
-        } else {
-            // Clear pending and global active prompt
-            pendingPromptId.value = null;
-            await clearGlobalActivePrompt();
-        }
-    } catch (error) {
-        console.error('Failed to clear active prompt:', error);
-    }
-};
-
-const startEditing = (id: string) => {
-    const prompt = prompts.value.find((p) => p.id === id);
-    if (prompt) {
-        editingPrompt.value = prompt;
-    }
-};
-
-const stopEditing = () => {
-    editingPrompt.value = null;
-    loadPrompts(); // Refresh list in case of changes
-};
-
-const applyPendingPromptToThread = async (threadId: string) => {
-    if (pendingPromptId.value) {
-        try {
-            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
-            emit('threadCreated', threadId, pendingPromptId.value);
-            pendingPromptId.value = null;
-        } catch (error) {
-            console.error('Failed to apply pending prompt to thread:', error);
-        }
-    }
-};
-
-const deletePrompt = async (id: string) => {
-    if (confirm('Are you sure you want to delete this prompt?')) {
-        try {
-            await softDeletePrompt(id);
-            if (activePromptId.value === id) {
-                clearActivePrompt();
-            }
-            if (defaultPromptId.value === id) {
-                await clearDefaultPrompt();
-            }
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to delete prompt:', error);
-        }
-    }
-};
-
-const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-    if (editingPrompt.value) return;
-    const key = event.key;
-    if (key >= '1' && key <= '9') {
-        const index = parseInt(key) - 1;
-        if (index < filteredPrompts.value.length) {
-            const prompt = filteredPrompts.value[index];
-            if (prompt) {
-                selectPrompt(prompt.id);
-                event.preventDefault();
-            }
-        }
-    }
-};
-
-onMounted(() => {
-    loadPrompts();
-    loadThreadSystemPrompt();
-});
-
-// Watch for threadId changes to reload thread-specific prompt
-watch(
-    () => props.threadId,
-    () => {
-        loadThreadSystemPrompt();
     }
 );
 
-function toggleDefault(id: string) {
-    if (defaultPromptId.value === id) {
-        clearDefaultPrompt();
-    } else {
-        setDefaultPrompt(id);
-    }
+function emitContent() {
+    if (!editor.value) return;
+    const json = editor.value.getJSON();
+    setDocumentContent(props.documentId, json);
 }
+
+function makeEditor() {
+    editor.value = new Editor({
+        extensions: [
+            StarterKit.configure({ heading: { levels: [1, 2] } }),
+            Placeholder.configure({
+                placeholder: 'Type your text here...',
+            }),
+        ],
+        content: state.value.record?.content || { type: 'doc', content: [] },
+        autofocus: false,
+        onUpdate: () => emitContent(),
+    });
+}
+
+onMounted(async () => {
+    await loadDocument(props.documentId);
+    // Ensure title reflects loaded record (refresh / deep link case)
+    titleDraft.value = state.value.record?.title || titleDraft.value || '';
+    // Ensure initial state ref matches (in case of rapid prop change before mount)
+    makeEditor();
+});
+
+onBeforeUnmount(() => {
+    editor.value?.destroy();
+});
+
+function isActive(name: string) {
+    return editor.value?.isActive(name) || false;
+}
+function isActiveHeading(level: number) {
+    return editor.value?.isActive('heading', { level }) || false;
+}
+
+function toggleHeading(level: number) {
+    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
+    editor.value
+        ?.chain()
+        .focus()
+        .toggleHeading({ level: level as any })
+        .run();
+    emitContent();
+}
+
+const commands: Record<string, () => void> = {
+    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
+    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
+    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
+    toggleBulletList: () =>
+        editor.value?.chain().focus().toggleBulletList().run(),
+    toggleOrderedList: () =>
+        editor.value?.chain().focus().toggleOrderedList().run(),
+    setHorizontalRule: () =>
+        editor.value?.chain().focus().setHorizontalRule().run(),
+    undo: () => editor.value?.commands.undo(),
+    redo: () => editor.value?.commands.redo(),
+};
+function cmd(name: string) {
+    commands[name]?.();
+    emitContent();
+}
+
+const statusText = computed(() => {
+    switch (state.value.status) {
+        case 'saving':
+            return 'Saving…';
+        case 'saved':
+            return 'Saved';
+        case 'error':
+            return 'Error';
+        default:
+            return 'Ready';
+    }
+});
 </script>
 
 <style scoped>
-/* Mobile full-screen adjustments */
-@media (max-width: 640px) {
-    .sp-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh !important;
-        max-height: 100dvh !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border-width: 0 !important;
-    }
+.prose :where(h1, h2) {
+    font-family: 'Press Start 2P', monospace;
 }
 
-/* Smooth scrolling area */
-.sp-modal :deep(.n-modal-body),
-.sp-modal :deep(.n-card__content) {
-    /* ensure body grows */
-    height: 100%;
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85; /* increase for dark background readability */
+    font-weight: normal;
 }
 </style>
 ```
@@ -9576,313 +9966,6 @@ button {
 </style>
 ```
 
-## File: app/components/modal/SettingsModal.vue
-```vue
-<template>
-    <UModal
-        v-model:open="open"
-        title="Rename thread"
-        :ui="{
-            footer: 'justify-end border-t-2',
-            header: 'border-b-2  border-black bg-primary p-0 min-h-[50px] text-white',
-            body: 'p-0!',
-        }"
-        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
-    >
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    Settings
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="xs"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-        </template>
-        <template #body>
-            <div class="flex flex-col h-full">
-                <div
-                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
-                >
-                    <div class="flex items-center gap-3 w-full">
-                        <div class="relative w-full max-w-md">
-                            <UInput
-                                v-model="searchQuery"
-                                icon="pixelarticons:search"
-                                placeholder="Search models (id, name, description, modality)"
-                                size="sm"
-                                class="w-full pr-8"
-                                :ui="{ base: 'w-full' }"
-                                autofocus
-                            />
-                            <button
-                                v-if="searchQuery"
-                                type="button"
-                                aria-label="Clear search"
-                                class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                                @click="searchQuery = ''"
-                            >
-                                <UIcon
-                                    name="i-heroicons-x-mark"
-                                    class="h-4 w-4"
-                                />
-                            </button>
-                        </div>
-                        <UButton
-                            :disabled="refreshing"
-                            size="sm"
-                            variant="ghost"
-                            :square="true"
-                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
-                            aria-label="Refresh model catalog"
-                            :title="
-                                refreshing
-                                    ? 'Refreshing…'
-                                    : 'Force refresh models (bypass cache)'
-                            "
-                            @click="doRefresh"
-                        >
-                            <UIcon
-                                v-if="!refreshing"
-                                name="i-heroicons-arrow-path"
-                                class="h-4 w-4"
-                            />
-                            <UIcon
-                                v-else
-                                name="i-heroicons-arrow-path"
-                                class="h-4 w-4 animate-spin"
-                            />
-                        </UButton>
-                    </div>
-                </div>
-                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
-                    Indexing models…
-                </div>
-                <div v-else class="flex-1 min-h-0">
-                    <VList
-                        :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 70dvh"
-                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
-                        :overscan="4"
-                        #default="{ item: row }"
-                    >
-                        <div
-                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
-                            :class="gridColsClass"
-                        >
-                            <div
-                                v-for="m in row"
-                                :key="m.id"
-                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
-                            >
-                                <div
-                                    class="flex items-start justify-between gap-2"
-                                >
-                                    <div class="flex flex-col min-w-0">
-                                        <div
-                                            class="font-medium text-sm truncate"
-                                            :title="m.canonical_slug"
-                                        >
-                                            {{ m.canonical_slug }}
-                                        </div>
-                                        <div
-                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
-                                        >
-                                            CTX {{ m.context_length }}
-                                        </div>
-                                    </div>
-                                    <button
-                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
-                                        :aria-pressed="isFavorite(m)"
-                                        @click.stop="toggleFavorite(m)"
-                                        :title="
-                                            isFavorite(m)
-                                                ? 'Unfavorite'
-                                                : 'Favorite'
-                                        "
-                                    >
-                                        <span v-if="isFavorite(m)">★</span>
-                                        <span v-else>☆</span>
-                                    </button>
-                                </div>
-                                <div
-                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
-                                >
-                                    <div class="flex flex-col">
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Input</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.prompt,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="flex flex-col items-end text-right"
-                                    >
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Output</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.completion,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                </div>
-                                <div
-                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
-                                >
-                                    <span>{{
-                                        m.architecture?.modality || 'text'
-                                    }}</span>
-                                    <span class="opacity-60">/1M tokens</span>
-                                </div>
-                                <div
-                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
-                                />
-                            </div>
-                        </div>
-                    </VList>
-                    <div
-                        v-if="!chunkedModels.length && searchQuery"
-                        class="px-6 pb-6 text-xs text-neutral-500"
-                    >
-                        No models match "{{ searchQuery }}".
-                    </div>
-                </div>
-            </div>
-        </template>
-        <template #footer> </template>
-    </UModal>
-</template>
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import { useModelSearch } from '~/composables/useModelSearch';
-import type { OpenRouterModel } from '~/utils/models-service';
-import { useModelStore } from '~/composables/useModelStore';
-
-const props = defineProps<{
-    showModal: boolean;
-}>();
-const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
-
-// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
-
-const modelCatalog = ref<OpenRouterModel[]>([]);
-// Search state (Orama index built client-side)
-const {
-    query: searchQuery,
-    results: searchResults,
-    ready: searchReady,
-} = useModelSearch(modelCatalog);
-
-// Fixed 3-column layout for consistent rows
-const COLS = 2;
-const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
-
-const chunkedModels = computed(() => {
-    const source = searchQuery.value.trim()
-        ? searchResults.value
-        : modelCatalog.value;
-    const cols = COLS;
-    const rows: OpenRouterModel[][] = [];
-    for (let i = 0; i < source.length; i += cols) {
-        rows.push(source.slice(i, i + cols));
-    }
-    return rows;
-});
-
-const {
-    favoriteModels,
-    getFavoriteModels,
-    catalog,
-    fetchModels,
-    refreshModels,
-    addFavoriteModel,
-    removeFavoriteModel,
-} = useModelStore();
-
-// Refresh state
-const refreshing = ref(false);
-
-async function doRefresh() {
-    if (refreshing.value) return;
-    refreshing.value = true;
-    try {
-        await refreshModels();
-        modelCatalog.value = catalog.value.slice();
-    } catch (e) {
-        console.warn('[SettingsModal] model refresh failed', e);
-    } finally {
-        refreshing.value = false;
-    }
-}
-
-onMounted(() => {
-    fetchModels().then(() => {
-        modelCatalog.value = catalog.value;
-    });
-
-    getFavoriteModels().then((models) => {
-        favoriteModels.value = models;
-    });
-});
-
-function isFavorite(m: OpenRouterModel) {
-    return favoriteModels.value.some((f) => f.id === m.id);
-}
-
-function toggleFavorite(m: OpenRouterModel) {
-    if (isFavorite(m)) {
-        removeFavoriteModel(m);
-    } else {
-        addFavoriteModel(m);
-    }
-}
-
-/**
- * Format a per-token price into a "per 1,000,000 tokens" currency string.
- * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
- */
-function formatPerMillion(raw: unknown, currency = 'USD') {
-    const perToken = Number(raw ?? 0);
-    const perMillion = perToken * 1_000_000;
-    try {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 2,
-        }).format(perMillion);
-    } catch (e) {
-        // Fallback: simple fixed formatting
-        return `$${perMillion.toFixed(2)}`;
-    }
-}
-</script>
-```
-
 ## File: app/components/prompts/PromptEditor.vue
 ```vue
 <template>
@@ -10092,6 +10175,119 @@ const statusText = computed(() => {
     pointer-events: none;
     opacity: 0.85;
 }
+</style>
+```
+
+## File: app/components/sidebar/SidebarHeader.vue
+```vue
+<template>
+    <div
+        :class="{
+            'px-0 justify-center': collapsed,
+            'px-3 justify-between': !collapsed,
+        }"
+        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+    >
+        <div v-show="!collapsed">
+            <slot name="sidebar-header">
+                <div class="flex items-center space-x-2">
+                    <div
+                        class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
+                    >
+                        <div
+                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
+                        >
+                            <div>Or</div>
+                            <div class="text-[17px]">3</div>
+                        </div>
+                        <span
+                            class="text-[18px] pb-[1.5px] -ml-0.5 font-vt323 font-bold text-primary"
+                            >.chat</span
+                        >
+                    </div>
+                </div>
+            </slot>
+        </div>
+
+        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
+            <UButton
+                size="xs"
+                :square="true"
+                color="neutral"
+                variant="ghost"
+                :class="'retro-btn'"
+                @click="onToggle"
+                :ui="{ base: 'retro-btn' }"
+                :aria-label="toggleAria"
+                :title="toggleAria"
+            >
+                <UIcon :name="toggleIcon" class="w-5 h-5" />
+            </UButton>
+        </slot>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { defineProps, defineEmits } from 'vue';
+
+const props = defineProps({
+    collapsed: { type: Boolean, required: true },
+    toggleIcon: { type: String, required: true },
+    toggleAria: { type: String, required: true },
+});
+const emit = defineEmits(['toggle']);
+
+function onToggle() {
+    emit('toggle');
+}
+</script>
+
+<style scoped>
+/* Gradient already supplied by global pattern image; we just ensure better dark base */
+.header-pattern {
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+.dark .header-pattern {
+    /* Elevated surface tone for dark mode header to distinguish from main background */
+    background-color: var(--md-surface-container-high) !important;
+}
+
+/* Retro logo title: pixel shadow + underline accent (no stroke) */
+.header-title {
+    font-family: 'Press Start 2P', monospace;
+
+    letter-spacing: 1px;
+    color: var(--md-primary);
+    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
+    padding: 2px 4px 3px 4px; /* subtle padding for readability */
+}
+
+.dark .header-title {
+    color: var(--md-on-primary-container);
+    text-shadow: 2px 2px 0 var(--md-primary);
+}
+.dark .header-title::after {
+    background: var(--md-on-primary-container);
+    box-shadow: 2px 2px 0 var(--md-primary);
+}
+
+/* Logo rendering tweaks */
+.logo {
+    width: 20px; /* lock display size */
+    height: 20px;
+    aspect-ratio: 1 / 1;
+    display: block;
+    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
+    /* image-rendering: pixelated; */
+}
+
+/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
+   switch to a DPR-based srcset for sharper sampling:
+   src="/logo-20.png"
+   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
 </style>
 ```
 
@@ -10367,601 +10563,6 @@ function navigateToCredits() {
 </style>
 ```
 
-## File: app/components/sidebar/SideNavHeader.vue
-```vue
-<template>
-    <div class="px-2 pt-2 flex flex-col space-y-2">
-        <div class="flex">
-            <UButton
-                @click="$emit('new-chat')"
-                class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
-                >New Chat</UButton
-            >
-            <UTooltip :delay-duration="0" text="Create project">
-                <UButton
-                    color="inverse-primary"
-                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                    icon="pixelarticons:folder-plus"
-                    :ui="{
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="openCreateProject"
-                />
-            </UTooltip>
-            <UTooltip :delay-duration="0" text="Create document">
-                <UButton
-                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                    icon="pixelarticons:note-plus"
-                    :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="openCreateDocumentModal"
-                />
-            </UTooltip>
-        </div>
-        <div class="relative w-full ml-[1px]">
-            <UInput
-                ref="searchInputWrapper"
-                v-model="sidebarQuery"
-                icon="pixelarticons:search"
-                size="md"
-                :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
-                variant="outline"
-                placeholder="Search..."
-                aria-label="Search"
-                class="w-full"
-                @keydown.escape.prevent.stop="onEscapeClear"
-            >
-                <template v-if="sidebarQuery.length > 0" #trailing>
-                    <UButton
-                        color="neutral"
-                        variant="subtle"
-                        size="xs"
-                        class="flex items-center justify-center p-0"
-                        icon="pixelarticons:close-box"
-                        aria-label="Clear input"
-                        @click="sidebarQuery = ''"
-                    />
-                </template>
-            </UInput>
-        </div>
-
-        <div
-            class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
-            role="group"
-            aria-label="Sidebar sections"
-        >
-            <UButton
-                v-for="seg in sectionToggles"
-                :key="seg.value"
-                size="sm"
-                :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
-                :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
-                class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
-                :class="
-                    activeSections[seg.value]
-                        ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
-                        : 'opacity-70 hover:bg-primary/15'
-                "
-                :aria-pressed="activeSections[seg.value]"
-                @click="toggleSection(seg.value)"
-            >
-                {{ seg.label }}
-            </UButton>
-        </div>
-
-        <!-- Rename modal -->
-        <UModal
-            v-model:open="showRenameModal"
-            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-            :ui="{
-                footer: 'justify-end ',
-            }"
-        >
-            <template #header>
-                <h3>
-                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
-                </h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameTitle"
-                        :placeholder="
-                            isRenamingDoc ? 'Document title' : 'Thread title'
-                        "
-                        icon="pixelarticons:edit"
-                        @keyup.enter="saveRename"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="primary" @click="saveRename">Save</UButton>
-            </template>
-        </UModal>
-
-        <!-- Rename Project Modal -->
-        <UModal
-            v-model:open="showRenameProjectModal"
-            title="Rename project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header><h3>Rename project?</h3></template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameProjectName"
-                        placeholder="Project name"
-                        icon="pixelarticons:folder"
-                        @keyup.enter="saveRenameProject"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameProjectModal = false"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="!renameProjectName.trim()"
-                    @click="saveRenameProject"
-                    >Save</UButton
-                >
-            </template>
-        </UModal>
-
-        <!-- Create Project Modal -->
-        <UModal
-            v-model:open="showCreateProjectModal"
-            title="New Project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Create project</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UForm
-                        :state="createProjectState"
-                        @submit.prevent="submitCreateProject"
-                    >
-                        <div class="flex flex-col space-y-3">
-                            <UFormField
-                                label="Title"
-                                name="name"
-                                :error="createProjectErrors.name"
-                            >
-                                <UInput
-                                    v-model="createProjectState.name"
-                                    required
-                                    placeholder="Project title"
-                                    icon="pixelarticons:folder"
-                                    class="w-full"
-                                    @keyup.enter="submitCreateProject"
-                                />
-                            </UFormField>
-                            <UFormField label="Description" name="description">
-                                <UTextarea
-                                    class="w-full border-2 rounded-[6px]"
-                                    v-model="createProjectState.description"
-                                    :rows="3"
-                                    placeholder="Optional description"
-                                />
-                            </UFormField>
-                        </div>
-                    </UForm>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeCreateProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    :disabled="
-                        !createProjectState.name.trim() || creatingProject
-                    "
-                    color="primary"
-                    @click="submitCreateProject"
-                >
-                    <span v-if="!creatingProject">Create</span>
-                    <span v-else class="inline-flex items-center gap-1">
-                        <UIcon name="i-lucide-loader" class="animate-spin" />
-                        Creating
-                    </span>
-                </UButton>
-            </template>
-        </UModal>
-
-        <!-- Add To Project Modal -->
-        <UModal
-            v-model:open="showAddToProjectModal"
-            title="Add to project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Add thread to project</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <div class="flex gap-2 text-xs font-mono">
-                        <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
-                            :class="
-                                addMode === 'select'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'select'"
-                        >
-                            Select Existing
-                        </button>
-                        <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
-                            :class="
-                                addMode === 'create'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'create'"
-                        >
-                            Create New
-                        </button>
-                    </div>
-                    <div v-if="addMode === 'select'" class="space-y-3">
-                        <UFormField label="Project" name="project">
-                            <USelectMenu
-                                v-model="selectedProjectId"
-                                :items="projectSelectOptions"
-                                :value-key="'value'"
-                                searchable
-                                placeholder="Select project"
-                                class="w-full"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                    <div v-else class="space-y-3">
-                        <UFormField label="Project Title" name="newProjectName">
-                            <UInput
-                                v-model="newProjectName"
-                                placeholder="Project name"
-                                icon="pixelarticons:folder"
-                                class="w-full"
-                            />
-                        </UFormField>
-                        <UFormField
-                            label="Description"
-                            name="newProjectDescription"
-                        >
-                            <UTextarea
-                                v-model="newProjectDescription"
-                                :rows="3"
-                                placeholder="Optional description"
-                                class="w-full border-2 rounded-[6px]"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeAddToProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="
-                        addingToProject ||
-                        (addMode === 'select'
-                            ? !selectedProjectId
-                            : !newProjectName.trim())
-                    "
-                    @click="submitAddToProject"
-                >
-                    <span v-if="!addingToProject">Add</span>
-                    <span v-else class="inline-flex items-center gap-1"
-                        ><UIcon
-                            name="i-lucide-loader"
-                            class="animate-spin"
-                        />Adding</span
-                    >
-                </UButton>
-            </template>
-        </UModal>
-
-        <!-- New Document Naming Modal -->
-        <UModal
-            v-model:open="showCreateDocumentModal"
-            title="New Document"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Name new document</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UForm
-                        :state="newDocumentState"
-                        @submit.prevent="submitCreateDocument"
-                    >
-                        <UFormField
-                            label="Title"
-                            name="title"
-                            :error="newDocumentErrors.title"
-                        >
-                            <UInput
-                                v-model="newDocumentState.title"
-                                required
-                                placeholder="Document title"
-                                icon="pixelarticons:note"
-                                class="w-full"
-                                @keyup.enter="submitCreateDocument"
-                            />
-                        </UFormField>
-                    </UForm>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeCreateDocumentModal"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="
-                        creatingDocument || !newDocumentState.title.trim()
-                    "
-                    @click="submitCreateDocument"
-                >
-                    <span v-if="!creatingDocument">Create</span>
-                    <span v-else class="inline-flex items-center gap-1">
-                        <UIcon name="i-lucide-loader" class="animate-spin" />
-                        Creating
-                    </span>
-                </UButton>
-            </template>
-        </UModal>
-    </div>
-</template>
-<script setup lang="ts">
-import { ref, computed } from 'vue';
-import { db, upsert, create } from '~/db';
-
-const props = defineProps<{
-    sidebarQuery: string;
-    activeSections: {
-        projects: boolean;
-        chats: boolean;
-        docs: boolean;
-    };
-    projects: any[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'update:sidebarQuery', value: string): void;
-    (e: 'update:activeSections', value: typeof props.activeSections): void;
-    (e: 'new-chat'): void;
-    (e: 'new-document', initial?: { title?: string }): void;
-    (e: 'open-rename', target: any): void;
-    (e: 'open-rename-project', projectId: string): void;
-    (e: 'add-to-project', thread: any): void;
-    (e: 'add-document-to-project', doc: any): void;
-}>();
-
-// Section visibility (multi-select) defaults to all on
-const sectionToggles = [
-    { label: 'Proj', value: 'projects' as const },
-    { label: 'Chats', value: 'chats' as const },
-    { label: 'Docs', value: 'docs' as const },
-];
-
-function toggleSection(v: 'projects' | 'chats' | 'docs') {
-    const next = { ...props.activeSections, [v]: !props.activeSections[v] };
-    emit('update:activeSections', next);
-}
-
-// Direct focus support for external callers
-const searchInputWrapper = ref<any | null>(null);
-function focusSearchInput() {
-    // Access underlying input inside UInput component
-    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
-        searchInputWrapper.value) as HTMLElement | null;
-    if (!root) return;
-    const input = root.querySelector('input');
-    if (input) (input as HTMLInputElement).focus();
-}
-defineExpose({ focusSearchInput });
-
-const sidebarQuery = computed({
-    get: () => props.sidebarQuery,
-    set: (value) => emit('update:sidebarQuery', value),
-});
-
-function onEscapeClear() {
-    if (sidebarQuery.value) sidebarQuery.value = '';
-}
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-const renameMetaKind = ref<'chat' | 'doc' | null>(null);
-const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
-
-async function openRename(target: any) {
-    emit('open-rename', target);
-}
-
-async function saveRename() {
-    emit('open-rename', {
-        id: renameId.value,
-        title: renameTitle.value,
-        kind: renameMetaKind.value,
-    });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-    renameMetaKind.value = null;
-}
-
-// ---- Project Rename Modal Logic ----
-const showRenameProjectModal = ref(false);
-const renameProjectId = ref<string | null>(null);
-const renameProjectName = ref('');
-
-async function openRenameProject(projectId: string) {
-    emit('open-rename-project', projectId);
-}
-
-async function saveRenameProject() {
-    if (!renameProjectId.value) return;
-    const name = renameProjectName.value.trim();
-    if (!name) return;
-    const project = await db.projects.get(renameProjectId.value);
-    if (!project) return;
-    try {
-        await upsert.project({
-            ...project,
-            name,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        showRenameProjectModal.value = false;
-        renameProjectId.value = null;
-        renameProjectName.value = '';
-    } catch (e) {
-        console.error('rename project failed', e);
-    }
-}
-
-// ---- Project Creation ----
-const showCreateProjectModal = ref(false);
-const creatingProject = ref(false);
-const createProjectState = ref<{ name: string; description: string }>({
-    name: '',
-    description: '',
-});
-const createProjectErrors = ref<{ name?: string }>({});
-
-function openCreateProject() {
-    showCreateProjectModal.value = true;
-    createProjectState.value = { name: '', description: '' };
-    createProjectErrors.value = {};
-}
-function closeCreateProject() {
-    showCreateProjectModal.value = false;
-}
-
-async function submitCreateProject() {
-    if (creatingProject.value) return;
-    const name = createProjectState.value.name.trim();
-    if (!name) {
-        createProjectErrors.value.name = 'Title required';
-        return;
-    }
-    creatingProject.value = true;
-    try {
-        const now = Math.floor(Date.now() / 1000);
-        // data holds ordered list of entities (chat/doc) we include kind now per request
-        const newId = crypto.randomUUID();
-        await create.project({
-            id: newId,
-            name,
-            description: createProjectState.value.description?.trim() || null,
-            data: [], // store as array; schema allows any
-            created_at: now,
-            updated_at: now,
-            deleted: false,
-            clock: 0,
-        } as any);
-        closeCreateProject();
-    } catch (e) {
-        console.error('Failed to create project', e);
-    } finally {
-        creatingProject.value = false;
-    }
-}
-
-// ---- Add To Project Flow ----
-const showAddToProjectModal = ref(false);
-const addToProjectThreadId = ref<string | null>(null);
-// Support documents
-const addToProjectDocumentId = ref<string | null>(null);
-const addMode = ref<'select' | 'create'>('select');
-const selectedProjectId = ref<string | null>(null);
-const newProjectName = ref('');
-const newProjectDescription = ref('');
-const addingToProject = ref(false);
-const addToProjectError = ref<string | null>(null);
-
-const projectSelectOptions = computed(() =>
-    props.projects.map((p) => ({ label: p.name, value: p.id }))
-);
-
-function openAddToProject(thread: any) {
-    emit('add-to-project', thread);
-}
-
-function openAddDocumentToProject(doc: any) {
-    emit('add-document-to-project', doc);
-}
-
-function closeAddToProject() {
-    showAddToProjectModal.value = false;
-    addToProjectThreadId.value = null;
-    addToProjectDocumentId.value = null;
-}
-
-async function submitAddToProject() {
-    emit('add-to-project', {
-        threadId: addToProjectThreadId.value,
-        documentId: addToProjectDocumentId.value,
-        mode: addMode.value,
-        selectedProjectId: selectedProjectId.value,
-        newProjectName: newProjectName.value,
-        newProjectDescription: newProjectDescription.value,
-    });
-    closeAddToProject();
-}
-
-// ---- New Document Flow (naming modal) ----
-const showCreateDocumentModal = ref(false);
-const creatingDocument = ref(false);
-const newDocumentState = ref<{ title: string }>({ title: '' });
-const newDocumentErrors = ref<{ title?: string }>({});
-
-function openCreateDocumentModal() {
-    showCreateDocumentModal.value = true;
-    newDocumentState.value = { title: '' };
-    newDocumentErrors.value = {};
-}
-function closeCreateDocumentModal() {
-    showCreateDocumentModal.value = false;
-}
-async function submitCreateDocument() {
-    if (creatingDocument.value) return;
-    const title = newDocumentState.value.title.trim();
-    if (!title) {
-        newDocumentErrors.value.title = 'Title required';
-        return;
-    }
-    creatingDocument.value = true;
-    try {
-        emit('new-document', { title });
-        closeCreateDocumentModal();
-    } finally {
-        creatingDocument.value = false;
-    }
-}
-</script>
-```
-
 ## File: app/composables/__tests__/__snapshots__/hookOrder.test.ts.snap
 ```
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
@@ -10988,129 +10589,6 @@ exports[`Hook order snapshot (pre-accumulator integration) > captures sendMessag
   "ai.chat.send:action:after",
 ]
 `;
-```
-
-## File: app/composables/ui-extensions/documents/useDocumentHistoryActions.ts
-```typescript
-import { computed, reactive } from 'vue';
-import type { Post } from '~/db';
-
-/** Definition for an extendable chat message action button. */
-export interface DocumentHistoryAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Label text. */
-    label: string;
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { document: Post }) => void | Promise<void>;
-}
-
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
-const registry: Map<string, DocumentHistoryAction> =
-    g.__or3DocumentHistoryActionsRegistry ||
-    (g.__or3DocumentHistoryActionsRegistry = new Map());
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: DocumentHistoryAction[] }>({
-    items: [],
-});
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
-}
-
-/** Register (or replace) a message action. */
-export function registerDocumentHistoryAction(action: DocumentHistoryAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
-}
-
-/** Unregister an action by id (optional utility). */
-export function unregisterDocumentHistoryAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
-}
-
-/** Accessor for actions applicable to a specific message. */
-export function useDocumentHistoryActions() {
-    return computed(() =>
-        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
-    );
-}
-
-/** Convenience for plugin authors to check existing action ids. */
-export function listRegisteredDocumentHistoryActionIds(): string[] {
-    return Array.from(registry.keys());
-}
-
-// Note: Core (built-in) actions remain hard-coded in ChatDocumentHistory.vue so they always appear;
-// external plugins should use order >= 200 to appear after them unless intentionally overriding.
-```
-
-## File: app/composables/ui-extensions/messages/useMessageActions.ts
-```typescript
-import { computed, reactive } from 'vue';
-
-/** Definition for an extendable chat message action button. */
-export interface ChatMessageAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Tooltip text. */
-    tooltip: string;
-    /** Where to show the action. */
-    showOn: 'user' | 'assistant' | 'both';
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { message: any; threadId?: string }) => void | Promise<void>;
-}
-
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
-const registry: Map<string, ChatMessageAction> =
-    g.__or3MessageActionsRegistry ||
-    (g.__or3MessageActionsRegistry = new Map());
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: ChatMessageAction[] }>({ items: [] });
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
-}
-
-/** Register (or replace) a message action. */
-export function registerMessageAction(action: ChatMessageAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
-}
-
-/** Unregister an action by id (optional utility). */
-export function unregisterMessageAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
-}
-
-/** Accessor for actions applicable to a specific message. */
-export function useMessageActions(message: { role: 'user' | 'assistant' }) {
-    return computed(() =>
-        reactiveList.items
-            .filter((a) => a.showOn === 'both' || a.showOn === message.role)
-            .sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
-    );
-}
-
-/** Convenience for plugin authors to check existing action ids. */
-export function listRegisteredMessageActionIds(): string[] {
-    return Array.from(registry.keys());
-}
-
-// Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;
-// external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
 ## File: app/composables/ui-extensions/projects/useProjectTreeActions.ts
@@ -11207,278 +10685,149 @@ export function listRegisteredProjectTreeActionIds(): string[] {
 // external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
-## File: app/composables/ui-extensions/threads/useThreadHistoryActions.ts
+## File: app/composables/useChatInputBridge.ts
 ```typescript
-import { computed, reactive } from 'vue';
-import type { Post, Thread } from '~/db';
+// Lightweight bridge allowing programmatic message injection to existing ChatInputDropper instances
+// without re-hydrating thread history or duplicating user messages. Each ChatContainer will register
+// its input + send handler keyed by paneId. The pane plugin API can then set the input text and invoke
+// the native onSend path (which already drives useChat/sendMessage and streaming) for a given pane.
+//
+// This avoids: (1) re-loading thread history, (2) re-sending duplicate user message content, and
+// (3) bypassing internal hook ordering. It reuses the exact UI pipeline.
+//
+// Contract:
+// registerPaneInput(paneId, api)   -> called by ChatContainer (client only)
+// unregisterPaneInput(paneId)      -> cleanup (HMR / pane close)
+// programmaticSend(paneId, text)   -> sets editor text + triggers native send
+// hasPane(paneId)                  -> helper
+//
+// The ChatInputDropper exposes a minimal imperative API (setText, send). We attach it via ref binding.
 
-/** Definition for an extendable chat message action button. */
-export interface ThreadHistoryAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Label text. */
-    label: string;
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    /** Handler invoked on click. */
-    handler: (ctx: { document: Thread }) => void | Promise<void>;
+import { ref } from 'vue';
+
+interface ChatInputImperativeApi {
+    setText(t: string): void;
+    triggerSend(): void; // send current text/attachments
 }
 
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
-const registry: Map<string, ThreadHistoryAction> =
-    g.__or3ThreadHistoryActionsRegistry ||
-    (g.__or3ThreadHistoryActionsRegistry = new Map());
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: ThreadHistoryAction[] }>({
-    items: [],
-});
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
+interface RegisteredPaneInput {
+    paneId: string;
+    api: ChatInputImperativeApi;
 }
 
-/** Register (or replace) a message action. */
-export function registerThreadHistoryAction(action: ThreadHistoryAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
+const registry = ref<RegisteredPaneInput[]>([]);
+
+function find(paneId: string) {
+    return registry.value.find((r) => r.paneId === paneId) || null;
 }
 
-/** Unregister an action by id (optional utility). */
-export function unregisterThreadHistoryAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
+export function registerPaneInput(paneId: string, api: ChatInputImperativeApi) {
+    const existing = find(paneId);
+    if (existing) existing.api = api; // HMR / re-mount
+    else registry.value.push({ paneId, api });
 }
 
-/** Accessor for actions applicable to a specific message. */
-export function useThreadHistoryActions() {
-    return computed(() =>
-        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
-    );
+export function unregisterPaneInput(paneId: string) {
+    registry.value = registry.value.filter((r) => r.paneId !== paneId);
 }
 
-/** Convenience for plugin authors to check existing action ids. */
-export function listRegisteredThreadHistoryActionIds(): string[] {
-    return Array.from(registry.keys());
+export function programmaticSend(paneId: string, text: string): boolean {
+    const r = find(paneId);
+    if (!r) return false;
+    try {
+        r.api.setText(text);
+        r.api.triggerSend();
+        return true;
+    } catch (e) {
+        if (import.meta.dev)
+            console.debug('[useChatInputBridge] send failed', e);
+        return false;
+    }
 }
 
-// Note: Core (built-in) actions remain hard-coded in ChatThreadHistory.vue so they always appear;
-// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+export function hasPane(paneId: string) {
+    return !!find(paneId);
+}
+
+// Expose globally (optional) for debugging / external inspection
+if (import.meta.dev) {
+    (globalThis as any).__or3ChatInputBridge = {
+        registry,
+        programmaticSend,
+        hasPane,
+    };
+}
 ```
 
-## File: app/composables/useDocumentsList.ts
+## File: app/composables/useMessageEditing.ts
 ```typescript
 import { ref } from 'vue';
-import { listDocuments, type Document } from '~/db/documents';
-import { useToast } from '#imports';
-import { useHookEffect } from './useHookEffect';
+import { upsert } from '~/db';
+import { nowSec } from '~/db/util';
 
-export function useDocumentsList(limit = 200) {
-    const docs = ref<Document[]>([]);
-    // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
-    const loading = ref(true);
-    const error = ref<unknown>(null);
+// Lightweight composable for editing a chat message (assistant/user)
+export function useMessageEditing(message: any) {
+    const editing = ref(false);
+    const draft = ref('');
+    const original = ref('');
+    const saving = ref(false);
 
-    async function refresh() {
-        loading.value = true;
-        error.value = null;
+    function beginEdit() {
+        if (editing.value) return;
+        // Some message objects use .text (UiChatMessage), others .content; fall back gracefully.
+        const base =
+            typeof message.content === 'string'
+                ? message.content
+                : typeof message.text === 'string'
+                ? message.text
+                : '';
+        original.value = base;
+        draft.value = base;
+        editing.value = true;
+    }
+    function cancelEdit() {
+        if (saving.value) return;
+        editing.value = false;
+        draft.value = '';
+        original.value = '';
+    }
+    async function saveEdit() {
+        if (saving.value) return;
+        const id = message.id;
+        if (!id) return;
+        const trimmed = draft.value.trim();
+        if (!trimmed) {
+            cancelEdit();
+            return;
+        }
         try {
-            // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
-            const full = await listDocuments(limit);
-            docs.value = full.map((d: any) => ({
-                // Keep lightweight/meta fields
-                id: d.id,
-                title: d.title,
-                postType: d.postType,
-                created_at: d.created_at,
-                updated_at: d.updated_at,
-                deleted: d.deleted,
-                meta: d.meta,
-                // Drop large content string; empty string placeholder keeps type happy
-                content: '',
-            }));
-        } catch (e) {
-            error.value = e;
-            useToast().add({ color: 'error', title: 'Document: list failed' });
+            saving.value = true;
+            const existing: any = await (
+                await import('~/db/client')
+            ).db.messages.get(id);
+            if (!existing) throw new Error('Message not found');
+            await upsert.message({
+                ...existing,
+                data: { ...(existing.data || {}), content: trimmed },
+                updated_at: nowSec(),
+            });
+            // Persist to both fields so renderers using either stay in sync
+            message.content = trimmed;
+            if ('text' in message) message.text = trimmed;
+            editing.value = false;
         } finally {
-            loading.value = false;
+            saving.value = false;
         }
     }
-
-    // initial load + subscribe to document DB hook events (client only)
-    if (process.client) {
-        refresh();
-        // Auto-refresh on create/update/delete after actions complete
-        useHookEffect('db.documents.create:action:after', () => refresh(), {
-            kind: 'action',
-        });
-        useHookEffect('db.documents.update:action:after', () => refresh(), {
-            kind: 'action',
-        });
-        useHookEffect('db.documents.delete:action:*:after', () => refresh(), {
-            kind: 'action',
-        });
-    }
-
-    return { docs, loading, error, refresh };
-}
-```
-
-## File: app/composables/useDocumentsStore.ts
-```typescript
-import { ref, reactive } from 'vue';
-import {
-    createDocument,
-    updateDocument,
-    getDocument,
-    type Document,
-} from '~/db/documents';
-import { useToast } from '#imports';
-
-interface DocState {
-    record: Document | null;
-    status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
-    lastError?: any;
-    pendingTitle?: string; // staged changes
-    pendingContent?: any; // TipTap JSON
-    timer?: any;
-}
-
-const documentsMap = reactive(new Map<string, DocState>());
-const loadingIds = ref(new Set<string>());
-
-function ensure(id: string): DocState {
-    let st = documentsMap.get(id);
-    if (!st) {
-        st = { record: null, status: 'loading' } as DocState;
-        documentsMap.set(id, st);
-    }
-    return st;
-}
-
-function scheduleSave(id: string, delay = 750) {
-    const st = documentsMap.get(id);
-    if (!st) return;
-    if (st.timer) clearTimeout(st.timer);
-    st.timer = setTimeout(() => flush(id), delay);
-}
-
-export async function flush(id: string) {
-    const st = documentsMap.get(id);
-    if (!st || !st.record) return;
-    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
-    const patch: any = {};
-    if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
-    if (st.pendingContent !== undefined) patch.content = st.pendingContent;
-    st.status = 'saving';
-    try {
-        const updated = await updateDocument(id, patch);
-        if (updated) {
-            st.record = updated;
-            st.status = 'saved';
-        } else {
-            st.status = 'error';
-        }
-    } catch (e) {
-        st.status = 'error';
-        st.lastError = e;
-        useToast().add({ color: 'error', title: 'Document: save failed' });
-    } finally {
-        st.pendingTitle = undefined;
-        st.pendingContent = undefined;
-    }
-}
-
-export async function loadDocument(id: string) {
-    const st = ensure(id);
-    st.status = 'loading';
-    try {
-        const rec = await getDocument(id);
-        st.record = rec || null;
-        st.status = rec ? 'idle' : 'error';
-        if (!rec) {
-            useToast().add({ color: 'error', title: 'Document: not found' });
-        }
-    } catch (e) {
-        st.status = 'error';
-        st.lastError = e;
-        useToast().add({ color: 'error', title: 'Document: load failed' });
-    }
-    return st.record;
-}
-
-export async function newDocument(initial?: { title?: string; content?: any }) {
-    try {
-        const rec = await createDocument(initial);
-        const st = ensure(rec.id);
-        st.record = rec;
-        st.status = 'idle';
-        return rec;
-    } catch (e) {
-        useToast().add({ color: 'error', title: 'Document: create failed' });
-        throw e;
-    }
-}
-
-export function setDocumentTitle(id: string, title: string) {
-    const st = ensure(id);
-    if (st.record) {
-        st.pendingTitle = title;
-        scheduleSave(id);
-    }
-}
-
-export function setDocumentContent(id: string, content: any) {
-    const st = ensure(id);
-    if (st.record) {
-        st.pendingContent = content;
-        scheduleSave(id);
-    }
-}
-
-export function useDocumentState(id: string) {
-    return documentsMap.get(id) || ensure(id);
-}
-
-export function useAllDocumentsState() {
-    return documentsMap;
-}
-
-// Release a document's in-memory state (after ensuring pending changes flushed).
-// This lets GC reclaim large TipTap JSON payloads when switching away.
-export async function releaseDocument(
-    id: string,
-    opts: { flush?: boolean; deleteEntry?: boolean } = {}
-) {
-    // Rename to avoid shadowing the exported flush(id) function above.
-    const { flush: shouldFlush = true, deleteEntry = true } = opts;
-    const st = documentsMap.get(id);
-    if (!st) return;
-    if (st.timer) {
-        clearTimeout(st.timer);
-        st.timer = undefined;
-    }
-    if (shouldFlush) {
-        try {
-            await flush(id);
-        } catch {}
-    }
-    // Null record to drop heavy content reference; then optionally drop entry entirely.
-    if (st.record) {
-        try {
-            // Remove large nested content tree reference if present.
-            if ((st.record as any).content)
-                (st.record as any).content = undefined;
-        } catch {}
-        st.record = null;
-    }
-    st.pendingTitle = undefined;
-    st.pendingContent = undefined;
-    if (deleteEntry) {
-        documentsMap.delete(id);
-    }
+    return {
+        editing,
+        draft,
+        original,
+        saving,
+        beginEdit,
+        cancelEdit,
+        saveEdit,
+    };
 }
 ```
 
@@ -11910,235 +11259,329 @@ export function useOpenRouterAuth() {
 }
 ```
 
-## File: app/composables/usePaneDocuments.ts
+## File: app/composables/usePanePrompt.ts
 ```typescript
-// Composable to manage per-pane document operations (create/select) abstracted from UI.
-// Assumes panes follow the PaneState contract from useMultiPane.
+import { reactive } from 'vue';
 
-import type { Ref } from 'vue';
-import type { MultiPaneState } from '~/composables/useMultiPane';
-import { releaseDocument } from '~/composables/useDocumentsStore';
+// In-memory map: paneId -> pending prompt id (applied on first thread creation)
+const pendingByPane: Record<string, string | null> = reactive({});
 
-export interface UsePaneDocumentsOptions {
-    panes: Ref<MultiPaneState[]>;
-    activePaneIndex: Ref<number>;
-    createNewDoc: (initial?: { title?: string }) => Promise<{ id: string }>;
-    flushDocument: (id: string) => Promise<void> | void;
+export function setPanePendingPrompt(paneId: string, promptId: string | null) {
+    pendingByPane[paneId] = promptId;
 }
 
-export interface UsePaneDocumentsApi {
-    newDocumentInActive: (initial?: {
-        title?: string;
-    }) => Promise<{ id: string } | undefined>;
-    selectDocumentInActive: (id: string) => Promise<void>;
+export function getPanePendingPrompt(
+    paneId: string
+): string | null | undefined {
+    return pendingByPane[paneId];
 }
 
-export function usePaneDocuments(
-    opts: UsePaneDocumentsOptions
-): UsePaneDocumentsApi {
-    const { panes, activePaneIndex, createNewDoc, flushDocument } = opts;
+export function clearPanePendingPrompt(paneId: string) {
+    delete pendingByPane[paneId];
+}
 
-    async function newDocumentInActive(initial?: { title?: string }) {
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        try {
-            if (pane.mode === 'doc' && pane.documentId) {
-                // Flush then release old document state to reclaim memory.
-                await flushDocument(pane.documentId);
-                await releaseDocument(pane.documentId, { flush: false });
-            }
-            const doc = await createNewDoc(initial);
-            pane.mode = 'doc';
-            pane.documentId = doc.id;
-            pane.threadId = '';
-            pane.messages = [];
-            return doc;
-        } catch {
-            return undefined;
-        }
-    }
-
-    async function selectDocumentInActive(id: string) {
-        if (!id) return;
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
-            try {
-                await flushDocument(pane.documentId);
-            } catch {}
-            // Always release the previous doc state after switching.
-            await releaseDocument(pane.documentId, { flush: false });
-        }
-        pane.mode = 'doc';
-        pane.documentId = id;
-        pane.threadId = '';
-        pane.messages = [];
-    }
-
-    return { newDocumentInActive, selectDocumentInActive };
+// Debug helper
+if (import.meta.dev) {
+    (globalThis as any).__or3PanePendingPrompts = pendingByPane;
 }
 ```
 
-## File: app/pages/_test.vue
-```vue
-<template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <div class="flex flex-col h-full relative">
-                <div class="p-2 flex flex-col space-y-2">
-                    <UButton class="w-full flex items-center justify-center"
-                        >New Chat</UButton
-                    >
-                    <UInput
-                        icon="i-lucide-search"
-                        size="md"
-                        variant="outline"
-                        placeholder="Search..."
-                        class="w-full ml-[1px]"
-                    ></UInput>
-                </div>
-                <div class="flex flex-col p-2 space-y-1.5">
-                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about aids</UButton
-                    >
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about dogs</UButton
-                    >
-                </div>
-                <sidebar-side-bottom-nav />
-            </div>
-        </template>
+## File: app/plugins/examples/dev-debug-console.client.ts
+```typescript
+// Dev helper: ensure console.debug messages are visible even if browser "Verbose" is disabled.
+// Maps console.debug to also emit a normal console.log (single line) so existing debug instrumentation shows up.
+// Safe no-op in production build (guarded by import.meta.dev).
+export default defineNuxtPlugin(() => {
+    if (!import.meta.dev) return; // only in dev
+    if (typeof window === 'undefined') return;
+    try {
+        const anyWin: any = window as any;
+        if (anyWin.__or3ConsoleDebugPatched) return;
+        anyWin.__or3ConsoleDebugPatched = true;
+        const orig = console.debug?.bind(console) || console.log.bind(console);
+        console.debug = (...args: any[]) => {
+            try {
+                console.log(...args);
+            } catch {}
+            try {
+                orig(...args);
+            } catch {}
+        };
+        console.log('[dev-debug-console] console.debug patched to also log');
+    } catch {}
+});
+```
 
-        <!-- Default slot = main content (right side) -->
-        <div class="min-h-[100dvh] overflow-y-scroll">
-            <div
-                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
-            ></div>
+## File: app/plugins/examples/document-history-test.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    // Simple test plugin that registers a document history action.
+    // Mirrors the pattern used by app/plugins/message-actions.client.ts
+    try {
+        console.info('[doc-history-test] registering action');
 
-            <div class="p-6 space-y-4">
-                <div class="flex flex-row space-x-2">
-                    <UButton @click="showToast" size="sm" color="primary"
-                        >Nuxt UI Button</UButton
-                    >
-                    <UButton color="success">Nuxt UI Button</UButton>
-                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
-                </div>
-                <div class="flex flex-row space-x-2">
-                    <UButtonGroup size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                    <UButtonGroup orientation="vertical" size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                </div>
+        registerDocumentHistoryAction({
+            id: 'test:inspect-doc',
+            icon: 'i-lucide-eye',
+            label: 'Inspect Document',
+            order: 300,
+            async handler({ document }) {
+                // Detailed console output for inspection
+                console.group('[doc-history-test] Inspect Document');
+                try {
+                    if (import.meta.dev) {
+                        console.debug('document.id:', document?.id);
+                        console.debug('document.title:', document?.title);
+                        console.debug(
+                            'document.content (snippet):',
+                            typeof document?.content === 'string'
+                                ? document.content.slice(0, 200)
+                                : document?.content
+                        );
+                        console.debug('full document object:', document);
+                    }
+                } catch (e) {
+                    console.error('[doc-history-test] logging error', e);
+                }
+                console.groupEnd();
 
-                <div class="flex space-x-2">
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="sm"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="md"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="lg"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                </div>
+                // Show a friendly toast for quick UI verification
+                try {
+                    useToast().add({
+                        title: 'Inspect Document',
+                        description: `id: ${
+                            document?.id ?? 'unknown'
+                        } — title: ${document?.title ?? 'Untitled'}`,
+                        duration: 4000,
+                    });
+                } catch (e) {
+                    // If useToast isn't available, still continue — we logged details above
+                    // eslint-disable-next-line no-console
+                    console.warn('[doc-history-test] useToast unavailable', e);
+                }
+            },
+        });
 
-                <div class="flex items-center gap-3">
-                    <button
-                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
-                        @click="toggle()"
-                    >
-                        Toggle Light/Dark
-                    </button>
-                    <span class="text-[var(--md-on-surface)]"
-                        >Current: {{ theme }}</span
-                    >
-                </div>
+        // Log current registered ids for debugging
+        try {
+            const ids = listRegisteredDocumentHistoryActionIds?.() ?? [];
+            console.info('[doc-history-test] registered action ids:', ids);
+        } catch (e) {
+            // ignore
+        }
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[doc-history-test] plugin failed to initialize', e);
+    }
+});
+```
 
-                <div class="grid grid-cols-2 gap-3">
-                    <div
-                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
-                    >
-                        Surface / On-Surface
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
-                    >
-                        Secondary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
-                    >
-                        Tertiary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
-                    >
-                        Error Container
-                    </div>
-                </div>
+## File: app/plugins/examples/message-actions-test.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    try {
+        console.info('[message-actions-test] registering action');
 
-                <chat-input-dropper />
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
+        registerMessageAction({
+            id: 'test:create-doc',
+            icon: 'pixelarticons:frame-delete',
+            tooltip: 'Create test document',
+            showOn: 'both',
+            order: 300,
+            async handler({ message }) {
+                console.group('[message-actions-test] handler invoked');
+                try {
+                    if (import.meta.dev) {
+                        console.debug('message id:', message?.id);
+                        console.debug('message role:', message?.role);
+                        console.debug(
+                            'message content (preview):',
+                            typeof message?.content === 'string'
+                                ? message.content.slice(0, 300)
+                                : message?.content
+                        );
+                        console.debug('full message object:', message);
+                    }
+                } catch (e) {
+                    console.error('[message-actions-test] logging error', e);
+                }
+                console.groupEnd();
 
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+                try {
+                    useToast().add({
+                        title: 'Test Create Document',
+                        description: `message id: ${
+                            message?.id ?? 'unknown'
+                        } — role: ${message?.role ?? 'unknown'}`,
+                        duration: 3500,
+                    });
+                } catch (e) {
+                    console.warn(
+                        '[message-actions-test] useToast unavailable',
+                        e
+                    );
+                }
+            },
+        });
 
-const nuxtApp = useNuxtApp();
-const theme = computed(() => (nuxtApp.$theme as any).get());
-const toggle = () => (nuxtApp.$theme as any).toggle();
-const toast = useToast();
+        try {
+            const ids = listRegisteredMessageActionIds?.() ?? [];
+            console.info('[message-actions-test] registered action ids:', ids);
+        } catch (e) {
+            // ignore
+        }
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[message-actions-test] plugin failed to initialize', e);
+    }
+});
+```
 
-function showToast() {
-    toast.add({
-        title: 'Success',
-        description: 'Your action was completed successfully.',
-        color: 'success',
-    });
-}
-</script>
+## File: app/plugins/examples/pane-hooks-test.client.ts
+```typescript
+// Dev example plugin demonstrating pane lifecycle & chat/document hook usage.
+// Safe to remove in production; only logs + optional toast notifications.
+
+export default defineNuxtPlugin(() => {
+    try {
+        const nuxtApp = useNuxtApp();
+        const hooks: any = (nuxtApp as any).$hooks;
+        if (!hooks) {
+            console.warn('[pane-hooks-test] $hooks engine unavailable');
+            return;
+        }
+
+        console.info('[pane-hooks-test] registering pane hooks test listeners');
+
+        const disposers: (() => void)[] = [];
+
+        function on(
+            name: string,
+            fn: (...a: any[]) => any,
+            kind: 'action' | 'filter' = 'action'
+        ) {
+            try {
+                if (kind === 'filter') hooks.addFilter(name, fn);
+                else hooks.addAction(name, fn);
+                disposers.push(() => {
+                    try {
+                        if (kind === 'filter') hooks.removeFilter(name, fn);
+                        else hooks.removeAction(name, fn);
+                    } catch {}
+                });
+            } catch (e) {
+                console.warn(
+                    `[pane-hooks-test] failed to register ${kind} ${name}`,
+                    e
+                );
+            }
+        }
+
+        // --- Actions ---
+        on('ui.pane.blur:action', (pane: any, index: number) => {
+            console.debug('[pane-hooks-test] blur', {
+                ts: Date.now(),
+                index,
+                id: pane?.id,
+                mode: pane?.mode,
+                thread: pane?.threadId,
+            });
+        });
+        on('ui.pane.switch:action', (pane: any, index: number) => {
+            console.debug('[pane-hooks-test] switch', {
+                ts: Date.now(),
+                index,
+                threadId: pane?.threadId,
+                doc: pane?.documentId,
+                msgs: Array.isArray(pane?.messages)
+                    ? pane.messages.length
+                    : undefined,
+            });
+        });
+        on(
+            'ui.pane.active:action',
+            (pane: any, index: number, prevIndex: number) => {
+                console.debug('[pane-hooks-test] active', {
+                    ts: Date.now(),
+                    index,
+                    prevIndex,
+                    mode: pane?.mode,
+                    thread: pane?.threadId,
+                });
+            }
+        );
+
+        on(
+            'ui.pane.thread:action:changed',
+            (pane: any, oldId: string, newId: string, count: number) => {
+                console.info('[pane-hooks-test] thread changed', {
+                    oldId,
+                    newId,
+                    messages: count,
+                });
+                try {
+                    useToast()?.add?.({
+                        title: 'Pane Thread Changed',
+                        description: `${oldId || '∅'} → ${
+                            newId || '∅'
+                        } (msgs: ${count})`,
+                        duration: 2500,
+                    });
+                } catch {}
+            }
+        );
+
+        on(
+            'ui.pane.doc:action:changed',
+            (pane: any, oldId: string, newId: string) => {
+                console.info('[pane-hooks-test] document changed', {
+                    oldId,
+                    newId,
+                });
+            }
+        );
+        on('ui.pane.doc:action:saved', (pane: any, docId: string) => {
+            console.info('[pane-hooks-test] document saved', { docId });
+        });
+
+        function paneSnapshot(p: any) {
+            return p
+                ? {
+                      id: p.id,
+                      mode: p.mode,
+                      threadId: p.threadId,
+                      msgs: Array.isArray(p.messages)
+                          ? p.messages.length
+                          : undefined,
+                  }
+                : null;
+        }
+        on('ui.pane.msg:action:sent', (pane: any, payload: any) => {
+            console.debug('[pane-hooks-test] msg sent', {
+                ts: Date.now(),
+                pane: paneSnapshot(pane),
+                ...payload,
+            });
+        });
+        on('ui.pane.msg:action:received', (pane: any, payload: any) => {
+            console.debug('[pane-hooks-test] msg received', {
+                ts: Date.now(),
+                pane: paneSnapshot(pane),
+                ...payload,
+            });
+        });
+
+        // Cleanup on hot reload / unmount
+        try {
+            (nuxtApp.hook as any)('app:beforeUnmount', () => {
+                for (const d of disposers) d();
+                console.info('[pane-hooks-test] removed listeners');
+            });
+        } catch {}
+    } catch (e) {
+        console.error('[pane-hooks-test] initialization failed', e);
+    }
+});
 ```
 
 ## File: app/plugins/examples/project-tree-actions.client.ts
@@ -12166,6 +11609,209 @@ export default defineNuxtPlugin(() => {
     } catch (e) {
         console.error('[thread-history-test] registration error', e);
     }
+});
+```
+
+## File: app/plugins/examples/thread-history-test.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    // Test plugin to register thread history actions for development/debugging.
+    // Registers two actions and logs output to console + toasts. Cleans up on app unmount.
+    try {
+        console.info('[thread-history-test] registering actions');
+
+        // Inspect thread action — shows a console group and a toast
+        registerThreadHistoryAction({
+            id: 'test:inspect-thread',
+            icon: 'i-lucide-eye',
+            label: 'Inspect Thread',
+            order: 300,
+            async handler(ctx: any) {
+                const t = ctx?.thread ?? ctx?.document ?? ctx;
+                console.group('[thread-history-test] Inspect Thread');
+                try {
+                    if (import.meta.dev) {
+                        console.debug('id:', t?.id);
+                        console.debug('title:', t?.title);
+                        console.debug(
+                            'snippet (messages or content):',
+                            Array.isArray(t?.messages)
+                                ? t.messages.slice(0, 5)
+                                : t?.content
+                        );
+                        console.debug('full thread object:', t);
+                    }
+                } catch (e) {
+                    console.error('[thread-history-test] logging error', e);
+                }
+                console.groupEnd();
+
+                try {
+                    useToast().add({
+                        title: 'Inspect Thread',
+                        description: `id: ${t?.id ?? 'unknown'} — title: ${
+                            t?.title ?? 'Untitled'
+                        }`,
+                        duration: 4000,
+                    });
+                } catch (e) {
+                    console.warn(
+                        '[thread-history-test] useToast unavailable',
+                        e
+                    );
+                }
+            },
+        });
+
+        // Dump thread to console action — lightweight, useful for automation tests
+        registerThreadHistoryAction({
+            id: 'test:dump-thread',
+            icon: 'i-lucide-copy',
+            label: 'Dump thread',
+            order: 310,
+            handler(ctx: any) {
+                const t = ctx?.thread ?? ctx?.document ?? ctx;
+                try {
+                    console.info('[thread-history-test] dump-thread', t);
+                    useToast()?.add?.({
+                        title: 'Dumped Thread',
+                        description: `Thread ${
+                            t?.id ?? 'unknown'
+                        } logged to console.`,
+                        duration: 2500,
+                    });
+                } catch (e) {
+                    // Best-effort: fall back to console only
+                    console.info(
+                        '[thread-history-test] toast unavailable, logged to console'
+                    );
+                }
+            },
+        });
+
+        // Debug: list current registered action ids (if helper available)
+        try {
+            const ids = listRegisteredThreadHistoryActionIds?.() ?? [];
+            console.info(
+                '[thread-history-test] registered thread action ids:',
+                ids
+            );
+        } catch (e) {
+            // ignore
+        }
+
+        // Clean up on app unmount (use Nuxt hook) so HMR doesn't duplicate actions.
+        try {
+            const nuxtApp = useNuxtApp();
+            // Cast hook key to any to avoid strict HookKeys typing; this is a dev helper plugin.
+            (nuxtApp.hook as any)('app:beforeUnmount', () => {
+                try {
+                    unregisterThreadHistoryAction?.('test:inspect-thread');
+                    unregisterThreadHistoryAction?.('test:dump-thread');
+                    console.info(
+                        '[thread-history-test] unregistered actions on app:beforeUnmount'
+                    );
+                } catch (e) {
+                    console.warn('[thread-history-test] cleanup failed', e);
+                }
+            });
+        } catch (e) {
+            // if hooks unavailable, it's non-fatal — actions will persist for dev session
+        }
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[thread-history-test] plugin failed to initialize', e);
+    }
+});
+```
+
+## File: app/plugins/message-actions.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    registerMessageAction({
+        id: 'Create document', // unique id
+        icon: 'pixelarticons:notes-plus', // any icon name supported by <UButton>
+        tooltip: 'Create document',
+        showOn: 'assistant', // 'user' | 'assistant' | 'both'
+        order: 300, // optional; after built-ins ( <200 reserved )
+        async handler({ message }) {
+            if (import.meta.dev)
+                console.debug('Create document action invoked', message);
+
+            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
+            async function markdownToTipTapDoc(md: string) {
+                const markdown = (md || '').trim();
+                if (!markdown) return { type: 'doc', content: [] };
+                try {
+                    const [{ Editor }] = await Promise.all([
+                        import('@tiptap/core'),
+                    ]);
+                    const StarterKit = (await import('@tiptap/starter-kit'))
+                        .default;
+                    // tiptap-markdown exports markdownToProseMirror function
+                    const { Markdown } = await import('tiptap-markdown');
+
+                    const editor = new Editor({
+                        // @ts-ignore
+                        extensions: [StarterKit, Markdown],
+                        content: '',
+                    });
+
+                    editor.commands.setContent(markdown);
+                    return editor.getJSON();
+                } catch (e) {
+                    alert('error!!!');
+                }
+            }
+
+            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
+
+            const doc = await newDocument({
+                title: (message as any).title || 'Untitled',
+                content: tiptapDoc,
+            });
+
+            if (import.meta.dev) console.debug('Created document record', doc);
+
+            // Attempt to open in a new pane (if capacity) else reuse active pane
+            const mp: any = (globalThis as any).__or3MultiPaneApi;
+            try {
+                if (mp) {
+                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
+                    if (couldAdd && typeof mp.addPane === 'function') {
+                        mp.addPane(); // sets new pane active
+                    }
+                    const panes = mp.panes?.value;
+
+                    const activeIndex = mp.activePaneIndex?.value ?? 0;
+
+                    if (Array.isArray(panes)) {
+                        const pane = panes[activeIndex];
+                        if (pane) {
+                            pane.mode = 'doc';
+                            pane.documentId = doc.id;
+                            // Reset chat-related fields when switching
+                            pane.threadId =
+                                pane.mode === 'doc'
+                                    ? pane.threadId
+                                    : pane.threadId;
+                        }
+                    }
+                }
+            } catch (e) {
+                // non-fatal; fallback is just created doc without auto-open
+                console.warn('Open document in pane failed', e);
+            }
+
+            useToast().add({
+                title: 'Document created',
+                description: `Opened in ${
+                    mp?.canAddPane?.value ? 'new' : 'current'
+                } pane: ${doc.id}`,
+                duration: 2600,
+            });
+        },
+    });
 });
 ```
 
@@ -12388,29 +12034,206 @@ function microTask() {
 }
 ```
 
+## File: app/app.config.ts
+```typescript
+export default defineAppConfig({
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
+        },
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
+                header: 'border-b-2 border-black bg-primary px-2 py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
+                title: 'text-white dark:text-black font-semibold text-sm',
+                description: 'hidden',
+                close: 'top-0 end-0 flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white dark:text-black  dark:hover:bg-white/80',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
+    },
+});
+```
+
 ## File: app/app.vue
 ```vue
 <template>
     <UApp>
+        <!-- Register the PWA web manifest on all pages -->
+        <VitePwaManifest />
+
         <NuxtPage />
+
+        <!-- Minimal update/offline prompt using $pwa -->
+        <div
+            v-if="$pwa?.needRefresh || $pwa?.offlineReady"
+            class="fixed left-1/2 bottom-4 z-50 -translate-x-1/2 rounded-md bg-neutral-900/90 text-white backdrop-blur px-3 py-2 shadow-lg flex items-center gap-3"
+        >
+            <span v-if="$pwa?.offlineReady">Ready to work offline.</span>
+            <span v-else>New content available.</span>
+            <button
+                v-if="$pwa?.needRefresh"
+                class="rounded bg-emerald-500 px-2 py-1 text-sm hover:bg-emerald-400"
+                @click="$pwa.updateServiceWorker(true)"
+            >
+                Reload
+            </button>
+            <button
+                class="rounded bg-neutral-700 px-2 py-1 text-sm hover:bg-neutral-600"
+                @click="$pwa.cancelPrompt()"
+            >
+                Close
+            </button>
+        </div>
     </UApp>
 </template>
 <script setup lang="ts">
 // Apply initial theme class to <html> so CSS variables cascade app-wide
+const nuxtApp = useNuxtApp();
+const isDark = computed(() =>
+    (
+        (nuxtApp as any).$theme?.current?.value ||
+        (nuxtApp as any).$theme?.get?.() ||
+        'light'
+    ).startsWith('dark')
+);
+const themeColor = computed(() => (isDark.value ? '#1A1F24' : '#F1F4FB'));
+const statusBarStyle = computed(() =>
+    isDark.value ? 'black-translucent' : 'default'
+);
+
 useHead({
     htmlAttrs: {
         class: 'light',
     },
     title: 'or3 chat',
-    link: [{ rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' }],
+    link: [
+        { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
+        // Provide an Apple touch icon to avoid 404s in Safari/iOS
+        { rel: 'apple-touch-icon', href: '/logos/logo-192.png' },
+    ],
+    meta: [
+        // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
+        { name: 'theme-color', content: themeColor },
+        // Enable iOS PWA full-screen and control status bar style
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        {
+            name: 'apple-mobile-web-app-status-bar-style',
+            content: statusBarStyle,
+        },
+        // Ensure content can extend under the notch when using black-translucent
+        {
+            name: 'viewport',
+            content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+        },
+    ],
 });
 
-import { onMounted } from 'vue';
-import { useNuxtApp } from '#app';
-
 // Fire app.init:action:after once after the root app mounts (client-only)
-const nuxtApp = useNuxtApp();
-
 onMounted(() => {
     const g: any = globalThis as any;
     if (g.__OR3_APP_INIT_FIRED__) return;
@@ -12478,6 +12301,74 @@ vi.mock('virtua/vue', () => {
 });
 ```
 
+## File: types/pane-plugin-api.d.ts
+```typescript
+import type {
+    PanePluginApi,
+    SendMessageOptions,
+    SendMessageResult,
+    UpdateDocumentOptions,
+    PatchDocumentOptions,
+    SetDocumentTitleOptions,
+    ActivePaneInfo,
+    PaneDescriptor,
+    Result,
+    Ok,
+    Err,
+    PaneApiErrorCode,
+} from '../app/plugins/pane-plugin-api.client';
+
+declare global {
+    // Global (SSR unsafe) handle exposed by pane-plugin-api.client.ts
+    // Optional during early app boot / before plugin init.
+    var __or3PanePluginApi: PanePluginApi | undefined; // eslint-disable-line no-var
+    interface Window {
+        __or3PanePluginApi?: PanePluginApi;
+    }
+}
+
+export {};
+
+// Re-export the types so plugin authors can `import type { SendMessageOptions } from "#/types/pane-plugin-api"` (depending on alias setup)
+export type {
+    PanePluginApi,
+    SendMessageOptions,
+    SendMessageResult,
+    UpdateDocumentOptions,
+    PatchDocumentOptions,
+    SetDocumentTitleOptions,
+    ActivePaneInfo,
+    PaneDescriptor,
+    Result,
+    Ok,
+    Err,
+    PaneApiErrorCode,
+};
+```
+
+## File: types/pwa.d.ts
+```typescript
+// PWA types augmentation for Nuxt config and app injection
+import type { PwaModuleOptions } from '@vite-pwa/nuxt';
+
+declare module 'nuxt/schema' {
+    interface NuxtConfig {
+        pwa?: PwaModuleOptions;
+    }
+    interface NuxtOptions {
+        pwa?: PwaModuleOptions;
+    }
+}
+
+declare module '#app' {
+    interface NuxtApp {
+        $pwa: any;
+    }
+}
+
+export {};
+```
+
 ## File: LICENSE
 ```
 GNU GENERAL PUBLIC LICENSE
@@ -12497,29 +12388,6 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
-```
-
-## File: nuxt.config.ts
-```typescript
-// https://nuxt.com/docs/api/configuration/nuxt-config
-
-export default defineNuxtConfig({
-    compatibilityDate: '2025-07-15',
-    devtools: { enabled: true },
-    modules: ['@nuxt/ui', '@nuxt/fonts'],
-    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
-    srcDir: 'app',
-    // Load Tailwind + theme variables globally
-    css: ['~/assets/css/main.css'],
-    fonts: {
-        families: [
-            { name: 'Press Start 2P', provider: 'google' },
-            { name: 'VT323', provider: 'google' },
-        ],
-    },
-    // Exclude test artifacts from scanning and server bundle (saves build time & size)
-    ignore: ['**/*.test.*', '**/__tests__/**', 'tests/**'],
-});
 ```
 
 ## File: app/assets/css/main.css
@@ -12682,1978 +12550,296 @@ html {
 }
 ```
 
-## File: app/components/documents/DocumentEditor.vue
+## File: app/components/modal/SettingsModal.vue
 ```vue
 <template>
-    <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
-    >
-        <div
-            class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
-        >
-            <UInput
-                v-model="titleDraft"
-                placeholder="Untitled"
-                size="md"
-                class="flex-1 max-w-[60%]"
-                @update:model-value="onTitleChange"
-            />
-            <div class="flex items-center gap-1">
-                <UTooltip :text="statusText">
-                    <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
-                        >{{ statusText }}</span
-                    >
-                </UTooltip>
-            </div>
-        </div>
-        <div
-            class="flex flex-row items-stretch border-b-2 px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
-        >
-            <ToolbarButton
-                icon="carbon:text-bold"
-                :active="isActive('bold')"
-                label="Bold (⌘B)"
-                @activate="cmd('toggleBold')"
-            />
-            <ToolbarButton
-                icon="carbon:text-italic"
-                :active="isActive('italic')"
-                label="Italic (⌘I)"
-                @activate="cmd('toggleItalic')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:code"
-                :active="isActive('code')"
-                label="Code"
-                @activate="cmd('toggleCode')"
-            />
-            <ToolbarButton
-                text="H1"
-                :active="isActiveHeading(1)"
-                label="H1"
-                @activate="toggleHeading(1)"
-            />
-            <ToolbarButton
-                text="H2"
-                :active="isActiveHeading(2)"
-                label="H2"
-                @activate="toggleHeading(2)"
-            />
-            <ToolbarButton
-                text="H3"
-                :active="isActiveHeading(3)"
-                label="H3"
-                @activate="toggleHeading(3)"
-            />
-            <ToolbarButton
-                icon="pixelarticons:list"
-                :active="isActive('bulletList')"
-                label="Bullets"
-                @activate="cmd('toggleBulletList')"
-            />
-            <ToolbarButton
-                icon="carbon:list-numbered"
-                :active="isActive('orderedList')"
-                label="Ordered"
-                @activate="cmd('toggleOrderedList')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:minus"
-                label="HR"
-                @activate="cmd('setHorizontalRule')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:undo"
-                label="Undo"
-                @activate="cmd('undo')"
-            />
-            <ToolbarButton
-                icon="pixelarticons:redo"
-                label="Redo"
-                @activate="cmd('redo')"
-            />
-        </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
-            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
-                <EditorContent
-                    :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
-                ></EditorContent>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
-import ToolbarButton from './ToolbarButton.vue';
-import {
-    useDocumentState,
-    setDocumentContent,
-    setDocumentTitle,
-    loadDocument,
-} from '~/composables/useDocumentsStore';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-import type { JSONContent } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
-
-const props = defineProps<{ documentId: string }>();
-
-// Reactive state wrapper (computed to always fetch current map entry)
-const state = computed(() => useDocumentState(props.documentId));
-const titleDraft = ref(state.value.record?.title || '');
-
-watch(
-    () => props.documentId,
-    async (id, _old, onCleanup) => {
-        // Switch to new state object from map
-        const currentLoadId = id;
-        await loadDocument(id);
-        if (props.documentId !== currentLoadId) return; // prop changed again
-        titleDraft.value = state.value.record?.title || '';
-        if (editor.value && state.value.record) {
-            const json = state.value.record.content as JSONContent;
-            editor.value.commands.setContent(json, { emitUpdate: false });
-        }
-    }
-);
-
-const editor = ref<Editor | null>(null);
-
-function onTitleChange() {
-    setDocumentTitle(props.documentId, titleDraft.value);
-}
-
-// Reflect external title updates (e.g., sidebar rename) into the input when
-// we're not currently staging a local pendingTitle.
-watch(
-    () => state.value.record?.title,
-    (newTitle) => {
-        if (
-            typeof newTitle === 'string' &&
-            newTitle.length > 0 &&
-            newTitle !== titleDraft.value &&
-            state.value.pendingTitle === undefined // don't clobber local edits
-        ) {
-            titleDraft.value = newTitle;
-        }
-    }
-);
-
-function emitContent() {
-    if (!editor.value) return;
-    const json = editor.value.getJSON();
-    setDocumentContent(props.documentId, json);
-}
-
-function makeEditor() {
-    editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2] } }),
-            Placeholder.configure({
-                placeholder: 'Type your text here...',
-            }),
-        ],
-        content: state.value.record?.content || { type: 'doc', content: [] },
-        autofocus: false,
-        onUpdate: () => emitContent(),
-    });
-}
-
-onMounted(async () => {
-    await loadDocument(props.documentId);
-    // Ensure title reflects loaded record (refresh / deep link case)
-    titleDraft.value = state.value.record?.title || titleDraft.value || '';
-    // Ensure initial state ref matches (in case of rapid prop change before mount)
-    makeEditor();
-});
-
-onBeforeUnmount(() => {
-    editor.value?.destroy();
-});
-
-function isActive(name: string) {
-    return editor.value?.isActive(name) || false;
-}
-function isActiveHeading(level: number) {
-    return editor.value?.isActive('heading', { level }) || false;
-}
-
-function toggleHeading(level: number) {
-    // TipTap Heading levels type expects specific union; cast to any to keep minimal.
-    editor.value
-        ?.chain()
-        .focus()
-        .toggleHeading({ level: level as any })
-        .run();
-    emitContent();
-}
-
-const commands: Record<string, () => void> = {
-    toggleBold: () => editor.value?.chain().focus().toggleBold().run(),
-    toggleItalic: () => editor.value?.chain().focus().toggleItalic().run(),
-    toggleCode: () => editor.value?.chain().focus().toggleCode().run(),
-    toggleBulletList: () =>
-        editor.value?.chain().focus().toggleBulletList().run(),
-    toggleOrderedList: () =>
-        editor.value?.chain().focus().toggleOrderedList().run(),
-    setHorizontalRule: () =>
-        editor.value?.chain().focus().setHorizontalRule().run(),
-    undo: () => editor.value?.commands.undo(),
-    redo: () => editor.value?.commands.redo(),
-};
-function cmd(name: string) {
-    commands[name]?.();
-    emitContent();
-}
-
-const statusText = computed(() => {
-    switch (state.value.status) {
-        case 'saving':
-            return 'Saving…';
-        case 'saved':
-            return 'Saved';
-        case 'error':
-            return 'Error';
-        default:
-            return 'Ready';
-    }
-});
-</script>
-
-<style scoped>
-.prose :where(h1, h2) {
-    font-family: 'Press Start 2P', monospace;
-}
-
-/* ProseMirror (TipTap) base styles */
-/* TipTap base */
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
-}
-
-/* Placeholder (needs :deep due to scoped styles) */
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    /* Use design tokens; ensure sufficient contrast in dark mode */
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    opacity: 0.85; /* increase for dark background readability */
-    font-weight: normal;
-}
-</style>
-```
-
-## File: app/components/sidebar/SidebarDocumentItem.vue
-```vue
-<template>
-    <RetroGlassBtn
-        class="w-full flex items-center justify-between text-left"
-        :class="{ 'active-element bg-primary/25': active }"
-        @click="emit('select', doc.id)"
-        @mouseenter="onHoverDoc()"
-    >
-        <span class="truncate flex-1 min-w-0" :title="doc.title">{{
-            doc.title
-        }}</span>
-        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
-            <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                @click.stop
-            >
-                <UIcon
-                    name="pixelarticons:more-vertical"
-                    class="w-4 h-4 opacity-70"
-                />
-            </span>
-            <template #content>
-                <div class="p-1 w-44 space-y-1">
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:edit"
-                        @click="emit('rename', doc)"
-                        >Rename</UButton
-                    >
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:folder-plus"
-                        @click="emit('add-to-project', doc)"
-                        >Add to project</UButton
-                    >
-                    <UButton
-                        color="error"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:trash"
-                        @click="emit('delete', doc)"
-                        >Delete</UButton
-                    >
-                    <template v-for="action in extraActions" :key="action.id">
-                        <UButton
-                            :icon="action.icon"
-                            color="neutral"
-                            variant="ghost"
-                            size="sm"
-                            class="w-full justify-start"
-                            @click="() => runExtraAction(action)"
-                            >{{ action.label || '' }}</UButton
-                        >
-                    </template>
-                </div>
-            </template>
-        </UPopover>
-    </RetroGlassBtn>
-</template>
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-import type { Post } from '~/db';
-import { db } from '~/db';
-import { useThrottleFn } from '@vueuse/core';
-const props = defineProps<{ doc: any; active?: boolean }>();
-const emit = defineEmits<{
-    (e: 'select', id: string): void;
-    (e: 'rename', doc: any): void;
-    (e: 'delete', doc: any): void;
-    (e: 'add-to-project', doc: any): void;
-}>();
-const extraActions = useDocumentHistoryActions();
-const fullDocCache = new Map<string, Post>();
-const prefetching = new Set<string>();
-async function fetchFullDoc(id: string) {
-    if (fullDocCache.has(id)) return fullDocCache.get(id)!;
-    try {
-        const rec = await db.posts.get(id);
-        if (rec) {
-            fullDocCache.set(id, rec as Post);
-            return rec as Post;
-        }
-    } catch {}
-    return null;
-}
-const doPrefetch = useThrottleFn(async (id: string) => {
-    if (fullDocCache.has(id) || prefetching.has(id)) return;
-    prefetching.add(id);
-    await fetchFullDoc(id);
-    prefetching.delete(id);
-}, 300);
-function onHoverDoc() {
-    if (!props.doc?.id) return;
-    if (!fullDocCache.has(props.doc.id)) doPrefetch(props.doc.id);
-}
-async function runExtraAction(action: any) {
-    try {
-        let docToSend = props.doc;
-        if (!docToSend.content || docToSend.content.length === 0) {
-            const full = await fetchFullDoc(props.doc.id);
-            if (full) docToSend = full;
-            else {
-                try {
-                    useToast().add({
-                        title: 'Document not available',
-                        description: 'Failed to load full content',
-                        color: 'error',
-                        duration: 3000,
-                    });
-                } catch {}
-                return;
-            }
-        }
-        await action.handler({ document: docToSend });
-    } catch (e: any) {
-        try {
-            useToast().add({
-                title: 'Action failed',
-                description: e?.message || 'Error running action',
-                color: 'error',
-                duration: 3000,
-            });
-        } catch {}
-        console.error('Doc action error', action.id, e);
-    }
-}
-</script>
-```
-
-## File: app/components/sidebar/SidebarHeader.vue
-```vue
-<template>
-    <div
-        :class="{
-            'px-0 justify-center': collapsed,
-            'px-3 justify-between': !collapsed,
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-t-2',
+            body: 'p-0!',
         }"
-        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+        title="Model settings"
+        description="Browse and favorite models from the OpenRouter catalog."
+        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
     >
-        <div v-show="!collapsed">
-            <slot name="sidebar-header">
-                <div class="flex items-center space-x-2">
-                    <div
-                        class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
-                    >
-                        <div
-                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
-                        >
-                            <div>Or</div>
-                            <div class="text-[17px]">3</div>
+        <template #body>
+            <div class="flex flex-col h-full">
+                <div
+                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                >
+                    <div class="flex items-center gap-3 w-full">
+                        <div class="relative w-full max-w-md">
+                            <UInput
+                                v-model="searchQuery"
+                                icon="pixelarticons:search"
+                                placeholder="Search models (id, name, description, modality)"
+                                size="sm"
+                                class="w-full pr-8"
+                                :ui="{ base: 'w-full' }"
+                                autofocus
+                            />
+                            <button
+                                v-if="searchQuery"
+                                type="button"
+                                aria-label="Clear search"
+                                class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                                @click="searchQuery = ''"
+                            >
+                                <UIcon
+                                    name="i-heroicons-x-mark"
+                                    class="h-4 w-4"
+                                />
+                            </button>
                         </div>
-                        <span
-                            class="text-[18px] pb-[1.5px] -ml-0.5 font-vt323 font-bold text-primary"
-                            >.chat</span
+                        <UButton
+                            :disabled="refreshing"
+                            size="sm"
+                            variant="ghost"
+                            :square="true"
+                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
+                            aria-label="Refresh model catalog"
+                            :title="
+                                refreshing
+                                    ? 'Refreshing…'
+                                    : 'Force refresh models (bypass cache)'
+                            "
+                            @click="doRefresh"
                         >
+                            <UIcon
+                                v-if="!refreshing"
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4"
+                            />
+                            <UIcon
+                                v-else
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4 animate-spin"
+                            />
+                        </UButton>
                     </div>
                 </div>
-            </slot>
-        </div>
-
-        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
-            <UButton
-                size="xs"
-                :square="true"
-                color="neutral"
-                variant="ghost"
-                :class="'retro-btn'"
-                @click="onToggle"
-                :ui="{ base: 'retro-btn' }"
-                :aria-label="toggleAria"
-                :title="toggleAria"
-            >
-                <UIcon :name="toggleIcon" class="w-5 h-5" />
-            </UButton>
-        </slot>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
-
-const props = defineProps({
-    collapsed: { type: Boolean, required: true },
-    toggleIcon: { type: String, required: true },
-    toggleAria: { type: String, required: true },
-});
-const emit = defineEmits(['toggle']);
-
-function onToggle() {
-    emit('toggle');
-}
-</script>
-
-<style scoped>
-/* Gradient already supplied by global pattern image; we just ensure better dark base */
-.header-pattern {
-    background-image: url('/gradient-x.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-.dark .header-pattern {
-    /* Elevated surface tone for dark mode header to distinguish from main background */
-    background-color: var(--md-surface-container-high) !important;
-}
-
-/* Retro logo title: pixel shadow + underline accent (no stroke) */
-.header-title {
-    font-family: 'Press Start 2P', monospace;
-
-    letter-spacing: 1px;
-    color: var(--md-primary);
-    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
-    padding: 2px 4px 3px 4px; /* subtle padding for readability */
-}
-
-.dark .header-title {
-    color: var(--md-on-primary-container);
-    text-shadow: 2px 2px 0 var(--md-primary);
-}
-.dark .header-title::after {
-    background: var(--md-on-primary-container);
-    box-shadow: 2px 2px 0 var(--md-primary);
-}
-
-/* Logo rendering tweaks */
-.logo {
-    width: 20px; /* lock display size */
-    height: 20px;
-    aspect-ratio: 1 / 1;
-    display: block;
-    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
-    /* image-rendering: pixelated; */
-}
-
-/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
-   switch to a DPR-based srcset for sharper sampling:
-   src="/logo-20.png"
-   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
-</style>
-```
-
-## File: app/components/sidebar/SidebarThreadItem.vue
-```vue
-<template>
-    <RetroGlassBtn
-        class="w-full flex items-center justify-between text-left"
-        :class="{ 'active-element bg-primary/25': active }"
-        @click="emit('select', thread.id)"
-    >
-        <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-            <UIcon
-                v-if="thread.forked"
-                name="pixelarticons:git-branch"
-                class="shrink-0"
-            />
-            <span
-                class="truncate flex-1 min-w-0"
-                :title="thread.title || 'New Thread'"
-                >{{ thread.title || 'New Thread' }}</span
-            >
-        </div>
-        <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
-            <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                @click.stop
-            >
-                <UIcon
-                    name="pixelarticons:more-vertical"
-                    class="w-4 h-4 opacity-70"
-                />
-            </span>
-            <template #content>
-                <div class="p-1 w-44 space-y-1">
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:edit"
-                        @click="emit('rename', thread)"
-                        >Rename</UButton
-                    >
-                    <UButton
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:folder-plus"
-                        @click="emit('add-to-project', thread)"
-                        >Add to project</UButton
-                    >
-                    <UButton
-                        color="error"
-                        variant="ghost"
-                        size="sm"
-                        class="w-full justify-start"
-                        icon="pixelarticons:trash"
-                        @click="emit('delete', thread)"
-                        >Delete</UButton
-                    >
-                    <template v-for="action in extraActions" :key="action.id">
-                        <UButton
-                            :icon="action.icon"
-                            color="neutral"
-                            variant="ghost"
-                            size="sm"
-                            class="w-full justify-start"
-                            @click="() => runExtraAction(action, thread)"
-                            >{{ action.label || '' }}</UButton
-                        >
-                    </template>
+                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
+                    Indexing models…
                 </div>
-            </template>
-        </UPopover>
-    </RetroGlassBtn>
+                <div v-else class="flex-1 min-h-0">
+                    <VList
+                        :data="chunkedModels as OpenRouterModel[][]"
+                        style="height: 70dvh"
+                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
+                        :overscan="4"
+                        #default="{ item: row }"
+                    >
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
+                            :class="gridColsClass"
+                        >
+                            <div
+                                v-for="m in row"
+                                :key="m.id"
+                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                            >
+                                <div
+                                    class="flex items-start justify-between gap-2"
+                                >
+                                    <div class="flex flex-col min-w-0">
+                                        <div
+                                            class="font-medium text-sm truncate"
+                                            :title="m.canonical_slug"
+                                        >
+                                            {{ m.canonical_slug }}
+                                        </div>
+                                        <div
+                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+                                        >
+                                            CTX {{ m.context_length }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
+                                        :aria-pressed="isFavorite(m)"
+                                        @click.stop="toggleFavorite(m)"
+                                        :title="
+                                            isFavorite(m)
+                                                ? 'Unfavorite'
+                                                : 'Favorite'
+                                        "
+                                    >
+                                        <span v-if="isFavorite(m)">★</span>
+                                        <span v-else>☆</span>
+                                    </button>
+                                </div>
+                                <div
+                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
+                                >
+                                    <div class="flex flex-col">
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Input</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.prompt,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-col items-end text-right"
+                                    >
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Output</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.completion,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </div>
+                                <div
+                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    <span>{{
+                                        m.architecture?.modality || 'text'
+                                    }}</span>
+                                    <span class="opacity-60">/1M tokens</span>
+                                </div>
+                                <div
+                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
+                                />
+                            </div>
+                        </div>
+                    </VList>
+                    <div
+                        v-if="!chunkedModels.length && searchQuery"
+                        class="px-6 pb-6 text-xs text-neutral-500"
+                    >
+                        No models match "{{ searchQuery }}".
+                    </div>
+                </div>
+            </div>
+        </template>
+        <template #footer> </template>
+    </UModal>
 </template>
 <script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-import type { Thread } from '~/db';
-const props = defineProps<{ thread: Thread; active?: boolean }>();
-const emit = defineEmits<{
-    (e: 'select', id: string): void;
-    (e: 'rename', thread: Thread): void;
-    (e: 'delete', thread: Thread): void;
-    (e: 'add-to-project', thread: Thread): void;
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import { useModelSearch } from '~/composables/useModelSearch';
+import type { OpenRouterModel } from '~/utils/models-service';
+import { useModelStore } from '~/composables/useModelStore';
+
+const props = defineProps<{
+    showModal: boolean;
 }>();
-// Plugin thread actions
-const extraActions = useThreadHistoryActions();
-async function runExtraAction(action: any, thread: Thread) {
-    try {
-        await action.handler({ thread });
-    } catch (e: any) {
-        try {
-            useToast().add({
-                title: 'Action failed',
-                description: e?.message || 'Error running action',
-                color: 'error',
-                duration: 3000,
-            });
-        } catch {}
-        console.error('Thread action error', action.id, e);
-    }
-}
-</script>
-```
+const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
 
-## File: app/pages/openrouter-callback.vue
-```vue
-<template>
-    <div class="min-h-[100dvh] flex items-center justify-center p-6">
-        <div
-            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
-        >
-            <p class="text-base font-medium mb-2">
-                {{ title }}
-            </p>
-            <p class="text-sm text-neutral-500 mb-4">
-                {{ subtitle }}
-            </p>
-            <div class="flex items-center justify-center gap-3">
-                <div
-                    v-if="loading"
-                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
-                />
-                <button
-                    v-if="ready"
-                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
-                    @click="goHome"
-                >
-                    Continue
-                </button>
-                <button
-                    v-if="errorMessage"
-                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
-                    @click="goHome"
-                >
-                    Go Home
-                </button>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup>
-import { kv } from '~/db';
-
-const route = useRoute();
-const router = useRouter();
-const rc = useRuntimeConfig();
-
-const loading = ref(true);
-const ready = ref(false);
-const redirecting = ref(false);
-const errorMessage = ref('');
-const title = computed(() =>
-    errorMessage.value
-        ? 'Login completed with warnings'
-        : ready.value
-        ? 'Login complete'
-        : 'Completing login…'
-);
-const subtitle = computed(() => {
-    if (errorMessage.value) return errorMessage.value;
-    if (ready.value && !redirecting.value)
-        return 'If this page doesn’t redirect automatically, tap Continue.';
-    return 'Please wait while we finish setup.';
+// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
 });
 
-function log(...args) {
-    try {
-        if (import.meta.dev) {
-            // eslint-disable-next-line no-console
-            console.debug('[openrouter-callback]', ...args);
-        }
-    } catch {}
-}
+const modelCatalog = ref<OpenRouterModel[]>([]);
+// Search state (Orama index built client-side)
+const {
+    query: searchQuery,
+    results: searchResults,
+    ready: searchReady,
+} = useModelSearch(modelCatalog);
 
-async function setKVNonBlocking(key, value, timeoutMs = 300) {
+// Fixed 3-column layout for consistent rows
+const COLS = 2;
+const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
+
+const chunkedModels = computed(() => {
+    const source = searchQuery.value.trim()
+        ? searchResults.value
+        : modelCatalog.value;
+    const cols = COLS;
+    const rows: OpenRouterModel[][] = [];
+    for (let i = 0; i < source.length; i += cols) {
+        rows.push(source.slice(i, i + cols));
+    }
+    return rows;
+});
+
+const {
+    favoriteModels,
+    getFavoriteModels,
+    catalog,
+    fetchModels,
+    refreshModels,
+    addFavoriteModel,
+    removeFavoriteModel,
+} = useModelStore();
+
+// Refresh state
+const refreshing = ref(false);
+
+async function doRefresh() {
+    if (refreshing.value) return;
+    refreshing.value = true;
     try {
-        if (!kv?.set) return;
-        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
-        const result = await Promise.race([
-            kv.set(key, value),
-            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
-        ]);
-        if (result === 'timeout') log('setKV timed out; continuing');
-        else log('setKV resolved');
+        await refreshModels();
+        modelCatalog.value = catalog.value.slice();
     } catch (e) {
-        log('setKV failed', e?.message || e);
+        console.warn('[SettingsModal] model refresh failed', e);
+    } finally {
+        refreshing.value = false;
     }
 }
-
-async function goHome() {
-    redirecting.value = true;
-    log("goHome() invoked. Trying router.replace('/').");
-    try {
-        await router.replace('/');
-        log("router.replace('/') resolved");
-    } catch (e) {
-        log("router.replace('/') failed:", e?.message || e);
-    }
-    try {
-        // Fallback to full document navigation
-        log("Attempting window.location.replace('/')");
-        window.location.replace('/');
-    } catch (e) {
-        log("window.location.replace('/') failed:", e?.message || e);
-    }
-    // Last-chance fallback on browsers that ignore replace
-    setTimeout(() => {
-        try {
-            log("Attempting final window.location.assign('/')");
-            window.location.assign('/');
-        } catch (e) {
-            log("window.location.assign('/') failed:", e?.message || e);
-        }
-    }, 150);
-}
-
-onMounted(async () => {
-    log('mounted at', window.location.href, 'referrer:', document.referrer);
-    const code = route.query.code;
-    const state = route.query.state;
-    const verifier = sessionStorage.getItem('openrouter_code_verifier');
-    const savedState = sessionStorage.getItem('openrouter_state');
-    const codeMethod =
-        sessionStorage.getItem('openrouter_code_method') || 'S256';
-    log('query params present:', {
-        code: Boolean(code),
-        state: Boolean(state),
-    });
-    log('session present:', {
-        verifier: Boolean(verifier),
-        savedState: Boolean(savedState),
-        codeMethod,
-    });
-
-    if (!code || !verifier) {
-        console.error('[openrouter-callback] Missing code or verifier');
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Missing code or verifier. Tap Continue to return.';
-        return;
-    }
-    if (savedState && state !== savedState) {
-        console.error('[openrouter-callback] State mismatch, potential CSRF', {
-            incoming: state,
-            savedState,
-        });
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value = 'State mismatch. Tap Continue to return.';
-        return;
-    }
-
-    try {
-        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
-        log('exchanging code with OpenRouter', {
-            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
-            codeLength: String(code).length,
-            method: codeMethod,
-            usingHTTPS: true,
-        });
-        const directResp = await fetch(
-            'https://openrouter.ai/api/v1/auth/keys',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: String(code),
-                    code_verifier: verifier,
-                    code_challenge_method: codeMethod,
-                }),
-            }
-        );
-        const directJson = await directResp.json().catch(async () => {
-            const text = await directResp.text().catch(() => '<no-body>');
-            log('non-JSON response body snippet:', text?.slice(0, 300));
-            return null;
-        });
-        if (!directResp.ok || !directJson) {
-            console.error(
-                '[openrouter-callback] Direct exchange failed',
-                directResp.status,
-                directJson
-            );
-            return;
-        }
-        const userKey = directJson.key || directJson.access_token;
-        if (!userKey) {
-            console.error(
-                '[openrouter-callback] Direct exchange returned no key',
-                {
-                    keys: Object.keys(directJson || {}),
-                }
-            );
-            return;
-        }
-        // store in localStorage for use by front-end
-        log('storing key in localStorage (length)', String(userKey).length);
-        // Save a human-readable name and the value; id/clock are handled
-        // inside the helper to match your schema
-        try {
-            await kv.set('openrouter_api_key', userKey);
-        } catch (e) {
-            log('kvByName.set failed', e?.message || e);
-        }
-        try {
-            log('dispatching openrouter:connected event');
-            window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            // Best-effort: also persist to synced KV
-            try {
-                await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch {}
-        } catch {}
-        log('clearing session markers (verifier/state/method)');
-        sessionStorage.removeItem('openrouter_code_verifier');
-        sessionStorage.removeItem('openrouter_state');
-        sessionStorage.removeItem('openrouter_code_method');
-        // Allow event loop to process storage events in other tabs/components
-        await new Promise((r) => setTimeout(r, 10));
-        loading.value = false;
-        ready.value = true;
-        log('ready to redirect');
-        // Attempt auto-redirect but keep the Continue button visible
-        setTimeout(() => {
-            // first SPA attempt
-            log("auto: router.replace('/')");
-            router.replace('/').catch((e) => {
-                log('auto: router.replace failed', e?.message || e);
-            });
-            // then a hard replace if SPA was blocked
-            setTimeout(() => {
-                try {
-                    log("auto: window.location.replace('/')");
-                    window.location.replace('/');
-                } catch (e) {
-                    log(
-                        'auto: window.location.replace failed',
-                        e?.message || e
-                    );
-                }
-            }, 250);
-        }, 50);
-    } catch (err) {
-        console.error('[openrouter-callback] Exchange failed', err);
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Authentication finished, but we couldn’t auto-redirect.';
-    }
-});
-</script>
-```
-
-## File: app/plugins/examples/document-history-test.client.ts
-```typescript
-export default defineNuxtPlugin(() => {
-    // Simple test plugin that registers a document history action.
-    // Mirrors the pattern used by app/plugins/message-actions.client.ts
-    try {
-        console.info('[doc-history-test] registering action');
-
-        registerDocumentHistoryAction({
-            id: 'test:inspect-doc',
-            icon: 'i-lucide-eye',
-            label: 'Inspect Document',
-            order: 300,
-            async handler({ document }) {
-                // Detailed console output for inspection
-                console.group('[doc-history-test] Inspect Document');
-                try {
-                    if (import.meta.dev) {
-                        console.debug('document.id:', document?.id);
-                        console.debug('document.title:', document?.title);
-                        console.debug(
-                            'document.content (snippet):',
-                            typeof document?.content === 'string'
-                                ? document.content.slice(0, 200)
-                                : document?.content
-                        );
-                        console.debug('full document object:', document);
-                    }
-                } catch (e) {
-                    console.error('[doc-history-test] logging error', e);
-                }
-                console.groupEnd();
-
-                // Show a friendly toast for quick UI verification
-                try {
-                    useToast().add({
-                        title: 'Inspect Document',
-                        description: `id: ${
-                            document?.id ?? 'unknown'
-                        } — title: ${document?.title ?? 'Untitled'}`,
-                        duration: 4000,
-                    });
-                } catch (e) {
-                    // If useToast isn't available, still continue — we logged details above
-                    // eslint-disable-next-line no-console
-                    console.warn('[doc-history-test] useToast unavailable', e);
-                }
-            },
-        });
-
-        // Log current registered ids for debugging
-        try {
-            const ids = listRegisteredDocumentHistoryActionIds?.() ?? [];
-            console.info('[doc-history-test] registered action ids:', ids);
-        } catch (e) {
-            // ignore
-        }
-    } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[doc-history-test] plugin failed to initialize', e);
-    }
-});
-```
-
-## File: app/plugins/examples/message-actions-test.client.ts
-```typescript
-export default defineNuxtPlugin(() => {
-    try {
-        console.info('[message-actions-test] registering action');
-
-        registerMessageAction({
-            id: 'test:create-doc',
-            icon: 'pixelarticons:frame-delete',
-            tooltip: 'Create test document',
-            showOn: 'both',
-            order: 300,
-            async handler({ message }) {
-                console.group('[message-actions-test] handler invoked');
-                try {
-                    if (import.meta.dev) {
-                        console.debug('message id:', message?.id);
-                        console.debug('message role:', message?.role);
-                        console.debug(
-                            'message content (preview):',
-                            typeof message?.content === 'string'
-                                ? message.content.slice(0, 300)
-                                : message?.content
-                        );
-                        console.debug('full message object:', message);
-                    }
-                } catch (e) {
-                    console.error('[message-actions-test] logging error', e);
-                }
-                console.groupEnd();
-
-                try {
-                    useToast().add({
-                        title: 'Test Create Document',
-                        description: `message id: ${
-                            message?.id ?? 'unknown'
-                        } — role: ${message?.role ?? 'unknown'}`,
-                        duration: 3500,
-                    });
-                } catch (e) {
-                    console.warn(
-                        '[message-actions-test] useToast unavailable',
-                        e
-                    );
-                }
-            },
-        });
-
-        try {
-            const ids = listRegisteredMessageActionIds?.() ?? [];
-            console.info('[message-actions-test] registered action ids:', ids);
-        } catch (e) {
-            // ignore
-        }
-    } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[message-actions-test] plugin failed to initialize', e);
-    }
-});
-```
-
-## File: app/plugins/examples/thread-history-test.client.ts
-```typescript
-export default defineNuxtPlugin(() => {
-    // Test plugin to register thread history actions for development/debugging.
-    // Registers two actions and logs output to console + toasts. Cleans up on app unmount.
-    try {
-        console.info('[thread-history-test] registering actions');
-
-        // Inspect thread action — shows a console group and a toast
-        registerThreadHistoryAction({
-            id: 'test:inspect-thread',
-            icon: 'i-lucide-eye',
-            label: 'Inspect Thread',
-            order: 300,
-            async handler(ctx: any) {
-                const t = ctx?.thread ?? ctx?.document ?? ctx;
-                console.group('[thread-history-test] Inspect Thread');
-                try {
-                    if (import.meta.dev) {
-                        console.debug('id:', t?.id);
-                        console.debug('title:', t?.title);
-                        console.debug(
-                            'snippet (messages or content):',
-                            Array.isArray(t?.messages)
-                                ? t.messages.slice(0, 5)
-                                : t?.content
-                        );
-                        console.debug('full thread object:', t);
-                    }
-                } catch (e) {
-                    console.error('[thread-history-test] logging error', e);
-                }
-                console.groupEnd();
-
-                try {
-                    useToast().add({
-                        title: 'Inspect Thread',
-                        description: `id: ${t?.id ?? 'unknown'} — title: ${
-                            t?.title ?? 'Untitled'
-                        }`,
-                        duration: 4000,
-                    });
-                } catch (e) {
-                    console.warn(
-                        '[thread-history-test] useToast unavailable',
-                        e
-                    );
-                }
-            },
-        });
-
-        // Dump thread to console action — lightweight, useful for automation tests
-        registerThreadHistoryAction({
-            id: 'test:dump-thread',
-            icon: 'i-lucide-copy',
-            label: 'Dump thread',
-            order: 310,
-            handler(ctx: any) {
-                const t = ctx?.thread ?? ctx?.document ?? ctx;
-                try {
-                    console.info('[thread-history-test] dump-thread', t);
-                    useToast()?.add?.({
-                        title: 'Dumped Thread',
-                        description: `Thread ${
-                            t?.id ?? 'unknown'
-                        } logged to console.`,
-                        duration: 2500,
-                    });
-                } catch (e) {
-                    // Best-effort: fall back to console only
-                    console.info(
-                        '[thread-history-test] toast unavailable, logged to console'
-                    );
-                }
-            },
-        });
-
-        // Debug: list current registered action ids (if helper available)
-        try {
-            const ids = listRegisteredThreadHistoryActionIds?.() ?? [];
-            console.info(
-                '[thread-history-test] registered thread action ids:',
-                ids
-            );
-        } catch (e) {
-            // ignore
-        }
-
-        // Clean up on app unmount (use Nuxt hook) so HMR doesn't duplicate actions.
-        try {
-            const nuxtApp = useNuxtApp();
-            // Cast hook key to any to avoid strict HookKeys typing; this is a dev helper plugin.
-            (nuxtApp.hook as any)('app:beforeUnmount', () => {
-                try {
-                    unregisterThreadHistoryAction?.('test:inspect-thread');
-                    unregisterThreadHistoryAction?.('test:dump-thread');
-                    console.info(
-                        '[thread-history-test] unregistered actions on app:beforeUnmount'
-                    );
-                } catch (e) {
-                    console.warn('[thread-history-test] cleanup failed', e);
-                }
-            });
-        } catch (e) {
-            // if hooks unavailable, it's non-fatal — actions will persist for dev session
-        }
-    } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[thread-history-test] plugin failed to initialize', e);
-    }
-});
-```
-
-## File: app/plugins/message-actions.client.ts
-```typescript
-export default defineNuxtPlugin(() => {
-    registerMessageAction({
-        id: 'Create document', // unique id
-        icon: 'pixelarticons:notes-plus', // any icon name supported by <UButton>
-        tooltip: 'Create document',
-        showOn: 'assistant', // 'user' | 'assistant' | 'both'
-        order: 300, // optional; after built-ins ( <200 reserved )
-        async handler({ message }) {
-            if (import.meta.dev)
-                console.debug('Create document action invoked', message);
-
-            // Convert markdown -> TipTap JSON using headless Editor & tiptap-markdown
-            async function markdownToTipTapDoc(md: string) {
-                const markdown = (md || '').trim();
-                if (!markdown) return { type: 'doc', content: [] };
-                try {
-                    const [{ Editor }] = await Promise.all([
-                        import('@tiptap/core'),
-                    ]);
-                    const StarterKit = (await import('@tiptap/starter-kit'))
-                        .default;
-                    // tiptap-markdown exports markdownToProseMirror function
-                    const { Markdown } = await import('tiptap-markdown');
-
-                    const editor = new Editor({
-                        // @ts-ignore
-                        extensions: [StarterKit, Markdown],
-                        content: '',
-                    });
-
-                    editor.commands.setContent(markdown);
-                    return editor.getJSON();
-                } catch (e) {
-                    alert('error!!!');
-                }
-            }
-
-            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
-
-            const doc = await newDocument({
-                title: (message as any).title || 'Untitled',
-                content: tiptapDoc,
-            });
-
-            if (import.meta.dev) console.debug('Created document record', doc);
-
-            // Attempt to open in a new pane (if capacity) else reuse active pane
-            const mp: any = (globalThis as any).__or3MultiPaneApi;
-            try {
-                if (mp) {
-                    const couldAdd = mp.canAddPane?.value === true; // snapshot before add
-                    if (couldAdd && typeof mp.addPane === 'function') {
-                        mp.addPane(); // sets new pane active
-                    }
-                    const panes = mp.panes?.value;
-
-                    const activeIndex = mp.activePaneIndex?.value ?? 0;
-
-                    if (Array.isArray(panes)) {
-                        const pane = panes[activeIndex];
-                        if (pane) {
-                            pane.mode = 'doc';
-                            pane.documentId = doc.id;
-                            // Reset chat-related fields when switching
-                            pane.threadId =
-                                pane.mode === 'doc'
-                                    ? pane.threadId
-                                    : pane.threadId;
-                        }
-                    }
-                }
-            } catch (e) {
-                // non-fatal; fallback is just created doc without auto-open
-                console.warn('Open document in pane failed', e);
-            }
-
-            useToast().add({
-                title: 'Document created',
-                description: `Opened in ${
-                    mp?.canAddPane?.value ? 'new' : 'current'
-                } pane: ${doc.id}`,
-                duration: 2600,
-            });
-        },
-    });
-});
-```
-
-## File: app/utils/chat/uiMessages.ts
-```typescript
-// Canonical UI message utilities (content part type no longer needed directly)
-import { parseHashes } from '~/utils/files/attachments';
-
-export interface UiChatMessage {
-    id: string;
-    role: 'user' | 'assistant' | 'system';
-    text: string; // flattened text + markdown image placeholders
-    file_hashes?: string[];
-    reasoning_text?: string | null;
-    stream_id?: string;
-    pending?: boolean;
-}
-
-export function partsToText(parts: any): string {
-    if (!parts) return '';
-    if (typeof parts === 'string') return parts;
-    if (!Array.isArray(parts)) return '';
-    let out = '';
-    for (const p of parts) {
-        if (!p) continue;
-        if (typeof p === 'string') {
-            out += p;
-            continue;
-        }
-        if (typeof p === 'object') {
-            if (p.type === 'text' && typeof p.text === 'string') out += p.text;
-            else if (p.type === 'image') {
-                const src = (p as any).image || (p as any).image_url?.url;
-                if (typeof src === 'string') {
-                    out += (out ? '\n\n' : '') + `![generated image](${src})`;
-                }
-            }
-        }
-    }
-    return out;
-}
-
-export function ensureUiMessage(raw: any): UiChatMessage {
-    const id = raw.id || raw.stream_id || crypto.randomUUID();
-    const role = raw.role || 'user';
-    let file_hashes: string[] | undefined;
-    if (Array.isArray(raw.file_hashes)) file_hashes = raw.file_hashes.slice();
-    else if (typeof raw.file_hashes === 'string') {
-        try {
-            file_hashes = parseHashes(raw.file_hashes);
-        } catch {
-            // ignore
-        }
-    }
-    const reasoning_text =
-        typeof raw.reasoning_text === 'string' ? raw.reasoning_text : null;
-    let text: string;
-    if (typeof raw.text === 'string' && !Array.isArray(raw.text)) {
-        text = raw.text;
-    } else if (typeof raw.content === 'string') {
-        text = raw.content;
-    } else {
-        text = partsToText(raw.content);
-    }
-    // Inject markdown placeholders for assistant file_hashes with de-duplication logic.
-    // Goal: avoid showing the same logical image twice when the model already emitted
-    // a markdown image (e.g. data: URL) for a hash we also have stored.
-    if (role === 'assistant' && file_hashes && file_hashes.length) {
-        const IMG_RE = /!\[[^\]]*]\(([^)]+)\)/g; // basic markdown image matcher
-        const existingImages = [...text.matchAll(IMG_RE)];
-        const existingCount = existingImages.length;
-        if (existingCount < file_hashes.length) {
-            // Determine how many placeholders we still need to represent each hash once.
-            const needed = file_hashes.length - existingCount;
-            // Candidate hashes: those not already present via a file-hash placeholder.
-            const candidate = file_hashes.filter(
-                (h) => h && !text.includes(`file-hash:${h}`)
-            );
-            // Only take up to the number we still need to avoid duplication.
-            const missing = candidate.slice(0, needed);
-            if (missing.length) {
-                const placeholders = missing.map(
-                    (h) => `![generated image](file-hash:${h})`
-                );
-                text += (text ? '\n\n' : '') + placeholders.join('\n\n');
-                if (import.meta.dev) {
-                    console.debug(
-                        '[uiMessages.ensureUiMessage] appended placeholders',
-                        {
-                            id,
-                            added: missing.length,
-                            totalHashes: file_hashes.length,
-                            existingCount,
-                        }
-                    );
-                }
-            } else if (import.meta.dev) {
-                console.debug(
-                    '[uiMessages.ensureUiMessage] no additional placeholders needed',
-                    { id, totalHashes: file_hashes.length, existingCount }
-                );
-            }
-        } else if (import.meta.dev) {
-            if (import.meta.dev)
-                console.debug(
-                    '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
-                    { id, totalHashes: file_hashes.length, existingCount }
-                );
-        }
-    }
-    return {
-        id,
-        role,
-        text,
-        file_hashes,
-        reasoning_text,
-        stream_id: raw.stream_id,
-        pending: raw.pending,
-    };
-}
-
-// Legacy raw storage (non reactive). We expose accessor for plugins.
-const _rawMessages: any[] = [];
-export function recordRawMessage(m: any) {
-    _rawMessages.push(m);
-}
-export function getRawMessages(): readonly any[] {
-    return _rawMessages.slice();
-}
-```
-
-## File: vitest.config.ts
-```typescript
-import { defineConfig } from 'vitest/config';
-import path from 'path';
-import vue from '@vitejs/plugin-vue';
-
-// Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
-// We intentionally cast the plugin to any to bypass structural mismatch.
-// No dependency version changes per instruction.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const vueAny: any = vue;
-
-export default defineConfig({
-    // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
-    plugins: [vueAny()],
-    resolve: {
-        alias: {
-            '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
-            '~': path.resolve(__dirname, 'app'),
-            '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
-        },
-    },
-    test: {
-        environment: 'jsdom',
-        globals: true,
-        include: ['app/**/__tests__/**/*.test.ts'],
-        exclude: ['node_modules', 'dist', '.nuxt'],
-        setupFiles: ['tests/setup.ts'],
-        testTimeout: 10000,
-        hookTimeout: 10000,
-        bail: 1,
-        coverage: {
-            provider: 'v8',
-            reportsDirectory: './coverage',
-            reporter: ['text', 'html'],
-            include: ['app/composables/useStreamAccumulator.ts'],
-            thresholds: {
-                lines: 90,
-                statements: 90,
-                branches: 90,
-                functions: 75, // helper functions covered adequately
-            },
-        },
-    },
-});
-```
-
-## File: app/composables/useStreamAccumulator.ts
-```typescript
-/**
- * Unified streaming accumulator (Task 1 – Unified Streaming Core)
- * Minimal rAF‑batched token buffer replacing legacy useTailStream + ad hoc refs.
- *
- * Responsibilities:
- *  - Collect incoming text / reasoning deltas via append()
- *  - Batch DOM/reactive writes to ≤1 per animation frame
- *  - Provide finalize() with success / error / abort semantics (idempotent)
- *  - Expose readonly reactive StreamingState for UI consumption
- */
-import { reactive, toRefs } from 'vue';
-
-export interface StreamingState {
-    text: string;
-    reasoningText: string;
-    isActive: boolean;
-    finalized: boolean;
-    error: Error | null;
-    version: number; // increments on each flush for lightweight watchers
-}
-
-export type AppendKind = 'text' | 'reasoning';
-
-export interface StreamAccumulatorApi {
-    state: Readonly<StreamingState>;
-    append(delta: string, options: { kind: AppendKind }): void;
-    finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent
-    reset(): void; // prepare for a fresh stream
-}
-
-// Fallback rAF for SSR / test environments
-const HAS_RAF = typeof requestAnimationFrame !== 'undefined';
-const _raf:
-    | typeof requestAnimationFrame
-    | ((cb: FrameRequestCallback) => number) = HAS_RAF
-    ? requestAnimationFrame
-    : (cb: FrameRequestCallback) =>
-          setTimeout(() => cb(performance.now()), 0) as any;
-const _caf: typeof cancelAnimationFrame | ((id: number) => void) = HAS_RAF
-    ? cancelAnimationFrame
-    : (id: number) => clearTimeout(id);
-
-export function createStreamAccumulator(): StreamAccumulatorApi {
-    const state = reactive<StreamingState>({
-        text: '',
-        reasoningText: '',
-        isActive: true,
-        finalized: false,
-        error: null,
-        version: 0,
-    });
-    // TODO(normalization): Future message normalization pass will consolidate assistant
-    // message text assembly so accumulator text piping can directly hydrate persisted
-    // message content without duplicate string concatenation in useChat.
-
-    let pendingMain: string[] = [];
-    let pendingReasoning: string[] = [];
-    let frame: number | null = null;
-    let _finalized = false;
-    let emptyAppendWarnings = 0;
-
-    function flush() {
-        frame = null;
-        if (pendingMain.length) {
-            state.text += pendingMain.join('');
-            pendingMain = [];
-        }
-        if (pendingReasoning.length) {
-            state.reasoningText += pendingReasoning.join('');
-            pendingReasoning = [];
-        }
-        state.version++;
-    }
-
-    function schedule() {
-        if (frame != null || _finalized) return;
-        if (!HAS_RAF) {
-            // In test / SSR environments without rAF, schedule a microtask-ish flush quickly
-            frame = _raf(() => flush());
-            return;
-        }
-        frame = _raf(flush);
-    }
-
-    /** Ensure stream not already finalized. Returns false if already finalized. */
-    function ensureNotFinalized(op: string): boolean {
-        if (_finalized) {
-            if (import.meta.dev) {
-                console.warn(`[stream] ${op} after finalize ignored`);
-            }
-            return false;
-        }
-        return true;
-    }
-
-    function append(delta: string, { kind }: { kind: AppendKind }) {
-        if (!ensureNotFinalized('append')) return;
-        if (!delta) {
-            if (import.meta.dev && ++emptyAppendWarnings <= 3) {
-                console.warn(
-                    '[stream] empty delta append ignored (possible upstream tokenization issue)'
-                );
-            }
-            return;
-        }
-        if (kind === 'reasoning') pendingReasoning.push(delta);
-        else pendingMain.push(delta);
-        schedule();
-    }
-
-    function finalize(opts?: { error?: Error; aborted?: boolean }) {
-        if (!ensureNotFinalized('finalize')) return;
-        _finalized = true;
-        if (frame != null) {
-            _caf(frame); // cancel pending frame then immediate flush
-            frame = null;
-        }
-        if (pendingMain.length || pendingReasoning.length) flush();
-        else state.version++;
-        if (opts?.error) state.error = opts.error;
-        state.isActive = false;
-        state.finalized = true;
-    }
-
-    function reset() {
-        if (frame != null) {
-            _caf(frame);
-            frame = null;
-        }
-        pendingMain = [];
-        pendingReasoning = [];
-        _finalized = false;
-        emptyAppendWarnings = 0;
-        state.text = '';
-        state.reasoningText = '';
-        state.error = null;
-        state.isActive = true;
-        state.finalized = false;
-        state.version++;
-    }
-
-    return { state, append, finalize, reset };
-}
-
-// Convenience factory (future usage) - could be extended to support options
-export function useStreamAccumulator() {
-    return createStreamAccumulator();
-}
-
-export type { StreamingState as UnifiedStreamingState };
-```
-
-## File: app/components/chat/VirtualMessageList.vue
-```vue
-<template>
-    <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" class="flex flex-col min-w-0" :class="wrapperClass">
-        <Virtualizer
-            :data="messages"
-            :itemSize="effectiveItemSize || undefined"
-            :overscan="overscan"
-            :scrollRef="scrollParent || undefined"
-            @scroll="onScroll"
-            @scroll-end="onScrollEnd"
-            v-slot="{ item, index }"
-        >
-            <div :key="item.id || index">
-                <slot name="item" :message="item" :index="index" />
-            </div>
-        </Virtualizer>
-        <!-- Tail slot for streaming message appended after virtualized stable messages -->
-        <slot name="tail" />
-    </div>
-</template>
-
-<script setup lang="ts">
-/**
- * VirtualMessageList
- * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
- * Thin abstraction over virtua's <VList>. Purpose:
- *  - Decouple higher-level chat code from 3p library specifics (swap easier).
- *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
- *    auto-scroll + lazy fetch triggers without leaking scroll math.
- *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
- *    don't sprinkle magic numbers.
- *
- * Task 2.3: Centralize scroll state and behavior here using VueUse utilities.
- * - useScroll: passive scroll tracking
- * - useResizeObserver: respond to size/DOM changes (messages/streaming)
- * - useRafFn: batch scroll-to-bottom to next frame to avoid jank
- */
-import {
-    onMounted,
-    ref,
-    watch,
-    computed,
-    nextTick,
-    watchEffect,
-    type PropType,
-} from 'vue';
-// eslint-disable-next-line import/no-unresolved
-import { Virtualizer } from 'virtua/vue';
-import {
-    useScroll,
-    useResizeObserver,
-    useRafFn,
-    useEventListener,
-    useThrottleFn,
-} from '@vueuse/core';
-
-interface ChatMessage {
-    id: string;
-    role?: string;
-    content?: string;
-    [k: string]: any;
-}
-
-const props = defineProps({
-    messages: { type: Array as PropType<ChatMessage[]>, required: true },
-    itemSizeEstimation: { type: Number, default: 500 }, // baseline heuristic average row height
-    overscan: { type: Number, default: 4 },
-    wrapperClass: { type: String, default: '' },
-    scrollParent: {
-        type: Object as PropType<HTMLElement | null>,
-        default: null,
-    },
-    // Task 3.2: streaming maintenance
-    isStreaming: { type: Boolean, default: false },
-    // Task 3.1: adjustable threshold (design 100px; we default 100 while retaining legacy 64 logic internally)
-    autoScrollThreshold: { type: Number, default: 100 },
-    // Task 3.3: external editing suppression of auto-scroll
-    editingActive: { type: Boolean, default: false },
-    // Task 3.4: enable dynamic estimation of item size from growth deltas
-    dynamicItemSize: { type: Boolean, default: true },
-});
-
-const emit = defineEmits<{
-    (e: 'visible-range-change', range: { start: number; end: number }): void;
-    (e: 'reached-top'): void;
-    (e: 'reached-bottom'): void;
-    (e: 'scroll-state', state: { atBottom: boolean; stick: boolean }): void; // Task 5.1.2
-}>();
-
-const root = ref<HTMLElement | null>(null);
-// Accept both HTMLElement and Ref<HTMLElement|null> for scrollParent prop
-const scrollParentRef = computed<HTMLElement | null>(() => {
-    const sp: any = props.scrollParent as any;
-    const el = sp && typeof sp === 'object' && 'value' in sp ? sp.value : sp;
-    return el || root.value;
-});
-// Tunables (defined BEFORE any immediate watchers that call compute to avoid TDZ during HMR)
-// Use provided threshold for deciding auto-scroll near-bottom detection (Req 1.1/3.1.3)
-const thresholdPx = computed(() => props.autoScrollThreshold);
-const NEAR_BOTTOM_PX = 24; // update "recently at bottom" window
-const disengageDeltaPx = 12; // small intentional upward scroll disengages
-const throttleMs = 50;
-const USER_SCROLL_INACTIVE_TIMEOUT = 800;
-
-// Initialize scroll metrics once scroll parent becomes available (after tunables defined)
-watch(
-    scrollParentRef,
-    (el) => {
-        if (!el) return;
-        try {
-            // seed previous metrics so onContentIncrease can detect prior bottom
-            lastScrollHeight = (el as any).scrollHeight || 0;
-            lastScrollTop = (el as any).scrollTop || 0;
-        } catch {}
-        compute();
-    },
-    { immediate: true }
-);
-
-// Sticky intent + user scroll tracking
-let stick = true;
-const userScrolling = ref(false);
-const lastBottomAt = ref(Date.now());
-let lastScrollTop = 0;
-let lastScrollHeight = 0;
-let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
-
-// Scroll state emission tracking (Task 5.1.2)
-let lastEmittedStick: boolean | null = null;
-let lastEmittedAtBottom: boolean | null = null;
-function maybeEmitScrollState() {
-    const a = atBottom?.value; // may be undefined early
-    if (a === undefined) return;
-    if (a !== lastEmittedAtBottom || stick !== lastEmittedStick) {
-        try {
-            emit('scroll-state', { atBottom: a, stick });
-        } catch {}
-        lastEmittedAtBottom = a;
-        lastEmittedStick = stick;
-    }
-}
-
-// Passive scroll monitoring
-useScroll(scrollParentRef, {
-    eventListenerOptions: { passive: true },
-});
-
-function compute() {
-    const el =
-        (props.scrollParent as any) || scrollParentRef.value || root.value;
-    if (!el) return;
-    // Defensive: during rare HMR timing edge thresholdPx might be undefined
-    if (!thresholdPx) return;
-    const currentTop = el.scrollTop;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const newAtBottom = dist <= thresholdPx.value;
-    // deliberate upward nudge disengages sticky
-    if (currentTop < lastScrollTop - disengageDeltaPx) {
-        stick = false;
-    }
-    if (!newAtBottom) stick = false;
-    if (dist <= NEAR_BOTTOM_PX) {
-        lastBottomAt.value = Date.now();
-    }
-    lastScrollTop = currentTop;
-    lastScrollHeight = el.scrollHeight;
-    maybeEmitScrollState();
-}
-
-const throttledCompute = compute;
-
-function markUserScroll() {
-    userScrolling.value = true;
-    if (userScrollTimer) clearTimeout(userScrollTimer);
-    userScrollTimer = setTimeout(() => {
-        userScrolling.value = false;
-    }, USER_SCROLL_INACTIVE_TIMEOUT);
-}
-
-useEventListener(scrollParentRef, 'scroll', throttledCompute, {
-    passive: true,
-});
-useEventListener(scrollParentRef, 'wheel', markUserScroll, { passive: true });
-useEventListener(scrollParentRef, 'touchstart', markUserScroll, {
-    passive: true,
-});
-useEventListener(scrollParentRef, 'touchmove', markUserScroll, {
-    passive: true,
-});
-
-const atBottom = computed(() => {
-    const el = scrollParentRef.value || root.value;
-    if (!el) return true;
-    return (
-        el.scrollHeight - el.scrollTop - el.clientHeight <= thresholdPx.value
-    );
-});
-
-// Task 3.1: shouldAutoScroll computed - true only when sticky intent & atBottom & not editing
-const shouldAutoScroll = computed(
-    () => stick && atBottom.value && !props.editingActive
-);
-
-function scrollToBottom(opts: { smooth?: boolean } = {}) {
-    const baseEl = scrollParentRef.value || root.value;
-    if (!baseEl) return;
-    const smooth = opts.smooth === true;
-
-    // Update both the provided scrollParent (if any) and our own root fallback.
-    const targets: any[] = [];
-    if (baseEl) targets.push(baseEl);
-    if (root.value && root.value !== baseEl) targets.push(root.value);
-
-    for (const t of targets) {
-        try {
-            const bottomPos = (t as any).scrollHeight - (t as any).clientHeight;
-            if (typeof (t as any).scrollTo === 'function') {
-                (t as any).scrollTo({
-                    top: bottomPos,
-                    behavior: (smooth ? 'smooth' : 'auto') as ScrollBehavior,
-                });
-            }
-            (t as any).scrollTop = bottomPos;
-        } catch {
-            try {
-                const bottomPos =
-                    (t as any).scrollHeight - (t as any).clientHeight;
-                (t as any).scrollTop = bottomPos;
-            } catch {}
-        }
-    }
-
-    stick = true;
-    lastBottomAt.value = Date.now();
-    try {
-        lastScrollTop = (baseEl as any).scrollTop ?? lastScrollTop;
-        lastScrollHeight = (baseEl as any).scrollHeight ?? lastScrollHeight;
-    } catch {}
-}
-
-// Batch to next animation frame using useRafFn
-// Accept a smooth flag for batched auto-scroll (messages appended) vs. non-smooth (stream tick)
-let pendingSmooth = false;
-const raf = useRafFn(
-    () => {
-        raf.pause();
-        scrollToBottom({ smooth: pendingSmooth });
-        pendingSmooth = false;
-    },
-    { immediate: false }
-);
-function scrollToBottomRaf(smooth = false) {
-    pendingSmooth = smooth;
-    if (!raf.isActive.value) raf.resume();
-}
-
-// React on DOM/size growth (new messages, streaming markdown expansion)
-function onContentIncrease() {
-    const el =
-        (props.scrollParent as any) || scrollParentRef.value || root.value;
-    if (!el) {
-        return;
-    }
-
-    // Fast path: if we are sticky or previously at/near bottom, snap immediately
-    const wasPrevAtBottom =
-        Math.abs(el.scrollTop + el.clientHeight - lastScrollHeight) <=
-        NEAR_BOTTOM_PX;
-
-    if (stick || wasPrevAtBottom) {
-        // Use non-smooth snap for content growth (markdown expansion) to avoid compound easing
-        scrollToBottom({ smooth: false });
-        return;
-    }
-
-    // If already within threshold now, snap
-    const distNow = el.scrollHeight - el.scrollTop - el.clientHeight;
-
-    if (distNow <= thresholdPx.value) {
-        scrollToBottom({ smooth: false });
-        return;
-    }
-
-    // Otherwise recompute to refresh internal metrics without forcing scroll
-    compute();
-}
-
-// Observe own root size changes
-useResizeObserver(root, () => {
-    nextTick(onContentIncrease);
-});
-// Observe external scrollParent if provided (helps when container padding changes)
-watch(
-    () => props.scrollParent,
-    (el) => {
-        if (!el) return;
-        useResizeObserver(el, () => {
-            nextTick(onContentIncrease);
-        });
-    },
-    { immediate: true }
-);
-
-// Virtualization range heuristics and events
-function computeRange(): { start: number; end: number } {
-    const total = props.messages.length;
-    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
-    return { start: 0, end: total - 1 };
-}
-
-function onInternalUpdate() {
-    const range = computeRange();
-    emit('visible-range-change', range);
-    if (range.start === 0) emit('reached-top');
-    if (range.end >= props.messages.length - 1) emit('reached-bottom');
-}
-
-function onScroll() {
-    onInternalUpdate();
-}
-function onScrollEnd() {
-    onInternalUpdate();
-}
-
-// Task 3.4 dynamic item size estimation (moving average)
-const averageItemSize = ref<number>(props.itemSizeEstimation);
-let prevLength = props.messages.length;
-let prevScrollHeight = 0;
-
-watch(
-    () => props.messages.length,
-    () => {
-        const el = scrollParentRef.value || root.value;
-        const beforeAtBottom = atBottom.value;
-        const added = props.messages.length - prevLength;
-        if (el && added > 0) {
-            // capture pre-growth height once before DOM updates applied (virtua may not yet reflect)
-            prevScrollHeight = el.scrollHeight;
-        }
-        onInternalUpdate();
-        nextTick(() => {
-            // After DOM paint, evaluate growth
-            const el2 = scrollParentRef.value || root.value;
-            if (props.dynamicItemSize && el2 && added > 0) {
-                const deltaH = el2.scrollHeight - prevScrollHeight;
-                if (deltaH > 0) {
-                    const per = deltaH / added;
-                    // Blend to smooth fluctuations
-                    averageItemSize.value = Math.max(
-                        32,
-                        Math.min(1200, averageItemSize.value * 0.7 + per * 0.3)
-                    );
-                } else if (
-                    deltaH === 0 &&
-                    averageItemSize.value === props.itemSizeEstimation
-                ) {
-                    // Fallback: if virtualization already expanded pre-measure, approximate using baseline * 1
-                    averageItemSize.value = props.itemSizeEstimation;
-                }
-            }
-            // Auto-scroll semantics for new messages (3.1)
-            if (beforeAtBottom && added > 0 && shouldAutoScroll.value) {
-                // Smooth scroll for user-visible new message additions
-                scrollToBottomRaf(true);
-            } else {
-                // Still update content increase metrics
-                onContentIncrease();
-            }
-            prevLength = props.messages.length;
-        });
-    }
-);
-
-// Effective item size binding for Virtualizer
-const effectiveItemSize = computed(() => {
-    return props.dynamicItemSize
-        ? Math.round(averageItemSize.value)
-        : props.itemSizeEstimation;
-});
-
-// Task 3.2 streaming maintenance: keep tail in view while streaming if user stays at bottom
-watchEffect(() => {
-    if (!props.isStreaming) return;
-    if (!shouldAutoScroll.value) return; // user disengaged or editing
-    // For streaming we prefer immediate (non-smooth) micro-adjusts post DOM flush
-    nextTick(() => scrollToBottomRaf(false));
-});
-
-// Note: stick re-engagement handled implicitly: when scrollToBottom invoked we set stick=true.
-// If user manually scrolls back to within threshold, next added content path sets stick via scrollToBottom call.
 
 onMounted(() => {
-    // Emit immediately so tests observing mount-time emissions don't miss it
-    onInternalUpdate();
-    nextTick(() => {
-        compute();
-        if (atBottom.value) {
-            // Snap synchronously to avoid race with rAF in tests and reduce jank
-            scrollToBottom({ smooth: false });
-        }
+    fetchModels().then(() => {
+        modelCatalog.value = catalog.value;
     });
-    // If consumer passed a ref (e.g. :scroll-parent="someRef") that is still null at mount,
-    // promote our root element into it so test harnesses expecting a populated element succeed.
-    // This is a safe fallback: if caller wanted a distinct scroll container they'd have set it.
-    const sp: any = props.scrollParent as any;
-    if (
-        sp &&
-        typeof sp === 'object' &&
-        'value' in sp &&
-        !sp.value &&
-        root.value instanceof HTMLElement
-    ) {
-        try {
-            sp.value = root.value;
-        } catch {}
+
+    getFavoriteModels().then((models) => {
+        favoriteModels.value = models;
+    });
+});
+
+function isFavorite(m: OpenRouterModel) {
+    return favoriteModels.value.some((f) => f.id === m.id);
+}
+
+function toggleFavorite(m: OpenRouterModel) {
+    if (isFavorite(m)) {
+        removeFavoriteModel(m);
+    } else {
+        addFavoriteModel(m);
     }
-});
+}
 
-// Expose minimal API for parent orchestration (kept small)
-defineExpose({
-    atBottom,
-    onContentIncrease,
-    scrollToBottom,
-    stickBottom: () => {
-        stick = true;
-        scrollToBottom({ smooth: true });
-    },
-    release: () => {
-        stick = false;
-    },
-    // test-only (dynamic sizing assertions)
-    effectiveItemSize,
-});
+/**
+ * Format a per-token price into a "per 1,000,000 tokens" currency string.
+ * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
+ */
+function formatPerMillion(raw: unknown, currency = 'USD') {
+    const perToken = Number(raw ?? 0);
+    const perMillion = perToken * 1_000_000;
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 2,
+        }).format(perMillion);
+    } catch (e) {
+        // Fallback: simple fixed formatting
+        return `$${perMillion.toFixed(2)}`;
+    }
+}
 </script>
-
-<style scoped>
-/* Keep retro feel: no extra styling here; rely on parent theme utilities */
-</style>
 ```
 
 ## File: app/components/sidebar/SidebarProjectTree.vue
@@ -15177,2615 +13363,6 @@ const activeDocumentSet = computed(() => {
     return new Set(props.activeDocument ? [props.activeDocument] : []);
 });
 </script>
-```
-
-## File: app/components/PageShell.vue
-```vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
-                ref="sideNavExpandedRef"
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
-            />
-        </template>
-        <div class="flex-1 h-[100dvh] w-full relative">
-            <div
-                id="top-nav"
-                :class="{
-                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
-                        panes.length > 1 || isMobile,
-                }"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
-            >
-                <div
-                    v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
-                >
-                    <UTooltip :delay-duration="0" text="Open sidebar">
-                        <UButton
-                            label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            aria-label="Open sidebar"
-                            title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
-                            @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div
-                    class="h-full items-center justify-center px-4 hidden md:flex"
-                >
-                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :disabled="!canAddPane"
-                            :class="
-                                'retro-btn pointer-events-auto mr-2 ' +
-                                (!canAddPane
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
-                            aria-label="New window"
-                            title="New window"
-                            @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div class="h-full flex items-center justify-center px-4">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <div
-                :class="[
-                    showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 min-w-0 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                    @keydown.left.prevent="focusPrev(i)"
-                    @keydown.right.prevent="focusNext(i)"
-                >
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
-
-                    <template v-if="pane.mode === 'chat'">
-                        <ChatContainer
-                            class="flex-1 min-h-0"
-                            :message-history="pane.messages"
-                            :thread-id="pane.threadId"
-                            @thread-selected="
-                                (id: string) => onInternalThreadCreated(id, i)
-                            "
-                        />
-                    </template>
-                    <template v-else-if="pane.mode === 'doc'">
-                        <LazyDocumentsDocumentEditor
-                            v-if="pane.documentId"
-                            :document-id="pane.documentId"
-                            class="flex-1 min-h-0"
-                        ></LazyDocumentsDocumentEditor>
-                        <div
-                            v-else
-                            class="flex-1 flex items-center justify-center text-sm opacity-70"
-                        >
-                            No document.
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-<script setup lang="ts">
-// Generic PageShell merging chat + docs functionality.
-// Props allow initializing with a thread OR a document and choosing default mode.
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
-import { db } from '~/db';
-import { useHookEffect } from '~/composables/useHookEffect';
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
-
-const props = withDefaults(
-    defineProps<{
-        initialThreadId?: string;
-        initialDocumentId?: string;
-        validateInitial?: boolean; // applies to whichever id is provided
-        routeSync?: boolean;
-        defaultMode?: 'chat' | 'doc'; // used when no initial id
-    }>(),
-    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
-);
-
-const router = useRouter();
-const toast = useToast();
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-const sideNavExpandedRef = ref<any | null>(null);
-
-// ---------------- Multi-pane ----------------
-const {
-    panes,
-    activePaneIndex,
-    canAddPane,
-    newWindowTooltip,
-    addPane,
-    closePane,
-    setActive,
-    focusPrev,
-    focusNext,
-    setPaneThread,
-    loadMessagesFor,
-    ensureAtLeastOne,
-} = useMultiPane({
-    initialThreadId: props.initialThreadId,
-    maxPanes: 3,
-    onFlushDocument: (id) => flushDocument(id),
-});
-
-// Active thread convenience (first pane for sidebar highlight)
-const activeChatThreadId = computed(() =>
-    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
-);
-
-// --------------- Initializers ---------------
-let validateToken = 0;
-
-async function validateThread(id: string): Promise<boolean> {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const t = await db.threads.get(id);
-            if (t && !t.deleted) return true;
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-async function validateDocument(id: string): Promise<boolean> {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const row = await db.posts.get(id);
-            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
-                return true;
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-async function initInitial() {
-    if (!process.client) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.initialThreadId) {
-        if (props.validateInitial) {
-            pane.validating = true;
-            const token = ++validateToken;
-            const ok = await validateThread(props.initialThreadId);
-            if (token !== validateToken) return;
-            if (!ok) {
-                redirectNotFound('chat');
-                return;
-            }
-        }
-        await setPaneThread(0, props.initialThreadId);
-        pane.mode = 'chat';
-        pane.validating = false;
-        updateUrl();
-        return;
-    }
-    if (props.initialDocumentId) {
-        if (props.validateInitial) {
-            pane.validating = true;
-            const token = ++validateToken;
-            const ok = await validateDocument(props.initialDocumentId);
-            if (token !== validateToken) return;
-            if (!ok) {
-                redirectNotFound('doc');
-                return;
-            }
-        }
-        pane.mode = 'doc';
-        pane.documentId = props.initialDocumentId;
-        pane.threadId = '';
-        pane.validating = false;
-        updateUrl();
-        return;
-    }
-    // No ids: set default mode
-    if (props.defaultMode === 'doc') {
-        pane.mode = 'doc';
-        pane.documentId = undefined;
-        pane.threadId = '';
-    } else {
-        pane.mode = 'chat';
-    }
-    updateUrl();
-}
-
-function redirectNotFound(kind: 'chat' | 'doc') {
-    if (kind === 'chat') router.replace('/chat');
-    else router.replace('/docs');
-    toast.add({
-        title: 'Not found',
-        description:
-            kind === 'chat'
-                ? 'This chat does not exist.'
-                : 'This document does not exist.',
-        color: 'error',
-    });
-}
-
-// --------------- URL Sync ---------------
-function updateUrl() {
-    if (!process.client || !props.routeSync) return;
-    const pane = panes.value[activePaneIndex.value];
-    if (!pane) return;
-    const base = pane.mode === 'doc' ? '/docs' : '/chat';
-    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
-    const newPath = id ? `${base}/${id}` : base;
-    if (window.location.pathname === newPath) return;
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-watch(
-    () =>
-        panes.value
-            .map(
-                (p) =>
-                    `${p.id}:${p.mode}:${p.threadId || ''}:${
-                        p.documentId || ''
-                    }`
-            )
-            .join(','),
-    () => updateUrl()
-);
-
-watch(
-    () => activePaneIndex.value,
-    () => updateUrl()
-);
-
-// --------------- Documents Integration ---------------
-const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
-    panes,
-    activePaneIndex,
-    createNewDoc,
-    flushDocument: (id) => flushDocument(id),
-});
-
-async function onNewDocument(initial?: { title?: string }) {
-    const doc = await newDocumentInActive(initial);
-    if (doc) updateUrl();
-    closeSidebarIfMobile();
-}
-async function onDocumentSelected(id: string) {
-    await selectDocumentInActive(id);
-    updateUrl();
-    closeSidebarIfMobile();
-}
-
-// Sidebar chat selection always puts pane in chat mode
-function onSidebarSelected(id: string) {
-    if (!id) return;
-    const target = activePaneIndex.value;
-    setPaneThread(target, id);
-    const pane = panes.value[target];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-    }
-    if (target === activePaneIndex.value) updateUrl();
-    closeSidebarIfMobile();
-}
-function onInternalThreadCreated(id: string, paneIndex?: number) {
-    if (!id) return;
-    const idx =
-        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
-    const pane = panes.value[idx];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    if (pane.threadId !== id) setPaneThread(idx, id);
-    if (idx === activePaneIndex.value) updateUrl();
-    closeSidebarIfMobile();
-}
-function onNewChat() {
-    const pane = panes.value[activePaneIndex.value];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-        pane.messages = [];
-        pane.threadId = '';
-    }
-    updateUrl();
-    closeSidebarIfMobile();
-}
-
-// --------------- Theme ---------------
-const nuxtApp = useNuxtApp();
-const getThemeSafe = () => {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client) {
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-        }
-    } catch {}
-    return 'light';
-};
-const themeName = ref<string>(getThemeSafe());
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    (nuxtApp.$theme as any)?.toggle?.();
-    syncTheme();
-}
-if (process.client) {
-    const root = document.documentElement;
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => observer.disconnect());
-    } else {
-        onUnmounted(() => observer.disconnect());
-    }
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// --------------- Mobile + layout ---------------
-import { isMobile } from '~/state/global';
-// Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
-if (process.client) {
-    const mq = window.matchMedia('(max-width: 640px)');
-    const apply = () => (isMobile.value = mq.matches);
-    onMounted(() => {
-        apply();
-        mq.addEventListener('change', apply);
-    });
-    const dispose = () => mq.removeEventListener('change', apply);
-    onUnmounted(dispose);
-    if (import.meta.hot) import.meta.hot.dispose(dispose);
-}
-const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
-function openMobileSidebar() {
-    (layoutRef.value as any)?.openSidebar?.();
-}
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    requestAnimationFrame(() => {
-        sideNavExpandedRef.value?.focusSearchInput?.();
-    });
-}
-function closeSidebarIfMobile() {
-    if (isMobile.value) (layoutRef.value as any)?.close?.();
-}
-
-// --------------- Deletion auto-reset ---------------
-function resetPaneToBlank(paneIndex: number) {
-    const pane = panes.value[paneIndex];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    pane.threadId = '';
-    pane.messages = [];
-    if (paneIndex === activePaneIndex.value) updateUrl();
-}
-function handleThreadDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
-    });
-}
-function handleDocumentDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
-    });
-}
-useHookEffect(
-    'db.threads.delete:action:soft:after',
-    (t: any) => handleThreadDeletion(t),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.threads.delete:action:hard:after',
-    (id: any) => handleThreadDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:soft:after',
-    (row: any) => handleDocumentDeletion(row),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:hard:after',
-    (id: any) => handleDocumentDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-
-// --------------- Mount ---------------
-onMounted(() => {
-    initInitial();
-    syncTheme();
-    ensureAtLeastOne();
-});
-
-// --------------- Shortcuts ---------------
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
-        }
-    };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    } else {
-        onUnmounted(() => window.removeEventListener('keydown', down));
-    }
-}
-</script>
-<style scoped>
-body {
-    overflow-y: hidden;
-}
-.pane-active {
-    position: relative;
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    border: 1px solid var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
-```
-
-## File: app/components/ResizableSidebarLayout.vue
-```vue
-<template>
-    <div
-        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
-    >
-        <!-- Backdrop on mobile when open -->
-        <Transition
-            enter-active-class="transition-opacity duration-150"
-            leave-active-class="transition-opacity duration-150"
-            enter-from-class="opacity-0"
-            leave-to-class="opacity-0"
-        >
-            <div
-                v-if="!isDesktop && open"
-                class="absolute inset-0 bg-black/40 z-30 md:hidden"
-                @click="close()"
-            />
-        </Transition>
-
-        <!-- Sidebar -->
-        <aside
-            :class="[
-                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-[var(--md-inverse-surface)] flex flex-col',
-                // width transition on desktop
-                initialized
-                    ? 'md:transition-[width] md:duration-200 md:ease-out'
-                    : 'hidden',
-                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
-                side === 'right' ? 'md:border-l md:border-r-0' : '',
-                // mobile overlay behavior
-                !isDesktop
-                    ? [
-                          'absolute top-0 bottom-0 w-[380px] max-w-[90vw] shadow-xl',
-                          // animated slide
-                          'transition-transform duration-200 ease-out',
-                          side === 'right'
-                              ? 'right-0 translate-x-full'
-                              : 'left-0 -translate-x-full',
-                          open ? 'translate-x-0' : '',
-                      ]
-                    : '',
-            ]"
-            :style="
-                Object.assign(
-                    isDesktop ? { width: computedWidth + 'px' } : {},
-                    {
-                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
-                        '--sidebar-rep-opacity': String(
-                            props.sidebarPatternOpacity
-                        ),
-                    }
-                )
-            "
-            @keydown.esc.stop.prevent="close()"
-        >
-            <div class="h-full flex flex-col">
-                <!-- Sidebar header -->
-                <SidebarHeader
-                    :collapsed="collapsed"
-                    :toggle-icon="toggleIcon"
-                    :toggle-aria="toggleAria"
-                    @toggle="toggleCollapse"
-                >
-                    <template #sidebar-header>
-                        <slot name="sidebar-header" />
-                    </template>
-                    <template #sidebar-toggle="slotProps">
-                        <slot name="sidebar-toggle" v-bind="slotProps" />
-                    </template>
-                </SidebarHeader>
-
-                <!-- Sidebar content -->
-                <div class="flex-1 overflow-auto">
-                    <div v-show="!collapsed" class="flex-1 h-full">
-                        <slot name="sidebar-expanded">
-                            <div class="p-3 space-y-2 text-sm opacity-80">
-                                <p>Add your nav here…</p>
-                                <ul class="space-y-1">
-                                    <li
-                                        v-for="i in 10"
-                                        :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
-                                    >
-                                        Item {{ i }}
-                                    </li>
-                                </ul>
-                            </div>
-                        </slot>
-                    </div>
-                    <div v-if="collapsed" class="flex-1 h-full">
-                        <slot name="sidebar-collapsed">
-                            <div class="p-3 space-y-2 text-sm opacity-80">
-                                <p>Add your nav here…</p>
-                                <ul class="space-y-1">
-                                    <li
-                                        v-for="i in 10"
-                                        :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
-                                    >
-                                        Item {{ i }}
-                                    </li>
-                                </ul>
-                            </div>
-                        </slot>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Resize handle (desktop only) -->
-            <ResizeHandle
-                :is-desktop="isDesktop"
-                :collapsed="collapsed"
-                :side="side"
-                :min-width="props.minWidth"
-                :max-width="props.maxWidth"
-                :computed-width="computedWidth"
-                @resize-start="onPointerDown"
-                @resize-keydown="onHandleKeydown"
-            />
-        </aside>
-
-        <!-- Main content -->
-        <div class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
-            <div
-                class="flex-1 overflow-hidden content-bg"
-                :style="{
-                    '--content-bg-size': props.patternSize + 'px',
-                    '--content-bg-opacity': String(props.patternOpacity),
-                    '--content-overlay-size': props.overlaySize + 'px',
-                    '--content-overlay-opacity': String(props.overlayOpacity),
-                }"
-            >
-                <slot>
-                    <div class="p-4 space-y-2 text-sm opacity-80">
-                        <p>Put your main content here…</p>
-                        <p>
-                            Resize the sidebar on desktop by dragging the
-                            handle. On mobile, use the Menu button to open/close
-                            the overlay.
-                        </p>
-                    </div>
-                </slot>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import SidebarHeader from './sidebar/SidebarHeader.vue';
-import ResizeHandle from './sidebar/ResizeHandle.vue';
-
-type Side = 'left' | 'right';
-
-const props = defineProps({
-    modelValue: { type: Boolean, default: undefined },
-    defaultOpen: { type: Boolean, default: true },
-    side: { type: String as () => Side, default: 'left' },
-    minWidth: { type: Number, default: 320 },
-    maxWidth: { type: Number, default: 480 },
-    defaultWidth: { type: Number, default: 280 },
-    collapsedWidth: { type: Number, default: 56 },
-    storageKey: { type: String, default: 'sidebar:width' },
-    // Visual tuning for content pattern
-    patternOpacity: { type: Number, default: 0.05 }, // 0..1
-    patternSize: { type: Number, default: 150 }, // px
-    // Overlay pattern (renders above the base pattern)
-    overlayOpacity: { type: Number, default: 0.05 },
-    overlaySize: { type: Number, default: 120 },
-    // Sidebar repeating background
-    sidebarPatternOpacity: { type: Number, default: 0.09 },
-    sidebarPatternSize: { type: Number, default: 240 },
-});
-const emit = defineEmits<{
-    (e: 'update:modelValue', v: boolean): void;
-    (e: 'resize', width: number): void;
-}>();
-
-// helper
-const clamp = (w: number) =>
-    Math.min(props.maxWidth, Math.max(props.minWidth, w));
-
-// open state (controlled or uncontrolled)
-// Minimal tweak: start closed on mobile to avoid initial empty sidebar flash.
-const openState = ref<boolean>(
-    (() => {
-        if (props.modelValue !== undefined) return props.modelValue;
-        if (import.meta.client) {
-            try {
-                const desktop = window.matchMedia('(min-width: 768px)').matches;
-                return desktop ? props.defaultOpen : false;
-            } catch {}
-        }
-        return false; // SSR fallback (prevents mobile flash)
-    })()
-);
-const open = computed({
-    get: () =>
-        props.modelValue === undefined ? openState.value : props.modelValue,
-    set: (v) => {
-        if (props.modelValue === undefined) openState.value = v;
-        emit('update:modelValue', v);
-    },
-});
-
-// collapsed toggle remembers last expanded width
-const collapsed = ref(false);
-const lastExpandedWidth = ref(props.defaultWidth);
-
-// width state with persistence
-const width = ref<number>(props.defaultWidth);
-const computedWidth = computed(() =>
-    collapsed.value ? props.collapsedWidth : width.value
-);
-
-// Attempt early (pre-mount) restoration to avoid post-mount jank
-if (import.meta.client) {
-    try {
-        const saved = localStorage.getItem(props.storageKey);
-        if (saved) width.value = clamp(parseInt(saved, 10));
-    } catch {}
-}
-
-// responsive
-const isDesktop = ref(false);
-let mq: MediaQueryList | undefined;
-const updateMq = () => {
-    if (typeof window === 'undefined') return;
-    mq = window.matchMedia('(min-width: 768px)');
-    isDesktop.value = mq.matches;
-};
-
-// Defer enabling transitions until after first paint so restored width doesn't animate
-const initialized = ref(false);
-
-onMounted(() => {
-    updateMq();
-    mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-    requestAnimationFrame(() => (initialized.value = true));
-});
-
-onBeforeUnmount(() => {
-    mq?.removeEventListener('change', () => {});
-});
-
-watch(width, (w) => {
-    try {
-        localStorage.setItem(props.storageKey, String(w));
-    } catch {}
-    emit('resize', w);
-});
-
-function toggle() {
-    open.value = !open.value;
-}
-function close() {
-    open.value = false;
-}
-function toggleCollapse() {
-    // On mobile, treat the collapse toggle as a full close of the overlay
-    if (!isDesktop.value) {
-        open.value = false;
-        return;
-    }
-    if (!collapsed.value) {
-        lastExpandedWidth.value = width.value;
-        collapsed.value = true;
-    } else {
-        collapsed.value = false;
-        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
-    }
-}
-
-// Resize logic (desktop only)
-let startX = 0;
-let startWidth = 0;
-function onPointerDown(e: PointerEvent) {
-    if (!isDesktop.value || collapsed.value) return;
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    startX = e.clientX;
-    startWidth = width.value;
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp, { once: true });
-}
-function onPointerMove(e: PointerEvent) {
-    const dx = e.clientX - startX;
-    const delta = props.side === 'right' ? -dx : dx;
-    width.value = clamp(startWidth + delta);
-}
-function onPointerUp() {
-    window.removeEventListener('pointermove', onPointerMove);
-}
-
-// Keyboard a11y for the resize handle
-function onHandleKeydown(e: KeyboardEvent) {
-    if (!isDesktop.value || collapsed.value) return;
-    const step = e.shiftKey ? 32 : 16;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        const dir = e.key === 'ArrowRight' ? 1 : -1;
-        // reverse on right side
-        const signed = props.side === 'right' ? -dir : dir;
-        width.value = clamp(width.value + signed * step);
-    } else if (e.key === 'Home') {
-        e.preventDefault();
-        width.value = props.minWidth;
-    } else if (e.key === 'End') {
-        e.preventDefault();
-        width.value = props.maxWidth;
-    } else if (e.key === 'PageUp') {
-        e.preventDefault();
-        const big = step * 2;
-        const signed = props.side === 'right' ? -1 : 1;
-        width.value = clamp(width.value + signed * big);
-    } else if (e.key === 'PageDown') {
-        e.preventDefault();
-        const big = step * 2;
-        const signed = props.side === 'right' ? 1 : -1;
-        width.value = clamp(width.value - signed * big);
-    }
-}
-
-// expose minimal API if needed
-function openSidebar() {
-    open.value = true;
-}
-function expand() {
-    // Ensure sidebar is open (mobile) and uncollapsed (desktop)
-    open.value = true;
-    if (collapsed.value) {
-        collapsed.value = false;
-        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
-    }
-}
-defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
-
-const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
-// Icon and aria label for collapse/expand button
-const toggleIcon = computed(() => {
-    // When collapsed, show the icon that suggests expanding back toward content area
-    if (collapsed.value) {
-        return side.value === 'right'
-            ? 'pixelarticons:arrow-bar-left'
-            : 'pixelarticons:arrow-bar-right';
-    }
-    // When expanded, show icon pointing into the sidebar to collapse it
-    return side.value === 'right'
-        ? 'pixelarticons:arrow-bar-right'
-        : 'pixelarticons:arrow-bar-left';
-});
-const toggleAria = computed(() =>
-    collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
-);
-</script>
-
-<style scoped>
-/* Optional: could add extra visual flair for the resize handle here */
-.content-bg {
-    position: relative;
-    /* Base matches sidebar/header */
-    background-color: var(--md-surface);
-}
-
-.content-bg::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/bg-repeat.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    /* Default variables; can be overridden via inline style */
-    --content-bg-size: 150px;
-    --content-bg-opacity: 0.08;
-    background-size: var(--content-bg-size) var(--content-bg-size);
-    opacity: var(--content-bg-opacity);
-    z-index: 0;
-}
-
-/* Ensure the real content sits above the pattern */
-.content-bg > * {
-    position: relative;
-    z-index: 1;
-}
-
-/* Overlay layer above base pattern but below content */
-.content-bg::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/bg-repeat-2.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    --content-overlay-size: 380px;
-    --content-overlay-opacity: 0.125;
-    background-size: var(--content-overlay-size) var(--content-overlay-size);
-    opacity: var(--content-overlay-opacity);
-    z-index: 0.5;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Sidebar repeating background layer */
-aside::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: url('/sidebar-repeater.webp');
-    background-repeat: repeat;
-    background-position: top left;
-    background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
-    opacity: var(--sidebar-rep-opacity);
-    z-index: 0;
-}
-
-/* Ensure sidebar children render above the pattern, but keep handle on top */
-aside > *:not(.resize-handle-layer) {
-    position: relative;
-    z-index: 1;
-}
-</style>
-```
-
-## File: app/components/chat/ChatInputDropper.vue
-```vue
-<template>
-    <div
-        @dragover.prevent="onDragOver"
-        @dragleave.prevent="onDragLeave"
-        @drop.prevent="handleDrop"
-        :class="[
-            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
-            isDragging
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
-            loading ? 'opacity-90 pointer-events-auto' : '',
-        ]"
-    >
-        <div class="flex flex-col gap-3.5 m-3.5">
-            <!-- Main Input Area -->
-            <div class="relative">
-                <div
-                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
-                >
-                    <!-- TipTap Editor -->
-                    <EditorContent
-                        :editor="editor as Editor"
-                        class="prosemirror-host"
-                    ></EditorContent>
-
-                    <div
-                        v-if="loading"
-                        class="absolute top-1 right-1 flex items-center gap-2"
-                    >
-                        <UIcon
-                            name="pixelarticons:loader"
-                            class="w-4 h-4 animate-spin opacity-70"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Controls -->
-            <div class="flex gap-2.5 w-full items-center">
-                <div
-                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
-                >
-                    <!-- Attachment Button -->
-                    <div class="relative shrink-0">
-                        <UButton
-                            @click="triggerFileInput"
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
-                            type="button"
-                            aria-label="Add attachments"
-                            :disabled="loading"
-                        >
-                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
-                        </UButton>
-                    </div>
-
-                    <!-- Settings Button (stub) -->
-                    <div class="relative shrink-0">
-                        <UPopover>
-                            <UButton
-                                label="Open"
-                                :square="true"
-                                size="sm"
-                                color="info"
-                                class="retro-btn text-black dark:text-white flex items-center justify-center"
-                                type="button"
-                                aria-label="Settings"
-                                :disabled="loading"
-                            >
-                                <UIcon
-                                    name="pixelarticons:sliders"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                            <template #content>
-                                <div class="flex flex-col w-[320px]">
-                                    <!-- Model Selector extracted -->
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2"
-                                    >
-                                        <LazyChatModelSelect
-                                            hydrate-on-interaction="focus"
-                                            v-if="
-                                                containerWidth &&
-                                                containerWidth < 400
-                                            "
-                                            v-model:model="selectedModel"
-                                            :loading="loading"
-                                            class="w-full!"
-                                        />
-                                    </div>
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
-                                    >
-                                        <USwitch
-                                            color="primary"
-                                            label="Enable web search"
-                                            class="w-full"
-                                            v-model="webSearchEnabled"
-                                        ></USwitch>
-                                        <UIcon
-                                            name="pixelarticons:visible"
-                                            class="w-4 h-4"
-                                        />
-                                    </div>
-                                    <div
-                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
-                                    >
-                                        <USwitch
-                                            color="primary"
-                                            label="Enable thinking"
-                                            class="w-full"
-                                        ></USwitch>
-                                        <UIcon
-                                            name="pixelarticons:lightbulb-on"
-                                            class="w-4 h-4"
-                                        />
-                                    </div>
-                                    <button
-                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
-                                        @click="showSystemPrompts = true"
-                                    >
-                                        <span class="px-1">System prompts</span>
-                                        <UIcon
-                                            name="pixelarticons:script-text"
-                                            class="w-4 h-4"
-                                        />
-                                    </button>
-                                    <button
-                                        @click="showModelCatalog = true"
-                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
-                                    >
-                                        <span class="px-1">Model Catalog</span>
-                                        <UIcon
-                                            name="pixelarticons:android"
-                                            class="w-4 h-4"
-                                        />
-                                    </button>
-                                </div>
-                            </template>
-                        </UPopover>
-                    </div>
-                </div>
-
-                <!-- Model Selector extracted -->
-                <LazyChatModelSelect
-                    hydrate-on-interaction="focus"
-                    v-if="!isMobile && containerWidth && containerWidth > 400"
-                    v-model:model="selectedModel"
-                    :loading="loading"
-                    class="shrink-0 hidden sm:block"
-                />
-
-                <!-- Send / Stop Button -->
-                <div>
-                    <UButton
-                        v-if="!props.streaming"
-                        @click="handleSend"
-                        :disabled="
-                            loading ||
-                            (!promptText.trim() && uploadedImages.length === 0)
-                        "
-                        :square="true"
-                        size="sm"
-                        color="primary"
-                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
-                        type="button"
-                        aria-label="Send message"
-                    >
-                        <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
-                    </UButton>
-                    <UButton
-                        v-else
-                        @click="emit('stop-stream')"
-                        :square="true"
-                        size="sm"
-                        color="error"
-                        class="retro-btn text-white dark:text-black flex items-center justify-center"
-                        type="button"
-                        aria-label="Stop generation"
-                    >
-                        <UIcon name="pixelarticons:pause" class="w-4 h-4" />
-                    </UButton>
-                </div>
-            </div>
-        </div>
-
-        <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
-        <div
-            v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
-            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
-        >
-            <!-- Images -->
-            <div
-                v-for="(image, index) in uploadedImages.filter(
-                    (att: any) => att.kind === 'image'
-                )"
-                :key="'img-' + index"
-                class="relative group aspect-square"
-            >
-                <img
-                    :src="image.url"
-                    :alt="'Uploaded Image ' + (index + 1)"
-                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
-                />
-                <button
-                    @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove image"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
-                <div
-                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
-                >
-                    {{ image.name }}
-                </div>
-            </div>
-            <!-- PDFs -->
-            <div
-                v-for="(pdf, index) in uploadedImages.filter(
-                    (att: any) => att.kind === 'pdf'
-                )"
-                :key="'pdf-' + index"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
-            >
-                <div
-                    class="flex flex-col items-center justify-center w-full h-full"
-                >
-                    <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
-                        >PDF</span
-                    >
-                    <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
-                        :title="pdf.name"
-                        >{{ pdf.name }}</span
-                    >
-                </div>
-                <button
-                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove PDF"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
-            </div>
-            <!-- Large Text Blocks -->
-            <div
-                v-for="(block, tIndex) in largeTextBlocks"
-                :key="'txt-' + block.id"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
-            >
-                <div
-                    class="flex flex-col items-center justify-center w-full h-full"
-                >
-                    <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
-                        >TXT</span
-                    >
-                    <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
-                        :title="block.previewFull"
-                    >
-                        {{ block.preview }}
-                    </span>
-                    <span class="mt-1 text-[10px] opacity-70"
-                        >{{ block.wordCount }}w</span
-                    >
-                </div>
-                <button
-                    @click="removeTextBlock(tIndex)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
-                    aria-label="Remove text block"
-                    :disabled="loading"
-                >
-                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
-                </button>
-            </div>
-        </div>
-
-        <!-- Drag and Drop Overlay -->
-        <div
-            v-if="isDragging"
-            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
-        >
-            <div class="text-center">
-                <UIcon
-                    name="i-lucide:upload-cloud"
-                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
-                />
-                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
-                    Drop images here to upload
-                </p>
-            </div>
-        </div>
-        <lazy-modal-settings-modal v-model:showModal="showModelCatalog" />
-        <LazyChatSystemPromptsModal
-            hydrate-on-visible
-            v-model:showModal="showSystemPrompts"
-            :thread-id="props.threadId"
-            @selected="handlePromptSelected"
-            @closed="handlePromptModalClosed"
-        />
-    </div>
-</template>
-
-<script setup lang="ts">
-import {
-    ref,
-    nextTick,
-    defineEmits,
-    onMounted,
-    onBeforeUnmount,
-    watch,
-    getCurrentInstance,
-} from 'vue';
-import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
-import { createOrRefFile } from '~/db/files';
-import type { FileMeta } from '~/db/schema';
-import { useModelStore } from '~/composables/useModelStore';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-import { Extension } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
-import { computed } from 'vue';
-import { isMobile, state } from '~/state/global';
-import { useUserApiKey } from '~/composables/useUserApiKey';
-import { useOpenRouterAuth } from '~/composables/useOpenrouter';
-import { useToast } from '#imports';
-const props = defineProps<{
-    loading?: boolean;
-    containerWidth?: number;
-    threadId?: string;
-    streaming?: boolean; // assistant response streaming
-}>();
-
-const { favoriteModels, getFavoriteModels } = useModelStore();
-const webSearchEnabled = ref<boolean>(false);
-const LAST_MODEL_KEY = 'last_selected_model';
-
-onMounted(async () => {
-    const fave = await getFavoriteModels();
-    // Favorite models loaded (log removed)
-    if (process.client) {
-        try {
-            const stored = localStorage.getItem(LAST_MODEL_KEY);
-            if (stored && typeof stored === 'string') {
-                selectedModel.value = stored;
-            }
-        } catch (e) {
-            console.warn('[ChatInputDropper] restore last model failed', e);
-        }
-    }
-});
-
-onMounted(() => {
-    if (!process.client) return;
-    try {
-        // Minimal shortcut: Enter sends, Shift+Enter = newline
-        const enterToSend = Extension.create({
-            name: 'enterToSend',
-            addKeyboardShortcuts() {
-                return {
-                    Enter: () => {
-                        // Disable auto-send on mobile; allow normal newline
-                        if (isMobile.value) return false;
-                        // Respect Shift+Enter for newline
-                        const ev = window.event as KeyboardEvent | undefined;
-                        if (ev?.shiftKey) return false;
-                        handleSend();
-                        return true; // prevent default newline
-                    },
-                    'Shift-Enter': () => false, // explicit newline
-                };
-            },
-        });
-        editor.value = new Editor({
-            extensions: [
-                enterToSend,
-                Placeholder.configure({
-                    // Use a placeholder:
-                    placeholder: 'Write something …',
-                }),
-                StarterKit.configure({
-                    bold: false,
-                    italic: false,
-                    strike: false,
-                    code: false,
-                    blockquote: false,
-                    heading: false,
-                    bulletList: false,
-                    orderedList: false,
-                    codeBlock: false,
-                    horizontalRule: false,
-                    dropcursor: false,
-                    gapcursor: false,
-                }),
-            ],
-            onUpdate: ({ editor: ed }) => {
-                promptText.value = ed.getText();
-                autoResize();
-            },
-            onPaste: (event) => {
-                handlePaste(event);
-            },
-            content: '',
-        });
-    } catch (err) {
-        console.warn(
-            '[ChatInputDropper] TipTap init failed, using fallback textarea',
-            err
-        );
-    }
-});
-
-onBeforeUnmount(() => {
-    try {
-        editor.value?.destroy();
-    } catch (err) {
-        console.warn('[ChatInputDropper] TipTap destroy error', err);
-    }
-});
-
-interface UploadedImage {
-    file: File;
-    url: string; // data URL preview
-    name: string;
-    hash?: string; // content hash after persistence
-    status: 'pending' | 'ready' | 'error';
-    error?: string;
-    meta?: FileMeta;
-    mime: string;
-    kind: 'image' | 'pdf';
-}
-
-interface ImageSettings {
-    quality: 'low' | 'medium' | 'high';
-    numResults: number;
-    size: '1024x1024' | '1024x1536' | '1536x1024';
-}
-
-const showModelCatalog = ref(false);
-const showSystemPrompts = ref(false);
-
-const emit = defineEmits<{
-    (
-        e: 'send',
-        payload: {
-            text: string;
-            images: UploadedImage[]; // backward compatibility
-            attachments: UploadedImage[]; // new unified field
-            largeTexts: LargeTextBlock[];
-            model: string;
-            settings: ImageSettings;
-            webSearchEnabled: boolean;
-        }
-    ): void;
-    (e: 'prompt-change', value: string): void;
-    (e: 'image-add', image: UploadedImage): void;
-    (e: 'image-remove', index: number): void;
-    (e: 'model-change', model: string): void;
-    (e: 'settings-change', settings: ImageSettings): void;
-    (e: 'trigger-file-input'): void;
-    (e: 'pending-prompt-selected', promptId: string | null): void;
-    (e: 'stop-stream'): void; // New event for stopping the stream
-    (e: 'resize', payload: { height: number }): void;
-}>();
-
-const promptText = ref('');
-// Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
-const editor = ref<Editor | null>(null);
-
-const attachments = ref<UploadedImage[]>([]);
-// Backward compatibility: expose as uploadedImages for template
-const uploadedImages = computed(() => attachments.value);
-// Large pasted text blocks (> threshold)
-interface LargeTextBlock {
-    id: string;
-    text: string;
-    wordCount: number;
-    preview: string;
-    previewFull: string;
-}
-const largeTextBlocks = ref<LargeTextBlock[]>([]);
-const LARGE_TEXT_WORD_THRESHOLD = 600;
-function makeId() {
-    return Math.random().toString(36).slice(2, 9);
-}
-const isDragging = ref(false);
-const selectedModel = ref<string>('openai/gpt-oss-120b');
-const hiddenFileInput = ref<HTMLInputElement | null>(null);
-const imageSettings = ref<ImageSettings>({
-    quality: 'medium',
-    numResults: 2,
-    size: '1024x1024',
-});
-const showSettingsDropdown = ref(false);
-
-watch(selectedModel, (newModel) => {
-    emit('model-change', newModel);
-    if (process.client) {
-        try {
-            localStorage.setItem(LAST_MODEL_KEY, newModel);
-        } catch (e) {
-            console.warn('[ChatInputDropper] persist last model failed', e);
-        }
-    }
-});
-
-const autoResize = async () => {
-    await nextTick();
-    if (textareaRef.value) {
-        textareaRef.value.style.height = 'auto';
-        textareaRef.value.style.height =
-            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
-    }
-};
-
-const handlePromptInput = () => {
-    emit('prompt-change', promptText.value);
-    autoResize();
-};
-
-const handlePaste = async (event: ClipboardEvent) => {
-    const cd = event.clipboardData;
-    if (!cd) return;
-    // 1. Handle images and PDFs first (extended behavior)
-    const items = cd.items;
-    let handled = false;
-    for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        if (!it) continue;
-        const mime = it.type || '';
-        if (mime.startsWith('image/') || mime === 'application/pdf') {
-            event.preventDefault();
-            handled = true;
-            const file = it.getAsFile();
-            if (!file) continue;
-            await processAttachment(
-                file,
-                file.name ||
-                    `pasted-${
-                        mime.startsWith('image/') ? 'image' : 'pdf'
-                    }-${Date.now()}.${
-                        mime === 'application/pdf' ? 'pdf' : 'png'
-                    }`
-            );
-        }
-    }
-    if (handled) return; // skip text path if attachment already captured
-
-    // 2. Large text detection
-    const text = cd.getData('text/plain');
-    if (!text) return; // allow normal behavior
-    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-    if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
-        // Prevent the heavy text from entering the rich-text editor (lag source)
-        event.preventDefault();
-        event.stopPropagation();
-        const prev = editor.value ? editor.value.getText() : '';
-        const previewFull = text.slice(0, 800).trim();
-        const preview =
-            previewFull.split(/\s+/).slice(0, 12).join(' ') +
-            (wordCount > 12 ? '…' : '');
-        largeTextBlocks.value.push({
-            id: makeId(),
-            text,
-            wordCount,
-            preview,
-            previewFull,
-        });
-        // TipTap may still stage an insertion despite preventDefault in some edge cases;
-        // restore previous content on next tick to be safe.
-        nextTick(() => {
-            try {
-                if (editor.value)
-                    editor.value.commands.setContent(prev, {
-                        emitUpdate: false,
-                    });
-            } catch {}
-        });
-    }
-};
-
-const triggerFileInput = () => {
-    emit('trigger-file-input');
-    if (!hiddenFileInput.value) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.multiple = true;
-        input.accept = 'image/*';
-        input.style.display = 'none';
-        input.addEventListener('change', (e) => {
-            handleFileChange(e);
-        });
-        document.body.appendChild(input);
-        hiddenFileInput.value = input;
-    }
-    hiddenFileInput.value?.click();
-};
-
-const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
-
-async function processAttachment(file: File, name?: string) {
-    const mime = file.type || '';
-    const kind = mime.startsWith('image/')
-        ? 'image'
-        : mime === 'application/pdf'
-        ? 'pdf'
-        : null;
-    if (!kind) return; // only images and PDFs
-    // Fast preview first
-    const dataUrl: string = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) =>
-            resolve(
-                typeof e.target?.result === 'string'
-                    ? (e.target?.result as string)
-                    : ''
-            );
-        reader.onerror = () => reject(new Error('read failed'));
-        reader.readAsDataURL(file);
-    });
-    if (attachments.value.length >= MAX_IMAGES) return;
-    const attachment: UploadedImage = {
-        file,
-        url: dataUrl,
-        name: name || file.name,
-        status: 'pending',
-        mime,
-        kind,
-    };
-    attachments.value.push(attachment);
-    emit('image-add', attachment);
-    try {
-        const meta = await createOrRefFile(file, attachment.name);
-        attachment.hash = meta.hash;
-        attachment.meta = meta;
-        attachment.status = 'ready';
-    } catch (err: any) {
-        attachment.status = 'error';
-        attachment.error = err?.message || 'failed';
-        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
-    }
-}
-
-const processFiles = async (files: FileList | null) => {
-    if (!files) return;
-    for (let i = 0; i < files.length; i++) {
-        if (attachments.value.length >= MAX_IMAGES) break;
-        const file = files[i];
-        if (!file) continue;
-        await processAttachment(file);
-    }
-};
-
-const handleFileChange = (event: Event) => {
-    const target = event.target as HTMLInputElement | null;
-    if (!target || !target.files) return;
-    processFiles(target.files);
-};
-
-const handleDrop = (event: DragEvent) => {
-    isDragging.value = false;
-    processFiles(event.dataTransfer?.files || null);
-};
-
-const onDragOver = (event: DragEvent) => {
-    const items = event.dataTransfer?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const mime = item.type || '';
-        if (mime.startsWith('image/') || mime === 'application/pdf') {
-            isDragging.value = true;
-            return;
-        }
-    }
-};
-
-const onDragLeave = (event: DragEvent) => {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = event.clientX;
-    const y = event.clientY;
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-        isDragging.value = false;
-    }
-};
-
-const removeImage = (index: number) => {
-    attachments.value.splice(index, 1);
-    emit('image-remove', index);
-};
-
-const removeTextBlock = (index: number) => {
-    largeTextBlocks.value.splice(index, 1);
-};
-
-const handleSend = () => {
-    if (props.loading) return;
-    // Require OpenRouter connection (api key) before sending
-    const { apiKey } = useUserApiKey();
-    if (!apiKey.value) {
-        const { startLogin } = useOpenRouterAuth();
-        // Show toast with action to initiate login
-        useToast().add({
-            id: 'need-openrouter-login',
-            title: 'Connect to OpenRouter',
-            description: 'You need to log in before sending messages.',
-            color: 'primary',
-            duration: 5000,
-            actions: [
-                {
-                    label: 'Login',
-                    onClick: () => startLogin(),
-                    size: 'sm',
-                },
-                {
-                    label: 'Manually enter key',
-                    onClick: (toast) => {
-                        const apiKey = prompt(
-                            'Please enter your OpenRouter API key:'
-                        );
-
-                        if (apiKey && apiKey.trim()) {
-                            // Save the API key
-                            state.value.openrouterKey = apiKey.trim();
-                        }
-                    },
-                    size: 'sm',
-                    variant: 'link',
-                },
-            ],
-        });
-        return;
-    }
-    if (
-        promptText.value.trim() ||
-        uploadedImages.value.length > 0 ||
-        largeTextBlocks.value.length > 0
-    ) {
-        emit('send', {
-            text: promptText.value,
-            images: attachments.value, // backward compatibility
-            attachments: attachments.value, // new unified field
-            largeTexts: largeTextBlocks.value,
-            model: selectedModel.value,
-            settings: imageSettings.value,
-            webSearchEnabled: webSearchEnabled.value,
-        });
-        // Reset local state and editor content so placeholder shows again
-        promptText.value = '';
-        try {
-            editor.value?.commands.clearContent();
-        } catch (e) {
-            // noop
-        }
-        attachments.value = [];
-        largeTextBlocks.value = [];
-        autoResize();
-    }
-};
-
-const handlePromptSelected = (id: string) => {
-    if (!props.threadId) emit('pending-prompt-selected', id);
-};
-
-const handlePromptModalClosed = () => {
-    /* modal closed */
-};
-
-// Emit live height via ResizeObserver (debounced with rAF)
-let __resizeRaf: number | null = null;
-// Flattened observer setup (avoids build transform splitting issues)
-if (process.client && 'ResizeObserver' in window) {
-    let ro: ResizeObserver | null = null;
-    onMounted(() => {
-        const inst = getCurrentInstance();
-        const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
-        if (!rootEl) return;
-        ro = new ResizeObserver(() => {
-            if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
-            __resizeRaf = requestAnimationFrame(() => {
-                emit('resize', { height: rootEl.offsetHeight });
-            });
-        });
-        ro.observe(rootEl);
-    });
-    const dispose = () => {
-        try {
-            ro?.disconnect();
-        } catch {}
-        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
-        ro = null;
-    };
-    onBeforeUnmount(dispose);
-    if (import.meta.hot) import.meta.hot.dispose(dispose);
-}
-</script>
-
-<style scoped>
-/* Custom scrollbar for textarea */
-/* Firefox */
-textarea {
-    scrollbar-width: thin;
-    scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit */
-textarea::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-textarea::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-textarea::-webkit-scrollbar-thumb {
-    background: var(--md-primary);
-    border-radius: 9999px;
-}
-
-textarea::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-
-/* Focus states */
-.group:hover .opacity-0 {
-    opacity: 1;
-}
-
-/* Smooth transitions */
-* {
-    transition-property: color, background-color, border-color, opacity,
-        transform;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-}
-
-/* ProseMirror (TipTap) base styles */
-/* TipTap base */
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
-}
-
-/* Placeholder (needs :deep due to scoped styles) */
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    /* Use design tokens; ensure sufficient contrast in dark mode */
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    opacity: 0.85; /* increase for dark background readability */
-    font-weight: normal;
-}
-</style>
-```
-
-## File: app/composables/useAi.ts
-```typescript
-import { ref } from 'vue';
-import { createStreamAccumulator } from './useStreamAccumulator';
-import { useToast } from '#imports';
-import { nowSec, newId } from '~/db/util';
-import { useUserApiKey } from './useUserApiKey';
-import { useHooks } from './useHooks';
-import { useActivePrompt } from './useActivePrompt';
-import { getDefaultPromptId } from './useDefaultPrompt';
-import { create, db, tx, upsert } from '~/db';
-import { createOrRefFile } from '~/db/files';
-import { serializeFileHashes } from '~/db/files-util';
-import {
-    parseHashes,
-    mergeAssistantFileHashes,
-} from '~/utils/files/attachments';
-import { getThreadSystemPrompt } from '~/db/threads';
-import { getPrompt } from '~/db/prompts';
-import type {
-    ContentPart,
-    ChatMessage,
-    SendMessageParams,
-    TextPart,
-} from '~/utils/chat/types';
-import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
-import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import {
-    buildParts,
-    mergeFileHashes,
-    trimOrMessagesImages,
-} from '~/utils/chat/messages';
-// getTextFromContent removed for UI messages; raw messages maintain original parts if needed
-import { openRouterStream } from '~/utils/chat/openrouterStream';
-import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
-import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
-import { promptJsonToString } from '~/utils/prompt-utils';
-import { state } from '~/state/global';
-
-const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
-
-export function useChat(
-    msgs: ChatMessage[] = [],
-    initialThreadId?: string,
-    pendingPromptId?: string
-) {
-    // Messages and basic state
-    // UI-facing normalized messages
-    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
-    // Raw legacy messages (content parts / strings) used for history & hooks
-    const rawMessages = ref<ChatMessage[]>([...msgs]);
-    const getRawMessages = () => {
-        if (import.meta.dev) {
-            console.warn(
-                '[useChat] getRawMessages() is deprecated; prefer UiChatMessage via messages ref'
-            );
-        }
-        return rawMessages.value;
-    }; // transitional
-    const loading = ref(false);
-    const abortController = ref<AbortController | null>(null);
-    const aborted = ref(false);
-    let { apiKey, setKey } = useUserApiKey();
-    const hooks = useHooks();
-    const { activePromptContent } = useActivePrompt();
-    const threadIdRef = ref<string | undefined>(initialThreadId);
-    const historyLoadedFor = ref<string | null>(null);
-
-    if (import.meta.dev) {
-        if (state.value.openrouterKey && apiKey) {
-            setKey(state.value.openrouterKey);
-        }
-    }
-
-    // Unified streaming accumulator only (legacy removed)
-    const streamAcc = createStreamAccumulator();
-    const streamState = streamAcc.state;
-    const streamId = ref<string | null>(null);
-    function resetStream() {
-        streamAcc.reset();
-        streamId.value = null;
-    }
-
-    async function getSystemPromptContent(): Promise<string | null> {
-        if (!threadIdRef.value) return null;
-        try {
-            const promptId = await getThreadSystemPrompt(threadIdRef.value);
-            if (promptId) {
-                const prompt = await getPrompt(promptId);
-                if (prompt) return promptJsonToString(prompt.content);
-            }
-        } catch (e) {
-            console.warn('Failed to load thread system prompt', e);
-        }
-        return activePromptContent.value
-            ? promptJsonToString(activePromptContent.value)
-            : null;
-    }
-
-    async function sendMessage(
-        content: string,
-        sendMessagesParams: SendMessageParams = {
-            files: [],
-            model: DEFAULT_AI_MODEL,
-            file_hashes: [],
-            online: false,
-        }
-    ) {
-        if (!apiKey.value) return;
-
-        if (!threadIdRef.value) {
-            // Resolve system prompt: pending > default
-            let effectivePromptId: string | null = pendingPromptId || null;
-            if (!effectivePromptId) {
-                try {
-                    effectivePromptId = await getDefaultPromptId();
-                } catch {}
-            }
-            const newThread = await create.thread({
-                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
-                last_message_at: nowSec(),
-                parent_thread_id: null,
-                system_prompt_id: effectivePromptId || null,
-            });
-            threadIdRef.value = newThread.id;
-        }
-
-        await ensureThreadHistoryLoaded(
-            threadIdRef,
-            historyLoadedFor,
-            rawMessages as any
-        );
-
-        // Prior assistant hashes for image carry-over
-        const prevAssistantRaw = [...rawMessages.value]
-            .reverse()
-            .find((m) => m.role === 'assistant');
-        const prevAssistant = prevAssistantRaw
-            ? messages.value.find((m) => m.id === prevAssistantRaw.id)
-            : null;
-        const assistantHashes = prevAssistantRaw?.file_hashes
-            ? parseHashes(prevAssistantRaw.file_hashes)
-            : [];
-
-        // Prepare accumulator
-        streamAcc.reset();
-        // Normalize params
-        let { files, model, file_hashes, extraTextParts, online } =
-            sendMessagesParams as any;
-        if (
-            (!files || files.length === 0) &&
-            Array.isArray((sendMessagesParams as any)?.images)
-        ) {
-            files = (sendMessagesParams as any).images.map((img: any) => {
-                const url = typeof img === 'string' ? img : img.url;
-                const provided = typeof img === 'object' ? img.type : undefined;
-                return { type: inferMimeFromUrl(url, provided), url } as any;
-            });
-        }
-        if (!model) model = DEFAULT_AI_MODEL;
-        if (online === true) model = model + ':online';
-
-        const outgoing = await hooks.applyFilters(
-            'ui.chat.message:filter:outgoing',
-            content
-        );
-
-        file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
-        const userDbMsg = await tx.appendMessage({
-            thread_id: threadIdRef.value!,
-            role: 'user',
-            data: { content: outgoing, attachments: files ?? [] },
-            file_hashes:
-                file_hashes && file_hashes.length
-                    ? (file_hashes as any)
-                    : undefined,
-        });
-        const parts: ContentPart[] = buildParts(
-            outgoing,
-            files,
-            extraTextParts
-        );
-        const rawUser: ChatMessage = {
-            role: 'user',
-            content: parts,
-            id: (userDbMsg as any).id,
-            file_hashes: userDbMsg.file_hashes,
-        };
-        recordRawMessage(rawUser);
-        rawMessages.value.push(rawUser);
-        messages.value.push(ensureUiMessage(rawUser));
-
-        loading.value = true;
-        streamId.value = null;
-
-        try {
-            const startedAt = Date.now();
-            const modelId = await hooks.applyFilters(
-                'ai.chat.model:filter:select',
-                model
-            );
-
-            // Inject system message
-            let messagesWithSystemRaw = [...rawMessages.value];
-            const systemText = await getSystemPromptContent();
-            if (systemText && systemText.trim()) {
-                messagesWithSystemRaw.unshift({
-                    role: 'system',
-                    content: systemText,
-                    id: `system-${newId()}`,
-                });
-            }
-
-            const effectiveMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:input',
-                messagesWithSystemRaw
-            );
-
-            const { buildOpenRouterMessages } = await import(
-                '~/utils/openrouter-build'
-            );
-
-            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
-            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
-                (m: any) => ({ ...m })
-            );
-            if (assistantHashes.length && prevAssistant?.id) {
-                const target = modelInputMessages.find(
-                    (m) => m.id === prevAssistant.id
-                );
-                if (target) target.file_hashes = null;
-            }
-            const orMessages = await buildOpenRouterMessages(
-                modelInputMessages as any,
-                {
-                    maxImageInputs: 16,
-                    imageInclusionPolicy: 'all',
-                    debug: false,
-                }
-            );
-            trimOrMessagesImages(orMessages, 5);
-
-            const hasImageInput = (modelInputMessages as any[]).some((m) =>
-                Array.isArray(m.content)
-                    ? (m.content as any[]).some(
-                          (p) =>
-                              p?.type === 'image_url' ||
-                              p?.type === 'image' ||
-                              p?.mediaType?.startsWith('image/')
-                      )
-                    : false
-            );
-            const modelImageHint = /image|vision|flash/i.test(modelId);
-            const modalities =
-                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
-
-            const newStreamId = newId();
-            streamId.value = newStreamId;
-            const assistantDbMsg = await tx.appendMessage({
-                thread_id: threadIdRef.value!,
-                role: 'assistant',
-                stream_id: newStreamId,
-                data: { content: '', attachments: [], reasoning_text: null },
-            });
-
-            await hooks.doAction('ai.chat.send:action:before', {
-                threadId: threadIdRef.value,
-                modelId,
-                user: { id: userDbMsg.id, length: outgoing.length },
-                assistant: { id: assistantDbMsg.id, streamId: newStreamId },
-                messagesCount: Array.isArray(effectiveMessages)
-                    ? (effectiveMessages as any[]).length
-                    : undefined,
-            });
-
-            aborted.value = false;
-            abortController.value = new AbortController();
-            const stream = openRouterStream({
-                apiKey: apiKey.value!,
-                model: modelId,
-                orMessages,
-                modalities,
-                signal: abortController.value.signal,
-            });
-
-            const rawAssistant: ChatMessage = {
-                role: 'assistant',
-                content: '',
-                id: (assistantDbMsg as any).id,
-                stream_id: newStreamId,
-                reasoning_text: null,
-            } as any;
-            recordRawMessage(rawAssistant);
-            rawMessages.value.push(rawAssistant);
-            const uiAssistant = ensureUiMessage(rawAssistant);
-            uiAssistant.pending = true;
-            const idx = messages.value.push(uiAssistant) - 1;
-            const current = messages.value[idx]!; // UiChatMessage
-            let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 500;
-            let lastPersistAt = 0;
-            const assistantFileHashes: string[] = [];
-
-            for await (const ev of stream) {
-                if (ev.type === 'reasoning') {
-                    if (current.reasoning_text === null)
-                        current.reasoning_text = ev.text;
-                    else current.reasoning_text += ev.text;
-                    streamAcc.append(ev.text, { kind: 'reasoning' });
-                    try {
-                        await hooks.doAction(
-                            'ai.chat.stream:action:reasoning',
-                            ev.text,
-                            {
-                                threadId: threadIdRef.value,
-                                assistantId: assistantDbMsg.id,
-                                streamId: newStreamId,
-                                reasoningLength:
-                                    current.reasoning_text?.length || 0,
-                            }
-                        );
-                    } catch {}
-                } else if (ev.type === 'text') {
-                    if (current.pending) current.pending = false;
-                    const delta = ev.text;
-                    streamAcc.append(delta, { kind: 'text' });
-                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                        threadId: threadIdRef.value,
-                        assistantId: assistantDbMsg.id,
-                        streamId: newStreamId,
-                        deltaLength: String(delta ?? '').length,
-                        totalLength:
-                            current.text.length + String(delta ?? '').length,
-                        chunkIndex: chunkIndex++,
-                    });
-                    current.text += delta;
-                } else if (ev.type === 'image') {
-                    if (current.pending) current.pending = false;
-                    // Append markdown placeholder exactly once per image URL
-                    const placeholder = `![generated image](${ev.url})`;
-                    const already = current.text.includes(placeholder);
-                    if (!already) {
-                        current.text +=
-                            (current.text ? '\n\n' : '') + placeholder;
-                    }
-                    if (import.meta.dev) {
-                        console.debug('[stream:image:event]', {
-                            url: ev.url?.slice(0, 80),
-                            placeholderInserted: !already,
-                            currentLength: current.text.length,
-                            fileHashes: assistantFileHashes.slice(),
-                        });
-                    }
-                    if (assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/'))
-                            blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            try {
-                                const r = await fetch(ev.url);
-                                if (r.ok) blob = await r.blob();
-                            } catch {}
-                        }
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(
-                                    blob,
-                                    'gen-image'
-                                );
-                                assistantFileHashes.push(meta.hash);
-                                const serialized =
-                                    serializeFileHashes(assistantFileHashes);
-                                const updatedMsg = {
-                                    ...assistantDbMsg,
-                                    data: {
-                                        ...((assistantDbMsg as any).data || {}),
-                                        reasoning_text:
-                                            current.reasoning_text ?? null,
-                                    },
-                                    file_hashes: serialized,
-                                    updated_at: nowSec(),
-                                } as any;
-                                await upsert.message(updatedMsg);
-                                (current as any).file_hashes = serialized;
-                                if (import.meta.dev) {
-                                    console.debug('[stream:image:persist]', {
-                                        hash: meta.hash,
-                                        total: assistantFileHashes.length,
-                                        serialized,
-                                    });
-                                }
-                            } catch {}
-                        }
-                    }
-                }
-
-                const now = Date.now();
-                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent = current.text;
-                    const updated = {
-                        ...assistantDbMsg,
-                        data: {
-                            ...((assistantDbMsg as any).data || {}),
-                            content: textContent,
-                            reasoning_text: current.reasoning_text ?? null,
-                        },
-                        file_hashes: assistantFileHashes.length
-                            ? serializeFileHashes(assistantFileHashes)
-                            : (assistantDbMsg as any).file_hashes,
-                        updated_at: nowSec(),
-                    } as any;
-                    await upsert.message(updated);
-                    if (assistantFileHashes.length)
-                        (current as any).file_hashes =
-                            serializeFileHashes(assistantFileHashes);
-                    lastPersistAt = now;
-                }
-            }
-
-            const fullText = current.text;
-            const incoming = await hooks.applyFilters(
-                'ui.chat.message:filter:incoming',
-                fullText,
-                threadIdRef.value
-            );
-            if (current.pending) current.pending = false;
-            current.text = incoming as string;
-            const finalized = {
-                ...assistantDbMsg,
-                data: {
-                    ...((assistantDbMsg as any).data || {}),
-                    content: incoming,
-                    reasoning_text: current.reasoning_text ?? null,
-                },
-                file_hashes: assistantFileHashes.length
-                    ? serializeFileHashes(assistantFileHashes)
-                    : (assistantDbMsg as any).file_hashes,
-                updated_at: nowSec(),
-            } as any;
-            await upsert.message(finalized);
-            const endedAt = Date.now();
-            await hooks.doAction('ai.chat.send:action:after', {
-                threadId: threadIdRef.value,
-                request: { modelId, userId: userDbMsg.id },
-                response: {
-                    assistantId: assistantDbMsg.id,
-                    length: (incoming as string).length,
-                },
-                timings: {
-                    startedAt,
-                    endedAt,
-                    durationMs: endedAt - startedAt,
-                },
-                aborted: false,
-            });
-            streamAcc.finalize();
-        } catch (err) {
-            if (aborted.value) {
-                try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        (last as any).pending = false;
-                    }
-                } catch {}
-                await hooks.doAction('ai.chat.send:action:after', {
-                    threadId: threadIdRef.value,
-                    aborted: true,
-                });
-            } else {
-                await hooks.doAction('ai.chat.error:action', {
-                    threadId: threadIdRef.value,
-                    stage: 'stream',
-                    error: err,
-                });
-                try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        messages.value.pop();
-                    }
-                    const lastUser = [...messages.value]
-                        .reverse()
-                        .find((m) => m.role === 'user');
-                    const toast = useToast();
-                    toast.add({
-                        title: 'Message failed',
-                        description: (err as any)?.message || 'Request failed',
-                        color: 'error',
-                        actions: lastUser
-                            ? [
-                                  {
-                                      label: 'Retry',
-                                      onClick: () => {
-                                          if (lastUser?.id)
-                                              retryMessage(lastUser.id as any);
-                                      },
-                                  },
-                              ]
-                            : undefined,
-                        duration: 6000,
-                    });
-                } catch {}
-                const e = err instanceof Error ? err : new Error(String(err));
-                streamAcc.finalize({ error: e });
-            }
-        } finally {
-            loading.value = false;
-            abortController.value = null;
-            setTimeout(() => {
-                if (!loading.value && streamState.finalized) resetStream();
-            }, 0);
-        }
-    }
-
-    async function retryMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || !threadIdRef.value) return;
-        try {
-            const target: any = await db.messages.get(messageId);
-            if (!target || target.thread_id !== threadIdRef.value) return;
-            let userMsg: any = target.role === 'user' ? target : null;
-            if (!userMsg && target.role === 'assistant') {
-                const DexieMod = (await import('dexie')).default;
-                userMsg = await db.messages
-                    .where('[thread_id+index]')
-                    .between(
-                        [target.thread_id, DexieMod.minKey],
-                        [target.thread_id, target.index]
-                    )
-                    .filter(
-                        (m: any) =>
-                            m.role === 'user' &&
-                            !m.deleted &&
-                            m.index < target.index
-                    )
-                    .last();
-            }
-            if (!userMsg) return;
-            const DexieMod2 = (await import('dexie')).default;
-            const assistant = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [userMsg.thread_id, userMsg.index + 1],
-                    [userMsg.thread_id, DexieMod2.maxKey]
-                )
-                .filter((m: any) => m.role === 'assistant' && !m.deleted)
-                .first();
-            await hooks.doAction('ai.chat.retry:action:before', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                triggeredBy: target.role,
-            });
-            await db.transaction('rw', db.messages, async () => {
-                await db.messages.delete(userMsg.id);
-                if (assistant) await db.messages.delete(assistant.id);
-            });
-            rawMessages.value = rawMessages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-            messages.value = messages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-            const originalText = (userMsg.data as any)?.content || '';
-            let hashes: string[] = [];
-            if (userMsg.file_hashes) {
-                const { parseFileHashes } = await import('~/db/files-util');
-                hashes = parseFileHashes(userMsg.file_hashes);
-            }
-            await sendMessage(originalText, {
-                model: modelOverride || DEFAULT_AI_MODEL,
-                file_hashes: hashes,
-                files: [],
-                online: false,
-            });
-            const tail = messages.value.slice(-2);
-            const newUser = tail.find((m: any) => m.role === 'user');
-            const newAssistant = tail.find((m: any) => m.role === 'assistant');
-            await hooks.doAction('ai.chat.retry:action:after', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                newUserId: newUser?.id,
-                newAssistantId: newAssistant?.id,
-            });
-        } catch (e) {
-            console.error('[useChat.retryMessage] failed', e);
-        }
-    }
-
-    /** Free all in-memory message arrays (UI + raw) and abort any active stream. */
-    function clear() {
-        try {
-            if (abortController.value) {
-                aborted.value = true;
-                try {
-                    abortController.value.abort();
-                } catch {}
-                streamAcc.finalize({ aborted: true });
-                abortController.value = null;
-            }
-        } catch {}
-        rawMessages.value = [];
-        messages.value = [];
-        // Defensive: if any lingering refs still hold many messages, let GC reclaim by slicing to empty
-        if (
-            (rawMessages as any)._value &&
-            (rawMessages as any)._value.length > 1000
-        ) {
-            (rawMessages as any)._value = [];
-        }
-        if (
-            (messages as any)._value &&
-            (messages as any)._value.length > 1000
-        ) {
-            (messages as any)._value = [];
-        }
-        streamAcc.reset();
-    }
-
-    return {
-        messages,
-        sendMessage,
-        retryMessage,
-        loading,
-        threadId: threadIdRef,
-        streamId,
-        resetStream,
-        streamState,
-        abort: () => {
-            if (!loading.value || !abortController.value) return;
-            aborted.value = true;
-            try {
-                abortController.value.abort();
-            } catch {}
-            streamAcc.finalize({ aborted: true });
-        },
-        clear,
-    };
-}
-```
-
-## File: app/composables/index.ts
-```typescript
-/** Barrel export for chat-related composables (Task 1.6) */
-export * from './useStreamAccumulator';
-export * from './useObservedElementSize';
-export * from './ui-extensions/messages/useMessageActions';
-export * from './ui-extensions/documents/useDocumentHistoryActions';
-export * from './ui-extensions/threads/useThreadHistoryActions';
-export * from './ui-extensions/projects/useProjectTreeActions';
-```
-
-## File: package.json
-```json
-{
-    "name": "or3-chat",
-    "type": "module",
-    "private": false,
-    "version": "0.1.0",
-    "license": "GPL-3.0",
-    "scripts": {
-        "build": "nuxt build",
-        "dev": "nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
-        "test": "vitest run",
-        "test:watch": "vitest"
-    },
-    "dependencies": {
-        "@nuxt/ui": "^3.3.2",
-        "@orama/orama": "^3.1.11",
-        "@tiptap/extension-placeholder": "^3.3.0",
-        "@tiptap/pm": "^3.3.0",
-        "@tiptap/starter-kit": "^3.3.0",
-        "@tiptap/vue-3": "^3.3.0",
-        "@types/node": "^24.3.1",
-        "@vueuse/core": "^13.7.0",
-        "dexie": "^4.0.11",
-        "gpt-tokenizer": "^3.0.1",
-        "nuxt": "^4.0.3",
-        "spark-md5": "^3.0.2",
-        "streamdown-vue": "^1.0.12",
-        "tiptap-markdown": "^0.8.10",
-        "turndown": "^7.2.1",
-        "typescript": "^5.6.3",
-        "virtua": "^0.41.5",
-        "vue": "^3.5.18",
-        "vue-router": "^4.5.1",
-        "zod": "^4.0.17"
-    },
-    "devDependencies": {
-        "@types/spark-md5": "^3.0.5",
-        "@tailwindcss/typography": "^0.5.16",
-        "@vitejs/plugin-vue": "^5.1.4",
-        "@vitest/coverage-v8": "2.1.9",
-        "@vitest/ui": "^2.1.2",
-        "@vue/test-utils": "^2.4.6",
-        "jsdom": "^25.0.0",
-        "vite": "^5.4.8",
-        "vitest": "^2.1.2"
-    }
-}
 ```
 
 ## File: app/components/sidebar/SideNavContent.vue
@@ -19076,6 +14653,5849 @@ async function submitCreateDocument() {
 </script>
 ```
 
+## File: app/pages/openrouter-callback.vue
+```vue
+<template>
+    <div class="min-h-[100dvh] flex items-center justify-center p-6">
+        <div
+            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
+        >
+            <p class="text-base font-medium mb-2">
+                {{ title }}
+            </p>
+            <p class="text-sm text-neutral-500 mb-4">
+                {{ subtitle }}
+            </p>
+            <div class="flex items-center justify-center gap-3">
+                <div
+                    v-if="loading"
+                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
+                />
+                <button
+                    v-if="ready"
+                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
+                    @click="goHome"
+                >
+                    Continue
+                </button>
+                <button
+                    v-if="errorMessage"
+                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
+                    @click="goHome"
+                >
+                    Go Home
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup>
+import { kv } from '~/db';
+
+const route = useRoute();
+const router = useRouter();
+const rc = useRuntimeConfig();
+
+const loading = ref(true);
+const ready = ref(false);
+const redirecting = ref(false);
+const errorMessage = ref('');
+const title = computed(() =>
+    errorMessage.value
+        ? 'Login completed with warnings'
+        : ready.value
+        ? 'Login complete'
+        : 'Completing login…'
+);
+const subtitle = computed(() => {
+    if (errorMessage.value) return errorMessage.value;
+    if (ready.value && !redirecting.value)
+        return 'If this page doesn’t redirect automatically, tap Continue.';
+    return 'Please wait while we finish setup.';
+});
+
+function log(...args) {
+    try {
+        if (import.meta.dev) {
+            // eslint-disable-next-line no-console
+            console.debug('[openrouter-callback]', ...args);
+        }
+    } catch {}
+}
+
+async function setKVNonBlocking(key, value, timeoutMs = 300) {
+    try {
+        if (!kv?.set) return;
+        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
+        const result = await Promise.race([
+            kv.set(key, value),
+            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
+        ]);
+        if (result === 'timeout') log('setKV timed out; continuing');
+        else log('setKV resolved');
+    } catch (e) {
+        log('setKV failed', e?.message || e);
+    }
+}
+
+async function goHome() {
+    redirecting.value = true;
+    log("goHome() invoked. Trying router.replace('/').");
+    try {
+        await router.replace('/');
+        log("router.replace('/') resolved");
+    } catch (e) {
+        log("router.replace('/') failed:", e?.message || e);
+    }
+    try {
+        // Fallback to full document navigation
+        log("Attempting window.location.replace('/')");
+        window.location.replace('/');
+    } catch (e) {
+        log("window.location.replace('/') failed:", e?.message || e);
+    }
+    // Last-chance fallback on browsers that ignore replace
+    setTimeout(() => {
+        try {
+            log("Attempting final window.location.assign('/')");
+            window.location.assign('/');
+        } catch (e) {
+            log("window.location.assign('/') failed:", e?.message || e);
+        }
+    }, 150);
+}
+
+onMounted(async () => {
+    log('mounted at', window.location.href, 'referrer:', document.referrer);
+    const code = route.query.code;
+    const state = route.query.state;
+    const verifier = sessionStorage.getItem('openrouter_code_verifier');
+    const savedState = sessionStorage.getItem('openrouter_state');
+    const codeMethod =
+        sessionStorage.getItem('openrouter_code_method') || 'S256';
+    log('query params present:', {
+        code: Boolean(code),
+        state: Boolean(state),
+    });
+    log('session present:', {
+        verifier: Boolean(verifier),
+        savedState: Boolean(savedState),
+        codeMethod,
+    });
+
+    if (!code || !verifier) {
+        console.error('[openrouter-callback] Missing code or verifier');
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Missing code or verifier. Tap Continue to return.';
+        return;
+    }
+    if (savedState && state !== savedState) {
+        console.error('[openrouter-callback] State mismatch, potential CSRF', {
+            incoming: state,
+            savedState,
+        });
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value = 'State mismatch. Tap Continue to return.';
+        return;
+    }
+
+    try {
+        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
+        log('exchanging code with OpenRouter', {
+            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
+            codeLength: String(code).length,
+            method: codeMethod,
+            usingHTTPS: true,
+        });
+        const directResp = await fetch(
+            'https://openrouter.ai/api/v1/auth/keys',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: String(code),
+                    code_verifier: verifier,
+                    code_challenge_method: codeMethod,
+                }),
+            }
+        );
+        const directJson = await directResp.json().catch(async () => {
+            const text = await directResp.text().catch(() => '<no-body>');
+            log('non-JSON response body snippet:', text?.slice(0, 300));
+            return null;
+        });
+        if (!directResp.ok || !directJson) {
+            console.error(
+                '[openrouter-callback] Direct exchange failed',
+                directResp.status,
+                directJson
+            );
+            return;
+        }
+        const userKey = directJson.key || directJson.access_token;
+        if (!userKey) {
+            console.error(
+                '[openrouter-callback] Direct exchange returned no key',
+                {
+                    keys: Object.keys(directJson || {}),
+                }
+            );
+            return;
+        }
+        // store in localStorage for use by front-end
+        log('storing key in localStorage (length)', String(userKey).length);
+        // Save a human-readable name and the value; id/clock are handled
+        // inside the helper to match your schema
+        try {
+            await kv.set('openrouter_api_key', userKey);
+        } catch (e) {
+            log('kvByName.set failed', e?.message || e);
+        }
+        try {
+            log('dispatching openrouter:connected event');
+            window.dispatchEvent(new CustomEvent('openrouter:connected'));
+            // Best-effort: also persist to synced KV
+            try {
+                await setKVNonBlocking('openrouter_api_key', userKey, 300);
+            } catch {}
+        } catch {}
+        log('clearing session markers (verifier/state/method)');
+        sessionStorage.removeItem('openrouter_code_verifier');
+        sessionStorage.removeItem('openrouter_state');
+        sessionStorage.removeItem('openrouter_code_method');
+        // Allow event loop to process storage events in other tabs/components
+        await new Promise((r) => setTimeout(r, 10));
+        loading.value = false;
+        ready.value = true;
+        log('ready to redirect');
+        // Attempt auto-redirect but keep the Continue button visible
+        setTimeout(() => {
+            // first SPA attempt
+            log("auto: router.replace('/')");
+            router.replace('/').catch((e) => {
+                log('auto: router.replace failed', e?.message || e);
+            });
+            // then a hard replace if SPA was blocked
+            setTimeout(() => {
+                try {
+                    log("auto: window.location.replace('/')");
+                    window.location.replace('/');
+                } catch (e) {
+                    log(
+                        'auto: window.location.replace failed',
+                        e?.message || e
+                    );
+                }
+            }, 250);
+        }, 50);
+    } catch (err) {
+        console.error('[openrouter-callback] Exchange failed', err);
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Authentication finished, but we couldn’t auto-redirect.';
+    }
+});
+</script>
+```
+
+## File: app/plugins/examples/dual-llm-relay.client.ts
+```typescript
+// dual-llm-relay.client.ts
+// Example plugin: if two chat panes are open, bounce messages between them automatically.
+// Flow:
+// 1. User sends a message in pane A (normal UI path fires ui.pane.msg:action:sent).
+// 2. We forward that text to pane B via __or3PanePluginApi.sendMessage (source 'relay').
+// 3. When pane B's assistant reply is finalized (ui.pane.msg:action:received) we forward
+//    its content back to pane A, and so on, until a safety hop limit is reached.
+// Safeguards:
+// - Requires exactly 2 panes in chat mode with threads.
+// - Per-thread hop counters to prevent infinite loops.
+// - Skips forwarding if message was injected by this relay (source tagging).
+// - Debounce rapid duplicate forwards (simple last-message-id memory).
+import { useNuxtApp } from '#app';
+import type { PaneState } from '~/composables/useMultiPane';
+import type { PanePluginApi } from '../pane-plugin-api.client';
+import { getMessage } from '~/db/messages';
+
+const MAX_HOPS = 3; // prevent runaway ping-pong
+const RELAY_SOURCE = 'relay';
+
+// Hook payload (sent) produced by pane-plugin-api + core chat send path
+interface PaneMsgSentMeta {
+    id: string;
+    threadId: string;
+    paneIndex: number;
+    length: number;
+    fileHashes: string | null;
+    source?: string;
+}
+// Received payload currently mirrors sent with optional reasoning + possible content (future-proof)
+interface PaneMsgReceivedMeta extends PaneMsgSentMeta {
+    reasoningLength?: number;
+    content?: unknown; // currently not populated by core hook
+}
+
+function getApi(): PanePluginApi | undefined {
+    return globalThis.__or3PanePluginApi;
+}
+
+// Module-level flag instead of mutating global object.
+let relayInitialized = false;
+
+// Ensure TypeScript knows about the global (should already be in types, but this is a narrow safety net for isolated module context)
+declare global {
+    // eslint-disable-next-line no-var
+    var __or3PanePluginApi: PanePluginApi | undefined;
+}
+
+export default defineNuxtPlugin(() => {
+    if (import.meta.dev) console.debug('[dual-llm-relay] plugin loaded');
+    const nuxt = useNuxtApp();
+
+    function initIfReady(): boolean {
+        const hooks = nuxt.$hooks;
+        const api = getApi();
+        if (!hooks || !api) return false;
+        console.log('DUAL LLM RELAY INIT', { hooks, api });
+        if (relayInitialized) return true;
+        relayInitialized = true;
+        if (import.meta.dev) console.debug('[dual-llm-relay] init actions');
+
+        hooks.addAction(
+            'ui.pane.msg:action:sent',
+            (pane: PaneState, meta: PaneMsgSentMeta) => {
+                //console.log('[dual-llm-relay] sent', pane.id, meta);
+            }
+        );
+
+        // Track per-thread hop counts to avoid infinite loops
+        const hopCounts = new Map<string, number>();
+
+        hooks.addAction(
+            'ui.pane.msg:action:received',
+            async (pane: PaneState, meta: PaneMsgReceivedMeta) => {
+                // We only forward assistant messages produced in a pane's thread.
+                const panesRes = api.getPanes();
+                if (!panesRes.ok) return;
+                const paneList = panesRes.panes;
+                if (paneList.length !== 2) return; // require exactly 2 panes for deterministic relay
+
+                // Derive index from descriptor list (meta.paneIndex not currently provided by core)
+                const fromIndex = paneList.findIndex(
+                    (p) => p.paneId === pane.id
+                );
+                if (fromIndex === -1) return;
+                const targetPaneDesc = paneList[fromIndex === 0 ? 1 : 0];
+                if (!targetPaneDesc) return;
+
+                // Prevent relaying our own injected messages (source flag present only on sent hook currently). If future meta.source appears, respect it.
+                if ((meta as any).source === RELAY_SOURCE) return;
+
+                const key =
+                    meta.threadId +
+                    '->' +
+                    (targetPaneDesc.threadId || targetPaneDesc.paneId);
+                const hops = hopCounts.get(key) || 0;
+                if (hops >= MAX_HOPS) {
+                    if (import.meta.dev)
+                        console.debug(
+                            '[dual-llm-relay] hop limit reached',
+                            key,
+                            hops
+                        );
+                    return;
+                }
+
+                // Fetch message content (meta.id corresponds to assistant message id)
+                let text = '';
+                try {
+                    const msg: any = await getMessage(meta.id);
+                    text = msg?.data?.content || '';
+                } catch {}
+                if (!text.trim()) return;
+
+                hopCounts.set(key, hops + 1);
+                api.sendMessage({
+                    paneId: targetPaneDesc.paneId,
+                    text,
+                    source: RELAY_SOURCE,
+                    createIfMissing: true,
+                });
+            }
+        );
+        return true;
+    }
+
+    if (!initIfReady()) {
+        if (import.meta.dev)
+            console.debug('[dual-llm-relay] waiting for hooks/api');
+        const interval = setInterval(() => {
+            if (initIfReady()) clearInterval(interval);
+        }, 100);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() => clearInterval(interval));
+        }
+    }
+});
+```
+
+## File: app/plugins/pane-plugin-api.client.ts
+```typescript
+import { nowSec } from '~/db/util';
+import { create, tx } from '~/db';
+import { useNuxtApp } from '#app';
+import {
+    setDocumentContent,
+    setDocumentTitle,
+    useDocumentState,
+} from '~/composables/useDocumentsStore';
+import type { Ref } from 'vue';
+import type { PaneState } from '~/composables/useMultiPane';
+
+/** All error codes emitted by the Pane Plugin API */
+export type PaneApiErrorCode =
+    | 'missing_source'
+    | 'missing_pane'
+    | 'invalid_text'
+    | 'not_found'
+    | 'pane_not_chat'
+    | 'pane_not_doc'
+    | 'no_thread'
+    | 'no_thread_bind'
+    | 'append_failed'
+    | 'no_document'
+    | 'no_active_pane'
+    | 'no_panes';
+
+/** Success result helper */
+export type Ok<T extends object = {}> = { ok: true } & T;
+/** Error result helper */
+export interface Err<C extends PaneApiErrorCode = PaneApiErrorCode> {
+    ok: false;
+    code: C;
+    message: string;
+}
+
+/** Unified result type */
+export type Result<T extends object = {}> = Ok<T> | Err;
+interface MultiPaneApi {
+    panes: Ref<PaneState[]>;
+    activePaneIndex: Ref<number>;
+    setPaneThread(i: number, id: string): Promise<void> | void;
+}
+interface HookBus {
+    doAction?(name: string, ...a: unknown[]): void;
+}
+
+/** Input options for sendMessage */
+export interface SendMessageOptions {
+    paneId: string;
+    text: string;
+    role?: 'user' | 'assistant';
+    createIfMissing?: boolean; // when true, auto-creates a thread for chat panes without one
+    source: string; // required identifier for auditing
+    stream?: boolean; // if true (default) trigger assistant streaming for chat pane
+}
+export type SendMessageResult = Result<{ messageId: string; threadId: string }>;
+
+/** Document replace options */
+export interface UpdateDocumentOptions {
+    paneId: string;
+    content: unknown; // caller supplies fully replaced doc JSON
+    source: string;
+}
+/** Document patch options */
+export interface PatchDocumentOptions {
+    paneId: string;
+    patch: unknown; // shallow merge rules (arrays concatenated)
+    source: string;
+}
+/** Set document title options */
+export interface SetDocumentTitleOptions {
+    paneId: string;
+    title: string;
+    source: string;
+}
+
+export interface ActivePaneInfo {
+    paneId: string;
+    mode: string;
+    threadId?: string;
+    documentId?: string;
+    contentSnapshot?: unknown;
+}
+
+export interface PaneDescriptor {
+    paneId: string;
+    mode: PaneState['mode'];
+    threadId?: string;
+    documentId?: string;
+}
+export interface PanePluginApi {
+    /**
+     * Append a new message into a chat pane's thread. Optionally creates a thread if missing.
+     * Returns message & thread identifiers on success.
+     */
+    sendMessage(opts: SendMessageOptions): Promise<SendMessageResult>;
+
+    /** Replace the full document content for a doc pane. */
+    updateDocumentContent(opts: UpdateDocumentOptions): Result;
+
+    /** Shallow patch merge into a document (arrays concatenated, other keys overwritten). */
+    patchDocumentContent(opts: PatchDocumentOptions): Result;
+
+    /** Update the document title associated with a doc pane. */
+    setDocumentTitle(opts: SetDocumentTitleOptions): Result;
+
+    /** Retrieve metadata + optional cloned content for the active pane. */
+    getActivePaneData(): Result<ActivePaneInfo>;
+
+    /** List all panes (lightweight descriptors) and the current active index. */
+    getPanes(): Result<{ panes: PaneDescriptor[]; activeIndex: number }>;
+}
+const err = <C extends PaneApiErrorCode>(code: C, message: string): Err<C> => ({
+    ok: false,
+    code,
+    message,
+});
+const mp = (): MultiPaneApi | undefined =>
+    (globalThis as any).__or3MultiPaneApi;
+function getPaneEntry(
+    id: string
+): { pane: PaneState; index: number; mp: MultiPaneApi } | null {
+    const m = mp();
+    const ps = m?.panes?.value;
+    if (!ps) return null;
+    const index = ps.findIndex((p) => p.id === id);
+    if (index < 0) return null;
+    const pane = ps[index];
+    if (!pane) return null;
+    return { pane, index, mp: m! };
+}
+async function ensureThread(
+    p: PaneState,
+    i: number,
+    h: HookBus,
+    title: string
+): Promise<string | Err> {
+    if (p.threadId) return p.threadId;
+    const m = mp();
+    if (!m?.setPaneThread) return err('no_thread_bind', 'Cannot bind thread');
+    const t: { id: string } = await create.thread({
+        title: title.split(/\s+/).slice(0, 6).join(' ') || 'New Thread',
+        last_message_at: nowSec(),
+        parent_thread_id: null,
+        system_prompt_id: null,
+    });
+    await m.setPaneThread(i, t.id);
+    try {
+        h.doAction?.('ui.pane.thread:action:changed', p, '', t.id, 0);
+    } catch {}
+    return t.id;
+}
+type DocJson = { type: string; content?: unknown[]; [k: string]: unknown };
+function patchDoc(base: unknown, patch: unknown): DocJson {
+    let b: DocJson =
+        base && typeof base === 'object'
+            ? (base as DocJson)
+            : { type: 'doc', content: [] };
+    if (patch && typeof patch === 'object') {
+        const p = patch as DocJson;
+        if (Array.isArray(b.content) && Array.isArray(p.content))
+            b.content = [...b.content, ...p.content];
+        else if (Array.isArray(p.content)) b.content = p.content;
+        for (const k of Object.keys(p))
+            if (k !== 'content') (b as any)[k] = (p as any)[k];
+    }
+    return b;
+}
+const log = (tag: string, meta: unknown) => {
+    if (import.meta.dev)
+        try {
+            console.debug('[pane-plugin-api] ' + tag, meta);
+        } catch {}
+};
+async function makeApi(): Promise<PanePluginApi> {
+    const hooks: HookBus = (useNuxtApp() as any).$hooks;
+    return {
+        async sendMessage({
+            paneId,
+            text,
+            role = 'user',
+            createIfMissing,
+            source,
+            stream = true,
+        }: SendMessageOptions) {
+            if (!source) return err('missing_source', 'source required');
+            if (!paneId) return err('missing_pane', 'paneId required');
+            if (typeof text !== 'string' || !text.trim())
+                return err('invalid_text', 'text required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const { pane: p, index } = entry;
+            if (p.mode !== 'chat') return err('pane_not_chat', 'pane not chat');
+            let threadId = p.threadId;
+            if (!threadId) {
+                if (!createIfMissing) return err('no_thread', 'no thread');
+                const t = await ensureThread(p, index, hooks, text);
+                if (typeof t !== 'string') return t;
+                threadId = t;
+            }
+            try {
+                // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
+                if (role === 'user' && stream) {
+                    const { programmaticSend, hasPane } = await import(
+                        '~/composables/useChatInputBridge'
+                    );
+                    if (hasPane(p.id)) {
+                        const okBridge = programmaticSend(p.id, text);
+                        if (okBridge) {
+                            log('sendMessage-bridge', {
+                                source,
+                                paneId,
+                                threadId,
+                            });
+                            return {
+                                ok: true,
+                                messageId: 'bridge',
+                                threadId,
+                            } as any;
+                        }
+                    }
+                }
+                // Fallback: direct append (no streaming)
+                const dbMsg = await tx.appendMessage({
+                    thread_id: threadId,
+                    role: role === 'assistant' ? 'assistant' : 'user',
+                    data: { content: text, attachments: [] },
+                });
+                try {
+                    hooks.doAction?.('ui.pane.msg:action:sent', p, {
+                        id: dbMsg.id,
+                        threadId,
+                        length: text.length,
+                        fileHashes: null,
+                        paneIndex: -1,
+                        source,
+                    });
+                } catch {}
+                log('sendMessage-fallback', {
+                    source,
+                    paneId,
+                    threadId,
+                    id: dbMsg.id,
+                });
+                return { ok: true, messageId: dbMsg.id, threadId };
+            } catch (e: unknown) {
+                return err(
+                    'append_failed',
+                    e instanceof Error ? e.message : 'append failed'
+                );
+            }
+        },
+        updateDocumentContent({
+            paneId,
+            content,
+            source,
+        }: UpdateDocumentOptions) {
+            if (!source) return err('missing_source', 'source required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const p = entry.pane;
+            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
+            if (!p.documentId) return err('no_document', 'no document');
+            setDocumentContent(p.documentId, content);
+            log('updateDocumentContent', { source, paneId });
+            return { ok: true };
+        },
+        patchDocumentContent({ paneId, patch, source }: PatchDocumentOptions) {
+            if (!source) return err('missing_source', 'source required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const p = entry.pane;
+            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
+            if (!p.documentId) return err('no_document', 'no document');
+            const st = useDocumentState(p.documentId) as {
+                record?: { content?: unknown };
+            };
+            const merged = patchDoc(st?.record?.content, patch);
+            setDocumentContent(p.documentId, merged);
+            log('patchDocumentContent', { source, paneId });
+            return { ok: true };
+        },
+        setDocumentTitle({ paneId, title, source }: SetDocumentTitleOptions) {
+            if (!source) return err('missing_source', 'source required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const p = entry.pane;
+            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
+            if (!p.documentId) return err('no_document', 'no document');
+            setDocumentTitle(p.documentId, title);
+            log('setDocumentTitle', { source, paneId });
+            return { ok: true };
+        },
+        getActivePaneData() {
+            const m = mp();
+            const panes = m?.panes?.value;
+            const idx = m?.activePaneIndex?.value ?? -1;
+            if (!panes || idx < 0 || idx >= panes.length)
+                return err('no_active_pane', 'no active pane');
+            const p = panes[idx];
+            if (!p) return err('no_active_pane', 'no active pane');
+            const base: ActivePaneInfo = { paneId: p.id, mode: p.mode };
+            if (p.mode === 'chat' && p.threadId) base.threadId = p.threadId;
+            if (p.mode === 'doc' && p.documentId) {
+                base.documentId = p.documentId;
+                try {
+                    const st = useDocumentState(p.documentId) as {
+                        record?: { content?: unknown };
+                    };
+                    const c = st?.record?.content;
+                    base.contentSnapshot = c
+                        ? JSON.parse(JSON.stringify(c))
+                        : undefined;
+                } catch {}
+            }
+            return { ok: true, ...base };
+        },
+        getPanes() {
+            const m = mp();
+            const panes = m?.panes?.value;
+            if (!panes) return err('no_panes', 'no panes');
+            const activeIndex = m?.activePaneIndex?.value ?? -1;
+            const mapped: PaneDescriptor[] = panes.map((p) => ({
+                paneId: p.id,
+                mode: p.mode,
+                threadId: p.threadId || undefined,
+                documentId: p.documentId || undefined,
+            }));
+            return { ok: true, panes: mapped, activeIndex };
+        },
+    };
+}
+export default defineNuxtPlugin(async () => {
+    if ((globalThis as any).__or3PanePluginApi) return;
+    try {
+        (globalThis as any).__or3PanePluginApi = await makeApi();
+        if (import.meta.dev) console.log('[pane-plugin-api] ready');
+    } catch (e) {
+        console.error('[pane-plugin-api] failed to init', e);
+    }
+});
+```
+
+## File: app/utils/chat/uiMessages.ts
+```typescript
+// Canonical UI message utilities (content part type no longer needed directly)
+import { parseHashes } from '~/utils/files/attachments';
+
+export interface UiChatMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    text: string; // flattened text + markdown image placeholders
+    file_hashes?: string[];
+    reasoning_text?: string | null;
+    stream_id?: string;
+    pending?: boolean;
+}
+
+export function partsToText(parts: any): string {
+    if (!parts) return '';
+    if (typeof parts === 'string') return parts;
+    if (!Array.isArray(parts)) return '';
+    let out = '';
+    for (const p of parts) {
+        if (!p) continue;
+        if (typeof p === 'string') {
+            out += p;
+            continue;
+        }
+        if (typeof p === 'object') {
+            if (p.type === 'text' && typeof p.text === 'string') out += p.text;
+            else if (p.type === 'image') {
+                const src = (p as any).image || (p as any).image_url?.url;
+                if (typeof src === 'string') {
+                    out += (out ? '\n\n' : '') + `![generated image](${src})`;
+                }
+            }
+        }
+    }
+    return out;
+}
+
+export function ensureUiMessage(raw: any): UiChatMessage {
+    const id = raw.id || raw.stream_id || crypto.randomUUID();
+    const role = raw.role || 'user';
+    let file_hashes: string[] | undefined;
+    if (Array.isArray(raw.file_hashes)) file_hashes = raw.file_hashes.slice();
+    else if (typeof raw.file_hashes === 'string') {
+        try {
+            file_hashes = parseHashes(raw.file_hashes);
+        } catch {
+            // ignore
+        }
+    }
+    const reasoning_text =
+        typeof raw.reasoning_text === 'string' ? raw.reasoning_text : null;
+    let text: string;
+    if (typeof raw.text === 'string' && !Array.isArray(raw.text)) {
+        text = raw.text;
+    } else if (typeof raw.content === 'string') {
+        text = raw.content;
+    } else {
+        text = partsToText(raw.content);
+    }
+    // Inject markdown placeholders for assistant file_hashes with de-duplication logic.
+    // Goal: avoid showing the same logical image twice when the model already emitted
+    // a markdown image (e.g. data: URL) for a hash we also have stored.
+    if (role === 'assistant' && file_hashes && file_hashes.length) {
+        const IMG_RE = /!\[[^\]]*]\(([^)]+)\)/g; // basic markdown image matcher
+        const existingImages = [...text.matchAll(IMG_RE)];
+        const existingCount = existingImages.length;
+        if (existingCount < file_hashes.length) {
+            // Determine how many placeholders we still need to represent each hash once.
+            const needed = file_hashes.length - existingCount;
+            // Candidate hashes: those not already present via a file-hash placeholder.
+            const candidate = file_hashes.filter(
+                (h) => h && !text.includes(`file-hash:${h}`)
+            );
+            // Only take up to the number we still need to avoid duplication.
+            const missing = candidate.slice(0, needed);
+            if (missing.length) {
+                const placeholders = missing.map(
+                    (h) => `![generated image](file-hash:${h})`
+                );
+                text += (text ? '\n\n' : '') + placeholders.join('\n\n');
+                if (import.meta.dev) {
+                    console.debug(
+                        '[uiMessages.ensureUiMessage] appended placeholders',
+                        {
+                            id,
+                            added: missing.length,
+                            totalHashes: file_hashes.length,
+                            existingCount,
+                        }
+                    );
+                }
+            } else if (import.meta.dev) {
+                console.debug(
+                    '[uiMessages.ensureUiMessage] no additional placeholders needed',
+                    { id, totalHashes: file_hashes.length, existingCount }
+                );
+            }
+        } else if (import.meta.dev) {
+            if (import.meta.dev)
+                console.debug(
+                    '[uiMessages.ensureUiMessage] existing images >= hashes; skipping placeholder injection',
+                    { id, totalHashes: file_hashes.length, existingCount }
+                );
+        }
+    }
+    return {
+        id,
+        role,
+        text,
+        file_hashes,
+        reasoning_text,
+        stream_id: raw.stream_id,
+        pending: raw.pending,
+    };
+}
+
+// Legacy raw storage (non reactive). We expose accessor for plugins.
+const _rawMessages: any[] = [];
+export function recordRawMessage(m: any) {
+    _rawMessages.push(m);
+}
+export function getRawMessages(): readonly any[] {
+    return _rawMessages.slice();
+}
+```
+
+## File: vitest.config.ts
+```typescript
+import { defineConfig } from 'vitest/config';
+import path from 'path';
+import vue from '@vitejs/plugin-vue';
+
+// Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
+// We intentionally cast the plugin to any to bypass structural mismatch.
+// No dependency version changes per instruction.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const vueAny: any = vue;
+
+export default defineConfig({
+    // Casted plugin to avoid TS 2769 noise only in editor; runtime unaffected.
+    plugins: [vueAny()],
+    resolve: {
+        alias: {
+            '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
+            '~': path.resolve(__dirname, 'app'),
+            '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
+        },
+    },
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        include: ['app/**/__tests__/**/*.test.ts'],
+        exclude: ['node_modules', 'dist', '.nuxt'],
+        setupFiles: ['tests/setup.ts'],
+        testTimeout: 10000,
+        hookTimeout: 10000,
+        bail: 1,
+        coverage: {
+            provider: 'v8',
+            reportsDirectory: './coverage',
+            reporter: ['text', 'html'],
+            include: ['app/composables/useStreamAccumulator.ts'],
+            thresholds: {
+                lines: 90,
+                statements: 90,
+                branches: 90,
+                functions: 75, // helper functions covered adequately
+            },
+        },
+    },
+});
+```
+
+## File: app/components/chat/SystemPromptsModal.vue
+```vue
+<template>
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-none',
+            body: 'p-0! border-b-0! overflow-hidden',
+        }"
+        title="System Prompts"
+        description="Manage and select system prompts to customize AI behavior."
+        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
+    >
+        <!--
+        <template #header>
+            <div class="flex w-full items-center justify-between pr-2">
+                
+                <h3 class="font-semibold text-sm pl-2 dark:text-black">
+                    System Prompts
+                </h3>
+                <UButton
+                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
+                    :square="true"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-heroicons-x-mark"
+                    @click="open = false"
+                />
+            </div>
+            
+        </template>
+        -->
+        <template #body>
+            <div class="flex flex-col h-full" @keydown="handleKeydown">
+                <div
+                    v-show="!editingPrompt"
+                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
+                >
+                    <div
+                        class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
+                    >
+                        <UButton
+                            @click="createNewPrompt"
+                            size="sm"
+                            color="primary"
+                            class="retro-btn"
+                        >
+                            New Prompt
+                        </UButton>
+                        <UButton
+                            v-if="currentActivePromptId"
+                            @click="clearActivePrompt"
+                            size="sm"
+                            color="neutral"
+                            variant="outline"
+                        >
+                            Clear Active
+                        </UButton>
+                    </div>
+                    <UInput
+                        v-model="searchQuery"
+                        placeholder="Search prompts..."
+                        :size="isMobile ? 'md' : 'sm'"
+                        class="w-full my-2 sm:my-0 sm:max-w-xs"
+                        icon="i-heroicons-magnifying-glass"
+                    />
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <!-- List View -->
+                    <div
+                        v-if="!editingPrompt"
+                        class="max-h-full overflow-y-auto"
+                    >
+                        <div
+                            v-if="filteredPrompts.length === 0"
+                            class="flex flex-col items-center justify-center h-full text-center p-8"
+                        >
+                            <UIcon
+                                name="pixelarticons:script-text"
+                                class="w-16 h-16 text-gray-400 mb-4"
+                            />
+                            <h3
+                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
+                            >
+                                No system prompts yet
+                            </h3>
+                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                                Create your first system prompt to customize AI
+                                behavior.
+                            </p>
+                            <UButton @click="createNewPrompt" color="primary">
+                                Create Your First Prompt
+                            </UButton>
+                        </div>
+
+                        <div v-else class="p-4 space-y-3">
+                            <div
+                                v-for="prompt in filteredPrompts"
+                                :key="prompt.id"
+                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
+                                :data-active="
+                                    prompt.id === currentActivePromptId
+                                        ? 'true'
+                                        : 'false'
+                                "
+                            >
+                                <!-- Left / Main meta -->
+                                <div class="flex-1 min-w-0">
+                                    <div
+                                        class="flex flex-wrap items-center gap-2 mb-1"
+                                    >
+                                        <h4
+                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
+                                            :class="{
+                                                'italic opacity-60':
+                                                    !prompt.title,
+                                            }"
+                                        >
+                                            {{
+                                                prompt.title ||
+                                                'Untitled Prompt'
+                                            }}
+                                        </h4>
+                                        <span
+                                            v-if="prompt.id === defaultPromptId"
+                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            >Default</span
+                                        >
+                                        <span
+                                            v-if="
+                                                prompt.id ===
+                                                    currentActivePromptId &&
+                                                prompt.id !== defaultPromptId
+                                            "
+                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
+                                            >Active</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
+                                    >
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:clock"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            Updated
+                                            {{ formatDate(prompt.updated_at) }}
+                                        </span>
+                                        <span
+                                            class="hidden sm:inline opacity-40"
+                                            >|</span
+                                        >
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:chart-bar"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            {{ tokenCounts[prompt.id] || 0 }}
+                                            tokens
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div
+                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
+                                >
+                                    <UTooltip
+                                        :delay-duration="0"
+                                        :text="
+                                            prompt.id === defaultPromptId
+                                                ? 'Remove default prompt'
+                                                : 'Set as default prompt'
+                                        "
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            :variant="
+                                                prompt.id === defaultPromptId
+                                                    ? 'solid'
+                                                    : 'outline'
+                                            "
+                                            :color="
+                                                prompt.id === defaultPromptId
+                                                    ? 'primary'
+                                                    : 'neutral'
+                                            "
+                                            :square="true"
+                                            :ui="{
+                                                base: 'retro-btn px-1! text-nowrap',
+                                            }"
+                                            class="retro-btn"
+                                            aria-label="Toggle default prompt"
+                                            @click.stop="
+                                                toggleDefault(prompt.id)
+                                            "
+                                            >{{
+                                                prompt.id === defaultPromptId
+                                                    ? 'default'
+                                                    : 'set default'
+                                            }}</UButton
+                                        >
+                                    </UTooltip>
+                                    <UButton
+                                        @click="selectPrompt(prompt.id)"
+                                        size="sm"
+                                        :color="
+                                            prompt.id === currentActivePromptId
+                                                ? 'primary'
+                                                : 'neutral'
+                                        "
+                                        :variant="
+                                            prompt.id === currentActivePromptId
+                                                ? 'solid'
+                                                : 'outline'
+                                        "
+                                        :aria-pressed="
+                                            prompt.id === currentActivePromptId
+                                        "
+                                    >
+                                        {{
+                                            prompt.id === currentActivePromptId
+                                                ? 'Selected'
+                                                : 'Select'
+                                        }}
+                                    </UButton>
+                                    <UPopover
+                                        :popper="{ placement: 'bottom-end' }"
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            variant="outline"
+                                            color="neutral"
+                                            class="flex items-center justify-center"
+                                            :square="true"
+                                            icon="pixelarticons:more-vertical"
+                                            aria-label="More actions"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex flex-col py-1 w-36 text-sm"
+                                            >
+                                                <button
+                                                    @click="
+                                                        startEditing(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:edit"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button
+                                                    @click="
+                                                        deletePrompt(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:trash"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editor View -->
+                    <div v-else class="h-full overflow-hidden flex flex-col">
+                        <div class="flex-1 p-4 overflow-hidden">
+                            <LazyPromptsPromptEditor
+                                :prompt-id="editingPrompt.id"
+                                @back="stopEditing"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </UModal>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, computed, watch } from 'vue';
+import {
+    listPrompts,
+    createPrompt,
+    softDeletePrompt,
+    type PromptRecord,
+} from '~/db/prompts';
+import { useActivePrompt } from '~/composables/useActivePrompt';
+import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
+import { encode } from 'gpt-tokenizer';
+import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+import { isMobile } from '~/state/global';
+
+// Props & modal open bridging (like SettingsModal pattern)
+const props = defineProps<{
+    showModal: boolean;
+    threadId?: string;
+    paneId?: string; // isolate pending selection per pane (before thread exists)
+}>();
+const emit = defineEmits({
+    'update:showModal': (value: boolean) => typeof value === 'boolean',
+    selected: (id: string) => typeof id === 'string',
+    closed: () => true,
+    threadCreated: (threadId: string, promptId: string | null) => true,
+});
+
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
+});
+
+watch(
+    () => props.showModal,
+    (v, ov) => {
+        if (!v && ov) emit('closed');
+    }
+);
+
+const {
+    activePromptId,
+    setActivePrompt,
+    clearActivePrompt: clearGlobalActivePrompt,
+} = useActivePrompt();
+
+const prompts = ref<PromptRecord[]>([]);
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
+const editingPrompt = ref<PromptRecord | null>(null);
+const showDeleteConfirm = ref<string | null>(null);
+
+const searchQuery = ref('');
+const filteredPrompts = computed(() => {
+    if (!searchQuery.value) return prompts.value;
+    return prompts.value.filter((p) =>
+        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+});
+
+// Thread-specific system prompt handling
+const threadSystemPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet (pane scoped)
+
+// Computed for current active prompt (thread-specific or global)
+const currentActivePromptId = computed(() => {
+    if (props.threadId) return threadSystemPromptId.value;
+    // If no thread yet use pane-scoped pending first, else fall back to global active
+    return pendingPromptId.value || activePromptId.value;
+});
+
+// Extract plain text from TipTap JSON recursively
+function extractText(node: any): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    const type = node.type;
+    let acc = '';
+    if (type === 'text') {
+        acc += node.text || '';
+    }
+    if (node.content && Array.isArray(node.content)) {
+        const inner = node.content.map(extractText).join('');
+        acc += inner;
+    }
+    // Block separators to avoid word merging
+    if (
+        [
+            'paragraph',
+            'heading',
+            'bulletList',
+            'orderedList',
+            'listItem',
+        ].includes(type)
+    ) {
+        acc += '\n';
+    }
+    return acc;
+}
+
+function contentToText(content: any): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    // TipTap root usually { type: 'doc', content: [...] }
+    if (content.type === 'doc' && Array.isArray(content.content)) {
+        return extractText(content)
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+    }
+    if (Array.isArray(content.content)) return extractText(content).trim();
+    return '';
+}
+
+// Cached token counts per prompt id (recomputed when prompts list changes)
+const tokenCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of prompts.value) {
+        try {
+            const text = contentToText(p.content);
+            map[p.id] = text ? encode(text).length : 0;
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token encode failed', e);
+            map[p.id] = 0;
+        }
+    }
+    return map;
+});
+
+// Totals derived from cached counts
+const totalTokens = computed(() =>
+    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
+);
+const filteredTokens = computed(() =>
+    filteredPrompts.value.reduce(
+        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
+        0
+    )
+);
+
+// (Events moved above with prop bridging)
+
+const loadPrompts = async () => {
+    try {
+        prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.find((p) => p.id === defaultPromptId.value)
+        ) {
+            await clearDefaultPrompt();
+        }
+    } catch (error) {
+        console.error('Failed to load prompts:', error);
+    }
+};
+
+const loadThreadSystemPrompt = async () => {
+    if (props.threadId) {
+        try {
+            threadSystemPromptId.value = await getThreadSystemPrompt(
+                props.threadId
+            );
+        } catch (error) {
+            console.error('Failed to load thread system prompt:', error);
+            threadSystemPromptId.value = null;
+        }
+    } else {
+        threadSystemPromptId.value = null;
+    }
+};
+
+const createNewPrompt = async () => {
+    try {
+        const newPrompt = await createPrompt();
+        prompts.value.unshift(newPrompt);
+        startEditing(newPrompt.id);
+    } catch (error) {
+        console.error('Failed to create prompt:', error);
+    }
+};
+
+const selectPrompt = async (id: string) => {
+    try {
+        if (props.threadId) {
+            // Update thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, id);
+            threadSystemPromptId.value = id;
+        } else {
+            // Store as pending for when thread is created
+            pendingPromptId.value = id;
+            // Also update global for immediate feedback
+            // Do NOT override global active prompt; keep pane scoped selection only
+        }
+        emit('selected', id);
+    } catch (error) {
+        console.error('Failed to select prompt:', error);
+    }
+};
+
+const clearActivePrompt = async () => {
+    try {
+        if (props.threadId) {
+            // Clear thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadSystemPromptId.value = null;
+        } else {
+            // Clear pending and global active prompt
+            pendingPromptId.value = null;
+            // Don't clear global active prompt automatically (leave global state untouched)
+        }
+    } catch (error) {
+        console.error('Failed to clear active prompt:', error);
+    }
+};
+
+const startEditing = (id: string) => {
+    const prompt = prompts.value.find((p) => p.id === id);
+    if (prompt) {
+        editingPrompt.value = prompt;
+    }
+};
+
+const stopEditing = () => {
+    editingPrompt.value = null;
+    loadPrompts(); // Refresh list in case of changes
+};
+
+const applyPendingPromptToThread = async (threadId: string) => {
+    if (pendingPromptId.value) {
+        try {
+            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
+            emit('threadCreated', threadId, pendingPromptId.value);
+            pendingPromptId.value = null;
+        } catch (error) {
+            console.error('Failed to apply pending prompt to thread:', error);
+        }
+    }
+};
+
+const deletePrompt = async (id: string) => {
+    if (confirm('Are you sure you want to delete this prompt?')) {
+        try {
+            await softDeletePrompt(id);
+            if (activePromptId.value === id) {
+                clearActivePrompt();
+            }
+            if (defaultPromptId.value === id) {
+                await clearDefaultPrompt();
+            }
+            loadPrompts();
+        } catch (error) {
+            console.error('Failed to delete prompt:', error);
+        }
+    }
+};
+
+const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (editingPrompt.value) return;
+    const key = event.key;
+    if (key >= '1' && key <= '9') {
+        const index = parseInt(key) - 1;
+        if (index < filteredPrompts.value.length) {
+            const prompt = filteredPrompts.value[index];
+            if (prompt) {
+                selectPrompt(prompt.id);
+                event.preventDefault();
+            }
+        }
+    }
+};
+
+onMounted(() => {
+    loadPrompts();
+    loadThreadSystemPrompt();
+});
+
+// Watch for threadId changes to reload thread-specific prompt
+watch(
+    () => props.threadId,
+    () => {
+        loadThreadSystemPrompt();
+    }
+);
+
+function toggleDefault(id: string) {
+    if (defaultPromptId.value === id) {
+        clearDefaultPrompt();
+    } else {
+        setDefaultPrompt(id);
+    }
+}
+</script>
+
+<style scoped>
+/* Mobile full-screen adjustments */
+@media (max-width: 640px) {
+    .sp-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-width: 0 !important;
+    }
+}
+
+/* Smooth scrolling area */
+.sp-modal :deep(.n-modal-body),
+.sp-modal :deep(.n-card__content) {
+    /* ensure body grows */
+    height: 100%;
+}
+</style>
+```
+
+## File: app/composables/useDocumentsStore.ts
+```typescript
+import { ref, reactive } from 'vue';
+import { useNuxtApp } from '#app';
+import {
+    createDocument,
+    updateDocument,
+    getDocument,
+    type Document,
+} from '~/db/documents';
+import { useToast } from '#imports';
+
+interface DocState {
+    record: Document | null;
+    status: 'idle' | 'saving' | 'saved' | 'error' | 'loading';
+    lastError?: any;
+    pendingTitle?: string; // staged changes
+    pendingContent?: any; // TipTap JSON
+    timer?: any;
+}
+
+const documentsMap = reactive(new Map<string, DocState>());
+const loadingIds = ref(new Set<string>());
+
+function ensure(id: string): DocState {
+    let st = documentsMap.get(id);
+    if (!st) {
+        st = { record: null, status: 'loading' } as DocState;
+        documentsMap.set(id, st);
+    }
+    return st;
+}
+
+function scheduleSave(id: string, delay = 750) {
+    const st = documentsMap.get(id);
+    if (!st) return;
+    if (st.timer) clearTimeout(st.timer);
+    st.timer = setTimeout(() => flush(id), delay);
+}
+
+export async function flush(id: string) {
+    const st = documentsMap.get(id);
+    if (!st || !st.record) return;
+    if (!st.pendingTitle && !st.pendingContent) return; // nothing to persist
+    const patch: any = {};
+    if (st.pendingTitle !== undefined) patch.title = st.pendingTitle;
+    if (st.pendingContent !== undefined) patch.content = st.pendingContent;
+    st.status = 'saving';
+    try {
+        const updated = await updateDocument(id, patch);
+        if (updated) {
+            st.record = updated;
+            st.status = 'saved';
+        } else {
+            st.status = 'error';
+        }
+    } catch (e) {
+        st.status = 'error';
+        st.lastError = e;
+        useToast().add({ color: 'error', title: 'Document: save failed' });
+    } finally {
+        st.pendingTitle = undefined;
+        st.pendingContent = undefined;
+        // Emit pane-scoped saved hook for any panes displaying this doc.
+        try {
+            if (typeof window !== 'undefined') {
+                const nuxt = useNuxtApp();
+                const hooks: any = (nuxt as any)?.$hooks;
+                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                const panes = mpApi?.panes?.value || [];
+                if (hooks && panes.length) {
+                    for (const p of panes) {
+                        if (p?.mode === 'doc' && p?.documentId === id) {
+                            hooks.doAction(
+                                'ui.pane.doc:action:saved',
+                                p,
+                                id,
+                                {}
+                            );
+                        }
+                    }
+                }
+            }
+        } catch {}
+    }
+}
+
+export async function loadDocument(id: string) {
+    const st = ensure(id);
+    st.status = 'loading';
+    try {
+        const rec = await getDocument(id);
+        st.record = rec || null;
+        st.status = rec ? 'idle' : 'error';
+        if (!rec) {
+            useToast().add({ color: 'error', title: 'Document: not found' });
+        }
+    } catch (e) {
+        st.status = 'error';
+        st.lastError = e;
+        useToast().add({ color: 'error', title: 'Document: load failed' });
+    }
+    return st.record;
+}
+
+export async function newDocument(initial?: { title?: string; content?: any }) {
+    try {
+        const rec = await createDocument(initial);
+        const st = ensure(rec.id);
+        st.record = rec;
+        st.status = 'idle';
+        return rec;
+    } catch (e) {
+        useToast().add({ color: 'error', title: 'Document: create failed' });
+        throw e;
+    }
+}
+
+export function setDocumentTitle(id: string, title: string) {
+    const st = ensure(id);
+    if (st.record) {
+        st.pendingTitle = title;
+        scheduleSave(id);
+    }
+}
+
+export function setDocumentContent(id: string, content: any) {
+    const st = ensure(id);
+    if (st.record) {
+        st.pendingContent = content;
+        scheduleSave(id);
+    }
+}
+
+export function useDocumentState(id: string) {
+    return documentsMap.get(id) || ensure(id);
+}
+
+export function useAllDocumentsState() {
+    return documentsMap;
+}
+
+// ---- Minimal internal peek helpers for multi-pane hook integration ----
+// Whether there are staged (pending) changes that would trigger a save on flush.
+export function __hasPendingDocumentChanges(id: string): boolean {
+    const st = documentsMap.get(id);
+    return !!(
+        st &&
+        st.record &&
+        (st.pendingTitle !== undefined || st.pendingContent !== undefined)
+    );
+}
+
+// Read current status (used to confirm a flush produced a saved state).
+export function __peekDocumentStatus(
+    id: string
+): DocState['status'] | undefined {
+    return documentsMap.get(id)?.status;
+}
+
+// Release a document's in-memory state (after ensuring pending changes flushed).
+// This lets GC reclaim large TipTap JSON payloads when switching away.
+export async function releaseDocument(
+    id: string,
+    opts: { flush?: boolean; deleteEntry?: boolean } = {}
+) {
+    // Rename to avoid shadowing the exported flush(id) function above.
+    const { flush: shouldFlush = true, deleteEntry = true } = opts;
+    const st = documentsMap.get(id);
+    if (!st) return;
+    if (st.timer) {
+        clearTimeout(st.timer);
+        st.timer = undefined;
+    }
+    if (shouldFlush) {
+        try {
+            await flush(id);
+        } catch {}
+    }
+    // Null record to drop heavy content reference; then optionally drop entry entirely.
+    if (st.record) {
+        try {
+            // Remove large nested content tree reference if present.
+            if ((st.record as any).content)
+                (st.record as any).content = undefined;
+        } catch {}
+        st.record = null;
+    }
+    st.pendingTitle = undefined;
+    st.pendingContent = undefined;
+    if (deleteEntry) {
+        documentsMap.delete(id);
+    }
+}
+```
+
+## File: app/composables/useMultiPane.ts
+```typescript
+// Multi-pane state management composable for chat & documents
+// Keeps pane logic outside of UI components for easier testing & extension.
+
+import Dexie from 'dexie';
+import { ref, computed, type Ref, type ComputedRef } from 'vue';
+import { db } from '~/db';
+import { useHooks } from './useHooks';
+
+// Narrow pane message representation (always flattened string content)
+export type MultiPaneMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+    id?: string;
+    stream_id?: string;
+};
+
+export interface PaneState {
+    id: string;
+    mode: 'chat' | 'doc';
+    threadId: string; // '' indicates unsaved/new chat
+    documentId?: string;
+    messages: MultiPaneMessage[];
+    validating: boolean;
+}
+
+export interface UseMultiPaneOptions {
+    initialThreadId?: string;
+    maxPanes?: number; // default 3
+    onFlushDocument?: (id: string) => void | Promise<void>;
+    loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
+}
+
+export interface UseMultiPaneApi {
+    panes: Ref<PaneState[]>;
+    activePaneIndex: Ref<number>;
+    canAddPane: ComputedRef<boolean>;
+    newWindowTooltip: ComputedRef<string>;
+    addPane: () => void;
+    closePane: (index: number) => Promise<void> | void;
+    setActive: (index: number) => void;
+    focusPrev: (current: number) => void;
+    focusNext: (current: number) => void;
+    setPaneThread: (index: number, threadId: string) => Promise<void>;
+    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;
+    ensureAtLeastOne: () => void;
+}
+
+function genId() {
+    try {
+        if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+            // @ts-ignore
+            return crypto.randomUUID();
+        }
+    } catch {}
+    return 'pane-' + Math.random().toString(36).slice(2);
+}
+
+function createEmptyPane(initialThreadId = ''): PaneState {
+    return {
+        id: genId(),
+        mode: 'chat',
+        threadId: initialThreadId,
+        messages: [],
+        validating: false,
+    };
+}
+
+async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
+    if (!id) return [];
+    try {
+        const msgs = await db.messages
+            .where('[thread_id+index]')
+            .between([id, Dexie.minKey], [id, Dexie.maxKey])
+            .filter((m: any) => !m.deleted)
+            .toArray();
+        return (msgs || []).map((msg: any) => {
+            const data = msg.data as {
+                content?: string;
+                reasoning_text?: string | null;
+            };
+            const content =
+                typeof data === 'object' && data !== null && 'content' in data
+                    ? String((data as any).content ?? '')
+                    : String((msg.content as any) ?? '');
+            return {
+                role: msg.role as 'user' | 'assistant',
+                content,
+                file_hashes: msg.file_hashes,
+                id: msg.id,
+                stream_id: msg.stream_id,
+                reasoning_text: data?.reasoning_text || null,
+            } as MultiPaneMessage;
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+export function useMultiPane(
+    options: UseMultiPaneOptions = {}
+): UseMultiPaneApi {
+    const { initialThreadId = '', maxPanes = 3 } = options;
+
+    const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
+    const activePaneIndex = ref(0);
+    const hooks = useHooks();
+
+    const canAddPane = computed(() => panes.value.length < maxPanes);
+    const newWindowTooltip = computed(() =>
+        canAddPane.value ? 'New window' : `Max ${maxPanes} windows`
+    );
+
+    const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
+
+    async function setPaneThread(index: number, threadId: string) {
+        const pane = panes.value[index];
+        if (!pane) return;
+        const oldId = pane.threadId;
+        let requested: string | '' | false = threadId;
+        if (import.meta.dev) {
+            try {
+                console.debug('[multiPane] setPaneThread:request', {
+                    index,
+                    oldId,
+                    incoming: threadId,
+                });
+            } catch {}
+        }
+        // Allow external transform / veto
+        try {
+            requested = (await hooks.applyFilters(
+                'ui.pane.thread:filter:select',
+                requested,
+                pane,
+                oldId
+            )) as string | '' | false;
+        } catch {}
+        if (requested === false) return; // veto
+        // Clear association
+        if (requested === '') {
+            pane.threadId = '';
+            pane.messages = [];
+            if (oldId !== '')
+                hooks.doAction(
+                    'ui.pane.thread:action:changed',
+                    pane,
+                    oldId,
+                    '',
+                    0
+                );
+            if (import.meta.dev) {
+                try {
+                    console.debug('[multiPane] setPaneThread:cleared', {
+                        index,
+                        oldId,
+                    });
+                } catch {}
+            }
+            return;
+        }
+        pane.threadId = requested;
+        pane.messages = await loadMessagesFor(requested);
+        if (oldId !== requested)
+            hooks.doAction(
+                'ui.pane.thread:action:changed',
+                pane,
+                oldId,
+                requested,
+                pane.messages.length
+            );
+        if (import.meta.dev) {
+            try {
+                console.debug('[multiPane] setPaneThread:applied', {
+                    index,
+                    oldId,
+                    newId: requested,
+                    messages: pane.messages.length,
+                });
+            } catch {}
+        }
+    }
+
+    function setActive(i: number) {
+        if (i < 0 || i >= panes.value.length) return;
+        if (i === activePaneIndex.value) return;
+        const prevIndex = activePaneIndex.value;
+        const prevPane = panes.value[prevIndex];
+        activePaneIndex.value = i;
+        if (import.meta.dev) {
+            try {
+                console.debug('[multiPane] setActive', {
+                    prevIndex,
+                    nextIndex: i,
+                    prevThread: prevPane?.threadId,
+                    nextThread: panes.value[i]?.threadId,
+                });
+            } catch {}
+        }
+        if (prevPane)
+            hooks.doAction('ui.pane.blur:action', prevPane, prevIndex);
+        // Preserve existing switch hook for compatibility
+        hooks.doAction('ui.pane.switch:action', panes.value[i], i);
+        hooks.doAction('ui.pane.active:action', panes.value[i], i, prevIndex);
+    }
+
+    function addPane() {
+        if (!canAddPane.value) return;
+        const pane = createEmptyPane();
+        panes.value.push(pane);
+        setActive(panes.value.length - 1);
+        hooks.doAction(
+            'ui.pane.open:action:after',
+            pane,
+            panes.value.length - 1
+        );
+    }
+
+    async function closePane(i: number) {
+        if (panes.value.length <= 1) return; // never close last
+        const closing = panes.value[i];
+        // Pre-close hook
+        hooks.doAction('ui.pane.close:action:before', closing, i);
+        if (
+            closing?.mode === 'doc' &&
+            closing.documentId &&
+            options.onFlushDocument
+        ) {
+            try {
+                await options.onFlushDocument(closing.documentId);
+            } catch {}
+        }
+        const wasActive = i === activePaneIndex.value;
+        panes.value.splice(i, 1);
+        if (!panes.value.length) {
+            panes.value.push(createEmptyPane());
+            activePaneIndex.value = 0;
+            return;
+        }
+        if (wasActive) {
+            const newIndex = Math.min(i, panes.value.length - 1);
+            setActive(newIndex);
+        } else if (i < activePaneIndex.value) {
+            activePaneIndex.value -= 1; // shift left
+        }
+    }
+
+    function focusPrev(current: number) {
+        if (panes.value.length < 2) return;
+        const target = current - 1;
+        if (target >= 0) setActive(target);
+    }
+    function focusNext(current: number) {
+        if (panes.value.length < 2) return;
+        const target = current + 1;
+        if (target < panes.value.length) setActive(target);
+    }
+
+    function ensureAtLeastOne() {
+        if (!panes.value.length) {
+            panes.value.push(createEmptyPane());
+            activePaneIndex.value = 0;
+        }
+    }
+
+    const api: UseMultiPaneApi = {
+        panes,
+        activePaneIndex,
+        canAddPane,
+        newWindowTooltip,
+        addPane,
+        closePane,
+        setActive,
+        focusPrev,
+        focusNext,
+        setPaneThread,
+        loadMessagesFor,
+        ensureAtLeastOne,
+    };
+
+    // Expose globally so plugins (message action handlers etc.) can interact.
+    // This is intentionally lightweight; if multiple instances are created the latest wins.
+    try {
+        (globalThis as any).__or3MultiPaneApi = api;
+    } catch {}
+
+    return api;
+}
+
+export type { PaneState as MultiPaneState };
+```
+
+## File: app/composables/usePaneDocuments.ts
+```typescript
+// Composable to manage per-pane document operations (create/select) abstracted from UI.
+// Assumes panes follow the PaneState contract from useMultiPane.
+
+import type { Ref } from 'vue';
+import type { MultiPaneState } from '~/composables/useMultiPane';
+import {
+    releaseDocument,
+    useDocumentState,
+} from '~/composables/useDocumentsStore';
+import { useHooks } from './useHooks';
+
+export interface UsePaneDocumentsOptions {
+    panes: Ref<MultiPaneState[]>;
+    activePaneIndex: Ref<number>;
+    createNewDoc: (initial?: { title?: string }) => Promise<{ id: string }>;
+    flushDocument: (id: string) => Promise<void> | void;
+}
+
+export interface UsePaneDocumentsApi {
+    newDocumentInActive: (initial?: {
+        title?: string;
+    }) => Promise<{ id: string } | undefined>;
+    selectDocumentInActive: (id: string) => Promise<void>;
+}
+
+export function usePaneDocuments(
+    opts: UsePaneDocumentsOptions
+): UsePaneDocumentsApi {
+    const { panes, activePaneIndex, createNewDoc, flushDocument } = opts;
+    const hooks = useHooks();
+
+    function findPaneByDoc(id: string) {
+        return panes.value.find((p) => p.mode === 'doc' && p.documentId === id);
+    }
+
+    async function newDocumentInActive(initial?: { title?: string }) {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        try {
+            if (pane.mode === 'doc' && pane.documentId) {
+                // Detect pending changes before flush.
+                const prevState = useDocumentState(pane.documentId);
+                const hadPending = !!(
+                    prevState &&
+                    ((prevState as any).pendingTitle !== undefined ||
+                        (prevState as any).pendingContent !== undefined)
+                );
+                await flushDocument(pane.documentId);
+                // Central flush may emit saved; ensure at least one emission when tests simulate state outside real store.
+                if (hadPending) {
+                    // Avoid duplicate: only emit if pane still bound and pending flags cleared (meaning flush processed) and no recent status 'saved' dispatch already triggered pane emission.
+                    // Simple heuristic: do nothing if pane.documentId changed during flush.
+                    if (pane.documentId) {
+                        hooks.doAction(
+                            'ui.pane.doc:action:saved',
+                            pane,
+                            pane.documentId,
+                            {}
+                        );
+                    }
+                }
+                await releaseDocument(pane.documentId, { flush: false });
+            }
+            const doc = await createNewDoc(initial);
+            const oldId = pane.documentId;
+            let newId: string | '' | false = doc.id;
+            try {
+                newId = (await hooks.applyFilters(
+                    'ui.pane.doc:filter:select',
+                    newId,
+                    pane,
+                    oldId
+                )) as any;
+            } catch {}
+            if (newId === false) return undefined; // veto
+            pane.mode = 'doc';
+            pane.documentId = newId || undefined;
+            pane.threadId = '';
+            pane.messages = [];
+            if (oldId !== newId)
+                hooks.doAction(
+                    'ui.pane.doc:action:changed',
+                    pane,
+                    oldId,
+                    newId || ''
+                );
+            return doc;
+        } catch {
+            return undefined;
+        }
+    }
+
+    async function selectDocumentInActive(id: string) {
+        if (!id) return;
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        const oldId = pane.documentId || '';
+        let requested: string | '' | false = id;
+        try {
+            requested = (await hooks.applyFilters(
+                'ui.pane.doc:filter:select',
+                requested,
+                pane,
+                oldId
+            )) as any;
+        } catch {}
+        if (requested === false) return; // veto
+        if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
+            try {
+                const prevState = useDocumentState(pane.documentId);
+                const hadPending = !!(
+                    prevState &&
+                    ((prevState as any).pendingTitle !== undefined ||
+                        (prevState as any).pendingContent !== undefined)
+                );
+                await flushDocument(pane.documentId); // central flush may emit
+                if (hadPending) {
+                    if (pane.documentId) {
+                        hooks.doAction(
+                            'ui.pane.doc:action:saved',
+                            pane,
+                            pane.documentId,
+                            {}
+                        );
+                    }
+                }
+            } catch {}
+            // Always release the previous doc state after switching.
+            await releaseDocument(pane.documentId, { flush: false });
+        }
+        pane.mode = 'doc';
+        pane.documentId = (requested as string) || undefined;
+        pane.threadId = '';
+        pane.messages = [];
+        if (oldId !== requested)
+            hooks.doAction(
+                'ui.pane.doc:action:changed',
+                pane,
+                oldId,
+                requested || ''
+            );
+    }
+
+    return { newDocumentInActive, selectDocumentInActive };
+}
+```
+
+## File: app/composables/useStreamAccumulator.ts
+```typescript
+/**
+ * Unified streaming accumulator (Task 1 – Unified Streaming Core)
+ * Minimal rAF‑batched token buffer replacing legacy useTailStream + ad hoc refs.
+ *
+ * Responsibilities:
+ *  - Collect incoming text / reasoning deltas via append()
+ *  - Batch DOM/reactive writes to ≤1 per animation frame
+ *  - Provide finalize() with success / error / abort semantics (idempotent)
+ *  - Expose readonly reactive StreamingState for UI consumption
+ */
+import { reactive, toRefs } from 'vue';
+
+export interface StreamingState {
+    text: string;
+    reasoningText: string;
+    isActive: boolean;
+    finalized: boolean;
+    error: Error | null;
+    version: number; // increments on each flush for lightweight watchers
+}
+
+export type AppendKind = 'text' | 'reasoning';
+
+export interface StreamAccumulatorApi {
+    state: Readonly<StreamingState>;
+    append(delta: string, options: { kind: AppendKind }): void;
+    finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent
+    reset(): void; // prepare for a fresh stream
+}
+
+// Fallback rAF for SSR / test environments
+const HAS_RAF = typeof requestAnimationFrame !== 'undefined';
+const _raf:
+    | typeof requestAnimationFrame
+    | ((cb: FrameRequestCallback) => number) = HAS_RAF
+    ? requestAnimationFrame
+    : (cb: FrameRequestCallback) =>
+          setTimeout(() => cb(performance.now()), 0) as any;
+const _caf: typeof cancelAnimationFrame | ((id: number) => void) = HAS_RAF
+    ? cancelAnimationFrame
+    : (id: number) => clearTimeout(id);
+
+export function createStreamAccumulator(): StreamAccumulatorApi {
+    const state = reactive<StreamingState>({
+        text: '',
+        reasoningText: '',
+        isActive: true,
+        finalized: false,
+        error: null,
+        version: 0,
+    });
+    // TODO(normalization): Future message normalization pass will consolidate assistant
+    // message text assembly so accumulator text piping can directly hydrate persisted
+    // message content without duplicate string concatenation in useChat.
+
+    let pendingMain: string[] = [];
+    let pendingReasoning: string[] = [];
+    let frame: number | null = null;
+    let _finalized = false;
+    let emptyAppendWarnings = 0;
+
+    function flush() {
+        frame = null;
+        if (pendingMain.length) {
+            state.text += pendingMain.join('');
+            pendingMain = [];
+        }
+        if (pendingReasoning.length) {
+            state.reasoningText += pendingReasoning.join('');
+            pendingReasoning = [];
+        }
+        state.version++;
+    }
+
+    function schedule() {
+        if (frame != null || _finalized) return;
+        if (!HAS_RAF) {
+            // In test / SSR environments without rAF, schedule a microtask-ish flush quickly
+            frame = _raf(() => flush());
+            return;
+        }
+        frame = _raf(flush);
+    }
+
+    /** Ensure stream not already finalized. Returns false if already finalized. */
+    function ensureNotFinalized(op: string): boolean {
+        if (_finalized) {
+            if (import.meta.dev) {
+                console.warn(`[stream] ${op} after finalize ignored`);
+            }
+            return false;
+        }
+        return true;
+    }
+
+    function append(delta: string, { kind }: { kind: AppendKind }) {
+        if (!ensureNotFinalized('append')) return;
+        if (!delta) {
+            if (import.meta.dev && ++emptyAppendWarnings <= 3) {
+                console.warn(
+                    '[stream] empty delta append ignored (possible upstream tokenization issue)'
+                );
+            }
+            return;
+        }
+        if (kind === 'reasoning') pendingReasoning.push(delta);
+        else pendingMain.push(delta);
+        schedule();
+    }
+
+    function finalize(opts?: { error?: Error; aborted?: boolean }) {
+        if (!ensureNotFinalized('finalize')) return;
+        _finalized = true;
+        if (frame != null) {
+            _caf(frame); // cancel pending frame then immediate flush
+            frame = null;
+        }
+        if (pendingMain.length || pendingReasoning.length) flush();
+        else state.version++;
+        if (opts?.error) state.error = opts.error;
+        state.isActive = false;
+        state.finalized = true;
+    }
+
+    function reset() {
+        if (frame != null) {
+            _caf(frame);
+            frame = null;
+        }
+        pendingMain = [];
+        pendingReasoning = [];
+        _finalized = false;
+        emptyAppendWarnings = 0;
+        state.text = '';
+        state.reasoningText = '';
+        state.error = null;
+        state.isActive = true;
+        state.finalized = false;
+        state.version++;
+    }
+
+    return { state, append, finalize, reset };
+}
+
+// Convenience factory (future usage) - could be extended to support options
+export function useStreamAccumulator() {
+    return createStreamAccumulator();
+}
+
+export type { StreamingState as UnifiedStreamingState };
+```
+
+## File: app/pages/_test.vue
+```vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar>
+            <div class="flex flex-col h-full relative">
+                <div class="p-2 flex flex-col space-y-2">
+                    <UButton class="w-full flex items-center justify-center"
+                        >New Chat</UButton
+                    >
+                    <UInput
+                        icon="i-lucide-search"
+                        size="md"
+                        variant="outline"
+                        placeholder="Search..."
+                        class="w-full ml-[1px]"
+                    ></UInput>
+                </div>
+                <div class="flex flex-col p-2 space-y-1.5">
+                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about aids</UButton
+                    >
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about dogs</UButton
+                    >
+                </div>
+                <sidebar-side-bottom-nav />
+            </div>
+        </template>
+
+        <!-- Default slot = main content (right side) -->
+        <div class="min-h-[100dvh] overflow-y-scroll">
+            <div
+                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
+            ></div>
+
+            <div class="p-6 space-y-4">
+                <div class="flex flex-row space-x-2">
+                    <UButton @click="showToast" size="sm" color="primary"
+                        >Nuxt UI Button</UButton
+                    >
+                    <UButton color="success">Nuxt UI Button</UButton>
+                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+                </div>
+                <div class="flex flex-row space-x-2">
+                    <UButtonGroup size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                    <UButtonGroup orientation="vertical" size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                </div>
+
+                <div class="flex space-x-2">
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="sm"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="md"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="lg"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
+                        @click="toggle()"
+                    >
+                        Toggle Light/Dark
+                    </button>
+                    <span class="text-[var(--md-on-surface)]"
+                        >Current: {{ theme }}</span
+                    >
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div
+                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
+                    >
+                        Surface / On-Surface
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
+                    >
+                        Secondary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
+                    >
+                        Tertiary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
+                    >
+                        Error Container
+                    </div>
+                </div>
+
+                <chat-input-dropper />
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+
+const nuxtApp = useNuxtApp();
+// Theme plugin is client-only (theme.client.ts). During SSR/prerender $theme is undefined.
+// Guard with optional chaining so SSR does not crash trying to read .get on undefined.
+const theme = computed(() => (nuxtApp.$theme as any)?.get?.() ?? 'light');
+const toggle = () => (nuxtApp.$theme as any)?.toggle?.();
+const toast = useToast();
+
+function showToast() {
+    toast.add({
+        title: 'Success',
+        description: 'Your action was completed successfully.',
+        color: 'success',
+    });
+}
+</script>
+```
+
+## File: nuxt.config.ts
+```typescript
+// https://nuxt.com/docs/api/configuration/nuxt-config
+
+export default defineNuxtConfig({
+    compatibilityDate: '2025-07-15',
+    devtools: { enabled: true },
+    modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
+    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
+    srcDir: 'app',
+    // Load Tailwind + theme variables globally
+    css: ['~/assets/css/main.css'],
+    fonts: {
+        families: [
+            { name: 'Press Start 2P', provider: 'google' },
+            { name: 'VT323', provider: 'google' },
+        ],
+    },
+    // PWA configuration
+    pwa: {
+        // Auto update SW when new content is available
+        registerType: 'autoUpdate',
+        // Enable PWA in dev so you can install/test while developing
+        devOptions: {
+            enabled: true,
+            suppressWarnings: true,
+        },
+        // Expose $pwa and intercept install prompt
+        client: {
+            installPrompt: true,
+            registerPlugin: true,
+        },
+        // Basic offline support; let Workbox handle common assets
+        workbox: {
+            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+            runtimeCaching: [
+                // Cache Vite/Nuxt client chunks in dev after first load
+                {
+                    urlPattern: /^\/_nuxt\//,
+                    handler: 'NetworkFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-dev-chunks',
+                        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
+                    },
+                },
+                // Cache app images from public/
+                {
+                    urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'static-images',
+                        expiration: { maxEntries: 200, maxAgeSeconds: 7 * 24 * 60 * 60 },
+                    },
+                },
+                // Cache fonts provided by @nuxt/fonts (served under /_fonts/)
+                {
+                    urlPattern: /^\/_fonts\//,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-fonts',
+                        expiration: { maxEntries: 50, maxAgeSeconds: 30 * 24 * 60 * 60 },
+                    },
+                },
+                // Cache Nuxt Icon API responses used by UI
+                {
+                    urlPattern: /\/api\/_nuxt_icon\/.*$/,
+                    handler: 'StaleWhileRevalidate',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-icons',
+                        expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
+                    },
+                },
+            ],
+        },
+        // Web App Manifest
+        manifest: {
+            name: 'Or3 Chat',
+            short_name: 'Or3.Chat',
+            description:
+                'The open, extensible AI chat platform for the people.',
+            start_url: '/',
+            display: 'standalone',
+            background_color: '#0b0f1a',
+            theme_color: '#0b0f1a',
+            icons: [
+                {
+                    src: '/logos/logo-192.png',
+                    sizes: '192x192',
+                    type: 'image/png',
+                },
+                {
+                    src: '/logos/logo-512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                },
+                // WebP is fine in many browsers; PNGs above cover platforms requiring PNG
+                {
+                    src: '/logos/logo-1024.webp',
+                    sizes: '1024x1024',
+                    type: 'image/webp',
+                    purpose: 'any maskable',
+                },
+            ],
+        },
+    },
+    // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
+    ignore: [
+        '**/*.test.*',
+        '**/__tests__/**',
+        'tests/**',
+        // Example plugins (dev only); keep them out of production build
+        process.env.NODE_ENV === 'production'
+            ? 'app/plugins/examples/**'
+            : undefined,
+    ].filter(Boolean) as string[],
+});
+```
+
+## File: app/composables/index.ts
+```typescript
+/** Barrel export for chat-related composables (Task 1.6) */
+export * from './useStreamAccumulator';
+export * from './useObservedElementSize';
+export * from './ui-extensions/messages/useMessageActions';
+export * from './ui-extensions/documents/useDocumentHistoryActions';
+export * from './ui-extensions/threads/useThreadHistoryActions';
+export * from './ui-extensions/projects/useProjectTreeActions';
+```
+
+## File: app/components/ResizableSidebarLayout.vue
+```vue
+<template>
+    <div
+        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+    >
+        <!-- Backdrop on mobile when open -->
+        <Transition
+            enter-active-class="transition-opacity duration-150"
+            leave-active-class="transition-opacity duration-150"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="!isDesktop && open"
+                class="absolute inset-0 bg-black/40 z-30 md:hidden"
+                @click="close()"
+            />
+        </Transition>
+
+        <!-- Sidebar -->
+        <aside
+            :class="[
+                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-[var(--md-inverse-surface)] flex flex-col',
+                // width transition on desktop
+                initialized
+                    ? 'md:transition-[width] md:duration-200 md:ease-out'
+                    : 'hidden',
+                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
+                side === 'right' ? 'md:border-l md:border-r-0' : '',
+                // mobile overlay behavior
+                !isDesktop
+                    ? [
+                          'absolute top-0 bottom-0 w-[380px] max-w-[90vw] shadow-xl',
+                          // animated slide
+                          'transition-transform duration-200 ease-out',
+                          side === 'right'
+                              ? 'right-0 translate-x-full'
+                              : 'left-0 -translate-x-full',
+                          open ? 'translate-x-0' : '',
+                      ]
+                    : '',
+            ]"
+            :style="
+                Object.assign(
+                    isDesktop ? { width: computedWidth + 'px' } : {},
+                    {
+                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
+                        '--sidebar-rep-opacity': String(
+                            props.sidebarPatternOpacity
+                        ),
+                    }
+                )
+            "
+            @keydown.esc.stop.prevent="close()"
+        >
+            <div class="h-full flex flex-col">
+                <!-- Sidebar header -->
+                <SidebarHeader
+                    :collapsed="collapsed"
+                    :toggle-icon="toggleIcon"
+                    :toggle-aria="toggleAria"
+                    @toggle="toggleCollapse"
+                >
+                    <template #sidebar-header>
+                        <slot name="sidebar-header" />
+                    </template>
+                    <template #sidebar-toggle="slotProps">
+                        <slot name="sidebar-toggle" v-bind="slotProps" />
+                    </template>
+                </SidebarHeader>
+
+                <!-- Sidebar content -->
+                <div class="flex-1 overflow-auto">
+                    <div v-show="!collapsed" class="flex-1 h-full">
+                        <slot name="sidebar-expanded">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
+                    <div v-if="collapsed" class="flex-1 h-full">
+                        <slot name="sidebar-collapsed">
+                            <div class="p-3 space-y-2 text-sm opacity-80">
+                                <p>Add your nav here…</p>
+                                <ul class="space-y-1">
+                                    <li
+                                        v-for="i in 10"
+                                        :key="i"
+                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                    >
+                                        Item {{ i }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </slot>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resize handle (desktop only) -->
+            <ResizeHandle
+                :is-desktop="isDesktop"
+                :collapsed="collapsed"
+                :side="side"
+                :min-width="props.minWidth"
+                :max-width="props.maxWidth"
+                :computed-width="computedWidth"
+                @resize-start="onPointerDown"
+                @resize-keydown="onHandleKeydown"
+            />
+        </aside>
+
+        <!-- Main content -->
+        <div class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
+            <div
+                class="flex-1 overflow-hidden content-bg"
+                :style="{
+                    '--content-bg-size': props.patternSize + 'px',
+                    '--content-bg-opacity': String(props.patternOpacity),
+                    '--content-overlay-size': props.overlaySize + 'px',
+                    '--content-overlay-opacity': String(props.overlayOpacity),
+                }"
+            >
+                <slot>
+                    <div class="p-4 space-y-2 text-sm opacity-80">
+                        <p>Put your main content here…</p>
+                        <p>
+                            Resize the sidebar on desktop by dragging the
+                            handle. On mobile, use the Menu button to open/close
+                            the overlay.
+                        </p>
+                    </div>
+                </slot>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import SidebarHeader from './sidebar/SidebarHeader.vue';
+import ResizeHandle from './sidebar/ResizeHandle.vue';
+
+type Side = 'left' | 'right';
+
+const props = defineProps({
+    modelValue: { type: Boolean, default: undefined },
+    defaultOpen: { type: Boolean, default: true },
+    side: { type: String as () => Side, default: 'left' },
+    minWidth: { type: Number, default: 320 },
+    maxWidth: { type: Number, default: 480 },
+    defaultWidth: { type: Number, default: 280 },
+    collapsedWidth: { type: Number, default: 56 },
+    storageKey: { type: String, default: 'sidebar:width' },
+    // Visual tuning for content pattern
+    patternOpacity: { type: Number, default: 0.05 }, // 0..1
+    patternSize: { type: Number, default: 150 }, // px
+    // Overlay pattern (renders above the base pattern)
+    overlayOpacity: { type: Number, default: 0.05 },
+    overlaySize: { type: Number, default: 120 },
+    // Sidebar repeating background
+    sidebarPatternOpacity: { type: Number, default: 0.09 },
+    sidebarPatternSize: { type: Number, default: 240 },
+});
+const emit = defineEmits<{
+    (e: 'update:modelValue', v: boolean): void;
+    (e: 'resize', width: number): void;
+}>();
+
+// helper
+const clamp = (w: number) =>
+    Math.min(props.maxWidth, Math.max(props.minWidth, w));
+
+// open state (controlled or uncontrolled)
+// Hydration note:
+// We intentionally start CLOSED for both SSR and initial client render to avoid
+// class / node mismatches between server HTML (which cannot know viewport width)
+// and the hydrated client (which previously opened immediately on desktop).
+// After mount we detect desktop and apply defaultOpen. This removes the
+// hydration warnings about missing backdrop / translate-x-0 classes.
+const openState = ref<boolean>(
+    (() => {
+        if (props.modelValue !== undefined) return props.modelValue;
+        return false; // unified deterministic initial state
+    })()
+);
+const open = computed({
+    get: () =>
+        props.modelValue === undefined ? openState.value : props.modelValue,
+    set: (v) => {
+        if (props.modelValue === undefined) openState.value = v;
+        emit('update:modelValue', v);
+    },
+});
+
+// collapsed toggle remembers last expanded width
+const collapsed = ref(false);
+const lastExpandedWidth = ref(props.defaultWidth);
+
+// width state with persistence
+const width = ref<number>(props.defaultWidth);
+const computedWidth = computed(() =>
+    collapsed.value ? props.collapsedWidth : width.value
+);
+
+// Attempt early (pre-mount) restoration to avoid post-mount jank
+if (import.meta.client) {
+    try {
+        const saved = localStorage.getItem(props.storageKey);
+        if (saved) width.value = clamp(parseInt(saved, 10));
+    } catch {}
+}
+
+// responsive
+const isDesktop = ref(false);
+let mq: MediaQueryList | undefined;
+const updateMq = () => {
+    if (typeof window === 'undefined') return;
+    mq = window.matchMedia('(min-width: 768px)');
+    isDesktop.value = mq.matches;
+};
+
+// Defer enabling transitions until after first paint so restored width doesn't animate
+const initialized = ref(false);
+
+onMounted(() => {
+    updateMq();
+    mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
+    // Apply defaultOpen only AFTER we know if we're on desktop so SSR & first client
+    // render remain consistent.
+    if (
+        props.modelValue === undefined &&
+        isDesktop.value &&
+        props.defaultOpen &&
+        !openState.value
+    ) {
+        openState.value = true;
+    }
+    requestAnimationFrame(() => (initialized.value = true));
+});
+
+onBeforeUnmount(() => {
+    mq?.removeEventListener('change', () => {});
+});
+
+watch(width, (w) => {
+    try {
+        localStorage.setItem(props.storageKey, String(w));
+    } catch {}
+    emit('resize', w);
+});
+
+function toggle() {
+    open.value = !open.value;
+}
+function close() {
+    open.value = false;
+}
+function toggleCollapse() {
+    // On mobile, treat the collapse toggle as a full close of the overlay
+    if (!isDesktop.value) {
+        open.value = false;
+        return;
+    }
+    if (!collapsed.value) {
+        lastExpandedWidth.value = width.value;
+        collapsed.value = true;
+    } else {
+        collapsed.value = false;
+        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
+    }
+}
+
+// Resize logic (desktop only)
+let startX = 0;
+let startWidth = 0;
+function onPointerDown(e: PointerEvent) {
+    if (!isDesktop.value || collapsed.value) return;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    startX = e.clientX;
+    startWidth = width.value;
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp, { once: true });
+}
+function onPointerMove(e: PointerEvent) {
+    const dx = e.clientX - startX;
+    const delta = props.side === 'right' ? -dx : dx;
+    width.value = clamp(startWidth + delta);
+}
+function onPointerUp() {
+    window.removeEventListener('pointermove', onPointerMove);
+}
+
+// Keyboard a11y for the resize handle
+function onHandleKeydown(e: KeyboardEvent) {
+    if (!isDesktop.value || collapsed.value) return;
+    const step = e.shiftKey ? 32 : 16;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        // reverse on right side
+        const signed = props.side === 'right' ? -dir : dir;
+        width.value = clamp(width.value + signed * step);
+    } else if (e.key === 'Home') {
+        e.preventDefault();
+        width.value = props.minWidth;
+    } else if (e.key === 'End') {
+        e.preventDefault();
+        width.value = props.maxWidth;
+    } else if (e.key === 'PageUp') {
+        e.preventDefault();
+        const big = step * 2;
+        const signed = props.side === 'right' ? -1 : 1;
+        width.value = clamp(width.value + signed * big);
+    } else if (e.key === 'PageDown') {
+        e.preventDefault();
+        const big = step * 2;
+        const signed = props.side === 'right' ? 1 : -1;
+        width.value = clamp(width.value - signed * big);
+    }
+}
+
+// expose minimal API if needed
+function openSidebar() {
+    open.value = true;
+}
+function expand() {
+    // Ensure sidebar is open (mobile) and uncollapsed (desktop)
+    open.value = true;
+    if (collapsed.value) {
+        collapsed.value = false;
+        width.value = clamp(lastExpandedWidth.value || props.defaultWidth);
+    }
+}
+defineExpose({ toggle, close, openSidebar, expand, isCollapsed: collapsed });
+
+const side = computed<Side>(() => (props.side === 'right' ? 'right' : 'left'));
+// Icon and aria label for collapse/expand button
+const toggleIcon = computed(() => {
+    // When collapsed, show the icon that suggests expanding back toward content area
+    if (collapsed.value) {
+        return side.value === 'right'
+            ? 'pixelarticons:arrow-bar-left'
+            : 'pixelarticons:arrow-bar-right';
+    }
+    // When expanded, show icon pointing into the sidebar to collapse it
+    return side.value === 'right'
+        ? 'pixelarticons:arrow-bar-right'
+        : 'pixelarticons:arrow-bar-left';
+});
+const toggleAria = computed(() =>
+    collapsed.value ? 'Expand sidebar' : 'Collapse sidebar'
+);
+</script>
+
+<style scoped>
+/* Optional: could add extra visual flair for the resize handle here */
+.content-bg {
+    position: relative;
+    /* Base matches sidebar/header */
+    background-color: var(--md-surface);
+}
+
+.content-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    /* Default variables; can be overridden via inline style */
+    --content-bg-size: 150px;
+    --content-bg-opacity: 0.08;
+    background-size: var(--content-bg-size) var(--content-bg-size);
+    opacity: var(--content-bg-opacity);
+    z-index: 0;
+}
+
+/* Ensure the real content sits above the pattern */
+.content-bg > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Overlay layer above base pattern but below content */
+.content-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/bg-repeat-2.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    --content-overlay-size: 380px;
+    --content-overlay-opacity: 0.125;
+    background-size: var(--content-overlay-size) var(--content-overlay-size);
+    opacity: var(--content-overlay-opacity);
+    z-index: 0.5;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Sidebar repeating background layer */
+aside::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url('/sidebar-repeater.webp');
+    background-repeat: repeat;
+    background-position: top left;
+    background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
+    opacity: var(--sidebar-rep-opacity);
+    z-index: 0;
+}
+
+/* Ensure sidebar children render above the pattern, but keep handle on top */
+aside > *:not(.resize-handle-layer) {
+    position: relative;
+    z-index: 1;
+}
+</style>
+```
+
+## File: app/components/chat/VirtualMessageList.vue
+```vue
+<template>
+    <!-- Wrapper around virtua's virtual list for messages -->
+    <div ref="root" class="flex flex-col min-w-0" :class="wrapperClass">
+        <Virtualizer
+            :data="messages"
+            :itemSize="effectiveItemSize || undefined"
+            :overscan="overscan"
+            :scrollRef="scrollParent || undefined"
+            @scroll="onScroll"
+            @scroll-end="onScrollEnd"
+            v-slot="{ item, index }"
+        >
+            <div :key="item.id || index">
+                <slot name="item" :message="item" :index="index" />
+            </div>
+        </Virtualizer>
+        <!-- Tail slot for streaming message appended after virtualized stable messages -->
+        <slot name="tail" />
+    </div>
+</template>
+
+<script setup lang="ts">
+/**
+ * VirtualMessageList
+ * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
+ * Thin abstraction over virtua's <VList>. Purpose:
+ *  - Decouple higher-level chat code from 3p library specifics (swap easier).
+ *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
+ *    auto-scroll + lazy fetch triggers without leaking scroll math.
+ *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
+ *    don't sprinkle magic numbers.
+ *
+ * Task 2.3: Centralize scroll state and behavior here using VueUse utilities.
+ * - useScroll: passive scroll tracking
+ * - useResizeObserver: respond to size/DOM changes (messages/streaming)
+ * - useRafFn: batch scroll-to-bottom to next frame to avoid jank
+ */
+import {
+    onMounted,
+    ref,
+    watch,
+    computed,
+    nextTick,
+    watchEffect,
+    type PropType,
+} from 'vue';
+// eslint-disable-next-line import/no-unresolved
+import { Virtualizer } from 'virtua/vue';
+import {
+    useScroll,
+    useResizeObserver,
+    useRafFn,
+    useEventListener,
+} from '@vueuse/core';
+
+interface ChatMessage {
+    id: string;
+    role?: string;
+    content?: string;
+    [k: string]: any;
+}
+
+const props = defineProps({
+    messages: { type: Array as PropType<ChatMessage[]>, required: true },
+    itemSizeEstimation: { type: Number, default: 500 }, // baseline heuristic average row height
+    overscan: { type: Number, default: 4 },
+    wrapperClass: { type: String, default: '' },
+    scrollParent: {
+        type: Object as PropType<HTMLElement | null>,
+        default: null,
+    },
+    // Task 3.2: streaming maintenance
+    isStreaming: { type: Boolean, default: false },
+    // Task 3.1: adjustable threshold (design 100px; we default 100 while retaining legacy 64 logic internally)
+    autoScrollThreshold: { type: Number, default: 100 },
+    // Task 3.3: external editing suppression of auto-scroll
+    editingActive: { type: Boolean, default: false },
+    // Task 3.4: enable dynamic estimation of item size from growth deltas
+    dynamicItemSize: { type: Boolean, default: true },
+});
+
+const emit = defineEmits<{
+    (e: 'visible-range-change', range: { start: number; end: number }): void;
+    (e: 'reached-top'): void;
+    (e: 'reached-bottom'): void;
+    (e: 'scroll-state', state: { atBottom: boolean; stick: boolean }): void; // Task 5.1.2
+}>();
+
+const root = ref<HTMLElement | null>(null);
+// Accept both HTMLElement and Ref<HTMLElement|null> for scrollParent prop
+const scrollParentRef = computed<HTMLElement | null>(() => {
+    const sp: any = props.scrollParent as any;
+    const el = sp && typeof sp === 'object' && 'value' in sp ? sp.value : sp;
+    return el || root.value;
+});
+// Tunables (defined BEFORE any immediate watchers that call compute to avoid TDZ during HMR)
+// Use provided threshold for deciding auto-scroll near-bottom detection (Req 1.1/3.1.3)
+const thresholdPx = computed(() => props.autoScrollThreshold);
+const disengageDeltaPx = 12; // small intentional upward scroll disengages
+const USER_SCROLL_INACTIVE_TIMEOUT = 800;
+
+// Scroll / stick state
+let stick = true; // whether we are willing to auto-scroll
+const atBottom = ref(true); // updated by compute(); default true so first append snaps
+let lastScrollTop = 0;
+let lastScrollHeight = 0;
+let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Initialize scroll metrics once scroll parent becomes available (after variables above are defined)
+watch(
+    scrollParentRef,
+    (el) => {
+        if (!el) return;
+        try {
+            lastScrollHeight = (el as any).scrollHeight || 0;
+            lastScrollTop = (el as any).scrollTop || 0;
+        } catch {}
+        compute();
+    },
+    { immediate: true }
+);
+
+// Scroll state emission tracking (Task 5.1.2)
+let lastEmittedStick: boolean | null = null;
+let lastEmittedAtBottom: boolean | null = null;
+function maybeEmitScrollState() {
+    const a = atBottom.value;
+    if (a !== lastEmittedAtBottom || stick !== lastEmittedStick) {
+        try {
+            emit('scroll-state', { atBottom: a, stick });
+        } catch {}
+        lastEmittedAtBottom = a;
+        lastEmittedStick = stick;
+    }
+}
+
+// Passive scroll monitoring
+useScroll(scrollParentRef, {
+    eventListenerOptions: { passive: true },
+});
+
+function compute() {
+    const el =
+        (props.scrollParent as any) || scrollParentRef.value || root.value;
+    if (!el) return;
+    const currentTop = el.scrollTop;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottomNow = dist <= thresholdPx.value;
+    // Disengage if user scrolled upward a meaningful amount.
+    const upward = currentTop < lastScrollTop - disengageDeltaPx;
+    if (upward) {
+        stick = false; // user explicitly left bottom intent
+    } else if (atBottomNow && currentTop > lastScrollTop) {
+        // Only (re)enable stick when user actively scrolled downward into bottom zone.
+        stick = true;
+    }
+    atBottom.value = atBottomNow;
+    lastScrollTop = currentTop;
+    lastScrollHeight = el.scrollHeight;
+    maybeEmitScrollState();
+}
+
+function markUserScroll() {
+    if (userScrollTimer) clearTimeout(userScrollTimer);
+    userScrollTimer = setTimeout(() => {}, USER_SCROLL_INACTIVE_TIMEOUT);
+}
+
+useEventListener(scrollParentRef, 'scroll', compute, {
+    passive: true,
+});
+useEventListener(scrollParentRef, 'wheel', markUserScroll, { passive: true });
+useEventListener(scrollParentRef, 'touchstart', markUserScroll, {
+    passive: true,
+});
+useEventListener(scrollParentRef, 'touchmove', markUserScroll, {
+    passive: true,
+});
+
+// Minimal: auto-scroll only if user is at bottom and not editing.
+const shouldAutoScroll = computed(
+    () => stick && atBottom.value && !props.editingActive
+);
+
+// (Restick delay removed for simplicity.)
+
+function scrollToBottom(opts: { smooth?: boolean } = {}) {
+    if (!stick) return; // respect disengaged reading state
+    const baseEl = scrollParentRef.value || root.value;
+    if (!baseEl) return;
+    const smooth = opts.smooth === true;
+    const targets: any[] = [];
+    if (baseEl) targets.push(baseEl);
+    if (root.value && root.value !== baseEl) targets.push(root.value);
+    for (const t of targets) {
+        try {
+            const bottomPos = t.scrollHeight - t.clientHeight;
+            if (typeof t.scrollTo === 'function') {
+                t.scrollTo({
+                    top: bottomPos,
+                    behavior: (smooth ? 'smooth' : 'auto') as ScrollBehavior,
+                });
+            } else {
+                t.scrollTop = bottomPos;
+            }
+        } catch {}
+    }
+    stick = true;
+    (scrollToBottom as any)._count = ((scrollToBottom as any)._count || 0) + 1;
+    try {
+        lastScrollTop = baseEl.scrollTop ?? lastScrollTop;
+        lastScrollHeight = baseEl.scrollHeight ?? lastScrollHeight;
+    } catch {}
+}
+
+let pendingSmooth = false;
+const raf = useRafFn(
+    () => {
+        raf.pause();
+        scrollToBottom({ smooth: pendingSmooth });
+        pendingSmooth = false;
+    },
+    { immediate: false }
+);
+function scrollToBottomRaf(smooth = false) {
+    pendingSmooth = smooth;
+    if (!raf.isActive.value) raf.resume();
+}
+
+function onContentIncrease() {
+    const el =
+        (props.scrollParent as any) || scrollParentRef.value || root.value;
+    if (!el) return;
+    if (shouldAutoScroll.value) {
+        scrollToBottom({ smooth: false });
+    } else {
+        // Just refresh metrics, do not adjust position.
+        lastScrollHeight = el.scrollHeight;
+    }
+}
+
+useResizeObserver(root, () => {
+    nextTick(onContentIncrease);
+});
+watch(
+    () => props.scrollParent,
+    (el) => {
+        if (!el) return;
+        useResizeObserver(el, () => {
+            nextTick(onContentIncrease);
+        });
+    },
+    { immediate: true }
+);
+
+function computeRange(): { start: number; end: number } {
+    const total = props.messages.length;
+    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
+    return { start: 0, end: total - 1 };
+}
+
+function onInternalUpdate() {
+    const range = computeRange();
+    emit('visible-range-change', range);
+    if (range.start === 0) emit('reached-top');
+    if (range.end >= props.messages.length - 1) emit('reached-bottom');
+}
+
+function onScroll() {
+    onInternalUpdate();
+}
+function onScrollEnd() {
+    onInternalUpdate();
+}
+
+const averageItemSize = ref<number>(props.itemSizeEstimation);
+let prevLength = props.messages.length;
+let prevScrollHeight = 0;
+
+watch(
+    () => props.messages.length,
+    () => {
+        const el = scrollParentRef.value || root.value;
+        const beforeAtBottom = atBottom.value;
+        const added = props.messages.length - prevLength;
+        if (el && added > 0) {
+            prevScrollHeight = el.scrollHeight;
+        }
+        onInternalUpdate();
+        nextTick(() => {
+            const el2 = scrollParentRef.value || root.value;
+            if (props.dynamicItemSize && el2 && added > 0) {
+                const deltaH = el2.scrollHeight - prevScrollHeight;
+                if (deltaH > 0) {
+                    const per = deltaH / added;
+                    averageItemSize.value = Math.max(
+                        32,
+                        Math.min(1200, averageItemSize.value * 0.7 + per * 0.3)
+                    );
+                } else if (
+                    deltaH === 0 &&
+                    averageItemSize.value === props.itemSizeEstimation
+                ) {
+                    averageItemSize.value = props.itemSizeEstimation;
+                }
+            }
+            if (added > 0) {
+                if (shouldAutoScroll.value && beforeAtBottom) {
+                    scrollToBottomRaf(true);
+                } else {
+                    onContentIncrease();
+                }
+            }
+            prevLength = props.messages.length;
+        });
+    }
+);
+
+const effectiveItemSize = computed(() => {
+    return props.dynamicItemSize
+        ? Math.round(averageItemSize.value)
+        : props.itemSizeEstimation;
+});
+
+watchEffect(() => {
+    if (!props.isStreaming) return;
+    if (!shouldAutoScroll.value) return; // includes stick check
+    nextTick(() => scrollToBottomRaf(false));
+});
+
+// --- Finalize clamp (retry over a few macrotasks to catch synthetic jump) ---
+// --- Finalize stabilization: simplest form (capture reading position while streaming, restore once) ---
+let readingPos: number | null = null;
+// Capture reading position anytime user is disengaged during streaming
+useEventListener(scrollParentRef, 'scroll', () => {
+    if (!props.isStreaming) return;
+    if (stick || atBottom.value) return; // following bottom; no need
+    const el = scrollParentRef.value || root.value;
+    if (!el) return;
+    readingPos = el.scrollTop;
+});
+
+watch(
+    () => props.isStreaming,
+    (v, prev) => {
+        if (!(prev && !v)) return; // only when streaming just ended
+        if (stick || atBottom.value) {
+            readingPos = null;
+            return;
+        }
+        const target = readingPos;
+        if (target == null) return;
+        const apply = () => {
+            const el = scrollParentRef.value || root.value;
+            if (!el) {
+                readingPos = null;
+                return;
+            }
+            if (stick || atBottom.value) {
+                readingPos = null;
+                return;
+            }
+            // If user scrolled further up after finalize, respect it
+            if (el.scrollTop < target - 4) {
+                readingPos = null;
+                return;
+            }
+            if (Math.abs(el.scrollTop - target) > 4) {
+                try {
+                    if (typeof (el as any).scrollTo === 'function')
+                        (el as any).scrollTo({ top: target });
+                } catch {}
+                try {
+                    (el as any).scrollTop = target;
+                } catch {}
+            }
+            readingPos = null;
+        };
+        // Stage corrections so synthetic test mutation (immediate) is seen:
+        nextTick(() => {
+            apply();
+            queueMicrotask(apply);
+            requestAnimationFrame(apply);
+        });
+    },
+    { flush: 'post' }
+);
+
+onMounted(() => {
+    onInternalUpdate();
+    nextTick(() => {
+        compute();
+        if (atBottom.value) {
+            scrollToBottom({ smooth: false });
+        }
+    });
+    const sp: any = props.scrollParent as any;
+    if (
+        sp &&
+        typeof sp === 'object' &&
+        'value' in sp &&
+        !sp.value &&
+        root.value instanceof HTMLElement
+    ) {
+        try {
+            sp.value = root.value;
+        } catch {}
+    }
+});
+
+defineExpose({
+    atBottom,
+    onContentIncrease,
+    scrollToBottom,
+    stickBottom: () => {
+        stick = true;
+        scrollToBottom({ smooth: true });
+    },
+    release: () => {
+        stick = false;
+        // no-op; stick will restore only when user reaches bottom again
+    },
+    effectiveItemSize,
+    _devMetrics: () => ({ scrollCalls: (scrollToBottom as any)._count || 0 }),
+});
+</script>
+
+<style scoped>
+/* Keep retro feel: no extra styling here; rely on parent theme utilities */
+</style>
+```
+
+## File: app/components/PageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 h-[100dvh] w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 min-w-0 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            :pane-id="pane.id"
+                            @thread-selected="
+                                (id: string) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <LazyDocumentsDocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        ></LazyDocumentsDocumentEditor>
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+// Generic PageShell merging chat + docs functionality.
+// Props allow initializing with a thread OR a document and choosing default mode.
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        initialDocumentId?: string;
+        validateInitial?: boolean; // applies to whichever id is provided
+        routeSync?: boolean;
+        defaultMode?: 'chat' | 'doc'; // used when no initial id
+    }>(),
+    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+
+// ---------------- Multi-pane ----------------
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
+
+// Active thread convenience (first pane for sidebar highlight)
+const activeChatThreadId = computed(() =>
+    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
+);
+
+// --------------- Initializers ---------------
+let validateToken = 0;
+
+async function validateThread(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t && !t.deleted) return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function validateDocument(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function initInitial() {
+    if (!process.client) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.initialThreadId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateThread(props.initialThreadId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('chat');
+                return;
+            }
+        }
+        await setPaneThread(0, props.initialThreadId);
+        pane.mode = 'chat';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    if (props.initialDocumentId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateDocument(props.initialDocumentId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('doc');
+                return;
+            }
+        }
+        pane.mode = 'doc';
+        pane.documentId = props.initialDocumentId;
+        pane.threadId = '';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    // No ids: set default mode
+    if (props.defaultMode === 'doc') {
+        pane.mode = 'doc';
+        pane.documentId = undefined;
+        pane.threadId = '';
+    } else {
+        pane.mode = 'chat';
+    }
+    updateUrl();
+}
+
+function redirectNotFound(kind: 'chat' | 'doc') {
+    if (kind === 'chat') router.replace('/chat');
+    else router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description:
+            kind === 'chat'
+                ? 'This chat does not exist.'
+                : 'This document does not exist.',
+        color: 'error',
+    });
+}
+
+// --------------- URL Sync ---------------
+function updateUrl() {
+    if (!process.client || !props.routeSync) return;
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    const base = pane.mode === 'doc' ? '/docs' : '/chat';
+    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
+    const newPath = id ? `${base}/${id}` : base;
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+watch(
+    () =>
+        panes.value
+            .map(
+                (p) =>
+                    `${p.id}:${p.mode}:${p.threadId || ''}:${
+                        p.documentId || ''
+                    }`
+            )
+            .join(','),
+    () => updateUrl()
+);
+
+watch(
+    () => activePaneIndex.value,
+    () => updateUrl()
+);
+
+// --------------- Documents Integration ---------------
+const { useDocumentState } = await import('~/composables/useDocumentsStore');
+const hooks = useHooks();
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: async (id) => {
+        await flushDocument(id); // central flush now emits saved
+    },
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrl();
+    closeSidebarIfMobile();
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrl();
+    closeSidebarIfMobile();
+}
+
+// Sidebar chat selection always puts pane in chat mode
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrl();
+    closeSidebarIfMobile();
+}
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrl();
+    closeSidebarIfMobile();
+}
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrl();
+    closeSidebarIfMobile();
+}
+
+// --------------- Theme ---------------
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// --------------- Mobile + layout ---------------
+import { isMobile } from '~/state/global';
+// Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
+if (process.client) {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const apply = () => (isMobile.value = mq.matches);
+    onMounted(() => {
+        apply();
+        mq.addEventListener('change', apply);
+    });
+    const dispose = () => mq.removeEventListener('change', apply);
+    onUnmounted(dispose);
+    if (import.meta.hot) import.meta.hot.dispose(dispose);
+}
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+function openMobileSidebar() {
+    (layoutRef.value as any)?.openSidebar?.();
+}
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => {
+        sideNavExpandedRef.value?.focusSearchInput?.();
+    });
+}
+function closeSidebarIfMobile() {
+    if (isMobile.value) (layoutRef.value as any)?.close?.();
+}
+
+// --------------- Deletion auto-reset ---------------
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    if (paneIndex === activePaneIndex.value) updateUrl();
+}
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
+    });
+}
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
+    });
+}
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+
+// --------------- Mount ---------------
+onMounted(() => {
+    initInitial();
+    syncTheme();
+    ensureAtLeastOne();
+});
+
+// --------------- Shortcuts ---------------
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+</script>
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
+```
+
+## File: app/components/chat/ChatInputDropper.vue
+```vue
+<template>
+    <div
+        @dragover.prevent="onDragOver"
+        @dragleave.prevent="onDragLeave"
+        @drop.prevent="handleDrop"
+        :class="[
+            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            isDragging
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+            loading ? 'opacity-90 pointer-events-auto' : '',
+        ]"
+    >
+        <div class="flex flex-col gap-3.5 m-3.5">
+            <!-- Main Input Area -->
+            <div class="relative">
+                <div
+                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
+                >
+                    <!-- TipTap Editor -->
+                    <EditorContent
+                        :editor="editor as Editor"
+                        class="prosemirror-host"
+                    ></EditorContent>
+
+                    <div
+                        v-if="loading"
+                        class="absolute top-1 right-1 flex items-center gap-2"
+                    >
+                        <UIcon
+                            name="pixelarticons:loader"
+                            class="w-4 h-4 animate-spin opacity-70"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="flex gap-2.5 w-full items-center">
+                <div
+                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
+                >
+                    <!-- Attachment Button -->
+                    <div class="relative shrink-0">
+                        <UButton
+                            @click="triggerFileInput"
+                            :square="true"
+                            size="sm"
+                            color="info"
+                            class="retro-btn text-black dark:text-white flex items-center justify-center"
+                            type="button"
+                            aria-label="Add attachments"
+                            :disabled="loading"
+                        >
+                            <UIcon name="i-lucide:plus" class="w-4 h-4" />
+                        </UButton>
+                    </div>
+
+                    <!-- Settings Button (stub) -->
+                    <div class="relative shrink-0">
+                        <UPopover>
+                            <UButton
+                                label="Open"
+                                :square="true"
+                                size="sm"
+                                color="info"
+                                class="retro-btn text-black dark:text-white flex items-center justify-center"
+                                type="button"
+                                aria-label="Settings"
+                                :disabled="loading"
+                            >
+                                <UIcon
+                                    name="pixelarticons:sliders"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                            <template #content>
+                                <div class="flex flex-col w-[320px]">
+                                    <!-- Model Selector extracted -->
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2"
+                                    >
+                                        <LazyChatModelSelect
+                                            hydrate-on-interaction="focus"
+                                            v-if="
+                                                containerWidth &&
+                                                containerWidth < 400
+                                            "
+                                            v-model:model="selectedModel"
+                                            :loading="loading"
+                                            class="w-full!"
+                                        />
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable web search"
+                                            class="w-full"
+                                            v-model="webSearchEnabled"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:visible"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full items-center py-1 px-2 border-b"
+                                    >
+                                        <USwitch
+                                            color="primary"
+                                            label="Enable thinking"
+                                            class="w-full"
+                                        ></USwitch>
+                                        <UIcon
+                                            name="pixelarticons:lightbulb-on"
+                                            class="w-4 h-4"
+                                        />
+                                    </div>
+                                    <button
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 border-b cursor-pointer"
+                                        @click="showSystemPrompts = true"
+                                    >
+                                        <span class="px-1">System prompts</span>
+                                        <UIcon
+                                            name="pixelarticons:script-text"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
+                                    <button
+                                        @click="showModelCatalog = true"
+                                        class="flex justify-between w-full items-center py-1 px-2 hover:bg-primary/10 rounded-[3px] cursor-pointer"
+                                    >
+                                        <span class="px-1">Model Catalog</span>
+                                        <UIcon
+                                            name="pixelarticons:android"
+                                            class="w-4 h-4"
+                                        />
+                                    </button>
+                                </div>
+                            </template>
+                        </UPopover>
+                    </div>
+                </div>
+
+                <!-- Model Selector extracted -->
+                <LazyChatModelSelect
+                    hydrate-on-interaction="focus"
+                    v-if="!isMobile && containerWidth && containerWidth > 400"
+                    v-model:model="selectedModel"
+                    :loading="loading"
+                    class="shrink-0 hidden sm:block"
+                />
+
+                <!-- Send / Stop Button -->
+                <div>
+                    <UButton
+                        v-if="!props.streaming"
+                        @click="handleSend"
+                        :disabled="
+                            loading ||
+                            (!promptText.trim() && uploadedImages.length === 0)
+                        "
+                        :square="true"
+                        size="sm"
+                        color="primary"
+                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Send message"
+                    >
+                        <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
+                    </UButton>
+                    <UButton
+                        v-else
+                        @click="emit('stop-stream')"
+                        :square="true"
+                        size="sm"
+                        color="error"
+                        class="retro-btn text-white dark:text-black flex items-center justify-center"
+                        type="button"
+                        aria-label="Stop generation"
+                    >
+                        <UIcon name="pixelarticons:pause" class="w-4 h-4" />
+                    </UButton>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
+        <div
+            v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
+            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+        >
+            <!-- Images -->
+            <div
+                v-for="(image, index) in uploadedImages.filter(
+                    (att: any) => att.kind === 'image'
+                )"
+                :key="'img-' + index"
+                class="relative group aspect-square"
+            >
+                <img
+                    :src="image.url"
+                    :alt="'Uploaded Image ' + (index + 1)"
+                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                />
+                <button
+                    @click="() => removeImage(uploadedImages.indexOf(image))"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove image"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+                <div
+                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                >
+                    {{ image.name }}
+                </div>
+            </div>
+            <!-- PDFs -->
+            <div
+                v-for="(pdf, index) in uploadedImages.filter(
+                    (att: any) => att.kind === 'pdf'
+                )"
+                :key="'pdf-' + index"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >PDF</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="pdf.name"
+                        >{{ pdf.name }}</span
+                    >
+                </div>
+                <button
+                    @click="() => removeImage(uploadedImages.indexOf(pdf))"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove PDF"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+            </div>
+            <!-- Large Text Blocks -->
+            <div
+                v-for="(block, tIndex) in largeTextBlocks"
+                :key="'txt-' + block.id"
+                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+            >
+                <div
+                    class="flex flex-col items-center justify-center w-full h-full"
+                >
+                    <span
+                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        >TXT</span
+                    >
+                    <span
+                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        :title="block.previewFull"
+                    >
+                        {{ block.preview }}
+                    </span>
+                    <span class="mt-1 text-[10px] opacity-70"
+                        >{{ block.wordCount }}w</span
+                    >
+                </div>
+                <button
+                    @click="removeTextBlock(tIndex)"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    aria-label="Remove text block"
+                    :disabled="loading"
+                >
+                    <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
+                </button>
+            </div>
+        </div>
+
+        <!-- Drag and Drop Overlay -->
+        <div
+            v-if="isDragging"
+            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+        >
+            <div class="text-center">
+                <UIcon
+                    name="i-lucide:upload-cloud"
+                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
+                />
+                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                    Drop images here to upload
+                </p>
+            </div>
+        </div>
+        <lazy-modal-settings-modal v-model:showModal="showModelCatalog" />
+        <LazyChatSystemPromptsModal hydrate-on-visible
+        v-model:showModal="showSystemPrompts" :thread-id="props.threadId" "
+        :pane-id="props.paneId" @selected="handlePromptSelected"
+        @closed="handlePromptModalClosed" />
+    </div>
+</template>
+
+<script setup lang="ts">
+import {
+    ref,
+    nextTick,
+    defineEmits,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+    getCurrentInstance,
+} from 'vue';
+import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
+import { createOrRefFile } from '~/db/files';
+import type { FileMeta } from '~/db/schema';
+import { useModelStore } from '~/composables/useModelStore';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import { Extension } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
+import { computed } from 'vue';
+import { isMobile, state } from '~/state/global';
+import { useUserApiKey } from '~/composables/useUserApiKey';
+import { useOpenRouterAuth } from '~/composables/useOpenrouter';
+import { useToast } from '#imports';
+import {
+    registerPaneInput,
+    unregisterPaneInput,
+} from '~/composables/useChatInputBridge';
+const props = defineProps<{
+    loading?: boolean;
+    containerWidth?: number;
+    threadId?: string;
+    streaming?: boolean; // assistant response streaming
+    paneId?: string; // provided by ChatContainer so the bridge can key this input
+}>();
+
+const { favoriteModels, getFavoriteModels } = useModelStore();
+const webSearchEnabled = ref<boolean>(false);
+const LAST_MODEL_KEY = 'last_selected_model';
+
+onMounted(async () => {
+    const fave = await getFavoriteModels();
+    // Favorite models loaded (log removed)
+    if (process.client) {
+        try {
+            const stored = localStorage.getItem(LAST_MODEL_KEY);
+            if (stored && typeof stored === 'string') {
+                selectedModel.value = stored;
+            }
+        } catch (e) {
+            console.warn('[ChatInputDropper] restore last model failed', e);
+        }
+    }
+});
+
+onMounted(() => {
+    if (!process.client) return;
+    try {
+        // Minimal shortcut: Enter sends, Shift+Enter = newline
+        const enterToSend = Extension.create({
+            name: 'enterToSend',
+            addKeyboardShortcuts() {
+                return {
+                    Enter: () => {
+                        // Disable auto-send on mobile; allow normal newline
+                        if (isMobile.value) return false;
+                        // Respect Shift+Enter for newline
+                        const ev = window.event as KeyboardEvent | undefined;
+                        if (ev?.shiftKey) return false;
+                        handleSend();
+                        return true; // prevent default newline
+                    },
+                    'Shift-Enter': () => false, // explicit newline
+                };
+            },
+        });
+        editor.value = new Editor({
+            extensions: [
+                enterToSend,
+                Placeholder.configure({
+                    // Use a placeholder:
+                    placeholder: 'Write something …',
+                }),
+                StarterKit.configure({
+                    bold: false,
+                    italic: false,
+                    strike: false,
+                    code: false,
+                    blockquote: false,
+                    heading: false,
+                    bulletList: false,
+                    orderedList: false,
+                    codeBlock: false,
+                    horizontalRule: false,
+                    dropcursor: false,
+                    gapcursor: false,
+                }),
+            ],
+            onUpdate: ({ editor: ed }) => {
+                promptText.value = ed.getText();
+                autoResize();
+            },
+            onPaste: (event) => {
+                handlePaste(event);
+            },
+            content: '',
+        });
+    } catch (err) {
+        console.warn(
+            '[ChatInputDropper] TipTap init failed, using fallback textarea',
+            err
+        );
+    }
+});
+
+onBeforeUnmount(() => {
+    try {
+        editor.value?.destroy();
+    } catch (err) {
+        console.warn('[ChatInputDropper] TipTap destroy error', err);
+    }
+});
+
+interface UploadedImage {
+    file: File;
+    url: string; // data URL preview
+    name: string;
+    hash?: string; // content hash after persistence
+    status: 'pending' | 'ready' | 'error';
+    error?: string;
+    meta?: FileMeta;
+    mime: string;
+    kind: 'image' | 'pdf';
+}
+
+interface ImageSettings {
+    quality: 'low' | 'medium' | 'high';
+    numResults: number;
+    size: '1024x1024' | '1024x1536' | '1536x1024';
+}
+
+const showModelCatalog = ref(false);
+const showSystemPrompts = ref(false);
+
+const emit = defineEmits<{
+    (
+        e: 'send',
+        payload: {
+            text: string;
+            images: UploadedImage[]; // backward compatibility
+            attachments: UploadedImage[]; // new unified field
+            largeTexts: LargeTextBlock[];
+            model: string;
+            settings: ImageSettings;
+            webSearchEnabled: boolean;
+        }
+    ): void;
+    (e: 'prompt-change', value: string): void;
+    (e: 'image-add', image: UploadedImage): void;
+    (e: 'image-remove', index: number): void;
+    (e: 'model-change', model: string): void;
+    (e: 'settings-change', settings: ImageSettings): void;
+    (e: 'trigger-file-input'): void;
+    (e: 'pending-prompt-selected', promptId: string | null): void;
+    (e: 'stop-stream'): void; // New event for stopping the stream
+    (e: 'resize', payload: { height: number }): void;
+}>();
+
+const promptText = ref('');
+// Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const editor = ref<Editor | null>(null);
+
+const attachments = ref<UploadedImage[]>([]);
+// Backward compatibility: expose as uploadedImages for template
+const uploadedImages = computed(() => attachments.value);
+// Large pasted text blocks (> threshold)
+interface LargeTextBlock {
+    id: string;
+    text: string;
+    wordCount: number;
+    preview: string;
+    previewFull: string;
+}
+const largeTextBlocks = ref<LargeTextBlock[]>([]);
+const LARGE_TEXT_WORD_THRESHOLD = 600;
+function makeId() {
+    return Math.random().toString(36).slice(2, 9);
+}
+const isDragging = ref(false);
+const selectedModel = ref<string>('openai/gpt-oss-120b');
+const hiddenFileInput = ref<HTMLInputElement | null>(null);
+const imageSettings = ref<ImageSettings>({
+    quality: 'medium',
+    numResults: 2,
+    size: '1024x1024',
+});
+const showSettingsDropdown = ref(false);
+
+watch(selectedModel, (newModel) => {
+    emit('model-change', newModel);
+    if (process.client) {
+        try {
+            localStorage.setItem(LAST_MODEL_KEY, newModel);
+        } catch (e) {
+            console.warn('[ChatInputDropper] persist last model failed', e);
+        }
+    }
+});
+
+const autoResize = async () => {
+    await nextTick();
+    if (textareaRef.value) {
+        textareaRef.value.style.height = 'auto';
+        textareaRef.value.style.height =
+            Math.min(textareaRef.value.scrollHeight, 384) + 'px';
+    }
+};
+
+const handlePromptInput = () => {
+    emit('prompt-change', promptText.value);
+    autoResize();
+};
+
+const handlePaste = async (event: ClipboardEvent) => {
+    const cd = event.clipboardData;
+    if (!cd) return;
+    // 1. Handle images and PDFs first (extended behavior)
+    const items = cd.items;
+    let handled = false;
+    for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it) continue;
+        const mime = it.type || '';
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
+            event.preventDefault();
+            handled = true;
+            const file = it.getAsFile();
+            if (!file) continue;
+            await processAttachment(
+                file,
+                file.name ||
+                    `pasted-${
+                        mime.startsWith('image/') ? 'image' : 'pdf'
+                    }-${Date.now()}.${
+                        mime === 'application/pdf' ? 'pdf' : 'png'
+                    }`
+            );
+        }
+    }
+    if (handled) return; // skip text path if attachment already captured
+
+    // 2. Large text detection
+    const text = cd.getData('text/plain');
+    if (!text) return; // allow normal behavior
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount >= LARGE_TEXT_WORD_THRESHOLD) {
+        // Prevent the heavy text from entering the rich-text editor (lag source)
+        event.preventDefault();
+        event.stopPropagation();
+        const prev = editor.value ? editor.value.getText() : '';
+        const previewFull = text.slice(0, 800).trim();
+        const preview =
+            previewFull.split(/\s+/).slice(0, 12).join(' ') +
+            (wordCount > 12 ? '…' : '');
+        largeTextBlocks.value.push({
+            id: makeId(),
+            text,
+            wordCount,
+            preview,
+            previewFull,
+        });
+        // TipTap may still stage an insertion despite preventDefault in some edge cases;
+        // restore previous content on next tick to be safe.
+        nextTick(() => {
+            try {
+                if (editor.value)
+                    editor.value.commands.setContent(prev, {
+                        emitUpdate: false,
+                    });
+            } catch {}
+        });
+    }
+};
+
+const triggerFileInput = () => {
+    emit('trigger-file-input');
+    if (!hiddenFileInput.value) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        input.addEventListener('change', (e) => {
+            handleFileChange(e);
+        });
+        document.body.appendChild(input);
+        hiddenFileInput.value = input;
+    }
+    hiddenFileInput.value?.click();
+};
+
+const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
+
+async function processAttachment(file: File, name?: string) {
+    const mime = file.type || '';
+    const kind = mime.startsWith('image/')
+        ? 'image'
+        : mime === 'application/pdf'
+        ? 'pdf'
+        : null;
+    if (!kind) return; // only images and PDFs
+    // Fast preview first
+    const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) =>
+            resolve(
+                typeof e.target?.result === 'string'
+                    ? (e.target?.result as string)
+                    : ''
+            );
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+    });
+    if (attachments.value.length >= MAX_IMAGES) return;
+    const attachment: UploadedImage = {
+        file,
+        url: dataUrl,
+        name: name || file.name,
+        status: 'pending',
+        mime,
+        kind,
+    };
+    attachments.value.push(attachment);
+    emit('image-add', attachment);
+    try {
+        const meta = await createOrRefFile(file, attachment.name);
+        attachment.hash = meta.hash;
+        attachment.meta = meta;
+        attachment.status = 'ready';
+    } catch (err: any) {
+        attachment.status = 'error';
+        attachment.error = err?.message || 'failed';
+        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
+    }
+}
+
+const processFiles = async (files: FileList | null) => {
+    if (!files) return;
+    for (let i = 0; i < files.length; i++) {
+        if (attachments.value.length >= MAX_IMAGES) break;
+        const file = files[i];
+        if (!file) continue;
+        await processAttachment(file);
+    }
+};
+
+const handleFileChange = (event: Event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || !target.files) return;
+    processFiles(target.files);
+};
+
+const handleDrop = (event: DragEvent) => {
+    isDragging.value = false;
+    processFiles(event.dataTransfer?.files || null);
+};
+
+const onDragOver = (event: DragEvent) => {
+    const items = event.dataTransfer?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        const mime = item.type || '';
+        if (mime.startsWith('image/') || mime === 'application/pdf') {
+            isDragging.value = true;
+            return;
+        }
+    }
+};
+
+const onDragLeave = (event: DragEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = event.clientX;
+    const y = event.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        isDragging.value = false;
+    }
+};
+
+const removeImage = (index: number) => {
+    attachments.value.splice(index, 1);
+    emit('image-remove', index);
+};
+
+const removeTextBlock = (index: number) => {
+    largeTextBlocks.value.splice(index, 1);
+};
+
+const handleSend = () => {
+    if (props.loading) return;
+    // Require OpenRouter connection (api key) before sending
+    const { apiKey } = useUserApiKey();
+    if (!apiKey.value) {
+        const { startLogin } = useOpenRouterAuth();
+        // Show toast with action to initiate login
+        useToast().add({
+            id: 'need-openrouter-login',
+            title: 'Connect to OpenRouter',
+            description: 'You need to log in before sending messages.',
+            color: 'primary',
+            duration: 5000,
+            actions: [
+                {
+                    label: 'Login',
+                    onClick: () => startLogin(),
+                    size: 'sm',
+                },
+                {
+                    label: 'Manually enter key',
+                    onClick: (toast) => {
+                        const apiKey = prompt(
+                            'Please enter your OpenRouter API key:'
+                        );
+
+                        if (apiKey && apiKey.trim()) {
+                            // Save the API key
+                            state.value.openrouterKey = apiKey.trim();
+                        }
+                    },
+                    size: 'sm',
+                    variant: 'link',
+                },
+            ],
+        });
+        return;
+    }
+    if (
+        promptText.value.trim() ||
+        uploadedImages.value.length > 0 ||
+        largeTextBlocks.value.length > 0
+    ) {
+        emit('send', {
+            text: promptText.value,
+            images: attachments.value, // backward compatibility
+            attachments: attachments.value, // new unified field
+            largeTexts: largeTextBlocks.value,
+            model: selectedModel.value,
+            settings: imageSettings.value,
+            webSearchEnabled: webSearchEnabled.value,
+        });
+        // Reset local state and editor content so placeholder shows again
+        promptText.value = '';
+        try {
+            editor.value?.commands.clearContent();
+        } catch (e) {
+            // noop
+        }
+        attachments.value = [];
+        largeTextBlocks.value = [];
+        autoResize();
+    }
+};
+
+// Imperative bridge API (used by programmatic pane plugin sends)
+function setText(t: string) {
+    promptText.value = t;
+    try {
+        if (editor.value) {
+            editor.value.commands.setContent(t, { emitUpdate: true });
+        }
+    } catch {}
+    autoResize();
+}
+function triggerSend() {
+    handleSend();
+}
+defineExpose({ setText, triggerSend });
+
+onMounted(() => {
+    if (props.paneId) {
+        registerPaneInput(props.paneId, { setText, triggerSend });
+    }
+});
+onBeforeUnmount(() => {
+    if (props.paneId) unregisterPaneInput(props.paneId);
+});
+
+const handlePromptSelected = (id: string) => {
+    if (!props.threadId) emit('pending-prompt-selected', id);
+};
+
+const handlePromptModalClosed = () => {
+    /* modal closed */
+};
+
+// Emit live height via ResizeObserver (debounced with rAF)
+let __resizeRaf: number | null = null;
+// Flattened observer setup (avoids build transform splitting issues)
+if (process.client && 'ResizeObserver' in window) {
+    let ro: ResizeObserver | null = null;
+    onMounted(() => {
+        const inst = getCurrentInstance();
+        const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
+        if (!rootEl) return;
+        ro = new ResizeObserver(() => {
+            if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
+            __resizeRaf = requestAnimationFrame(() => {
+                emit('resize', { height: rootEl.offsetHeight });
+            });
+        });
+        ro.observe(rootEl);
+    });
+    const dispose = () => {
+        try {
+            ro?.disconnect();
+        } catch {}
+        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
+        ro = null;
+    };
+    onBeforeUnmount(dispose);
+    if (import.meta.hot) import.meta.hot.dispose(dispose);
+}
+</script>
+
+<style scoped>
+/* Custom scrollbar for textarea */
+/* Firefox */
+textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit */
+textarea::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background: var(--md-primary);
+    border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+
+/* Focus states */
+.group:hover .opacity-0 {
+    opacity: 1;
+}
+
+/* Smooth transitions */
+* {
+    transition-property: color, background-color, border-color, opacity,
+        transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* ProseMirror (TipTap) base styles */
+/* TipTap base */
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+
+/* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    /* Use design tokens; ensure sufficient contrast in dark mode */
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85; /* increase for dark background readability */
+    font-weight: normal;
+}
+</style>
+```
+
+## File: app/composables/useAi.ts
+```typescript
+import { ref } from 'vue';
+import { createStreamAccumulator } from './useStreamAccumulator';
+import { useToast } from '#imports';
+import { nowSec, newId } from '~/db/util';
+import { useUserApiKey } from './useUserApiKey';
+import { useHooks } from './useHooks';
+import { useActivePrompt } from './useActivePrompt';
+import { getDefaultPromptId } from './useDefaultPrompt';
+import { create, db, tx, upsert } from '~/db';
+import { createOrRefFile } from '~/db/files';
+import { serializeFileHashes } from '~/db/files-util';
+import {
+    parseHashes,
+    mergeAssistantFileHashes,
+} from '~/utils/files/attachments';
+import { getThreadSystemPrompt } from '~/db/threads';
+import { getPrompt } from '~/db/prompts';
+import type {
+    ContentPart,
+    ChatMessage,
+    SendMessageParams,
+    TextPart,
+} from '~/utils/chat/types';
+import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import {
+    buildParts,
+    mergeFileHashes,
+    trimOrMessagesImages,
+} from '~/utils/chat/messages';
+// getTextFromContent removed for UI messages; raw messages maintain original parts if needed
+import { openRouterStream } from '~/utils/chat/openrouterStream';
+import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
+import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
+import { promptJsonToString } from '~/utils/prompt-utils';
+import { state } from '~/state/global';
+
+const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+export function useChat(
+    msgs: ChatMessage[] = [],
+    initialThreadId?: string,
+    pendingPromptId?: string
+) {
+    // Messages and basic state
+    // UI-facing normalized messages
+    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
+    // Raw legacy messages (content parts / strings) used for history & hooks
+    const rawMessages = ref<ChatMessage[]>([...msgs]);
+    const getRawMessages = () => {
+        if (import.meta.dev) {
+            console.warn(
+                '[useChat] getRawMessages() is deprecated; prefer UiChatMessage via messages ref'
+            );
+        }
+        return rawMessages.value;
+    }; // transitional
+    const loading = ref(false);
+    const abortController = ref<AbortController | null>(null);
+    const aborted = ref(false);
+    let { apiKey, setKey } = useUserApiKey();
+    const hooks = useHooks();
+    const { activePromptContent } = useActivePrompt();
+    const threadIdRef = ref<string | undefined>(initialThreadId);
+    const historyLoadedFor = ref<string | null>(null);
+
+    if (import.meta.dev) {
+        if (state.value.openrouterKey && apiKey) {
+            setKey(state.value.openrouterKey);
+        }
+    }
+
+    // Unified streaming accumulator only (legacy removed)
+    const streamAcc = createStreamAccumulator();
+    const streamState = streamAcc.state;
+    const streamId = ref<string | null>(null);
+    function resetStream() {
+        streamAcc.reset();
+        streamId.value = null;
+    }
+
+    async function getSystemPromptContent(): Promise<string | null> {
+        if (!threadIdRef.value) return null;
+        try {
+            const promptId = await getThreadSystemPrompt(threadIdRef.value);
+            if (promptId) {
+                const prompt = await getPrompt(promptId);
+                if (prompt) return promptJsonToString(prompt.content);
+            }
+        } catch (e) {
+            console.warn('Failed to load thread system prompt', e);
+        }
+        return activePromptContent.value
+            ? promptJsonToString(activePromptContent.value)
+            : null;
+    }
+
+    async function sendMessage(
+        content: string,
+        sendMessagesParams: SendMessageParams = {
+            files: [],
+            model: DEFAULT_AI_MODEL,
+            file_hashes: [],
+            online: false,
+        }
+    ) {
+        if (!apiKey.value) return;
+
+        // --- DEBUG ENTRY (pane/mpApi snapshot) ---
+        try {
+            const mpApiDbg: any = (globalThis as any).__or3MultiPaneApi;
+            console.debug('[useChat] sendMessage:entry', {
+                threadIdRef: threadIdRef.value,
+                hasMpApi: !!mpApiDbg,
+                panesLen: mpApiDbg?.panes?.value?.length,
+                activePaneIndex: mpApiDbg?.activePaneIndex?.value,
+                paneThreadIds: Array.isArray(mpApiDbg?.panes?.value)
+                    ? mpApiDbg.panes.value.map((p: any, i: number) => ({
+                          i,
+                          mode: p.mode,
+                          threadId: p.threadId,
+                      }))
+                    : null,
+            });
+        } catch {}
+
+        if (!threadIdRef.value) {
+            // Resolve system prompt: pending > default
+            let effectivePromptId: string | null = pendingPromptId || null;
+            if (!effectivePromptId) {
+                try {
+                    effectivePromptId = await getDefaultPromptId();
+                } catch {}
+            }
+            const newThread = await create.thread({
+                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
+                last_message_at: nowSec(),
+                parent_thread_id: null,
+                system_prompt_id: effectivePromptId || null,
+            });
+            threadIdRef.value = newThread.id;
+            // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
+            try {
+                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                if (
+                    mpApi?.panes?.value &&
+                    mpApi.activePaneIndex?.value != null &&
+                    mpApi.activePaneIndex.value >= 0
+                ) {
+                    const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
+                    if (pane && pane.mode === 'chat' && !pane.threadId) {
+                        if (typeof mpApi.setPaneThread === 'function') {
+                            try {
+                                await mpApi.setPaneThread(
+                                    mpApi.activePaneIndex.value,
+                                    newThread.id
+                                );
+                            } catch {
+                                pane.threadId = newThread.id;
+                            }
+                        } else {
+                            pane.threadId = newThread.id;
+                        }
+                        try {
+                            console.debug('[useChat] thread-bound-to-pane', {
+                                newThreadId: newThread.id,
+                                activePaneIndex: mpApi.activePaneIndex?.value,
+                                paneId: pane?.id,
+                                paneThreadId: pane?.threadId,
+                            });
+                        } catch {}
+                    }
+                } else {
+                    try {
+                        console.debug(
+                            '[useChat] thread-bound: no panes present',
+                            {
+                                newThreadId: newThread.id,
+                            }
+                        );
+                    } catch {}
+                }
+            } catch {}
+        } // END create-new-thread block
+
+        // Prior assistant hashes for image carry-over
+        const prevAssistantRaw = [...rawMessages.value]
+            .reverse()
+            .find((m) => m.role === 'assistant');
+        const prevAssistant = prevAssistantRaw
+            ? messages.value.find((m) => m.id === prevAssistantRaw.id)
+            : null;
+        const assistantHashes = prevAssistantRaw?.file_hashes
+            ? parseHashes(prevAssistantRaw.file_hashes)
+            : [];
+
+        // Prepare accumulator
+        streamAcc.reset();
+        // Normalize params
+        let { files, model, file_hashes, extraTextParts, online } =
+            sendMessagesParams as any;
+        if (
+            (!files || files.length === 0) &&
+            Array.isArray((sendMessagesParams as any)?.images)
+        ) {
+            files = (sendMessagesParams as any).images.map((img: any) => {
+                const url = typeof img === 'string' ? img : img.url;
+                const provided = typeof img === 'object' ? img.type : undefined;
+                return { type: inferMimeFromUrl(url, provided), url } as any;
+            });
+        }
+        if (!model) model = DEFAULT_AI_MODEL;
+        if (online === true) model = model + ':online';
+
+        const outgoing = await hooks.applyFilters(
+            'ui.chat.message:filter:outgoing',
+            content
+        );
+
+        file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
+        const userDbMsg = await tx.appendMessage({
+            thread_id: threadIdRef.value!,
+            role: 'user',
+            data: { content: outgoing, attachments: files ?? [] },
+            file_hashes:
+                file_hashes && file_hashes.length
+                    ? (file_hashes as any)
+                    : undefined,
+        });
+        const parts: ContentPart[] = buildParts(
+            outgoing,
+            files,
+            extraTextParts
+        );
+        const rawUser: ChatMessage = {
+            role: 'user',
+            content: parts,
+            id: (userDbMsg as any).id,
+            file_hashes: userDbMsg.file_hashes,
+        };
+        recordRawMessage(rawUser);
+        rawMessages.value.push(rawUser);
+        messages.value.push(ensureUiMessage(rawUser));
+
+        // Pane-scoped message sent hook (after append)
+        try {
+            const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+            if (mpApi && mpApi.panes?.value) {
+                try {
+                    console.debug('[useChat] pane-search:sent', {
+                        threadId: threadIdRef.value,
+                        paneThreads: mpApi.panes.value.map(
+                            (p: any, i: number) => ({
+                                i,
+                                mode: p.mode,
+                                threadId: p.threadId,
+                            })
+                        ),
+                    });
+                } catch {}
+                const pane = mpApi.panes.value.find(
+                    (p: any) =>
+                        p.mode === 'chat' && p.threadId === threadIdRef.value
+                );
+                if (pane) {
+                    if (import.meta.dev) {
+                        try {
+                            console.debug('[useChat] pane msg:sent', {
+                                paneIndex: mpApi.panes.value.indexOf(pane),
+                                threadId: threadIdRef.value,
+                                msgId: userDbMsg.id,
+                                length: outgoing.length,
+                                fileHashes: userDbMsg.file_hashes || null,
+                            });
+                        } catch {}
+                    }
+                    hooks.doAction('ui.pane.msg:action:sent', pane, {
+                        id: userDbMsg.id,
+                        paneIndex: mpApi.panes.value.indexOf(pane),
+                        threadId: threadIdRef.value,
+                        length: outgoing.length,
+                        fileHashes: userDbMsg.file_hashes || null,
+                    });
+                } else if (import.meta.dev) {
+                    try {
+                        console.debug(
+                            '[useChat] pane msg:sent (no pane found)',
+                            {
+                                threadId: threadIdRef.value,
+                                msgId: userDbMsg.id,
+                                panes: Array.isArray(mpApi.panes.value)
+                                    ? mpApi.panes.value.map(
+                                          (p: any, i: number) => ({
+                                              i,
+                                              mode: p.mode,
+                                              threadId: p.threadId,
+                                          })
+                                      )
+                                    : null,
+                                activePaneIndex: mpApi.activePaneIndex?.value,
+                                reason: !mpApi.panes.value.length
+                                    ? 'no-panes'
+                                    : 'thread-mismatch',
+                            }
+                        );
+                    } catch {}
+                }
+            } else {
+                try {
+                    console.debug(
+                        '[useChat] pane-search:sent mpApi missing or no panes',
+                        {
+                            threadId: threadIdRef.value,
+                            hasMpApi: !!mpApi,
+                        }
+                    );
+                } catch {}
+            }
+        } catch {}
+
+        loading.value = true;
+        streamId.value = null;
+
+        try {
+            const startedAt = Date.now();
+            const modelId = await hooks.applyFilters(
+                'ai.chat.model:filter:select',
+                model
+            );
+
+            // Inject system message
+            let messagesWithSystemRaw = [...rawMessages.value];
+            const systemText = await getSystemPromptContent();
+            if (systemText && systemText.trim()) {
+                messagesWithSystemRaw.unshift({
+                    role: 'system',
+                    content: systemText,
+                    id: `system-${newId()}`,
+                });
+            }
+
+            const effectiveMessages = await hooks.applyFilters(
+                'ai.chat.messages:filter:input',
+                messagesWithSystemRaw
+            );
+
+            const { buildOpenRouterMessages } = await import(
+                '~/utils/openrouter-build'
+            );
+
+            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
+            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
+                (m: any) => ({ ...m })
+            );
+            if (assistantHashes.length && prevAssistant?.id) {
+                const target = modelInputMessages.find(
+                    (m) => m.id === prevAssistant.id
+                );
+                if (target) target.file_hashes = null;
+            }
+            const orMessages = await buildOpenRouterMessages(
+                modelInputMessages as any,
+                {
+                    maxImageInputs: 16,
+                    imageInclusionPolicy: 'all',
+                    debug: false,
+                }
+            );
+            trimOrMessagesImages(orMessages, 5);
+
+            const hasImageInput = (modelInputMessages as any[]).some((m) =>
+                Array.isArray(m.content)
+                    ? (m.content as any[]).some(
+                          (p) =>
+                              p?.type === 'image_url' ||
+                              p?.type === 'image' ||
+                              p?.mediaType?.startsWith('image/')
+                      )
+                    : false
+            );
+            const modelImageHint = /image|vision|flash/i.test(modelId);
+            const modalities =
+                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+
+            const newStreamId = newId();
+            streamId.value = newStreamId;
+            const assistantDbMsg = await tx.appendMessage({
+                thread_id: threadIdRef.value!,
+                role: 'assistant',
+                stream_id: newStreamId,
+                data: { content: '', attachments: [], reasoning_text: null },
+            });
+
+            await hooks.doAction('ai.chat.send:action:before', {
+                threadId: threadIdRef.value,
+                modelId,
+                user: { id: userDbMsg.id, length: outgoing.length },
+                assistant: { id: assistantDbMsg.id, streamId: newStreamId },
+                messagesCount: Array.isArray(effectiveMessages)
+                    ? (effectiveMessages as any[]).length
+                    : undefined,
+            });
+
+            aborted.value = false;
+            abortController.value = new AbortController();
+            const stream = openRouterStream({
+                apiKey: apiKey.value!,
+                model: modelId,
+                orMessages,
+                modalities,
+                signal: abortController.value.signal,
+            });
+
+            const rawAssistant: ChatMessage = {
+                role: 'assistant',
+                content: '',
+                id: (assistantDbMsg as any).id,
+                stream_id: newStreamId,
+                reasoning_text: null,
+            } as any;
+            recordRawMessage(rawAssistant);
+            rawMessages.value.push(rawAssistant);
+            const uiAssistant = ensureUiMessage(rawAssistant);
+            uiAssistant.pending = true;
+            const idx = messages.value.push(uiAssistant) - 1;
+            const current = messages.value[idx]!; // UiChatMessage
+            let chunkIndex = 0;
+            const WRITE_INTERVAL_MS = 500;
+            let lastPersistAt = 0;
+            const assistantFileHashes: string[] = [];
+
+            for await (const ev of stream) {
+                if (ev.type === 'reasoning') {
+                    if (current.reasoning_text === null)
+                        current.reasoning_text = ev.text;
+                    else current.reasoning_text += ev.text;
+                    streamAcc.append(ev.text, { kind: 'reasoning' });
+                    try {
+                        await hooks.doAction(
+                            'ai.chat.stream:action:reasoning',
+                            ev.text,
+                            {
+                                threadId: threadIdRef.value,
+                                assistantId: assistantDbMsg.id,
+                                streamId: newStreamId,
+                                reasoningLength:
+                                    current.reasoning_text?.length || 0,
+                            }
+                        );
+                    } catch {}
+                } else if (ev.type === 'text') {
+                    if (current.pending) current.pending = false;
+                    const delta = ev.text;
+                    streamAcc.append(delta, { kind: 'text' });
+                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
+                        threadId: threadIdRef.value,
+                        assistantId: assistantDbMsg.id,
+                        streamId: newStreamId,
+                        deltaLength: String(delta ?? '').length,
+                        totalLength:
+                            current.text.length + String(delta ?? '').length,
+                        chunkIndex: chunkIndex++,
+                    });
+                    current.text += delta;
+                } else if (ev.type === 'image') {
+                    if (current.pending) current.pending = false;
+                    // Append markdown placeholder exactly once per image URL
+                    const placeholder = `![generated image](${ev.url})`;
+                    const already = current.text.includes(placeholder);
+                    if (!already) {
+                        current.text +=
+                            (current.text ? '\n\n' : '') + placeholder;
+                    }
+                    if (import.meta.dev) {
+                        console.debug('[stream:image:event]', {
+                            url: ev.url?.slice(0, 80),
+                            placeholderInserted: !already,
+                            currentLength: current.text.length,
+                            fileHashes: assistantFileHashes.slice(),
+                        });
+                    }
+                    if (assistantFileHashes.length < 6) {
+                        let blob: Blob | null = null;
+                        if (ev.url.startsWith('data:image/'))
+                            blob = dataUrlToBlob(ev.url);
+                        else if (/^https?:/.test(ev.url)) {
+                            try {
+                                const r = await fetch(ev.url);
+                                if (r.ok) blob = await r.blob();
+                            } catch {}
+                        }
+                        if (blob) {
+                            try {
+                                const meta = await createOrRefFile(
+                                    blob,
+                                    'gen-image'
+                                );
+                                assistantFileHashes.push(meta.hash);
+                                const serialized =
+                                    serializeFileHashes(assistantFileHashes);
+                                const updatedMsg = {
+                                    ...assistantDbMsg,
+                                    data: {
+                                        ...((assistantDbMsg as any).data || {}),
+                                        reasoning_text:
+                                            current.reasoning_text ?? null,
+                                    },
+                                    file_hashes: serialized,
+                                    updated_at: nowSec(),
+                                } as any;
+                                await upsert.message(updatedMsg);
+                                (current as any).file_hashes = serialized;
+                                if (import.meta.dev) {
+                                    console.debug('[stream:image:persist]', {
+                                        hash: meta.hash,
+                                        total: assistantFileHashes.length,
+                                        serialized,
+                                    });
+                                }
+                            } catch {}
+                        }
+                    }
+                }
+
+                const now = Date.now();
+                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                    const textContent = current.text;
+                    const updated = {
+                        ...assistantDbMsg,
+                        data: {
+                            ...((assistantDbMsg as any).data || {}),
+                            content: textContent,
+                            reasoning_text: current.reasoning_text ?? null,
+                        },
+                        file_hashes: assistantFileHashes.length
+                            ? serializeFileHashes(assistantFileHashes)
+                            : (assistantDbMsg as any).file_hashes,
+                        updated_at: nowSec(),
+                    } as any;
+                    await upsert.message(updated);
+                    if (assistantFileHashes.length)
+                        (current as any).file_hashes =
+                            serializeFileHashes(assistantFileHashes);
+                    lastPersistAt = now;
+                }
+            }
+
+            const fullText = current.text;
+            const incoming = await hooks.applyFilters(
+                'ui.chat.message:filter:incoming',
+                fullText,
+                threadIdRef.value
+            );
+            if (current.pending) current.pending = false;
+            current.text = incoming as string;
+            const finalized = {
+                ...assistantDbMsg,
+                data: {
+                    ...((assistantDbMsg as any).data || {}),
+                    content: incoming,
+                    reasoning_text: current.reasoning_text ?? null,
+                },
+                file_hashes: assistantFileHashes.length
+                    ? serializeFileHashes(assistantFileHashes)
+                    : (assistantDbMsg as any).file_hashes,
+                updated_at: nowSec(),
+            } as any;
+            await upsert.message(finalized);
+            // Pane-scoped assistant received hook
+            try {
+                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                if (mpApi && mpApi.panes?.value) {
+                    try {
+                        console.debug('[useChat] pane-search:received', {
+                            threadId: threadIdRef.value,
+                            paneThreads: mpApi.panes.value.map(
+                                (p: any, i: number) => ({
+                                    i,
+                                    mode: p.mode,
+                                    threadId: p.threadId,
+                                })
+                            ),
+                        });
+                    } catch {}
+                    const pane = mpApi.panes.value.find(
+                        (p: any) =>
+                            p.mode === 'chat' &&
+                            p.threadId === threadIdRef.value
+                    );
+                    if (pane) {
+                        if (import.meta.dev) {
+                            try {
+                                console.debug('[useChat] pane msg:received', {
+                                    paneIndex: mpApi.panes.value.indexOf(pane),
+                                    threadId: threadIdRef.value,
+                                    msgId: finalized.id,
+                                    length: (incoming as string).length,
+                                    reasoningLength: (
+                                        current.reasoning_text || ''
+                                    ).length,
+                                    fileHashes: finalized.file_hashes || null,
+                                });
+                            } catch {}
+                        }
+                        hooks.doAction('ui.pane.msg:action:received', pane, {
+                            id: finalized.id,
+                            threadId: threadIdRef.value,
+                            paneIndex: mpApi.panes.value.indexOf(pane),
+                            msgId: finalized.id,
+                            length: (incoming as string).length,
+                            fileHashes: finalized.file_hashes || null,
+                            reasoningLength: (current.reasoning_text || '')
+                                .length,
+                        });
+                    } else if (import.meta.dev) {
+                        try {
+                            console.debug(
+                                '[useChat] pane msg:received (no pane found)',
+                                {
+                                    threadId: threadIdRef.value,
+                                    msgId: finalized.id,
+                                    length: (incoming as string).length,
+                                    panes: Array.isArray(mpApi.panes.value)
+                                        ? mpApi.panes.value.map(
+                                              (p: any, i: number) => ({
+                                                  i,
+                                                  mode: p.mode,
+                                                  threadId: p.threadId,
+                                              })
+                                          )
+                                        : null,
+                                    activePaneIndex:
+                                        mpApi.activePaneIndex?.value,
+                                    reason: !mpApi.panes.value.length
+                                        ? 'no-panes'
+                                        : 'thread-mismatch',
+                                }
+                            );
+                        } catch {}
+                    }
+                } else {
+                    try {
+                        console.debug(
+                            '[useChat] pane-search:received mpApi missing or no panes',
+                            {
+                                threadId: threadIdRef.value,
+                                hasMpApi: !!mpApi,
+                            }
+                        );
+                    } catch {}
+                }
+            } catch {}
+            const endedAt = Date.now();
+            await hooks.doAction('ai.chat.send:action:after', {
+                threadId: threadIdRef.value,
+                request: { modelId, userId: userDbMsg.id },
+                response: {
+                    assistantId: assistantDbMsg.id,
+                    length: (incoming as string).length,
+                },
+                timings: {
+                    startedAt,
+                    endedAt,
+                    durationMs: endedAt - startedAt,
+                },
+                aborted: false,
+            });
+            streamAcc.finalize();
+        } catch (err) {
+            if (aborted.value) {
+                try {
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        (last as any).pending = false;
+                    }
+                } catch {}
+                await hooks.doAction('ai.chat.send:action:after', {
+                    threadId: threadIdRef.value,
+                    aborted: true,
+                });
+            } else {
+                await hooks.doAction('ai.chat.error:action', {
+                    threadId: threadIdRef.value,
+                    stage: 'stream',
+                    error: err,
+                });
+                try {
+                    const last = messages.value[messages.value.length - 1];
+                    if (
+                        last &&
+                        last.role === 'assistant' &&
+                        (last as any).pending
+                    ) {
+                        messages.value.pop();
+                    }
+                    const lastUser = [...messages.value]
+                        .reverse()
+                        .find((m) => m.role === 'user');
+                    const toast = useToast();
+                    toast.add({
+                        title: 'Message failed',
+                        description: (err as any)?.message || 'Request failed',
+                        color: 'error',
+                        actions: lastUser
+                            ? [
+                                  {
+                                      label: 'Retry',
+                                      onClick: () => {
+                                          if (lastUser?.id)
+                                              retryMessage(lastUser.id as any);
+                                      },
+                                  },
+                              ]
+                            : undefined,
+                        duration: 6000,
+                    });
+                } catch {}
+                const e = err instanceof Error ? err : new Error(String(err));
+                streamAcc.finalize({ error: e });
+            }
+        } finally {
+            loading.value = false;
+            abortController.value = null;
+            setTimeout(() => {
+                if (!loading.value && streamState.finalized) resetStream();
+            }, 0);
+        }
+    }
+
+    // END sendMessage
+
+    async function retryMessage(messageId: string, modelOverride?: string) {
+        if (loading.value || !threadIdRef.value) return;
+        try {
+            const target: any = await db.messages.get(messageId);
+            if (!target || target.thread_id !== threadIdRef.value) return;
+            let userMsg: any = target.role === 'user' ? target : null;
+            if (!userMsg && target.role === 'assistant') {
+                const DexieMod = (await import('dexie')).default;
+                userMsg = await db.messages
+                    .where('[thread_id+index]')
+                    .between(
+                        [target.thread_id, DexieMod.minKey],
+                        [target.thread_id, target.index]
+                    )
+                    .filter(
+                        (m: any) =>
+                            m.role === 'user' &&
+                            !m.deleted &&
+                            m.index < target.index
+                    )
+                    .last();
+            }
+            if (!userMsg) return;
+            const DexieMod2 = (await import('dexie')).default;
+            const assistant = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [userMsg.thread_id, userMsg.index + 1],
+                    [userMsg.thread_id, DexieMod2.maxKey]
+                )
+                .filter((m: any) => m.role === 'assistant' && !m.deleted)
+                .first();
+            await hooks.doAction('ai.chat.retry:action:before', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                triggeredBy: target.role,
+            });
+            await db.transaction('rw', db.messages, async () => {
+                await db.messages.delete(userMsg.id);
+                if (assistant) await db.messages.delete(assistant.id);
+            });
+            rawMessages.value = rawMessages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            messages.value = messages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            const originalText = (userMsg.data as any)?.content || '';
+            let hashes: string[] = [];
+            if (userMsg.file_hashes) {
+                const { parseFileHashes } = await import('~/db/files-util');
+                hashes = parseFileHashes(userMsg.file_hashes);
+            }
+            await sendMessage(originalText, {
+                model: modelOverride || DEFAULT_AI_MODEL,
+                file_hashes: hashes,
+                files: [],
+                online: false,
+            });
+            const tail = messages.value.slice(-2);
+            const newUser = tail.find((m: any) => m.role === 'user');
+            const newAssistant = tail.find((m: any) => m.role === 'assistant');
+            await hooks.doAction('ai.chat.retry:action:after', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                newUserId: newUser?.id,
+                newAssistantId: newAssistant?.id,
+            });
+        } catch (e) {
+            console.error('[useChat.retryMessage] failed', e);
+        }
+    }
+
+    /** Free all in-memory message arrays (UI + raw) and abort any active stream. */
+    function clear() {
+        try {
+            if (abortController.value) {
+                aborted.value = true;
+                try {
+                    abortController.value.abort();
+                } catch {}
+                streamAcc.finalize({ aborted: true });
+                abortController.value = null;
+            }
+        } catch {}
+        rawMessages.value = [];
+        messages.value = [];
+        // Defensive: if any lingering refs still hold many messages, let GC reclaim by slicing to empty
+        if (
+            (rawMessages as any)._value &&
+            (rawMessages as any)._value.length > 1000
+        ) {
+            (rawMessages as any)._value = [];
+        }
+        if (
+            (messages as any)._value &&
+            (messages as any)._value.length > 1000
+        ) {
+            (messages as any)._value = [];
+        }
+        streamAcc.reset();
+    }
+
+    return {
+        messages,
+        sendMessage,
+        retryMessage,
+        loading,
+        threadId: threadIdRef,
+        streamId,
+        resetStream,
+        streamState,
+        abort: () => {
+            if (!loading.value || !abortController.value) return;
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch {}
+            streamAcc.finalize({ aborted: true });
+        },
+        clear,
+    };
+}
+```
+
 ## File: app/plugins/theme.client.ts
 ```typescript
 import 'katex/dist/katex.min.css';
@@ -19151,436 +20571,58 @@ export default defineNuxtPlugin((nuxtApp) => {
 });
 ```
 
-## File: app/components/chat/ChatContainer.vue
-```vue
-<template>
-    <main
-        ref="containerRoot"
-        class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
-    >
-        <!-- Scroll viewport -->
-        <div
-            ref="scrollParent"
-            class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
-            :style="scrollParentStyle"
-        >
-            <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
-            >
-                <!-- Virtualized stable messages (Req 3.1) -->
-                <VirtualMessageList
-                    :messages="virtualStableMessages"
-                    :item-size-estimation="520"
-                    :overscan="5"
-                    :scroll-parent="scrollParent"
-                    :is-streaming="streamActive"
-                    :editing-active="anyEditing"
-                    @scroll-state="onScrollState"
-                    wrapper-class="flex flex-col"
-                >
-                    <template #item="{ message, index }">
-                        <div
-                            :key="message.id || message.stream_id || index"
-                            class="group relative w-full max-w-full min-w-0 space-y-4 break-words"
-                            :data-msg-id="message.id"
-                            :data-stream-id="message.stream_id"
-                        >
-                            <ChatMessage
-                                :message="message"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                                @begin-edit="onBeginEdit(message.id)"
-                                @cancel-edit="onEndEdit(message.id)"
-                                @save-edit="onEndEdit(message.id)"
-                            />
-                        </div>
-                    </template>
-                    <template #tail>
-                        <!-- Stable virtualization ends here -->
-                        <!-- Recently active (non-virtual) messages -->
-                        <div
-                            v-for="rm in recentMessages"
-                            :key="rm.id"
-                            class="min-w-0"
-                            :data-msg-id="rm.id"
-                            :data-stream-id="rm.stream_id"
-                        >
-                            <ChatMessage
-                                :message="rm"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                                @begin-edit="onBeginEdit(rm.id)"
-                                @cancel-edit="onEndEdit(rm.id)"
-                                @save-edit="onEndEdit(rm.id)"
-                            />
-                        </div>
-                        <!-- Streaming tail appended (Req 3.2) -->
-                        <div
-                            v-if="streamingMessage"
-                            class=""
-                            style="overflow-anchor: none"
-                            ref="tailWrapper"
-                        >
-                            <ChatMessage
-                                :message="streamingMessage as any"
-                                :thread-id="props.threadId"
-                                @retry="onRetry"
-                                @branch="onBranch"
-                                @edited="onEdited"
-                                @begin-edit="onBeginEdit(streamingMessage.id)"
-                                @cancel-edit="onEndEdit(streamingMessage.id)"
-                                @save-edit="onEndEdit(streamingMessage.id)"
-                            />
-                        </div>
-                    </template>
-                </VirtualMessageList>
-            </div>
-        </div>
-        <!-- Input area overlay -->
-        <div :class="inputWrapperClass" :style="inputWrapperStyle">
-            <div :class="innerInputContainerClass">
-                <chat-input-dropper
-                    ref="chatInputEl"
-                    :loading="loading"
-                    :streaming="loading"
-                    :container-width="containerWidth"
-                    :thread-id="currentThreadId"
-                    @send="onSend"
-                    @model-change="onModelChange"
-                    @stop-stream="onStopStream"
-                    @pending-prompt-selected="onPendingPromptSelected"
-                    @resize="onInputResize"
-                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
-                />
-            </div>
-        </div>
-    </main>
-</template>
-
-<script setup lang="ts">
-// Refactored ChatContainer (Task 4) – orchestration only.
-// Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
-import ChatMessage from './ChatMessage.vue';
-import {
-    shallowRef,
-    computed,
-    watch,
-    ref,
-    nextTick,
-    type Ref,
-    type CSSProperties,
-} from 'vue';
-import { useChat } from '~/composables/useAi';
-import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
-import VirtualMessageList from './VirtualMessageList.vue';
-import { useElementSize } from '@vueuse/core';
-import { isMobile } from '~/state/global';
-import { onMounted, watchEffect } from 'vue';
-
-// Debug utilities removed per request.
-
-const model = ref('openai/gpt-oss-120b');
-const pendingPromptId = ref<string | null>(null);
-
-// Resize (Req 3.4): useElementSize -> reactive width
-const containerRoot: Ref<HTMLElement | null> = ref(null);
-const { width: containerWidth } = useElementSize(containerRoot);
-// Dynamic chat input height to compute scroll padding
-const chatInputEl: Ref<HTMLElement | null> = ref(null);
-const { height: chatInputHeight } = useElementSize(chatInputEl);
-// Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
-const emittedInputHeight = ref<number | null>(null);
-const effectiveInputHeight = computed(
-    () => emittedInputHeight.value || chatInputHeight.value || 140
-);
-// Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
-const bottomPad = computed(() => {
-    const base = Math.round(effectiveInputHeight.value + 0);
-    return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
-});
-
-// Use typed CSSProperties for template binding; overflowAnchor uses the proper union type
-const scrollParentStyle = computed<CSSProperties>(() => ({
-    paddingBottom: bottomPad.value + 'px',
-    overflowAnchor: 'auto' as CSSProperties['overflowAnchor'],
-}));
-
-// Mobile fixed wrapper classes/styles
-// Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
-const inputWrapperClass = computed(() =>
-    isMobile.value
-        ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
-        : // Desktop: keep input scoped to its pane container
-          'pointer-events-none absolute inset-x-0 bottom-0 z-10'
-);
-const inputWrapperStyle = computed(() => ({}));
-const innerInputContainerClass = computed(() =>
-    isMobile.value
-        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
-        : 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2'
-);
-function onInputResize(e: { height: number }) {
-    emittedInputHeight.value = e?.height || null;
-}
-
-function onModelChange(newModel: string) {
-    model.value = newModel;
-    // Silenced model change log.
-}
-
-const props = defineProps<{
-    threadId?: string;
-    messageHistory?: ChatMessageType[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'thread-selected', id: string): void;
-}>();
-
-// Initialize chat composable and make it refresh when threadId changes
-const chat = shallowRef(
-    useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined
-    )
-);
-
-watch(
-    () => props.threadId,
-    (newId) => {
-        const currentId = chat.value?.threadId?.value;
-        // Avoid re-initializing if the composable already set the same id (first-send case)
-        if (newId && currentId && newId === currentId) {
-            return;
-        }
-        // Free previous thread messages & abort any active stream before switching
-        try {
-            (chat.value as any)?.clear?.();
-        } catch {}
-        chat.value = useChat(
-            props.messageHistory,
-            newId,
-            pendingPromptId.value || undefined
-        );
-    }
-);
-
-// Keep composable messages in sync when parent provides an updated messageHistory
-watch(
-    () => props.messageHistory,
-    (mh) => {
-        if (!chat.value) return;
-        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
-        if (chat.value.loading.value) {
-            return;
-        }
-        // Prefer to update the internal messages array directly to avoid remount flicker
-        import('~/utils/chat/uiMessages').then(({ ensureUiMessage }) => {
-            chat.value!.messages.value = (mh || []).map((m: any) =>
-                ensureUiMessage(m)
-            );
-        });
-    }
-);
-
-// When a new thread id is created internally (first send), propagate upward once
-watch(
-    () => chat.value?.threadId?.value,
-    (id, prev) => {
-        if (!prev && id) {
-            emit('thread-selected', id);
-            // Clear pending prompt since it's now applied to the thread
-            pendingPromptId.value = null;
-        }
-    }
-);
-
-// Render messages with content narrowed to string for ChatMessage.vue
-// messages already normalized to UiChatMessage with .text in useChat composable
-const messages = computed(() => chat.value.messages.value || []);
-onMounted(() => {
-    // mounted
-});
-// Removed length logging watcher.
-const loading = computed(() => chat.value.loading.value);
-
-// Tail streaming now provided directly by useChat composable
-// `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
-const streamId = computed(() => {
-    const s = chat.value?.streamId;
-    return s && 'value' in s ? s.value : s;
-});
-const streamState: any = computed(() => {
-    const s = chat.value?.streamState;
-    return s && 'value' in s ? s.value : s;
-});
-const streamReasoning = computed(
-    () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
-);
-const tailDisplay = computed(
-    () => streamState?.value?.text || streamState?.text || ''
-);
-// Removed tail char delta logging.
-// Current thread id for this container (reactive)
-const currentThreadId = computed(() => chat.value.threadId?.value);
-// Tail active means stream not finalized
-const streamActive = computed(
-    () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
-);
-// Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
-const streamingMessage = computed<any | null>(() => {
-    if (!streamActive.value) return null;
-    if (!streamId.value) return null;
-    const rawTail = tailDisplay.value || '';
-    const reasoningTail = streamReasoning.value || '';
-    if (!rawTail && !reasoningTail && messages.value.length === 0) return null;
-    return {
-        role: 'assistant',
-        text: rawTail,
-        id: 'tail-' + streamId.value,
-        stream_id: streamId.value || undefined,
-        pending: true,
-        reasoning_text: reasoningTail,
-    } as any;
-});
-
-// Hybrid virtualization: keep last N recent messages outside virtual list to avoid flicker near viewport
-const RECENT_NON_VIRTUAL = 6;
-function filterStreaming(arr: any[]) {
-    if (streamActive.value && streamId.value) {
-        return arr.filter((m) => m.stream_id !== streamId.value);
-    }
-    return arr;
-}
-const recentMessages = computed<any[]>(() => {
-    const base = filterStreaming(messages.value);
-    if (base.length <= RECENT_NON_VIRTUAL) return base;
-    return base.slice(-RECENT_NON_VIRTUAL);
-});
-const virtualStableMessages = computed<any[]>(() => {
-    const base = filterStreaming(messages.value);
-    if (base.length <= RECENT_NON_VIRTUAL) return [];
-    return base.slice(0, -RECENT_NON_VIRTUAL);
-});
-// Removed size change logging for virtual/recent message groups.
-
-// Removed assistantVisible tracking (no handoff overlap needed)
-
-// Scroll handling centralized in VirtualMessageList
-const scrollParent: Ref<HTMLElement | null> = ref(null);
-// Track editing state across child messages for scroll suppression (Task 5.2.2)
-const editingIds = ref<Set<string>>(new Set());
-const anyEditing = computed(() => editingIds.value.size > 0);
-function onBeginEdit(id: string) {
-    if (!id) return;
-    if (!editingIds.value.has(id)) {
-        editingIds.value = new Set(editingIds.value).add(id);
+## File: package.json
+```json
+{
+    "name": "or3-chat",
+    "type": "module",
+    "private": false,
+    "version": "0.1.0",
+    "license": "GPL-3.0",
+    "scripts": {
+        "build": "nuxt build",
+        "dev": "nuxt dev",
+        "generate": "nuxt generate",
+        "preview": "nuxt preview",
+        "postinstall": "nuxt prepare",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@nuxt/ui": "^3.3.2",
+        "@orama/orama": "^3.1.11",
+        "@tiptap/extension-placeholder": "^3.3.0",
+        "@tiptap/pm": "^3.3.0",
+        "@tiptap/starter-kit": "^3.3.0",
+        "@tiptap/vue-3": "^3.3.0",
+        "@types/node": "^24.3.1",
+        "@vueuse/core": "^13.7.0",
+        "dexie": "^4.0.11",
+        "gpt-tokenizer": "^3.0.1",
+        "nuxt": "^4.0.3",
+        "spark-md5": "^3.0.2",
+        "streamdown-vue": "^1.0.12",
+        "tiptap-markdown": "^0.8.10",
+        "turndown": "^7.2.1",
+        "typescript": "^5.6.3",
+        "virtua": "^0.41.5",
+        "vue": "^3.5.18",
+        "vue-router": "^4.5.1",
+        "zod": "^4.0.17"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.16",
+        "@types/spark-md5": "^3.0.5",
+        "@vite-pwa/nuxt": "^1.0.4",
+        "@vitejs/plugin-vue": "^5.1.4",
+        "@vitest/coverage-v8": "2.1.9",
+        "@vitest/ui": "^2.1.2",
+        "@vue/test-utils": "^2.4.6",
+        "jsdom": "^25.0.0",
+        "vite": "^5.4.8",
+        "vitest": "^2.1.2"
     }
 }
-function onEndEdit(id: string) {
-    if (!id) return;
-    if (editingIds.value.has(id)) {
-        const next = new Set(editingIds.value);
-        next.delete(id);
-        editingIds.value = next;
-    }
-}
-// Scroll state from VirtualMessageList (Task 5.1.2)
-const atBottom = ref(true);
-const stick = ref(true);
-function onScrollState(s: { atBottom: boolean; stick: boolean }) {
-    atBottom.value = s.atBottom;
-    stick.value = s.stick;
-}
-
-// (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
-// Chat send abstraction (Req 3.5)
-
-function onSend(payload: any) {
-    if (loading.value) return;
-    const readyImages = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'ready')
-        : [];
-    const pendingCount = Array.isArray(payload.images)
-        ? payload.images.filter((img: any) => img && img.status === 'pending')
-              .length
-        : 0;
-    if (pendingCount > 0 && readyImages.length === 0) {
-        // Defer sending until at least one image hashed (user can click again shortly)
-        console.warn(
-            '[ChatContainer.onSend] images still hashing; delaying send'
-        );
-        return;
-    }
-    const files = readyImages.map((img: any) => ({
-        type: img.file?.type || 'image/png',
-        url: img.url,
-    }));
-    const file_hashes = readyImages
-        .map((img: any) => img.hash)
-        .filter((h: any) => typeof h === 'string');
-    const extraTextParts = Array.isArray(payload.largeTexts)
-        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
-        : [];
-
-    // Send message via useChat composable
-    chat.value
-        .sendMessage(payload.text, {
-            model: model.value,
-            files,
-            file_hashes,
-            extraTextParts,
-            online: !!payload.webSearchEnabled,
-        })
-        .catch(() => {});
-}
-
-function onRetry(messageId: string) {
-    if (!chat.value || chat.value.loading.value) return;
-    // Provide current model so retry uses same selection
-    (chat.value as any).retryMessage(messageId, model.value);
-}
-
-function onBranch(newThreadId: string) {
-    if (newThreadId) emit('thread-selected', newThreadId);
-}
-
-function onEdited(payload: { id: string; content: string }) {
-    if (!chat.value) return;
-    const arr = chat.value.messages.value;
-    const idx = arr.findIndex((m: any) => m.id === payload.id);
-    if (idx === -1) return;
-    const msg = arr[idx];
-    if (!msg) return;
-    msg.text = payload.content;
-    chat.value.messages.value = [...arr];
-}
-
-function onPendingPromptSelected(promptId: string | null) {
-    pendingPromptId.value = promptId;
-    // Reinitialize chat with the pending prompt
-    chat.value = useChat(
-        props.messageHistory,
-        props.threadId,
-        pendingPromptId.value || undefined
-    );
-}
-
-function onStopStream() {
-    try {
-        (chat.value as any)?.abort?.();
-    } catch {}
-}
-</script>
-
-<style>
-/* Optional custom styles placeholder */
-</style>
 ```
 
 ## File: app/components/chat/ChatMessage.vue
@@ -20548,5 +21590,424 @@ const streamMdClasses = [
 .message-body :deep([data-streamdown='code-lang']) {
     font: inherit;
 }
+</style>
+```
+
+## File: app/components/chat/ChatContainer.vue
+```vue
+<template>
+    <main
+        ref="containerRoot"
+        class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
+    >
+        <!-- Scroll viewport -->
+        <div
+            ref="scrollParent"
+            class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            :style="scrollParentStyle"
+        >
+            <div
+                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
+            >
+                <!-- Virtualized stable messages (Req 3.1) -->
+                <VirtualMessageList
+                    :messages="stableMessages"
+                    :item-size-estimation="520"
+                    :overscan="5"
+                    :scroll-parent="scrollParent"
+                    :is-streaming="streamActive"
+                    :editing-active="anyEditing"
+                    @scroll-state="onScrollState"
+                    wrapper-class="flex flex-col"
+                >
+                    <template #item="{ message, index }">
+                        <div
+                            :key="message.id || message.stream_id || index"
+                            class="group relative w-full max-w-full min-w-0 space-y-4 break-words"
+                            :data-msg-id="message.id"
+                            :data-stream-id="message.stream_id"
+                        >
+                            <ChatMessage
+                                :message="message"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                                @begin-edit="onBeginEdit(message.id)"
+                                @cancel-edit="onEndEdit(message.id)"
+                                @save-edit="onEndEdit(message.id)"
+                            />
+                        </div>
+                    </template>
+                    <template #tail>
+                        <!-- Streaming tail appended (Req 3.2) -->
+                        <div
+                            v-if="streamingMessage"
+                            class=""
+                            style="overflow-anchor: none"
+                            ref="tailWrapper"
+                        >
+                            <ChatMessage
+                                :message="streamingMessage as any"
+                                :thread-id="props.threadId"
+                                @retry="onRetry"
+                                @branch="onBranch"
+                                @edited="onEdited"
+                                @begin-edit="onBeginEdit(streamingMessage.id)"
+                                @cancel-edit="onEndEdit(streamingMessage.id)"
+                                @save-edit="onEndEdit(streamingMessage.id)"
+                            />
+                        </div>
+                    </template>
+                </VirtualMessageList>
+            </div>
+        </div>
+        <!-- Input area overlay -->
+        <div :class="inputWrapperClass" :style="inputWrapperStyle">
+            <div :class="innerInputContainerClass">
+                <chat-input-dropper
+                    ref="chatInputEl"
+                    :loading="loading"
+                    :streaming="loading"
+                    :container-width="containerWidth"
+                    :thread-id="currentThreadId"
+                    :pane-id="paneId"
+                    @send="onSend"
+                    @model-change="onModelChange"
+                    @stop-stream="onStopStream"
+                    @pending-prompt-selected="onPendingPromptSelected"
+                    @resize="onInputResize"
+                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
+                />
+            </div>
+        </div>
+    </main>
+</template>
+
+<script setup lang="ts">
+// Refactored ChatContainer (Task 4) – orchestration only.
+// Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
+import ChatMessage from './ChatMessage.vue';
+import {
+    shallowRef,
+    computed,
+    watch,
+    ref,
+    type Ref,
+    type CSSProperties,
+} from 'vue';
+import { useChat } from '~/composables/useAi';
+import {
+    getPanePendingPrompt,
+    clearPanePendingPrompt,
+} from '~/composables/usePanePrompt';
+import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
+import VirtualMessageList from './VirtualMessageList.vue';
+import { useElementSize } from '@vueuse/core';
+import { isMobile } from '~/state/global';
+// Removed onMounted/watchEffect (unused)
+
+// Debug utilities removed per request.
+
+const model = ref('openai/gpt-oss-120b');
+const pendingPromptId = ref<string | null>(null);
+//yoooolo
+// Resize (Req 3.4): useElementSize -> reactive width
+const containerRoot: Ref<HTMLElement | null> = ref(null);
+const { width: containerWidth } = useElementSize(containerRoot);
+// Dynamic chat input height to compute scroll padding
+const chatInputEl: Ref<HTMLElement | null> = ref(null);
+const { height: chatInputHeight } = useElementSize(chatInputEl);
+// Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
+const emittedInputHeight = ref<number | null>(null);
+const effectiveInputHeight = computed(
+    () => emittedInputHeight.value || chatInputHeight.value || 140
+);
+// Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
+const bottomPad = computed(() => {
+    const base = Math.round(effectiveInputHeight.value + 0);
+    return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
+});
+
+// Use typed CSSProperties for template binding; overflowAnchor uses the proper union type
+const scrollParentStyle = computed<CSSProperties>(() => ({
+    paddingBottom: bottomPad.value + 'px',
+    overflowAnchor: 'auto' as CSSProperties['overflowAnchor'],
+}));
+
+// Mobile fixed wrapper classes/styles
+// Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
+const inputWrapperClass = computed(() =>
+    isMobile.value
+        ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
+        : // Desktop: keep input scoped to its pane container
+          'pointer-events-none absolute inset-x-0 bottom-0 z-10'
+);
+const inputWrapperStyle = computed(() => ({}));
+const innerInputContainerClass = computed(() =>
+    isMobile.value
+        ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'
+        : 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-2'
+);
+function onInputResize(e: { height: number }) {
+    emittedInputHeight.value = e?.height || null;
+}
+
+function onModelChange(newModel: string) {
+    model.value = newModel;
+    // Silenced model change log.
+}
+
+const props = defineProps<{
+    threadId?: string;
+    messageHistory?: ChatMessageType[];
+    paneId?: string; // forwarded so ChatInputDropper can register with bridge
+}>();
+
+const emit = defineEmits<{
+    (e: 'thread-selected', id: string): void;
+}>();
+
+// Initialize chat composable and make it refresh when threadId changes
+// Initialized defensively (HMR can briefly leave it null in re-eval window)
+// If pane has a pending prompt selection (chosen before thread exists) seed it
+if (props.paneId) {
+    const pre = getPanePendingPrompt(props.paneId);
+    if (pre) pendingPromptId.value = pre;
+}
+const chat = shallowRef<any>(
+    useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    )
+);
+
+watch(
+    () => props.threadId,
+    (newId) => {
+        const currentId = chat.value?.threadId?.value;
+        // Avoid re-initializing if the composable already set the same id (first-send case)
+        if (newId && currentId && newId === currentId) {
+            return;
+        }
+        // Free previous thread messages & abort any active stream before switching
+        try {
+            (chat.value as any)?.clear?.();
+        } catch {}
+        chat.value = useChat(
+            props.messageHistory,
+            newId,
+            pendingPromptId.value || undefined
+        );
+    }
+);
+
+// Keep composable messages in sync when parent provides an updated messageHistory
+watch(
+    () => props.messageHistory,
+    (mh) => {
+        if (!chat.value) return;
+        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
+        if (chat.value.loading.value) {
+            return;
+        }
+        // Prefer to update the internal messages array directly to avoid remount flicker
+        import('~/utils/chat/uiMessages').then(({ ensureUiMessage }) => {
+            chat.value!.messages.value = (mh || []).map((m: any) =>
+                ensureUiMessage(m)
+            );
+        });
+    }
+);
+
+// When a new thread id is created internally (first send), propagate upward once
+watch(
+    () => chat.value?.threadId?.value,
+    (id, prev) => {
+        if (!prev && id) {
+            emit('thread-selected', id);
+            // Clear pending prompt (and pane-level cached) since it's applied
+            if (props.paneId) clearPanePendingPrompt(props.paneId);
+            pendingPromptId.value = null;
+        }
+    }
+);
+
+// Render messages with content narrowed to string for ChatMessage.vue
+// messages already normalized to UiChatMessage with .text in useChat composable
+const messages = computed(() => chat.value?.messages?.value || []);
+
+const loading = computed(() => chat.value?.loading?.value || false);
+
+// Tail streaming now provided directly by useChat composable
+// `useChat` returns many refs; unwrap common ones so computed values expose plain objects/primitives
+const streamId = computed(() => {
+    const s = chat.value?.streamId;
+    return s && 'value' in s ? (s as any).value : s;
+});
+const streamState: any = computed(() => {
+    const s = chat.value?.streamState;
+    return s && 'value' in s ? (s as any).value : s;
+});
+const streamReasoning = computed(
+    () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
+);
+const tailDisplay = computed(
+    () => streamState?.value?.text || streamState?.text || ''
+);
+// Removed tail char delta logging.
+// Current thread id for this container (reactive)
+const currentThreadId = computed(() => chat.value?.threadId?.value);
+// Tail active means stream not finalized
+const streamActive = computed(
+    () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
+);
+// Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
+const streamingMessage = computed<any | null>(() => {
+    if (!streamActive.value) return null;
+    if (!streamId.value) return null;
+    const rawTail = tailDisplay.value || '';
+    const reasoningTail = streamReasoning.value || '';
+    if (!rawTail && !reasoningTail && messages.value.length === 0) return null;
+    return {
+        role: 'assistant',
+        text: rawTail,
+        id: 'tail-' + streamId.value,
+        stream_id: streamId.value || undefined,
+        pending: true,
+        reasoning_text: reasoningTail,
+    } as any;
+});
+
+// All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
+function filterStreaming(arr: any[]) {
+    if (streamActive.value && streamId.value) {
+        return arr.filter((m) => m.stream_id !== streamId.value);
+    }
+    return arr;
+}
+const stableMessages = computed<any[]>(() => filterStreaming(messages.value));
+// Removed size change logging for virtual/recent message groups.
+
+// Removed assistantVisible tracking (no handoff overlap needed)
+
+// Scroll handling centralized in VirtualMessageList
+const scrollParent: Ref<HTMLElement | null> = ref(null);
+// Track editing state across child messages for scroll suppression (Task 5.2.2)
+const editingIds = ref<Set<string>>(new Set());
+const anyEditing = computed(() => editingIds.value.size > 0);
+function onBeginEdit(id: string) {
+    if (!id) return;
+    if (!editingIds.value.has(id)) {
+        editingIds.value = new Set(editingIds.value).add(id);
+    }
+}
+function onEndEdit(id: string) {
+    if (!id) return;
+    if (editingIds.value.has(id)) {
+        const next = new Set(editingIds.value);
+        next.delete(id);
+        editingIds.value = next;
+    }
+}
+// Scroll state from VirtualMessageList (Task 5.1.2)
+const atBottom = ref(true);
+const stick = ref(true);
+function onScrollState(s: { atBottom: boolean; stick: boolean }) {
+    atBottom.value = s.atBottom;
+    stick.value = s.stick;
+}
+
+// (8.4) Auto-scroll already consolidated; tail growth handled via version watcher
+// Chat send abstraction (Req 3.5)
+
+function onSend(payload: any) {
+    if (loading.value) return;
+    const readyImages = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'ready')
+        : [];
+    const pendingCount = Array.isArray(payload.images)
+        ? payload.images.filter((img: any) => img && img.status === 'pending')
+              .length
+        : 0;
+    if (pendingCount > 0 && readyImages.length === 0) {
+        // Defer sending until at least one image hashed (user can click again shortly)
+        console.warn(
+            '[ChatContainer.onSend] images still hashing; delaying send'
+        );
+        return;
+    }
+    const files = readyImages.map((img: any) => ({
+        type: img.file?.type || 'image/png',
+        url: img.url,
+    }));
+    const file_hashes = readyImages
+        .map((img: any) => img.hash)
+        .filter((h: any) => typeof h === 'string');
+    const extraTextParts = Array.isArray(payload.largeTexts)
+        ? payload.largeTexts.map((t: any) => t.text).filter(Boolean)
+        : [];
+
+    // Send message via useChat composable
+    chat.value
+        ?.sendMessage(payload.text, {
+            model: model.value,
+            files,
+            file_hashes,
+            extraTextParts,
+            online: !!payload.webSearchEnabled,
+        })
+        ?.catch(() => {});
+}
+
+function onRetry(messageId: string) {
+    if (!chat.value || chat.value?.loading?.value) return;
+    // Provide current model so retry uses same selection
+    (chat.value as any).retryMessage(messageId, model.value);
+}
+
+function onBranch(newThreadId: string) {
+    if (newThreadId) emit('thread-selected', newThreadId);
+}
+
+function onEdited(payload: { id: string; content: string }) {
+    if (!chat.value) return;
+    const arr = chat.value?.messages?.value;
+    if (!arr) return;
+    const idx = arr.findIndex((m: any) => m.id === payload.id);
+    if (idx === -1) return;
+    const msg = arr[idx];
+    if (!msg) return;
+    msg.text = payload.content;
+    chat.value.messages.value = [...arr];
+}
+
+function onPendingPromptSelected(promptId: string | null) {
+    pendingPromptId.value = promptId;
+    // Store pane-level until thread creation
+    if (props.paneId) {
+        // dynamic import to avoid circular
+        import('~/composables/usePanePrompt').then((m) =>
+            m.setPanePendingPrompt(props.paneId!, promptId)
+        );
+    }
+    // Reinitialize chat with the pending prompt
+    chat.value = useChat(
+        props.messageHistory,
+        props.threadId,
+        pendingPromptId.value || undefined
+    );
+}
+
+function onStopStream() {
+    try {
+        (chat.value as any)?.abort?.();
+    } catch {}
+}
+</script>
+
+<style>
+/* Optional custom styles placeholder */
 </style>
 ```

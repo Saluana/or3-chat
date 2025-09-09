@@ -9,25 +9,6 @@
         description="Manage and select system prompts to customize AI behavior."
         class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
-        <!--
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    System Prompts
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="sm"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-            
-        </template>
-        -->
         <template #body>
             <div class="flex flex-col h-full" @keydown="handleKeydown">
                 <div

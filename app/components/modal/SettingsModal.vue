@@ -7,7 +7,7 @@
         }"
         title="Model settings"
         description="Browse and favorite models from the OpenRouter catalog."
-        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
+        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
         <template #body>
             <div class="flex flex-col h-full">
@@ -71,19 +71,19 @@
                 <div v-else class="flex-1 min-h-0">
                     <VList
                         :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 70dvh"
+                        style="height: 100%"
                         class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
                         :overscan="4"
                         #default="{ item: row }"
                     >
                         <div
-                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
+                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 pt-2 sm:pt-0 px-2 sm:px-6 w-full"
                             :class="gridColsClass"
                         >
                             <div
                                 v-for="m in row"
                                 :key="m.id"
-                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
                             >
                                 <div
                                     class="flex items-start justify-between gap-2"
