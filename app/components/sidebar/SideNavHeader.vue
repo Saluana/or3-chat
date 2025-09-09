@@ -88,11 +88,6 @@
                 footer: 'justify-end ',
             }"
         >
-            <template #header>
-                <h3>
-                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
-                </h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UInput
@@ -119,7 +114,6 @@
             title="Rename project"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header><h3>Rename project?</h3></template>
             <template #body>
                 <div class="space-y-4">
                     <UInput
@@ -146,12 +140,9 @@
         <!-- Create Project Modal -->
         <UModal
             v-model:open="showCreateProjectModal"
-            title="New Project"
+            title="New project"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Create project</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UForm
@@ -208,12 +199,9 @@
         <!-- Add To Project Modal -->
         <UModal
             v-model:open="showAddToProjectModal"
-            title="Add to project"
+            title="Add thread to project"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Add thread to project</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <div class="flex gap-2 text-xs font-mono">
@@ -309,12 +297,9 @@
         <!-- New Document Naming Modal -->
         <UModal
             v-model:open="showCreateDocumentModal"
-            title="New Document"
+            title="Name new document"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Name new document</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UForm

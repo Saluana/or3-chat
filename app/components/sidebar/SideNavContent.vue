@@ -64,11 +64,6 @@
                 footer: 'justify-end ',
             }"
         >
-            <template #header>
-                <h3>
-                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
-                </h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UInput
@@ -122,11 +117,10 @@
         <!-- Delete confirm modal -->
         <UModal
             v-model:open="showDeleteModal"
-            title="Delete thread?"
+            title="Delete thread"
             :ui="{ footer: 'justify-end' }"
             class="border-2"
         >
-            <template #header> <h3>Delete thread?</h3> </template>
             <template #body>
                 <p class="text-sm opacity-70">
                     This will permanently remove the thread and its messages.
@@ -143,11 +137,10 @@
         <!-- Delete document confirm modal -->
         <UModal
             v-model:open="showDeleteDocumentModal"
-            title="Delete document?"
+            title="Delete document"
             :ui="{ footer: 'justify-end' }"
             class="border-2"
         >
-            <template #header> <h3>Delete document?</h3> </template>
             <template #body>
                 <p class="text-sm opacity-70">
                     This will permanently remove the document.
@@ -166,11 +159,10 @@
         <!-- Delete project confirm modal -->
         <UModal
             v-model:open="showDeleteProjectModal"
-            title="Delete project?"
+            title="Delete project"
             :ui="{ footer: 'justify-end' }"
             class="border-2"
         >
-            <template #header> <h3>Delete project?</h3> </template>
             <template #body>
                 <p class="text-sm opacity-70">
                     This will remove the project from the sidebar. Project data
@@ -191,9 +183,6 @@
             title="New Project"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Create project</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UForm
@@ -253,9 +242,6 @@
             title="Add to project"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Add thread to project</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <div class="flex gap-2 text-xs font-mono">
@@ -352,9 +338,6 @@
             title="New Document"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Name new document</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UForm
