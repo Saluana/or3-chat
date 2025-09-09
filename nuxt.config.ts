@@ -27,10 +27,62 @@ export default defineNuxtConfig({
         client: {
             installPrompt: true,
             registerPlugin: true,
+            periodicSyncForUpdates: 12 * 60 * 60, // Check every 12 hours
         },
         // Basic offline support; let Workbox handle common assets
         workbox: {
             globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+            runtimeCaching: [
+                // Cache Vite/Nuxt client chunks in dev after first load
+                {
+                    urlPattern: /^\/_nuxt\//,
+                    handler: 'NetworkFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-dev-chunks',
+                        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
+                    },
+                },
+                // Cache app images from public/
+                {
+                    urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'static-images',
+                        expiration: {
+                            maxEntries: 200,
+                            maxAgeSeconds: 7 * 24 * 60 * 60,
+                        },
+                    },
+                },
+                // Cache fonts provided by @nuxt/fonts (served under /_fonts/)
+                {
+                    urlPattern: /^\/_fonts\//,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-fonts',
+                        expiration: {
+                            maxEntries: 50,
+                            maxAgeSeconds: 30 * 24 * 60 * 60,
+                        },
+                    },
+                },
+                // Cache Nuxt Icon API responses used by UI
+                {
+                    urlPattern: /\/api\/_nuxt_icon\/.*$/,
+                    handler: 'StaleWhileRevalidate',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-icons',
+                        expiration: {
+                            maxEntries: 200,
+                            maxAgeSeconds: 30 * 24 * 60 * 60,
+                        },
+                    },
+                },
+            ],
         },
         // Web App Manifest
         manifest: {
