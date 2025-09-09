@@ -3,7 +3,7 @@
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
     devtools: { enabled: true },
-    modules: ['@nuxt/ui', '@nuxt/fonts'],
+    modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
     // Load Tailwind + theme variables globally
@@ -13,6 +13,55 @@ export default defineNuxtConfig({
             { name: 'Press Start 2P', provider: 'google' },
             { name: 'VT323', provider: 'google' },
         ],
+    },
+    // PWA configuration
+    pwa: {
+        // Auto update SW when new content is available
+        registerType: 'autoUpdate',
+        // Enable PWA in dev so you can install/test while developing
+        devOptions: {
+            enabled: true,
+            suppressWarnings: true,
+        },
+        // Expose $pwa and intercept install prompt
+        client: {
+            installPrompt: true,
+            registerPlugin: true,
+        },
+        // Basic offline support; let Workbox handle common assets
+        workbox: {
+            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        },
+        // Web App Manifest
+        manifest: {
+            name: 'Or3 Chat',
+            short_name: 'Or3.Chat',
+            description:
+                'The open, extensible AI chat platform for the people.',
+            start_url: '/',
+            display: 'standalone',
+            background_color: '#0b0f1a',
+            theme_color: '#0b0f1a',
+            icons: [
+                {
+                    src: '/logos/logo-192.png',
+                    sizes: '192x192',
+                    type: 'image/png',
+                },
+                {
+                    src: '/logos/logo-512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                },
+                // WebP is fine in many browsers; PNGs above cover platforms requiring PNG
+                {
+                    src: '/logos/logo-1024.webp',
+                    sizes: '1024x1024',
+                    type: 'image/webp',
+                    purpose: 'any maskable',
+                },
+            ],
+        },
     },
     // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
     ignore: [
