@@ -34,7 +34,7 @@ useHead({
         // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
         { name: 'theme-color', content: themeColor },
         // Enable iOS PWA full-screen and control status bar style
-        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
         {
             name: 'apple-mobile-web-app-status-bar-style',
             content: statusBarStyle,

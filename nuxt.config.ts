@@ -14,13 +14,14 @@ export default defineNuxtConfig({
             { name: 'VT323', provider: 'google' },
         ],
     },
+    nitro: { prerender: { routes: ['/openrouter-callback'] } },
     // PWA configuration
     pwa: {
         // Auto update SW when new content is available
         registerType: 'autoUpdate',
         // Enable PWA in dev so you can install/test while developing
         devOptions: {
-            enabled: false,
+            enabled: true,
             suppressWarnings: true,
         },
         // Expose $pwa and intercept install prompt
@@ -31,9 +32,21 @@ export default defineNuxtConfig({
         },
         // Basic offline support; let Workbox handle common assets
         workbox: {
+            // Ensure the prerendered callback HTML can be matched regardless of auth params
+            ignoreURLParametersMatching: [/^code$/, /^state$/],
+            // Never serve the generic SPA fallback for the auth callback (with or without params)
+            navigateFallbackDenylist: [
+                /\/openrouter-callback$/,
+                /\/openrouter-callback\?.*$/,
+            ],
             globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
             runtimeCaching: [
-                // Cache Vite/Nuxt client chunks in dev after first load
+                // Auth callback: prefer fresh network, but fall back to cached prerender if offline
+                {
+                    urlPattern: /\/openrouter-callback(\?.*)?$/,
+                    handler: 'NetworkOnly',
+                },
+                // Nuxt chunks
                 {
                     urlPattern: /^\/_nuxt\//,
                     handler: 'NetworkFirst',
@@ -43,7 +56,7 @@ export default defineNuxtConfig({
                         expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
                     },
                 },
-                // Cache app images from public/
+                // Static images
                 {
                     urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
                     handler: 'CacheFirst',
@@ -56,7 +69,7 @@ export default defineNuxtConfig({
                         },
                     },
                 },
-                // Cache fonts provided by @nuxt/fonts (served under /_fonts/)
+                // Fonts
                 {
                     urlPattern: /^\/_fonts\//,
                     handler: 'CacheFirst',
@@ -69,7 +82,7 @@ export default defineNuxtConfig({
                         },
                     },
                 },
-                // Cache Nuxt Icon API responses used by UI
+                // Icon API
                 {
                     urlPattern: /\/api\/_nuxt_icon\/.*$/,
                     handler: 'StaleWhileRevalidate',

@@ -326,6 +326,12 @@ function redirectNotFound(kind: 'chat' | 'doc') {
 // --------------- URL Sync ---------------
 function updateUrl() {
     if (!process.client || !props.routeSync) return;
+    // Prevent route sync from clobbering the OAuth callback path while the
+    // OpenRouter token exchange page is mounting. The callback component
+    // itself will redirect after finishing, so we should not rewrite here.
+    const currentPath =
+        typeof window !== 'undefined' ? window.location.pathname : '';
+    if (currentPath.startsWith('/openrouter-callback')) return;
     const pane = panes.value[activePaneIndex.value];
     if (!pane) return;
     const base = pane.mode === 'doc' ? '/docs' : '/chat';

@@ -1,5 +1,8 @@
 <template>
-    <div class="min-h-[100dvh] flex items-center justify-center p-6">
+    <div
+        class="min-h-[100dvh] flex items-center justify-center p-6"
+        data-page="openrouter-callback"
+    >
         <div
             class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
         >
@@ -35,6 +38,7 @@
 
 <script setup>
 import { kv } from '~/db';
+import { state } from '~/state/global';
 
 const route = useRoute();
 const router = useRouter();
@@ -113,10 +117,19 @@ onMounted(async () => {
     log('mounted at', window.location.href, 'referrer:', document.referrer);
     const code = route.query.code;
     const state = route.query.state;
-    const verifier = sessionStorage.getItem('openrouter_code_verifier');
-    const savedState = sessionStorage.getItem('openrouter_state');
+    // Primary in sessionStorage (original), fallback to localStorage if a reload or restore lost it.
+    const verifier =
+        sessionStorage.getItem('openrouter_code_verifier') ||
+        localStorage.getItem('openrouter_code_verifier') ||
+        '';
+    const savedState =
+        sessionStorage.getItem('openrouter_state') ||
+        localStorage.getItem('openrouter_state') ||
+        '';
     const codeMethod =
-        sessionStorage.getItem('openrouter_code_method') || 'S256';
+        sessionStorage.getItem('openrouter_code_method') ||
+        localStorage.getItem('openrouter_code_method') ||
+        'S256';
     log('query params present:', {
         code: Boolean(code),
         state: Boolean(state),
@@ -195,6 +208,10 @@ onMounted(async () => {
         // inside the helper to match your schema
         try {
             await kv.set('openrouter_api_key', userKey);
+            // Update global state immediately so UI reacts even before listeners.
+            try {
+                state.value.openrouterKey = userKey;
+            } catch {}
         } catch (e) {
             log('kvByName.set failed', e?.message || e);
         }
@@ -207,9 +224,15 @@ onMounted(async () => {
             } catch {}
         } catch {}
         log('clearing session markers (verifier/state/method)');
-        sessionStorage.removeItem('openrouter_code_verifier');
-        sessionStorage.removeItem('openrouter_state');
-        sessionStorage.removeItem('openrouter_code_method');
+        const keys = [
+            'openrouter_code_verifier',
+            'openrouter_state',
+            'openrouter_code_method',
+        ];
+        keys.forEach((k) => {
+            sessionStorage.removeItem(k);
+            localStorage.removeItem(k);
+        });
         // Allow event loop to process storage events in other tabs/components
         await new Promise((r) => setTimeout(r, 10));
         loading.value = false;
@@ -222,7 +245,7 @@ onMounted(async () => {
             router.replace('/').catch((e) => {
                 log('auto: router.replace failed', e?.message || e);
             });
-            // then a hard replace if SPA was blocked
+
             setTimeout(() => {
                 try {
                     log("auto: window.location.replace('/')");
@@ -242,5 +265,14 @@ onMounted(async () => {
         errorMessage.value =
             'Authentication finished, but we couldn’t auto-redirect.';
     }
+    // Safety: if nothing happened within 4s (no ready), force a hard reload to bust SW fallback
+    setTimeout(() => {
+        if (!ready.value && !errorMessage.value) {
+            try {
+                log('safety reload firing');
+                window.location.reload();
+            } catch {}
+        }
+    }, 4000);
 });
 </script>
