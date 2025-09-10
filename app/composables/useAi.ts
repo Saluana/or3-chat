@@ -37,6 +37,9 @@ import { state } from '~/state/global';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
+// NOTE: Previous global tail map removed; we keep per-instance tail state so
+// each chat composable manages its own streaming tail.
+
 export function useChat(
     msgs: ChatMessage[] = [],
     initialThreadId?: string,
@@ -93,6 +96,16 @@ export function useChat(
         return activePromptContent.value
             ? promptJsonToString(activePromptContent.value)
             : null;
+    }
+
+    // Tail assistant UI message (not added to messages[] until next user send)
+    const tailAssistant = ref<UiChatMessage | null>(null);
+    function flushTailAssistant() {
+        if (!tailAssistant.value) return;
+        if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
+            messages.value.push(tailAssistant.value!);
+        }
+        tailAssistant.value = null;
     }
 
     async function sendMessage(
@@ -182,6 +195,9 @@ export function useChat(
                 }
             } catch {}
         } // END create-new-thread block
+
+        // Promote previous tail assistant (completed prior answer) into history
+        flushTailAssistant();
 
         // Prior assistant hashes for image carry-over
         const prevAssistantRaw = [...rawMessages.value]
@@ -422,8 +438,8 @@ export function useChat(
             rawMessages.value.push(rawAssistant);
             const uiAssistant = ensureUiMessage(rawAssistant);
             uiAssistant.pending = true;
-            const idx = messages.value.push(uiAssistant) - 1;
-            const current = messages.value[idx]!; // UiChatMessage
+            tailAssistant.value = uiAssistant; // keep out of main messages until next user send
+            const current = uiAssistant;
             let chunkIndex = 0;
             const WRITE_INTERVAL_MS = 500;
             let lastPersistAt = 0;
@@ -668,16 +684,8 @@ export function useChat(
             streamAcc.finalize();
         } catch (err) {
             if (aborted.value) {
-                try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        (last as any).pending = false;
-                    }
-                } catch {}
+                if (tailAssistant.value?.pending)
+                    (tailAssistant.value as any).pending = false;
                 await hooks.doAction('ai.chat.send:action:after', {
                     threadId: threadIdRef.value,
                     aborted: true,
@@ -689,14 +697,6 @@ export function useChat(
                     error: err,
                 });
                 try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        messages.value.pop();
-                    }
                     const lastUser = [...messages.value]
                         .reverse()
                         .find((m) => m.role === 'user');
@@ -721,6 +721,10 @@ export function useChat(
                 } catch {}
                 const e = err instanceof Error ? err : new Error(String(err));
                 streamAcc.finalize({ error: e });
+                // Drop empty failed assistant
+                if (!tailAssistant.value?.text) tailAssistant.value = null;
+                else if (tailAssistant.value?.pending)
+                    (tailAssistant.value as any).pending = false;
             }
         } finally {
             loading.value = false;
@@ -847,6 +851,8 @@ export function useChat(
         streamId,
         resetStream,
         streamState,
+        tailAssistant,
+        flushTailAssistant,
         abort: () => {
             if (!loading.value || !abortController.value) return;
             aborted.value = true;
@@ -854,6 +860,8 @@ export function useChat(
                 abortController.value.abort();
             } catch {}
             streamAcc.finalize({ aborted: true });
+            if (tailAssistant.value?.pending)
+                (tailAssistant.value as any).pending = false;
         },
         clear,
     };

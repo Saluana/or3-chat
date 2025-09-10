@@ -253,6 +253,13 @@ const streamState: any = computed(() => {
     const s = chat.value?.streamState;
     return s && 'value' in s ? (s as any).value : s;
 });
+// Stream text + reasoning (from unified stream accumulator)
+// Tail assistant from composable (kept out of history until next user send)
+const tailAssistant = computed<any | null>(() => {
+    const t = chat.value?.tailAssistant;
+    return t && 'value' in t ? (t as any).value : t;
+});
+// Live streaming deltas (while active) to overlay into tailAssistant
 const streamReasoning = computed(
     () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
 );
@@ -266,31 +273,24 @@ const currentThreadId = computed(() => chat.value?.threadId?.value);
 const streamActive = computed(
     () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
 );
-// Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
+// Display logic: if tailAssistant exists, use it; merge live accumulator text while active.
 const streamingMessage = computed<any | null>(() => {
-    if (!streamActive.value) return null;
-    if (!streamId.value) return null;
-    const rawTail = tailDisplay.value || '';
-    const reasoningTail = streamReasoning.value || '';
-    if (!rawTail && !reasoningTail && messages.value.length === 0) return null;
-    return {
-        role: 'assistant',
-        text: rawTail,
-        id: 'tail-' + streamId.value,
-        stream_id: streamId.value || undefined,
-        pending: true,
-        reasoning_text: reasoningTail,
-    } as any;
+    const base = tailAssistant.value;
+    if (!base) return null;
+    const active = streamActive.value && streamId.value;
+    if (!active) return base; // finalized: use original object so edits persist
+    const text = tailDisplay.value || base.text;
+    const reasoning = streamReasoning.value || base.reasoning_text;
+    return Object.assign({}, base, {
+        text,
+        reasoning_text: reasoning,
+        pending: base.pending && !(text || reasoning),
+    });
 });
 
 // All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
-function filterStreaming(arr: any[]) {
-    if (streamActive.value && streamId.value) {
-        return arr.filter((m) => m.stream_id !== streamId.value);
-    }
-    return arr;
-}
-const stableMessages = computed<any[]>(() => filterStreaming(messages.value));
+// messages[] already excludes tail assistant; no filtering required
+const stableMessages = computed<any[]>(() => messages.value);
 // Removed size change logging for virtual/recent message groups.
 
 // Removed assistantVisible tracking (no handoff overlap needed)
@@ -377,13 +377,20 @@ function onBranch(newThreadId: string) {
 function onEdited(payload: { id: string; content: string }) {
     if (!chat.value) return;
     const arr = chat.value?.messages?.value;
-    if (!arr) return;
-    const idx = arr.findIndex((m: any) => m.id === payload.id);
-    if (idx === -1) return;
-    const msg = arr[idx];
-    if (!msg) return;
-    msg.text = payload.content;
-    chat.value.messages.value = [...arr];
+    if (arr) {
+        const idx = arr.findIndex((m: any) => m.id === payload.id);
+        if (idx !== -1) {
+            const msg = arr[idx];
+            if (msg) msg.text = payload.content;
+            chat.value.messages.value = [...arr];
+            return;
+        }
+    }
+    // Tail assistant edit (not yet flushed)
+    const ta = (chat.value as any).tailAssistant?.value;
+    if (ta && ta.id === payload.id) {
+        ta.text = payload.content;
+    }
 }
 
 function onPendingPromptSelected(promptId: string | null) {

@@ -112,7 +112,7 @@
             </div>
         </div>
         <!-- Editing surface -->
-        <div v-else class="w-full">
+        <div v-else class="w-full" ref="editorRoot">
             <LazyChatMessageEditor
                 hydrate-on-interaction="focus"
                 v-model="draft"
@@ -235,6 +235,7 @@ import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
+import { shallowRef } from 'vue';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
@@ -322,6 +323,15 @@ const currentShikiTheme = computed(() => {
 // console.debug('[ChatMessage] debug hook installed for ensureThumb');
 
 // Editing (extracted)
+// Wrap message in a shallowRef so if parent swaps the object (stream tail -> finalized),
+// editing composable always sees latest.
+const messageRef = shallowRef(props.message as any);
+watch(
+    () => props.message,
+    (m) => {
+        messageRef.value = m as any;
+    }
+);
 const {
     editing,
     draft,
@@ -329,7 +339,54 @@ const {
     beginEdit,
     cancelEdit,
     saveEdit: internalSaveEdit,
-} = useMessageEditing(props.message);
+} = useMessageEditing(messageRef);
+// Ensure focus cursor moves to end when entering edit mode (including for tail assistant post-stream)
+const editorRoot = ref<HTMLElement | null>(null);
+const IS_IOS =
+    typeof navigator !== 'undefined' &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+function focusEditorAtEnd() {
+    let tries = 0;
+    const maxTries = 25; // allow up to ~1.5s (25 * 60ms) for lazy editor mount on iOS
+    const attempt = () => {
+        const rootEl: any = editorRoot.value || null;
+        let textarea: HTMLTextAreaElement | null = null;
+        if (rootEl) {
+            textarea = rootEl.querySelector('textarea');
+            if (!textarea && rootEl.$el) {
+                textarea = rootEl.$el.querySelector?.('textarea') || null;
+            }
+        }
+        if (textarea) {
+            try {
+                // iOS sometimes needs scroll into view before focus sticks
+                if (IS_IOS) textarea.scrollIntoView?.({ block: 'center' });
+                textarea.focus();
+                const setSel = () => {
+                    try {
+                        const len = textarea!.value.length;
+                        textarea!.setSelectionRange(len, len);
+                    } catch {}
+                };
+                // Use both rAF and timeout to satisfy iOS timing quirks
+                requestAnimationFrame(setSel);
+                setTimeout(setSel, 0);
+            } catch {}
+        } else if (tries++ < maxTries) {
+            setTimeout(attempt, IS_IOS ? 60 : 40);
+        }
+    };
+    attempt();
+}
+watch(
+    () => editing.value,
+    (v) => {
+        if (v) {
+            // nextTick not strictly needed due to retry loop, but helps initial timing
+            nextTick(() => focusEditorAtEnd());
+        }
+    }
+);
 // Wrap begin/cancel/save to emit lifecycle events for container scroll suppression
 function wrappedBeginEdit() {
     const id = (props.message as any).id;
