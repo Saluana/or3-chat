@@ -20,7 +20,7 @@ export default defineNuxtConfig({
         registerType: 'autoUpdate',
         // Enable PWA in dev so you can install/test while developing
         devOptions: {
-            enabled: true,
+            enabled: false,
             suppressWarnings: true,
         },
         // Expose $pwa and intercept install prompt
