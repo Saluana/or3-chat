@@ -100,6 +100,10 @@ export function useChat(
 
     // Tail assistant UI message (not added to messages[] until next user send)
     const tailAssistant = ref<UiChatMessage | null>(null);
+    // When retrying we may intentionally remove the previous tail assistant (finalized answer)
+    // and must ensure the next send() does NOT flush it into history. We keep the removed id
+    // here and skip a single automatic flush if it matches.
+    let lastSuppressedAssistantId: string | null = null;
     function flushTailAssistant() {
         if (!tailAssistant.value) return;
         if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
@@ -196,8 +200,21 @@ export function useChat(
             } catch {}
         } // END create-new-thread block
 
-        // Promote previous tail assistant (completed prior answer) into history
-        flushTailAssistant();
+        // Promote previous tail assistant (completed prior answer) into history unless
+        // we intentionally suppressed it during a retry (duplicate would appear before
+        // the re-sent user message otherwise).
+        if (
+            tailAssistant.value &&
+            lastSuppressedAssistantId &&
+            tailAssistant.value.id === lastSuppressedAssistantId
+        ) {
+            // Drop without flushing
+            tailAssistant.value = null;
+            lastSuppressedAssistantId = null;
+        } else {
+            flushTailAssistant();
+            lastSuppressedAssistantId = null; // clear in normal path too
+        }
 
         // Prior assistant hashes for image carry-over
         const prevAssistantRaw = [...rawMessages.value]
@@ -769,6 +786,22 @@ export function useChat(
                 )
                 .filter((m: any) => m.role === 'assistant' && !m.deleted)
                 .first();
+
+            // Suppress flushing of the previous tail assistant if it corresponds to the
+            // assistant we are removing for retry. We cannot rely solely on clearing the ref
+            // because sendMessage() calls flushTailAssistant() unconditionally; instead we
+            // record the id and skip a single flush on next send.
+            if (assistant && tailAssistant.value?.id === assistant.id) {
+                lastSuppressedAssistantId = assistant.id;
+                tailAssistant.value = null;
+            } else if (
+                target.role === 'assistant' &&
+                tailAssistant.value?.id === target.id
+            ) {
+                lastSuppressedAssistantId = target.id;
+                tailAssistant.value = null;
+            }
+
             await hooks.doAction('ai.chat.retry:action:before', {
                 threadId: threadIdRef.value,
                 originalUserId: userMsg.id,
