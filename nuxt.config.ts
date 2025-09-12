@@ -21,7 +21,7 @@ export default defineNuxtConfig({
         registerType: 'autoUpdate',
         // Enable PWA in dev so you can install/test while developing
         devOptions: {
-            enabled: true,
+            enabled: false,
             suppressWarnings: true,
         },
         // Expose $pwa and intercept install prompt
@@ -32,6 +32,9 @@ export default defineNuxtConfig({
         },
         // Basic offline support; let Workbox handle common assets
         workbox: {
+            skipWaiting: true, // activate new SW immediately
+            clientsClaim: true, // control pages right away
+            cleanupOutdatedCaches: true,
             // Ensure the prerendered callback HTML can be matched regardless of auth params
             ignoreURLParametersMatching: [/^code$/, /^state$/],
             // Never serve the generic SPA fallback for the auth callback (with or without params)

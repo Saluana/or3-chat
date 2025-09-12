@@ -107,6 +107,7 @@
                     :shiki-theme="currentShikiTheme"
                     :class="streamMdClasses"
                     :allowed-image-prefixes="['data:image/']"
+                    code-block-show-line-numbers
                 />
                 <!-- legacy rendered html path removed -->
             </div>
@@ -1003,7 +1004,7 @@ const streamMdClasses = [
 
 .message-body :deep([data-streamdown='code-body']) {
     padding: 0;
-    padding-left: 15px;
+    padding-left: 0px;
     padding-right: 15px;
     margin: 0;
     border: none;
@@ -1012,10 +1013,19 @@ const streamMdClasses = [
 .message-body :deep([data-streamdown='code-body']) pre {
     border: none;
     margin-bottom: 0;
-    padding-bottom: 30px;
+    margin-top: 0px;
+    padding-top: 15px;
+    padding-bottom: 15px;
     background: var(--md-surface-container-lowest) !important;
 }
 .message-body :deep([data-streamdown='code-lang']) {
     font: inherit;
+}
+.message-body :deep([data-streamdown='code-line-number']) {
+    margin-right: 12px;
+    padding: 20px;
+}
+.message-body :deep(pre) {
+    padding-left: 0;
 }
 </style>

@@ -161,6 +161,7 @@ app/
     hooks.client.ts
     hooks.server.ts
     message-actions.client.ts
+    openrouter-capture.client.ts
     pane-plugin-api.client.ts
     theme.client.ts
   state/
@@ -2964,601 +2965,6 @@ function onNewChat() {
 </script>
 ```
 
-## File: app/components/sidebar/SideNavHeader.vue
-```vue
-<template>
-    <div class="px-2 pt-2 flex flex-col space-y-2">
-        <div class="flex">
-            <UButton
-                @click="$emit('new-chat')"
-                class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
-                >New Chat</UButton
-            >
-            <UTooltip :delay-duration="0" text="Create project">
-                <UButton
-                    color="inverse-primary"
-                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                    icon="pixelarticons:folder-plus"
-                    :ui="{
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="openCreateProject"
-                />
-            </UTooltip>
-            <UTooltip :delay-duration="0" text="Create document">
-                <UButton
-                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                    icon="pixelarticons:note-plus"
-                    :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="openCreateDocumentModal"
-                />
-            </UTooltip>
-        </div>
-        <div class="relative w-full ml-[1px]">
-            <UInput
-                ref="searchInputWrapper"
-                v-model="sidebarQuery"
-                icon="pixelarticons:search"
-                size="md"
-                :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
-                variant="outline"
-                placeholder="Search..."
-                aria-label="Search"
-                class="w-full"
-                @keydown.escape.prevent.stop="onEscapeClear"
-            >
-                <template v-if="sidebarQuery.length > 0" #trailing>
-                    <UButton
-                        color="neutral"
-                        variant="subtle"
-                        size="xs"
-                        class="flex items-center justify-center p-0"
-                        icon="pixelarticons:close-box"
-                        aria-label="Clear input"
-                        @click="sidebarQuery = ''"
-                    />
-                </template>
-            </UInput>
-        </div>
-
-        <div
-            class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
-            role="group"
-            aria-label="Sidebar sections"
-        >
-            <UButton
-                v-for="seg in sectionToggles"
-                :key="seg.value"
-                size="sm"
-                :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
-                :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
-                class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
-                :class="
-                    activeSections[seg.value]
-                        ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
-                        : 'opacity-70 hover:bg-primary/15'
-                "
-                :aria-pressed="activeSections[seg.value]"
-                @click="toggleSection(seg.value)"
-            >
-                {{ seg.label }}
-            </UButton>
-        </div>
-
-        <!-- Rename modal -->
-        <UModal
-            v-model:open="showRenameModal"
-            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-            :ui="{
-                footer: 'justify-end ',
-            }"
-        >
-            <template #header>
-                <h3>
-                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
-                </h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameTitle"
-                        :placeholder="
-                            isRenamingDoc ? 'Document title' : 'Thread title'
-                        "
-                        icon="pixelarticons:edit"
-                        @keyup.enter="saveRename"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameModal = false"
-                    >Cancel</UButton
-                >
-                <UButton color="primary" @click="saveRename">Save</UButton>
-            </template>
-        </UModal>
-
-        <!-- Rename Project Modal -->
-        <UModal
-            v-model:open="showRenameProjectModal"
-            title="Rename project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header><h3>Rename project?</h3></template>
-            <template #body>
-                <div class="space-y-4">
-                    <UInput
-                        v-model="renameProjectName"
-                        placeholder="Project name"
-                        icon="pixelarticons:folder"
-                        @keyup.enter="saveRenameProject"
-                    />
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="showRenameProjectModal = false"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="!renameProjectName.trim()"
-                    @click="saveRenameProject"
-                    >Save</UButton
-                >
-            </template>
-        </UModal>
-
-        <!-- Create Project Modal -->
-        <UModal
-            v-model:open="showCreateProjectModal"
-            title="New Project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Create project</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UForm
-                        :state="createProjectState"
-                        @submit.prevent="submitCreateProject"
-                    >
-                        <div class="flex flex-col space-y-3">
-                            <UFormField
-                                label="Title"
-                                name="name"
-                                :error="createProjectErrors.name"
-                            >
-                                <UInput
-                                    v-model="createProjectState.name"
-                                    required
-                                    placeholder="Project title"
-                                    icon="pixelarticons:folder"
-                                    class="w-full"
-                                    @keyup.enter="submitCreateProject"
-                                />
-                            </UFormField>
-                            <UFormField label="Description" name="description">
-                                <UTextarea
-                                    class="w-full border-2 rounded-[6px]"
-                                    v-model="createProjectState.description"
-                                    :rows="3"
-                                    placeholder="Optional description"
-                                />
-                            </UFormField>
-                        </div>
-                    </UForm>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeCreateProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    :disabled="
-                        !createProjectState.name.trim() || creatingProject
-                    "
-                    color="primary"
-                    @click="submitCreateProject"
-                >
-                    <span v-if="!creatingProject">Create</span>
-                    <span v-else class="inline-flex items-center gap-1">
-                        <UIcon name="i-lucide-loader" class="animate-spin" />
-                        Creating
-                    </span>
-                </UButton>
-            </template>
-        </UModal>
-
-        <!-- Add To Project Modal -->
-        <UModal
-            v-model:open="showAddToProjectModal"
-            title="Add to project"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Add thread to project</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <div class="flex gap-2 text-xs font-mono">
-                        <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
-                            :class="
-                                addMode === 'select'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'select'"
-                        >
-                            Select Existing
-                        </button>
-                        <button
-                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
-                            :class="
-                                addMode === 'create'
-                                    ? 'bg-primary/30'
-                                    : 'opacity-70'
-                            "
-                            @click="addMode = 'create'"
-                        >
-                            Create New
-                        </button>
-                    </div>
-                    <div v-if="addMode === 'select'" class="space-y-3">
-                        <UFormField label="Project" name="project">
-                            <USelectMenu
-                                v-model="selectedProjectId"
-                                :items="projectSelectOptions"
-                                :value-key="'value'"
-                                searchable
-                                placeholder="Select project"
-                                class="w-full"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                    <div v-else class="space-y-3">
-                        <UFormField label="Project Title" name="newProjectName">
-                            <UInput
-                                v-model="newProjectName"
-                                placeholder="Project name"
-                                icon="pixelarticons:folder"
-                                class="w-full"
-                            />
-                        </UFormField>
-                        <UFormField
-                            label="Description"
-                            name="newProjectDescription"
-                        >
-                            <UTextarea
-                                v-model="newProjectDescription"
-                                :rows="3"
-                                placeholder="Optional description"
-                                class="w-full border-2 rounded-[6px]"
-                            />
-                        </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
-                            {{ addToProjectError }}
-                        </p>
-                    </div>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeAddToProject"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="
-                        addingToProject ||
-                        (addMode === 'select'
-                            ? !selectedProjectId
-                            : !newProjectName.trim())
-                    "
-                    @click="submitAddToProject"
-                >
-                    <span v-if="!addingToProject">Add</span>
-                    <span v-else class="inline-flex items-center gap-1"
-                        ><UIcon
-                            name="i-lucide-loader"
-                            class="animate-spin"
-                        />Adding</span
-                    >
-                </UButton>
-            </template>
-        </UModal>
-
-        <!-- New Document Naming Modal -->
-        <UModal
-            v-model:open="showCreateDocumentModal"
-            title="New Document"
-            :ui="{ footer: 'justify-end' }"
-        >
-            <template #header>
-                <h3>Name new document</h3>
-            </template>
-            <template #body>
-                <div class="space-y-4">
-                    <UForm
-                        :state="newDocumentState"
-                        @submit.prevent="submitCreateDocument"
-                    >
-                        <UFormField
-                            label="Title"
-                            name="title"
-                            :error="newDocumentErrors.title"
-                        >
-                            <UInput
-                                v-model="newDocumentState.title"
-                                required
-                                placeholder="Document title"
-                                icon="pixelarticons:note"
-                                class="w-full"
-                                @keyup.enter="submitCreateDocument"
-                            />
-                        </UFormField>
-                    </UForm>
-                </div>
-            </template>
-            <template #footer>
-                <UButton variant="ghost" @click="closeCreateDocumentModal"
-                    >Cancel</UButton
-                >
-                <UButton
-                    color="primary"
-                    :disabled="
-                        creatingDocument || !newDocumentState.title.trim()
-                    "
-                    @click="submitCreateDocument"
-                >
-                    <span v-if="!creatingDocument">Create</span>
-                    <span v-else class="inline-flex items-center gap-1">
-                        <UIcon name="i-lucide-loader" class="animate-spin" />
-                        Creating
-                    </span>
-                </UButton>
-            </template>
-        </UModal>
-    </div>
-</template>
-<script setup lang="ts">
-import { ref, computed } from 'vue';
-import { db, upsert, create } from '~/db';
-
-const props = defineProps<{
-    sidebarQuery: string;
-    activeSections: {
-        projects: boolean;
-        chats: boolean;
-        docs: boolean;
-    };
-    projects: any[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'update:sidebarQuery', value: string): void;
-    (e: 'update:activeSections', value: typeof props.activeSections): void;
-    (e: 'new-chat'): void;
-    (e: 'new-document', initial?: { title?: string }): void;
-    (e: 'open-rename', target: any): void;
-    (e: 'open-rename-project', projectId: string): void;
-    (e: 'add-to-project', thread: any): void;
-    (e: 'add-document-to-project', doc: any): void;
-}>();
-
-// Section visibility (multi-select) defaults to all on
-const sectionToggles = [
-    { label: 'Proj', value: 'projects' as const },
-    { label: 'Chats', value: 'chats' as const },
-    { label: 'Docs', value: 'docs' as const },
-];
-
-function toggleSection(v: 'projects' | 'chats' | 'docs') {
-    const next = { ...props.activeSections, [v]: !props.activeSections[v] };
-    emit('update:activeSections', next);
-}
-
-// Direct focus support for external callers
-const searchInputWrapper = ref<any | null>(null);
-function focusSearchInput() {
-    // Access underlying input inside UInput component
-    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
-        searchInputWrapper.value) as HTMLElement | null;
-    if (!root) return;
-    const input = root.querySelector('input');
-    if (input) (input as HTMLInputElement).focus();
-}
-defineExpose({ focusSearchInput });
-
-const sidebarQuery = computed({
-    get: () => props.sidebarQuery,
-    set: (value) => emit('update:sidebarQuery', value),
-});
-
-function onEscapeClear() {
-    if (sidebarQuery.value) sidebarQuery.value = '';
-}
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-const renameMetaKind = ref<'chat' | 'doc' | null>(null);
-const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
-
-async function openRename(target: any) {
-    emit('open-rename', target);
-}
-
-async function saveRename() {
-    emit('open-rename', {
-        id: renameId.value,
-        title: renameTitle.value,
-        kind: renameMetaKind.value,
-    });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
-    renameMetaKind.value = null;
-}
-
-// ---- Project Rename Modal Logic ----
-const showRenameProjectModal = ref(false);
-const renameProjectId = ref<string | null>(null);
-const renameProjectName = ref('');
-
-async function openRenameProject(projectId: string) {
-    emit('open-rename-project', projectId);
-}
-
-async function saveRenameProject() {
-    if (!renameProjectId.value) return;
-    const name = renameProjectName.value.trim();
-    if (!name) return;
-    const project = await db.projects.get(renameProjectId.value);
-    if (!project) return;
-    try {
-        await upsert.project({
-            ...project,
-            name,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        showRenameProjectModal.value = false;
-        renameProjectId.value = null;
-        renameProjectName.value = '';
-    } catch (e) {
-        console.error('rename project failed', e);
-    }
-}
-
-// ---- Project Creation ----
-const showCreateProjectModal = ref(false);
-const creatingProject = ref(false);
-const createProjectState = ref<{ name: string; description: string }>({
-    name: '',
-    description: '',
-});
-const createProjectErrors = ref<{ name?: string }>({});
-
-function openCreateProject() {
-    showCreateProjectModal.value = true;
-    createProjectState.value = { name: '', description: '' };
-    createProjectErrors.value = {};
-}
-function closeCreateProject() {
-    showCreateProjectModal.value = false;
-}
-
-async function submitCreateProject() {
-    if (creatingProject.value) return;
-    const name = createProjectState.value.name.trim();
-    if (!name) {
-        createProjectErrors.value.name = 'Title required';
-        return;
-    }
-    creatingProject.value = true;
-    try {
-        const now = Math.floor(Date.now() / 1000);
-        // data holds ordered list of entities (chat/doc) we include kind now per request
-        const newId = crypto.randomUUID();
-        await create.project({
-            id: newId,
-            name,
-            description: createProjectState.value.description?.trim() || null,
-            data: [], // store as array; schema allows any
-            created_at: now,
-            updated_at: now,
-            deleted: false,
-            clock: 0,
-        } as any);
-        closeCreateProject();
-    } catch (e) {
-        console.error('Failed to create project', e);
-    } finally {
-        creatingProject.value = false;
-    }
-}
-
-// ---- Add To Project Flow ----
-const showAddToProjectModal = ref(false);
-const addToProjectThreadId = ref<string | null>(null);
-// Support documents
-const addToProjectDocumentId = ref<string | null>(null);
-const addMode = ref<'select' | 'create'>('select');
-const selectedProjectId = ref<string | null>(null);
-const newProjectName = ref('');
-const newProjectDescription = ref('');
-const addingToProject = ref(false);
-const addToProjectError = ref<string | null>(null);
-
-const projectSelectOptions = computed(() =>
-    props.projects.map((p) => ({ label: p.name, value: p.id }))
-);
-
-function openAddToProject(thread: any) {
-    emit('add-to-project', thread);
-}
-
-function openAddDocumentToProject(doc: any) {
-    emit('add-document-to-project', doc);
-}
-
-function closeAddToProject() {
-    showAddToProjectModal.value = false;
-    addToProjectThreadId.value = null;
-    addToProjectDocumentId.value = null;
-}
-
-async function submitAddToProject() {
-    emit('add-to-project', {
-        threadId: addToProjectThreadId.value,
-        documentId: addToProjectDocumentId.value,
-        mode: addMode.value,
-        selectedProjectId: selectedProjectId.value,
-        newProjectName: newProjectName.value,
-        newProjectDescription: newProjectDescription.value,
-    });
-    closeAddToProject();
-}
-
-// ---- New Document Flow (naming modal) ----
-const showCreateDocumentModal = ref(false);
-const creatingDocument = ref(false);
-const newDocumentState = ref<{ title: string }>({ title: '' });
-const newDocumentErrors = ref<{ title?: string }>({});
-
-function openCreateDocumentModal() {
-    showCreateDocumentModal.value = true;
-    newDocumentState.value = { title: '' };
-    newDocumentErrors.value = {};
-}
-function closeCreateDocumentModal() {
-    showCreateDocumentModal.value = false;
-}
-async function submitCreateDocument() {
-    if (creatingDocument.value) return;
-    const title = newDocumentState.value.title.trim();
-    if (!title) {
-        newDocumentErrors.value.title = 'Title required';
-        return;
-    }
-    creatingDocument.value = true;
-    try {
-        emit('new-document', { title });
-        closeCreateDocumentModal();
-    } finally {
-        creatingDocument.value = false;
-    }
-}
-</script>
-```
-
 ## File: app/components/RetroGlassBtn.vue
 ```vue
 <template>
@@ -3692,6 +3098,100 @@ export function listRegisteredMessageActionIds(): string[] {
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatMessage.vue so they always appear;
+// external plugins should use order >= 200 to appear after them unless intentionally overriding.
+```
+
+## File: app/composables/ui-extensions/projects/useProjectTreeActions.ts
+```typescript
+import { computed, reactive } from 'vue';
+
+// Local interfaces describing the tree rows printed in the console.
+// These mirror the shape produced by SidebarProjectTree.vue for root and child items.
+export type ProjectTreeKind = 'chat' | 'doc';
+export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';
+
+export interface ProjectTreeChild {
+    value: string; // id of the entry
+    label: string;
+    icon?: string;
+    kind?: ProjectTreeKind; // 'chat' | 'doc'
+    parentId?: string;
+    onSelect?: (e: Event) => void;
+}
+
+export interface ProjectTreeRoot {
+    value: string; // project id
+    label: string; // project name
+    defaultExpanded?: boolean;
+    children?: ProjectTreeChild[];
+    onSelect?: (e: Event) => void;
+}
+
+export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;
+
+export interface ProjectTreeHandlerCtx {
+    // The tree row this action was invoked for (root or child)
+    treeRow: ProjectTreeRow;
+    // legacy/alternate shapes seen in the wild may include a `child` property
+    // but prefer to use `treeRow`.
+    child?: ProjectTreeChild;
+    root?: ProjectTreeRoot;
+}
+
+/** Definition for an extendable chat message action button. */
+export interface ProjectTreeAction {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** Icon name (passed to UButton icon prop). */
+    icon: string;
+    /** Label text. */
+    label: string;
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds
+    /** Handler invoked on click. */
+    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;
+}
+
+// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
+const g: any = globalThis as any;
+const registry: Map<string, ProjectTreeAction> =
+    g.__or3ProjectTreeActionsRegistry ||
+    (g.__or3ProjectTreeActionsRegistry = new Map());
+
+// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
+const reactiveList = reactive<{ items: ProjectTreeAction[] }>({
+    items: [],
+});
+
+function syncReactiveList() {
+    reactiveList.items = Array.from(registry.values());
+}
+
+/** Register (or replace) a message action. */
+export function registerProjectTreeAction(action: ProjectTreeAction) {
+    registry.set(action.id, action);
+    syncReactiveList();
+}
+
+/** Unregister an action by id (optional utility). */
+export function unregisterProjectTreeAction(id: string) {
+    if (registry.delete(id)) syncReactiveList();
+}
+
+/** Accessor for actions applicable to a specific message. */
+export function useProjectTreeActions() {
+    return computed(() =>
+        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+    );
+}
+
+/** Convenience for plugin authors to check existing action ids. */
+export function listRegisteredProjectTreeActionIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// Note: Core (built-in) actions remain hard-coded in ChatProjectTree.vue so they always appear;
 // external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
@@ -6919,6 +6419,34 @@ import PageShell from '~/components/PageShell.vue';
 </script>
 ```
 
+## File: app/plugins/examples/project-tree-actions.client.ts
+```typescript
+import type { ProjectTreeHandlerCtx } from '@/composables/ui-extensions/projects/useProjectTreeActions';
+
+export default defineNuxtPlugin(() => {
+    // Test plugin to register thread history actions for development/debugging.
+    // Registers two actions and logs output to console + toasts. Cleans up on app unmount.
+    try {
+        console.info('[thread-history-test] registering actions');
+
+        // Inspect thread action — shows a console group and a toast
+        registerProjectTreeAction({
+            id: 'test:inspect-thread',
+            icon: 'i-lucide-eye',
+            label: 'Inspect Thread',
+            order: 300,
+            showOn: ['root', 'chat'],
+            async handler(ctx: ProjectTreeHandlerCtx) {
+                // Keep the same runtime behavior; log the typed context for authors.
+                console.log(ctx);
+            },
+        });
+    } catch (e) {
+        console.error('[thread-history-test] registration error', e);
+    }
+});
+```
+
 ## File: app/plugins/hooks.client.ts
 ```typescript
 import { defineNuxtPlugin } from '#app';
@@ -8693,6 +8221,27 @@ export default defineAppConfig({
 });
 ```
 
+## File: LICENSE
+```
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2025 @Saluana
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+```
+
 ## File: tsconfig.json
 ```json
 {
@@ -8712,6 +8261,166 @@ export default defineAppConfig({
       "path": "./.nuxt/tsconfig.node.json"
     }
   ]
+}
+```
+
+## File: app/assets/css/main.css
+```css
+/* Tailwind v4: single import includes preflight + utilities */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Nuxt UI base styles (load first so we can override its tokens below) */
+@import "@nuxt/ui";
+
+/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
+	so classes used in Nuxt UI theme overrides are generated. */
+@source "../../../app.config.ts";
+
+
+/* Your Material theme variable files (scoped: .light, .dark, etc.) */
+@import "./theme.css";
+
+/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
+@import "~/assets/css/nuxt-ui-map.css";
+
+/* Font setup: body uses VT323, headings use Press Start 2P */
+:root {
+	/* Tailwind v4 token vars (optional for font utilities) */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+    --ui-radius: 3px;
+}
+
+.font-ps2 {
+	font-family: var(--font-heading) !important;
+}
+
+.font-vt323 {
+	font-family: var(--font-sans) !important;
+}
+
+html, body {
+	font-family: var(--font-sans) !important;
+    font-size: 20px; 
+}
+
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+	font-family: var(--font-heading) !important;
+}
+
+.retro-btn { 
+	display: inline-flex;
+	line-height: 1; /* avoid extra vertical space from font metrics */
+	position: relative;
+	border-radius: 3px;                               /* default */
+	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
+.retro-btn.aspect-square {
+	padding: 0; /* our button variant already sets px-0, this enforces it */
+	place-items: center;
+}
+
+/* Physical press: move button into its shadow and add subtle inner bevel */
+.retro-btn:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+.active-element {
+		box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Keyboard accessibility: preserve pixel look while focused */
+.retro-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Global thin colored scrollbars (WebKit + Firefox) */
+/* Firefox */
+html {
+	scrollbar-width: thin;
+	/* thumb color, then track color */
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit (Chromium, Safari) */
+/* Apply to all scrollable elements */
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+	border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--md-primary);
+	border-radius: 9999px;
+	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern-flipped {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    rotate: 180deg;
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
+.dark .prose strong,
+.dark .prosemirror-host :where(.ProseMirror) strong {
+	color: var(--md-on-surface);
+}
+
+.hljs {
+	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
 }
 ```
 
@@ -10291,6 +10000,529 @@ function onToggle() {
 </style>
 ```
 
+## File: app/components/sidebar/SidebarProjectTree.vue
+```vue
+<template>
+    <div v-if="projects.length" class="space-y-1">
+        <h1 class="text-xs uppercase opacity-70 px-1 py-3 select-none">
+            Projects
+        </h1>
+        <UTree
+            v-model:expanded="internalExpanded"
+            :items="treeItems"
+            color="neutral"
+            size="sm"
+            :ui="ui"
+        >
+            <template #item-trailing="{ item, level }">
+                <div class="flex items-center gap-1">
+                    <!-- Root-level quick add buttons (appear on hover) -->
+                    <template v-if="level === 0">
+                        <button
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addChat', item.value)"
+                            aria-label="Add chat to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:message-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                        <button
+                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop="emit('addDocument', item.value)"
+                            aria-label="Add document to project"
+                        >
+                            <UIcon
+                                name="pixelarticons:note-plus"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </button>
+                    </template>
+                    <UPopover
+                        :content="{
+                            side: 'right',
+                            align: 'start',
+                            sideOffset: 6,
+                        }"
+                    >
+                        <span
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            @click.stop
+                            :aria-label="
+                                level === 0
+                                    ? 'Project actions'
+                                    : 'Entry actions'
+                            "
+                        >
+                            <UIcon
+                                name="pixelarticons:more-vertical"
+                                class="w-4 h-4 opacity-70"
+                            />
+                        </span>
+                        <template #content>
+                            <div class="p-1 w-48 space-y-1">
+                                <template v-if="level === 0">
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:edit"
+                                        @click.stop.prevent="
+                                            emit('renameProject', item.value)
+                                        "
+                                        >Rename Project</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start cursor-pointer"
+                                        icon="pixelarticons:trash"
+                                        @click.stop.prevent="
+                                            emit('deleteProject', item.value)
+                                        "
+                                        >Delete Project</UButton
+                                    >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="
+                                                !action.showOn ||
+                                                action.showOn.includes('root')
+                                            "
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        root: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
+                                </template>
+                                <template v-else>
+                                    <UButton
+                                        color="neutral"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="pixelarticons:edit"
+                                        @click.stop.prevent="
+                                            emit('renameEntry', {
+                                                projectId: item.parentId!,
+                                                entryId: item.value,
+                                                kind: item.kind as ProjectEntryKind,
+                                            })
+                                        "
+                                        >Rename</UButton
+                                    >
+                                    <UButton
+                                        color="error"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="w-full justify-start"
+                                        icon="pixelarticons:trash"
+                                        @click.stop.prevent="
+                                            emit('removeFromProject', {
+                                                projectId: item.parentId!,
+                                                entryId: item.value,
+                                                kind: item.kind as ProjectEntryKind,
+                                            })
+                                        "
+                                        >Remove from Project</UButton
+                                    >
+                                    <template
+                                        v-for="action in extraActions"
+                                        :key="action.id"
+                                    >
+                                        <UButton
+                                            v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
+                                            :icon="action.icon"
+                                            color="neutral"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full justify-start"
+                                            @click="
+                                                () =>
+                                                    runExtraAction(action, {
+                                                        child: item,
+                                                    })
+                                            "
+                                            >{{ action.label || '' }}</UButton
+                                        >
+                                    </template>
+                                </template>
+                            </div>
+                        </template>
+                    </UPopover>
+                </div>
+            </template>
+        </UTree>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed, watch, ref } from 'vue';
+
+// Distinct kinds of entries that can live under a project.
+// Extend here if we introduce more entry types in the future.
+export type ProjectEntryKind = 'chat' | 'doc';
+
+// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
+interface ProjectEntry {
+    id: string;
+    name?: string;
+    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
+}
+
+interface ProjectRow {
+    id: string;
+    name: string;
+    // The backing data that encodes the project entries. Can be
+    //  - an already parsed array of ProjectEntry objects
+    //  - a JSON string representing that array
+    //  - anything else (ignored)
+    data?: unknown;
+}
+
+// Shape consumed by UTree. (We only type the properties we actually use.)
+interface TreeItem {
+    label: string;
+    value: string;
+    icon?: string;
+    kind?: ProjectEntryKind; // Only for non-root items
+    parentId?: string; // Only set for child entries
+    defaultExpanded?: boolean;
+    children?: TreeItem[];
+    onSelect?: (e: Event) => void;
+}
+
+const props = defineProps<{
+    projects: ProjectRow[];
+    expanded?: string[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'update:expanded', value: string[]): void;
+    (e: 'chatSelected', id: string): void;
+    (e: 'documentSelected', id: string): void;
+    (e: 'addChat', projectId: string): void;
+    (e: 'addDocument', projectId: string): void;
+    (e: 'deleteProject', projectId: string): void;
+    (e: 'renameProject', projectId: string): void;
+    (
+        e: 'renameEntry',
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
+    ): void;
+    (
+        e: 'removeFromProject',
+        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
+    ): void;
+}>();
+
+// Local mirror for v-model:expanded
+const internalExpanded = ref<string[]>(
+    props.expanded ? [...props.expanded] : []
+);
+watch(
+    () => props.expanded,
+    (val) => {
+        if (val && val !== internalExpanded.value)
+            internalExpanded.value = [...val];
+    }
+);
+watch(internalExpanded, (val) => emit('update:expanded', val));
+
+function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
+    const raw = p?.data;
+    if (Array.isArray(raw)) return raw as ProjectEntry[];
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
+        } catch {
+            // Silently ignore malformed JSON
+        }
+    }
+    return [];
+}
+
+const treeItems = computed<TreeItem[]>(() =>
+    props.projects.map<TreeItem>((p) => {
+        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
+            (entry) => {
+                // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
+                const kind: ProjectEntryKind =
+                    entry.kind === 'doc' ? 'doc' : 'chat';
+                return {
+                    label: entry.name || '(untitled)',
+                    value: entry.id,
+                    icon:
+                        kind === 'doc'
+                            ? 'pixelarticons:note'
+                            : 'pixelarticons:chat',
+                    kind,
+                    parentId: p.id,
+                    onSelect: (e: Event) => {
+                        if (kind === 'chat') emit('chatSelected', entry.id);
+                        else emit('documentSelected', entry.id);
+                        // Prevent default selection behavior if needed by UTree (not sure), otherwise leave.
+                    },
+                };
+            }
+        );
+        return {
+            label: p.name,
+            value: p.id,
+            defaultExpanded: false,
+            children,
+            onSelect: (e: Event) => e.preventDefault(), // Root projects themselves aren't selectable
+        };
+    })
+);
+
+const ui = {
+    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
+    link: 'group/addchat text-[13px] rounded-[4px] py-1',
+    item: 'cursor-pointer ',
+};
+
+// Plugin project tree actions
+const extraActions = useProjectTreeActions();
+async function runExtraAction(action: any, data: { root?: any; child?: any }) {
+    try {
+        await action.handler(data);
+    } catch (e: any) {
+        try {
+            useToast().add({
+                title: 'Action failed',
+                description: e?.message || 'Error running action',
+                color: 'error',
+                duration: 3000,
+            });
+        } catch {}
+        console.error('Project tree action error', action.id, e);
+    }
+}
+</script>
+
+<style scoped></style>
+```
+
+## File: app/components/sidebar/SidebarVirtualList.vue
+```vue
+<template>
+    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <VList
+            :data="flatItems"
+            :style="{ height: 'calc(100dvh - 318px)' }"
+            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
+            #default="{ item, index }"
+        >
+            <div :key="item.key || index">
+                <h1
+                    v-if="item.type === 'sectionHeader'"
+                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
+                >
+                    {{ item.label }}
+                </h1>
+                <SidebarProjectTree
+                    v-else-if="item.type === 'projectsTree'"
+                    :projects="projects"
+                    v-model:expanded="expandedProjectsLocal"
+                    @chatSelected="emit('chatSelected', $event)"
+                    @documentSelected="emit('documentSelected', $event)"
+                    @addChat="emit('addChat', $event)"
+                    @addDocument="emit('addDocument', $event)"
+                    @renameProject="emit('renameProject', $event)"
+                    @deleteProject="emit('deleteProject', $event)"
+                    @renameEntry="emit('renameEntry', $event)"
+                    @removeFromProject="emit('removeFromProject', $event)"
+                />
+                <div v-else-if="item.type === 'thread'" class="mr-1">
+                    <SidebarThreadItem
+                        :thread="item.thread"
+                        :active="activeThreadSet.has(item.thread.id)"
+                        class="mb-2"
+                        @select="emit('selectThread', $event)"
+                        @rename="emit('renameThread', $event)"
+                        @delete="emit('deleteThread', $event)"
+                        @add-to-project="emit('addThreadToProject', $event)"
+                    />
+                </div>
+                <div v-else-if="item.type === 'doc'" class="mr-1">
+                    <SidebarDocumentItem
+                        :doc="item.doc"
+                        class="mb-2"
+                        :active="activeDocumentSet.has(item.doc.id)"
+                        @select="emit('selectDocument', $event)"
+                        @rename="emit('renameDocument', $event)"
+                        @delete="emit('deleteDocument', $event)"
+                        @add-to-project="emit('addDocumentToProject', $event)"
+                    />
+                </div>
+            </div>
+        </VList>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
+import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
+import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+
+interface ProjectEntry {
+    id: string;
+    name?: string;
+    kind: 'chat' | 'doc';
+}
+interface Project {
+    id: string;
+    name: string;
+    data?: any;
+}
+interface Thread {
+    id: string;
+    title?: string;
+    forked?: boolean;
+}
+interface DocLite {
+    id: string;
+    title: string;
+    updated_at?: number;
+    created_at?: number;
+    postType?: string;
+}
+
+// Row item discriminated union
+interface SectionHeaderItem {
+    type: 'sectionHeader';
+    key: string;
+    label: string;
+}
+interface ProjectsTreeItem {
+    type: 'projectsTree';
+    key: string;
+}
+interface ThreadItem {
+    type: 'thread';
+    key: string;
+    thread: Thread;
+}
+interface DocItem {
+    type: 'doc';
+    key: string;
+    doc: DocLite;
+}
+
+type SidebarRowItem =
+    | SectionHeaderItem
+    | ProjectsTreeItem
+    | ThreadItem
+    | DocItem;
+
+const props = defineProps<{
+    projects: Project[];
+    threads: Thread[];
+    documents: any[]; // possibly full posts containing heavy fields
+    displayDocuments?: any[]; // optional filtered docs from search
+    expandedProjects: string[]; // mutated in place (passed to tree)
+    activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
+    activeThread?: string; // legacy single selection
+    activeDocument?: string; // legacy single selection
+    activeThreads?: string[]; // new multi-active selection
+    activeDocuments?: string[]; // new multi-active selection
+    height: number; // required external measured height
+}>();
+
+// Simplified emit typing (broad) to accommodate both legacy kebab-case and new camelCase events during transition
+// TODO: tighten types once integration finalized
+// eslint-disable-next-line @typescript-eslint/ban-types
+const emit = defineEmits<(e: string, ...args: any[]) => void>();
+
+// Lightweight docs mapping (strip heavy fields like content)
+const lightweightDocs = computed<DocLite[]>(() =>
+    (props.documents || []).map((d: any) => ({
+        id: d.id,
+        title: d.title || '(untitled document)',
+        updated_at: d.updated_at,
+        created_at: d.created_at,
+        postType: d.postType,
+    }))
+);
+
+const effectiveDocs = computed<DocLite[]>(() => {
+    if (props.displayDocuments && props.displayDocuments.length) {
+        return props.displayDocuments.map((d: any) => ({
+            id: d.id,
+            title: d.title || '(untitled document)',
+            updated_at: d.updated_at,
+            created_at: d.created_at,
+            postType: d.postType,
+        }));
+    }
+    return lightweightDocs.value;
+});
+
+// Local mirror for v-model with tree (keep reference semantics for parent array)
+const expandedProjectsLocal = computed({
+    get: () => props.expandedProjects,
+    set: (val: string[]) => {
+        // mutate original array for parent expectations
+        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
+    },
+});
+
+const flatItems = computed<SidebarRowItem[]>(() => {
+    const out: SidebarRowItem[] = [];
+    if (props.activeSections.projects && props.projects.length) {
+        out.push({ type: 'projectsTree', key: 'projectsTree' });
+    }
+    // Threads section
+    if (props.activeSections.threads && props.threads.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
+        for (const t of props.threads) {
+            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
+        }
+    }
+    // Docs section
+    if (props.activeSections.docs && effectiveDocs.value.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
+        for (const d of effectiveDocs.value) {
+            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
+        }
+    }
+    return out;
+});
+
+// Constant row size estimate
+const rowSize = 36;
+
+// ---- Multi-active support ----
+const activeThreadSet = computed(() => {
+    if (Array.isArray(props.activeThreads))
+        return new Set(props.activeThreads.filter(Boolean));
+    return new Set(props.activeThread ? [props.activeThread] : []);
+});
+const activeDocumentSet = computed(() => {
+    if (Array.isArray(props.activeDocuments))
+        return new Set(props.activeDocuments.filter(Boolean));
+    return new Set(props.activeDocument ? [props.activeDocument] : []);
+});
+</script>
+```
+
 ## File: app/components/sidebar/SideBottomNav.vue
 ```vue
 <template>
@@ -10563,6 +10795,586 @@ function navigateToCredits() {
 </style>
 ```
 
+## File: app/components/sidebar/SideNavHeader.vue
+```vue
+<template>
+    <div class="px-2 pt-2 flex flex-col space-y-2">
+        <div class="flex">
+            <UButton
+                @click="$emit('new-chat')"
+                class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
+                >New Chat</UButton
+            >
+            <UTooltip :delay-duration="0" text="Create project">
+                <UButton
+                    color="inverse-primary"
+                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                    icon="pixelarticons:folder-plus"
+                    :ui="{
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="openCreateProject"
+                />
+            </UTooltip>
+            <UTooltip :delay-duration="0" text="Create document">
+                <UButton
+                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
+                    icon="pixelarticons:note-plus"
+                    :ui="{
+                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="openCreateDocumentModal"
+                />
+            </UTooltip>
+        </div>
+        <div class="relative w-full ml-[1px]">
+            <UInput
+                ref="searchInputWrapper"
+                v-model="sidebarQuery"
+                icon="pixelarticons:search"
+                size="md"
+                :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
+                variant="outline"
+                placeholder="Search..."
+                aria-label="Search"
+                class="w-full"
+                @keydown.escape.prevent.stop="onEscapeClear"
+            >
+                <template v-if="sidebarQuery.length > 0" #trailing>
+                    <UButton
+                        color="neutral"
+                        variant="subtle"
+                        size="xs"
+                        class="flex items-center justify-center p-0"
+                        icon="pixelarticons:close-box"
+                        aria-label="Clear input"
+                        @click="sidebarQuery = ''"
+                    />
+                </template>
+            </UInput>
+        </div>
+
+        <div
+            class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
+            role="group"
+            aria-label="Sidebar sections"
+        >
+            <UButton
+                v-for="seg in sectionToggles"
+                :key="seg.value"
+                size="sm"
+                :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
+                :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
+                class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
+                :class="
+                    activeSections[seg.value]
+                        ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
+                        : 'opacity-70 hover:bg-primary/15'
+                "
+                :aria-pressed="activeSections[seg.value]"
+                @click="toggleSection(seg.value)"
+            >
+                {{ seg.label }}
+            </UButton>
+        </div>
+
+        <!-- Rename modal -->
+        <UModal
+            v-model:open="showRenameModal"
+            :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
+            :ui="{
+                footer: 'justify-end ',
+            }"
+        >
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameTitle"
+                        :placeholder="
+                            isRenamingDoc ? 'Document title' : 'Thread title'
+                        "
+                        icon="pixelarticons:edit"
+                        @keyup.enter="saveRename"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameModal = false"
+                    >Cancel</UButton
+                >
+                <UButton color="primary" @click="saveRename">Save</UButton>
+            </template>
+        </UModal>
+
+        <!-- Rename Project Modal -->
+        <UModal
+            v-model:open="showRenameProjectModal"
+            title="Rename project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #body>
+                <div class="space-y-4">
+                    <UInput
+                        v-model="renameProjectName"
+                        placeholder="Project name"
+                        icon="pixelarticons:folder"
+                        @keyup.enter="saveRenameProject"
+                    />
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="showRenameProjectModal = false"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="!renameProjectName.trim()"
+                    @click="saveRenameProject"
+                    >Save</UButton
+                >
+            </template>
+        </UModal>
+
+        <!-- Create Project Modal -->
+        <UModal
+            v-model:open="showCreateProjectModal"
+            title="New project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="createProjectState"
+                        @submit.prevent="submitCreateProject"
+                    >
+                        <div class="flex flex-col space-y-3">
+                            <UFormField
+                                label="Title"
+                                name="name"
+                                :error="createProjectErrors.name"
+                            >
+                                <UInput
+                                    v-model="createProjectState.name"
+                                    required
+                                    placeholder="Project title"
+                                    icon="pixelarticons:folder"
+                                    class="w-full"
+                                    @keyup.enter="submitCreateProject"
+                                />
+                            </UFormField>
+                            <UFormField label="Description" name="description">
+                                <UTextarea
+                                    class="w-full border-2 rounded-[6px]"
+                                    v-model="createProjectState.description"
+                                    :rows="3"
+                                    placeholder="Optional description"
+                                />
+                            </UFormField>
+                        </div>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    :disabled="
+                        !createProjectState.name.trim() || creatingProject
+                    "
+                    color="primary"
+                    @click="submitCreateProject"
+                >
+                    <span v-if="!creatingProject">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+
+        <!-- Add To Project Modal -->
+        <UModal
+            v-model:open="showAddToProjectModal"
+            title="Add thread to project"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #body>
+                <div class="space-y-4">
+                    <div class="flex gap-2 text-xs font-mono">
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'select'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'select'"
+                        >
+                            Select Existing
+                        </button>
+                        <button
+                            class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                            :class="
+                                addMode === 'create'
+                                    ? 'bg-primary/30'
+                                    : 'opacity-70'
+                            "
+                            @click="addMode = 'create'"
+                        >
+                            Create New
+                        </button>
+                    </div>
+                    <div v-if="addMode === 'select'" class="space-y-3">
+                        <UFormField label="Project" name="project">
+                            <USelectMenu
+                                v-model="selectedProjectId"
+                                :items="projectSelectOptions"
+                                :value-key="'value'"
+                                searchable
+                                placeholder="Select project"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                    <div v-else class="space-y-3">
+                        <UFormField label="Project Title" name="newProjectName">
+                            <UInput
+                                v-model="newProjectName"
+                                placeholder="Project name"
+                                icon="pixelarticons:folder"
+                                class="w-full"
+                            />
+                        </UFormField>
+                        <UFormField
+                            label="Description"
+                            name="newProjectDescription"
+                        >
+                            <UTextarea
+                                v-model="newProjectDescription"
+                                :rows="3"
+                                placeholder="Optional description"
+                                class="w-full border-2 rounded-[6px]"
+                            />
+                        </UFormField>
+                        <p v-if="addToProjectError" class="text-error text-xs">
+                            {{ addToProjectError }}
+                        </p>
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeAddToProject"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        addingToProject ||
+                        (addMode === 'select'
+                            ? !selectedProjectId
+                            : !newProjectName.trim())
+                    "
+                    @click="submitAddToProject"
+                >
+                    <span v-if="!addingToProject">Add</span>
+                    <span v-else class="inline-flex items-center gap-1"
+                        ><UIcon
+                            name="i-lucide-loader"
+                            class="animate-spin"
+                        />Adding</span
+                    >
+                </UButton>
+            </template>
+        </UModal>
+
+        <!-- New Document Naming Modal -->
+        <UModal
+            v-model:open="showCreateDocumentModal"
+            title="Name new document"
+            :ui="{ footer: 'justify-end' }"
+        >
+            <template #body>
+                <div class="space-y-4">
+                    <UForm
+                        :state="newDocumentState"
+                        @submit.prevent="submitCreateDocument"
+                    >
+                        <UFormField
+                            label="Title"
+                            name="title"
+                            :error="newDocumentErrors.title"
+                        >
+                            <UInput
+                                v-model="newDocumentState.title"
+                                required
+                                placeholder="Document title"
+                                icon="pixelarticons:note"
+                                class="w-full"
+                                @keyup.enter="submitCreateDocument"
+                            />
+                        </UFormField>
+                    </UForm>
+                </div>
+            </template>
+            <template #footer>
+                <UButton variant="ghost" @click="closeCreateDocumentModal"
+                    >Cancel</UButton
+                >
+                <UButton
+                    color="primary"
+                    :disabled="
+                        creatingDocument || !newDocumentState.title.trim()
+                    "
+                    @click="submitCreateDocument"
+                >
+                    <span v-if="!creatingDocument">Create</span>
+                    <span v-else class="inline-flex items-center gap-1">
+                        <UIcon name="i-lucide-loader" class="animate-spin" />
+                        Creating
+                    </span>
+                </UButton>
+            </template>
+        </UModal>
+    </div>
+</template>
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import { db, upsert, create } from '~/db';
+
+const props = defineProps<{
+    sidebarQuery: string;
+    activeSections: {
+        projects: boolean;
+        chats: boolean;
+        docs: boolean;
+    };
+    projects: any[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'update:sidebarQuery', value: string): void;
+    (e: 'update:activeSections', value: typeof props.activeSections): void;
+    (e: 'new-chat'): void;
+    (e: 'new-document', initial?: { title?: string }): void;
+    (e: 'open-rename', target: any): void;
+    (e: 'open-rename-project', projectId: string): void;
+    (e: 'add-to-project', thread: any): void;
+    (e: 'add-document-to-project', doc: any): void;
+}>();
+
+// Section visibility (multi-select) defaults to all on
+const sectionToggles = [
+    { label: 'Proj', value: 'projects' as const },
+    { label: 'Chats', value: 'chats' as const },
+    { label: 'Docs', value: 'docs' as const },
+];
+
+function toggleSection(v: 'projects' | 'chats' | 'docs') {
+    const next = { ...props.activeSections, [v]: !props.activeSections[v] };
+    emit('update:activeSections', next);
+}
+
+// Direct focus support for external callers
+const searchInputWrapper = ref<any | null>(null);
+function focusSearchInput() {
+    // Access underlying input inside UInput component
+    const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
+        searchInputWrapper.value) as HTMLElement | null;
+    if (!root) return;
+    const input = root.querySelector('input');
+    if (input) (input as HTMLInputElement).focus();
+}
+defineExpose({ focusSearchInput });
+
+const sidebarQuery = computed({
+    get: () => props.sidebarQuery,
+    set: (value) => emit('update:sidebarQuery', value),
+});
+
+function onEscapeClear() {
+    if (sidebarQuery.value) sidebarQuery.value = '';
+}
+
+// ----- Actions: menu, rename, delete -----
+const showRenameModal = ref(false);
+const renameId = ref<string | null>(null);
+const renameTitle = ref('');
+const renameMetaKind = ref<'chat' | 'doc' | null>(null);
+const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
+
+async function openRename(target: any) {
+    emit('open-rename', target);
+}
+
+async function saveRename() {
+    emit('open-rename', {
+        id: renameId.value,
+        title: renameTitle.value,
+        kind: renameMetaKind.value,
+    });
+    showRenameModal.value = false;
+    renameId.value = null;
+    renameTitle.value = '';
+    renameMetaKind.value = null;
+}
+
+// ---- Project Rename Modal Logic ----
+const showRenameProjectModal = ref(false);
+const renameProjectId = ref<string | null>(null);
+const renameProjectName = ref('');
+
+async function openRenameProject(projectId: string) {
+    emit('open-rename-project', projectId);
+}
+
+async function saveRenameProject() {
+    if (!renameProjectId.value) return;
+    const name = renameProjectName.value.trim();
+    if (!name) return;
+    const project = await db.projects.get(renameProjectId.value);
+    if (!project) return;
+    try {
+        await upsert.project({
+            ...project,
+            name,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        showRenameProjectModal.value = false;
+        renameProjectId.value = null;
+        renameProjectName.value = '';
+    } catch (e) {
+        console.error('rename project failed', e);
+    }
+}
+
+// ---- Project Creation ----
+const showCreateProjectModal = ref(false);
+const creatingProject = ref(false);
+const createProjectState = ref<{ name: string; description: string }>({
+    name: '',
+    description: '',
+});
+const createProjectErrors = ref<{ name?: string }>({});
+
+function openCreateProject() {
+    showCreateProjectModal.value = true;
+    createProjectState.value = { name: '', description: '' };
+    createProjectErrors.value = {};
+}
+function closeCreateProject() {
+    showCreateProjectModal.value = false;
+}
+
+async function submitCreateProject() {
+    if (creatingProject.value) return;
+    const name = createProjectState.value.name.trim();
+    if (!name) {
+        createProjectErrors.value.name = 'Title required';
+        return;
+    }
+    creatingProject.value = true;
+    try {
+        const now = Math.floor(Date.now() / 1000);
+        // data holds ordered list of entities (chat/doc) we include kind now per request
+        const newId = crypto.randomUUID();
+        await create.project({
+            id: newId,
+            name,
+            description: createProjectState.value.description?.trim() || null,
+            data: [], // store as array; schema allows any
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+        } as any);
+        closeCreateProject();
+    } catch (e) {
+        console.error('Failed to create project', e);
+    } finally {
+        creatingProject.value = false;
+    }
+}
+
+// ---- Add To Project Flow ----
+const showAddToProjectModal = ref(false);
+const addToProjectThreadId = ref<string | null>(null);
+// Support documents
+const addToProjectDocumentId = ref<string | null>(null);
+const addMode = ref<'select' | 'create'>('select');
+const selectedProjectId = ref<string | null>(null);
+const newProjectName = ref('');
+const newProjectDescription = ref('');
+const addingToProject = ref(false);
+const addToProjectError = ref<string | null>(null);
+
+const projectSelectOptions = computed(() =>
+    props.projects.map((p) => ({ label: p.name, value: p.id }))
+);
+
+function openAddToProject(thread: any) {
+    emit('add-to-project', thread);
+}
+
+function openAddDocumentToProject(doc: any) {
+    emit('add-document-to-project', doc);
+}
+
+function closeAddToProject() {
+    showAddToProjectModal.value = false;
+    addToProjectThreadId.value = null;
+    addToProjectDocumentId.value = null;
+}
+
+async function submitAddToProject() {
+    emit('add-to-project', {
+        threadId: addToProjectThreadId.value,
+        documentId: addToProjectDocumentId.value,
+        mode: addMode.value,
+        selectedProjectId: selectedProjectId.value,
+        newProjectName: newProjectName.value,
+        newProjectDescription: newProjectDescription.value,
+    });
+    closeAddToProject();
+}
+
+// ---- New Document Flow (naming modal) ----
+const showCreateDocumentModal = ref(false);
+const creatingDocument = ref(false);
+const newDocumentState = ref<{ title: string }>({ title: '' });
+const newDocumentErrors = ref<{ title?: string }>({});
+
+function openCreateDocumentModal() {
+    showCreateDocumentModal.value = true;
+    newDocumentState.value = { title: '' };
+    newDocumentErrors.value = {};
+}
+function closeCreateDocumentModal() {
+    showCreateDocumentModal.value = false;
+}
+async function submitCreateDocument() {
+    if (creatingDocument.value) return;
+    const title = newDocumentState.value.title.trim();
+    if (!title) {
+        newDocumentErrors.value.title = 'Title required';
+        return;
+    }
+    creatingDocument.value = true;
+    try {
+        emit('new-document', { title });
+        closeCreateDocumentModal();
+    } finally {
+        creatingDocument.value = false;
+    }
+}
+</script>
+```
+
 ## File: app/composables/__tests__/__snapshots__/hookOrder.test.ts.snap
 ```
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
@@ -10589,100 +11401,6 @@ exports[`Hook order snapshot (pre-accumulator integration) > captures sendMessag
   "ai.chat.send:action:after",
 ]
 `;
-```
-
-## File: app/composables/ui-extensions/projects/useProjectTreeActions.ts
-```typescript
-import { computed, reactive } from 'vue';
-
-// Local interfaces describing the tree rows printed in the console.
-// These mirror the shape produced by SidebarProjectTree.vue for root and child items.
-export type ProjectTreeKind = 'chat' | 'doc';
-export type ShowOnKind = 'root' | 'all' | 'chat' | 'doc';
-
-export interface ProjectTreeChild {
-    value: string; // id of the entry
-    label: string;
-    icon?: string;
-    kind?: ProjectTreeKind; // 'chat' | 'doc'
-    parentId?: string;
-    onSelect?: (e: Event) => void;
-}
-
-export interface ProjectTreeRoot {
-    value: string; // project id
-    label: string; // project name
-    defaultExpanded?: boolean;
-    children?: ProjectTreeChild[];
-    onSelect?: (e: Event) => void;
-}
-
-export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;
-
-export interface ProjectTreeHandlerCtx {
-    // The tree row this action was invoked for (root or child)
-    treeRow: ProjectTreeRow;
-    // legacy/alternate shapes seen in the wild may include a `child` property
-    // but prefer to use `treeRow`.
-    child?: ProjectTreeChild;
-    root?: ProjectTreeRoot;
-}
-
-/** Definition for an extendable chat message action button. */
-export interface ProjectTreeAction {
-    /** Unique id (stable across reloads). */
-    id: string;
-    /** Icon name (passed to UButton icon prop). */
-    icon: string;
-    /** Label text. */
-    label: string;
-    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
-    order?: number;
-    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds
-    /** Handler invoked on click. */
-    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;
-}
-
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
-const registry: Map<string, ProjectTreeAction> =
-    g.__or3ProjectTreeActionsRegistry ||
-    (g.__or3ProjectTreeActionsRegistry = new Map());
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: ProjectTreeAction[] }>({
-    items: [],
-});
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
-}
-
-/** Register (or replace) a message action. */
-export function registerProjectTreeAction(action: ProjectTreeAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
-}
-
-/** Unregister an action by id (optional utility). */
-export function unregisterProjectTreeAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
-}
-
-/** Accessor for actions applicable to a specific message. */
-export function useProjectTreeActions() {
-    return computed(() =>
-        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
-    );
-}
-
-/** Convenience for plugin authors to check existing action ids. */
-export function listRegisteredProjectTreeActionIds(): string[] {
-    return Array.from(registry.keys());
-}
-
-// Note: Core (built-in) actions remain hard-coded in ChatProjectTree.vue so they always appear;
-// external plugins should use order >= 200 to appear after them unless intentionally overriding.
 ```
 
 ## File: app/composables/useChatInputBridge.ts
@@ -10755,78 +11473,6 @@ if (import.meta.dev) {
         registry,
         programmaticSend,
         hasPane,
-    };
-}
-```
-
-## File: app/composables/useMessageEditing.ts
-```typescript
-import { ref } from 'vue';
-import { upsert } from '~/db';
-import { nowSec } from '~/db/util';
-
-// Lightweight composable for editing a chat message (assistant/user)
-export function useMessageEditing(message: any) {
-    const editing = ref(false);
-    const draft = ref('');
-    const original = ref('');
-    const saving = ref(false);
-
-    function beginEdit() {
-        if (editing.value) return;
-        // Some message objects use .text (UiChatMessage), others .content; fall back gracefully.
-        const base =
-            typeof message.content === 'string'
-                ? message.content
-                : typeof message.text === 'string'
-                ? message.text
-                : '';
-        original.value = base;
-        draft.value = base;
-        editing.value = true;
-    }
-    function cancelEdit() {
-        if (saving.value) return;
-        editing.value = false;
-        draft.value = '';
-        original.value = '';
-    }
-    async function saveEdit() {
-        if (saving.value) return;
-        const id = message.id;
-        if (!id) return;
-        const trimmed = draft.value.trim();
-        if (!trimmed) {
-            cancelEdit();
-            return;
-        }
-        try {
-            saving.value = true;
-            const existing: any = await (
-                await import('~/db/client')
-            ).db.messages.get(id);
-            if (!existing) throw new Error('Message not found');
-            await upsert.message({
-                ...existing,
-                data: { ...(existing.data || {}), content: trimmed },
-                updated_at: nowSec(),
-            });
-            // Persist to both fields so renderers using either stay in sync
-            message.content = trimmed;
-            if ('text' in message) message.text = trimmed;
-            editing.value = false;
-        } finally {
-            saving.value = false;
-        }
-    }
-    return {
-        editing,
-        draft,
-        original,
-        saving,
-        beginEdit,
-        cancelEdit,
-        saveEdit,
     };
 }
 ```
@@ -11584,34 +12230,6 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
-## File: app/plugins/examples/project-tree-actions.client.ts
-```typescript
-import type { ProjectTreeHandlerCtx } from '@/composables/ui-extensions/projects/useProjectTreeActions';
-
-export default defineNuxtPlugin(() => {
-    // Test plugin to register thread history actions for development/debugging.
-    // Registers two actions and logs output to console + toasts. Cleans up on app unmount.
-    try {
-        console.info('[thread-history-test] registering actions');
-
-        // Inspect thread action — shows a console group and a toast
-        registerProjectTreeAction({
-            id: 'test:inspect-thread',
-            icon: 'i-lucide-eye',
-            label: 'Inspect Thread',
-            order: 300,
-            showOn: ['root', 'chat'],
-            async handler(ctx: ProjectTreeHandlerCtx) {
-                // Keep the same runtime behavior; log the typed context for authors.
-                console.log(ctx);
-            },
-        });
-    } catch (e) {
-        console.error('[thread-history-test] registration error', e);
-    }
-});
-```
-
 ## File: app/plugins/examples/thread-history-test.client.ts
 ```typescript
 export default defineNuxtPlugin(() => {
@@ -11812,6 +12430,45 @@ export default defineNuxtPlugin(() => {
             });
         },
     });
+});
+```
+
+## File: app/plugins/openrouter-capture.client.ts
+```typescript
+// Early capture of OpenRouter OAuth params to reduce chance of SW/navigation race.
+// If landing on /openrouter-callback with code/state in query, persist them ASAP
+// (in both sessionStorage and localStorage) then strip them from the visible URL
+// so future reloads don't rely on SW matching query variants.
+export default defineNuxtPlugin(() => {
+    if (process.server) return;
+    try {
+        const loc = window.location;
+        if (loc.pathname === '/openrouter-callback') {
+            const url = new URL(loc.href);
+            const code = url.searchParams.get('code');
+            const state = url.searchParams.get('state');
+            if (code) {
+                sessionStorage.setItem(
+                    'openrouter_code_verifier',
+                    sessionStorage.getItem('openrouter_code_verifier') ||
+                        localStorage.getItem('openrouter_code_verifier') ||
+                        ''
+                );
+                sessionStorage.setItem('openrouter_state', state || '');
+                // Mirror to localStorage for resilience
+                if (state) localStorage.setItem('openrouter_state', state);
+                // Remove query params (preserve history entry) so SW matching without params works
+                if (url.search) {
+                    const clean = loc.origin + loc.pathname;
+                    window.history.replaceState(
+                        window.history.state,
+                        '',
+                        clean
+                    );
+                }
+            }
+        }
+    } catch {}
 });
 ```
 
@@ -12034,218 +12691,6 @@ function microTask() {
 }
 ```
 
-## File: app/app.config.ts
-```typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
-                header: 'border-b-2 border-black bg-primary px-2 py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
-                title: 'text-white dark:text-black font-semibold text-sm',
-                description: 'hidden',
-                close: 'top-0 end-0 flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white dark:text-black  dark:hover:bg-white/80',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                color: {
-                    'inverse-primary':
-                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
-    },
-});
-```
-
-## File: app/app.vue
-```vue
-<template>
-    <UApp>
-        <!-- Register the PWA web manifest on all pages -->
-        <VitePwaManifest />
-
-        <NuxtPage />
-
-        <!-- Minimal update/offline prompt using $pwa -->
-        <div
-            v-if="$pwa?.needRefresh || $pwa?.offlineReady"
-            class="fixed left-1/2 bottom-4 z-50 -translate-x-1/2 rounded-md bg-neutral-900/90 text-white backdrop-blur px-3 py-2 shadow-lg flex items-center gap-3"
-        >
-            <span v-if="$pwa?.offlineReady">Ready to work offline.</span>
-            <span v-else>New content available.</span>
-            <button
-                v-if="$pwa?.needRefresh"
-                class="rounded bg-emerald-500 px-2 py-1 text-sm hover:bg-emerald-400"
-                @click="$pwa.updateServiceWorker(true)"
-            >
-                Reload
-            </button>
-            <button
-                class="rounded bg-neutral-700 px-2 py-1 text-sm hover:bg-neutral-600"
-                @click="$pwa.cancelPrompt()"
-            >
-                Close
-            </button>
-        </div>
-    </UApp>
-</template>
-<script setup lang="ts">
-// Apply initial theme class to <html> so CSS variables cascade app-wide
-const nuxtApp = useNuxtApp();
-const isDark = computed(() =>
-    (
-        (nuxtApp as any).$theme?.current?.value ||
-        (nuxtApp as any).$theme?.get?.() ||
-        'light'
-    ).startsWith('dark')
-);
-const themeColor = computed(() => (isDark.value ? '#1A1F24' : '#F1F4FB'));
-const statusBarStyle = computed(() =>
-    isDark.value ? 'black-translucent' : 'default'
-);
-
-useHead({
-    htmlAttrs: {
-        class: 'light',
-    },
-    title: 'or3 chat',
-    link: [
-        { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
-        // Provide an Apple touch icon to avoid 404s in Safari/iOS
-        { rel: 'apple-touch-icon', href: '/logos/logo-192.png' },
-    ],
-    meta: [
-        // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
-        { name: 'theme-color', content: themeColor },
-        // Enable iOS PWA full-screen and control status bar style
-        { name: 'apple-mobile-web-app-capable', content: 'yes' },
-        {
-            name: 'apple-mobile-web-app-status-bar-style',
-            content: statusBarStyle,
-        },
-        // Ensure content can extend under the notch when using black-translucent
-        {
-            name: 'viewport',
-            content: 'width=device-width, initial-scale=1, viewport-fit=cover',
-        },
-    ],
-});
-
-// Fire app.init:action:after once after the root app mounts (client-only)
-onMounted(() => {
-    const g: any = globalThis as any;
-    if (g.__OR3_APP_INIT_FIRED__) return;
-    g.__OR3_APP_INIT_FIRED__ = true;
-    const hooks: any = nuxtApp.$hooks;
-    if (hooks && typeof hooks.doAction === 'function') {
-        hooks.doAction('app.init:action:after', nuxtApp);
-    }
-});
-</script>
-```
-
 ## File: tests/stubs/nuxt-app.ts
 ```typescript
 // Minimal Nuxt app stub for Vitest
@@ -12369,1002 +12814,6 @@ declare module '#app' {
 export {};
 ```
 
-## File: LICENSE
-```
-GNU GENERAL PUBLIC LICENSE
-Version 3, 29 June 2007
-
-Copyright (C) 2025 @Saluana
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-```
-
-## File: app/assets/css/main.css
-```css
-/* Tailwind v4: single import includes preflight + utilities */
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-
-/* Nuxt UI base styles (load first so we can override its tokens below) */
-@import "@nuxt/ui";
-
-/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
-	so classes used in Nuxt UI theme overrides are generated. */
-@source "../../../app.config.ts";
-
-
-/* Your Material theme variable files (scoped: .light, .dark, etc.) */
-@import "./theme.css";
-
-/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
-@import "~/assets/css/nuxt-ui-map.css";
-
-/* Font setup: body uses VT323, headings use Press Start 2P */
-:root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
-    --ui-radius: 3px;
-}
-
-.font-ps2 {
-	font-family: var(--font-heading) !important;
-}
-
-.font-vt323 {
-	font-family: var(--font-sans) !important;
-}
-
-html, body {
-	font-family: var(--font-sans) !important;
-    font-size: 20px; 
-}
-
-/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
-.scrollbars {
-	scrollbar-width: thin;
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
-.scrollbar-hidden {
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE/Edge legacy */
-}
-.scrollbar-hidden::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
-
-h1, h2, h3, h4, h5, h6, .font-heading {
-	font-family: var(--font-heading) !important;
-}
-
-.retro-btn { 
-	display: inline-flex;
-	line-height: 1; /* avoid extra vertical space from font metrics */
-	position: relative;
-	border-radius: 3px;                               /* default */
-	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-
-/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
-.retro-btn.aspect-square {
-	padding: 0; /* our button variant already sets px-0, this enforces it */
-	place-items: center;
-}
-
-/* Physical press: move button into its shadow and add subtle inner bevel */
-.retro-btn:active {
-	transform: translate(2px, 2px);
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-.active-element {
-		box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-/* Keyboard accessibility: preserve pixel look while focused */
-.retro-btn:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-/* Global thin colored scrollbars (WebKit + Firefox) */
-/* Firefox */
-html {
-	scrollbar-width: thin;
-	/* thumb color, then track color */
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit (Chromium, Safari) */
-/* Apply to all scrollable elements */
-*::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
-}
-*::-webkit-scrollbar-track {
-	background: transparent;
-	border-radius: 9999px;
-}
-*::-webkit-scrollbar-thumb {
-	background: var(--md-primary);
-	border-radius: 9999px;
-	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
-	background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-*::-webkit-scrollbar-corner { background: transparent; }
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern-flipped {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    rotate: 180deg;
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
-.dark .prose strong,
-.dark .prosemirror-host :where(.ProseMirror) strong {
-	color: var(--md-on-surface);
-}
-
-.hljs {
-	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
-}
-```
-
-## File: app/components/modal/SettingsModal.vue
-```vue
-<template>
-    <UModal
-        v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-t-2',
-            body: 'p-0!',
-        }"
-        title="Model settings"
-        description="Browse and favorite models from the OpenRouter catalog."
-        class="border-2 w-full sm:min-w-[720px]! overflow-hidden"
-    >
-        <template #body>
-            <div class="flex flex-col h-full">
-                <div
-                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
-                >
-                    <div class="flex items-center gap-3 w-full">
-                        <div class="relative w-full max-w-md">
-                            <UInput
-                                v-model="searchQuery"
-                                icon="pixelarticons:search"
-                                placeholder="Search models (id, name, description, modality)"
-                                size="sm"
-                                class="w-full pr-8"
-                                :ui="{ base: 'w-full' }"
-                                autofocus
-                            />
-                            <button
-                                v-if="searchQuery"
-                                type="button"
-                                aria-label="Clear search"
-                                class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                                @click="searchQuery = ''"
-                            >
-                                <UIcon
-                                    name="i-heroicons-x-mark"
-                                    class="h-4 w-4"
-                                />
-                            </button>
-                        </div>
-                        <UButton
-                            :disabled="refreshing"
-                            size="sm"
-                            variant="ghost"
-                            :square="true"
-                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
-                            aria-label="Refresh model catalog"
-                            :title="
-                                refreshing
-                                    ? 'Refreshing…'
-                                    : 'Force refresh models (bypass cache)'
-                            "
-                            @click="doRefresh"
-                        >
-                            <UIcon
-                                v-if="!refreshing"
-                                name="i-heroicons-arrow-path"
-                                class="h-4 w-4"
-                            />
-                            <UIcon
-                                v-else
-                                name="i-heroicons-arrow-path"
-                                class="h-4 w-4 animate-spin"
-                            />
-                        </UButton>
-                    </div>
-                </div>
-                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
-                    Indexing models…
-                </div>
-                <div v-else class="flex-1 min-h-0">
-                    <VList
-                        :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 70dvh"
-                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
-                        :overscan="4"
-                        #default="{ item: row }"
-                    >
-                        <div
-                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 px-6 w-full"
-                            :class="gridColsClass"
-                        >
-                            <div
-                                v-for="m in row"
-                                :key="m.id"
-                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
-                            >
-                                <div
-                                    class="flex items-start justify-between gap-2"
-                                >
-                                    <div class="flex flex-col min-w-0">
-                                        <div
-                                            class="font-medium text-sm truncate"
-                                            :title="m.canonical_slug"
-                                        >
-                                            {{ m.canonical_slug }}
-                                        </div>
-                                        <div
-                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
-                                        >
-                                            CTX {{ m.context_length }}
-                                        </div>
-                                    </div>
-                                    <button
-                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
-                                        :aria-pressed="isFavorite(m)"
-                                        @click.stop="toggleFavorite(m)"
-                                        :title="
-                                            isFavorite(m)
-                                                ? 'Unfavorite'
-                                                : 'Favorite'
-                                        "
-                                    >
-                                        <span v-if="isFavorite(m)">★</span>
-                                        <span v-else>☆</span>
-                                    </button>
-                                </div>
-                                <div
-                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
-                                >
-                                    <div class="flex flex-col">
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Input</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.prompt,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="flex flex-col items-end text-right"
-                                    >
-                                        <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Output</span
-                                        >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.completion,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
-                                    </div>
-                                </div>
-                                <div
-                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
-                                >
-                                    <span>{{
-                                        m.architecture?.modality || 'text'
-                                    }}</span>
-                                    <span class="opacity-60">/1M tokens</span>
-                                </div>
-                                <div
-                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
-                                />
-                            </div>
-                        </div>
-                    </VList>
-                    <div
-                        v-if="!chunkedModels.length && searchQuery"
-                        class="px-6 pb-6 text-xs text-neutral-500"
-                    >
-                        No models match "{{ searchQuery }}".
-                    </div>
-                </div>
-            </div>
-        </template>
-        <template #footer> </template>
-    </UModal>
-</template>
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import { useModelSearch } from '~/composables/useModelSearch';
-import type { OpenRouterModel } from '~/utils/models-service';
-import { useModelStore } from '~/composables/useModelStore';
-
-const props = defineProps<{
-    showModal: boolean;
-}>();
-const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
-
-// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
-
-const modelCatalog = ref<OpenRouterModel[]>([]);
-// Search state (Orama index built client-side)
-const {
-    query: searchQuery,
-    results: searchResults,
-    ready: searchReady,
-} = useModelSearch(modelCatalog);
-
-// Fixed 3-column layout for consistent rows
-const COLS = 2;
-const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
-
-const chunkedModels = computed(() => {
-    const source = searchQuery.value.trim()
-        ? searchResults.value
-        : modelCatalog.value;
-    const cols = COLS;
-    const rows: OpenRouterModel[][] = [];
-    for (let i = 0; i < source.length; i += cols) {
-        rows.push(source.slice(i, i + cols));
-    }
-    return rows;
-});
-
-const {
-    favoriteModels,
-    getFavoriteModels,
-    catalog,
-    fetchModels,
-    refreshModels,
-    addFavoriteModel,
-    removeFavoriteModel,
-} = useModelStore();
-
-// Refresh state
-const refreshing = ref(false);
-
-async function doRefresh() {
-    if (refreshing.value) return;
-    refreshing.value = true;
-    try {
-        await refreshModels();
-        modelCatalog.value = catalog.value.slice();
-    } catch (e) {
-        console.warn('[SettingsModal] model refresh failed', e);
-    } finally {
-        refreshing.value = false;
-    }
-}
-
-onMounted(() => {
-    fetchModels().then(() => {
-        modelCatalog.value = catalog.value;
-    });
-
-    getFavoriteModels().then((models) => {
-        favoriteModels.value = models;
-    });
-});
-
-function isFavorite(m: OpenRouterModel) {
-    return favoriteModels.value.some((f) => f.id === m.id);
-}
-
-function toggleFavorite(m: OpenRouterModel) {
-    if (isFavorite(m)) {
-        removeFavoriteModel(m);
-    } else {
-        addFavoriteModel(m);
-    }
-}
-
-/**
- * Format a per-token price into a "per 1,000,000 tokens" currency string.
- * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
- */
-function formatPerMillion(raw: unknown, currency = 'USD') {
-    const perToken = Number(raw ?? 0);
-    const perMillion = perToken * 1_000_000;
-    try {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 2,
-        }).format(perMillion);
-    } catch (e) {
-        // Fallback: simple fixed formatting
-        return `$${perMillion.toFixed(2)}`;
-    }
-}
-</script>
-```
-
-## File: app/components/sidebar/SidebarProjectTree.vue
-```vue
-<template>
-    <div v-if="projects.length" class="space-y-1">
-        <h1 class="text-xs uppercase opacity-70 px-1 py-3 select-none">
-            Projects
-        </h1>
-        <UTree
-            v-model:expanded="internalExpanded"
-            :items="treeItems"
-            color="neutral"
-            size="sm"
-            :ui="ui"
-        >
-            <template #item-trailing="{ item, level }">
-                <div class="flex items-center gap-1">
-                    <!-- Root-level quick add buttons (appear on hover) -->
-                    <template v-if="level === 0">
-                        <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop="emit('addChat', item.value)"
-                            aria-label="Add chat to project"
-                        >
-                            <UIcon
-                                name="pixelarticons:message-plus"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </button>
-                        <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop="emit('addDocument', item.value)"
-                            aria-label="Add document to project"
-                        >
-                            <UIcon
-                                name="pixelarticons:note-plus"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </button>
-                    </template>
-                    <UPopover
-                        :content="{
-                            side: 'right',
-                            align: 'start',
-                            sideOffset: 6,
-                        }"
-                    >
-                        <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
-                            @click.stop
-                            :aria-label="
-                                level === 0
-                                    ? 'Project actions'
-                                    : 'Entry actions'
-                            "
-                        >
-                            <UIcon
-                                name="pixelarticons:more-vertical"
-                                class="w-4 h-4 opacity-70"
-                            />
-                        </span>
-                        <template #content>
-                            <div class="p-1 w-48 space-y-1">
-                                <template v-if="level === 0">
-                                    <UButton
-                                        color="neutral"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start cursor-pointer"
-                                        icon="pixelarticons:edit"
-                                        @click.stop.prevent="
-                                            emit('renameProject', item.value)
-                                        "
-                                        >Rename Project</UButton
-                                    >
-                                    <UButton
-                                        color="error"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start cursor-pointer"
-                                        icon="pixelarticons:trash"
-                                        @click.stop.prevent="
-                                            emit('deleteProject', item.value)
-                                        "
-                                        >Delete Project</UButton
-                                    >
-                                    <template
-                                        v-for="action in extraActions"
-                                        :key="action.id"
-                                    >
-                                        <UButton
-                                            v-if="
-                                                !action.showOn ||
-                                                action.showOn.includes('root')
-                                            "
-                                            :icon="action.icon"
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            @click="
-                                                () =>
-                                                    runExtraAction(action, {
-                                                        root: item,
-                                                    })
-                                            "
-                                            >{{ action.label || '' }}</UButton
-                                        >
-                                    </template>
-                                </template>
-                                <template v-else>
-                                    <UButton
-                                        color="neutral"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="pixelarticons:edit"
-                                        @click.stop.prevent="
-                                            emit('renameEntry', {
-                                                projectId: item.parentId!,
-                                                entryId: item.value,
-                                                kind: item.kind as ProjectEntryKind,
-                                            })
-                                        "
-                                        >Rename</UButton
-                                    >
-                                    <UButton
-                                        color="error"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="w-full justify-start"
-                                        icon="pixelarticons:trash"
-                                        @click.stop.prevent="
-                                            emit('removeFromProject', {
-                                                projectId: item.parentId!,
-                                                entryId: item.value,
-                                                kind: item.kind as ProjectEntryKind,
-                                            })
-                                        "
-                                        >Remove from Project</UButton
-                                    >
-                                    <template
-                                        v-for="action in extraActions"
-                                        :key="action.id"
-                                    >
-                                        <UButton
-                                            v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
-                                            :icon="action.icon"
-                                            color="neutral"
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full justify-start"
-                                            @click="
-                                                () =>
-                                                    runExtraAction(action, {
-                                                        child: item,
-                                                    })
-                                            "
-                                            >{{ action.label || '' }}</UButton
-                                        >
-                                    </template>
-                                </template>
-                            </div>
-                        </template>
-                    </UPopover>
-                </div>
-            </template>
-        </UTree>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed, watch, ref } from 'vue';
-
-// Distinct kinds of entries that can live under a project.
-// Extend here if we introduce more entry types in the future.
-export type ProjectEntryKind = 'chat' | 'doc';
-
-// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
-}
-
-interface ProjectRow {
-    id: string;
-    name: string;
-    // The backing data that encodes the project entries. Can be
-    //  - an already parsed array of ProjectEntry objects
-    //  - a JSON string representing that array
-    //  - anything else (ignored)
-    data?: unknown;
-}
-
-// Shape consumed by UTree. (We only type the properties we actually use.)
-interface TreeItem {
-    label: string;
-    value: string;
-    icon?: string;
-    kind?: ProjectEntryKind; // Only for non-root items
-    parentId?: string; // Only set for child entries
-    defaultExpanded?: boolean;
-    children?: TreeItem[];
-    onSelect?: (e: Event) => void;
-}
-
-const props = defineProps<{
-    projects: ProjectRow[];
-    expanded?: string[];
-}>();
-
-const emit = defineEmits<{
-    (e: 'update:expanded', value: string[]): void;
-    (e: 'chatSelected', id: string): void;
-    (e: 'documentSelected', id: string): void;
-    (e: 'addChat', projectId: string): void;
-    (e: 'addDocument', projectId: string): void;
-    (e: 'deleteProject', projectId: string): void;
-    (e: 'renameProject', projectId: string): void;
-    (
-        e: 'renameEntry',
-        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
-    ): void;
-    (
-        e: 'removeFromProject',
-        payload: { projectId: string; entryId: string; kind: ProjectEntryKind }
-    ): void;
-}>();
-
-// Local mirror for v-model:expanded
-const internalExpanded = ref<string[]>(
-    props.expanded ? [...props.expanded] : []
-);
-watch(
-    () => props.expanded,
-    (val) => {
-        if (val && val !== internalExpanded.value)
-            internalExpanded.value = [...val];
-    }
-);
-watch(internalExpanded, (val) => emit('update:expanded', val));
-
-function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
-    const raw = p?.data;
-    if (Array.isArray(raw)) return raw as ProjectEntry[];
-    if (typeof raw === 'string') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
-        } catch {
-            // Silently ignore malformed JSON
-        }
-    }
-    return [];
-}
-
-const treeItems = computed<TreeItem[]>(() =>
-    props.projects.map<TreeItem>((p) => {
-        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
-            (entry) => {
-                // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
-                const kind: ProjectEntryKind =
-                    entry.kind === 'doc' ? 'doc' : 'chat';
-                return {
-                    label: entry.name || '(untitled)',
-                    value: entry.id,
-                    icon:
-                        kind === 'doc'
-                            ? 'pixelarticons:note'
-                            : 'pixelarticons:chat',
-                    kind,
-                    parentId: p.id,
-                    onSelect: (e: Event) => {
-                        if (kind === 'chat') emit('chatSelected', entry.id);
-                        else emit('documentSelected', entry.id);
-                        // Prevent default selection behavior if needed by UTree (not sure), otherwise leave.
-                    },
-                };
-            }
-        );
-        return {
-            label: p.name,
-            value: p.id,
-            defaultExpanded: false,
-            children,
-            onSelect: (e: Event) => e.preventDefault(), // Root projects themselves aren't selectable
-        };
-    })
-);
-
-const ui = {
-    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
-    link: 'group/addchat text-[13px] rounded-[4px] py-1',
-    item: 'cursor-pointer ',
-};
-
-// Plugin project tree actions
-const extraActions = useProjectTreeActions();
-async function runExtraAction(action: any, data: { root?: any; child?: any }) {
-    try {
-        await action.handler(data);
-    } catch (e: any) {
-        try {
-            useToast().add({
-                title: 'Action failed',
-                description: e?.message || 'Error running action',
-                color: 'error',
-                duration: 3000,
-            });
-        } catch {}
-        console.error('Project tree action error', action.id, e);
-    }
-}
-</script>
-
-<style scoped></style>
-```
-
-## File: app/components/sidebar/SidebarVirtualList.vue
-```vue
-<template>
-    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <VList
-            :data="flatItems"
-            :style="{ height: 'calc(100dvh - 318px)' }"
-            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
-            #default="{ item, index }"
-        >
-            <div :key="item.key || index">
-                <h1
-                    v-if="item.type === 'sectionHeader'"
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
-                >
-                    {{ item.label }}
-                </h1>
-                <SidebarProjectTree
-                    v-else-if="item.type === 'projectsTree'"
-                    :projects="projects"
-                    v-model:expanded="expandedProjectsLocal"
-                    @chatSelected="emit('chatSelected', $event)"
-                    @documentSelected="emit('documentSelected', $event)"
-                    @addChat="emit('addChat', $event)"
-                    @addDocument="emit('addDocument', $event)"
-                    @renameProject="emit('renameProject', $event)"
-                    @deleteProject="emit('deleteProject', $event)"
-                    @renameEntry="emit('renameEntry', $event)"
-                    @removeFromProject="emit('removeFromProject', $event)"
-                />
-                <div v-else-if="item.type === 'thread'" class="mr-1">
-                    <SidebarThreadItem
-                        :thread="item.thread"
-                        :active="activeThreadSet.has(item.thread.id)"
-                        class="mb-2"
-                        @select="emit('selectThread', $event)"
-                        @rename="emit('renameThread', $event)"
-                        @delete="emit('deleteThread', $event)"
-                        @add-to-project="emit('addThreadToProject', $event)"
-                    />
-                </div>
-                <div v-else-if="item.type === 'doc'" class="mr-1">
-                    <SidebarDocumentItem
-                        :doc="item.doc"
-                        class="mb-2"
-                        :active="activeDocumentSet.has(item.doc.id)"
-                        @select="emit('selectDocument', $event)"
-                        @rename="emit('renameDocument', $event)"
-                        @delete="emit('deleteDocument', $event)"
-                        @add-to-project="emit('addDocumentToProject', $event)"
-                    />
-                </div>
-            </div>
-        </VList>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
-import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
-import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
-
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind: 'chat' | 'doc';
-}
-interface Project {
-    id: string;
-    name: string;
-    data?: any;
-}
-interface Thread {
-    id: string;
-    title?: string;
-    forked?: boolean;
-}
-interface DocLite {
-    id: string;
-    title: string;
-    updated_at?: number;
-    created_at?: number;
-    postType?: string;
-}
-
-// Row item discriminated union
-interface SectionHeaderItem {
-    type: 'sectionHeader';
-    key: string;
-    label: string;
-}
-interface ProjectsTreeItem {
-    type: 'projectsTree';
-    key: string;
-}
-interface ThreadItem {
-    type: 'thread';
-    key: string;
-    thread: Thread;
-}
-interface DocItem {
-    type: 'doc';
-    key: string;
-    doc: DocLite;
-}
-
-type SidebarRowItem =
-    | SectionHeaderItem
-    | ProjectsTreeItem
-    | ThreadItem
-    | DocItem;
-
-const props = defineProps<{
-    projects: Project[];
-    threads: Thread[];
-    documents: any[]; // possibly full posts containing heavy fields
-    displayDocuments?: any[]; // optional filtered docs from search
-    expandedProjects: string[]; // mutated in place (passed to tree)
-    activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
-    activeThread?: string; // legacy single selection
-    activeDocument?: string; // legacy single selection
-    activeThreads?: string[]; // new multi-active selection
-    activeDocuments?: string[]; // new multi-active selection
-    height: number; // required external measured height
-}>();
-
-// Simplified emit typing (broad) to accommodate both legacy kebab-case and new camelCase events during transition
-// TODO: tighten types once integration finalized
-// eslint-disable-next-line @typescript-eslint/ban-types
-const emit = defineEmits<(e: string, ...args: any[]) => void>();
-
-// Lightweight docs mapping (strip heavy fields like content)
-const lightweightDocs = computed<DocLite[]>(() =>
-    (props.documents || []).map((d: any) => ({
-        id: d.id,
-        title: d.title || '(untitled document)',
-        updated_at: d.updated_at,
-        created_at: d.created_at,
-        postType: d.postType,
-    }))
-);
-
-const effectiveDocs = computed<DocLite[]>(() => {
-    if (props.displayDocuments && props.displayDocuments.length) {
-        return props.displayDocuments.map((d: any) => ({
-            id: d.id,
-            title: d.title || '(untitled document)',
-            updated_at: d.updated_at,
-            created_at: d.created_at,
-            postType: d.postType,
-        }));
-    }
-    return lightweightDocs.value;
-});
-
-// Local mirror for v-model with tree (keep reference semantics for parent array)
-const expandedProjectsLocal = computed({
-    get: () => props.expandedProjects,
-    set: (val: string[]) => {
-        // mutate original array for parent expectations
-        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
-    },
-});
-
-const flatItems = computed<SidebarRowItem[]>(() => {
-    const out: SidebarRowItem[] = [];
-    if (props.activeSections.projects && props.projects.length) {
-        out.push({ type: 'projectsTree', key: 'projectsTree' });
-    }
-    // Threads section
-    if (props.activeSections.threads && props.threads.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
-        for (const t of props.threads) {
-            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
-        }
-    }
-    // Docs section
-    if (props.activeSections.docs && effectiveDocs.value.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
-        for (const d of effectiveDocs.value) {
-            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
-        }
-    }
-    return out;
-});
-
-// Constant row size estimate
-const rowSize = 36;
-
-// ---- Multi-active support ----
-const activeThreadSet = computed(() => {
-    if (Array.isArray(props.activeThreads))
-        return new Set(props.activeThreads.filter(Boolean));
-    return new Set(props.activeThread ? [props.activeThread] : []);
-});
-const activeDocumentSet = computed(() => {
-    if (Array.isArray(props.activeDocuments))
-        return new Set(props.activeDocuments.filter(Boolean));
-    return new Set(props.activeDocument ? [props.activeDocument] : []);
-});
-</script>
-```
-
 ## File: app/components/sidebar/SideNavContent.vue
 ```vue
 <template>
@@ -13433,11 +12882,6 @@ const activeDocumentSet = computed(() => {
                 footer: 'justify-end ',
             }"
         >
-            <template #header>
-                <h3>
-                    {{ isRenamingDoc ? 'Rename document?' : 'Rename thread?' }}
-                </h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UInput
@@ -13491,11 +12935,10 @@ const activeDocumentSet = computed(() => {
         <!-- Delete confirm modal -->
         <UModal
             v-model:open="showDeleteModal"
-            title="Delete thread?"
+            title="Delete thread"
             :ui="{ footer: 'justify-end' }"
             class="border-2"
         >
-            <template #header> <h3>Delete thread?</h3> </template>
             <template #body>
                 <p class="text-sm opacity-70">
                     This will permanently remove the thread and its messages.
@@ -13512,11 +12955,10 @@ const activeDocumentSet = computed(() => {
         <!-- Delete document confirm modal -->
         <UModal
             v-model:open="showDeleteDocumentModal"
-            title="Delete document?"
+            title="Delete document"
             :ui="{ footer: 'justify-end' }"
             class="border-2"
         >
-            <template #header> <h3>Delete document?</h3> </template>
             <template #body>
                 <p class="text-sm opacity-70">
                     This will permanently remove the document.
@@ -13535,11 +12977,10 @@ const activeDocumentSet = computed(() => {
         <!-- Delete project confirm modal -->
         <UModal
             v-model:open="showDeleteProjectModal"
-            title="Delete project?"
+            title="Delete project"
             :ui="{ footer: 'justify-end' }"
             class="border-2"
         >
-            <template #header> <h3>Delete project?</h3> </template>
             <template #body>
                 <p class="text-sm opacity-70">
                     This will remove the project from the sidebar. Project data
@@ -13560,9 +13001,6 @@ const activeDocumentSet = computed(() => {
             title="New Project"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Create project</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UForm
@@ -13622,9 +13060,6 @@ const activeDocumentSet = computed(() => {
             title="Add to project"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Add thread to project</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <div class="flex gap-2 text-xs font-mono">
@@ -13721,9 +13156,6 @@ const activeDocumentSet = computed(() => {
             title="New Document"
             :ui="{ footer: 'justify-end' }"
         >
-            <template #header>
-                <h3>Name new document</h3>
-            </template>
             <template #body>
                 <div class="space-y-4">
                     <UForm
@@ -14653,254 +14085,82 @@ async function submitCreateDocument() {
 </script>
 ```
 
-## File: app/pages/openrouter-callback.vue
-```vue
-<template>
-    <div class="min-h-[100dvh] flex items-center justify-center p-6">
-        <div
-            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
-        >
-            <p class="text-base font-medium mb-2">
-                {{ title }}
-            </p>
-            <p class="text-sm text-neutral-500 mb-4">
-                {{ subtitle }}
-            </p>
-            <div class="flex items-center justify-center gap-3">
-                <div
-                    v-if="loading"
-                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
-                />
-                <button
-                    v-if="ready"
-                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
-                    @click="goHome"
-                >
-                    Continue
-                </button>
-                <button
-                    v-if="errorMessage"
-                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
-                    @click="goHome"
-                >
-                    Go Home
-                </button>
-            </div>
-        </div>
-    </div>
-</template>
+## File: app/composables/useMessageEditing.ts
+```typescript
+import { ref, isRef } from 'vue';
+import { upsert } from '~/db';
+import { nowSec } from '~/db/util';
 
-<script setup>
-import { kv } from '~/db';
+// Lightweight composable for editing a chat message (assistant/user)
+export function useMessageEditing(message: any) {
+    // Support passing a Ref so caller can swap underlying message object (e.g., streaming tail -> finalized)
+    const getMessage = () => (isRef(message) ? message.value : message);
+    const editing = ref(false);
+    const draft = ref('');
+    const original = ref('');
+    const saving = ref(false);
 
-const route = useRoute();
-const router = useRouter();
-const rc = useRuntimeConfig();
-
-const loading = ref(true);
-const ready = ref(false);
-const redirecting = ref(false);
-const errorMessage = ref('');
-const title = computed(() =>
-    errorMessage.value
-        ? 'Login completed with warnings'
-        : ready.value
-        ? 'Login complete'
-        : 'Completing login…'
-);
-const subtitle = computed(() => {
-    if (errorMessage.value) return errorMessage.value;
-    if (ready.value && !redirecting.value)
-        return 'If this page doesn’t redirect automatically, tap Continue.';
-    return 'Please wait while we finish setup.';
-});
-
-function log(...args) {
-    try {
-        if (import.meta.dev) {
-            // eslint-disable-next-line no-console
-            console.debug('[openrouter-callback]', ...args);
-        }
-    } catch {}
-}
-
-async function setKVNonBlocking(key, value, timeoutMs = 300) {
-    try {
-        if (!kv?.set) return;
-        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
-        const result = await Promise.race([
-            kv.set(key, value),
-            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
-        ]);
-        if (result === 'timeout') log('setKV timed out; continuing');
-        else log('setKV resolved');
-    } catch (e) {
-        log('setKV failed', e?.message || e);
+    function beginEdit() {
+        if (editing.value) return;
+        // Some message objects use .text (UiChatMessage), others .content; fall back gracefully.
+        const m = getMessage() || {};
+        const base =
+            typeof m.content === 'string'
+                ? m.content
+                : typeof m.text === 'string'
+                ? m.text
+                : '';
+        original.value = base;
+        draft.value = base;
+        editing.value = true;
     }
-}
-
-async function goHome() {
-    redirecting.value = true;
-    log("goHome() invoked. Trying router.replace('/').");
-    try {
-        await router.replace('/');
-        log("router.replace('/') resolved");
-    } catch (e) {
-        log("router.replace('/') failed:", e?.message || e);
+    function cancelEdit() {
+        if (saving.value) return;
+        editing.value = false;
+        draft.value = '';
+        original.value = '';
     }
-    try {
-        // Fallback to full document navigation
-        log("Attempting window.location.replace('/')");
-        window.location.replace('/');
-    } catch (e) {
-        log("window.location.replace('/') failed:", e?.message || e);
-    }
-    // Last-chance fallback on browsers that ignore replace
-    setTimeout(() => {
-        try {
-            log("Attempting final window.location.assign('/')");
-            window.location.assign('/');
-        } catch (e) {
-            log("window.location.assign('/') failed:", e?.message || e);
-        }
-    }, 150);
-}
-
-onMounted(async () => {
-    log('mounted at', window.location.href, 'referrer:', document.referrer);
-    const code = route.query.code;
-    const state = route.query.state;
-    const verifier = sessionStorage.getItem('openrouter_code_verifier');
-    const savedState = sessionStorage.getItem('openrouter_state');
-    const codeMethod =
-        sessionStorage.getItem('openrouter_code_method') || 'S256';
-    log('query params present:', {
-        code: Boolean(code),
-        state: Boolean(state),
-    });
-    log('session present:', {
-        verifier: Boolean(verifier),
-        savedState: Boolean(savedState),
-        codeMethod,
-    });
-
-    if (!code || !verifier) {
-        console.error('[openrouter-callback] Missing code or verifier');
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Missing code or verifier. Tap Continue to return.';
-        return;
-    }
-    if (savedState && state !== savedState) {
-        console.error('[openrouter-callback] State mismatch, potential CSRF', {
-            incoming: state,
-            savedState,
-        });
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value = 'State mismatch. Tap Continue to return.';
-        return;
-    }
-
-    try {
-        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
-        log('exchanging code with OpenRouter', {
-            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
-            codeLength: String(code).length,
-            method: codeMethod,
-            usingHTTPS: true,
-        });
-        const directResp = await fetch(
-            'https://openrouter.ai/api/v1/auth/keys',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: String(code),
-                    code_verifier: verifier,
-                    code_challenge_method: codeMethod,
-                }),
-            }
-        );
-        const directJson = await directResp.json().catch(async () => {
-            const text = await directResp.text().catch(() => '<no-body>');
-            log('non-JSON response body snippet:', text?.slice(0, 300));
-            return null;
-        });
-        if (!directResp.ok || !directJson) {
-            console.error(
-                '[openrouter-callback] Direct exchange failed',
-                directResp.status,
-                directJson
-            );
+    async function saveEdit() {
+        if (saving.value) return;
+        const m = getMessage();
+        const id = m?.id;
+        if (!id) return;
+        const trimmed = draft.value.trim();
+        if (!trimmed) {
+            cancelEdit();
             return;
         }
-        const userKey = directJson.key || directJson.access_token;
-        if (!userKey) {
-            console.error(
-                '[openrouter-callback] Direct exchange returned no key',
-                {
-                    keys: Object.keys(directJson || {}),
-                }
-            );
-            return;
-        }
-        // store in localStorage for use by front-end
-        log('storing key in localStorage (length)', String(userKey).length);
-        // Save a human-readable name and the value; id/clock are handled
-        // inside the helper to match your schema
         try {
-            await kv.set('openrouter_api_key', userKey);
-        } catch (e) {
-            log('kvByName.set failed', e?.message || e);
-        }
-        try {
-            log('dispatching openrouter:connected event');
-            window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            // Best-effort: also persist to synced KV
-            try {
-                await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch {}
-        } catch {}
-        log('clearing session markers (verifier/state/method)');
-        sessionStorage.removeItem('openrouter_code_verifier');
-        sessionStorage.removeItem('openrouter_state');
-        sessionStorage.removeItem('openrouter_code_method');
-        // Allow event loop to process storage events in other tabs/components
-        await new Promise((r) => setTimeout(r, 10));
-        loading.value = false;
-        ready.value = true;
-        log('ready to redirect');
-        // Attempt auto-redirect but keep the Continue button visible
-        setTimeout(() => {
-            // first SPA attempt
-            log("auto: router.replace('/')");
-            router.replace('/').catch((e) => {
-                log('auto: router.replace failed', e?.message || e);
+            saving.value = true;
+            const existing: any = await (
+                await import('~/db/client')
+            ).db.messages.get(id);
+            if (!existing) throw new Error('Message not found');
+            await upsert.message({
+                ...existing,
+                data: { ...(existing.data || {}), content: trimmed },
+                updated_at: nowSec(),
             });
-            // then a hard replace if SPA was blocked
-            setTimeout(() => {
-                try {
-                    log("auto: window.location.replace('/')");
-                    window.location.replace('/');
-                } catch (e) {
-                    log(
-                        'auto: window.location.replace failed',
-                        e?.message || e
-                    );
-                }
-            }, 250);
-        }, 50);
-    } catch (err) {
-        console.error('[openrouter-callback] Exchange failed', err);
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Authentication finished, but we couldn’t auto-redirect.';
+            // Persist to both fields so renderers using either stay in sync
+            if (m) {
+                (m as any).content = trimmed;
+                if ('text' in m) (m as any).text = trimmed;
+            }
+            editing.value = false;
+        } finally {
+            saving.value = false;
+        }
     }
-});
-</script>
+    return {
+        editing,
+        draft,
+        original,
+        saving,
+        beginEdit,
+        cancelEdit,
+        saveEdit,
+    };
+}
 ```
 
 ## File: app/plugins/examples/dual-llm-relay.client.ts
@@ -15564,612 +14824,307 @@ export default defineConfig({
 });
 ```
 
-## File: app/components/chat/SystemPromptsModal.vue
+## File: app/components/modal/SettingsModal.vue
 ```vue
 <template>
     <UModal
         v-model:open="open"
         :ui="{
-            footer: 'justify-end border-none',
-            body: 'p-0! border-b-0! overflow-hidden',
+            footer: 'justify-end border-t-2',
+            body: 'p-0!',
         }"
-        title="System Prompts"
-        description="Manage and select system prompts to customize AI behavior."
-        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
+        title="Model settings"
+        description="Browse and favorite models from the OpenRouter catalog."
+        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
-        <!--
-        <template #header>
-            <div class="flex w-full items-center justify-between pr-2">
-                
-                <h3 class="font-semibold text-sm pl-2 dark:text-black">
-                    System Prompts
-                </h3>
-                <UButton
-                    class="bg-white/90 dark:text-black dark:border-black! hover:bg-white/95 active:bg-white/95 flex items-center justify-center cursor-pointer"
-                    :square="true"
-                    variant="ghost"
-                    size="sm"
-                    icon="i-heroicons-x-mark"
-                    @click="open = false"
-                />
-            </div>
-            
-        </template>
-        -->
         <template #body>
-            <div class="flex flex-col h-full" @keydown="handleKeydown">
+            <div class="flex flex-col h-full">
                 <div
-                    v-show="!editingPrompt"
-                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
+                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
                 >
-                    <div
-                        class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
-                    >
+                    <div class="flex items-center gap-3 w-full">
+                        <div class="relative w-full max-w-md">
+                            <UInput
+                                v-model="searchQuery"
+                                icon="pixelarticons:search"
+                                placeholder="Search models (id, name, description, modality)"
+                                size="sm"
+                                class="w-full pr-8"
+                                :ui="{ base: 'w-full' }"
+                                autofocus
+                            />
+                            <button
+                                v-if="searchQuery"
+                                type="button"
+                                aria-label="Clear search"
+                                class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                                @click="searchQuery = ''"
+                            >
+                                <UIcon
+                                    name="i-heroicons-x-mark"
+                                    class="h-4 w-4"
+                                />
+                            </button>
+                        </div>
                         <UButton
-                            @click="createNewPrompt"
+                            :disabled="refreshing"
                             size="sm"
-                            color="primary"
-                            class="retro-btn"
-                        >
-                            New Prompt
-                        </UButton>
-                        <UButton
-                            v-if="currentActivePromptId"
-                            @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
-                        >
-                            Clear Active
-                        </UButton>
-                    </div>
-                    <UInput
-                        v-model="searchQuery"
-                        placeholder="Search prompts..."
-                        :size="isMobile ? 'md' : 'sm'"
-                        class="w-full my-2 sm:my-0 sm:max-w-xs"
-                        icon="i-heroicons-magnifying-glass"
-                    />
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <!-- List View -->
-                    <div
-                        v-if="!editingPrompt"
-                        class="max-h-full overflow-y-auto"
-                    >
-                        <div
-                            v-if="filteredPrompts.length === 0"
-                            class="flex flex-col items-center justify-center h-full text-center p-8"
+                            variant="ghost"
+                            :square="true"
+                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
+                            aria-label="Refresh model catalog"
+                            :title="
+                                refreshing
+                                    ? 'Refreshing…'
+                                    : 'Force refresh models (bypass cache)'
+                            "
+                            @click="doRefresh"
                         >
                             <UIcon
-                                name="pixelarticons:script-text"
-                                class="w-16 h-16 text-gray-400 mb-4"
+                                v-if="!refreshing"
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4"
                             />
-                            <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
-                            >
-                                No system prompts yet
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
-                                Create your first system prompt to customize AI
-                                behavior.
-                            </p>
-                            <UButton @click="createNewPrompt" color="primary">
-                                Create Your First Prompt
-                            </UButton>
-                        </div>
-
-                        <div v-else class="p-4 space-y-3">
+                            <UIcon
+                                v-else
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4 animate-spin"
+                            />
+                        </UButton>
+                    </div>
+                </div>
+                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
+                    Indexing models…
+                </div>
+                <div v-else class="flex-1 min-h-0">
+                    <VList
+                        :data="chunkedModels as OpenRouterModel[][]"
+                        style="height: 100%"
+                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
+                        :overscan="4"
+                        #default="{ item: row }"
+                    >
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 pt-2 sm:pt-0 px-2 sm:px-6 w-full"
+                            :class="gridColsClass"
+                        >
                             <div
-                                v-for="prompt in filteredPrompts"
-                                :key="prompt.id"
-                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
-                                :data-active="
-                                    prompt.id === currentActivePromptId
-                                        ? 'true'
-                                        : 'false'
-                                "
+                                v-for="m in row"
+                                :key="m.id"
+                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
                             >
-                                <!-- Left / Main meta -->
-                                <div class="flex-1 min-w-0">
-                                    <div
-                                        class="flex flex-wrap items-center gap-2 mb-1"
-                                    >
-                                        <h4
-                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
-                                            :class="{
-                                                'italic opacity-60':
-                                                    !prompt.title,
-                                            }"
-                                        >
-                                            {{
-                                                prompt.title ||
-                                                'Untitled Prompt'
-                                            }}
-                                        </h4>
-                                        <span
-                                            v-if="prompt.id === defaultPromptId"
-                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
-                                            >Default</span
-                                        >
-                                        <span
-                                            v-if="
-                                                prompt.id ===
-                                                    currentActivePromptId &&
-                                                prompt.id !== defaultPromptId
-                                            "
-                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
-                                            >Active</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
-                                    >
-                                        <span class="flex items-center gap-1">
-                                            <UIcon
-                                                name="pixelarticons:clock"
-                                                class="w-3.5 h-3.5 opacity-70"
-                                            />
-                                            Updated
-                                            {{ formatDate(prompt.updated_at) }}
-                                        </span>
-                                        <span
-                                            class="hidden sm:inline opacity-40"
-                                            >|</span
-                                        >
-                                        <span class="flex items-center gap-1">
-                                            <UIcon
-                                                name="pixelarticons:chart-bar"
-                                                class="w-3.5 h-3.5 opacity-70"
-                                            />
-                                            {{ tokenCounts[prompt.id] || 0 }}
-                                            tokens
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <!-- Actions -->
                                 <div
-                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
+                                    class="flex items-start justify-between gap-2"
                                 >
-                                    <UTooltip
-                                        :delay-duration="0"
-                                        :text="
-                                            prompt.id === defaultPromptId
-                                                ? 'Remove default prompt'
-                                                : 'Set as default prompt'
-                                        "
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            :variant="
-                                                prompt.id === defaultPromptId
-                                                    ? 'solid'
-                                                    : 'outline'
-                                            "
-                                            :color="
-                                                prompt.id === defaultPromptId
-                                                    ? 'primary'
-                                                    : 'neutral'
-                                            "
-                                            :square="true"
-                                            :ui="{
-                                                base: 'retro-btn px-1! text-nowrap',
-                                            }"
-                                            class="retro-btn"
-                                            aria-label="Toggle default prompt"
-                                            @click.stop="
-                                                toggleDefault(prompt.id)
-                                            "
-                                            >{{
-                                                prompt.id === defaultPromptId
-                                                    ? 'default'
-                                                    : 'set default'
-                                            }}</UButton
+                                    <div class="flex flex-col min-w-0">
+                                        <div
+                                            class="font-medium text-sm truncate"
+                                            :title="m.canonical_slug"
                                         >
-                                    </UTooltip>
-                                    <UButton
-                                        @click="selectPrompt(prompt.id)"
-                                        size="sm"
-                                        :color="
-                                            prompt.id === currentActivePromptId
-                                                ? 'primary'
-                                                : 'neutral'
-                                        "
-                                        :variant="
-                                            prompt.id === currentActivePromptId
-                                                ? 'solid'
-                                                : 'outline'
-                                        "
-                                        :aria-pressed="
-                                            prompt.id === currentActivePromptId
+                                            {{ m.canonical_slug }}
+                                        </div>
+                                        <div
+                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+                                        >
+                                            CTX {{ m.context_length }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
+                                        :aria-pressed="isFavorite(m)"
+                                        @click.stop="toggleFavorite(m)"
+                                        :title="
+                                            isFavorite(m)
+                                                ? 'Unfavorite'
+                                                : 'Favorite'
                                         "
                                     >
-                                        {{
-                                            prompt.id === currentActivePromptId
-                                                ? 'Selected'
-                                                : 'Select'
-                                        }}
-                                    </UButton>
-                                    <UPopover
-                                        :popper="{ placement: 'bottom-end' }"
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            variant="outline"
-                                            color="neutral"
-                                            class="flex items-center justify-center"
-                                            :square="true"
-                                            icon="pixelarticons:more-vertical"
-                                            aria-label="More actions"
-                                        />
-                                        <template #content>
-                                            <div
-                                                class="flex flex-col py-1 w-36 text-sm"
-                                            >
-                                                <button
-                                                    @click="
-                                                        startEditing(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:edit"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Edit</span>
-                                                </button>
-                                                <button
-                                                    @click="
-                                                        deletePrompt(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:trash"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Delete</span>
-                                                </button>
-                                            </div>
-                                        </template>
-                                    </UPopover>
+                                        <span v-if="isFavorite(m)">★</span>
+                                        <span v-else>☆</span>
+                                    </button>
                                 </div>
+                                <div
+                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
+                                >
+                                    <div class="flex flex-col">
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Input</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.prompt,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-col items-end text-right"
+                                    >
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Output</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.completion,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </div>
+                                <div
+                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    <span>{{
+                                        m.architecture?.modality || 'text'
+                                    }}</span>
+                                    <span class="opacity-60">/1M tokens</span>
+                                </div>
+                                <div
+                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
+                                />
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Editor View -->
-                    <div v-else class="h-full overflow-hidden flex flex-col">
-                        <div class="flex-1 p-4 overflow-hidden">
-                            <LazyPromptsPromptEditor
-                                :prompt-id="editingPrompt.id"
-                                @back="stopEditing"
-                            />
-                        </div>
+                    </VList>
+                    <div
+                        v-if="!chunkedModels.length && searchQuery"
+                        class="px-6 pb-6 text-xs text-neutral-500"
+                    >
+                        No models match "{{ searchQuery }}".
                     </div>
                 </div>
             </div>
         </template>
+        <template #footer> </template>
     </UModal>
 </template>
-
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import {
-    listPrompts,
-    createPrompt,
-    softDeletePrompt,
-    type PromptRecord,
-} from '~/db/prompts';
-import { useActivePrompt } from '~/composables/useActivePrompt';
-import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-import { encode } from 'gpt-tokenizer';
-import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
-import { isMobile } from '~/state/global';
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import { useModelSearch } from '~/composables/useModelSearch';
+import type { OpenRouterModel } from '~/utils/models-service';
+import { useModelStore } from '~/composables/useModelStore';
 
-// Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{
     showModal: boolean;
-    threadId?: string;
-    paneId?: string; // isolate pending selection per pane (before thread exists)
 }>();
-const emit = defineEmits({
-    'update:showModal': (value: boolean) => typeof value === 'boolean',
-    selected: (id: string) => typeof id === 'string',
-    closed: () => true,
-    threadCreated: (threadId: string, promptId: string | null) => true,
-});
+const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
 
+// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
 const open = computed({
     get: () => props.showModal,
     set: (value: boolean) => emit('update:showModal', value),
 });
 
-watch(
-    () => props.showModal,
-    (v, ov) => {
-        if (!v && ov) emit('closed');
+const modelCatalog = ref<OpenRouterModel[]>([]);
+// Search state (Orama index built client-side)
+const {
+    query: searchQuery,
+    results: searchResults,
+    ready: searchReady,
+} = useModelSearch(modelCatalog);
+
+// Fixed 3-column layout for consistent rows
+const COLS = 2;
+const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
+
+const chunkedModels = computed(() => {
+    const source = searchQuery.value.trim()
+        ? searchResults.value
+        : modelCatalog.value;
+    const cols = COLS;
+    const rows: OpenRouterModel[][] = [];
+    for (let i = 0; i < source.length; i += cols) {
+        rows.push(source.slice(i, i + cols));
     }
-);
+    return rows;
+});
 
 const {
-    activePromptId,
-    setActivePrompt,
-    clearActivePrompt: clearGlobalActivePrompt,
-} = useActivePrompt();
+    favoriteModels,
+    getFavoriteModels,
+    catalog,
+    fetchModels,
+    refreshModels,
+    addFavoriteModel,
+    removeFavoriteModel,
+} = useModelStore();
 
-const prompts = ref<PromptRecord[]>([]);
-const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
-    useDefaultPrompt();
-const editingPrompt = ref<PromptRecord | null>(null);
-const showDeleteConfirm = ref<string | null>(null);
+// Refresh state
+const refreshing = ref(false);
 
-const searchQuery = ref('');
-const filteredPrompts = computed(() => {
-    if (!searchQuery.value) return prompts.value;
-    return prompts.value.filter((p) =>
-        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    );
-});
-
-// Thread-specific system prompt handling
-const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet (pane scoped)
-
-// Computed for current active prompt (thread-specific or global)
-const currentActivePromptId = computed(() => {
-    if (props.threadId) return threadSystemPromptId.value;
-    // If no thread yet use pane-scoped pending first, else fall back to global active
-    return pendingPromptId.value || activePromptId.value;
-});
-
-// Extract plain text from TipTap JSON recursively
-function extractText(node: any): string {
-    if (!node) return '';
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    const type = node.type;
-    let acc = '';
-    if (type === 'text') {
-        acc += node.text || '';
+async function doRefresh() {
+    if (refreshing.value) return;
+    refreshing.value = true;
+    try {
+        await refreshModels();
+        modelCatalog.value = catalog.value.slice();
+    } catch (e) {
+        console.warn('[SettingsModal] model refresh failed', e);
+    } finally {
+        refreshing.value = false;
     }
-    if (node.content && Array.isArray(node.content)) {
-        const inner = node.content.map(extractText).join('');
-        acc += inner;
-    }
-    // Block separators to avoid word merging
-    if (
-        [
-            'paragraph',
-            'heading',
-            'bulletList',
-            'orderedList',
-            'listItem',
-        ].includes(type)
-    ) {
-        acc += '\n';
-    }
-    return acc;
 }
-
-function contentToText(content: any): string {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    // TipTap root usually { type: 'doc', content: [...] }
-    if (content.type === 'doc' && Array.isArray(content.content)) {
-        return extractText(content)
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-    }
-    if (Array.isArray(content.content)) return extractText(content).trim();
-    return '';
-}
-
-// Cached token counts per prompt id (recomputed when prompts list changes)
-const tokenCounts = computed<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const p of prompts.value) {
-        try {
-            const text = contentToText(p.content);
-            map[p.id] = text ? encode(text).length : 0;
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token encode failed', e);
-            map[p.id] = 0;
-        }
-    }
-    return map;
-});
-
-// Totals derived from cached counts
-const totalTokens = computed(() =>
-    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
-);
-const filteredTokens = computed(() =>
-    filteredPrompts.value.reduce(
-        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
-        0
-    )
-);
-
-// (Events moved above with prop bridging)
-
-const loadPrompts = async () => {
-    try {
-        prompts.value = await listPrompts();
-        if (
-            defaultPromptId.value &&
-            !prompts.value.find((p) => p.id === defaultPromptId.value)
-        ) {
-            await clearDefaultPrompt();
-        }
-    } catch (error) {
-        console.error('Failed to load prompts:', error);
-    }
-};
-
-const loadThreadSystemPrompt = async () => {
-    if (props.threadId) {
-        try {
-            threadSystemPromptId.value = await getThreadSystemPrompt(
-                props.threadId
-            );
-        } catch (error) {
-            console.error('Failed to load thread system prompt:', error);
-            threadSystemPromptId.value = null;
-        }
-    } else {
-        threadSystemPromptId.value = null;
-    }
-};
-
-const createNewPrompt = async () => {
-    try {
-        const newPrompt = await createPrompt();
-        prompts.value.unshift(newPrompt);
-        startEditing(newPrompt.id);
-    } catch (error) {
-        console.error('Failed to create prompt:', error);
-    }
-};
-
-const selectPrompt = async (id: string) => {
-    try {
-        if (props.threadId) {
-            // Update thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, id);
-            threadSystemPromptId.value = id;
-        } else {
-            // Store as pending for when thread is created
-            pendingPromptId.value = id;
-            // Also update global for immediate feedback
-            // Do NOT override global active prompt; keep pane scoped selection only
-        }
-        emit('selected', id);
-    } catch (error) {
-        console.error('Failed to select prompt:', error);
-    }
-};
-
-const clearActivePrompt = async () => {
-    try {
-        if (props.threadId) {
-            // Clear thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, null);
-            threadSystemPromptId.value = null;
-        } else {
-            // Clear pending and global active prompt
-            pendingPromptId.value = null;
-            // Don't clear global active prompt automatically (leave global state untouched)
-        }
-    } catch (error) {
-        console.error('Failed to clear active prompt:', error);
-    }
-};
-
-const startEditing = (id: string) => {
-    const prompt = prompts.value.find((p) => p.id === id);
-    if (prompt) {
-        editingPrompt.value = prompt;
-    }
-};
-
-const stopEditing = () => {
-    editingPrompt.value = null;
-    loadPrompts(); // Refresh list in case of changes
-};
-
-const applyPendingPromptToThread = async (threadId: string) => {
-    if (pendingPromptId.value) {
-        try {
-            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
-            emit('threadCreated', threadId, pendingPromptId.value);
-            pendingPromptId.value = null;
-        } catch (error) {
-            console.error('Failed to apply pending prompt to thread:', error);
-        }
-    }
-};
-
-const deletePrompt = async (id: string) => {
-    if (confirm('Are you sure you want to delete this prompt?')) {
-        try {
-            await softDeletePrompt(id);
-            if (activePromptId.value === id) {
-                clearActivePrompt();
-            }
-            if (defaultPromptId.value === id) {
-                await clearDefaultPrompt();
-            }
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to delete prompt:', error);
-        }
-    }
-};
-
-const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-    if (editingPrompt.value) return;
-    const key = event.key;
-    if (key >= '1' && key <= '9') {
-        const index = parseInt(key) - 1;
-        if (index < filteredPrompts.value.length) {
-            const prompt = filteredPrompts.value[index];
-            if (prompt) {
-                selectPrompt(prompt.id);
-                event.preventDefault();
-            }
-        }
-    }
-};
 
 onMounted(() => {
-    loadPrompts();
-    loadThreadSystemPrompt();
+    fetchModels().then(() => {
+        modelCatalog.value = catalog.value;
+    });
+
+    getFavoriteModels().then((models) => {
+        favoriteModels.value = models;
+    });
 });
 
-// Watch for threadId changes to reload thread-specific prompt
-watch(
-    () => props.threadId,
-    () => {
-        loadThreadSystemPrompt();
-    }
-);
+function isFavorite(m: OpenRouterModel) {
+    return favoriteModels.value.some((f) => f.id === m.id);
+}
 
-function toggleDefault(id: string) {
-    if (defaultPromptId.value === id) {
-        clearDefaultPrompt();
+function toggleFavorite(m: OpenRouterModel) {
+    if (isFavorite(m)) {
+        removeFavoriteModel(m);
     } else {
-        setDefaultPrompt(id);
+        addFavoriteModel(m);
+    }
+}
+
+/**
+ * Format a per-token price into a "per 1,000,000 tokens" currency string.
+ * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
+ */
+function formatPerMillion(raw: unknown, currency = 'USD') {
+    const perToken = Number(raw ?? 0);
+    const perMillion = perToken * 1_000_000;
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 2,
+        }).format(perMillion);
+    } catch (e) {
+        // Fallback: simple fixed formatting
+        return `$${perMillion.toFixed(2)}`;
     }
 }
 </script>
+```
 
-<style scoped>
-/* Mobile full-screen adjustments */
-@media (max-width: 640px) {
-    .sp-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh !important;
-        max-height: 100dvh !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border-width: 0 !important;
-    }
-}
-
-/* Smooth scrolling area */
-.sp-modal :deep(.n-modal-body),
-.sp-modal :deep(.n-card__content) {
-    /* ensure body grows */
-    height: 100%;
-}
-</style>
+## File: app/composables/index.ts
+```typescript
+/** Barrel export for chat-related composables (Task 1.6) */
+export * from './useStreamAccumulator';
+export * from './useObservedElementSize';
+export * from './ui-extensions/messages/useMessageActions';
+export * from './ui-extensions/documents/useDocumentHistoryActions';
+export * from './ui-extensions/threads/useThreadHistoryActions';
+export * from './ui-extensions/projects/useProjectTreeActions';
 ```
 
 ## File: app/composables/useDocumentsStore.ts
@@ -17129,137 +16084,1064 @@ function showToast() {
 </script>
 ```
 
-## File: nuxt.config.ts
-```typescript
-// https://nuxt.com/docs/api/configuration/nuxt-config
+## File: app/pages/openrouter-callback.vue
+```vue
+<template>
+    <div
+        class="min-h-[100dvh] flex items-center justify-center p-6"
+        data-page="openrouter-callback"
+    >
+        <div
+            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
+        >
+            <p class="text-base font-medium mb-2">
+                {{ title }}
+            </p>
+            <p class="text-sm text-neutral-500 mb-4">
+                {{ subtitle }}
+            </p>
+            <div class="flex items-center justify-center gap-3">
+                <div
+                    v-if="loading"
+                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
+                />
+                <button
+                    v-if="ready"
+                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
+                    @click="goHome"
+                >
+                    Continue
+                </button>
+                <button
+                    v-if="errorMessage"
+                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
+                    @click="goHome"
+                >
+                    Go Home
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
 
-export default defineNuxtConfig({
-    compatibilityDate: '2025-07-15',
-    devtools: { enabled: true },
-    modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
-    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
-    srcDir: 'app',
-    // Load Tailwind + theme variables globally
-    css: ['~/assets/css/main.css'],
-    fonts: {
-        families: [
-            { name: 'Press Start 2P', provider: 'google' },
-            { name: 'VT323', provider: 'google' },
-        ],
+<script setup>
+import { kv } from '~/db';
+import { state } from '~/state/global';
+
+const route = useRoute();
+const router = useRouter();
+const rc = useRuntimeConfig();
+
+const loading = ref(true);
+const ready = ref(false);
+const redirecting = ref(false);
+const errorMessage = ref('');
+const title = computed(() =>
+    errorMessage.value
+        ? 'Login completed with warnings'
+        : ready.value
+        ? 'Login complete'
+        : 'Completing login…'
+);
+const subtitle = computed(() => {
+    if (errorMessage.value) return errorMessage.value;
+    if (ready.value && !redirecting.value)
+        return 'If this page doesn’t redirect automatically, tap Continue.';
+    return 'Please wait while we finish setup.';
+});
+
+function log(...args) {
+    try {
+        if (import.meta.dev) {
+            // eslint-disable-next-line no-console
+            console.debug('[openrouter-callback]', ...args);
+        }
+    } catch {}
+}
+
+async function setKVNonBlocking(key, value, timeoutMs = 300) {
+    try {
+        if (!kv?.set) return;
+        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
+        const result = await Promise.race([
+            kv.set(key, value),
+            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
+        ]);
+        if (result === 'timeout') log('setKV timed out; continuing');
+        else log('setKV resolved');
+    } catch (e) {
+        log('setKV failed', e?.message || e);
+    }
+}
+
+async function goHome() {
+    redirecting.value = true;
+    log("goHome() invoked. Trying router.replace('/').");
+    try {
+        await router.replace('/');
+        log("router.replace('/') resolved");
+    } catch (e) {
+        log("router.replace('/') failed:", e?.message || e);
+    }
+    try {
+        // Fallback to full document navigation
+        log("Attempting window.location.replace('/')");
+        window.location.replace('/');
+    } catch (e) {
+        log("window.location.replace('/') failed:", e?.message || e);
+    }
+    // Last-chance fallback on browsers that ignore replace
+    setTimeout(() => {
+        try {
+            log("Attempting final window.location.assign('/')");
+            window.location.assign('/');
+        } catch (e) {
+            log("window.location.assign('/') failed:", e?.message || e);
+        }
+    }, 150);
+}
+
+onMounted(async () => {
+    log('mounted at', window.location.href, 'referrer:', document.referrer);
+    const code = route.query.code;
+    const state = route.query.state;
+    // Primary in sessionStorage (original), fallback to localStorage if a reload or restore lost it.
+    const verifier =
+        sessionStorage.getItem('openrouter_code_verifier') ||
+        localStorage.getItem('openrouter_code_verifier') ||
+        '';
+    const savedState =
+        sessionStorage.getItem('openrouter_state') ||
+        localStorage.getItem('openrouter_state') ||
+        '';
+    const codeMethod =
+        sessionStorage.getItem('openrouter_code_method') ||
+        localStorage.getItem('openrouter_code_method') ||
+        'S256';
+    log('query params present:', {
+        code: Boolean(code),
+        state: Boolean(state),
+    });
+    log('session present:', {
+        verifier: Boolean(verifier),
+        savedState: Boolean(savedState),
+        codeMethod,
+    });
+
+    if (!code || !verifier) {
+        console.error('[openrouter-callback] Missing code or verifier');
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Missing code or verifier. Tap Continue to return.';
+        return;
+    }
+    if (savedState && state !== savedState) {
+        console.error('[openrouter-callback] State mismatch, potential CSRF', {
+            incoming: state,
+            savedState,
+        });
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value = 'State mismatch. Tap Continue to return.';
+        return;
+    }
+
+    try {
+        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
+        log('exchanging code with OpenRouter', {
+            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
+            codeLength: String(code).length,
+            method: codeMethod,
+            usingHTTPS: true,
+        });
+        const directResp = await fetch(
+            'https://openrouter.ai/api/v1/auth/keys',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: String(code),
+                    code_verifier: verifier,
+                    code_challenge_method: codeMethod,
+                }),
+            }
+        );
+        const directJson = await directResp.json().catch(async () => {
+            const text = await directResp.text().catch(() => '<no-body>');
+            log('non-JSON response body snippet:', text?.slice(0, 300));
+            return null;
+        });
+        if (!directResp.ok || !directJson) {
+            console.error(
+                '[openrouter-callback] Direct exchange failed',
+                directResp.status,
+                directJson
+            );
+            return;
+        }
+        const userKey = directJson.key || directJson.access_token;
+        if (!userKey) {
+            console.error(
+                '[openrouter-callback] Direct exchange returned no key',
+                {
+                    keys: Object.keys(directJson || {}),
+                }
+            );
+            return;
+        }
+        // store in localStorage for use by front-end
+        log('storing key in localStorage (length)', String(userKey).length);
+        // Save a human-readable name and the value; id/clock are handled
+        // inside the helper to match your schema
+        try {
+            await kv.set('openrouter_api_key', userKey);
+            // Update global state immediately so UI reacts even before listeners.
+            try {
+                state.value.openrouterKey = userKey;
+            } catch {}
+        } catch (e) {
+            log('kvByName.set failed', e?.message || e);
+        }
+        try {
+            log('dispatching openrouter:connected event');
+            window.dispatchEvent(new CustomEvent('openrouter:connected'));
+            // Best-effort: also persist to synced KV
+            try {
+                await setKVNonBlocking('openrouter_api_key', userKey, 300);
+            } catch {}
+        } catch {}
+        log('clearing session markers (verifier/state/method)');
+        const keys = [
+            'openrouter_code_verifier',
+            'openrouter_state',
+            'openrouter_code_method',
+        ];
+        keys.forEach((k) => {
+            sessionStorage.removeItem(k);
+            localStorage.removeItem(k);
+        });
+        // Allow event loop to process storage events in other tabs/components
+        await new Promise((r) => setTimeout(r, 10));
+        loading.value = false;
+        ready.value = true;
+        log('ready to redirect');
+        // Attempt auto-redirect but keep the Continue button visible
+        setTimeout(() => {
+            // first SPA attempt
+            log("auto: router.replace('/')");
+            router.replace('/').catch((e) => {
+                log('auto: router.replace failed', e?.message || e);
+            });
+
+            setTimeout(() => {
+                try {
+                    log("auto: window.location.replace('/')");
+                    window.location.replace('/');
+                } catch (e) {
+                    log(
+                        'auto: window.location.replace failed',
+                        e?.message || e
+                    );
+                }
+            }, 250);
+        }, 50);
+    } catch (err) {
+        console.error('[openrouter-callback] Exchange failed', err);
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Authentication finished, but we couldn’t auto-redirect.';
+    }
+    // Safety: if nothing happened within 4s (no ready), force a hard reload to bust SW fallback
+    setTimeout(() => {
+        if (!ready.value && !errorMessage.value) {
+            try {
+                log('safety reload firing');
+                window.location.reload();
+            } catch {}
+        }
+    }, 4000);
+});
+</script>
+```
+
+## File: app/app.config.ts
+```typescript
+export default defineAppConfig({
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
+        },
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
+                header: 'border-b-2 border-black bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
+                title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
+                description: 'hidden',
+                close: 'top-0 end-0 flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white dark:text-black  dark:hover:bg-white/80',
+            },
+        },
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+                square: {
+                    true: 'px-0! aspect-square!',
+                },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
+                },
+            },
+        },
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
+                },
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
+                },
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
+        },
     },
-    // PWA configuration
-    pwa: {
-        // Auto update SW when new content is available
-        registerType: 'autoUpdate',
-        // Enable PWA in dev so you can install/test while developing
-        devOptions: {
-            enabled: true,
-            suppressWarnings: true,
-        },
-        // Expose $pwa and intercept install prompt
-        client: {
-            installPrompt: true,
-            registerPlugin: true,
-        },
-        // Basic offline support; let Workbox handle common assets
-        workbox: {
-            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
-            runtimeCaching: [
-                // Cache Vite/Nuxt client chunks in dev after first load
-                {
-                    urlPattern: /^\/_nuxt\//,
-                    handler: 'NetworkFirst',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'nuxt-dev-chunks',
-                        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
-                    },
-                },
-                // Cache app images from public/
-                {
-                    urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
-                    handler: 'CacheFirst',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'static-images',
-                        expiration: { maxEntries: 200, maxAgeSeconds: 7 * 24 * 60 * 60 },
-                    },
-                },
-                // Cache fonts provided by @nuxt/fonts (served under /_fonts/)
-                {
-                    urlPattern: /^\/_fonts\//,
-                    handler: 'CacheFirst',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'nuxt-fonts',
-                        expiration: { maxEntries: 50, maxAgeSeconds: 30 * 24 * 60 * 60 },
-                    },
-                },
-                // Cache Nuxt Icon API responses used by UI
-                {
-                    urlPattern: /\/api\/_nuxt_icon\/.*$/,
-                    handler: 'StaleWhileRevalidate',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'nuxt-icons',
-                        expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
-                    },
-                },
-            ],
-        },
-        // Web App Manifest
-        manifest: {
-            name: 'Or3 Chat',
-            short_name: 'Or3.Chat',
-            description:
-                'The open, extensible AI chat platform for the people.',
-            start_url: '/',
-            display: 'standalone',
-            background_color: '#0b0f1a',
-            theme_color: '#0b0f1a',
-            icons: [
-                {
-                    src: '/logos/logo-192.png',
-                    sizes: '192x192',
-                    type: 'image/png',
-                },
-                {
-                    src: '/logos/logo-512.png',
-                    sizes: '512x512',
-                    type: 'image/png',
-                },
-                // WebP is fine in many browsers; PNGs above cover platforms requiring PNG
-                {
-                    src: '/logos/logo-1024.webp',
-                    sizes: '1024x1024',
-                    type: 'image/webp',
-                    purpose: 'any maskable',
-                },
-            ],
-        },
-    },
-    // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
-    ignore: [
-        '**/*.test.*',
-        '**/__tests__/**',
-        'tests/**',
-        // Example plugins (dev only); keep them out of production build
-        process.env.NODE_ENV === 'production'
-            ? 'app/plugins/examples/**'
-            : undefined,
-    ].filter(Boolean) as string[],
 });
 ```
 
-## File: app/composables/index.ts
-```typescript
-/** Barrel export for chat-related composables (Task 1.6) */
-export * from './useStreamAccumulator';
-export * from './useObservedElementSize';
-export * from './ui-extensions/messages/useMessageActions';
-export * from './ui-extensions/documents/useDocumentHistoryActions';
-export * from './ui-extensions/threads/useThreadHistoryActions';
-export * from './ui-extensions/projects/useProjectTreeActions';
+## File: app/app.vue
+```vue
+<template>
+    <UApp>
+        <!-- Register the PWA web manifest on all pages -->
+        <VitePwaManifest />
+        <NuxtPage />
+    </UApp>
+</template>
+<script setup lang="ts">
+// Apply initial theme class to <html> so CSS variables cascade app-wide
+const nuxtApp = useNuxtApp();
+const isDark = computed(() =>
+    (
+        (nuxtApp as any).$theme?.current?.value ||
+        (nuxtApp as any).$theme?.get?.() ||
+        'light'
+    ).startsWith('dark')
+);
+const themeColor = computed(() => (isDark.value ? '#1A1F24' : '#F1F4FB'));
+const statusBarStyle = computed(() =>
+    isDark.value ? 'black-translucent' : 'default'
+);
+
+useHead({
+    htmlAttrs: {
+        class: 'light',
+    },
+    title: 'or3 chat',
+    link: [
+        { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
+        // Provide an Apple touch icon to avoid 404s in Safari/iOS
+        { rel: 'apple-touch-icon', href: '/logos/logo-192.png' },
+    ],
+    meta: [
+        // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
+        { name: 'theme-color', content: themeColor },
+        // Enable iOS PWA full-screen and control status bar style
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        {
+            name: 'apple-mobile-web-app-status-bar-style',
+            content: statusBarStyle,
+        },
+        // Ensure content can extend under the notch when using black-translucent
+        {
+            name: 'viewport',
+            content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+        },
+    ],
+});
+
+// Fire app.init:action:after once after the root app mounts (client-only)
+onMounted(() => {
+    const g: any = globalThis as any;
+    if (g.__OR3_APP_INIT_FIRED__) return;
+    g.__OR3_APP_INIT_FIRED__ = true;
+    const hooks: any = nuxtApp.$hooks;
+    if (hooks && typeof hooks.doAction === 'function') {
+        hooks.doAction('app.init:action:after', nuxtApp);
+    }
+});
+</script>
+```
+
+## File: app/components/chat/SystemPromptsModal.vue
+```vue
+<template>
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-none',
+            body: 'p-0! border-b-0! overflow-hidden',
+        }"
+        title="System Prompts"
+        description="Manage and select system prompts to customize AI behavior."
+        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
+    >
+        <template #body>
+            <div class="flex flex-col h-full" @keydown="handleKeydown">
+                <div
+                    v-show="!editingPrompt"
+                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
+                >
+                    <div
+                        class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
+                    >
+                        <UButton
+                            @click="createNewPrompt"
+                            size="sm"
+                            color="primary"
+                            class="retro-btn"
+                        >
+                            New Prompt
+                        </UButton>
+                        <UButton
+                            v-if="currentActivePromptId"
+                            @click="clearActivePrompt"
+                            size="sm"
+                            color="neutral"
+                            variant="outline"
+                        >
+                            Clear Active
+                        </UButton>
+                    </div>
+                    <UInput
+                        v-model="searchQuery"
+                        placeholder="Search prompts..."
+                        :size="isMobile ? 'md' : 'sm'"
+                        class="w-full my-2 sm:my-0 sm:max-w-xs"
+                        icon="i-heroicons-magnifying-glass"
+                    />
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <!-- List View -->
+                    <div
+                        v-if="!editingPrompt"
+                        class="max-h-full overflow-y-auto"
+                    >
+                        <div
+                            v-if="filteredPrompts.length === 0"
+                            class="flex flex-col items-center justify-center h-full text-center p-8"
+                        >
+                            <UIcon
+                                name="pixelarticons:script-text"
+                                class="w-16 h-16 text-gray-400 mb-4"
+                            />
+                            <h3
+                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
+                            >
+                                No system prompts yet
+                            </h3>
+                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                                Create your first system prompt to customize AI
+                                behavior.
+                            </p>
+                            <UButton @click="createNewPrompt" color="primary">
+                                Create Your First Prompt
+                            </UButton>
+                        </div>
+
+                        <div v-else class="p-4 space-y-3">
+                            <div
+                                v-for="prompt in filteredPrompts"
+                                :key="prompt.id"
+                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
+                                :data-active="
+                                    prompt.id === currentActivePromptId
+                                        ? 'true'
+                                        : 'false'
+                                "
+                            >
+                                <!-- Left / Main meta -->
+                                <div class="flex-1 min-w-0">
+                                    <div
+                                        class="flex flex-wrap items-center gap-2 mb-1"
+                                    >
+                                        <h4
+                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
+                                            :class="{
+                                                'italic opacity-60':
+                                                    !prompt.title,
+                                            }"
+                                        >
+                                            {{
+                                                prompt.title ||
+                                                'Untitled Prompt'
+                                            }}
+                                        </h4>
+                                        <span
+                                            v-if="prompt.id === defaultPromptId"
+                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            >Default</span
+                                        >
+                                        <span
+                                            v-if="
+                                                prompt.id ===
+                                                    currentActivePromptId &&
+                                                prompt.id !== defaultPromptId
+                                            "
+                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
+                                            >Active</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
+                                    >
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:clock"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            Updated
+                                            {{ formatDate(prompt.updated_at) }}
+                                        </span>
+                                        <span
+                                            class="hidden sm:inline opacity-40"
+                                            >|</span
+                                        >
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:chart-bar"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            {{ tokenCounts[prompt.id] || 0 }}
+                                            tokens
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div
+                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
+                                >
+                                    <UTooltip
+                                        :delay-duration="0"
+                                        :text="
+                                            prompt.id === defaultPromptId
+                                                ? 'Remove default prompt'
+                                                : 'Set as default prompt'
+                                        "
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            :variant="
+                                                prompt.id === defaultPromptId
+                                                    ? 'solid'
+                                                    : 'outline'
+                                            "
+                                            :color="
+                                                prompt.id === defaultPromptId
+                                                    ? 'primary'
+                                                    : 'neutral'
+                                            "
+                                            :square="true"
+                                            :ui="{
+                                                base: 'retro-btn px-1! text-nowrap',
+                                            }"
+                                            class="retro-btn"
+                                            aria-label="Toggle default prompt"
+                                            @click.stop="
+                                                toggleDefault(prompt.id)
+                                            "
+                                            >{{
+                                                prompt.id === defaultPromptId
+                                                    ? 'default'
+                                                    : 'set default'
+                                            }}</UButton
+                                        >
+                                    </UTooltip>
+                                    <UButton
+                                        @click="selectPrompt(prompt.id)"
+                                        size="sm"
+                                        :color="
+                                            prompt.id === currentActivePromptId
+                                                ? 'primary'
+                                                : 'neutral'
+                                        "
+                                        :variant="
+                                            prompt.id === currentActivePromptId
+                                                ? 'solid'
+                                                : 'outline'
+                                        "
+                                        :aria-pressed="
+                                            prompt.id === currentActivePromptId
+                                        "
+                                    >
+                                        {{
+                                            prompt.id === currentActivePromptId
+                                                ? 'Selected'
+                                                : 'Select'
+                                        }}
+                                    </UButton>
+                                    <UPopover
+                                        :popper="{ placement: 'bottom-end' }"
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            variant="outline"
+                                            color="neutral"
+                                            class="flex items-center justify-center"
+                                            :square="true"
+                                            icon="pixelarticons:more-vertical"
+                                            aria-label="More actions"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex flex-col py-1 w-36 text-sm"
+                                            >
+                                                <button
+                                                    @click="
+                                                        startEditing(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:edit"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button
+                                                    @click="
+                                                        deletePrompt(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:trash"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editor View -->
+                    <div v-else class="h-full overflow-hidden flex flex-col">
+                        <div class="flex-1 p-4 overflow-hidden">
+                            <LazyPromptsPromptEditor
+                                :prompt-id="editingPrompt.id"
+                                @back="stopEditing"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </UModal>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, computed, watch } from 'vue';
+import {
+    listPrompts,
+    createPrompt,
+    softDeletePrompt,
+    type PromptRecord,
+} from '~/db/prompts';
+import { useActivePrompt } from '~/composables/useActivePrompt';
+import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
+import { encode } from 'gpt-tokenizer';
+import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+import { isMobile } from '~/state/global';
+
+// Props & modal open bridging (like SettingsModal pattern)
+const props = defineProps<{
+    showModal: boolean;
+    threadId?: string;
+    paneId?: string; // isolate pending selection per pane (before thread exists)
+}>();
+const emit = defineEmits({
+    'update:showModal': (value: boolean) => typeof value === 'boolean',
+    selected: (id: string) => typeof id === 'string',
+    closed: () => true,
+    threadCreated: (threadId: string, promptId: string | null) => true,
+});
+
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
+});
+
+watch(
+    () => props.showModal,
+    (v, ov) => {
+        if (!v && ov) emit('closed');
+    }
+);
+
+const {
+    activePromptId,
+    setActivePrompt,
+    clearActivePrompt: clearGlobalActivePrompt,
+} = useActivePrompt();
+
+const prompts = ref<PromptRecord[]>([]);
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
+const editingPrompt = ref<PromptRecord | null>(null);
+const showDeleteConfirm = ref<string | null>(null);
+
+const searchQuery = ref('');
+const filteredPrompts = computed(() => {
+    if (!searchQuery.value) return prompts.value;
+    return prompts.value.filter((p) =>
+        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+});
+
+// Thread-specific system prompt handling
+const threadSystemPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet (pane scoped)
+
+// Computed for current active prompt (thread-specific or global)
+const currentActivePromptId = computed(() => {
+    if (props.threadId) return threadSystemPromptId.value;
+    // If no thread yet use pane-scoped pending first, else fall back to global active
+    return pendingPromptId.value || activePromptId.value;
+});
+
+// Extract plain text from TipTap JSON recursively
+function extractText(node: any): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    const type = node.type;
+    let acc = '';
+    if (type === 'text') {
+        acc += node.text || '';
+    }
+    if (node.content && Array.isArray(node.content)) {
+        const inner = node.content.map(extractText).join('');
+        acc += inner;
+    }
+    // Block separators to avoid word merging
+    if (
+        [
+            'paragraph',
+            'heading',
+            'bulletList',
+            'orderedList',
+            'listItem',
+        ].includes(type)
+    ) {
+        acc += '\n';
+    }
+    return acc;
+}
+
+function contentToText(content: any): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    // TipTap root usually { type: 'doc', content: [...] }
+    if (content.type === 'doc' && Array.isArray(content.content)) {
+        return extractText(content)
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+    }
+    if (Array.isArray(content.content)) return extractText(content).trim();
+    return '';
+}
+
+// Cached token counts per prompt id (recomputed when prompts list changes)
+const tokenCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of prompts.value) {
+        try {
+            const text = contentToText(p.content);
+            map[p.id] = text ? encode(text).length : 0;
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token encode failed', e);
+            map[p.id] = 0;
+        }
+    }
+    return map;
+});
+
+// Totals derived from cached counts
+const totalTokens = computed(() =>
+    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
+);
+const filteredTokens = computed(() =>
+    filteredPrompts.value.reduce(
+        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
+        0
+    )
+);
+
+// (Events moved above with prop bridging)
+
+const loadPrompts = async () => {
+    try {
+        prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.find((p) => p.id === defaultPromptId.value)
+        ) {
+            await clearDefaultPrompt();
+        }
+    } catch (error) {
+        console.error('Failed to load prompts:', error);
+    }
+};
+
+const loadThreadSystemPrompt = async () => {
+    if (props.threadId) {
+        try {
+            threadSystemPromptId.value = await getThreadSystemPrompt(
+                props.threadId
+            );
+        } catch (error) {
+            console.error('Failed to load thread system prompt:', error);
+            threadSystemPromptId.value = null;
+        }
+    } else {
+        threadSystemPromptId.value = null;
+    }
+};
+
+const createNewPrompt = async () => {
+    try {
+        const newPrompt = await createPrompt();
+        prompts.value.unshift(newPrompt);
+        startEditing(newPrompt.id);
+    } catch (error) {
+        console.error('Failed to create prompt:', error);
+    }
+};
+
+const selectPrompt = async (id: string) => {
+    try {
+        if (props.threadId) {
+            // Update thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, id);
+            threadSystemPromptId.value = id;
+        } else {
+            // Store as pending for when thread is created
+            pendingPromptId.value = id;
+            // Also update global for immediate feedback
+            // Do NOT override global active prompt; keep pane scoped selection only
+        }
+        emit('selected', id);
+    } catch (error) {
+        console.error('Failed to select prompt:', error);
+    }
+};
+
+const clearActivePrompt = async () => {
+    try {
+        if (props.threadId) {
+            // Clear thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadSystemPromptId.value = null;
+        } else {
+            // Clear pending and global active prompt
+            pendingPromptId.value = null;
+            // Don't clear global active prompt automatically (leave global state untouched)
+        }
+    } catch (error) {
+        console.error('Failed to clear active prompt:', error);
+    }
+};
+
+const startEditing = (id: string) => {
+    const prompt = prompts.value.find((p) => p.id === id);
+    if (prompt) {
+        editingPrompt.value = prompt;
+    }
+};
+
+const stopEditing = () => {
+    editingPrompt.value = null;
+    loadPrompts(); // Refresh list in case of changes
+};
+
+const applyPendingPromptToThread = async (threadId: string) => {
+    if (pendingPromptId.value) {
+        try {
+            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
+            emit('threadCreated', threadId, pendingPromptId.value);
+            pendingPromptId.value = null;
+        } catch (error) {
+            console.error('Failed to apply pending prompt to thread:', error);
+        }
+    }
+};
+
+const deletePrompt = async (id: string) => {
+    if (confirm('Are you sure you want to delete this prompt?')) {
+        try {
+            await softDeletePrompt(id);
+            if (activePromptId.value === id) {
+                clearActivePrompt();
+            }
+            if (defaultPromptId.value === id) {
+                await clearDefaultPrompt();
+            }
+            loadPrompts();
+        } catch (error) {
+            console.error('Failed to delete prompt:', error);
+        }
+    }
+};
+
+const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (editingPrompt.value) return;
+    const key = event.key;
+    if (key >= '1' && key <= '9') {
+        const index = parseInt(key) - 1;
+        if (index < filteredPrompts.value.length) {
+            const prompt = filteredPrompts.value[index];
+            if (prompt) {
+                selectPrompt(prompt.id);
+                event.preventDefault();
+            }
+        }
+    }
+};
+
+onMounted(() => {
+    loadPrompts();
+    loadThreadSystemPrompt();
+});
+
+// Watch for threadId changes to reload thread-specific prompt
+watch(
+    () => props.threadId,
+    () => {
+        loadThreadSystemPrompt();
+    }
+);
+
+function toggleDefault(id: string) {
+    if (defaultPromptId.value === id) {
+        clearDefaultPrompt();
+    } else {
+        setDefaultPrompt(id);
+    }
+}
+</script>
+
+<style scoped>
+/* Mobile full-screen adjustments */
+@media (max-width: 640px) {
+    .sp-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-width: 0 !important;
+    }
+}
+
+/* Smooth scrolling area */
+.sp-modal :deep(.n-modal-body),
+.sp-modal :deep(.n-card__content) {
+    /* ensure body grows */
+    height: 100%;
+}
+</style>
 ```
 
 ## File: app/components/ResizableSidebarLayout.vue
@@ -18137,600 +18019,149 @@ defineExpose({
 </style>
 ```
 
-## File: app/components/PageShell.vue
-```vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
-                ref="sideNavExpandedRef"
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
-            />
-        </template>
-        <div class="flex-1 h-[100dvh] w-full relative">
-            <div
-                id="top-nav"
-                :class="{
-                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
-                        panes.length > 1 || isMobile,
-                }"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
-            >
-                <div
-                    v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
-                >
-                    <UTooltip :delay-duration="0" text="Open sidebar">
-                        <UButton
-                            label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            aria-label="Open sidebar"
-                            title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
-                            @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div
-                    class="h-full items-center justify-center px-4 hidden md:flex"
-                >
-                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :disabled="!canAddPane"
-                            :class="
-                                'retro-btn pointer-events-auto mr-2 ' +
-                                (!canAddPane
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
-                            aria-label="New window"
-                            title="New window"
-                            @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div class="h-full flex items-center justify-center px-4">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <div
-                :class="[
-                    showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 min-w-0 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                    @keydown.left.prevent="focusPrev(i)"
-                    @keydown.right.prevent="focusNext(i)"
-                >
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
+## File: nuxt.config.ts
+```typescript
+// https://nuxt.com/docs/api/configuration/nuxt-config
 
-                    <template v-if="pane.mode === 'chat'">
-                        <ChatContainer
-                            class="flex-1 min-h-0"
-                            :message-history="pane.messages"
-                            :thread-id="pane.threadId"
-                            :pane-id="pane.id"
-                            @thread-selected="
-                                (id: string) => onInternalThreadCreated(id, i)
-                            "
-                        />
-                    </template>
-                    <template v-else-if="pane.mode === 'doc'">
-                        <LazyDocumentsDocumentEditor
-                            v-if="pane.documentId"
-                            :document-id="pane.documentId"
-                            class="flex-1 min-h-0"
-                        ></LazyDocumentsDocumentEditor>
-                        <div
-                            v-else
-                            class="flex-1 flex items-center justify-center text-sm opacity-70"
-                        >
-                            No document.
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-<script setup lang="ts">
-// Generic PageShell merging chat + docs functionality.
-// Props allow initializing with a thread OR a document and choosing default mode.
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
-import { db } from '~/db';
-import { useHookEffect } from '~/composables/useHookEffect';
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
-
-const props = withDefaults(
-    defineProps<{
-        initialThreadId?: string;
-        initialDocumentId?: string;
-        validateInitial?: boolean; // applies to whichever id is provided
-        routeSync?: boolean;
-        defaultMode?: 'chat' | 'doc'; // used when no initial id
-    }>(),
-    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
-);
-
-const router = useRouter();
-const toast = useToast();
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-const sideNavExpandedRef = ref<any | null>(null);
-
-// ---------------- Multi-pane ----------------
-const {
-    panes,
-    activePaneIndex,
-    canAddPane,
-    newWindowTooltip,
-    addPane,
-    closePane,
-    setActive,
-    focusPrev,
-    focusNext,
-    setPaneThread,
-    loadMessagesFor,
-    ensureAtLeastOne,
-} = useMultiPane({
-    initialThreadId: props.initialThreadId,
-    maxPanes: 3,
-    onFlushDocument: (id) => flushDocument(id),
-});
-
-// Active thread convenience (first pane for sidebar highlight)
-const activeChatThreadId = computed(() =>
-    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
-);
-
-// --------------- Initializers ---------------
-let validateToken = 0;
-
-async function validateThread(id: string): Promise<boolean> {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const t = await db.threads.get(id);
-            if (t && !t.deleted) return true;
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-async function validateDocument(id: string): Promise<boolean> {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-    const ATTEMPTS = 5;
-    for (let a = 0; a < ATTEMPTS; a++) {
-        try {
-            const row = await db.posts.get(id);
-            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
-                return true;
-        } catch {}
-        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-async function initInitial() {
-    if (!process.client) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.initialThreadId) {
-        if (props.validateInitial) {
-            pane.validating = true;
-            const token = ++validateToken;
-            const ok = await validateThread(props.initialThreadId);
-            if (token !== validateToken) return;
-            if (!ok) {
-                redirectNotFound('chat');
-                return;
-            }
-        }
-        await setPaneThread(0, props.initialThreadId);
-        pane.mode = 'chat';
-        pane.validating = false;
-        updateUrl();
-        return;
-    }
-    if (props.initialDocumentId) {
-        if (props.validateInitial) {
-            pane.validating = true;
-            const token = ++validateToken;
-            const ok = await validateDocument(props.initialDocumentId);
-            if (token !== validateToken) return;
-            if (!ok) {
-                redirectNotFound('doc');
-                return;
-            }
-        }
-        pane.mode = 'doc';
-        pane.documentId = props.initialDocumentId;
-        pane.threadId = '';
-        pane.validating = false;
-        updateUrl();
-        return;
-    }
-    // No ids: set default mode
-    if (props.defaultMode === 'doc') {
-        pane.mode = 'doc';
-        pane.documentId = undefined;
-        pane.threadId = '';
-    } else {
-        pane.mode = 'chat';
-    }
-    updateUrl();
-}
-
-function redirectNotFound(kind: 'chat' | 'doc') {
-    if (kind === 'chat') router.replace('/chat');
-    else router.replace('/docs');
-    toast.add({
-        title: 'Not found',
-        description:
-            kind === 'chat'
-                ? 'This chat does not exist.'
-                : 'This document does not exist.',
-        color: 'error',
-    });
-}
-
-// --------------- URL Sync ---------------
-function updateUrl() {
-    if (!process.client || !props.routeSync) return;
-    const pane = panes.value[activePaneIndex.value];
-    if (!pane) return;
-    const base = pane.mode === 'doc' ? '/docs' : '/chat';
-    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
-    const newPath = id ? `${base}/${id}` : base;
-    if (window.location.pathname === newPath) return;
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-watch(
-    () =>
-        panes.value
-            .map(
-                (p) =>
-                    `${p.id}:${p.mode}:${p.threadId || ''}:${
-                        p.documentId || ''
-                    }`
-            )
-            .join(','),
-    () => updateUrl()
-);
-
-watch(
-    () => activePaneIndex.value,
-    () => updateUrl()
-);
-
-// --------------- Documents Integration ---------------
-const { useDocumentState } = await import('~/composables/useDocumentsStore');
-const hooks = useHooks();
-const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
-    panes,
-    activePaneIndex,
-    createNewDoc,
-    flushDocument: async (id) => {
-        await flushDocument(id); // central flush now emits saved
+export default defineNuxtConfig({
+    compatibilityDate: '2025-07-15',
+    devtools: { enabled: true },
+    modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
+    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
+    srcDir: 'app',
+    // Load Tailwind + theme variables globally
+    css: ['~/assets/css/main.css'],
+    fonts: {
+        families: [
+            { name: 'Press Start 2P', provider: 'google' },
+            { name: 'VT323', provider: 'google' },
+        ],
     },
+    nitro: { prerender: { routes: ['/openrouter-callback'] } },
+    // PWA configuration
+    pwa: {
+        // Auto update SW when new content is available
+        registerType: 'autoUpdate',
+        // Enable PWA in dev so you can install/test while developing
+        devOptions: {
+            enabled: true,
+            suppressWarnings: true,
+        },
+        // Expose $pwa and intercept install prompt
+        client: {
+            installPrompt: true,
+            registerPlugin: true,
+            periodicSyncForUpdates: 12 * 60 * 60, // Check every 12 hours
+        },
+        // Basic offline support; let Workbox handle common assets
+        workbox: {
+            // Ensure the prerendered callback HTML can be matched regardless of auth params
+            ignoreURLParametersMatching: [/^code$/, /^state$/],
+            // Never serve the generic SPA fallback for the auth callback (with or without params)
+            navigateFallbackDenylist: [
+                /\/openrouter-callback$/,
+                /\/openrouter-callback\?.*$/,
+            ],
+            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+            runtimeCaching: [
+                // Auth callback: prefer fresh network, but fall back to cached prerender if offline
+                {
+                    urlPattern: /\/openrouter-callback(\?.*)?$/,
+                    handler: 'NetworkOnly',
+                },
+                // Nuxt chunks
+                {
+                    urlPattern: /^\/_nuxt\//,
+                    handler: 'NetworkFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-dev-chunks',
+                        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
+                    },
+                },
+                // Static images
+                {
+                    urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'static-images',
+                        expiration: {
+                            maxEntries: 200,
+                            maxAgeSeconds: 7 * 24 * 60 * 60,
+                        },
+                    },
+                },
+                // Fonts
+                {
+                    urlPattern: /^\/_fonts\//,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-fonts',
+                        expiration: {
+                            maxEntries: 50,
+                            maxAgeSeconds: 30 * 24 * 60 * 60,
+                        },
+                    },
+                },
+                // Icon API
+                {
+                    urlPattern: /\/api\/_nuxt_icon\/.*$/,
+                    handler: 'StaleWhileRevalidate',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-icons',
+                        expiration: {
+                            maxEntries: 200,
+                            maxAgeSeconds: 30 * 24 * 60 * 60,
+                        },
+                    },
+                },
+            ],
+        },
+        // Web App Manifest
+        manifest: {
+            name: 'Or3 Chat',
+            short_name: 'Or3.Chat',
+            description:
+                'The open, extensible AI chat platform for the people.',
+            start_url: '/',
+            display: 'standalone',
+            background_color: '#0b0f1a',
+            theme_color: '#0b0f1a',
+            icons: [
+                {
+                    src: '/logos/logo-192.png',
+                    sizes: '192x192',
+                    type: 'image/png',
+                },
+                {
+                    src: '/logos/logo-512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                },
+                // WebP is fine in many browsers; PNGs above cover platforms requiring PNG
+                {
+                    src: '/logos/logo-1024.webp',
+                    sizes: '1024x1024',
+                    type: 'image/webp',
+                    purpose: 'any maskable',
+                },
+            ],
+        },
+    },
+    // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
+    ignore: [
+        '**/*.test.*',
+        '**/__tests__/**',
+        'tests/**',
+        // Example plugins (dev only); keep them out of production build
+        process.env.NODE_ENV === 'production'
+            ? 'app/plugins/examples/**'
+            : undefined,
+    ].filter(Boolean) as string[],
 });
-
-async function onNewDocument(initial?: { title?: string }) {
-    const doc = await newDocumentInActive(initial);
-    if (doc) updateUrl();
-    closeSidebarIfMobile();
-}
-async function onDocumentSelected(id: string) {
-    await selectDocumentInActive(id);
-    updateUrl();
-    closeSidebarIfMobile();
-}
-
-// Sidebar chat selection always puts pane in chat mode
-function onSidebarSelected(id: string) {
-    if (!id) return;
-    const target = activePaneIndex.value;
-    setPaneThread(target, id);
-    const pane = panes.value[target];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-    }
-    if (target === activePaneIndex.value) updateUrl();
-    closeSidebarIfMobile();
-}
-function onInternalThreadCreated(id: string, paneIndex?: number) {
-    if (!id) return;
-    const idx =
-        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
-    const pane = panes.value[idx];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    if (pane.threadId !== id) setPaneThread(idx, id);
-    if (idx === activePaneIndex.value) updateUrl();
-    closeSidebarIfMobile();
-}
-function onNewChat() {
-    const pane = panes.value[activePaneIndex.value];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-        pane.messages = [];
-        pane.threadId = '';
-    }
-    updateUrl();
-    closeSidebarIfMobile();
-}
-
-// --------------- Theme ---------------
-const nuxtApp = useNuxtApp();
-const getThemeSafe = () => {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client) {
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-        }
-    } catch {}
-    return 'light';
-};
-const themeName = ref<string>(getThemeSafe());
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    (nuxtApp.$theme as any)?.toggle?.();
-    syncTheme();
-}
-if (process.client) {
-    const root = document.documentElement;
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => observer.disconnect());
-    } else {
-        onUnmounted(() => observer.disconnect());
-    }
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// --------------- Mobile + layout ---------------
-import { isMobile } from '~/state/global';
-// Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
-if (process.client) {
-    const mq = window.matchMedia('(max-width: 640px)');
-    const apply = () => (isMobile.value = mq.matches);
-    onMounted(() => {
-        apply();
-        mq.addEventListener('change', apply);
-    });
-    const dispose = () => mq.removeEventListener('change', apply);
-    onUnmounted(dispose);
-    if (import.meta.hot) import.meta.hot.dispose(dispose);
-}
-const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
-function openMobileSidebar() {
-    (layoutRef.value as any)?.openSidebar?.();
-}
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    requestAnimationFrame(() => {
-        sideNavExpandedRef.value?.focusSearchInput?.();
-    });
-}
-function closeSidebarIfMobile() {
-    if (isMobile.value) (layoutRef.value as any)?.close?.();
-}
-
-// --------------- Deletion auto-reset ---------------
-function resetPaneToBlank(paneIndex: number) {
-    const pane = panes.value[paneIndex];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    pane.threadId = '';
-    pane.messages = [];
-    if (paneIndex === activePaneIndex.value) updateUrl();
-}
-function handleThreadDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
-    });
-}
-function handleDocumentDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
-    });
-}
-useHookEffect(
-    'db.threads.delete:action:soft:after',
-    (t: any) => handleThreadDeletion(t),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.threads.delete:action:hard:after',
-    (id: any) => handleThreadDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:soft:after',
-    (row: any) => handleDocumentDeletion(row),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:hard:after',
-    (id: any) => handleDocumentDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-
-// --------------- Mount ---------------
-onMounted(() => {
-    initInitial();
-    syncTheme();
-    ensureAtLeastOne();
-});
-
-// --------------- Shortcuts ---------------
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
-        }
-    };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    } else {
-        onUnmounted(() => window.removeEventListener('keydown', down));
-    }
-}
-</script>
-<style scoped>
-body {
-    overflow-y: hidden;
-}
-.pane-active {
-    position: relative;
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    border: 1px solid var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
 ```
 
 ## File: app/components/chat/ChatInputDropper.vue
@@ -19632,6 +19063,737 @@ textarea::-webkit-scrollbar-thumb:hover {
 </style>
 ```
 
+## File: app/components/PageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 h-[100dvh] w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 min-w-0 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            :pane-id="pane.id"
+                            @thread-selected="
+                                (id: string) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <LazyDocumentsDocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        ></LazyDocumentsDocumentEditor>
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+// Generic PageShell merging chat + docs functionality.
+// Props allow initializing with a thread OR a document and choosing default mode.
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        initialDocumentId?: string;
+        validateInitial?: boolean; // applies to whichever id is provided
+        routeSync?: boolean;
+        defaultMode?: 'chat' | 'doc'; // used when no initial id
+    }>(),
+    { validateInitial: false, routeSync: true, defaultMode: 'chat' }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+
+// ---------------- Multi-pane ----------------
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
+
+// Active thread convenience (first pane for sidebar highlight)
+const activeChatThreadId = computed(() =>
+    panes.value[0]?.mode === 'chat' ? panes.value[0].threadId || '' : ''
+);
+
+// --------------- Initializers ---------------
+let validateToken = 0;
+
+async function validateThread(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t && !t.deleted) return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function validateDocument(id: string): Promise<boolean> {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+    const ATTEMPTS = 5;
+    for (let a = 0; a < ATTEMPTS; a++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+async function initInitial() {
+    if (!process.client) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.initialThreadId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateThread(props.initialThreadId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('chat');
+                return;
+            }
+        }
+        await setPaneThread(0, props.initialThreadId);
+        pane.mode = 'chat';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    if (props.initialDocumentId) {
+        if (props.validateInitial) {
+            pane.validating = true;
+            const token = ++validateToken;
+            const ok = await validateDocument(props.initialDocumentId);
+            if (token !== validateToken) return;
+            if (!ok) {
+                redirectNotFound('doc');
+                return;
+            }
+        }
+        pane.mode = 'doc';
+        pane.documentId = props.initialDocumentId;
+        pane.threadId = '';
+        pane.validating = false;
+        updateUrl();
+        return;
+    }
+    // No ids: set default mode
+    if (props.defaultMode === 'doc') {
+        pane.mode = 'doc';
+        pane.documentId = undefined;
+        pane.threadId = '';
+    } else {
+        pane.mode = 'chat';
+    }
+    updateUrl();
+}
+
+function redirectNotFound(kind: 'chat' | 'doc') {
+    if (kind === 'chat') router.replace('/chat');
+    else router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description:
+            kind === 'chat'
+                ? 'This chat does not exist.'
+                : 'This document does not exist.',
+        color: 'error',
+    });
+}
+
+// --------------- URL Sync ---------------
+function updateUrl() {
+    if (!process.client || !props.routeSync) return;
+    // Prevent route sync from clobbering the OAuth callback path while the
+    // OpenRouter token exchange page is mounting. The callback component
+    // itself will redirect after finishing, so we should not rewrite here.
+    const currentPath =
+        typeof window !== 'undefined' ? window.location.pathname : '';
+    if (currentPath.startsWith('/openrouter-callback')) return;
+    const pane = panes.value[activePaneIndex.value];
+    if (!pane) return;
+    const base = pane.mode === 'doc' ? '/docs' : '/chat';
+    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
+    const newPath = id ? `${base}/${id}` : base;
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+watch(
+    () =>
+        panes.value
+            .map(
+                (p) =>
+                    `${p.id}:${p.mode}:${p.threadId || ''}:${
+                        p.documentId || ''
+                    }`
+            )
+            .join(','),
+    () => updateUrl()
+);
+
+watch(
+    () => activePaneIndex.value,
+    () => updateUrl()
+);
+
+// --------------- Documents Integration ---------------
+const { useDocumentState } = await import('~/composables/useDocumentsStore');
+const hooks = useHooks();
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: async (id) => {
+        await flushDocument(id); // central flush now emits saved
+    },
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrl();
+    closeSidebarIfMobile();
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrl();
+    closeSidebarIfMobile();
+}
+
+// Sidebar chat selection always puts pane in chat mode
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrl();
+    closeSidebarIfMobile();
+}
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrl();
+    closeSidebarIfMobile();
+}
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrl();
+    closeSidebarIfMobile();
+}
+
+// --------------- Theme ---------------
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// --------------- Mobile + layout ---------------
+import { isMobile } from '~/state/global';
+// Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
+if (process.client) {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const apply = () => (isMobile.value = mq.matches);
+    onMounted(() => {
+        apply();
+        mq.addEventListener('change', apply);
+    });
+    const dispose = () => mq.removeEventListener('change', apply);
+    onUnmounted(dispose);
+    if (import.meta.hot) import.meta.hot.dispose(dispose);
+}
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+function openMobileSidebar() {
+    (layoutRef.value as any)?.openSidebar?.();
+}
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => {
+        sideNavExpandedRef.value?.focusSearchInput?.();
+    });
+}
+function closeSidebarIfMobile() {
+    if (isMobile.value) (layoutRef.value as any)?.close?.();
+}
+
+// --------------- Deletion auto-reset ---------------
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    if (paneIndex === activePaneIndex.value) updateUrl();
+}
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
+    });
+}
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
+    });
+}
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+
+// --------------- Mount ---------------
+onMounted(() => {
+    initInitial();
+    syncTheme();
+    ensureAtLeastOne();
+});
+
+// --------------- Shortcuts ---------------
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+</script>
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
+```
+
+## File: app/plugins/theme.client.ts
+```typescript
+import 'katex/dist/katex.min.css';
+import { useShikiHighlighter } from 'streamdown-vue';
+import { ref } from 'vue';
+useShikiHighlighter();
+
+export default defineNuxtPlugin((nuxtApp) => {
+    const THEME_CLASSES = [
+        'light',
+        'dark',
+        'light-high-contrast',
+        'dark-high-contrast',
+        'light-medium-contrast',
+        'dark-medium-contrast',
+    ];
+
+    const storageKey = 'theme';
+    const root = document.documentElement;
+
+    const getSystemPref = () =>
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+
+    const apply = (name: string) => {
+        for (const cls of THEME_CLASSES) root.classList.remove(cls);
+        root.classList.add(name);
+    };
+
+    const read = () => localStorage.getItem(storageKey) as string | null;
+
+    const current = ref(read() || getSystemPref());
+    apply(current.value);
+
+    const set = (name: string) => {
+        current.value = name;
+        localStorage.setItem(storageKey, name);
+        apply(name);
+    };
+
+    const toggle = () =>
+        set(current.value.startsWith('dark') ? 'light' : 'dark');
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => {
+        if (!read()) {
+            current.value = e.matches ? 'dark' : 'light';
+            apply(current.value);
+        }
+    };
+    media.addEventListener('change', onChange);
+
+    nuxtApp.hook('app:beforeMount', () => {
+        current.value = read() || getSystemPref();
+        apply(current.value);
+    });
+
+    // Cleanup for HMR in dev so we don't stack listeners
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            media.removeEventListener('change', onChange)
+        );
+    }
+
+    nuxtApp.provide('theme', {
+        set,
+        toggle,
+        get: () => current.value,
+        system: getSystemPref,
+        current, // expose ref for reactivity if needed
+    });
+});
+```
+
+## File: package.json
+```json
+{
+    "name": "or3-chat",
+    "type": "module",
+    "private": false,
+    "version": "0.1.0",
+    "license": "GPL-3.0",
+    "scripts": {
+        "build": "nuxt build",
+        "dev": "nuxt dev",
+        "generate": "nuxt generate",
+        "preview": "nuxt preview",
+        "postinstall": "nuxt prepare",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@nuxt/ui": "^3.3.2",
+        "@orama/orama": "^3.1.11",
+        "@tiptap/extension-placeholder": "^3.3.0",
+        "@tiptap/pm": "^3.3.0",
+        "@tiptap/starter-kit": "^3.3.0",
+        "@tiptap/vue-3": "^3.3.0",
+        "@types/node": "^24.3.1",
+        "@vueuse/core": "^13.7.0",
+        "dexie": "^4.0.11",
+        "gpt-tokenizer": "^3.0.1",
+        "nuxt": "^4.0.3",
+        "spark-md5": "^3.0.2",
+        "streamdown-vue": "^1.0.13",
+        "tiptap-markdown": "^0.8.10",
+        "turndown": "^7.2.1",
+        "typescript": "^5.6.3",
+        "virtua": "^0.41.5",
+        "vue": "^3.5.18",
+        "vue-router": "^4.5.1",
+        "zod": "^4.0.17"
+    },
+    "devDependencies": {
+        "@tailwindcss/typography": "^0.5.16",
+        "@types/spark-md5": "^3.0.5",
+        "@vite-pwa/nuxt": "^1.0.4",
+        "@vitejs/plugin-vue": "^5.1.4",
+        "@vitest/coverage-v8": "2.1.9",
+        "@vitest/ui": "^2.1.2",
+        "@vue/test-utils": "^2.4.6",
+        "jsdom": "^25.0.0",
+        "vite": "^5.4.8",
+        "vitest": "^2.1.2"
+    }
+}
+```
+
 ## File: app/composables/useAi.ts
 ```typescript
 import { ref } from 'vue';
@@ -19672,6 +19834,9 @@ import { promptJsonToString } from '~/utils/prompt-utils';
 import { state } from '~/state/global';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+// NOTE: Previous global tail map removed; we keep per-instance tail state so
+// each chat composable manages its own streaming tail.
 
 export function useChat(
     msgs: ChatMessage[] = [],
@@ -19729,6 +19894,20 @@ export function useChat(
         return activePromptContent.value
             ? promptJsonToString(activePromptContent.value)
             : null;
+    }
+
+    // Tail assistant UI message (not added to messages[] until next user send)
+    const tailAssistant = ref<UiChatMessage | null>(null);
+    // When retrying we may intentionally remove the previous tail assistant (finalized answer)
+    // and must ensure the next send() does NOT flush it into history. We keep the removed id
+    // here and skip a single automatic flush if it matches.
+    let lastSuppressedAssistantId: string | null = null;
+    function flushTailAssistant() {
+        if (!tailAssistant.value) return;
+        if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
+            messages.value.push(tailAssistant.value!);
+        }
+        tailAssistant.value = null;
     }
 
     async function sendMessage(
@@ -19818,6 +19997,22 @@ export function useChat(
                 }
             } catch {}
         } // END create-new-thread block
+
+        // Promote previous tail assistant (completed prior answer) into history unless
+        // we intentionally suppressed it during a retry (duplicate would appear before
+        // the re-sent user message otherwise).
+        if (
+            tailAssistant.value &&
+            lastSuppressedAssistantId &&
+            tailAssistant.value.id === lastSuppressedAssistantId
+        ) {
+            // Drop without flushing
+            tailAssistant.value = null;
+            lastSuppressedAssistantId = null;
+        } else {
+            flushTailAssistant();
+            lastSuppressedAssistantId = null; // clear in normal path too
+        }
 
         // Prior assistant hashes for image carry-over
         const prevAssistantRaw = [...rawMessages.value]
@@ -20058,8 +20253,8 @@ export function useChat(
             rawMessages.value.push(rawAssistant);
             const uiAssistant = ensureUiMessage(rawAssistant);
             uiAssistant.pending = true;
-            const idx = messages.value.push(uiAssistant) - 1;
-            const current = messages.value[idx]!; // UiChatMessage
+            tailAssistant.value = uiAssistant; // keep out of main messages until next user send
+            const current = uiAssistant;
             let chunkIndex = 0;
             const WRITE_INTERVAL_MS = 500;
             let lastPersistAt = 0;
@@ -20304,16 +20499,8 @@ export function useChat(
             streamAcc.finalize();
         } catch (err) {
             if (aborted.value) {
-                try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        (last as any).pending = false;
-                    }
-                } catch {}
+                if (tailAssistant.value?.pending)
+                    (tailAssistant.value as any).pending = false;
                 await hooks.doAction('ai.chat.send:action:after', {
                     threadId: threadIdRef.value,
                     aborted: true,
@@ -20325,14 +20512,6 @@ export function useChat(
                     error: err,
                 });
                 try {
-                    const last = messages.value[messages.value.length - 1];
-                    if (
-                        last &&
-                        last.role === 'assistant' &&
-                        (last as any).pending
-                    ) {
-                        messages.value.pop();
-                    }
                     const lastUser = [...messages.value]
                         .reverse()
                         .find((m) => m.role === 'user');
@@ -20357,6 +20536,10 @@ export function useChat(
                 } catch {}
                 const e = err instanceof Error ? err : new Error(String(err));
                 streamAcc.finalize({ error: e });
+                // Drop empty failed assistant
+                if (!tailAssistant.value?.text) tailAssistant.value = null;
+                else if (tailAssistant.value?.pending)
+                    (tailAssistant.value as any).pending = false;
             }
         } finally {
             loading.value = false;
@@ -20401,6 +20584,22 @@ export function useChat(
                 )
                 .filter((m: any) => m.role === 'assistant' && !m.deleted)
                 .first();
+
+            // Suppress flushing of the previous tail assistant if it corresponds to the
+            // assistant we are removing for retry. We cannot rely solely on clearing the ref
+            // because sendMessage() calls flushTailAssistant() unconditionally; instead we
+            // record the id and skip a single flush on next send.
+            if (assistant && tailAssistant.value?.id === assistant.id) {
+                lastSuppressedAssistantId = assistant.id;
+                tailAssistant.value = null;
+            } else if (
+                target.role === 'assistant' &&
+                tailAssistant.value?.id === target.id
+            ) {
+                lastSuppressedAssistantId = target.id;
+                tailAssistant.value = null;
+            }
+
             await hooks.doAction('ai.chat.retry:action:before', {
                 threadId: threadIdRef.value,
                 originalUserId: userMsg.id,
@@ -20483,6 +20682,8 @@ export function useChat(
         streamId,
         resetStream,
         streamState,
+        tailAssistant,
+        flushTailAssistant,
         abort: () => {
             if (!loading.value || !abortController.value) return;
             aborted.value = true;
@@ -20490,138 +20691,11 @@ export function useChat(
                 abortController.value.abort();
             } catch {}
             streamAcc.finalize({ aborted: true });
+            if (tailAssistant.value?.pending)
+                (tailAssistant.value as any).pending = false;
         },
         clear,
     };
-}
-```
-
-## File: app/plugins/theme.client.ts
-```typescript
-import 'katex/dist/katex.min.css';
-import { useShikiHighlighter } from 'streamdown-vue';
-import { ref } from 'vue';
-useShikiHighlighter();
-
-export default defineNuxtPlugin((nuxtApp) => {
-    const THEME_CLASSES = [
-        'light',
-        'dark',
-        'light-high-contrast',
-        'dark-high-contrast',
-        'light-medium-contrast',
-        'dark-medium-contrast',
-    ];
-
-    const storageKey = 'theme';
-    const root = document.documentElement;
-
-    const getSystemPref = () =>
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-            ? 'dark'
-            : 'light';
-
-    const apply = (name: string) => {
-        for (const cls of THEME_CLASSES) root.classList.remove(cls);
-        root.classList.add(name);
-    };
-
-    const read = () => localStorage.getItem(storageKey) as string | null;
-
-    const current = ref(read() || getSystemPref());
-    apply(current.value);
-
-    const set = (name: string) => {
-        current.value = name;
-        localStorage.setItem(storageKey, name);
-        apply(name);
-    };
-
-    const toggle = () =>
-        set(current.value.startsWith('dark') ? 'light' : 'dark');
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => {
-        if (!read()) {
-            current.value = e.matches ? 'dark' : 'light';
-            apply(current.value);
-        }
-    };
-    media.addEventListener('change', onChange);
-
-    nuxtApp.hook('app:beforeMount', () => {
-        current.value = read() || getSystemPref();
-        apply(current.value);
-    });
-
-    // Cleanup for HMR in dev so we don't stack listeners
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            media.removeEventListener('change', onChange)
-        );
-    }
-
-    nuxtApp.provide('theme', {
-        set,
-        toggle,
-        get: () => current.value,
-        system: getSystemPref,
-        current, // expose ref for reactivity if needed
-    });
-});
-```
-
-## File: package.json
-```json
-{
-    "name": "or3-chat",
-    "type": "module",
-    "private": false,
-    "version": "0.1.0",
-    "license": "GPL-3.0",
-    "scripts": {
-        "build": "nuxt build",
-        "dev": "nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
-        "test": "vitest run",
-        "test:watch": "vitest"
-    },
-    "dependencies": {
-        "@nuxt/ui": "^3.3.2",
-        "@orama/orama": "^3.1.11",
-        "@tiptap/extension-placeholder": "^3.3.0",
-        "@tiptap/pm": "^3.3.0",
-        "@tiptap/starter-kit": "^3.3.0",
-        "@tiptap/vue-3": "^3.3.0",
-        "@types/node": "^24.3.1",
-        "@vueuse/core": "^13.7.0",
-        "dexie": "^4.0.11",
-        "gpt-tokenizer": "^3.0.1",
-        "nuxt": "^4.0.3",
-        "spark-md5": "^3.0.2",
-        "streamdown-vue": "^1.0.12",
-        "tiptap-markdown": "^0.8.10",
-        "turndown": "^7.2.1",
-        "typescript": "^5.6.3",
-        "virtua": "^0.41.5",
-        "vue": "^3.5.18",
-        "vue-router": "^4.5.1",
-        "zod": "^4.0.17"
-    },
-    "devDependencies": {
-        "@tailwindcss/typography": "^0.5.16",
-        "@types/spark-md5": "^3.0.5",
-        "@vite-pwa/nuxt": "^1.0.4",
-        "@vitejs/plugin-vue": "^5.1.4",
-        "@vitest/coverage-v8": "2.1.9",
-        "@vitest/ui": "^2.1.2",
-        "@vue/test-utils": "^2.4.6",
-        "jsdom": "^25.0.0",
-        "vite": "^5.4.8",
-        "vitest": "^2.1.2"
-    }
 }
 ```
 
@@ -20741,7 +20815,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             </div>
         </div>
         <!-- Editing surface -->
-        <div v-else class="w-full">
+        <div v-else class="w-full" ref="editorRoot">
             <LazyChatMessageEditor
                 hydrate-on-interaction="focus"
                 v-model="draft"
@@ -20864,6 +20938,7 @@ import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { useMessageEditing } from '~/composables/useMessageEditing';
+import { shallowRef } from 'vue';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
@@ -20951,6 +21026,15 @@ const currentShikiTheme = computed(() => {
 // console.debug('[ChatMessage] debug hook installed for ensureThumb');
 
 // Editing (extracted)
+// Wrap message in a shallowRef so if parent swaps the object (stream tail -> finalized),
+// editing composable always sees latest.
+const messageRef = shallowRef(props.message as any);
+watch(
+    () => props.message,
+    (m) => {
+        messageRef.value = m as any;
+    }
+);
 const {
     editing,
     draft,
@@ -20958,7 +21042,54 @@ const {
     beginEdit,
     cancelEdit,
     saveEdit: internalSaveEdit,
-} = useMessageEditing(props.message);
+} = useMessageEditing(messageRef);
+// Ensure focus cursor moves to end when entering edit mode (including for tail assistant post-stream)
+const editorRoot = ref<HTMLElement | null>(null);
+const IS_IOS =
+    typeof navigator !== 'undefined' &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+function focusEditorAtEnd() {
+    let tries = 0;
+    const maxTries = 25; // allow up to ~1.5s (25 * 60ms) for lazy editor mount on iOS
+    const attempt = () => {
+        const rootEl: any = editorRoot.value || null;
+        let textarea: HTMLTextAreaElement | null = null;
+        if (rootEl) {
+            textarea = rootEl.querySelector('textarea');
+            if (!textarea && rootEl.$el) {
+                textarea = rootEl.$el.querySelector?.('textarea') || null;
+            }
+        }
+        if (textarea) {
+            try {
+                // iOS sometimes needs scroll into view before focus sticks
+                if (IS_IOS) textarea.scrollIntoView?.({ block: 'center' });
+                textarea.focus();
+                const setSel = () => {
+                    try {
+                        const len = textarea!.value.length;
+                        textarea!.setSelectionRange(len, len);
+                    } catch {}
+                };
+                // Use both rAF and timeout to satisfy iOS timing quirks
+                requestAnimationFrame(setSel);
+                setTimeout(setSel, 0);
+            } catch {}
+        } else if (tries++ < maxTries) {
+            setTimeout(attempt, IS_IOS ? 60 : 40);
+        }
+    };
+    attempt();
+}
+watch(
+    () => editing.value,
+    (v) => {
+        if (v) {
+            // nextTick not strictly needed due to retry loop, but helps initial timing
+            nextTick(() => focusEditorAtEnd());
+        }
+    }
+);
 // Wrap begin/cancel/save to emit lifecycle events for container scroll suppression
 function wrappedBeginEdit() {
     const id = (props.message as any).id;
@@ -21850,6 +21981,13 @@ const streamState: any = computed(() => {
     const s = chat.value?.streamState;
     return s && 'value' in s ? (s as any).value : s;
 });
+// Stream text + reasoning (from unified stream accumulator)
+// Tail assistant from composable (kept out of history until next user send)
+const tailAssistant = computed<any | null>(() => {
+    const t = chat.value?.tailAssistant;
+    return t && 'value' in t ? (t as any).value : t;
+});
+// Live streaming deltas (while active) to overlay into tailAssistant
 const streamReasoning = computed(
     () => streamState?.value?.reasoningText || streamState?.reasoningText || ''
 );
@@ -21863,31 +22001,24 @@ const currentThreadId = computed(() => chat.value?.threadId?.value);
 const streamActive = computed(
     () => !(streamState?.value?.finalized ?? streamState?.finalized ?? false)
 );
-// Simplified streaming placeholder: only while active and we have an id + some text/reasoning OR prior message
+// Display logic: if tailAssistant exists, use it; merge live accumulator text while active.
 const streamingMessage = computed<any | null>(() => {
-    if (!streamActive.value) return null;
-    if (!streamId.value) return null;
-    const rawTail = tailDisplay.value || '';
-    const reasoningTail = streamReasoning.value || '';
-    if (!rawTail && !reasoningTail && messages.value.length === 0) return null;
-    return {
-        role: 'assistant',
-        text: rawTail,
-        id: 'tail-' + streamId.value,
-        stream_id: streamId.value || undefined,
-        pending: true,
-        reasoning_text: reasoningTail,
-    } as any;
+    const base = tailAssistant.value;
+    if (!base) return null;
+    const active = streamActive.value && streamId.value;
+    if (!active) return base; // finalized: use original object so edits persist
+    const text = tailDisplay.value || base.text;
+    const reasoning = streamReasoning.value || base.reasoning_text;
+    return Object.assign({}, base, {
+        text,
+        reasoning_text: reasoning,
+        pending: base.pending && !(text || reasoning),
+    });
 });
 
 // All stable messages (excluding the in-flight streaming tail) are virtualized to avoid boundary jumps
-function filterStreaming(arr: any[]) {
-    if (streamActive.value && streamId.value) {
-        return arr.filter((m) => m.stream_id !== streamId.value);
-    }
-    return arr;
-}
-const stableMessages = computed<any[]>(() => filterStreaming(messages.value));
+// messages[] already excludes tail assistant; no filtering required
+const stableMessages = computed<any[]>(() => messages.value);
 // Removed size change logging for virtual/recent message groups.
 
 // Removed assistantVisible tracking (no handoff overlap needed)
@@ -21974,13 +22105,20 @@ function onBranch(newThreadId: string) {
 function onEdited(payload: { id: string; content: string }) {
     if (!chat.value) return;
     const arr = chat.value?.messages?.value;
-    if (!arr) return;
-    const idx = arr.findIndex((m: any) => m.id === payload.id);
-    if (idx === -1) return;
-    const msg = arr[idx];
-    if (!msg) return;
-    msg.text = payload.content;
-    chat.value.messages.value = [...arr];
+    if (arr) {
+        const idx = arr.findIndex((m: any) => m.id === payload.id);
+        if (idx !== -1) {
+            const msg = arr[idx];
+            if (msg) msg.text = payload.content;
+            chat.value.messages.value = [...arr];
+            return;
+        }
+    }
+    // Tail assistant edit (not yet flushed)
+    const ta = (chat.value as any).tailAssistant?.value;
+    if (ta && ta.id === payload.id) {
+        ta.text = payload.content;
+    }
 }
 
 function onPendingPromptSelected(promptId: string | null) {
