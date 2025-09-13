@@ -20,9 +20,9 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 3. Hooks (Req: 5,12,18)
 
-[ ] 3.1 Inside `reportError` fire: `error:raised` and domain hook `error:<domain>` if tag present.
-[ ] 3.2 Bridge legacy chat hook when `domain==='chat'`.
-[ ] 3.3 Test: chat error triggers both hooks; non-chat only generic + domain.
+[x] 3.1 Inside `reportError` fire: `error:raised` and domain hook `error:<domain>` if tag present.
+[x] 3.2 Bridge legacy chat hook when `domain==='chat'`.
+[x] 3.3 Test: chat error triggers both hooks; non-chat only generic + domain.
 
 ## 4. Retry (Req: 7)
 

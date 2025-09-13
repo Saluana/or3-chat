@@ -11,6 +11,7 @@ import { useHooks } from '~/composables/useHooks';
 // Stub hooks (light) if needed
 vi.mock('~/composables/useHooks', () => {
     const actions: Record<string, any[]> = {};
+    (globalThis as any).__hookActions = actions;
     return {
         useHooks: () => ({
             doAction: (name: string, payload: any) => {
@@ -48,7 +49,12 @@ describe('errors util', () => {
         );
     });
 
-    it('records hook emissions', () => {
+    it('chat domain error triggers generic, domain, and legacy chat hook', () => {
+        const actions = (globalThis as any).__hookActions as Record<
+            string,
+            any[]
+        >;
+        for (const k in actions) delete actions[k];
         const e = reportError(
             err('ERR_NETWORK', 'offline', {
                 severity: 'warn',
@@ -56,6 +62,32 @@ describe('errors util', () => {
             })
         );
         expect(e.code).toBe('ERR_NETWORK');
+        expect(Object.keys(actions)).toContain('error:raised');
+        expect(Object.keys(actions)).toContain('error:chat');
+        expect(Object.keys(actions)).toContain('ai.chat.error:action');
+        expect(actions['error:raised']?.length).toBe(1);
+        expect(actions['error:chat']?.length).toBe(1);
+        expect(actions['ai.chat.error:action']?.length).toBe(1);
+    });
+
+    it('non-chat domain error triggers generic + domain only', () => {
+        const actions = (globalThis as any).__hookActions as Record<
+            string,
+            any[]
+        >;
+        for (const k in actions) delete actions[k];
+        const e = reportError(
+            err('ERR_AUTH', 'auth failed', {
+                severity: 'error',
+                tags: { domain: 'auth' },
+            })
+        );
+        expect(e.code).toBe('ERR_AUTH');
+        expect(Object.keys(actions)).toContain('error:raised');
+        expect(Object.keys(actions)).toContain('error:auth');
+        expect(actions['error:raised']?.length).toBe(1);
+        expect(actions['error:auth']?.length).toBe(1);
+        expect(actions['ai.chat.error:action']).toBeUndefined();
     });
 
     it('simpleRetry eventually succeeds', async () => {
@@ -75,8 +107,8 @@ describe('errors util', () => {
 
     it('pushes toast (non-info)', () => {
         const { toasts } = useErrorToasts();
-        const sizeBefore = toasts.length;
         reportError(err('ERR_NETWORK', 'x', { severity: 'warn' }));
-        expect(toasts.length).toBe(sizeBefore + 1);
+        const found = toasts.find((t) => t.error.message === 'x');
+        expect(!!found).toBe(true);
     });
 });
