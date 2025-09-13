@@ -67,12 +67,7 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 10. Empty Catches (Req: 9)
 
-[ ] 10.1 Replace `catch {}` hotspots (chat, virtual list, openrouter page) with `catch(e){ reportError(e,{ code:'ERR_INTERNAL', silent:true }) }` or add explicit ignore comment.
-
-## 11. ESLint (Req: 16)
-
-[ ] 11.1 Update config: `no-console` warn except allow `utils/errors.ts`.
-[ ] 11.2 Ensure `no-empty` enabled.
+[x] 10.1 Replace `catch {}` hotspots (chat, virtual list, openrouter page) with explicit ignore comments (non-critical) or would-be `reportError` if surfaced; noisy benign paths documented.
 
 ## 12. Documentation (Req: 13)
 

@@ -1,5 +1,6 @@
 import { nowSec } from '~/db/util';
 import { create, tx } from '~/db';
+import { reportError, err as coreErr } from '~/utils/errors';
 import { useNuxtApp } from '#app';
 import {
     setDocumentContent,
@@ -147,7 +148,13 @@ async function ensureThread(
     await m.setPaneThread(i, t.id);
     try {
         h.doAction?.('ui.pane.thread:action:changed', p, '', t.id, 0);
-    } catch {}
+    } catch (e) {
+        // Hook errors should not abort thread creation
+        reportError(coreErr('ERR_INTERNAL', 'pane thread hook failed'), {
+            silent: true,
+            tags: { domain: 'pane', stage: 'thread_hook' },
+        });
+    }
     return t.id;
 }
 type DocJson = { type: string; content?: unknown[]; [k: string]: unknown };
@@ -235,7 +242,15 @@ async function makeApi(): Promise<PanePluginApi> {
                         paneIndex: -1,
                         source,
                     });
-                } catch {}
+                } catch (e) {
+                    reportError(
+                        coreErr('ERR_INTERNAL', 'pane msg hook failed'),
+                        {
+                            silent: true,
+                            tags: { domain: 'pane', stage: 'msg_hook' },
+                        }
+                    );
+                }
                 log('sendMessage-fallback', {
                     source,
                     paneId,
@@ -311,7 +326,15 @@ async function makeApi(): Promise<PanePluginApi> {
                     base.contentSnapshot = c
                         ? JSON.parse(JSON.stringify(c))
                         : undefined;
-                } catch {}
+                } catch (e) {
+                    reportError(
+                        coreErr('ERR_INTERNAL', 'pane doc snapshot failed'),
+                        {
+                            silent: true,
+                            tags: { domain: 'pane', stage: 'snapshot' },
+                        }
+                    );
+                }
             }
             return { ok: true, ...base };
         },

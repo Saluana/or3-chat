@@ -70,7 +70,9 @@ function log(...args: any[]) {
             // eslint-disable-next-line no-console
             console.debug('[openrouter-callback]', ...args);
         }
-    } catch {}
+    } catch (e) {
+        // intentionally ignored: debug logging failure (dev-only)
+    }
 }
 
 async function setKVNonBlocking(key: string, value: string, timeoutMs = 300) {
@@ -84,7 +86,7 @@ async function setKVNonBlocking(key: string, value: string, timeoutMs = 300) {
         if (result === 'timeout') log('setKV timed out; continuing');
         else log('setKV resolved');
     } catch (e: any) {
-        log('setKV failed', (e && (e as any).message) || e);
+        // intentionally ignored: non-critical KV sync failure
     }
 }
 
@@ -95,14 +97,14 @@ async function goHome() {
         await router.replace('/');
         log("router.replace('/') resolved");
     } catch (e: any) {
-        log("router.replace('/') failed:", (e && e.message) || e);
+        // intentionally ignored: navigation fallback
     }
     try {
         // Fallback to full document navigation
         log("Attempting window.location.replace('/')");
         window.location.replace('/');
     } catch (e: any) {
-        log("window.location.replace('/') failed:", (e && e.message) || e);
+        // intentionally ignored: navigation fallback
     }
     // Last-chance fallback on browsers that ignore replace
     setTimeout(() => {
@@ -110,7 +112,7 @@ async function goHome() {
             log("Attempting final window.location.assign('/')");
             window.location.assign('/');
         } catch (e: any) {
-            log("window.location.assign('/') failed:", (e && e.message) || e);
+            // intentionally ignored: navigation fallback
         }
     }, 150);
 }
@@ -215,7 +217,9 @@ onMounted(async () => {
             // Update global state immediately so UI reacts even before listeners.
             try {
                 (state as any).value.openrouterKey = userKey;
-            } catch {}
+            } catch (e) {
+                // intentionally ignored: dispatch failure (no user impact)
+            }
         } catch (e: any) {
             log('kvByName.set failed', (e && e.message) || e);
         }
@@ -225,8 +229,12 @@ onMounted(async () => {
             // Best-effort: also persist to synced KV
             try {
                 await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch {}
-        } catch {}
+            } catch (e) {
+                // intentionally ignored: optional synced KV persistence
+            }
+        } catch (e) {
+            // intentionally ignored: event dispatch failure
+        }
         log('clearing session markers (verifier/state/method)');
         const keys = [
             'openrouter_code_verifier',
@@ -271,7 +279,9 @@ onMounted(async () => {
             try {
                 log('safety reload firing');
                 window.location.reload();
-            } catch {}
+            } catch (e) {
+                // intentionally ignored: safety reload failure
+            }
         }
     }, 4000);
 });

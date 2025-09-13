@@ -2,6 +2,8 @@
 // If landing on /openrouter-callback with code/state in query, persist them ASAP
 // (in both sessionStorage and localStorage) then strip them from the visible URL
 // so future reloads don't rely on SW matching query variants.
+import { reportError, err } from '~/utils/errors';
+
 export default defineNuxtPlugin(() => {
     if (process.server) return;
     try {
@@ -31,5 +33,11 @@ export default defineNuxtPlugin(() => {
                 }
             }
         }
-    } catch {}
+    } catch (e) {
+        // Non-fatal: capture failure only reduces resilience of auth callback; log silently
+        reportError(err('ERR_INTERNAL', 'OpenRouter param capture failed'), {
+            silent: true,
+            tags: { domain: 'auth', stage: 'capture' },
+        });
+    }
 });
