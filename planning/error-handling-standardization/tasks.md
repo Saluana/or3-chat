@@ -9,9 +9,9 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 1. Core Utility (Req: 1,2,3,15)
 
-[ ] 1.1 Create single file `utils/errors.ts` with: types, `err`, `isAppError`, `asAppError`, `reportError`, `simpleRetry`, light scrub & duplicate suppression.
-[ ] 1.2 Add minimal unit tests (err/asAppError/reportError duplicate suppression + scrub).
-[ ] 1.3 Export functions for plugin authors via existing auto-import (add to d.ts if needed).
+[x] 1.1 Create single file `utils/errors.ts` with: types, `err`, `isAppError`, `asAppError`, `reportError`, `simpleRetry`, light scrub & duplicate suppression.
+[x] 1.2 Add minimal unit tests (err/asAppError/reportError duplicate suppression + scrub).
+[x] 1.3 Export functions for plugin authors via existing auto-import (add to d.ts if needed). Added `app/composables/useErrorApi.ts`.
 
 ## 2. Logging (Req: 4,17)
 
