@@ -774,6 +774,7 @@ export function useChat(
                 const retryFn = lastUser
                     ? () => retryMessage(lastUser.id as any)
                     : undefined;
+                // Inline tag object (Req 18.1) for clarity & tree-shaking
                 reportError(err, {
                     code: 'ERR_STREAM_FAILURE',
                     tags: {

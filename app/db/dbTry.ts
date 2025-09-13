@@ -1,5 +1,9 @@
 import { reportError, err } from '~/utils/errors';
 
+// Quota guidance (Req 20.2) exported for UI/doc reuse
+export const DB_QUOTA_GUIDANCE =
+    'Storage quota exceeded. Clear older chats, files, or browser site data to free space.';
+
 // Lightweight DB operation wrapper (Task 7.1)
 // Usage: const res = await dbTry(() => db.table.put(obj), { op: 'write', entity: 'message' })
 // - Maps Dexie/IndexedDB quota errors -> ERR_DB_QUOTA_EXCEEDED (non-retryable)
@@ -26,15 +30,11 @@ export async function dbTry<T>(
         const isQuota = /quota/i.test(name) || /quota/i.test(msg);
         if (isQuota) {
             reportError(
-                err(
-                    'ERR_DB_QUOTA_EXCEEDED',
-                    'Local storage is full. Remove old data to continue.',
-                    {
-                        severity: 'error',
-                        retryable: false,
-                        tags: { ...tags, domain: 'db' },
-                    }
-                ),
+                err('ERR_DB_QUOTA_EXCEEDED', DB_QUOTA_GUIDANCE, {
+                    severity: 'error',
+                    retryable: false,
+                    tags: { ...tags, domain: 'db', rw: tags.op }, // add rw tag (Req 20.1)
+                }),
                 { toast: true }
             );
             if (opts.rethrow) throw e;
@@ -46,7 +46,7 @@ export async function dbTry<T>(
             err(code, 'Database operation failed', {
                 severity: 'error',
                 retryable: tags.op === 'read' ? true : true, // allow manual re-invoke upstream
-                tags: { ...tags, domain: 'db' },
+                tags: { ...tags, domain: 'db', rw: tags.op }, // include rw convenience tag (Req 20.1)
                 cause: e,
             }),
             { toast: true }

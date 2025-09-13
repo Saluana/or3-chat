@@ -71,8 +71,8 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 12. Documentation (Req: 13)
 
-[ ] 12.1 Create concise `docs/error-handling.md` (1 page) with: quick start, API snippet, codes table.
-[ ] 12.2 Add plugin example (adding domain tag + legacy chat hook note).
+[x] 12.1 Create concise `docs/error-handling.md` (1 page) with: quick start, API snippet, codes table.
+[x] 12.2 Add plugin example (adding domain tag + legacy chat hook note).
 
 ## 13. Config (Req: 8)
 
@@ -97,8 +97,8 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 18. Context Tags (Req: 18)
 
-[ ] 18.1 Inline object creation in chat (no helper) to reduce code.
-[ ] 18.2 Test tag presence.
+[x] 18.1 Inline object creation in chat (no helper) to reduce code.
+[x] 18.2 Test tag presence.
 
 ## 19. File Errors (Req: 19)
 
@@ -107,19 +107,19 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 20. DB Tags (Req: 20)
 
-[ ] 20.1 Add read/write tag when calling `dbTry`.
-[ ] 20.2 Quota guidance message (string constant) added.
+[x] 20.1 Add read/write tag when calling `dbTry`.
+[x] 20.2 Quota guidance message (string constant) added. (`DB_QUOTA_GUIDANCE`)
 
 ## 21. Legacy Hook (Req: 12)
 
-[ ] 21.1 Keep bridge; add doc note only (no warn yet to avoid noise).
+[x] 21.1 Keep bridge; add doc note only (no warn yet to avoid noise).
 
 ## 22. Cleanup
 
-[ ] 22.1 Manual scan leftover `console.error` -> replace or justify.
-[ ] 22.2 Remove unused codes.
-[ ] 22.3 Run tests & lint.
-[ ] 22.4 Add README short section link to docs.
+[x] 22.1 Manual scan leftover `console.error` -> replace or justify.
+[x] 22.2 Remove unused codes.
+[x] 22.3 Run tests
+[x] 22.4 Add README short section link to docs.
 
 ## 23. Deferred (Optional Only)
 
