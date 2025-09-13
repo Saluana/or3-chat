@@ -1,5 +1,6 @@
 import Dexie from 'dexie';
 import { db } from './client';
+import { dbTry } from './dbTry';
 import { useHooks } from '../composables/useHooks';
 import { newId, nowSec, parseOrThrow } from './util';
 import {
@@ -26,7 +27,11 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
     const prepared = parseOrThrow(MessageCreateSchema, filtered);
     const value = parseOrThrow(MessageSchema, prepared);
     await hooks.doAction('db.messages.create:action:before', value);
-    await db.messages.put(value);
+    await dbTry(
+        () => db.messages.put(value),
+        { op: 'write', entity: 'messages', action: 'create' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.messages.create:action:after', value);
     return value;
 }
@@ -39,60 +44,78 @@ export async function upsertMessage(value: Message): Promise<void> {
     );
     await hooks.doAction('db.messages.upsert:action:before', filtered);
     parseOrThrow(MessageSchema, filtered);
-    await db.messages.put(filtered);
+    await dbTry(
+        () => db.messages.put(filtered),
+        { op: 'write', entity: 'messages', action: 'upsert' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.messages.upsert:action:after', filtered);
 }
 
 export function messagesByThread(threadId: string) {
     const hooks = useHooks();
-    return db.messages
-        .where('thread_id')
-        .equals(threadId)
-        .sortBy('index')
-        .then((res) =>
-            hooks.applyFilters('db.messages.byThread:filter:output', res)
-        );
+    return dbTry(
+        () => db.messages.where('thread_id').equals(threadId).sortBy('index'),
+        { op: 'read', entity: 'messages', action: 'byThread' }
+    )?.then((res) =>
+        hooks.applyFilters('db.messages.byThread:filter:output', res as any)
+    );
 }
 
 export function getMessage(id: string) {
     const hooks = useHooks();
-    return db.messages
-        .get(id)
-        .then((res) =>
-            hooks.applyFilters('db.messages.get:filter:output', res)
-        );
+    return dbTry(() => db.messages.get(id), {
+        op: 'read',
+        entity: 'messages',
+        action: 'get',
+    })?.then((res) => hooks.applyFilters('db.messages.get:filter:output', res));
 }
 
 export function messageByStream(streamId: string) {
     const hooks = useHooks();
-    return db.messages
-        .where('stream_id')
-        .equals(streamId)
-        .first()
-        .then((res) =>
-            hooks.applyFilters('db.messages.byStream:filter:output', res)
-        );
+    return dbTry(
+        () => db.messages.where('stream_id').equals(streamId).first(),
+        { op: 'read', entity: 'messages', action: 'byStream' }
+    )?.then((res) =>
+        hooks.applyFilters('db.messages.byStream:filter:output', res)
+    );
 }
 
 export async function softDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.messages, async () => {
-        const m = await db.messages.get(id);
+        const m = await dbTry(() => db.messages.get(id), {
+            op: 'read',
+            entity: 'messages',
+            action: 'get',
+        });
         if (!m) return;
         await hooks.doAction('db.messages.delete:action:soft:before', m);
-        await db.messages.put({ ...m, deleted: true, updated_at: nowSec() });
+        await dbTry(
+            () =>
+                db.messages.put({ ...m, deleted: true, updated_at: nowSec() }),
+            { op: 'write', entity: 'messages', action: 'softDelete' }
+        );
         await hooks.doAction('db.messages.delete:action:soft:after', m);
     });
 }
 
 export async function hardDeleteMessage(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.messages.get(id);
+    const existing = await dbTry(() => db.messages.get(id), {
+        op: 'read',
+        entity: 'messages',
+        action: 'get',
+    });
     await hooks.doAction(
         'db.messages.delete:action:hard:before',
         existing ?? id
     );
-    await db.messages.delete(id);
+    await dbTry(() => db.messages.delete(id), {
+        op: 'write',
+        entity: 'messages',
+        action: 'hardDelete',
+    });
     await hooks.doAction('db.messages.delete:action:hard:after', id);
 }
 

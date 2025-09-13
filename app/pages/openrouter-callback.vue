@@ -36,9 +36,11 @@
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import { reportError, err } from '~/utils/errors';
 import { kv } from '~/db';
 import { state } from '~/state/global';
+import { exchangeOpenRouterCode } from './openrouter-auth';
 
 const route = useRoute();
 const router = useRouter();
@@ -62,16 +64,18 @@ const subtitle = computed(() => {
     return 'Please wait while we finish setup.';
 });
 
-function log(...args) {
+function log(...args: any[]) {
     try {
         if (import.meta.dev) {
             // eslint-disable-next-line no-console
             console.debug('[openrouter-callback]', ...args);
         }
-    } catch {}
+    } catch (e) {
+        // intentionally ignored: debug logging failure (dev-only)
+    }
 }
 
-async function setKVNonBlocking(key, value, timeoutMs = 300) {
+async function setKVNonBlocking(key: string, value: string, timeoutMs = 300) {
     try {
         if (!kv?.set) return;
         log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
@@ -81,8 +85,8 @@ async function setKVNonBlocking(key, value, timeoutMs = 300) {
         ]);
         if (result === 'timeout') log('setKV timed out; continuing');
         else log('setKV resolved');
-    } catch (e) {
-        log('setKV failed', e?.message || e);
+    } catch (e: any) {
+        // intentionally ignored: non-critical KV sync failure
     }
 }
 
@@ -92,23 +96,23 @@ async function goHome() {
     try {
         await router.replace('/');
         log("router.replace('/') resolved");
-    } catch (e) {
-        log("router.replace('/') failed:", e?.message || e);
+    } catch (e: any) {
+        // intentionally ignored: navigation fallback
     }
     try {
         // Fallback to full document navigation
         log("Attempting window.location.replace('/')");
         window.location.replace('/');
-    } catch (e) {
-        log("window.location.replace('/') failed:", e?.message || e);
+    } catch (e: any) {
+        // intentionally ignored: navigation fallback
     }
     // Last-chance fallback on browsers that ignore replace
     setTimeout(() => {
         try {
             log("Attempting final window.location.assign('/')");
             window.location.assign('/');
-        } catch (e) {
-            log("window.location.assign('/') failed:", e?.message || e);
+        } catch (e: any) {
+            // intentionally ignored: navigation fallback
         }
     }, 150);
 }
@@ -141,7 +145,13 @@ onMounted(async () => {
     });
 
     if (!code || !verifier) {
-        console.error('[openrouter-callback] Missing code or verifier');
+        reportError(
+            err('ERR_AUTH', 'Missing code or verifier', {
+                severity: 'warn',
+                tags: { domain: 'auth', page: 'openrouter-callback' },
+            }),
+            { toast: true }
+        );
         loading.value = false;
         ready.value = true;
         errorMessage.value =
@@ -149,59 +159,55 @@ onMounted(async () => {
         return;
     }
     if (savedState && state !== savedState) {
-        console.error('[openrouter-callback] State mismatch, potential CSRF', {
-            incoming: state,
-            savedState,
-        });
+        reportError(
+            err('ERR_AUTH', 'State mismatch (possible CSRF)', {
+                severity: 'error',
+                tags: { domain: 'auth', page: 'openrouter-callback' },
+            }),
+            { toast: true }
+        );
         loading.value = false;
         ready.value = true;
         errorMessage.value = 'State mismatch. Tap Continue to return.';
         return;
     }
 
-    try {
-        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
-        log('exchanging code with OpenRouter', {
-            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
-            codeLength: String(code).length,
-            method: codeMethod,
-            usingHTTPS: true,
+    let attempt = 0;
+    const doExchange = async (): Promise<boolean> => {
+        attempt++;
+        const result = await exchangeOpenRouterCode({
+            code: String(code),
+            verifier,
+            codeMethod,
+            attempt,
         });
-        const directResp = await fetch(
-            'https://openrouter.ai/api/v1/auth/keys',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: String(code),
-                    code_verifier: verifier,
-                    code_challenge_method: codeMethod,
-                }),
+        if (!result.ok) {
+            // Provide user-facing message for first failure
+            errorMessage.value =
+                result.reason === 'no-key'
+                    ? 'No key returned. Continue to finish.'
+                    : 'Exchange failed. Retry or continue home.';
+            // Attach retry closure only if network/bad-response
+            if (result.reason !== 'no-key') {
+                reportError(
+                    err('ERR_NETWORK', 'Auth code exchange failed', {
+                        severity: 'error',
+                        tags: {
+                            domain: 'auth',
+                            page: 'openrouter-callback',
+                            status: result.status,
+                            attempt,
+                        },
+                        retryable: true,
+                    }),
+                    { toast: true, retry: doExchange }
+                );
             }
-        );
-        const directJson = await directResp.json().catch(async () => {
-            const text = await directResp.text().catch(() => '<no-body>');
-            log('non-JSON response body snippet:', text?.slice(0, 300));
-            return null;
-        });
-        if (!directResp.ok || !directJson) {
-            console.error(
-                '[openrouter-callback] Direct exchange failed',
-                directResp.status,
-                directJson
-            );
-            return;
+            loading.value = false;
+            ready.value = true;
+            return false;
         }
-        const userKey = directJson.key || directJson.access_token;
-        if (!userKey) {
-            console.error(
-                '[openrouter-callback] Direct exchange returned no key',
-                {
-                    keys: Object.keys(directJson || {}),
-                }
-            );
-            return;
-        }
+        const userKey = result.userKey;
         // store in localStorage for use by front-end
         log('storing key in localStorage (length)', String(userKey).length);
         // Save a human-readable name and the value; id/clock are handled
@@ -210,10 +216,12 @@ onMounted(async () => {
             await kv.set('openrouter_api_key', userKey);
             // Update global state immediately so UI reacts even before listeners.
             try {
-                state.value.openrouterKey = userKey;
-            } catch {}
-        } catch (e) {
-            log('kvByName.set failed', e?.message || e);
+                (state as any).value.openrouterKey = userKey;
+            } catch (e) {
+                // intentionally ignored: dispatch failure (no user impact)
+            }
+        } catch (e: any) {
+            log('kvByName.set failed', (e && e.message) || e);
         }
         try {
             log('dispatching openrouter:connected event');
@@ -221,8 +229,12 @@ onMounted(async () => {
             // Best-effort: also persist to synced KV
             try {
                 await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch {}
-        } catch {}
+            } catch (e) {
+                // intentionally ignored: optional synced KV persistence
+            }
+        } catch (e) {
+            // intentionally ignored: event dispatch failure
+        }
         log('clearing session markers (verifier/state/method)');
         const keys = [
             'openrouter_code_verifier',
@@ -238,40 +250,38 @@ onMounted(async () => {
         loading.value = false;
         ready.value = true;
         log('ready to redirect');
-        // Attempt auto-redirect but keep the Continue button visible
         setTimeout(() => {
-            // first SPA attempt
             log("auto: router.replace('/')");
-            router.replace('/').catch((e) => {
-                log('auto: router.replace failed', e?.message || e);
+            router.replace('/').catch((e: any) => {
+                log('auto: router.replace failed', (e && e.message) || e);
             });
-
             setTimeout(() => {
                 try {
                     log("auto: window.location.replace('/')");
                     window.location.replace('/');
-                } catch (e) {
+                } catch (e: any) {
                     log(
                         'auto: window.location.replace failed',
-                        e?.message || e
+                        (e && e.message) || e
                     );
                 }
             }, 250);
         }, 50);
-    } catch (err) {
-        console.error('[openrouter-callback] Exchange failed', err);
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Authentication finished, but we couldn’t auto-redirect.';
-    }
+        return true;
+    };
+    const success = await doExchange();
+    if (!success) return;
+    loading.value = false;
+    ready.value = true;
     // Safety: if nothing happened within 4s (no ready), force a hard reload to bust SW fallback
     setTimeout(() => {
         if (!ready.value && !errorMessage.value) {
             try {
                 log('safety reload firing');
                 window.location.reload();
-            } catch {}
+            } catch (e) {
+                // intentionally ignored: safety reload failure
+            }
         }
     }, 4000);
 });

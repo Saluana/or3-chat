@@ -1,4 +1,5 @@
 import { db } from './client';
+import { dbTry } from './dbTry';
 import { useHooks } from '../composables/useHooks';
 import { parseOrThrow } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
@@ -11,7 +12,11 @@ export async function createKv(input: KvCreate): Promise<Kv> {
     );
     await hooks.doAction('db.kv.create:action:before', filtered);
     const value = parseOrThrow(KvCreateSchema, filtered);
-    await db.kv.put(value);
+    await dbTry(
+        () => db.kv.put(value),
+        { op: 'write', entity: 'kv', action: 'create' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.kv.create:action:after', value);
     return value;
 }
@@ -24,13 +29,21 @@ export async function upsertKv(value: Kv): Promise<void> {
     );
     await hooks.doAction('db.kv.upsert:action:before', filtered);
     parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
+    await dbTry(
+        () => db.kv.put(filtered),
+        { op: 'write', entity: 'kv', action: 'upsert' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.kv.upsert:action:after', filtered);
 }
 
 export async function hardDeleteKv(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.kv.get(id);
+    const existing = await dbTry(() => db.kv.get(id), {
+        op: 'read',
+        entity: 'kv',
+        action: 'get',
+    });
     await hooks.doAction('db.kv.delete:action:hard:before', existing ?? id);
     await db.kv.delete(id);
     await hooks.doAction('db.kv.delete:action:hard:after', id);
@@ -38,13 +51,21 @@ export async function hardDeleteKv(id: string): Promise<void> {
 
 export async function getKv(id: string) {
     const hooks = useHooks();
-    const res = await db.kv.get(id);
+    const res = await dbTry(() => db.kv.get(id), {
+        op: 'read',
+        entity: 'kv',
+        action: 'get',
+    });
     return hooks.applyFilters('db.kv.get:filter:output', res);
 }
 
 export async function getKvByName(name: string) {
     const hooks = useHooks();
-    const res = await db.kv.where('name').equals(name).first();
+    const res = await dbTry(() => db.kv.where('name').equals(name).first(), {
+        op: 'read',
+        entity: 'kv',
+        action: 'getByName',
+    });
     return hooks.applyFilters('db.kv.getByName:filter:output', res);
 }
 
@@ -54,7 +75,10 @@ export async function setKvByName(
     value: string | null
 ): Promise<Kv> {
     const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
+    const existing = await dbTry(
+        () => db.kv.where('name').equals(name).first(),
+        { op: 'read', entity: 'kv', action: 'getByName' }
+    );
     const now = Math.floor(Date.now() / 1000);
     const record: Kv = {
         id: existing?.id ?? `kv:${name}`,
@@ -69,16 +93,27 @@ export async function setKvByName(
         record
     );
     parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
+    await dbTry(
+        () => db.kv.put(filtered),
+        { op: 'write', entity: 'kv', action: 'upsertByName' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.kv.upsertByName:action:after', filtered);
     return filtered;
 }
 
 export async function hardDeleteKvByName(name: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
+    const existing = await dbTry(
+        () => db.kv.where('name').equals(name).first(),
+        { op: 'read', entity: 'kv', action: 'getByName' }
+    );
     if (!existing) return; // nothing to do
     await hooks.doAction('db.kv.deleteByName:action:hard:before', existing);
-    await db.kv.delete(existing.id);
+    await dbTry(
+        () => db.kv.delete(existing.id),
+        { op: 'write', entity: 'kv', action: 'deleteByName' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
 }

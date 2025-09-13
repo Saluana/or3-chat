@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { createStreamAccumulator } from './useStreamAccumulator';
-import { useToast } from '#imports';
+import { useToast, useAppConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
@@ -22,6 +22,7 @@ import type {
     TextPart,
 } from '~/utils/chat/types';
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import { reportError, err } from '~/utils/errors';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
@@ -354,12 +355,14 @@ export function useChat(
         loading.value = true;
         streamId.value = null;
 
+        let currentModelId: string | undefined;
         try {
             const startedAt = Date.now();
             const modelId = await hooks.applyFilters(
                 'ai.chat.model:filter:select',
                 model
             );
+            currentModelId = modelId;
 
             // Inject system message
             let messagesWithSystemRaw = [...rawMessages.value];
@@ -765,34 +768,26 @@ export function useChat(
                     aborted: true,
                 });
             } else {
-                await hooks.doAction('ai.chat.error:action', {
-                    threadId: threadIdRef.value,
-                    stage: 'stream',
-                    error: err,
+                const lastUser = [...messages.value]
+                    .reverse()
+                    .find((m) => m.role === 'user');
+                const retryFn = lastUser
+                    ? () => retryMessage(lastUser.id as any)
+                    : undefined;
+                // Inline tag object (Req 18.1) for clarity & tree-shaking
+                reportError(err, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        modelId: currentModelId || '',
+                        stage: 'stream',
+                    },
+                    retry: retryFn,
+                    toast: true,
+                    retryable: !!retryFn,
                 });
-                try {
-                    const lastUser = [...messages.value]
-                        .reverse()
-                        .find((m) => m.role === 'user');
-                    const toast = useToast();
-                    toast.add({
-                        title: 'Message failed',
-                        description: (err as any)?.message || 'Request failed',
-                        color: 'error',
-                        actions: lastUser
-                            ? [
-                                  {
-                                      label: 'Retry',
-                                      onClick: () => {
-                                          if (lastUser?.id)
-                                              retryMessage(lastUser.id as any);
-                                      },
-                                  },
-                              ]
-                            : undefined,
-                        duration: 6000,
-                    });
-                } catch {}
                 const e = err instanceof Error ? err : new Error(String(err));
                 streamAcc.finalize({ error: e });
                 // Drop empty failed assistant
@@ -898,7 +893,17 @@ export function useChat(
                 newAssistantId: newAssistant?.id,
             });
         } catch (e) {
-            console.error('[useChat.retryMessage] failed', e);
+            reportError(
+                e instanceof Error
+                    ? e
+                    : err('ERR_INTERNAL', '[retryMessage] failed', {
+                          tags: { domain: 'chat', op: 'retryMessage' },
+                      }),
+                {
+                    code: 'ERR_INTERNAL',
+                    tags: { domain: 'chat', op: 'retryMessage' },
+                }
+            );
         }
     }
 
@@ -952,6 +957,22 @@ export function useChat(
             streamAcc.finalize({ aborted: true });
             if (tailAssistant.value?.pending)
                 (tailAssistant.value as any).pending = false;
+            try {
+                const appConfig = useAppConfig?.() as any;
+                const showAbort = appConfig?.errors?.showAbortInfo === true;
+                reportError(
+                    err('ERR_STREAM_ABORTED', 'Generation aborted', {
+                        severity: 'info',
+                        tags: {
+                            domain: 'chat',
+                            threadId: threadIdRef.value || '',
+                            streamId: streamId.value || '',
+                            stage: 'abort',
+                        },
+                    }),
+                    { code: 'ERR_STREAM_ABORTED', toast: showAbort }
+                );
+            } catch {}
         },
         clear,
     };

@@ -1,3 +1,4 @@
+import { reportError, err } from '~/utils/errors';
 /**
  * Hashing utilities for file deduplication.
  * Implements async chunked MD5 with Web Crypto fallback to spark-md5.
@@ -94,7 +95,13 @@ function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
                 );
             }
         }
-    } catch {}
+    } catch (e) {
+        // Perf instrumentation failure is non-fatal
+        reportError(err('ERR_INTERNAL', 'perf mark failed'), {
+            silent: true,
+            tags: { domain: 'files', stage: 'hash_perf' },
+        });
+    }
 }
 
 function bufferToHex(buf: Uint8Array): string {

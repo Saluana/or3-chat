@@ -318,6 +318,8 @@ import {
 } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
+import { reportError, err } from '~/utils/errors';
+import { validateFile, persistAttachment } from './file-upload-utils';
 import type { FileMeta } from '~/db/schema';
 import { useModelStore } from '~/composables/useModelStore';
 import { Editor, EditorContent } from '@tiptap/vue-3';
@@ -611,12 +613,15 @@ const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
 
 async function processAttachment(file: File, name?: string) {
     const mime = file.type || '';
-    const kind = mime.startsWith('image/')
-        ? 'image'
-        : mime === 'application/pdf'
-        ? 'pdf'
-        : null;
-    if (!kind) return; // only images and PDFs
+    const validation = validateFile(file);
+    if (!validation.ok) {
+        reportError(err(validation.code, validation.message), {
+            toast: true,
+            tags: { domain: 'files', stage: 'select', mime, size: file.size },
+        });
+        return;
+    }
+    const kind = validation.kind;
     // Fast preview first
     const dataUrl: string = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -640,16 +645,7 @@ async function processAttachment(file: File, name?: string) {
     };
     attachments.value.push(attachment);
     emit('image-add', attachment);
-    try {
-        const meta = await createOrRefFile(file, attachment.name);
-        attachment.hash = meta.hash;
-        attachment.meta = meta;
-        attachment.status = 'ready';
-    } catch (err: any) {
-        attachment.status = 'error';
-        attachment.error = err?.message || 'failed';
-        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
-    }
+    await persistAttachment(attachment as any);
 }
 
 const processFiles = async (files: FileList | null) => {

@@ -1,4 +1,8 @@
 export default defineAppConfig({
+    errors: {
+        showAbortInfo: false,
+        maxToasts: 5,
+    },
     ui: {
         tree: {
             slots: {

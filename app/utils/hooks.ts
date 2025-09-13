@@ -1,3 +1,4 @@
+import { reportError, err } from '~/utils/errors';
 // Lightweight, type-safe hook engine for Nuxt/Vue apps
 // - Supports actions (side-effects) and filters (value transform)
 // - Priority scheduling (lower runs earlier)
@@ -438,8 +439,12 @@ export function createHookEngine(): HookEngine {
         off(disposer: () => void) {
             try {
                 disposer();
-            } catch {
-                /* noop */
+            } catch (e) {
+                // Disposer failures are non-critical; log silently
+                reportError(err('ERR_INTERNAL', 'hook disposer failed'), {
+                    silent: true,
+                    tags: { domain: 'hooks', stage: 'off' },
+                });
             }
         },
 

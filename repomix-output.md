@@ -18044,7 +18044,7 @@ export default defineNuxtConfig({
         registerType: 'autoUpdate',
         // Enable PWA in dev so you can install/test while developing
         devOptions: {
-            enabled: true,
+            enabled: false,
             suppressWarnings: true,
         },
         // Expose $pwa and intercept install prompt
@@ -18055,6 +18055,9 @@ export default defineNuxtConfig({
         },
         // Basic offline support; let Workbox handle common assets
         workbox: {
+            skipWaiting: true, // activate new SW immediately
+            clientsClaim: true, // control pages right away
+            cleanupOutdatedCaches: true,
             // Ensure the prerendered callback HTML can be matched regardless of auth params
             ignoreURLParametersMatching: [/^code$/, /^state$/],
             // Never serve the generic SPA fallback for the auth callback (with or without params)
@@ -19770,7 +19773,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         "gpt-tokenizer": "^3.0.1",
         "nuxt": "^4.0.3",
         "spark-md5": "^3.0.2",
-        "streamdown-vue": "^1.0.13",
+        "streamdown-vue": "^1.0.20",
         "tiptap-markdown": "^0.8.10",
         "turndown": "^7.2.1",
         "typescript": "^5.6.3",
@@ -20175,14 +20178,71 @@ export function useChat(
                 messagesWithSystemRaw
             );
 
+            // --- Sanitization: remove prior empty assistant placeholder messages ---
+            // Root cause investigation: Anthropic (via OpenRouter) rejects a conversation
+            // when an earlier assistant message has empty content, emitting:
+            //   "messages.1: all messages must have non-empty content except for the optional final assistant message"
+            // This occurs if a previous streamed assistant was aborted / failed before
+            // any delta arrived, leaving an empty assistant entry in rawMessages.
+            // We exclude such empty assistant messages from the request payload.
+            const sanitizedEffectiveMessages = (
+                effectiveMessages as any[]
+            ).filter((m) => {
+                if (m.role !== 'assistant') return true;
+                const c = m.content;
+                if (c == null) return false;
+                if (typeof c === 'string') return c.trim().length > 0;
+                if (Array.isArray(c)) {
+                    // Content parts: keep if any part has non-empty text OR is an image / media part
+                    return c.some((p) => {
+                        if (!p) return false;
+                        if (typeof p === 'string') return p.trim().length > 0;
+                        if (p.type === 'text' && typeof p.text === 'string')
+                            return p.text.trim().length > 0;
+                        // Treat image / media parts as content-bearing
+                        if (
+                            p.type === 'image' ||
+                            p.type === 'image_url' ||
+                            (p.mediaType && /image\//.test(p.mediaType))
+                        )
+                            return true;
+                        return false;
+                    });
+                }
+                return true; // unknown shape: keep defensively
+            });
+            if (
+                sanitizedEffectiveMessages.length !==
+                (effectiveMessages as any[]).length
+            ) {
+                try {
+                    console.debug(
+                        '[useChat] removed empty assistant placeholders:',
+                        (effectiveMessages as any[])
+                            .filter((m: any) => m.role === 'assistant')
+                            .map((m: any) => ({
+                                id: m.id,
+                                kept: sanitizedEffectiveMessages.includes(m),
+                                contentPreview:
+                                    typeof m.content === 'string'
+                                        ? m.content.slice(0, 30)
+                                        : JSON.stringify(m.content).slice(
+                                              0,
+                                              60
+                                          ),
+                            }))
+                    );
+                } catch {}
+            }
+
             const { buildOpenRouterMessages } = await import(
                 '~/utils/openrouter-build'
             );
 
             // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
-            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
-                (m: any) => ({ ...m })
-            );
+            const modelInputMessages: any[] = (
+                sanitizedEffectiveMessages as any[]
+            ).map((m: any) => ({ ...m }));
             if (assistantHashes.length && prevAssistant?.id) {
                 const target = modelInputMessages.find(
                     (m) => m.id === prevAssistant.id
@@ -20810,6 +20870,7 @@ export function useChat(
                     :shiki-theme="currentShikiTheme"
                     :class="streamMdClasses"
                     :allowed-image-prefixes="['data:image/']"
+                    code-block-show-line-numbers
                 />
                 <!-- legacy rendered html path removed -->
             </div>
@@ -21706,7 +21767,7 @@ const streamMdClasses = [
 
 .message-body :deep([data-streamdown='code-body']) {
     padding: 0;
-    padding-left: 15px;
+    padding-left: 0px;
     padding-right: 15px;
     margin: 0;
     border: none;
@@ -21715,11 +21776,20 @@ const streamMdClasses = [
 .message-body :deep([data-streamdown='code-body']) pre {
     border: none;
     margin-bottom: 0;
-    padding-bottom: 30px;
+    margin-top: 0px;
+    padding-top: 15px;
+    padding-bottom: 15px;
     background: var(--md-surface-container-lowest) !important;
 }
 .message-body :deep([data-streamdown='code-lang']) {
     font: inherit;
+}
+.message-body :deep([data-streamdown='code-line-number']) {
+    margin-right: 12px;
+    padding: 20px;
+}
+.message-body :deep(pre) {
+    padding-left: 0;
 }
 </style>
 ```

@@ -162,6 +162,10 @@ They’re read when constructing the OpenRouter auth URL and PKCE verifier. &#x2
 -   **Virtualized** message list uses `virtua/vue`.&#x20;
 -   There’s a **documents store** and a **documents editor** component for CRUD and UI state.&#x20;
 
+### Error Handling
+
+Unified error API lives in `~/utils/errors.ts` (see `docs/error-handling.md`). Use `reportError(e,{ code:'ERR_INTERNAL', tags:{ domain:'feature', stage:'x' }, toast:true })` instead of raw `console.error`. Errors emit `error:raised`, `error:<domain>` (and legacy `ai.chat.error:action` for chat). Duplicate logs suppressed (300ms) and obvious secrets scrubbed.
+
 ---
 
 ## What this project is (and isn’t)

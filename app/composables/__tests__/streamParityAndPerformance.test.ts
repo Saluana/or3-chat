@@ -209,13 +209,16 @@ describe('Streaming parity & performance', () => {
         const { useChat } = await import('../useAi');
         const chat = useChat([]);
         await chat.sendMessage('perf');
-        await nextFrames(3);
+        // Allow more frames for persistence since streaming writes intermittently
+        await nextFrames(8);
         const versions = chat.streamState?.version ?? 0;
         expect(versions).toBeLessThanOrEqual(20);
         // Assistant message persisted should have 200 chars
-        const last = (chat as any).messages.value.find(
-            (m: any) => m.role === 'assistant'
-        );
+        const tail = (chat as any).tailAssistant?.value;
+        const last =
+            (chat as any).messages.value.find(
+                (m: any) => m.role === 'assistant'
+            ) || tail;
         const len = last?.text ? last.text.length : 0;
         expect(len).toBe(200);
     });

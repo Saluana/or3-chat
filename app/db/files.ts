@@ -9,6 +9,7 @@ import {
     type FileMetaCreate,
 } from './schema';
 import { computeFileHash } from '../utils/hash';
+import { reportError, err } from '../utils/errors';
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
 
@@ -182,5 +183,11 @@ function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
                 `${entry.duration.toFixed(1)}ms`
             );
         }
-    } catch {}
+    } catch (e) {
+        // Perf metric finalize is best-effort only
+        reportError(err('ERR_INTERNAL', 'file perf finalize failed'), {
+            silent: true,
+            tags: { domain: 'files', stage: 'perf_finalize' },
+        });
+    }
 }

@@ -114,7 +114,9 @@ watch(
         try {
             lastScrollHeight = (el as any).scrollHeight || 0;
             lastScrollTop = (el as any).scrollTop || 0;
-        } catch {}
+        } catch (e) {
+            // intentionally ignored: initial scroll metrics fetch may fail if element not ready
+        }
         compute();
     },
     { immediate: true }
@@ -128,7 +130,9 @@ function maybeEmitScrollState() {
     if (a !== lastEmittedAtBottom || stick !== lastEmittedStick) {
         try {
             emit('scroll-state', { atBottom: a, stick });
-        } catch {}
+        } catch (e) {
+            // intentionally ignored: emit failure should not break scrolling
+        }
         lastEmittedAtBottom = a;
         lastEmittedStick = stick;
     }
@@ -202,14 +206,18 @@ function scrollToBottom(opts: { smooth?: boolean } = {}) {
             } else {
                 t.scrollTop = bottomPos;
             }
-        } catch {}
+        } catch (e) {
+            // intentionally ignored: scrollTo API unsupported
+        }
     }
     stick = true;
     (scrollToBottom as any)._count = ((scrollToBottom as any)._count || 0) + 1;
     try {
         lastScrollTop = baseEl.scrollTop ?? lastScrollTop;
         lastScrollHeight = baseEl.scrollHeight ?? lastScrollHeight;
-    } catch {}
+    } catch (e) {
+        // intentionally ignored: metrics update
+    }
 }
 
 let pendingSmooth = false;
@@ -368,10 +376,14 @@ watch(
                 try {
                     if (typeof (el as any).scrollTo === 'function')
                         (el as any).scrollTo({ top: target });
-                } catch {}
+                } catch (e) {
+                    // intentionally ignored: scrollTo unsupported
+                }
                 try {
                     (el as any).scrollTop = target;
-                } catch {}
+                } catch (e) {
+                    // intentionally ignored: direct scrollTop set failure
+                }
             }
             readingPos = null;
         };
@@ -403,7 +415,9 @@ onMounted(() => {
     ) {
         try {
             sp.value = root.value;
-        } catch {}
+        } catch (e) {
+            // intentionally ignored: cannot assign scroll parent
+        }
     }
 });
 

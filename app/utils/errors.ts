@@ -1,0 +1,224 @@
+// Minimal centralized error utility (Task 1.1)
+// Provides: types, err(), isAppError(), asAppError(), reportError(), simpleRetry(), light scrub & duplicate suppression.
+
+import { useHooks } from '~/composables/useHooks';
+import { useToast } from '#imports';
+
+export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
+
+export type ErrorCode =
+    | 'ERR_INTERNAL'
+    | 'ERR_STREAM_ABORTED'
+    | 'ERR_STREAM_FAILURE'
+    | 'ERR_NETWORK'
+    | 'ERR_TIMEOUT'
+    | 'ERR_DB_WRITE_FAILED'
+    | 'ERR_DB_READ_FAILED'
+    | 'ERR_DB_QUOTA_EXCEEDED'
+    | 'ERR_FILE_VALIDATION'
+    | 'ERR_FILE_PERSIST'
+    | 'ERR_VALIDATION'
+    | 'ERR_AUTH'
+    | 'ERR_RATE_LIMIT'
+    | 'ERR_UNSUPPORTED_MODEL'
+    | 'ERR_HOOK_FAILURE';
+
+export interface AppError extends Error {
+    code: ErrorCode;
+    severity: ErrorSeverity; // default 'error'
+    retryable?: boolean;
+    tags?: Record<string, string | number | boolean | undefined>;
+    timestamp: number; // ms epoch
+}
+
+export type StandardError = AppError; // alias for wording continuity
+
+// Factory
+export function err(
+    code: ErrorCode,
+    message: string,
+    o: {
+        severity?: ErrorSeverity;
+        retryable?: boolean;
+        tags?: Record<string, any>;
+        cause?: unknown;
+    } = {}
+): AppError {
+    const e = new Error(message) as AppError & { cause?: unknown };
+    e.code = code;
+    e.severity = o.severity || 'error';
+    e.retryable = o.retryable;
+    e.tags = o.tags;
+    e.timestamp = Date.now();
+    if (o.cause && e.cause === undefined) e.cause = o.cause;
+    return e as AppError;
+}
+
+export function isAppError(v: unknown): v is AppError {
+    return (
+        !!v &&
+        typeof v === 'object' &&
+        'code' in (v as any) &&
+        'severity' in (v as any)
+    );
+}
+
+export function asAppError(
+    v: unknown,
+    fb: { code?: ErrorCode; message?: string } = {}
+): AppError {
+    if (isAppError(v)) return v;
+    if (v instanceof Error)
+        return err(
+            fb.code || 'ERR_INTERNAL',
+            v.message || fb.message || 'Error',
+            { cause: (v as any).cause }
+        );
+    if (typeof v === 'string') return err(fb.code || 'ERR_INTERNAL', v);
+    return err(fb.code || 'ERR_INTERNAL', fb.message || 'Unknown error');
+}
+
+// Lightweight secret scrub (only obvious tokens)
+function scrubValue(val: unknown): unknown {
+    if (typeof val !== 'string') return val;
+    if (/(api|key|secret|token)/i.test(val) && val.length > 8) return '***';
+    return val.length > 8192 ? val.slice(0, 8192) + '…' : val;
+}
+
+// Duplicate suppression (code|message within window)
+const recent = new Map<string, number>();
+const SUPPRESS_MS = 300;
+function shouldLog(code: string, message: string): boolean {
+    const key = code + '|' + message;
+    const now = Date.now();
+    const last = recent.get(key) || 0;
+    const dup = now - last < SUPPRESS_MS;
+    recent.set(key, now);
+    // Opportunistic prune (>1s old) every access (Req 14.1)
+    // Map sizes expected to remain tiny (< few hundred); full scan OK.
+    for (const [k, t] of recent) if (now - t > 1000) recent.delete(k);
+    return !dup;
+}
+
+// Use Nuxt UI toast directly; no custom store.
+function pushToast(error: AppError, retry?: () => any) {
+    try {
+        const { add } = useToast();
+        add({
+            id: error.timestamp + '-' + error.code,
+            title: error.code,
+            description: error.message,
+            actions: retry
+                ? [
+                      {
+                          label: 'Retry',
+                          onClick: () => {
+                              try {
+                                  retry();
+                              } catch {}
+                          },
+                      },
+                  ]
+                : undefined,
+            color:
+                error.severity === 'fatal'
+                    ? 'error'
+                    : error.severity === 'warn'
+                    ? 'warning'
+                    : error.severity === 'info'
+                    ? 'info'
+                    : 'error',
+        });
+    } catch {}
+}
+
+export interface ReportOptions {
+    code?: ErrorCode;
+    message?: string;
+    tags?: Record<string, any>;
+    toast?: boolean; // force toast even if info
+    silent?: boolean; // never show toast
+    retry?: () => any; // optional retry closure
+    severity?: ErrorSeverity; // override severity if wrapping non-error
+    retryable?: boolean; // override retryable
+}
+
+export function reportError(
+    input: unknown,
+    opts: ReportOptions = {}
+): AppError {
+    let e: AppError;
+    try {
+        e = asAppError(input, { code: opts.code, message: opts.message });
+        if (opts.severity) e.severity = opts.severity;
+        if (opts.retryable !== undefined) e.retryable = opts.retryable;
+        if (opts.tags) e.tags = { ...(e.tags || {}), ...opts.tags };
+        // Scrub shallow string fields
+        e.message = scrubValue(e.message) as string;
+        if (e.tags) {
+            for (const k in e.tags) e.tags[k] = scrubValue(e.tags[k]) as any;
+        }
+        if (shouldLog(e.code, e.message)) {
+            const level =
+                e.severity === 'warn'
+                    ? 'warn'
+                    : e.severity === 'info'
+                    ? 'info'
+                    : 'error';
+            (console as any)[level]('[err]', {
+                code: e.code,
+                msg: e.message,
+                severity: e.severity,
+                retryable: !!e.retryable,
+                tags: e.tags,
+            });
+        }
+        const hooks = useHooks();
+        hooks.doAction('error:raised', e);
+        const domain = e.tags?.domain as string | undefined;
+        if (domain) hooks.doAction('error:' + domain, e);
+        if (domain === 'chat')
+            hooks.doAction('ai.chat.error:action', { error: e });
+        if (
+            !opts.silent &&
+            !(e.code === 'ERR_STREAM_ABORTED' && e.severity === 'info')
+        ) {
+            if (opts.toast || e.severity !== 'info') pushToast(e, opts.retry);
+        }
+        return e;
+    } catch (inner) {
+        try {
+            console.error('[reportError-fallback]', inner, input);
+        } catch {}
+        // Best effort fallback error
+        return err('ERR_INTERNAL', 'Reporting failed');
+    }
+}
+
+export async function simpleRetry<T>(
+    fn: () => Promise<T>,
+    attempts = 2,
+    delayMs = 400
+): Promise<T> {
+    let lastErr: any;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastErr = e;
+            if (i < attempts - 1)
+                await new Promise((r) => setTimeout(r, delayMs));
+        }
+    }
+    throw lastErr;
+}
+
+// Deprecated: legacy hook-based toast accessor maintained for backward compatibility.
+// New code should rely on reportError + Nuxt UI useToast directly.
+export function useErrorToasts() {
+    console.warn(
+        '[useErrorToasts] deprecated – rely on reportError to surface toasts'
+    );
+    // Provide minimal shape expected by any legacy components.
+    return { toasts: [] as any[] };
+}

@@ -2,7 +2,9 @@
     <UApp>
         <!-- Register the PWA web manifest on all pages -->
         <VitePwaManifest />
-        <NuxtPage />
+        <FatalErrorBoundary>
+            <NuxtPage />
+        </FatalErrorBoundary>
     </UApp>
 </template>
 <script setup lang="ts">

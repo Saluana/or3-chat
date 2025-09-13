@@ -1,4 +1,5 @@
 import { db } from './client';
+import { dbTry } from './dbTry';
 import { useHooks } from '../composables/useHooks';
 import { parseOrThrow } from './util';
 import {
@@ -18,7 +19,11 @@ export async function createAttachment(
     );
     await hooks.doAction('db.attachments.create:action:before', filtered);
     const value = parseOrThrow(AttachmentCreateSchema, filtered);
-    await db.attachments.put(value);
+    await dbTry(
+        () => db.attachments.put(value),
+        { op: 'write', entity: 'attachments', action: 'create' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.attachments.create:action:after', value);
     return value;
 }
@@ -31,14 +36,22 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
     );
     await hooks.doAction('db.attachments.upsert:action:before', filtered);
     parseOrThrow(AttachmentSchema, filtered);
-    await db.attachments.put(filtered);
+    await dbTry(
+        () => db.attachments.put(filtered),
+        { op: 'write', entity: 'attachments', action: 'upsert' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.attachments.upsert:action:after', filtered);
 }
 
 export async function softDeleteAttachment(id: string): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.attachments, async () => {
-        const a = await db.attachments.get(id);
+        const a = await dbTry(() => db.attachments.get(id), {
+            op: 'read',
+            entity: 'attachments',
+            action: 'get',
+        });
         if (!a) return;
         await hooks.doAction('db.attachments.delete:action:soft:before', a);
         await db.attachments.put({
@@ -52,7 +65,11 @@ export async function softDeleteAttachment(id: string): Promise<void> {
 
 export async function hardDeleteAttachment(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.attachments.get(id);
+    const existing = await dbTry(() => db.attachments.get(id), {
+        op: 'read',
+        entity: 'attachments',
+        action: 'get',
+    });
     await hooks.doAction(
         'db.attachments.delete:action:hard:before',
         existing ?? id
@@ -63,6 +80,10 @@ export async function hardDeleteAttachment(id: string): Promise<void> {
 
 export async function getAttachment(id: string) {
     const hooks = useHooks();
-    const res = await db.attachments.get(id);
+    const res = await dbTry(() => db.attachments.get(id), {
+        op: 'read',
+        entity: 'attachments',
+        action: 'get',
+    });
     return hooks.applyFilters('db.attachments.get:filter:output', res);
 }
