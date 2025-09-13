@@ -94,10 +94,9 @@ function shouldLog(code: string, message: string): boolean {
     const last = recent.get(key) || 0;
     const dup = now - last < SUPPRESS_MS;
     recent.set(key, now);
-    // Opportunistic prune (>1s old) to keep map small
-    if (recent.size > 64) {
-        for (const [k, t] of recent) if (now - t > 1000) recent.delete(k);
-    }
+    // Opportunistic prune (>1s old) every access (Req 14.1)
+    // Map sizes expected to remain tiny (< few hundred); full scan OK.
+    for (const [k, t] of recent) if (now - t > 1000) recent.delete(k);
     return !dup;
 }
 

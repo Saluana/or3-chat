@@ -80,7 +80,7 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 14. Performance (Req: 14)
 
-[ ] 14.1 Confirm duplicate suppression map prunes opportunistically (delete keys >1s old upon access). No benchmark needed.
+[x] 14.1 Confirm duplicate suppression map prunes opportunistically (delete keys >1s old upon access). No benchmark needed. (Implemented unconditional prune loop in `shouldLog`.)
 
 ## 15. Scrubbing (Req: 15)
 
