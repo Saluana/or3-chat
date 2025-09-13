@@ -355,12 +355,14 @@ export function useChat(
         loading.value = true;
         streamId.value = null;
 
+        let currentModelId: string | undefined;
         try {
             const startedAt = Date.now();
             const modelId = await hooks.applyFilters(
                 'ai.chat.model:filter:select',
                 model
             );
+            currentModelId = modelId;
 
             // Inject system message
             let messagesWithSystemRaw = [...rawMessages.value];
@@ -766,34 +768,25 @@ export function useChat(
                     aborted: true,
                 });
             } else {
-                await hooks.doAction('ai.chat.error:action', {
-                    threadId: threadIdRef.value,
-                    stage: 'stream',
-                    error: err,
+                const lastUser = [...messages.value]
+                    .reverse()
+                    .find((m) => m.role === 'user');
+                const retryFn = lastUser
+                    ? () => retryMessage(lastUser.id as any)
+                    : undefined;
+                reportError(err, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        modelId: currentModelId || '',
+                        stage: 'stream',
+                    },
+                    retry: retryFn,
+                    toast: true,
+                    retryable: !!retryFn,
                 });
-                try {
-                    const lastUser = [...messages.value]
-                        .reverse()
-                        .find((m) => m.role === 'user');
-                    const toast = useToast();
-                    toast.add({
-                        title: 'Message failed',
-                        description: (err as any)?.message || 'Request failed',
-                        color: 'error',
-                        actions: lastUser
-                            ? [
-                                  {
-                                      label: 'Retry',
-                                      onClick: () => {
-                                          if (lastUser?.id)
-                                              retryMessage(lastUser.id as any);
-                                      },
-                                  },
-                              ]
-                            : undefined,
-                        duration: 6000,
-                    });
-                } catch {}
                 const e = err instanceof Error ? err : new Error(String(err));
                 streamAcc.finalize({ error: e });
                 // Drop empty failed assistant

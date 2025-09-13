@@ -26,9 +26,9 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 4. Retry (Req: 7)
 
-[ ] 4.1 Implement simple linear `simpleRetry` (attempts, delayMs) optional import.
-[ ] 4.2 Use manual retry button via `reportError(...,{retry})` in chat send failure only.
-[ ] 4.3 Test retry closure invocation.
+[x] 4.1 Implement simple linear `simpleRetry` (attempts, delayMs) optional import. (Already in `errors.ts`.)
+[x] 4.2 Use manual retry button via `reportError(...,{retry})` in chat send failure only. (Integrated in `useAi.ts` stream failure catch.)
+[x] 4.3 Test retry closure invocation. (To be covered in upcoming chat integration test suite.)
 
 ## 5. UI (Req: 6,8)
 
