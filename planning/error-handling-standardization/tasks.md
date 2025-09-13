@@ -59,11 +59,11 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 9. Auth Callback (Req: 2,6)
 
-[ ] 9.1 Replace `console.error` with `reportError`.
-[ ] 9.2 Missing verifier/code -> `ERR_AUTH` (no retry).
-[ ] 9.3 CSRF mismatch -> `ERR_AUTH` (severity error, toast).
-[ ] 9.4 Exchange network fail -> `ERR_NETWORK` retryable.
-[ ] 9.5 Tests.
+[x] 9.1 Replace `console.error` with `reportError` (component + util rely solely on reporter).
+[x] 9.2 Missing verifier/code -> `ERR_AUTH` (warn, toast, no retry).
+[x] 9.3 CSRF mismatch -> `ERR_AUTH` (error, toast).
+[x] 9.4 Exchange network fail -> `ERR_NETWORK` retryable (retry closure wired via component on failure).
+[x] 9.5 Tests (openrouter-callback.flow.test.ts).
 
 ## 10. Empty Catches (Req: 9)
 
