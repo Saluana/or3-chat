@@ -53,9 +53,9 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 8. Files (Req: 19)
 
-[ ] 8.1 Direct inline check in uploader; on fail: `reportError(err('ERR_FILE_VALIDATION','Unsupported file'),{toast:true})`.
-[ ] 8.2 Persistence failures -> `ERR_FILE_PERSIST` with retry closure.
-[ ] 8.3 Tests: invalid mime + oversize.
+[x] 8.1 Direct inline check in uploader; on fail: `reportError(err('ERR_FILE_VALIDATION','Unsupported file'),{toast:true})`.
+[x] 8.2 Persistence failures -> `ERR_FILE_PERSIST` with retry closure.
+[x] 8.3 Tests: invalid mime + oversize.
 
 ## 9. Auth Callback (Req: 2,6)
 
@@ -107,8 +107,8 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 19. File Errors (Req: 19)
 
-[ ] 19.1 Integrate validation & persistence mapping.
-[ ] 19.2 Tests.
+[x] 19.1 Integrate validation & persistence mapping. (Utility extracted `file-upload-utils.ts`)
+[x] 19.2 Tests (invalid mime, oversize, persist failure) now green.
 
 ## 20. DB Tags (Req: 20)
 

@@ -213,3 +213,13 @@ export async function simpleRetry<T>(
     }
     throw lastErr;
 }
+
+// Deprecated: legacy hook-based toast accessor maintained for backward compatibility.
+// New code should rely on reportError + Nuxt UI useToast directly.
+export function useErrorToasts() {
+    console.warn(
+        '[useErrorToasts] deprecated – rely on reportError to surface toasts'
+    );
+    // Provide minimal shape expected by any legacy components.
+    return { toasts: [] as any[] };
+}
