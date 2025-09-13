@@ -11,7 +11,10 @@
     >
         <template #body>
             <!-- iOS style springboard grid: fixed icon cell width per breakpoint, centered, nice vertical rhythm -->
-            <div class="p-4 flex justify-center">
+            <div
+                v-if="activeView === 'dashboard'"
+                class="p-4 flex justify-center"
+            >
                 <div
                     class="grid gap-y-6 gap-x-4 place-items-center grid-cols-4 xs:grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8"
                 >
@@ -27,6 +30,20 @@
                     />
                 </div>
             </div>
+            <div v-if="activeView === 'page'">
+                <div class="flex h-[40px] items-center border-b-2">
+                    <UButton
+                        variant="subtle"
+                        color="primary"
+                        size="sm"
+                        class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10!"
+                        @click="activeView = 'dashboard'"
+                        ><UIcon
+                            class="h-6 w-6"
+                            :name="'pixelarticons:chevron-left'"
+                    /></UButton>
+                </div>
+            </div>
         </template>
     </UModal>
 </template>
@@ -38,6 +55,8 @@ import { useDashboardPlugins } from '~/composables';
 const props = defineProps<{
     showModal: boolean;
 }>();
+
+const activeView = ref<'page' | 'dashboard'>('dashboard');
 
 const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
 
@@ -57,6 +76,10 @@ const coreItems = [
         icon: 'pixelarticons:sliders',
         label: 'Settings',
         order: 1,
+        handler: (item: any) => {
+            // Example handler to open settings
+            activeView.value = 'page';
+        },
     },
     {
         id: 'core:images',
