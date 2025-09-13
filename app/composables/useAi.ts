@@ -377,14 +377,71 @@ export function useChat(
                 messagesWithSystemRaw
             );
 
+            // --- Sanitization: remove prior empty assistant placeholder messages ---
+            // Root cause investigation: Anthropic (via OpenRouter) rejects a conversation
+            // when an earlier assistant message has empty content, emitting:
+            //   "messages.1: all messages must have non-empty content except for the optional final assistant message"
+            // This occurs if a previous streamed assistant was aborted / failed before
+            // any delta arrived, leaving an empty assistant entry in rawMessages.
+            // We exclude such empty assistant messages from the request payload.
+            const sanitizedEffectiveMessages = (
+                effectiveMessages as any[]
+            ).filter((m) => {
+                if (m.role !== 'assistant') return true;
+                const c = m.content;
+                if (c == null) return false;
+                if (typeof c === 'string') return c.trim().length > 0;
+                if (Array.isArray(c)) {
+                    // Content parts: keep if any part has non-empty text OR is an image / media part
+                    return c.some((p) => {
+                        if (!p) return false;
+                        if (typeof p === 'string') return p.trim().length > 0;
+                        if (p.type === 'text' && typeof p.text === 'string')
+                            return p.text.trim().length > 0;
+                        // Treat image / media parts as content-bearing
+                        if (
+                            p.type === 'image' ||
+                            p.type === 'image_url' ||
+                            (p.mediaType && /image\//.test(p.mediaType))
+                        )
+                            return true;
+                        return false;
+                    });
+                }
+                return true; // unknown shape: keep defensively
+            });
+            if (
+                sanitizedEffectiveMessages.length !==
+                (effectiveMessages as any[]).length
+            ) {
+                try {
+                    console.debug(
+                        '[useChat] removed empty assistant placeholders:',
+                        (effectiveMessages as any[])
+                            .filter((m: any) => m.role === 'assistant')
+                            .map((m: any) => ({
+                                id: m.id,
+                                kept: sanitizedEffectiveMessages.includes(m),
+                                contentPreview:
+                                    typeof m.content === 'string'
+                                        ? m.content.slice(0, 30)
+                                        : JSON.stringify(m.content).slice(
+                                              0,
+                                              60
+                                          ),
+                            }))
+                    );
+                } catch {}
+            }
+
             const { buildOpenRouterMessages } = await import(
                 '~/utils/openrouter-build'
             );
 
             // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
-            const modelInputMessages: any[] = (effectiveMessages as any[]).map(
-                (m: any) => ({ ...m })
-            );
+            const modelInputMessages: any[] = (
+                sanitizedEffectiveMessages as any[]
+            ).map((m: any) => ({ ...m }));
             if (assistantHashes.length && prevAssistant?.id) {
                 const target = modelInputMessages.find(
                     (m) => m.id === prevAssistant.id
