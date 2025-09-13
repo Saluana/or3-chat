@@ -4,7 +4,7 @@ artifact_id: 5f9e2c2f-169d-4f8d-9e31-5a4e1a64e7b4
 
 ## Overview
 
-Lean error handling standard: a single utility module, minimal types, one reporter API, optional toast integration. Optimize for: smallest code surface, easy plugin adoption, no silent failures, predictable shape, and low runtime cost. Removed from previous draft: separate logger module, complex coalescer, codemod phase, heavy retry abstraction, dedicated hook emitter file.
+Lean error handling standard: a single utility module, minimal types, one reporter API, Nuxt UI toast integration (no custom store). Optimize for: smallest code surface, easy plugin adoption, no silent failures, predictable shape, and low runtime cost. Removed from previous draft: separate logger module, complex coalescer, codemod phase, heavy retry abstraction, dedicated hook emitter file, and bespoke toast store/component.
 
 ## Architecture (Lean)
 
@@ -27,7 +27,8 @@ Hooks fired directly via existing `hooks.doAction`.
 3. Reporter (console + hooks + toast)
 4. Light duplicate suppression
 5. Optional retry helper
-6. Minimal toast store & optional boundary
+6. (Removed) Custom toast store (now direct Nuxt UI `useToast()` calls)
+7. Optional boundary (deferred)
 
 ## Data Model & Interfaces
 
@@ -182,16 +183,18 @@ Done inside `reportError`; no standalone emitter file.
 
 ### UI Presentation
 
-Store shape: `{ id, error, retry? }`. A simple component iterates and renders message + optional retry.
+Nuxt UI toast system is used directly. `reportError` triggers `useToast().add({ title: code, description: message, actions:[{label:'Retry', onClick: retry}] })` when a toast should appear. No custom component or reactive store is maintained.
 
 ### Abort Handling
 
-Use `reportError(err('ERR_STREAM_ABORTED','Aborted',{severity:'info',tags:{domain:'chat'}}), { silent: !appConfig.errors?.showAbortInfo })`.
+`useChat.abort()` calls:
+`reportError(err('ERR_STREAM_ABORTED','Generation aborted',{severity:'info',tags:{domain:'chat',stage:'abort'}}), { code:'ERR_STREAM_ABORTED', toast: appConfig.errors?.showAbortInfo })`.
+Default config `showAbortInfo=false` means aborts are logged + hooked but not toasted.
 
 ## Control Flow Examples (Lean)
 
 Streaming failure: `catch(e){ reportError(e,{ code:'ERR_STREAM_FAILURE', tags:{domain:'chat', threadId, streamId}}) }`.
-User abort: `reportError(err('ERR_STREAM_ABORTED','Aborted',{severity:'info',tags:{domain:'chat'}}), { silent: true })`.
+User abort: `reportError(err('ERR_STREAM_ABORTED','Generation aborted',{severity:'info',tags:{domain:'chat',stage:'abort'}}), { code:'ERR_STREAM_ABORTED', toast: false })`.
 File validation: `throw err('ERR_FILE_VALIDATION','Unsupported file');` (UI catches & calls `reportError`).
 
 ## Error Mapping Rules
@@ -233,7 +236,7 @@ UI: toast list renders code & message.
 | Code                  | Description                  | Retryable | Severity | Notes                          |
 | --------------------- | ---------------------------- | --------- | -------- | ------------------------------ |
 | ERR_INTERNAL          | Unclassified internal defect | false     | error    | Fallback                       |
-| ERR_STREAM_ABORTED    | User aborted stream          | false     | info     | No toast                       |
+| ERR_STREAM_ABORTED    | User aborted stream          | false     | info     | No toast (unless flag)         |
 | ERR_STREAM_FAILURE    | Stream transport failure     | true      | error    | Retry allowed                  |
 | ERR_NETWORK           | Generic network error        | true      | warn     | Offline detect                 |
 | ERR_TIMEOUT           | Operation timed out          | true      | warn     | Backoff                        |
@@ -306,11 +309,13 @@ Do not log large prompt text unless explicitly tagged. Mask obvious secret keys.
 
 ## Configuration
 
-Optional app config snippet:
+Optional app config snippet (implemented):
 
 ```ts
 errors: { showAbortInfo: false, maxToasts: 5 }
 ```
+
+`maxToasts` retained (no-op with Nuxt UI toasts) for potential future cap logic.
 
 ## Rollback Plan
 

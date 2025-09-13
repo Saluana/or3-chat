@@ -1,8 +1,8 @@
 // Minimal centralized error utility (Task 1.1)
 // Provides: types, err(), isAppError(), asAppError(), reportError(), simpleRetry(), light scrub & duplicate suppression.
 
-import { reactive } from 'vue';
 import { useHooks } from '~/composables/useHooks';
+import { useToast } from '#imports';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
 
@@ -101,21 +101,36 @@ function shouldLog(code: string, message: string): boolean {
     return !dup;
 }
 
-// Toast store (minimal) — plugins / app can observe via composable if needed later.
-interface ErrorToast {
-    id: string;
-    error: AppError;
-    retry?: () => void;
-}
-const toasts = reactive<ErrorToast[]>([]);
-let toastId = 0;
-export function useErrorToasts() {
-    return { toasts };
-}
+// Use Nuxt UI toast directly; no custom store.
 function pushToast(error: AppError, retry?: () => any) {
-    toasts.push({ id: String(++toastId), error, retry });
-    // Trim if too many (soft cap 5)
-    if (toasts.length > 5) toasts.shift();
+    try {
+        const { add } = useToast();
+        add({
+            id: error.timestamp + '-' + error.code,
+            title: error.code,
+            description: error.message,
+            actions: retry
+                ? [
+                      {
+                          label: 'Retry',
+                          onClick: () => {
+                              try {
+                                  retry();
+                              } catch {}
+                          },
+                      },
+                  ]
+                : undefined,
+            color:
+                error.severity === 'fatal'
+                    ? 'error'
+                    : error.severity === 'warn'
+                    ? 'warning'
+                    : error.severity === 'info'
+                    ? 'info'
+                    : 'error',
+        });
+    } catch {}
 }
 
 export interface ReportOptions {

@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { createStreamAccumulator } from './useStreamAccumulator';
-import { useToast } from '#imports';
+import { useToast, useAppConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { useUserApiKey } from './useUserApiKey';
 import { useHooks } from './useHooks';
@@ -956,6 +956,22 @@ export function useChat(
             streamAcc.finalize({ aborted: true });
             if (tailAssistant.value?.pending)
                 (tailAssistant.value as any).pending = false;
+            try {
+                const appConfig = useAppConfig?.() as any;
+                const showAbort = appConfig?.errors?.showAbortInfo === true;
+                reportError(
+                    err('ERR_STREAM_ABORTED', 'Generation aborted', {
+                        severity: 'info',
+                        tags: {
+                            domain: 'chat',
+                            threadId: threadIdRef.value || '',
+                            streamId: streamId.value || '',
+                            stage: 'abort',
+                        },
+                    }),
+                    { code: 'ERR_STREAM_ABORTED', toast: showAbort }
+                );
+            } catch {}
         },
         clear,
     };

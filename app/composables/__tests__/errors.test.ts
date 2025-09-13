@@ -1,11 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-    err,
-    asAppError,
-    reportError,
-    simpleRetry,
-    useErrorToasts,
-} from '~/utils/errors';
+import { err, asAppError, reportError, simpleRetry } from '~/utils/errors';
 import { useHooks } from '~/composables/useHooks';
 
 // Stub hooks (light) if needed
@@ -20,6 +14,12 @@ vi.mock('~/composables/useHooks', () => {
         }),
     };
 });
+
+// capture toast additions
+const addedToasts: any[] = [];
+vi.mock('#imports', () => ({
+    useToast: () => ({ add: (t: any) => addedToasts.push(t) }),
+}));
 
 describe('errors util', () => {
     it('creates err with defaults', () => {
@@ -106,9 +106,8 @@ describe('errors util', () => {
     });
 
     it('pushes toast (non-info)', () => {
-        const { toasts } = useErrorToasts();
         reportError(err('ERR_NETWORK', 'x', { severity: 'warn' }));
-        const found = toasts.find((t) => t.error.message === 'x');
+        const found = addedToasts.find((t) => t.title === 'ERR_NETWORK');
         expect(!!found).toBe(true);
     });
 });

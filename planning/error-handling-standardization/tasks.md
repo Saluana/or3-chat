@@ -32,18 +32,18 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 5. UI (Req: 6,8)
 
-[ ] 5.1 Add `useErrorToasts` composable (array + pushToast function used by `reportError`).
-[ ] 5.2 Simple toast renderer component (iterate; show code + message + Retry if provided).
+[x] 5.1 Switch to Nuxt UI `useToast()` (removed planned custom `useErrorToasts`).
+[x] 5.2 Remove bespoke toast component (leveraging Nuxt UI default renderer).
 [ ] 5.3 Add optional minimal error boundary (fatal only) later (low priority).
-[ ] 5.4 Chat abort suppressed unless config `showAbortInfo` true.
+[x] 5.4 Chat abort suppressed by default unless config `showAbortInfo` true.
 
 ## 6. Chat Integration (Req: 1,4,5,7,8,18)
 
-[ ] 6.1 Replace error branches in `useAi.ts` with `reportError`.
-[ ] 6.2 Use tags: `{ domain:'chat', threadId, streamId, modelId }`.
-[ ] 6.3 Abort path: `reportError(..., { silent: true })`.
-[ ] 6.4 Provide retry closure that replays last user message.
-[ ] 6.5 Tests: stream failure -> toast + retry; abort -> no toast.
+[x] 6.1 Replace error branches in `useAi.ts` with `reportError`.
+[x] 6.2 Use tags: `{ domain:'chat', threadId, streamId, modelId, stage }`.
+[x] 6.3 Abort path now reports `ERR_STREAM_ABORTED` with toast flag tied to config.
+[x] 6.4 Retry closure replays last user message.
+[ ] 6.5 Tests: add abort (no toast) test (pending) — stream failure + retry covered.
 
 ## 7. DB (Req: 2,4,20)
 
@@ -81,7 +81,7 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 13. Config (Req: 8)
 
-[ ] 13.1 Optional: add `errors.showAbortInfo` with default false.
+[x] 13.1 Added `errors.showAbortInfo` (default false) + `maxToasts` (legacy, now optional).
 
 ## 14. Performance (Req: 14)
 
@@ -89,12 +89,12 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 15. Scrubbing (Req: 15)
 
-[ ] 15.1 Implement simple token pattern replace.
-[ ] 15.2 Unit test.
+[x] 15.1 Implement simple token pattern replace.
+[x] 15.2 Unit test.
 
 ## 16. Graceful Degradation (Req: 17)
 
-[ ] 16.1 If `reportError` itself throws wrap in try/catch and fallback to `console.error` raw.
+[x] 16.1 `reportError` guarded by try/catch with fallback console logging.
 
 ## 17. Abort Policy (Req: 8)
 

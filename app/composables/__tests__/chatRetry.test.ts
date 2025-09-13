@@ -1,8 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useErrorToasts } from '~/utils/errors';
+// Collect toast calls via mocked useToast
+const addedToasts: any[] = [];
 
 // Basic mocks reused from other chat tests (minimal subset)
-vi.mock('#imports', () => ({ useToast: () => ({ add: () => {} }) }));
+vi.mock('#imports', () => ({
+    useToast: () => ({
+        add: (t: any) => {
+            addedToasts.push(t);
+        },
+    }),
+}));
 vi.mock('../../state/global', () => ({
     state: { value: { openrouterKey: null } },
 }));
@@ -118,19 +125,19 @@ describe('chat retry integration', () => {
         const chat = useChat([]);
         await chat.sendMessage('hello');
         await tick(20); // allow failure path + reportError toast push
-        const { toasts } = useErrorToasts();
-        const toast = [...toasts]
-            .reverse()
-            .find((t) => t.error.code === 'ERR_STREAM_FAILURE');
+        const toast = addedToasts.find((t) => t.title === 'ERR_STREAM_FAILURE');
         expect(toast).toBeTruthy();
-        expect(typeof toast?.retry).toBe('function');
+        const retryAction = toast?.actions?.find((a: any) =>
+            /retry/i.test(a.label)
+        );
+        expect(retryAction).toBeTruthy();
         const usersBefore = chat.messages.value.filter(
             (m) => m.role === 'user'
         );
         const userCountBefore = usersBefore.length;
         const originalUserId = usersBefore[usersBefore.length - 1]?.id;
         // Invoke retry
-        await toast!.retry!();
+        await retryAction.onClick();
         await tick(30);
         const usersAfter = chat.messages.value.filter((m) => m.role === 'user');
         const userCountAfter = usersAfter.length;
