@@ -1,6 +1,7 @@
 // Minimal centralized error utility (Task 1.1)
 // Provides: types, err(), isAppError(), asAppError(), reportError(), simpleRetry(), light scrub & duplicate suppression.
 
+import { reactive } from 'vue';
 import { useHooks } from '~/composables/useHooks';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';

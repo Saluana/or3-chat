@@ -22,6 +22,7 @@ import type {
     TextPart,
 } from '~/utils/chat/types';
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import { reportError, err } from '~/utils/errors';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import {
     buildParts,
@@ -898,7 +899,17 @@ export function useChat(
                 newAssistantId: newAssistant?.id,
             });
         } catch (e) {
-            console.error('[useChat.retryMessage] failed', e);
+            reportError(
+                e instanceof Error
+                    ? e
+                    : err('ERR_INTERNAL', '[retryMessage] failed', {
+                          tags: { domain: 'chat', op: 'retryMessage' },
+                      }),
+                {
+                    code: 'ERR_INTERNAL',
+                    tags: { domain: 'chat', op: 'retryMessage' },
+                }
+            );
         }
     }
 

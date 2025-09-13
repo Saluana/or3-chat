@@ -15,8 +15,8 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 2. Logging (Req: 4,17)
 
-[ ] 2.1 Use inline console in `reportError`; remove / ignore prior ad-hoc `console.error` after migration.
-[ ] 2.2 Replace high-noise spots (`useAi.ts`, openrouter callback) first.
+[x] 2.1 Use inline console in `reportError`; remove / ignore prior ad-hoc `console.error` after migration.
+[x] 2.2 Replace high-noise spots (`useAi.ts`, openrouter callback) first.
 
 ## 3. Hooks (Req: 5,12,18)
 

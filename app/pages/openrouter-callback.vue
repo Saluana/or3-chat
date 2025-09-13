@@ -37,6 +37,7 @@
 </template>
 
 <script setup>
+import { reportError, err } from '~/utils/errors';
 import { kv } from '~/db';
 import { state } from '~/state/global';
 
@@ -141,7 +142,13 @@ onMounted(async () => {
     });
 
     if (!code || !verifier) {
-        console.error('[openrouter-callback] Missing code or verifier');
+        reportError(
+            err('ERR_AUTH', 'Missing code or verifier', {
+                severity: 'warn',
+                tags: { domain: 'auth', page: 'openrouter-callback' },
+            }),
+            { toast: true }
+        );
         loading.value = false;
         ready.value = true;
         errorMessage.value =
@@ -149,10 +156,13 @@ onMounted(async () => {
         return;
     }
     if (savedState && state !== savedState) {
-        console.error('[openrouter-callback] State mismatch, potential CSRF', {
-            incoming: state,
-            savedState,
-        });
+        reportError(
+            err('ERR_AUTH', 'State mismatch (possible CSRF)', {
+                severity: 'error',
+                tags: { domain: 'auth', page: 'openrouter-callback' },
+            }),
+            { toast: true }
+        );
         loading.value = false;
         ready.value = true;
         errorMessage.value = 'State mismatch. Tap Continue to return.';
@@ -185,20 +195,31 @@ onMounted(async () => {
             return null;
         });
         if (!directResp.ok || !directJson) {
-            console.error(
-                '[openrouter-callback] Direct exchange failed',
-                directResp.status,
-                directJson
+            reportError(
+                err('ERR_NETWORK', 'Auth code exchange failed', {
+                    severity: 'error',
+                    tags: {
+                        domain: 'auth',
+                        page: 'openrouter-callback',
+                        status: directResp.status,
+                    },
+                }),
+                { toast: true }
             );
             return;
         }
         const userKey = directJson.key || directJson.access_token;
         if (!userKey) {
-            console.error(
-                '[openrouter-callback] Direct exchange returned no key',
-                {
-                    keys: Object.keys(directJson || {}),
-                }
+            reportError(
+                err('ERR_AUTH', 'Auth exchange returned no key', {
+                    severity: 'error',
+                    tags: {
+                        domain: 'auth',
+                        page: 'openrouter-callback',
+                        keys: Object.keys(directJson || {}).length,
+                    },
+                }),
+                { toast: true }
             );
             return;
         }
@@ -259,7 +280,11 @@ onMounted(async () => {
             }, 250);
         }, 50);
     } catch (err) {
-        console.error('[openrouter-callback] Exchange failed', err);
+        reportError(err, {
+            code: 'ERR_NETWORK',
+            tags: { domain: 'auth', page: 'openrouter-callback' },
+            toast: true,
+        });
         loading.value = false;
         ready.value = true;
         errorMessage.value =
