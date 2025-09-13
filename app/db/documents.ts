@@ -1,4 +1,5 @@
 import { db } from './client';
+import { dbTry } from './dbTry';
 import { newId, nowSec } from './util';
 import { useHooks } from '../composables/useHooks';
 
@@ -82,7 +83,11 @@ export async function createDocument(
         prepared
     )) as DocumentRow;
     await hooks.doAction('db.documents.create:action:before', filtered);
-    await db.posts.put(filtered as any); // reuse posts table
+    await dbTry(
+        () => db.posts.put(filtered as any),
+        { op: 'write', entity: 'posts', action: 'createDocument' },
+        { rethrow: true }
+    ); // reuse posts table
     await hooks.doAction('db.documents.create:action:after', filtered);
     return rowToRecord(filtered);
 }
@@ -91,7 +96,11 @@ export async function getDocument(
     id: string
 ): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const row = await db.posts.get(id);
+    const row = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
     if (!row || (row as any).postType !== 'doc') return undefined;
     const filtered = (await hooks.applyFilters(
         'db.documents.get:filter:output',
@@ -103,12 +112,17 @@ export async function getDocument(
 export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     const hooks = useHooks();
     // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
-        .where('postType')
-        .equals('doc')
-        .and((r) => !(r as any).deleted)
-        .reverse() // by primary key order soon? we'll sort manually after fetch
-        .toArray();
+    const rows = await dbTry(
+        () =>
+            db.posts
+                .where('postType')
+                .equals('doc')
+                .and((r) => !(r as any).deleted)
+                .reverse()
+                .toArray(),
+        { op: 'read', entity: 'posts', action: 'listDocuments' }
+    );
+    if (!rows) return [];
     // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
     rows.sort((a, b) => b.updated_at - a.updated_at);
     const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
@@ -129,7 +143,11 @@ export async function updateDocument(
     patch: UpdateDocumentPatch
 ): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
     if (!existing || (existing as any).postType !== 'doc') return undefined;
     const updated: DocumentRow = {
         id: existing.id,
@@ -150,14 +168,22 @@ export async function updateDocument(
         ? (filtered as any).updated
         : (filtered as any as DocumentRow);
     await hooks.doAction('db.documents.update:action:before', row);
-    await db.posts.put(row as any);
+    await dbTry(
+        () => db.posts.put(row as any),
+        { op: 'write', entity: 'posts', action: 'updateDocument' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.documents.update:action:after', row);
     return rowToRecord(row);
 }
 
 export async function softDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
     if (!existing || (existing as any).postType !== 'doc') return;
     const row = {
         ...(existing as any),
@@ -165,16 +191,28 @@ export async function softDeleteDocument(id: string): Promise<void> {
         updated_at: nowSec(),
     };
     await hooks.doAction('db.documents.delete:action:soft:before', row);
-    await db.posts.put(row);
+    await dbTry(
+        () => db.posts.put(row),
+        { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.documents.delete:action:soft:after', row);
 }
 
 export async function hardDeleteDocument(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.posts.get(id);
+    const existing = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
     if (!existing || (existing as any).postType !== 'doc') return;
     await hooks.doAction('db.documents.delete:action:hard:before', existing);
-    await db.posts.delete(id);
+    await dbTry(
+        () => db.posts.delete(id),
+        { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.documents.delete:action:hard:after', id);
 }
 

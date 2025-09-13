@@ -34,7 +34,7 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 [x] 5.1 Switch to Nuxt UI `useToast()` (removed planned custom `useErrorToasts`).
 [x] 5.2 Remove bespoke toast component (leveraging Nuxt UI default renderer).
-[ ] 5.3 Add optional minimal error boundary (fatal only) later (low priority).
+[x] 5.3 Add optional minimal error boundary (fatal only) later (low priority).
 [x] 5.4 Chat abort suppressed by default unless config `showAbortInfo` true.
 
 ## 6. Chat Integration (Req: 1,4,5,7,8,18)
@@ -43,13 +43,13 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 [x] 6.2 Use tags: `{ domain:'chat', threadId, streamId, modelId, stage }`.
 [x] 6.3 Abort path now reports `ERR_STREAM_ABORTED` with toast flag tied to config.
 [x] 6.4 Retry closure replays last user message.
-[ ] 6.5 Tests: add abort (no toast) test (pending) — stream failure + retry covered.
+[x] 6.5 Tests: add abort (no toast) test (pending) — stream failure + retry covered.
 
 ## 7. DB (Req: 2,4,20)
 
-[ ] 7.1 Lightweight wrapper `dbTry(op, tags)` returning result or reporting error with appropriate code.
-[ ] 7.2 Map quota exceeded to `ERR_DB_QUOTA_EXCEEDED` else read/write.
-[ ] 7.3 Tests: quota + write fail.
+[x] 7.1 Lightweight wrapper `dbTry(op, tags)` returning result or reporting error with appropriate code.
+[x] 7.2 Map quota exceeded to `ERR_DB_QUOTA_EXCEEDED` else read/write.
+[x] 7.3 Tests: quota + write fail.
 
 ## 8. Files (Req: 19)
 
@@ -98,7 +98,7 @@ artifact_id: c40b0dcb-25ce-4c6b-9a36-d1c1dbe9f6a4
 
 ## 17. Abort Policy (Req: 8)
 
-[ ] 17.1 Test suppression & config toggle.
+[x] 17.1 Test suppression & config toggle.
 
 ## 18. Context Tags (Req: 18)
 

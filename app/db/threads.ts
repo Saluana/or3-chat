@@ -1,4 +1,5 @@
 import { db } from './client';
+import { dbTry } from './dbTry';
 import { useHooks } from '../composables/useHooks';
 import { newId, nowSec, parseOrThrow } from './util';
 import {
@@ -19,7 +20,11 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
     // Validate against full schema so required defaults (status/pinned/etc.) are present
     const value = parseOrThrow(ThreadSchema, prepared);
     await hooks.doAction('db.threads.create:action:before', value);
-    await db.threads.put(value);
+    await dbTry(
+        () => db.threads.put(value),
+        { op: 'write', entity: 'threads', action: 'create' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.threads.create:action:after', value);
     return value;
 }
@@ -32,13 +37,20 @@ export async function upsertThread(value: Thread): Promise<void> {
     );
     await hooks.doAction('db.threads.upsert:action:before', filtered);
     parseOrThrow(ThreadSchema, filtered);
-    await db.threads.put(filtered);
+    await dbTry(
+        () => db.threads.put(filtered),
+        { op: 'write', entity: 'threads', action: 'upsert' },
+        { rethrow: true }
+    );
     await hooks.doAction('db.threads.upsert:action:after', filtered);
 }
 
 export function threadsByProject(projectId: string) {
     const hooks = useHooks();
-    const promise = db.threads.where('project_id').equals(projectId).toArray();
+    const promise = dbTry(
+        () => db.threads.where('project_id').equals(projectId).toArray(),
+        { op: 'read', entity: 'threads', action: 'byProject' }
+    );
     return promise.then((res) =>
         hooks.applyFilters('db.threads.byProject:filter:output', res)
     );
@@ -57,9 +69,11 @@ export function searchThreadsByTitle(term: string) {
 
 export function getThread(id: string) {
     const hooks = useHooks();
-    return db.threads
-        .get(id)
-        .then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
+    return dbTry(() => db.threads.get(id), {
+        op: 'read',
+        entity: 'threads',
+        action: 'get',
+    })?.then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
 }
 
 export function childThreads(parentThreadId: string) {
@@ -76,7 +90,11 @@ export function childThreads(parentThreadId: string) {
 export async function softDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.threads, async () => {
-        const t = await db.threads.get(id);
+        const t = await dbTry(() => db.threads.get(id), {
+            op: 'read',
+            entity: 'threads',
+            action: 'get',
+        });
         if (!t) return;
         await hooks.doAction('db.threads.delete:action:soft:before', t);
         await db.threads.put({
@@ -90,7 +108,11 @@ export async function softDeleteThread(id: string): Promise<void> {
 
 export async function hardDeleteThread(id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await db.threads.get(id);
+    const existing = await dbTry(() => db.threads.get(id), {
+        op: 'read',
+        entity: 'threads',
+        action: 'get',
+    });
     await db.transaction('rw', db.threads, db.messages, async () => {
         await hooks.doAction(
             'db.threads.delete:action:hard:before',
@@ -110,7 +132,11 @@ export async function forkThread(
 ): Promise<Thread> {
     const hooks = useHooks();
     return db.transaction('rw', db.threads, db.messages, async () => {
-        const src = await db.threads.get(sourceThreadId);
+        const src = await dbTry(
+            () => db.threads.get(sourceThreadId),
+            { op: 'read', entity: 'threads', action: 'get' },
+            { rethrow: true }
+        );
         if (!src) throw new Error('Source thread not found');
         const now = nowSec();
         const forkId = newId();
@@ -128,22 +154,57 @@ export async function forkThread(
             source: src,
             fork,
         });
-        await db.threads.put(fork);
+        await dbTry(
+            () => db.threads.put(fork),
+            { op: 'write', entity: 'threads', action: 'fork' },
+            { rethrow: true }
+        );
 
         if (options.copyMessages) {
-            const msgs = await db.messages
-                .where('thread_id')
-                .equals(src.id)
-                .sortBy('index');
+            const msgs =
+                (await dbTry(
+                    () =>
+                        db.messages
+                            .where('thread_id')
+                            .equals(src.id)
+                            .sortBy('index'),
+                    {
+                        op: 'read',
+                        entity: 'messages',
+                        action: 'forkCopyMessages',
+                    }
+                )) || [];
             for (const m of msgs) {
-                await db.messages.put({ ...m, id: newId(), thread_id: forkId });
+                await dbTry(
+                    () =>
+                        db.messages.put({
+                            ...m,
+                            id: newId(),
+                            thread_id: forkId,
+                        }),
+                    {
+                        op: 'write',
+                        entity: 'messages',
+                        action: 'forkCopyMessage',
+                    },
+                    { rethrow: true }
+                );
             }
             if (msgs.length > 0) {
-                await db.threads.put({
-                    ...fork,
-                    last_message_at: now,
-                    updated_at: now,
-                });
+                await dbTry(
+                    () =>
+                        db.threads.put({
+                            ...fork,
+                            last_message_at: now,
+                            updated_at: now,
+                        }),
+                    {
+                        op: 'write',
+                        entity: 'threads',
+                        action: 'forkUpdateMeta',
+                    },
+                    { rethrow: true }
+                );
             }
         }
         await hooks.doAction('db.threads.fork:action:after', fork);
@@ -157,7 +218,11 @@ export async function updateThreadSystemPrompt(
 ): Promise<void> {
     const hooks = useHooks();
     await db.transaction('rw', db.threads, async () => {
-        const thread = await db.threads.get(threadId);
+        const thread = await dbTry(() => db.threads.get(threadId), {
+            op: 'read',
+            entity: 'threads',
+            action: 'get',
+        });
         if (!thread) return;
         const updated = {
             ...thread,
@@ -168,7 +233,11 @@ export async function updateThreadSystemPrompt(
             thread,
             promptId,
         });
-        await db.threads.put(updated);
+        await dbTry(
+            () => db.threads.put(updated),
+            { op: 'write', entity: 'threads', action: 'updateSystemPrompt' },
+            { rethrow: true }
+        );
         await hooks.doAction('db.threads.updateSystemPrompt:action:after', {
             thread: updated,
             promptId,
@@ -180,7 +249,11 @@ export async function getThreadSystemPrompt(
     threadId: string
 ): Promise<string | null> {
     const hooks = useHooks();
-    const thread = await db.threads.get(threadId);
+    const thread = await dbTry(() => db.threads.get(threadId), {
+        op: 'read',
+        entity: 'threads',
+        action: 'get',
+    });
     const result = thread?.system_prompt_id ?? null;
     return hooks.applyFilters(
         'db.threads.getSystemPrompt:filter:output',
