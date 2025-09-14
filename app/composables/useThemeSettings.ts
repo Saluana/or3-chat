@@ -69,11 +69,11 @@ export const DEFAULT_THEME_SETTINGS_DARK: ThemeSettings = Object.freeze({
     bottomBarBgColor: 'var(--md-surface-container-high)',
     // Use a single subtle pattern layer by default (second disabled) to avoid washed-out light feel.
     contentBg1: '/bg-repeat.webp',
-    contentBg2: null, // disabled for clearer dark differentiation
-    contentBg1Opacity: 0.05,
-    contentBg2Opacity: 0.08, // kept for when user enables second layer
+    contentBg2: '/bg-repeat-2.webp', // disabled for clearer dark differentiation
+    contentBg1Opacity: 0.03,
+    contentBg2Opacity: 0.05, // kept for when user enables second layer
     sidebarBg: '/sidebar-repeater.webp',
-    sidebarBgOpacity: 0.06,
+    sidebarBgOpacity: 0.12,
     sidebarRepeat: 'repeat',
     contentRepeat: 'repeat',
     reducePatternsInHighContrast: true,
