@@ -1,5 +1,6 @@
 <template>
-    <div class="p-4 space-y-8 text-sm">
+    <!-- Root no longer forces full height or its own scroll; parent provides scroll container -->
+    <div class="px-4 py-4 space-y-12 text-sm">
         <!-- Typography -->
         <section class="space-y-3">
             <h2 class="font-heading text-base uppercase tracking-wide">
@@ -19,6 +20,16 @@
                     >{{ local.baseFontPx }}px</span
                 >
             </div>
+            <label
+                class="flex items-center gap-2 cursor-pointer select-none pt-2"
+            >
+                <input
+                    type="checkbox"
+                    :checked="settings.useSystemFont"
+                    @change="set({ useSystemFont: !settings.useSystemFont })"
+                />
+                <span class="text-xs">Use system font for body & headings</span>
+            </label>
         </section>
 
         <!-- Content Background Layer 1 -->
@@ -26,23 +37,49 @@
             <h2 class="font-heading text-base uppercase tracking-wide">
                 Content Layer 1
             </h2>
+            <!-- Preview row -->
+            <div class="flex items-center gap-3">
+                <div
+                    class="pattern-thumb"
+                    :class="
+                        !settings.contentBg1 || local.contentBg1Opacity === 0
+                            ? 'opacity-30'
+                            : ''
+                    "
+                    :style="{
+                        backgroundImage: settings.contentBg1
+                            ? `url(${settings.contentBg1})`
+                            : 'none',
+                        backgroundRepeat: settings.contentRepeat,
+                    }"
+                    aria-label="Content background layer 1 preview"
+                />
+                <span
+                    class="text-xs truncate max-w-[160px]"
+                    :title="displayName(settings.contentBg1)"
+                >
+                    {{
+                        settings.contentBg1
+                            ? displayName(settings.contentBg1)
+                            : 'None'
+                    }}
+                </span>
+            </div>
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
-                <button
+                <UButton
                     v-for="p in presetsContent1"
                     :key="p.src"
                     @click="applyPreset('contentBg1', p.src, p.opacity)"
-                    class="retro-btn px-2 py-1 text-xs"
+                    class="retro-chip"
+                    :class="isPresetActive('contentBg1', p.src)"
                 >
                     {{ p.label }}
-                </button>
-                <button
-                    class="retro-btn px-2 py-1 text-xs"
-                    @click="removeLayer('contentBg1')"
-                >
+                </UButton>
+                <UButton class="retro-chip" @click="removeLayer('contentBg1')">
                     Remove
-                </button>
-                <label class="retro-btn px-2 py-1 text-xs cursor-pointer">
+                </UButton>
+                <label class="retro-chip cursor-pointer">
                     Upload
                     <input
                         type="file"
@@ -51,13 +88,13 @@
                         @change="onUpload($event, 'contentBg1')"
                     />
                 </label>
-                <button
-                    class="retro-btn px-2 py-1 text-xs"
+                <UButton
+                    class="retro-chip"
                     @click="toggleRepeat('contentRepeat')"
                 >
                     Repeat:
                     {{ settings.contentRepeat === 'repeat' ? 'On' : 'Off' }}
-                </button>
+                </UButton>
             </div>
             <div class="flex items-center gap-4">
                 <label class="w-32">Opacity</label>
@@ -81,24 +118,49 @@
             <h2 class="font-heading text-base uppercase tracking-wide">
                 Content Layer 2
             </h2>
-            <div class="flex flex-wrap gap-2 items-center">
-                <button
-                    class="retro-btn px-2 py-1 text-xs"
-                    @click="toggleLayer2()"
+            <div class="flex items-center gap-3">
+                <div
+                    class="pattern-thumb"
+                    :class="
+                        !settings.contentBg2 || local.contentBg2Opacity === 0
+                            ? 'opacity-30'
+                            : ''
+                    "
+                    :style="{
+                        backgroundImage: settings.contentBg2
+                            ? `url(${settings.contentBg2})`
+                            : 'none',
+                        backgroundRepeat: settings.contentRepeat,
+                    }"
+                    aria-label="Content background layer 2 preview"
+                />
+                <span
+                    class="text-xs truncate max-w-[160px]"
+                    :title="displayName(settings.contentBg2)"
                 >
+                    {{
+                        settings.contentBg2
+                            ? displayName(settings.contentBg2)
+                            : 'Disabled'
+                    }}
+                </span>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+                <UButton class="retro-chip" @click="toggleLayer2()">
                     {{ settings.contentBg2 ? 'Disable' : 'Enable' }}
-                </button>
+                </UButton>
                 <template v-if="settings.contentBg2">
                     <span class="text-xs opacity-70">Presets:</span>
-                    <button
+                    <UButton
                         v-for="p in presetsContent2"
                         :key="p.src"
                         @click="applyPreset('contentBg2', p.src, p.opacity)"
-                        class="retro-btn px-2 py-1 text-xs"
+                        class="retro-chip"
+                        :class="isPresetActive('contentBg2', p.src)"
                     >
                         {{ p.label }}
-                    </button>
-                    <label class="retro-btn px-2 py-1 text-xs cursor-pointer">
+                    </UButton>
+                    <label class="retro-chip cursor-pointer">
                         Upload
                         <input
                             type="file"
@@ -131,23 +193,48 @@
             <h2 class="font-heading text-base uppercase tracking-wide">
                 Sidebar Background
             </h2>
+            <div class="flex items-center gap-3">
+                <div
+                    class="pattern-thumb"
+                    :class="
+                        !settings.sidebarBg || local.sidebarBgOpacity === 0
+                            ? 'opacity-30'
+                            : ''
+                    "
+                    :style="{
+                        backgroundImage: settings.sidebarBg
+                            ? `url(${settings.sidebarBg})`
+                            : 'none',
+                        backgroundRepeat: settings.sidebarRepeat,
+                    }"
+                    aria-label="Sidebar background preview"
+                />
+                <span
+                    class="text-xs truncate max-w-[160px]"
+                    :title="displayName(settings.sidebarBg)"
+                >
+                    {{
+                        settings.sidebarBg
+                            ? displayName(settings.sidebarBg)
+                            : 'None'
+                    }}
+                </span>
+            </div>
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
-                <button
+                <UButton
                     v-for="p in presetsSidebar"
                     :key="p.src"
                     @click="applyPreset('sidebarBg', p.src, p.opacity)"
-                    class="retro-btn px-2 py-1 text-xs"
+                    class="retro-chip"
+                    :class="isPresetActive('sidebarBg', p.src)"
                 >
                     {{ p.label }}
-                </button>
-                <button
-                    class="retro-btn px-2 py-1 text-xs"
-                    @click="removeLayer('sidebarBg')"
-                >
+                </UButton>
+                <UButton class="retro-chip" @click="removeLayer('sidebarBg')">
                     Remove
-                </button>
-                <label class="retro-btn px-2 py-1 text-xs cursor-pointer">
+                </UButton>
+                <label class="retro-chip cursor-pointer">
                     Upload
                     <input
                         type="file"
@@ -156,13 +243,13 @@
                         @change="onUpload($event, 'sidebarBg')"
                     />
                 </label>
-                <button
-                    class="retro-btn px-2 py-1 text-xs"
+                <UButton
+                    class="retro-chip"
                     @click="toggleRepeat('sidebarRepeat')"
                 >
                     Repeat:
                     {{ settings.sidebarRepeat === 'repeat' ? 'On' : 'Off' }}
-                </button>
+                </UButton>
             </div>
             <div class="flex items-center gap-4">
                 <label class="w-32">Opacity</label>
@@ -203,9 +290,9 @@
             <h2 class="font-heading text-base uppercase tracking-wide">
                 Reset
             </h2>
-            <button class="retro-btn px-3 py-2 text-xs" @click="onResetAll">
+            <UButton class="retro-btn px-3 py-2 text-xs" @click="onResetAll">
                 Reset All
-            </button>
+            </UButton>
         </section>
     </div>
 </template>
@@ -321,6 +408,24 @@ function applyPreset(
         set({ sidebarBg: src, sidebarBgOpacity: opacity });
 }
 
+function displayName(path: string | null) {
+    if (!path) return '';
+    try {
+        if (path.startsWith('blob:')) return 'Uploaded';
+        const url = new URL(path, window.location.origin);
+        return url.pathname.split('/').pop() || path;
+    } catch {
+        return path.split('/').pop() || path;
+    }
+}
+
+function isPresetActive(
+    which: 'contentBg1' | 'contentBg2' | 'sidebarBg',
+    src: string
+) {
+    return (settings.value as any)[which] === src ? 'active' : '';
+}
+
 // Object URL lifecycle tracking
 const objectUrls = new Set<string>();
 function registerObjectUrl(u: string) {
@@ -383,3 +488,47 @@ watch(
     { deep: true }
 );
 </script>
+
+<style scoped>
+.pattern-thumb {
+    width: 42px;
+    height: 42px;
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    background-color: var(--md-surface-variant);
+    background-size: 32px 32px;
+    image-rendering: pixelated;
+}
+
+.retro-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.5rem; /* ~py-1 px-2 */
+    font-size: 0.75rem; /* text-xs */
+    font-weight: 500; /* font-medium */
+    user-select: none;
+    transition: background-color 120ms ease, color 120ms ease;
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    border-radius: 3px;
+    background: var(--md-surface);
+    line-height: 1;
+}
+.retro-chip:hover {
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+}
+.retro-chip:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--md-inverse-surface);
+}
+.retro-chip.active {
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+}
+.retro-chip:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+</style>

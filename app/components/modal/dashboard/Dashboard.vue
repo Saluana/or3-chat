@@ -3,7 +3,7 @@
         v-model:open="open"
         :ui="{
             footer: 'justify-end border-t-2',
-            body: 'p-0!',
+            body: 'overflow-hidden h-full flex-1 p-0!',
         }"
         title="Dashboard"
         description="Browse all apps, plugins, and settings."
@@ -30,8 +30,13 @@
                     />
                 </div>
             </div>
-            <div v-if="activeView === 'page'">
-                <div class="flex h-[40px] items-center border-b-2 pr-2">
+            <div
+                v-if="activeView === 'page'"
+                class="h-full flex flex-col min-h-0"
+            >
+                <div
+                    class="flex h-[40px] shrink-0 items-center border-b-2 pr-2"
+                >
                     <UButton
                         variant="subtle"
                         color="primary"
@@ -81,8 +86,8 @@
                     </button>
                 </div>
                 <!-- Single page or chosen page -->
-                <div v-else class="p-4">
-                    <div v-if="loadingPage" class="text-sm opacity-70">
+                <div v-else class="flex-1 min-h-0 overflow-y-auto">
+                    <div v-if="loadingPage" class="text-sm opacity-70 p-4">
                         Loading…
                     </div>
                     <component

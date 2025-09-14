@@ -21,6 +21,9 @@
 	/* Tailwind v4 token vars (optional for font utilities) */
 	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
 	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+	/* Dynamic current font choices (updated by theme settings) */
+	--app-font-sans-current: var(--font-sans);
+	--app-font-heading-current: var(--font-heading);
     --ui-radius: 3px;
 
 	/* Theme customization variables (defaults mirror shipped design) */
@@ -48,7 +51,7 @@
 }
 
 html, body {
-	font-family: var(--font-sans) !important;
+	font-family: var(--app-font-sans-current, var(--font-sans)) !important;
     font-size: var(--app-font-size-root, 20px);
 }
 
@@ -69,7 +72,7 @@ html, body {
 }
 
 h1, h2, h3, h4, h5, h6, .font-heading {
-	font-family: var(--font-heading) !important;
+	font-family: var(--app-font-heading-current, var(--font-heading)) !important;
 }
 
 .retro-btn { 

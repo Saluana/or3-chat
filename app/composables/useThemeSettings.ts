@@ -6,6 +6,7 @@ import { ref, reactive, watch, toRaw } from 'vue';
  */
 export interface ThemeSettings {
     baseFontPx: number; // 14..24
+    useSystemFont: boolean; // when true, override both body and heading fonts with system stack
     contentBg1: string | null;
     contentBg2: string | null;
     contentBg1Opacity: number; // 0..1
@@ -21,6 +22,7 @@ export const THEME_SETTINGS_STORAGE_KEY = 'theme:settings:v1';
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = Object.freeze({
     baseFontPx: 20,
+    useSystemFont: false,
     contentBg1: '/bg-repeat.webp',
     contentBg2: '/bg-repeat-2.webp',
     contentBg1Opacity: 0.08,
@@ -63,6 +65,7 @@ function isValidImageValue(v: string) {
 function sanitize(s: ThemeSettings): ThemeSettings {
     const out: ThemeSettings = { ...s } as ThemeSettings;
     out.baseFontPx = clamp(Math.round(out.baseFontPx), 14, 24);
+    out.useSystemFont = !!out.useSystemFont;
     out.contentBg1 =
         out.contentBg1 && isValidImageValue(out.contentBg1)
             ? out.contentBg1
@@ -94,6 +97,26 @@ function applyToRoot(settings: ThemeSettings) {
     if (!isBrowser()) return; // SSR/test guard
     const r = document.documentElement.style;
     r.setProperty('--app-font-size-root', settings.baseFontPx + 'px');
+    // Font overrides
+    if (settings.useSystemFont) {
+        r.setProperty(
+            '--app-font-sans-current',
+            'ui-sans-serif, system-ui, sans-serif'
+        );
+        r.setProperty(
+            '--app-font-heading-current',
+            'ui-sans-serif, system-ui, sans-serif'
+        );
+    } else {
+        r.setProperty(
+            '--app-font-sans-current',
+            '"VT323", ui-sans-serif, system-ui, sans-serif'
+        );
+        r.setProperty(
+            '--app-font-heading-current',
+            '"Press Start 2P", ui-sans-serif, system-ui, sans-serif'
+        );
+    }
     r.setProperty(
         '--app-content-bg-1',
         settings.contentBg1 ? `url("${settings.contentBg1}")` : 'none'
