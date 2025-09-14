@@ -68,6 +68,8 @@
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
                 <UButton
+                    size="sm"
+                    variant="basic"
                     v-for="p in presetsContent1"
                     :key="p.src"
                     @click="applyPreset('contentBg1', p.src, p.opacity)"
@@ -76,10 +78,17 @@
                 >
                     {{ p.label }}
                 </UButton>
-                <UButton class="retro-chip" @click="removeLayer('contentBg1')">
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    @click="removeLayer('contentBg1')"
+                >
                     Remove
                 </UButton>
-                <label class="retro-chip cursor-pointer">
+                <label
+                    class="border-2 shadow-none! drop-shadow-none! hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)] rounded-[3px] h-[32px] text-[16px] flex items-center justify-center px-2.5 cursor-pointer"
+                >
                     Upload
                     <input
                         type="file"
@@ -89,6 +98,8 @@
                     />
                 </label>
                 <UButton
+                    size="sm"
+                    variant="basic"
                     class="retro-chip"
                     @click="toggleRepeat('contentRepeat')"
                 >
@@ -146,32 +157,39 @@
                 </span>
             </div>
             <div class="flex flex-wrap gap-2 items-center">
-                <UButton class="retro-chip" @click="toggleLayer2()">
-                    {{ settings.contentBg2 ? 'Disable' : 'Enable' }}
+                <span class="text-xs opacity-70">Presets:</span>
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    v-for="p in presetsContent2"
+                    :key="p.src"
+                    @click="applyPreset('contentBg2', p.src, p.opacity)"
+                    class="retro-chip"
+                    :class="isPresetActive('contentBg2', p.src)"
+                >
+                    {{ p.label }}
                 </UButton>
-                <template v-if="settings.contentBg2">
-                    <span class="text-xs opacity-70">Presets:</span>
-                    <UButton
-                        v-for="p in presetsContent2"
-                        :key="p.src"
-                        @click="applyPreset('contentBg2', p.src, p.opacity)"
-                        class="retro-chip"
-                        :class="isPresetActive('contentBg2', p.src)"
-                    >
-                        {{ p.label }}
-                    </UButton>
-                    <label class="retro-chip cursor-pointer">
-                        Upload
-                        <input
-                            type="file"
-                            class="hidden"
-                            accept="image/*"
-                            @change="onUpload($event, 'contentBg2')"
-                        />
-                    </label>
-                </template>
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    @click="removeLayer('contentBg2')"
+                >
+                    Remove
+                </UButton>
+                <label
+                    class="border-2 shadow-none! drop-shadow-none! hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)] rounded-[3px] h-[32px] text-[16px] flex items-center justify-center px-2.5 cursor-pointer"
+                >
+                    Upload
+                    <input
+                        type="file"
+                        class="hidden"
+                        accept="image/*"
+                        @change="onUpload($event, 'contentBg2')"
+                    />
+                </label>
             </div>
-            <div v-if="settings.contentBg2" class="flex items-center gap-4">
+            <div class="flex items-center gap-4">
                 <label class="w-32">Opacity</label>
                 <input
                     type="range"
@@ -223,6 +241,8 @@
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
                 <UButton
+                    size="sm"
+                    variant="basic"
                     v-for="p in presetsSidebar"
                     :key="p.src"
                     @click="applyPreset('sidebarBg', p.src, p.opacity)"
@@ -231,10 +251,17 @@
                 >
                     {{ p.label }}
                 </UButton>
-                <UButton class="retro-chip" @click="removeLayer('sidebarBg')">
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    @click="removeLayer('sidebarBg')"
+                >
                     Remove
                 </UButton>
-                <label class="retro-chip cursor-pointer">
+                <label
+                    class="border-2 shadow-none! drop-shadow-none! hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)] rounded-[3px] h-[32px] text-[16px] flex items-center justify-center px-2.5 cursor-pointer"
+                >
                     Upload
                     <input
                         type="file"
@@ -244,6 +271,8 @@
                     />
                 </label>
                 <UButton
+                    size="sm"
+                    variant="basic"
                     class="retro-chip"
                     @click="toggleRepeat('sidebarRepeat')"
                 >
@@ -290,7 +319,12 @@
             <h2 class="font-heading text-base uppercase tracking-wide">
                 Reset
             </h2>
-            <UButton class="retro-btn px-3 py-2 text-xs" @click="onResetAll">
+            <UButton
+                size="sm"
+                variant="basic"
+                class="retro-btn px-3 py-2 text-xs"
+                @click="onResetAll"
+            >
                 Reset All
             </UButton>
         </section>
@@ -355,22 +389,13 @@ function toggleRepeat(key: 'contentRepeat' | 'sidebarRepeat') {
     set({ [key]: next } as any);
 }
 
-function removeLayer(which: 'contentBg1' | 'sidebarBg') {
+function removeLayer(which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
     if (which === 'contentBg1') {
         set({ contentBg1: null, contentBg1Opacity: 0 });
+    } else if (which === 'contentBg2') {
+        set({ contentBg2: null, contentBg2Opacity: 0 });
     } else if (which === 'sidebarBg') {
         set({ sidebarBg: null, sidebarBgOpacity: 0 });
-    }
-}
-
-function toggleLayer2() {
-    if (settings.value.contentBg2) {
-        set({ contentBg2: null, contentBg2Opacity: 0 });
-    } else {
-        set({
-            contentBg2: DEFAULT_THEME_SETTINGS.contentBg2,
-            contentBg2Opacity: DEFAULT_THEME_SETTINGS.contentBg2Opacity,
-        });
     }
 }
 
@@ -383,16 +408,13 @@ function toggleReduceHighContrast() {
 }
 
 const presetsContent1 = [
-    { label: 'Default 1', src: '/bg-repeat.webp', opacity: 0.08 },
-    { label: 'Alt 1', src: '/gradient-x.webp', opacity: 0.08 },
+    { label: 'Default', src: '/bg-repeat.webp', opacity: 0.08 },
 ];
 const presetsContent2 = [
-    { label: 'Default 2', src: '/bg-repeat-2.webp', opacity: 0.125 },
-    { label: 'Alt 2', src: '/gradient-x-sm.webp', opacity: 0.1 },
+    { label: 'Default', src: '/bg-repeat-2.webp', opacity: 0.125 },
 ];
 const presetsSidebar = [
     { label: 'Default', src: '/sidebar-repeater.webp', opacity: 0.1 },
-    { label: 'Gradient', src: '/gradient-x.webp', opacity: 0.1 },
 ];
 
 function applyPreset(
@@ -491,8 +513,8 @@ watch(
 
 <style scoped>
 .pattern-thumb {
-    width: 42px;
-    height: 42px;
+    width: 58px;
+    height: 58px;
     border: 2px solid var(--md-inverse-surface);
     box-shadow: 2px 2px 0 var(--md-inverse-surface);
     background-color: var(--md-surface-variant);
