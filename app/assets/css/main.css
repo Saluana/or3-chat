@@ -22,6 +22,21 @@
 	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
 	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
     --ui-radius: 3px;
+
+	/* Theme customization variables (defaults mirror shipped design) */
+	--app-font-size-root: 20px; /* base font size */
+	/* Content background layer 1 */
+	--app-content-bg-1: url('/bg-repeat.webp');
+	--app-content-bg-1-opacity: 0.08;
+	/* Content background layer 2 (overlay) */
+	--app-content-bg-2: url('/bg-repeat-2.webp');
+	--app-content-bg-2-opacity: 0.125;
+	/* Repeat flag for content layers */
+	--app-content-bg-repeat: repeat;
+	/* Sidebar background */
+	--app-sidebar-bg-1: url('/sidebar-repeater.webp');
+	--app-sidebar-bg-1-opacity: 0.1;
+	--app-sidebar-bg-repeat: repeat;
 }
 
 .font-ps2 {
@@ -34,7 +49,7 @@
 
 html, body {
 	font-family: var(--font-sans) !important;
-    font-size: 20px; 
+    font-size: var(--app-font-size-root, 20px);
 }
 
 /* Reusable scrollbar style for inner scroll containers (Firefox specific props) */

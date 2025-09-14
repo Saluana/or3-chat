@@ -19,30 +19,30 @@ artifact_id: 9b0e02fd-1333-4c9e-bfd3-0f3c9d7eaa55
 
 ## 2. CSS Variables & Global Styles
 
--   [ ] 2.1 Add variable declarations to `app/assets/css/main.css` root scope (Req: R3,R4,R5,R2,R6,R11)
--   [ ] 2.2 Replace hardcoded font-size with var reference (Req: R2)
--   [ ] 2.3 Update `.content-bg::before/::after` in `ResizableSidebarLayout.vue` to use vars (Req: R3,R4,R6)
--   [ ] 2.4 Update `aside::before` sidebar pattern to vars (Req: R5,R6)
--   [ ] 2.5 Add repeat variable usage in both areas (Req: R6)
--   [ ] 2.6 Confirm fallback visuals unchanged with defaults (manual) (Req: R8,R10)
+-   [x] 2.1 Add variable declarations to `app/assets/css/main.css` root scope (Req: R3,R4,R5,R2,R6,R11)
+-   [x] 2.2 Replace hardcoded font-size with var reference (Req: R2)
+-   [x] 2.3 Update `.content-bg::before/::after` in `ResizableSidebarLayout.vue` to use vars (Req: R3,R4,R6)
+-   [x] 2.4 Update `aside::before` sidebar pattern to vars (Req: R5,R6)
+-   [x] 2.5 Add repeat variable usage in both areas (Req: R6)
+-   [x] 2.6 Confirm fallback visuals unchanged with defaults (manual reasoning: defaults identical to previous hardcoded values) (Req: R8,R10)
 
 ## 3. Client Plugin
 
--   [ ] 3.1 Create `app/plugins/theme-settings.client.ts` to load & apply early (Req: R1,R8)
--   [ ] 3.2 Ensure HMR-safe (dispose logic if needed) (Req: R10)
+-   [x] 3.1 Create `app/plugins/theme-settings.client.ts` to load & apply early (Req: R1,R8)
+-   [x] 3.2 Ensure HMR-safe (dispose logic if needed) (Req: R10)
 
 ## 4. Theme Page UI
 
--   [ ] 4.1 Implement base skeleton in `ThemePage.vue` (sections + layout) (Req: R2,R3,R4,R5,R6,R7,R9)
--   [ ] 4.2 Font size slider + live preview (Req: R2,R8)
--   [ ] 4.3 Content layer 1 controls: preset buttons, upload, opacity, remove, repeat (Req: R3,R6)
--   [ ] 4.4 Content layer 2 toggle + controls (Req: R4)
--   [ ] 4.5 Sidebar background controls (preset, upload, opacity, remove, repeat) (Req: R5,R6)
--   [ ] 4.6 Accessibility checkbox (pattern reduction) (Req: R7)
--   [ ] 4.7 Reset all button with confirm (Req: R9)
--   [ ] 4.8 Debounce sliders (opacity + font) (Req: R8,R10)
--   [ ] 4.9 Image validation + error toasts (Req: R10)
--   [ ] 4.10 Handle object URL lifecycle (revoke on replace/unmount) (Req: R10)
+-   [x] 4.1 Implement base skeleton in `ThemePage.vue` (sections + layout) (Req: R2,R3,R4,R5,R6,R7,R9)
+-   [x] 4.2 Font size slider + live preview (Req: R2,R8)
+-   [x] 4.3 Content layer 1 controls: preset buttons, upload, opacity, remove, repeat (Req: R3,R6)
+-   [x] 4.4 Content layer 2 toggle + controls (Req: R4)
+-   [x] 4.5 Sidebar background controls (preset, upload, opacity, remove, repeat) (Req: R5,R6)
+-   [x] 4.6 Accessibility checkbox (pattern reduction) (Req: R7)
+-   [x] 4.7 Reset all button with confirm (Req: R9)
+-   [x] 4.8 Debounce sliders (opacity + font) (Req: R8,R10)
+-   [x] 4.9 Image validation + error toasts (Req: R10)
+-   [x] 4.10 Handle object URL lifecycle (revoke on replace/unmount) (Req: R10)
 
 ## 5. Testing
 

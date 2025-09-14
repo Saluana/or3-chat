@@ -374,14 +374,14 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/bg-repeat.webp');
-    background-repeat: repeat;
+    background-image: var(--app-content-bg-1, url('/bg-repeat.webp'));
+    background-repeat: var(--app-content-bg-repeat, repeat);
     background-position: top left;
     /* Default variables; can be overridden via inline style */
     --content-bg-size: 150px;
-    --content-bg-opacity: 0.08;
+    --content-bg-opacity: 0.08; /* legacy component var (fallback) */
     background-size: var(--content-bg-size) var(--content-bg-size);
-    opacity: var(--content-bg-opacity);
+    opacity: var(--app-content-bg-1-opacity, var(--content-bg-opacity));
     z-index: 0;
 }
 
@@ -397,13 +397,13 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/bg-repeat-2.webp');
-    background-repeat: repeat;
+    background-image: var(--app-content-bg-2, url('/bg-repeat-2.webp'));
+    background-repeat: var(--app-content-bg-repeat, repeat);
     background-position: top left;
     --content-overlay-size: 380px;
-    --content-overlay-opacity: 0.125;
+    --content-overlay-opacity: 0.125; /* legacy component var (fallback) */
     background-size: var(--content-overlay-size) var(--content-overlay-size);
-    opacity: var(--content-overlay-opacity);
+    opacity: var(--app-content-bg-2-opacity, var(--content-overlay-opacity));
     z-index: 0.5;
 }
 
@@ -422,11 +422,11 @@ aside::before {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/sidebar-repeater.webp');
-    background-repeat: repeat;
+    background-image: var(--app-sidebar-bg-1, url('/sidebar-repeater.webp'));
+    background-repeat: var(--app-sidebar-bg-repeat, repeat);
     background-position: top left;
     background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
-    opacity: var(--sidebar-rep-opacity);
+    opacity: var(--app-sidebar-bg-1-opacity, var(--sidebar-rep-opacity));
     z-index: 0;
 }
 
