@@ -148,15 +148,26 @@
             <!-- Preview row -->
             <div class="flex items-center gap-3">
                 <div
-                    class="pattern-thumb"
-                    :class="
+                    class="pattern-thumb drop-zone"
+                    :class="[
                         !settings.contentBg1 || local.contentBg1Opacity === 0
                             ? 'opacity-30'
-                            : ''
-                    "
+                            : '',
+                        dragOver.contentBg1 ? 'is-dragover' : '',
+                    ]"
                     :style="contentBg1PreviewStyle"
-                    aria-label="Content background layer 1 preview"
-                />
+                    aria-label="Content background layer 1 (click or drop to upload)"
+                    role="button"
+                    tabindex="0"
+                    @click="openFile('contentBg1')"
+                    @keydown.enter.prevent="openFile('contentBg1')"
+                    @dragenter.prevent="onDragEnter($event, 'contentBg1')"
+                    @dragover.prevent="onDragOver($event)"
+                    @dragleave.prevent="onDragLeave($event, 'contentBg1')"
+                    @drop.prevent="onDrop($event, 'contentBg1')"
+                >
+                    <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
+                </div>
                 <span
                     class="text-xs truncate max-w-[160px]"
                     :title="displayName(settings.contentBg1)"
@@ -189,15 +200,14 @@
                 >
                     Remove
                 </UButton>
-                <label class="retro-chip cursor-pointer">
-                    <span>Upload</span>
-                    <input
-                        type="file"
-                        class="hidden"
-                        accept="image/*"
-                        @change="onUpload($event, 'contentBg1')"
-                    />
-                </label>
+                <!-- hidden input for programmatic trigger -->
+                <input
+                    :ref="(el:any)=> fileInputs.contentBg1 = el"
+                    type="file"
+                    class="sr-only"
+                    accept="image/*"
+                    @change="onUpload($event, 'contentBg1')"
+                />
                 <UButton
                     size="sm"
                     variant="basic"
@@ -253,7 +263,7 @@
                         : local.contentBg1SizePx + 'px'
                 }}</span>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
                     :disabled="!settings.customBgColorsEnabled"
@@ -313,15 +323,26 @@
             </p>
             <div class="flex items-center gap-3">
                 <div
-                    class="pattern-thumb"
-                    :class="
+                    class="pattern-thumb drop-zone"
+                    :class="[
                         !settings.contentBg2 || local.contentBg2Opacity === 0
                             ? 'opacity-30'
-                            : ''
-                    "
+                            : '',
+                        dragOver.contentBg2 ? 'is-dragover' : '',
+                    ]"
                     :style="contentBg2PreviewStyle"
-                    aria-label="Content background layer 2 preview"
-                />
+                    aria-label="Content background layer 2 (click or drop to upload)"
+                    role="button"
+                    tabindex="0"
+                    @click="openFile('contentBg2')"
+                    @keydown.enter.prevent="openFile('contentBg2')"
+                    @dragenter.prevent="onDragEnter($event, 'contentBg2')"
+                    @dragover.prevent="onDragOver($event)"
+                    @dragleave.prevent="onDragLeave($event, 'contentBg2')"
+                    @drop.prevent="onDrop($event, 'contentBg2')"
+                >
+                    <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
+                </div>
                 <span
                     class="text-xs truncate max-w-[160px]"
                     :title="displayName(settings.contentBg2)"
@@ -354,15 +375,13 @@
                 >
                     Remove
                 </UButton>
-                <label class="retro-chip cursor-pointer">
-                    <span>Upload</span>
-                    <input
-                        type="file"
-                        class="hidden"
-                        accept="image/*"
-                        @change="onUpload($event, 'contentBg2')"
-                    />
-                </label>
+                <input
+                    :ref="(el:any)=> fileInputs.contentBg2 = el"
+                    type="file"
+                    class="sr-only"
+                    accept="image/*"
+                    @change="onUpload($event, 'contentBg2')"
+                />
                 <UButton
                     size="sm"
                     variant="basic"
@@ -418,7 +437,7 @@
                         : local.contentBg2SizePx + 'px'
                 }}</span>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
                     :disabled="!settings.customBgColorsEnabled"
@@ -477,15 +496,26 @@
             </p>
             <div class="flex items-center gap-3">
                 <div
-                    class="pattern-thumb"
-                    :class="
+                    class="pattern-thumb drop-zone"
+                    :class="[
                         !settings.sidebarBg || local.sidebarBgOpacity === 0
                             ? 'opacity-30'
-                            : ''
-                    "
+                            : '',
+                        dragOver.sidebarBg ? 'is-dragover' : '',
+                    ]"
                     :style="sidebarBgPreviewStyle"
-                    aria-label="Sidebar background preview"
-                />
+                    aria-label="Sidebar background (click or drop to upload)"
+                    role="button"
+                    tabindex="0"
+                    @click="openFile('sidebarBg')"
+                    @keydown.enter.prevent="openFile('sidebarBg')"
+                    @dragenter.prevent="onDragEnter($event, 'sidebarBg')"
+                    @dragover.prevent="onDragOver($event)"
+                    @dragleave.prevent="onDragLeave($event, 'sidebarBg')"
+                    @drop.prevent="onDrop($event, 'sidebarBg')"
+                >
+                    <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
+                </div>
                 <span
                     class="text-xs truncate max-w-[160px]"
                     :title="displayName(settings.sidebarBg)"
@@ -518,15 +548,13 @@
                 >
                     Remove
                 </UButton>
-                <label class="retro-chip cursor-pointer">
-                    <span>Upload</span>
-                    <input
-                        type="file"
-                        class="hidden"
-                        accept="image/*"
-                        @change="onUpload($event, 'sidebarBg')"
-                    />
-                </label>
+                <input
+                    :ref="(el:any)=> fileInputs.sidebarBg = el"
+                    type="file"
+                    class="sr-only"
+                    accept="image/*"
+                    @change="onUpload($event, 'sidebarBg')"
+                />
                 <UButton
                     size="sm"
                     variant="basic"
@@ -580,7 +608,7 @@
                         : local.sidebarBgSizePx + 'px'
                 }}</span>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
                     :disabled="!settings.customBgColorsEnabled"
@@ -1035,24 +1063,42 @@ watch(
     { immediate: true }
 );
 
-const contentBg1PreviewStyle = computed(() => ({
-    backgroundImage: resolvedContentBg1.value
-        ? `url(${resolvedContentBg1.value})`
-        : 'none',
-    backgroundRepeat: settings.value.contentBg1Repeat,
-}));
-const contentBg2PreviewStyle = computed(() => ({
-    backgroundImage: resolvedContentBg2.value
-        ? `url(${resolvedContentBg2.value})`
-        : 'none',
-    backgroundRepeat: settings.value.contentBg2Repeat,
-}));
-const sidebarBgPreviewStyle = computed(() => ({
-    backgroundImage: resolvedSidebarBg.value
-        ? `url(${resolvedSidebarBg.value})`
-        : 'none',
-    backgroundRepeat: settings.value.sidebarRepeat,
-}));
+const contentBg1PreviewStyle = computed(() => {
+    const fit = !!settings.value.contentBg1Fit;
+    const repeatEnabled = settings.value.contentBg1Repeat === 'repeat' && !fit;
+    return {
+        backgroundImage: resolvedContentBg1.value
+            ? `url(${resolvedContentBg1.value})`
+            : 'none',
+        backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
+        backgroundSize: repeatEnabled ? '32px 32px' : fit ? 'cover' : 'contain',
+        backgroundPosition: 'center',
+    } as const;
+});
+const contentBg2PreviewStyle = computed(() => {
+    const fit = !!settings.value.contentBg2Fit;
+    const repeatEnabled = settings.value.contentBg2Repeat === 'repeat' && !fit;
+    return {
+        backgroundImage: resolvedContentBg2.value
+            ? `url(${resolvedContentBg2.value})`
+            : 'none',
+        backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
+        backgroundSize: repeatEnabled ? '32px 32px' : fit ? 'cover' : 'contain',
+        backgroundPosition: 'center',
+    } as const;
+});
+const sidebarBgPreviewStyle = computed(() => {
+    const fit = !!settings.value.sidebarBgFit;
+    const repeatEnabled = settings.value.sidebarRepeat === 'repeat' && !fit;
+    return {
+        backgroundImage: resolvedSidebarBg.value
+            ? `url(${resolvedSidebarBg.value})`
+            : 'none',
+        backgroundRepeat: repeatEnabled ? 'repeat' : 'no-repeat',
+        backgroundSize: repeatEnabled ? '32px 32px' : fit ? 'cover' : 'contain',
+        backgroundPosition: 'center',
+    } as const;
+});
 
 function isPresetActive(
     which: 'contentBg1' | 'contentBg2' | 'sidebarBg',
@@ -1074,6 +1120,50 @@ onBeforeUnmount(revokeAll);
 
 // Minimal notify (console only for now; integrate with existing toast system later)
 const liveStatus = ref<HTMLElement | null>(null);
+// Drag & file input state for drop zones
+const dragOver = reactive({
+    contentBg1: false,
+    contentBg2: false,
+    sidebarBg: false,
+});
+const fileInputs = reactive<Record<string, HTMLInputElement | null>>({
+    contentBg1: null,
+    contentBg2: null,
+    sidebarBg: null,
+});
+
+function openFile(which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
+    const el = fileInputs[which];
+    if (el) el.click();
+}
+function onDragEnter(
+    _e: DragEvent,
+    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
+) {
+    dragOver[which] = true;
+}
+function onDragOver(_e: DragEvent) {
+    /* keep default prevented in template */
+}
+function onDragLeave(
+    _e: DragEvent,
+    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
+) {
+    dragOver[which] = false;
+}
+async function onDrop(
+    e: DragEvent,
+    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
+) {
+    dragOver[which] = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    await onUpload(
+        { target: { files: [file], value: '' } } as any as Event,
+        which
+    );
+}
+
 function notify(title: string, description?: string) {
     console.warn('[theme-settings]', title, description || '');
     if (liveStatus.value) {
@@ -1199,10 +1289,7 @@ watch(
     border-radius: 6px;
     box-shadow: 2px 2px 0 var(--md-inverse-surface);
 }
-.section-card:focus-within {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 2px;
-}
+/* Removed previous focus-within outline on entire section */
 .group-heading {
     margin-top: -0.25rem; /* optical align */
     letter-spacing: 0.08em;
@@ -1214,6 +1301,65 @@ watch(
     color: var(--md-on-surface-variant, var(--md-on-surface));
     opacity: 0.7;
 }
+.fallback-row {
+    flex-wrap: wrap;
+}
+.fallback-row > label {
+    flex: 0 0 120px;
+}
+.fallback-row .retro-input {
+    width: 92px;
+}
+@media (max-width: 560px) {
+    .fallback-row {
+        align-items: flex-start;
+    }
+    .fallback-row > label {
+        width: 100%;
+        margin-bottom: 4px;
+    }
+    .fallback-row .retro-input {
+        width: 100px;
+    }
+}
+.drop-zone {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
+.drop-zone:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+.drop-zone.is-dragover {
+    outline: 2px dashed var(--md-primary);
+    outline-offset: 2px;
+}
+.drop-zone .dz-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    /* Stronger scrim for readability over any image */
+    background: linear-gradient(rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.58));
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.9);
+    -webkit-text-stroke: 0.25px rgba(0, 0, 0, 0.6);
+    backdrop-filter: brightness(0.85) saturate(0.9) contrast(1.15);
+    /* Fallback if backdrop-filter unsupported */
+    mix-blend-mode: normal;
+}
+.drop-zone:is(:hover, :focus-visible, .is-dragover) .dz-hint {
+    opacity: 1;
+}
+
 .sr-only {
     position: absolute;
     width: 1px;
@@ -1226,8 +1372,8 @@ watch(
     border: 0;
 }
 .pattern-thumb {
-    width: 58px;
-    height: 58px;
+    width: 150px;
+    height: 150px;
     border: 2px solid var(--md-inverse-surface);
     box-shadow: 2px 2px 0 var(--md-inverse-surface);
     background-color: var(--md-surface-variant);
