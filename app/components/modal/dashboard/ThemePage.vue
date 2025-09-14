@@ -1,10 +1,19 @@
 <template>
     <!-- Root no longer forces full height or its own scroll; parent provides scroll container -->
     <div class="px-4 py-4 space-y-12 text-sm">
+        <!-- Accessible live region for status updates -->
+        <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
         <!-- Mode Toggle -->
-        <section class="space-y-2">
-            <div class="flex items-center justify-between">
-                <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-2"
+            role="group"
+            aria-labelledby="theme-section-mode"
+        >
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <h2
+                    id="theme-section-mode"
+                    class="font-heading text-base uppercase tracking-wide group-heading"
+                >
                     Theme Mode
                 </h2>
                 <div class="flex gap-2 items-center">
@@ -14,6 +23,7 @@
                         class="retro-chip"
                         :class="activeMode === 'light' ? 'active' : ''"
                         :disabled="activeMode === 'light'"
+                        :aria-pressed="activeMode === 'light'"
                         @click="switchMode('light')"
                         >Light</UButton
                     >
@@ -23,6 +33,7 @@
                         class="retro-chip"
                         :class="activeMode === 'dark' ? 'active' : ''"
                         :disabled="activeMode === 'dark'"
+                        :aria-pressed="activeMode === 'dark'"
                         @click="switchMode('dark')"
                         >Dark</UButton
                     >
@@ -30,6 +41,7 @@
                         size="sm"
                         variant="basic"
                         class="retro-chip"
+                        aria-label="Reset current theme mode"
                         @click="onResetCurrent"
                         :title="'Reset ' + activeMode + ' profile'"
                         >Reset {{ activeMode }}</UButton
@@ -42,8 +54,15 @@
             </p>
         </section>
         <!-- Custom Background Colors Master Toggle -->
-        <section class="space-y-2">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-2"
+            role="group"
+            aria-labelledby="theme-section-custom-bg"
+        >
+            <h2
+                id="theme-section-custom-bg"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Custom Background Colors
             </h2>
             <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -73,8 +92,15 @@
             </p>
         </section>
         <!-- Typography -->
-        <section class="space-y-3">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-3"
+            role="group"
+            aria-labelledby="theme-section-typography"
+        >
+            <h2
+                id="theme-section-typography"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Typography
             </h2>
             <div class="flex items-center gap-4">
@@ -104,10 +130,21 @@
         </section>
 
         <!-- Content Background Layer 1 -->
-        <section class="space-y-4">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-4"
+            role="group"
+            aria-labelledby="theme-section-content1"
+        >
+            <h2
+                id="theme-section-content1"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Content Layer 1
             </h2>
+            <p class="supporting-text">
+                Primary pattern beneath UI chrome. Size slider disabled when Fit
+                is enabled.
+            </p>
             <!-- Preview row -->
             <div class="flex items-center gap-3">
                 <div
@@ -152,10 +189,8 @@
                 >
                     Remove
                 </UButton>
-                <label
-                    class="border-2 shadow-none! drop-shadow-none! hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)] rounded-[3px] h-[32px] text-[16px] flex items-center justify-center px-2.5 cursor-pointer"
-                >
-                    Upload
+                <label class="retro-chip cursor-pointer">
+                    <span>Upload</span>
                     <input
                         type="file"
                         class="hidden"
@@ -168,6 +203,7 @@
                     variant="basic"
                     class="retro-chip"
                     @click="toggleRepeat('contentBg1Repeat')"
+                    :aria-pressed="settings.contentBg1Repeat === 'repeat'"
                 >
                     Repeat:
                     {{ settings.contentBg1Repeat === 'repeat' ? 'On' : 'Off' }}
@@ -260,10 +296,21 @@
         </section>
 
         <!-- Content Background Layer 2 -->
-        <section class="space-y-4">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-4"
+            role="group"
+            aria-labelledby="theme-section-content2"
+        >
+            <h2
+                id="theme-section-content2"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Content Layer 2
             </h2>
+            <p class="supporting-text">
+                Optional overlay pattern. Lower opacity recommended for subtle
+                texture.
+            </p>
             <div class="flex items-center gap-3">
                 <div
                     class="pattern-thumb"
@@ -307,10 +354,8 @@
                 >
                     Remove
                 </UButton>
-                <label
-                    class="border-2 shadow-none! drop-shadow-none! hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)] rounded-[3px] h-[32px] text-[16px] flex items-center justify-center px-2.5 cursor-pointer"
-                >
-                    Upload
+                <label class="retro-chip cursor-pointer">
+                    <span>Upload</span>
                     <input
                         type="file"
                         class="hidden"
@@ -323,6 +368,7 @@
                     variant="basic"
                     class="retro-chip"
                     @click="toggleRepeat('contentBg2Repeat')"
+                    :aria-pressed="settings.contentBg2Repeat === 'repeat'"
                 >
                     Repeat:
                     {{ settings.contentBg2Repeat === 'repeat' ? 'On' : 'Off' }}
@@ -415,10 +461,20 @@
         </section>
 
         <!-- Sidebar Background -->
-        <section class="space-y-4">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-4"
+            role="group"
+            aria-labelledby="theme-section-sidebar"
+        >
+            <h2
+                id="theme-section-sidebar"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Sidebar Background
             </h2>
+            <p class="supporting-text">
+                Applies to navigation rail / project tree area.
+            </p>
             <div class="flex items-center gap-3">
                 <div
                     class="pattern-thumb"
@@ -462,10 +518,8 @@
                 >
                     Remove
                 </UButton>
-                <label
-                    class="border-2 shadow-none! drop-shadow-none! hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)] rounded-[3px] h-[32px] text-[16px] flex items-center justify-center px-2.5 cursor-pointer"
-                >
-                    Upload
+                <label class="retro-chip cursor-pointer">
+                    <span>Upload</span>
                     <input
                         type="file"
                         class="hidden"
@@ -478,6 +532,7 @@
                     variant="basic"
                     class="retro-chip"
                     @click="toggleRepeat('sidebarRepeat')"
+                    :aria-pressed="settings.sidebarRepeat === 'repeat'"
                 >
                     Repeat:
                     {{ settings.sidebarRepeat === 'repeat' ? 'On' : 'Off' }}
@@ -568,8 +623,15 @@
         </section>
 
         <!-- Accessibility -->
-        <section class="space-y-3">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-3"
+            role="group"
+            aria-labelledby="theme-section-accessibility"
+        >
+            <h2
+                id="theme-section-accessibility"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Accessibility
             </h2>
             <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -585,8 +647,15 @@
         </section>
 
         <!-- Navigation Header -->
-        <section class="space-y-4">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-4"
+            role="group"
+            aria-labelledby="theme-section-header"
+        >
+            <h2
+                id="theme-section-header"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Navigation Header
             </h2>
             <div class="flex items-center gap-3 text-xs">
@@ -657,8 +726,15 @@
         </section>
 
         <!-- Navigation Footer -->
-        <section class="space-y-4">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-4"
+            role="group"
+            aria-labelledby="theme-section-footer"
+        >
+            <h2
+                id="theme-section-footer"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Navigation Footer
             </h2>
             <div class="flex items-center gap-3 text-xs">
@@ -729,8 +805,15 @@
         </section>
 
         <!-- Reset -->
-        <section class="space-y-3">
-            <h2 class="font-heading text-base uppercase tracking-wide">
+        <section
+            class="section-card space-y-3"
+            role="group"
+            aria-labelledby="theme-section-reset"
+        >
+            <h2
+                id="theme-section-reset"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
                 Reset
             </h2>
             <UButton
@@ -990,9 +1073,14 @@ function revokeAll() {
 onBeforeUnmount(revokeAll);
 
 // Minimal notify (console only for now; integrate with existing toast system later)
+const liveStatus = ref<HTMLElement | null>(null);
 function notify(title: string, description?: string) {
-    // eslint-disable-next-line no-console
     console.warn('[theme-settings]', title, description || '');
+    if (liveStatus.value) {
+        liveStatus.value.textContent = description
+            ? `${title}: ${description}`
+            : title;
+    }
 }
 
 async function onUpload(
@@ -1100,6 +1188,43 @@ watch(
 </script>
 
 <style scoped>
+.section-card {
+    position: relative;
+    padding: 1.25rem 1rem 1rem 1rem; /* MD3 dense card spacing */
+    border: 2px solid var(--md-inverse-surface);
+    background: linear-gradient(
+        var(--md-surface) 0%,
+        var(--md-surface-variant) 140%
+    );
+    border-radius: 6px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.section-card:focus-within {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+.group-heading {
+    margin-top: -0.25rem; /* optical align */
+    letter-spacing: 0.08em;
+}
+.supporting-text {
+    font-size: 10px;
+    line-height: 1.2;
+    max-width: 56ch;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    opacity: 0.7;
+}
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
 .pattern-thumb {
     width: 58px;
     height: 58px;
@@ -1140,6 +1265,14 @@ watch(
 .retro-chip:focus-visible {
     outline: 2px solid var(--md-primary);
     outline-offset: 2px;
+}
+
+/* Motion reduction respect */
+@media (prefers-reduced-motion: reduce) {
+    .retro-chip,
+    .section-card {
+        transition: none;
+    }
 }
 
 .retro-input {
