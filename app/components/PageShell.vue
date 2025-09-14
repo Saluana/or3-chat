@@ -433,13 +433,21 @@ const getThemeSafe = () => {
     } catch {}
     return 'light';
 };
-const themeName = ref<string>(getThemeSafe());
+// To avoid SSR/client hydration mismatch, initialize with null placeholder then set onMounted
+const themeName = ref<string>('light'); // default placeholder
+if (process.client) {
+    // set actual theme asap after mount to prevent SSR mismatch flicker
+    onMounted(() => {
+        syncTheme();
+    });
+}
 function syncTheme() {
     themeName.value = getThemeSafe();
 }
 function toggleTheme() {
     (nuxtApp.$theme as any)?.toggle?.();
-    syncTheme();
+    // defer sync to next frame to let DOM class update first
+    requestAnimationFrame(() => syncTheme());
 }
 if (process.client) {
     const root = document.documentElement;
