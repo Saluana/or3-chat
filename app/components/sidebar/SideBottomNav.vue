@@ -224,21 +224,30 @@ function navigateToCredits() {
     background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
 }
 .dark .bottomnav-root {
-    background-color: var(--app-bottomnav-bg-color, var(--md-surface-container-high));
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container-high)
+    );
 }
 
 .bottomnav-inner {
     background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
 }
 .dark .bottomnav-inner {
-    background-color: var(--app-bottomnav-bg-color, var(--md-surface-container));
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container)
+    );
 }
 
 .bottomnav-bar {
     background-color: var(--app-bottomnav-bg-color, var(--md-surface));
 }
 .dark .bottomnav-bar {
-    background-color: var(--app-bottomnav-bg-color, var(--md-surface-container-low));
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container-low)
+    );
 }
 /* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
 .retro-bar {

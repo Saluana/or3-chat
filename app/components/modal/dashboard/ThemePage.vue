@@ -133,6 +133,28 @@
                     @update:model-value="(c: string | undefined)=> c && set({ contentBg1Color: c })"
                     class="scale-75 origin-left"
                 />
+                <div class="flex items-center gap-2">
+                    <input
+                        class="retro-input w-24"
+                        type="text"
+                        spellcheck="false"
+                        maxlength="9"
+                        placeholder="#RRGGBB"
+                        v-model="localHex.contentBg1Color"
+                        @input="onHexInput('contentBg1Color')"
+                        aria-label="Content layer 1 fallback hex color"
+                    />
+                    <button
+                        type="button"
+                        class="retro-btn-copy"
+                        @click="copyColor('contentBg1Color')"
+                        :disabled="!settings.contentBg1Color.startsWith('#')"
+                        aria-label="Copy content layer 1 color"
+                        title="Copy"
+                    >
+                        Copy
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -227,6 +249,28 @@
                     @update:model-value="(c: string | undefined)=> c && set({ contentBg2Color: c })"
                     class="scale-75 origin-left"
                 />
+                <div class="flex items-center gap-2">
+                    <input
+                        class="retro-input w-24"
+                        type="text"
+                        spellcheck="false"
+                        maxlength="9"
+                        placeholder="#RRGGBB"
+                        v-model="localHex.contentBg2Color"
+                        @input="onHexInput('contentBg2Color')"
+                        aria-label="Content layer 2 fallback hex color"
+                    />
+                    <button
+                        type="button"
+                        class="retro-btn-copy"
+                        @click="copyColor('contentBg2Color')"
+                        :disabled="!settings.contentBg2Color.startsWith('#')"
+                        aria-label="Copy content layer 2 color"
+                        title="Copy"
+                    >
+                        Copy
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -330,6 +374,28 @@
                     @update:model-value="(c: string | undefined)=> c && set({ sidebarBgColor: c })"
                     class="scale-75 origin-left"
                 />
+                <div class="flex items-center gap-2">
+                    <input
+                        class="retro-input w-24"
+                        type="text"
+                        spellcheck="false"
+                        maxlength="9"
+                        placeholder="#RRGGBB"
+                        v-model="localHex.sidebarBgColor"
+                        @input="onHexInput('sidebarBgColor')"
+                        aria-label="Sidebar fallback hex color"
+                    />
+                    <button
+                        type="button"
+                        class="retro-btn-copy"
+                        @click="copyColor('sidebarBgColor')"
+                        :disabled="!settings.sidebarBgColor.startsWith('#')"
+                        aria-label="Copy sidebar color"
+                        title="Copy"
+                    >
+                        Copy
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -391,6 +457,28 @@
                     @update:model-value="(c: string | undefined)=> c && set({ headerBgColor: c })"
                     class="scale-75 origin-left"
                 />
+                <div class="flex items-center gap-2">
+                    <input
+                        class="retro-input w-24"
+                        type="text"
+                        spellcheck="false"
+                        maxlength="9"
+                        placeholder="#RRGGBB"
+                        v-model="localHex.headerBgColor"
+                        @input="onHexInput('headerBgColor')"
+                        aria-label="Header background hex color"
+                    />
+                    <button
+                        type="button"
+                        class="retro-btn-copy"
+                        @click="copyColor('headerBgColor')"
+                        :disabled="!settings.headerBgColor.startsWith('#')"
+                        aria-label="Copy header color"
+                        title="Copy"
+                    >
+                        Copy
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -435,6 +523,28 @@
                     @update:model-value="(c: string | undefined)=> c && set({ bottomBarBgColor: c })"
                     class="scale-75 origin-left"
                 />
+                <div class="flex items-center gap-2">
+                    <input
+                        class="retro-input w-24"
+                        type="text"
+                        spellcheck="false"
+                        maxlength="9"
+                        placeholder="#RRGGBB"
+                        v-model="localHex.bottomBarBgColor"
+                        @input="onHexInput('bottomBarBgColor')"
+                        aria-label="Bottom bar background hex color"
+                    />
+                    <button
+                        type="button"
+                        class="retro-btn-copy"
+                        @click="copyColor('bottomBarBgColor')"
+                        :disabled="!settings.bottomBarBgColor.startsWith('#')"
+                        aria-label="Copy bottom bar color"
+                        title="Copy"
+                    >
+                        Copy
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -477,6 +587,25 @@ const local = reactive({
     contentBg1Opacity: settings.value.contentBg1Opacity,
     contentBg2Opacity: settings.value.contentBg2Opacity,
     sidebarBgOpacity: settings.value.sidebarBgOpacity,
+});
+
+// Local hex color text boxes (so user can type partial values without reverting)
+const localHex = reactive({
+    contentBg1Color: settings.value.contentBg1Color.startsWith('#')
+        ? settings.value.contentBg1Color
+        : '',
+    contentBg2Color: settings.value.contentBg2Color.startsWith('#')
+        ? settings.value.contentBg2Color
+        : '',
+    sidebarBgColor: settings.value.sidebarBgColor.startsWith('#')
+        ? settings.value.sidebarBgColor
+        : '',
+    headerBgColor: settings.value.headerBgColor.startsWith('#')
+        ? settings.value.headerBgColor
+        : '',
+    bottomBarBgColor: settings.value.bottomBarBgColor.startsWith('#')
+        ? settings.value.bottomBarBgColor
+        : '',
 });
 
 // Simple debounce helper
@@ -621,6 +750,34 @@ function onResetAll() {
     }
 }
 
+// Hex handling helpers
+function isValidHex(v: string) {
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(
+        v
+    );
+}
+function ensureHash(v: string) {
+    return v.startsWith('#') ? v : `#${v}`;
+}
+function onHexInput(key: keyof typeof localHex) {
+    const raw = (localHex as any)[key];
+    if (!raw) return; // allow clearing without committing
+    const candidate = ensureHash(raw.trim());
+    if (isValidHex(candidate)) {
+        set({ [key]: candidate.toLowerCase() } as any);
+    }
+}
+async function copyColor(key: keyof typeof localHex) {
+    const val = (settings.value as any)[key];
+    if (!val || !val.startsWith('#')) return;
+    try {
+        await navigator.clipboard.writeText(val);
+        notify('Copied color', val);
+    } catch {
+        notify('Copy failed');
+    }
+}
+
 // Keep local reactive sliders synced if external reset or future import occurs
 watch(
     settings,
@@ -630,6 +787,22 @@ watch(
         local.contentBg1Opacity = s.contentBg1Opacity;
         local.contentBg2Opacity = s.contentBg2Opacity;
         local.sidebarBgOpacity = s.sidebarBgOpacity;
+        // sync hex boxes (only show hex values)
+        localHex.contentBg1Color = s.contentBg1Color.startsWith('#')
+            ? s.contentBg1Color
+            : '';
+        localHex.contentBg2Color = s.contentBg2Color.startsWith('#')
+            ? s.contentBg2Color
+            : '';
+        localHex.sidebarBgColor = s.sidebarBgColor.startsWith('#')
+            ? s.sidebarBgColor
+            : '';
+        localHex.headerBgColor = s.headerBgColor.startsWith('#')
+            ? s.headerBgColor
+            : '';
+        localHex.bottomBarBgColor = s.bottomBarBgColor.startsWith('#')
+            ? s.bottomBarBgColor
+            : '';
     },
     { deep: true }
 );
@@ -674,6 +847,47 @@ watch(
     color: var(--md-on-primary-container);
 }
 .retro-chip:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+.retro-input {
+    height: 32px;
+    padding: 0 6px;
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1;
+    border: 2px solid var(--md-inverse-surface);
+    background: var(--md-surface);
+    color: var(--md-on-surface);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.retro-input:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+.retro-btn-copy {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 10px;
+    line-height: 1;
+    border: 2px solid var(--md-inverse-surface);
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    cursor: pointer;
+}
+.retro-btn-copy:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.retro-btn-copy:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--md-inverse-surface);
+}
+.retro-btn-copy:focus-visible {
     outline: 2px solid var(--md-primary);
     outline-offset: 2px;
 }

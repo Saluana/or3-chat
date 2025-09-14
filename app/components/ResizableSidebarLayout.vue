@@ -368,6 +368,12 @@ const toggleAria = computed(() =>
     /* Base matches sidebar/header */
     background-color: var(--app-content-bg-1-color, var(--md-surface));
 }
+.dark .content-bg {
+    background-color: var(
+        --app-content-bg-1-color,
+        var(--md-surface-container)
+    );
+}
 
 .content-bg::before {
     content: '';
@@ -436,6 +442,12 @@ aside::before {
 
 aside {
     background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
+}
+.dark aside {
+    background-color: var(
+        --app-sidebar-bg-color,
+        var(--md-surface-container-high)
+    );
 }
 
 /* Ensure sidebar children render above the pattern, but keep handle on top */
