@@ -58,6 +58,7 @@ app/
       ChatInputDropper.vue
       ChatMessage.vue
       ChatPageShell.vue
+      file-upload-utils.ts
       LoadingGenerating.vue
       MessageAttachmentsGallery.vue
       MessageEditor.vue
@@ -70,7 +71,13 @@ app/
       DocumentsPageShell.vue
       ToolbarButton.vue
     modal/
-      SettingsModal.vue
+      dashboard/
+        AiPage.vue
+        Dashboard.vue
+        PluginIcons.vue
+        SettingsPage.vue
+        ThemePage.vue
+      ModelCatalog.vue
     prompts/
       PromptEditor.vue
     sidebar/
@@ -84,6 +91,8 @@ app/
       SideNavContent.vue
       SideNavContentCollapsed.vue
       SideNavHeader.vue
+    ErrorToasts.vue
+    FatalErrorBoundary.vue
     PageShell.vue
     ResizableSidebarLayout.vue
     RetroGlassBtn.vue
@@ -93,6 +102,8 @@ app/
         hookOrder.test.ts.snap
         hookOrderSnapshot.test.ts.snap
     ui-extensions/
+      dashboard/
+        useDashboardPlugins.ts
       documents/
         useDocumentHistoryActions.ts
       messages/
@@ -126,6 +137,7 @@ app/
     attachments.ts
     branching.ts
     client.ts
+    dbTry.ts
     documents.ts
     files-util.ts
     files.ts
@@ -148,9 +160,17 @@ app/
       index.vue
     _test.vue
     index.vue
+    openrouter-auth.ts
     openrouter-callback.vue
   plugins/
     examples/
+      examples/
+        dashboard/
+          PagesDemoDetails.vue
+          PagesDemoOverview.vue
+      dashboard-pages-example.client.ts
+      dashboard-plugins-example.client.ts
+      dashboard-signal-test.client.ts
       dev-debug-console.client.ts
       document-history-test.client.ts
       dual-llm-relay.client.ts
@@ -176,6 +196,7 @@ app/
       uiMessages.ts
     files/
       attachments.ts
+    errors.ts
     files-constants.ts
     hash.ts
     hooks.ts
@@ -1773,6 +1794,166 @@ Use Cases
 }
 ```
 
+## File: app/assets/css/main.css
+```css
+/* Tailwind v4: single import includes preflight + utilities */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Nuxt UI base styles (load first so we can override its tokens below) */
+@import "@nuxt/ui";
+
+/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
+	so classes used in Nuxt UI theme overrides are generated. */
+@source "../../../app.config.ts";
+
+
+/* Your Material theme variable files (scoped: .light, .dark, etc.) */
+@import "./theme.css";
+
+/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
+@import "~/assets/css/nuxt-ui-map.css";
+
+/* Font setup: body uses VT323, headings use Press Start 2P */
+:root {
+	/* Tailwind v4 token vars (optional for font utilities) */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+    --ui-radius: 3px;
+}
+
+.font-ps2 {
+	font-family: var(--font-heading) !important;
+}
+
+.font-vt323 {
+	font-family: var(--font-sans) !important;
+}
+
+html, body {
+	font-family: var(--font-sans) !important;
+    font-size: 20px; 
+}
+
+/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
+.scrollbars {
+	scrollbar-width: thin;
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
+.scrollbar-hidden {
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+	font-family: var(--font-heading) !important;
+}
+
+.retro-btn { 
+	display: inline-flex;
+	line-height: 1; /* avoid extra vertical space from font metrics */
+	position: relative;
+	border-radius: 3px;                               /* default */
+	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
+.retro-btn.aspect-square {
+	padding: 0; /* our button variant already sets px-0, this enforces it */
+	place-items: center;
+}
+
+/* Physical press: move button into its shadow and add subtle inner bevel */
+.retro-btn:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+.active-element {
+		box-shadow: 0 0 0 var(--md-inverse-surface),
+							inset 0 2px 0 rgba(0, 0, 0, 0.25),
+							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Keyboard accessibility: preserve pixel look while focused */
+.retro-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Global thin colored scrollbars (WebKit + Firefox) */
+/* Firefox */
+html {
+	scrollbar-width: thin;
+	/* thumb color, then track color */
+	scrollbar-color: var(--md-primary) transparent;
+}
+
+/* WebKit (Chromium, Safari) */
+/* Apply to all scrollable elements */
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+	border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--md-primary);
+	border-radius: 9999px;
+	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--md-primary) 85%, black);
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern-flipped {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    rotate: 180deg;
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Hardcoded header pattern repeating horizontally */
+.header-pattern {
+    background-color: var(--md-surface-variant);
+    background-image: url('/gradient-x-sm.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+
+/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
+.dark .prose strong,
+.dark .prosemirror-host :where(.ProseMirror) strong {
+	color: var(--md-on-surface);
+}
+
+.hljs {
+	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
+}
+```
+
 ## File: app/assets/css/nuxt-ui-map.css
 ```css
 /* Map Material Design variables to Nuxt UI CSS tokens.
@@ -1879,6 +2060,584 @@ Use Cases
 @import "./dark.css";
 @import "./dark-hc.css";
 @import "./dark-mc.css";
+```
+
+## File: app/components/chat/ChatPageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="panes[0]?.threadId || ''"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="panes[0]?.threadId || ''"
+                @new-chat="onNewChat"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+            />
+        </template>
+        <div class="flex-1 min-h-[100dvh] w-full relative">
+            <div
+                id="top-nav"
+                :class="{
+                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                }"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
+            >
+                <!-- New Window Button -->
+                <div
+                    v-if="isMobile"
+                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                >
+                    <UTooltip :delay-duration="0" text="Open sidebar">
+                        <UButton
+                            label="Open"
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            aria-label="Open sidebar"
+                            title="Open sidebar"
+                            :class="'retro-btn'"
+                            :ui="{ base: 'retro-btn' }"
+                            @click="openMobileSidebar"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-bar-right"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <div
+                    class="h-full items-center justify-center px-4 hidden md:flex"
+                >
+                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :disabled="!canAddPane"
+                            :class="
+                                'retro-btn pointer-events-auto mr-2 ' +
+                                (!canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '')
+                            "
+                            :ui="{ base: 'retro-btn' }"
+                            aria-label="New window"
+                            title="New window"
+                            @click="addPane"
+                        >
+                            <UIcon
+                                name="pixelarticons:card-plus"
+                                class="w-5 h-5"
+                            />
+                        </UButton>
+                    </UTooltip>
+                </div>
+                <!-- Theme Toggle Button -->
+                <div class="h-full flex items-center justify-center px-4">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <!-- Panes Container -->
+            <div
+                :class="[
+                    showTopOffset ? 'pt-[46px]' : 'pt-0',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                    @keydown.left.prevent="focusPrev(i)"
+                    @keydown.right.prevent="focusNext(i)"
+                >
+                    <!-- Close button (only if >1 pane) -->
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+
+                    <template v-if="pane.mode === 'chat'">
+                        <ChatContainer
+                            class="flex-1 min-h-0"
+                            :message-history="pane.messages"
+                            :thread-id="pane.threadId"
+                            @thread-selected="
+                                (id: string) => onInternalThreadCreated(id, i)
+                            "
+                        />
+                    </template>
+                    <template v-else-if="pane.mode === 'doc'">
+                        <LazyDocumentsDocumentEditor
+                            v-if="pane.documentId"
+                            :document-id="pane.documentId"
+                            class="flex-1 min-h-0"
+                        ></LazyDocumentsDocumentEditor>
+                        <div
+                            v-else
+                            class="flex-1 flex items-center justify-center text-sm opacity-70"
+                        >
+                            No document.
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { db } from '~/db';
+import { useHookEffect } from '~/composables/useHookEffect';
+// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
+
+/**
+ * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
+ * Props:
+ *  - initialThreadId: optional id to load immediately (deep link)
+ *  - validateInitial: if true, ensure the initial thread exists else redirect + toast
+ *  - routeSync: keep URL in sync with active thread id (default true)
+ */
+const props = withDefaults(
+    defineProps<{
+        initialThreadId?: string;
+        validateInitial?: boolean;
+        routeSync?: boolean;
+    }>(),
+    {
+        validateInitial: false,
+        routeSync: true,
+    }
+);
+
+const router = useRouter();
+const toast = useToast();
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+
+type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    file_hashes?: string | null;
+    id?: string;
+    stream_id?: string;
+};
+
+// ---------------- Multi-pane via composable ----------------
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    loadMessagesFor,
+    ensureAtLeastOne,
+} = useMultiPane({
+    initialThreadId: props.initialThreadId,
+    maxPanes: 3,
+    onFlushDocument: (id) => flushDocument(id),
+});
+
+// Removed legacy aliases (threadId/messageHistory/validating); use pane[0] directly where needed
+let validateToken = 0; // token for initial validation
+
+// Watch pane add/remove to sync URL for active pane type
+watch(
+    () => panes.value.map((p) => p.id).join(','),
+    () => {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        if (pane.mode === 'chat') updateUrlThread(pane.threadId || undefined);
+        else updateUrlThread(undefined);
+    }
+);
+
+async function ensureDbOpen() {
+    try {
+        if (!db.isOpen()) await db.open();
+    } catch {}
+}
+
+async function validateThread(id: string): Promise<boolean> {
+    await ensureDbOpen();
+    const ATTEMPTS = 5;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+            const t = await db.threads.get(id);
+            if (t) return !t.deleted;
+        } catch {}
+        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+function redirectNotFound() {
+    router.replace('/chat');
+    toast.add({
+        title: 'Not found',
+        description: 'This chat does not exist.',
+        color: 'error',
+    });
+}
+
+async function initInitialThread() {
+    if (!process.client) return;
+    if (!props.initialThreadId) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.validateInitial) {
+        pane.validating = true;
+        const token = ++validateToken;
+        const ok = await validateThread(props.initialThreadId);
+        if (token !== validateToken) return; // superseded
+        if (!ok) {
+            redirectNotFound();
+            return;
+        }
+    }
+    await setPaneThread(0, props.initialThreadId);
+    pane.validating = false;
+}
+
+// Theme toggle (SSR safe)
+const nuxtApp = useNuxtApp();
+const getThemeSafe = () => {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client) {
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+        }
+    } catch {}
+    return 'light';
+};
+const themeName = ref<string>(getThemeSafe());
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    const api = nuxtApp.$theme as any;
+    if (api?.toggle) api.toggle();
+    // After toggle, re-read
+    syncTheme();
+}
+if (process.client) {
+    const root = document.documentElement;
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => observer.disconnect());
+    } else {
+        onUnmounted(() => observer.disconnect());
+    }
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// Mobile detection to keep padding on small screens
+import { isMobile } from '~/state/global';
+
+if (process.client) {
+    onMounted(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        const apply = () => (isMobile.value = mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        if (import.meta.hot) {
+            import.meta.hot.dispose(() =>
+                mq.removeEventListener('change', apply)
+            );
+        } else {
+            onUnmounted(() => mq.removeEventListener('change', apply));
+        }
+    });
+}
+
+// Only offset content when multi-pane OR on mobile (toolbar overlap avoidance)
+const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
+
+onMounted(() => {
+    initInitialThread();
+    syncTheme();
+    ensureAtLeastOne();
+});
+
+// Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
+
+function updateUrlThread(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/chat/${id}` : '/chat';
+    if (window.location.pathname === newPath) return; // no-op
+    // Preserve existing history.state so back button stack stays intact
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+// Sidebar selection
+function onSidebarSelected(id: string) {
+    if (!id) return;
+    const target = activePaneIndex.value;
+    setPaneThread(target, id);
+    const pane = panes.value[target];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+    }
+    if (target === activePaneIndex.value) updateUrlThread(id);
+}
+
+// ChatContainer emitted new thread (first user send)
+function onInternalThreadCreated(id: string, paneIndex?: number) {
+    if (!id) return;
+    const idx =
+        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
+    const pane = panes.value[idx];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    if (pane.threadId !== id) setPaneThread(idx, id);
+    if (idx === activePaneIndex.value) updateUrlThread(id);
+}
+
+function onNewChat() {
+    const pane = panes.value[activePaneIndex.value];
+    if (pane) {
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.messages = [];
+        pane.threadId = '';
+    }
+    updateUrlThread(undefined);
+}
+
+// --------------- Documents Integration (minimal) ---------------
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+
+// Document operations abstracted
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    await newDocumentInActive(initial);
+}
+
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+}
+
+// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document in active pane
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            // Ignore if focused in input/textarea/contentEditable
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    } else {
+        onUnmounted(() => window.removeEventListener('keydown', down));
+    }
+}
+
+// Mobile sidebar control
+function openMobileSidebar() {
+    // call exposed method on layout to force open
+    (layoutRef.value as any)?.openSidebar?.();
+}
+
+// Exposed to collapsed sidebar search button via emit
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    // Focus via exposed method on SideNavContent
+    requestAnimationFrame(() => {
+        sideNavExpandedRef.value?.focusSearchInput?.();
+    });
+}
+
+// ---------------- Auto-reset pane when active thread or document is deleted ----------------
+// If the currently loaded thread/doc is deleted (soft or hard), switch that pane to a blank chat.
+function resetPaneToBlank(paneIndex: number) {
+    const pane = panes.value[paneIndex];
+    if (!pane) return;
+    pane.mode = 'chat';
+    pane.documentId = undefined;
+    pane.threadId = '';
+    pane.messages = [];
+    // If this pane is the active one, update URL to /chat (blank)
+    if (paneIndex === activePaneIndex.value) updateUrlThread(undefined);
+}
+
+function handleThreadDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'chat' && p.threadId === deletedId) {
+            resetPaneToBlank(i);
+        }
+    });
+}
+
+function handleDocumentDeletion(payload: any) {
+    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+    if (!deletedId) return;
+    panes.value.forEach((p, i) => {
+        if (p.mode === 'doc' && p.documentId === deletedId) {
+            resetPaneToBlank(i);
+        }
+    });
+}
+
+// Register hook listeners (both soft + hard delete events)
+useHookEffect(
+    'db.threads.delete:action:soft:after',
+    (t: any) => handleThreadDeletion(t),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.threads.delete:action:hard:after',
+    (id: any) => handleThreadDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:soft:after',
+    (row: any) => handleDocumentDeletion(row),
+    { kind: 'action', priority: 10 }
+);
+useHookEffect(
+    'db.documents.delete:action:hard:after',
+    (id: any) => handleDocumentDeletion(id),
+    { kind: 'action', priority: 10 }
+);
+</script>
+
+<style scoped>
+body {
+    overflow-y: hidden;
+}
+
+/* Active pane visual indicator (retro glow using primary color) */
+.pane-active {
+    position: relative;
+    /* Smooth color / shadow transition when switching panes */
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0; /* cover full pane */
+    border: 1px solid var(--md-primary);
+
+    /* Layered shadows for a subtle glow while still retro / crisp */
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
 ```
 
 ## File: app/components/chat/LoadingGenerating.vue
@@ -2538,6 +3297,587 @@ const charCount = computed(() => (props.content || '').length);
 </style>
 ```
 
+## File: app/components/documents/DocumentsPageShell.vue
+```vue
+<template>
+    <resizable-sidebar-layout ref="layoutRef">
+        <template #sidebar-expanded>
+            <lazy-sidebar-side-nav-content
+                ref="sideNavExpandedRef"
+                :active-thread="''"
+                @newDocument="onNewDocument"
+                @documentSelected="onDocumentSelected"
+                @chatSelected="onSidebarChatSelected"
+                @new-chat="onSidebarNewChat"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                :active-thread="''"
+                @focusSearch="focusSidebarSearch"
+                @chatSelected="onSidebarChatSelected"
+                @new-chat="onSidebarNewChat"
+            />
+        </template>
+        <div class="flex-1 min-h-[100dvh] w-full relative">
+            <div
+                id="top-nav"
+                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"
+            >
+                <div class="h-full flex items-center justify-center px-2">
+                    <UTooltip :delay-duration="0" text="Toggle theme">
+                        <UButton
+                            size="xs"
+                            color="neutral"
+                            variant="ghost"
+                            :square="true"
+                            :class="'retro-btn pointer-events-auto '"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="themeAriaLabel"
+                            :title="themeAriaLabel"
+                            @click="toggleTheme"
+                        >
+                            <UIcon :name="themeIcon" class="w-5 h-5" />
+                        </UButton>
+                    </UTooltip>
+                </div>
+            </div>
+            <div
+                :class="[
+                    'pt-[46px]',
+                    'h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                ]"
+            >
+                <div
+                    v-for="(pane, i) in panes"
+                    :key="pane.id"
+                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :class="[
+                        i === activePaneIndex && panes.length > 1
+                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
+                            : 'border-[var(--md-inverse-surface)]',
+                        'transition-colors',
+                    ]"
+                    tabindex="0"
+                    @focus="setActive(i)"
+                    @click="setActive(i)"
+                >
+                    <div
+                        v-if="panes.length > 1"
+                        class="absolute top-1 right-1 z-10"
+                    >
+                        <UTooltip :delay-duration="0" text="Close window">
+                            <UButton
+                                size="xs"
+                                color="neutral"
+                                variant="ghost"
+                                :square="true"
+                                :class="'retro-btn'"
+                                :ui="{
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+                                }"
+                                aria-label="Close window"
+                                title="Close window"
+                                @click.stop="closePane(i)"
+                            >
+                                <UIcon
+                                    name="pixelarticons:close"
+                                    class="w-4 h-4"
+                                />
+                            </UButton>
+                        </UTooltip>
+                    </div>
+                    <LazyDocumentsDocumentEditor
+                        v-if="pane.documentId"
+                        :document-id="pane.documentId"
+                        class="flex-1 min-h-0"
+                    />
+                    <div
+                        v-else
+                        class="flex-1 flex items-center justify-center text-sm opacity-70"
+                    >
+                        No document.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+<script setup lang="ts">
+import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import { useMultiPane } from '~/composables/useMultiPane';
+import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import { ensureDbOpen as ensureDocumentsDbOpen } from '~/db/documents';
+import { usePaneDocuments } from '~/composables/usePaneDocuments';
+import { db } from '~/db';
+
+const props = withDefaults(
+    defineProps<{
+        initialDocumentId?: string;
+        validateInitial?: boolean;
+        routeSync?: boolean;
+    }>(),
+    { validateInitial: false, routeSync: true }
+);
+
+// Multi-pane: we only use doc mode; thread related fields remain unused.
+import { flush as flushDocument } from '~/composables/useDocumentsStore';
+const {
+    panes,
+    activePaneIndex,
+    canAddPane,
+    newWindowTooltip,
+    addPane,
+    closePane,
+    setActive,
+    focusPrev,
+    focusNext,
+    setPaneThread,
+    ensureAtLeastOne,
+} = useMultiPane({ onFlushDocument: (id) => flushDocument(id) });
+
+// Convert first pane to doc mode when loading an existing document
+watch(
+    () => props.initialDocumentId,
+    (id) => {
+        if (!id) return;
+        const pane = panes.value[0];
+        if (pane) {
+            pane.mode = 'doc';
+            pane.documentId = id;
+            pane.threadId = '';
+        }
+    },
+    { immediate: true }
+);
+
+const router = useRouter();
+const toast = useToast();
+
+async function validateDocument(id: string): Promise<boolean> {
+    await ensureDocumentsDbOpen();
+    const ATTEMPTS = 5;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+            const row = await db.posts.get(id);
+            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
+                return true;
+        } catch {}
+        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+}
+
+function redirectNotFound() {
+    router.replace('/docs');
+    toast.add({
+        title: 'Not found',
+        description: 'This document does not exist.',
+        color: 'error',
+    });
+}
+
+let validateToken = 0;
+async function initInitialDocument() {
+    if (!process.client) return;
+    if (!props.initialDocumentId) return;
+    const pane = panes.value[0];
+    if (!pane) return;
+    if (props.validateInitial) {
+        pane.validating = true;
+        const token = ++validateToken;
+        const ok = await validateDocument(props.initialDocumentId);
+        if (token !== validateToken) return;
+        if (!ok) return redirectNotFound();
+    }
+    pane.mode = 'doc';
+    pane.documentId = props.initialDocumentId;
+    pane.threadId = '';
+    pane.validating = false;
+    updateUrlDocument(props.initialDocumentId);
+}
+
+function updateUrlDocument(id?: string) {
+    if (!process.client || !props.routeSync) return;
+    const newPath = id ? `/docs/${id}` : '/docs';
+    if (window.location.pathname === newPath) return;
+    window.history.replaceState(window.history.state, '', newPath);
+}
+
+// Watch active pane doc changes to sync URL
+watch(
+    () =>
+        panes.value
+            .map((p) => `${p.id}:${p.documentId || ''}:${p.mode}`)
+            .join(','),
+    () => {
+        const pane = panes.value[activePaneIndex.value];
+        if (!pane) return;
+        if (pane.mode === 'doc') updateUrlDocument(pane.documentId);
+        else updateUrlDocument(undefined);
+    }
+);
+
+// Documents operations
+const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
+    panes,
+    activePaneIndex,
+    createNewDoc,
+    flushDocument: (id) => flushDocument(id),
+});
+
+async function onNewDocument(initial?: { title?: string }) {
+    const doc = await newDocumentInActive(initial);
+    if (doc) updateUrlDocument(doc.id);
+}
+async function onDocumentSelected(id: string) {
+    await selectDocumentInActive(id);
+    updateUrlDocument(id);
+}
+
+// If user picks a chat in sidebar, navigate to chat route (keeps consistent behavior with unified sidebar)
+function onSidebarChatSelected(id: string) {
+    if (!id) return;
+    router.push(`/chat/${id}`);
+}
+function onSidebarNewChat() {
+    router.push('/chat');
+}
+
+// Theme toggle (copied minimal from chat shell)
+const nuxtApp = useNuxtApp();
+const themeName = ref('light');
+function getThemeSafe() {
+    try {
+        const api = nuxtApp.$theme as any;
+        if (api && typeof api.get === 'function') return api.get();
+        if (process.client)
+            return document.documentElement.classList.contains('dark')
+                ? 'dark'
+                : 'light';
+    } catch {}
+    return 'light';
+}
+function syncTheme() {
+    themeName.value = getThemeSafe();
+}
+function toggleTheme() {
+    (nuxtApp.$theme as any)?.toggle?.();
+    syncTheme();
+}
+if (process.client) {
+    onMounted(() => {
+        syncTheme();
+        const root = document.documentElement;
+        const observer = new MutationObserver(syncTheme);
+        observer.observe(root, {
+            attributes: true,
+            attributeFilter: ['class'],
+        });
+        if (import.meta.hot)
+            import.meta.hot.dispose(() => observer.disconnect());
+        else onUnmounted(() => observer.disconnect());
+    });
+}
+const themeIcon = computed(() =>
+    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
+);
+const themeAriaLabel = computed(() =>
+    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+);
+
+// Sidebar focus (collapsed)
+const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
+const sideNavExpandedRef = ref<any | null>(null);
+function focusSidebarSearch() {
+    const layout: any = layoutRef.value;
+    if (layout?.expand) layout.expand();
+    requestAnimationFrame(() => sideNavExpandedRef.value?.focusSearchInput?.());
+}
+
+onMounted(() => {
+    ensureAtLeastOne();
+    initInitialDocument();
+});
+
+// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document
+if (process.client) {
+    const down = (e: KeyboardEvent) => {
+        if (!e.shiftKey) return;
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'd') {
+            const target = e.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (
+                    tag === 'INPUT' ||
+                    tag === 'TEXTAREA' ||
+                    target.isContentEditable
+                )
+                    return;
+            }
+            e.preventDefault();
+            onNewDocument();
+        }
+    };
+    window.addEventListener('keydown', down);
+    if (import.meta.hot)
+        import.meta.hot.dispose(() =>
+            window.removeEventListener('keydown', down)
+        );
+    else onUnmounted(() => window.removeEventListener('keydown', down));
+}
+</script>
+<style scoped>
+.pane-active {
+    position: relative;
+    transition: box-shadow 0.4s ease, background-color 0.3s ease;
+}
+.pane-active::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--md-primary);
+    box-shadow: inset 0 0 0 1px var(--md-primary),
+        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
+    mix-blend-mode: normal;
+    opacity: 0.6;
+    animation: panePulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pane-active::after {
+        animation: none;
+    }
+}
+</style>
+```
+
+## File: app/components/modal/dashboard/AiPage.vue
+```vue
+<template>hello world</template>
+<script setup lang="ts"></script>
+```
+
+## File: app/components/modal/dashboard/ThemePage.vue
+```vue
+<template>hello world</template>
+<script setup lang="ts"></script>
+```
+
+## File: app/components/prompts/PromptEditor.vue
+```vue
+<template>
+    <div
+        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+    >
+        <div
+            class="flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
+        >
+            <UButton
+                @click="emit('back')"
+                variant="outline"
+                class="flex items-center justify-center h-[40px] w-[40px] mr-3"
+                color="neutral"
+                icon="pixelarticons:arrow-left"
+                aria-label="Back to list"
+            />
+            <UInput
+                v-model="titleDraft"
+                placeholder="Untitled Prompt"
+                label="Prompt Title"
+                size="md"
+                :ui="{
+                    base: 'retro-shadow',
+                }"
+                class="flex-1"
+                @update:model-value="onTitleChange"
+            />
+            <div class="flex items-center gap-1">
+                <UTooltip :text="statusText">
+                    <span
+                        class="text-xs opacity-70 w-16 text-right select-none"
+                        >{{ statusText }}</span
+                    >
+                </UTooltip>
+            </div>
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto">
+            <div v-if="loading" class="p-6 text-sm text-neutral-500">
+                Loading…
+            </div>
+            <div v-else-if="!record" class="p-6 text-sm text-error">
+                Prompt not found.
+            </div>
+            <div
+                v-else
+                class="w-full max-h-[70dvh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
+            >
+                <EditorContent
+                    :editor="editor as Editor"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                />
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
+import { Editor, EditorContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import { Placeholder } from '@tiptap/extensions';
+import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
+
+const props = defineProps<{ promptId: string }>();
+const emit = defineEmits<{ (e: 'back'): void }>();
+
+const record = ref<PromptRecord | null>(null);
+const loading = ref(true);
+const titleDraft = ref('');
+const editor = ref<Editor | null>(null);
+const pendingTitle = ref<string | undefined>();
+const pendingContent = ref<any | undefined>();
+const saveTimer = ref<any | null>(null);
+const status = ref<'idle' | 'saving' | 'error' | 'loading'>('loading');
+
+async function load(id: string) {
+    loading.value = true;
+    status.value = 'loading';
+    try {
+        const rec = await getPrompt(id);
+        record.value = rec || null;
+        if (rec) {
+            titleDraft.value = rec.title;
+            if (editor.value) {
+                editor.value.commands.setContent(
+                    rec.content || { type: 'doc', content: [] },
+                    { emitUpdate: false }
+                );
+            }
+            status.value = 'idle';
+        } else {
+            status.value = 'error';
+        }
+    } catch (e) {
+        status.value = 'error';
+        console.warn('[PromptEditor] load failed', e);
+    } finally {
+        loading.value = false;
+    }
+}
+
+function scheduleSave() {
+    if (saveTimer.value) clearTimeout(saveTimer.value);
+    saveTimer.value = setTimeout(flush, 600);
+}
+
+async function flush() {
+    if (!record.value) return;
+    if (pendingTitle.value === undefined && pendingContent.value === undefined)
+        return;
+    status.value = 'saving';
+    try {
+        const patch: any = {};
+        if (pendingTitle.value !== undefined) patch.title = pendingTitle.value;
+        if (pendingContent.value !== undefined)
+            patch.content = pendingContent.value;
+        const updated = await updatePrompt(record.value.id, patch);
+        if (updated) {
+            record.value = updated;
+            titleDraft.value = updated.title;
+            status.value = 'idle';
+        } else {
+            status.value = 'error';
+        }
+    } catch (e) {
+        status.value = 'error';
+        console.warn('[PromptEditor] save failed', e);
+    } finally {
+        pendingTitle.value = undefined;
+        pendingContent.value = undefined;
+    }
+}
+
+function onTitleChange() {
+    pendingTitle.value = titleDraft.value;
+    scheduleSave();
+}
+
+function emitContent() {
+    if (!editor.value) return;
+    pendingContent.value = editor.value.getJSON();
+    scheduleSave();
+}
+
+function makeEditor() {
+    editor.value = new Editor({
+        extensions: [
+            StarterKit.configure({ heading: { levels: [1, 2] } }),
+            Placeholder.configure({
+                placeholder: 'Type your system instructions…',
+            }),
+        ],
+        content: record.value?.content || { type: 'doc', content: [] },
+        autofocus: false,
+        onUpdate: () => emitContent(),
+    });
+}
+
+onMounted(async () => {
+    await load(props.promptId);
+    makeEditor();
+});
+
+watch(
+    () => props.promptId,
+    async (id) => {
+        await load(id);
+    }
+);
+
+onBeforeUnmount(() => {
+    editor.value?.destroy();
+    if (saveTimer.value) clearTimeout(saveTimer.value);
+});
+
+const statusText = computed(() => {
+    switch (status.value) {
+        case 'saving':
+            return 'Saving…';
+        case 'idle':
+            return 'Ready';
+        case 'error':
+            return 'Error';
+        case 'loading':
+            return 'Loading…';
+    }
+});
+</script>
+
+<style scoped>
+.prose :where(h1, h2) {
+    font-family: 'Press Start 2P', monospace;
+}
+.prosemirror-host :deep(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+}
+.prosemirror-host :deep(.ProseMirror p) {
+    margin: 0;
+}
+.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
+    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.85;
+}
+</style>
+```
+
 ## File: app/components/sidebar/ResizeHandle.vue
 ```vue
 <template>
@@ -2731,6 +4071,119 @@ async function runExtraAction(action: any) {
 </script>
 ```
 
+## File: app/components/sidebar/SidebarHeader.vue
+```vue
+<template>
+    <div
+        :class="{
+            'px-0 justify-center': collapsed,
+            'px-3 justify-between': !collapsed,
+        }"
+        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+    >
+        <div v-show="!collapsed">
+            <slot name="sidebar-header">
+                <div class="flex items-center space-x-2">
+                    <div
+                        class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
+                    >
+                        <div
+                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
+                        >
+                            <div>Or</div>
+                            <div class="text-[17px]">3</div>
+                        </div>
+                        <span
+                            class="text-[18px] pb-[1.5px] -ml-0.5 font-vt323 font-bold text-primary"
+                            >.chat</span
+                        >
+                    </div>
+                </div>
+            </slot>
+        </div>
+
+        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
+            <UButton
+                size="xs"
+                :square="true"
+                color="neutral"
+                variant="ghost"
+                :class="'retro-btn'"
+                @click="onToggle"
+                :ui="{ base: 'retro-btn' }"
+                :aria-label="toggleAria"
+                :title="toggleAria"
+            >
+                <UIcon :name="toggleIcon" class="w-5 h-5" />
+            </UButton>
+        </slot>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { defineProps, defineEmits } from 'vue';
+
+const props = defineProps({
+    collapsed: { type: Boolean, required: true },
+    toggleIcon: { type: String, required: true },
+    toggleAria: { type: String, required: true },
+});
+const emit = defineEmits(['toggle']);
+
+function onToggle() {
+    emit('toggle');
+}
+</script>
+
+<style scoped>
+/* Gradient already supplied by global pattern image; we just ensure better dark base */
+.header-pattern {
+    background-image: url('/gradient-x.webp');
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+}
+.dark .header-pattern {
+    /* Elevated surface tone for dark mode header to distinguish from main background */
+    background-color: var(--md-surface-container-high) !important;
+}
+
+/* Retro logo title: pixel shadow + underline accent (no stroke) */
+.header-title {
+    font-family: 'Press Start 2P', monospace;
+
+    letter-spacing: 1px;
+    color: var(--md-primary);
+    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
+    padding: 2px 4px 3px 4px; /* subtle padding for readability */
+}
+
+.dark .header-title {
+    color: var(--md-on-primary-container);
+    text-shadow: 2px 2px 0 var(--md-primary);
+}
+.dark .header-title::after {
+    background: var(--md-on-primary-container);
+    box-shadow: 2px 2px 0 var(--md-primary);
+}
+
+/* Logo rendering tweaks */
+.logo {
+    width: 20px; /* lock display size */
+    height: 20px;
+    aspect-ratio: 1 / 1;
+    display: block;
+    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
+    /* image-rendering: pixelated; */
+}
+
+/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
+   switch to a DPR-based srcset for sharper sampling:
+   src="/logo-20.png"
+   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
+</style>
+```
+
 ## File: app/components/sidebar/SidebarThreadItem.vue
 ```vue
 <template>
@@ -2833,6 +4286,211 @@ async function runExtraAction(action: any, thread: Thread) {
         console.error('Thread action error', action.id, e);
     }
 }
+</script>
+```
+
+## File: app/components/sidebar/SidebarVirtualList.vue
+```vue
+<template>
+    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <VList
+            :data="flatItems"
+            :style="{ height: 'calc(100dvh - 318px)' }"
+            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
+            #default="{ item, index }"
+        >
+            <div :key="item.key || index">
+                <h1
+                    v-if="item.type === 'sectionHeader'"
+                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
+                >
+                    {{ item.label }}
+                </h1>
+                <SidebarProjectTree
+                    v-else-if="item.type === 'projectsTree'"
+                    :projects="projects"
+                    v-model:expanded="expandedProjectsLocal"
+                    @chatSelected="emit('chatSelected', $event)"
+                    @documentSelected="emit('documentSelected', $event)"
+                    @addChat="emit('addChat', $event)"
+                    @addDocument="emit('addDocument', $event)"
+                    @renameProject="emit('renameProject', $event)"
+                    @deleteProject="emit('deleteProject', $event)"
+                    @renameEntry="emit('renameEntry', $event)"
+                    @removeFromProject="emit('removeFromProject', $event)"
+                />
+                <div v-else-if="item.type === 'thread'" class="mr-1">
+                    <SidebarThreadItem
+                        :thread="item.thread"
+                        :active="activeThreadSet.has(item.thread.id)"
+                        class="mb-2"
+                        @select="emit('selectThread', $event)"
+                        @rename="emit('renameThread', $event)"
+                        @delete="emit('deleteThread', $event)"
+                        @add-to-project="emit('addThreadToProject', $event)"
+                    />
+                </div>
+                <div v-else-if="item.type === 'doc'" class="mr-1">
+                    <SidebarDocumentItem
+                        :doc="item.doc"
+                        class="mb-2"
+                        :active="activeDocumentSet.has(item.doc.id)"
+                        @select="emit('selectDocument', $event)"
+                        @rename="emit('renameDocument', $event)"
+                        @delete="emit('deleteDocument', $event)"
+                        @add-to-project="emit('addDocumentToProject', $event)"
+                    />
+                </div>
+            </div>
+        </VList>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
+import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
+import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+
+interface ProjectEntry {
+    id: string;
+    name?: string;
+    kind: 'chat' | 'doc';
+}
+interface Project {
+    id: string;
+    name: string;
+    data?: any;
+}
+interface Thread {
+    id: string;
+    title?: string;
+    forked?: boolean;
+}
+interface DocLite {
+    id: string;
+    title: string;
+    updated_at?: number;
+    created_at?: number;
+    postType?: string;
+}
+
+// Row item discriminated union
+interface SectionHeaderItem {
+    type: 'sectionHeader';
+    key: string;
+    label: string;
+}
+interface ProjectsTreeItem {
+    type: 'projectsTree';
+    key: string;
+}
+interface ThreadItem {
+    type: 'thread';
+    key: string;
+    thread: Thread;
+}
+interface DocItem {
+    type: 'doc';
+    key: string;
+    doc: DocLite;
+}
+
+type SidebarRowItem =
+    | SectionHeaderItem
+    | ProjectsTreeItem
+    | ThreadItem
+    | DocItem;
+
+const props = defineProps<{
+    projects: Project[];
+    threads: Thread[];
+    documents: any[]; // possibly full posts containing heavy fields
+    displayDocuments?: any[]; // optional filtered docs from search
+    expandedProjects: string[]; // mutated in place (passed to tree)
+    activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
+    activeThread?: string; // legacy single selection
+    activeDocument?: string; // legacy single selection
+    activeThreads?: string[]; // new multi-active selection
+    activeDocuments?: string[]; // new multi-active selection
+    height: number; // required external measured height
+}>();
+
+// Simplified emit typing (broad) to accommodate both legacy kebab-case and new camelCase events during transition
+// TODO: tighten types once integration finalized
+// eslint-disable-next-line @typescript-eslint/ban-types
+const emit = defineEmits<(e: string, ...args: any[]) => void>();
+
+// Lightweight docs mapping (strip heavy fields like content)
+const lightweightDocs = computed<DocLite[]>(() =>
+    (props.documents || []).map((d: any) => ({
+        id: d.id,
+        title: d.title || '(untitled document)',
+        updated_at: d.updated_at,
+        created_at: d.created_at,
+        postType: d.postType,
+    }))
+);
+
+const effectiveDocs = computed<DocLite[]>(() => {
+    if (props.displayDocuments && props.displayDocuments.length) {
+        return props.displayDocuments.map((d: any) => ({
+            id: d.id,
+            title: d.title || '(untitled document)',
+            updated_at: d.updated_at,
+            created_at: d.created_at,
+            postType: d.postType,
+        }));
+    }
+    return lightweightDocs.value;
+});
+
+// Local mirror for v-model with tree (keep reference semantics for parent array)
+const expandedProjectsLocal = computed({
+    get: () => props.expandedProjects,
+    set: (val: string[]) => {
+        // mutate original array for parent expectations
+        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
+    },
+});
+
+const flatItems = computed<SidebarRowItem[]>(() => {
+    const out: SidebarRowItem[] = [];
+    if (props.activeSections.projects && props.projects.length) {
+        out.push({ type: 'projectsTree', key: 'projectsTree' });
+    }
+    // Threads section
+    if (props.activeSections.threads && props.threads.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
+        for (const t of props.threads) {
+            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
+        }
+    }
+    // Docs section
+    if (props.activeSections.docs && effectiveDocs.value.length) {
+        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
+        for (const d of effectiveDocs.value) {
+            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
+        }
+    }
+    return out;
+});
+
+// Constant row size estimate
+const rowSize = 36;
+
+// ---- Multi-active support ----
+const activeThreadSet = computed(() => {
+    if (Array.isArray(props.activeThreads))
+        return new Set(props.activeThreads.filter(Boolean));
+    return new Set(props.activeThread ? [props.activeThread] : []);
+});
+const activeDocumentSet = computed(() => {
+    if (Array.isArray(props.activeDocuments))
+        return new Set(props.activeDocuments.filter(Boolean));
+    return new Set(props.activeDocument ? [props.activeDocument] : []);
+});
 </script>
 ```
 
@@ -4102,78 +5760,6 @@ export function useUserApiKey() {
 }
 ```
 
-## File: app/db/attachments.ts
-```typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import {
-    AttachmentCreateSchema,
-    AttachmentSchema,
-    type Attachment,
-    type AttachmentCreate,
-} from './schema';
-
-export async function createAttachment(
-    input: AttachmentCreate
-): Promise<Attachment> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.attachments.create:filter:input',
-        input
-    );
-    await hooks.doAction('db.attachments.create:action:before', filtered);
-    const value = parseOrThrow(AttachmentCreateSchema, filtered);
-    await db.attachments.put(value);
-    await hooks.doAction('db.attachments.create:action:after', value);
-    return value;
-}
-
-export async function upsertAttachment(value: Attachment): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.attachments.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.attachments.upsert:action:before', filtered);
-    parseOrThrow(AttachmentSchema, filtered);
-    await db.attachments.put(filtered);
-    await hooks.doAction('db.attachments.upsert:action:after', filtered);
-}
-
-export async function softDeleteAttachment(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.attachments, async () => {
-        const a = await db.attachments.get(id);
-        if (!a) return;
-        await hooks.doAction('db.attachments.delete:action:soft:before', a);
-        await db.attachments.put({
-            ...a,
-            deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        await hooks.doAction('db.attachments.delete:action:soft:after', a);
-    });
-}
-
-export async function hardDeleteAttachment(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.attachments.get(id);
-    await hooks.doAction(
-        'db.attachments.delete:action:hard:before',
-        existing ?? id
-    );
-    await db.attachments.delete(id);
-    await hooks.doAction('db.attachments.delete:action:hard:after', id);
-}
-
-export async function getAttachment(id: string) {
-    const hooks = useHooks();
-    const res = await db.attachments.get(id);
-    return hooks.applyFilters('db.attachments.get:filter:output', res);
-}
-```
-
 ## File: app/db/branching.ts
 ```typescript
 import Dexie from 'dexie';
@@ -4453,196 +6039,6 @@ export class Or3DB extends Dexie {
 export const db = new Or3DB();
 ```
 
-## File: app/db/documents.ts
-```typescript
-import { db } from './client';
-import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
-
-/**
- * Internal stored row shape (reuses posts table with postType = 'doc').
- * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
- * Content is persisted as a JSON string (TipTap JSON) for flexibility.
- */
-export interface DocumentRow {
-    id: string;
-    title: string; // non-empty trimmed
-    content: string; // JSON string
-    postType: string; // always 'doc'
-    created_at: number; // seconds
-    updated_at: number; // seconds
-    deleted: boolean;
-}
-
-/** Public facing record with content already parsed. */
-export interface DocumentRecord {
-    id: string;
-    title: string;
-    content: any; // TipTap JSON object
-    created_at: number;
-    updated_at: number;
-    deleted: boolean;
-}
-
-function emptyDocJSON() {
-    return { type: 'doc', content: [] };
-}
-
-function normalizeTitle(title?: string | null): string {
-    const t = (title ?? '').trim();
-    return t.length ? t : 'Untitled';
-}
-
-function parseContent(raw: string | null | undefined): any {
-    if (!raw) return emptyDocJSON();
-    try {
-        const parsed = JSON.parse(raw);
-        // Basic structural guard
-        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
-        return emptyDocJSON();
-    } catch {
-        return emptyDocJSON();
-    }
-}
-
-function rowToRecord(row: DocumentRow): DocumentRecord {
-    return {
-        id: row.id,
-        title: row.title,
-        content: parseContent(row.content),
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        deleted: row.deleted,
-    };
-}
-
-export interface CreateDocumentInput {
-    title?: string | null;
-    content?: any; // TipTap JSON object
-}
-
-export async function createDocument(
-    input: CreateDocumentInput = {}
-): Promise<DocumentRecord> {
-    const hooks = useHooks();
-    const prepared: DocumentRow = {
-        id: newId(),
-        title: normalizeTitle(input.title),
-        content: JSON.stringify(input.content ?? emptyDocJSON()),
-        postType: 'doc',
-        created_at: nowSec(),
-        updated_at: nowSec(),
-        deleted: false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.documents.create:filter:input',
-        prepared
-    )) as DocumentRow;
-    await hooks.doAction('db.documents.create:action:before', filtered);
-    await db.posts.put(filtered as any); // reuse posts table
-    await hooks.doAction('db.documents.create:action:after', filtered);
-    return rowToRecord(filtered);
-}
-
-export async function getDocument(
-    id: string
-): Promise<DocumentRecord | undefined> {
-    const hooks = useHooks();
-    const row = await db.posts.get(id);
-    if (!row || (row as any).postType !== 'doc') return undefined;
-    const filtered = (await hooks.applyFilters(
-        'db.documents.get:filter:output',
-        row
-    )) as DocumentRow | undefined;
-    return filtered ? rowToRecord(filtered) : undefined;
-}
-
-export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
-    const hooks = useHooks();
-    // Filter by postType (indexed) and non-deleted
-    const rows = await db.posts
-        .where('postType')
-        .equals('doc')
-        .and((r) => !(r as any).deleted)
-        .reverse() // by primary key order soon? we'll sort manually after fetch
-        .toArray();
-    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
-    rows.sort((a, b) => b.updated_at - a.updated_at);
-    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
-    const filtered = (await hooks.applyFilters(
-        'db.documents.list:filter:output',
-        sliced
-    )) as DocumentRow[];
-    return filtered.map(rowToRecord);
-}
-
-export interface UpdateDocumentPatch {
-    title?: string;
-    content?: any; // TipTap JSON object
-}
-
-export async function updateDocument(
-    id: string,
-    patch: UpdateDocumentPatch
-): Promise<DocumentRecord | undefined> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return undefined;
-    const updated: DocumentRow = {
-        id: existing.id,
-        title: patch.title ? normalizeTitle(patch.title) : existing.title,
-        content: patch.content
-            ? JSON.stringify(patch.content)
-            : (existing as any).content,
-        postType: 'doc',
-        created_at: existing.created_at,
-        updated_at: nowSec(),
-        deleted: (existing as any).deleted ?? false,
-    };
-    const filtered = (await hooks.applyFilters(
-        'db.documents.update:filter:input',
-        { existing, updated, patch }
-    )) as { updated: DocumentRow } | DocumentRow;
-    const row = (filtered as any).updated
-        ? (filtered as any).updated
-        : (filtered as any as DocumentRow);
-    await hooks.doAction('db.documents.update:action:before', row);
-    await db.posts.put(row as any);
-    await hooks.doAction('db.documents.update:action:after', row);
-    return rowToRecord(row);
-}
-
-export async function softDeleteDocument(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return;
-    const row = {
-        ...(existing as any),
-        deleted: true,
-        updated_at: nowSec(),
-    };
-    await hooks.doAction('db.documents.delete:action:soft:before', row);
-    await db.posts.put(row);
-    await hooks.doAction('db.documents.delete:action:soft:after', row);
-}
-
-export async function hardDeleteDocument(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    if (!existing || (existing as any).postType !== 'doc') return;
-    await hooks.doAction('db.documents.delete:action:hard:before', existing);
-    await db.posts.delete(id);
-    await hooks.doAction('db.documents.delete:action:hard:after', id);
-}
-
-// Convenience for ensuring DB open (mirrors pattern in other modules)
-export async function ensureDbOpen() {
-    if (!db.isOpen()) await db.open();
-}
-
-export type { DocumentRecord as Document };
-```
-
 ## File: app/db/files-util.ts
 ```typescript
 import { nowSec } from './util';
@@ -4697,196 +6093,6 @@ export function serializeFileHashes(hashes: string[]): string {
 /** Utility to create standard timestamp numbers (proxy re-export) */
 export function nowSecNumber(): number {
     return nowSec();
-}
-```
-
-## File: app/db/files.ts
-```typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import { nowSec } from './util';
-import {
-    FileMetaCreateSchema,
-    FileMetaSchema,
-    type FileMeta,
-    type FileMetaCreate,
-} from './schema';
-import { computeFileHash } from '../utils/hash';
-
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
-
-/** Internal helper to change ref_count and fire hook */
-async function changeRefCount(hash: string, delta: number) {
-    await db.transaction('rw', db.file_meta, async () => {
-        const meta = await db.file_meta.get(hash);
-        if (!meta) return;
-        const next = {
-            ...meta,
-            ref_count: Math.max(0, meta.ref_count + delta),
-            updated_at: nowSec(),
-        };
-        await db.file_meta.put(next);
-        const hooks = useHooks();
-        await hooks.doAction('db.files.refchange:action:after', {
-            before: meta,
-            after: next,
-            delta,
-        });
-    });
-}
-
-/** Create or reference existing file by content hash (dedupe). */
-export async function createOrRefFile(
-    file: Blob,
-    name: string
-): Promise<FileMeta> {
-    const dev = (import.meta as any).dev;
-    const hasPerf = typeof performance !== 'undefined';
-    const markId =
-        dev && hasPerf
-            ? `filestore-${Date.now()}-${Math.random().toString(36).slice(2)}`
-            : undefined;
-    if (markId && hasPerf) performance.mark(`${markId}:start`);
-    if (file.size > MAX_FILE_SIZE_BYTES) throw new Error('file too large');
-    const hooks = useHooks();
-    const hash = await computeFileHash(file);
-    const existing = await db.file_meta.get(hash);
-    if (existing) {
-        await changeRefCount(hash, 1);
-        if ((import.meta as any).dev) {
-            // eslint-disable-next-line no-console
-            console.debug('[files] ref existing', {
-                hash: hash.slice(0, 8),
-                size: existing.size_bytes,
-                ref_count: existing.ref_count + 1,
-            });
-        }
-        if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
-        return existing;
-    }
-    const mime = (file as any).type || 'application/octet-stream';
-    // Basic image dimension extraction if image
-    let width: number | undefined;
-    let height: number | undefined;
-    if (mime.startsWith('image/')) {
-        try {
-            const bmp = await blobImageSize(file);
-            width = bmp?.width;
-            height = bmp?.height;
-        } catch {}
-    }
-    const base: FileMetaCreate = {
-        hash,
-        name,
-        mime_type: mime,
-        kind: mime === 'application/pdf' ? 'pdf' : 'image',
-        size_bytes: file.size,
-        width,
-        height,
-        page_count: undefined,
-    } as any;
-    const filtered = await hooks.applyFilters(
-        'db.files.create:filter:input',
-        base
-    );
-    const value = parseOrThrow(FileMetaCreateSchema, filtered);
-    const meta = parseOrThrow(FileMetaSchema, value);
-    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
-        await hooks.doAction('db.files.create:action:before', meta);
-        await db.file_meta.put(meta);
-        await db.file_blobs.put({ hash, blob: file });
-        await hooks.doAction('db.files.create:action:after', meta);
-    });
-    if ((import.meta as any).dev) {
-        // eslint-disable-next-line no-console
-        console.debug('[files] created', {
-            hash: hash.slice(0, 8),
-            size: file.size,
-            mime,
-        });
-    }
-    if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
-    return meta;
-}
-
-/** Get file metadata by hash */
-export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
-    const hooks = useHooks();
-    const meta = await db.file_meta.get(hash);
-    return hooks.applyFilters('db.files.get:filter:output', meta);
-}
-
-/** Get binary Blob by hash */
-export async function getFileBlob(hash: string): Promise<Blob | undefined> {
-    const row = await db.file_blobs.get(hash);
-    return row?.blob;
-}
-
-/** Soft delete file (mark deleted flag only) */
-export async function softDeleteFile(hash: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.file_meta, async () => {
-        const meta = await db.file_meta.get(hash);
-        if (!meta) return;
-        await hooks.doAction('db.files.delete:action:soft:before', meta);
-        await db.file_meta.put({
-            ...meta,
-            deleted: true,
-            updated_at: nowSec(),
-        });
-        await hooks.doAction('db.files.delete:action:soft:after', hash);
-    });
-}
-
-/** Remove one reference to a file; if dropping to 0 we keep data (GC future) */
-export async function derefFile(hash: string): Promise<void> {
-    await changeRefCount(hash, -1);
-}
-
-// Export internal for testing / tasks list mapping
-export { changeRefCount };
-
-// Lightweight image dimension extraction without full decode (creates object URL)
-async function blobImageSize(
-    blob: Blob
-): Promise<{ width: number; height: number } | undefined> {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-            const res = { width: img.naturalWidth, height: img.naturalHeight };
-            URL.revokeObjectURL(img.src);
-            resolve(res);
-        };
-        img.onerror = () => {
-            URL.revokeObjectURL(img.src);
-            resolve(undefined);
-        };
-        img.src = URL.createObjectURL(blob);
-    });
-}
-
-function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
-    try {
-        performance.mark(`${id}:end`);
-        performance.measure(
-            `file:${kind}:bytes=${bytes}`,
-            `${id}:start`,
-            `${id}:end`
-        );
-        const entry = performance
-            .getEntriesByName(`file:${kind}:bytes=${bytes}`)
-            .slice(-1)[0];
-        if (entry) {
-            // eslint-disable-next-line no-console
-            console.debug(
-                '[perf] file store',
-                kind,
-                `${(bytes / 1024).toFixed(1)}KB`,
-                `${entry.duration.toFixed(1)}ms`
-            );
-        }
-    } catch {}
 }
 ```
 
@@ -5061,94 +6267,6 @@ export type {
 export type { Document } from './documents';
 ```
 
-## File: app/db/kv.ts
-```typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
-
-export async function createKv(input: KvCreate): Promise<Kv> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.kv.create:filter:input',
-        input
-    );
-    await hooks.doAction('db.kv.create:action:before', filtered);
-    const value = parseOrThrow(KvCreateSchema, filtered);
-    await db.kv.put(value);
-    await hooks.doAction('db.kv.create:action:after', value);
-    return value;
-}
-
-export async function upsertKv(value: Kv): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.kv.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.kv.upsert:action:before', filtered);
-    parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
-    await hooks.doAction('db.kv.upsert:action:after', filtered);
-}
-
-export async function hardDeleteKv(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.kv.get(id);
-    await hooks.doAction('db.kv.delete:action:hard:before', existing ?? id);
-    await db.kv.delete(id);
-    await hooks.doAction('db.kv.delete:action:hard:after', id);
-}
-
-export async function getKv(id: string) {
-    const hooks = useHooks();
-    const res = await db.kv.get(id);
-    return hooks.applyFilters('db.kv.get:filter:output', res);
-}
-
-export async function getKvByName(name: string) {
-    const hooks = useHooks();
-    const res = await db.kv.where('name').equals(name).first();
-    return hooks.applyFilters('db.kv.getByName:filter:output', res);
-}
-
-// Convenience helpers for auth/session flows
-export async function setKvByName(
-    name: string,
-    value: string | null
-): Promise<Kv> {
-    const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
-    const now = Math.floor(Date.now() / 1000);
-    const record: Kv = {
-        id: existing?.id ?? `kv:${name}`,
-        name,
-        value,
-        created_at: existing?.created_at ?? now,
-        updated_at: now,
-        clock: (existing?.clock ?? 0) + 1,
-    };
-    const filtered = await hooks.applyFilters(
-        'db.kv.upsertByName:filter:input',
-        record
-    );
-    parseOrThrow(KvSchema, filtered);
-    await db.kv.put(filtered);
-    await hooks.doAction('db.kv.upsertByName:action:after', filtered);
-    return filtered;
-}
-
-export async function hardDeleteKvByName(name: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.kv.where('name').equals(name).first();
-    if (!existing) return; // nothing to do
-    await hooks.doAction('db.kv.deleteByName:action:hard:before', existing);
-    await db.kv.delete(existing.id);
-    await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
-}
-```
-
 ## File: app/db/message-files.ts
 ```typescript
 import { db } from './client';
@@ -5230,488 +6348,6 @@ export async function removeFileFromMessage(messageId: string, hash: string) {
         });
         await derefFile(hash);
     });
-}
-```
-
-## File: app/db/messages.ts
-```typescript
-import Dexie from 'dexie';
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
-import {
-    MessageCreateSchema,
-    MessageSchema,
-    type Message,
-    type MessageCreate,
-} from './schema';
-import { serializeFileHashes } from './files-util';
-
-export async function createMessage(input: MessageCreate): Promise<Message> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.messages.create:filter:input',
-        input
-    );
-    // Support passing file_hashes as string[] for convenience
-    if (Array.isArray((filtered as any).file_hashes)) {
-        (filtered as any).file_hashes = serializeFileHashes(
-            (filtered as any).file_hashes
-        );
-    }
-    // Apply defaults (id/clock/timestamps) then validate fully
-    const prepared = parseOrThrow(MessageCreateSchema, filtered);
-    const value = parseOrThrow(MessageSchema, prepared);
-    await hooks.doAction('db.messages.create:action:before', value);
-    await db.messages.put(value);
-    await hooks.doAction('db.messages.create:action:after', value);
-    return value;
-}
-
-export async function upsertMessage(value: Message): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.messages.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.messages.upsert:action:before', filtered);
-    parseOrThrow(MessageSchema, filtered);
-    await db.messages.put(filtered);
-    await hooks.doAction('db.messages.upsert:action:after', filtered);
-}
-
-export function messagesByThread(threadId: string) {
-    const hooks = useHooks();
-    return db.messages
-        .where('thread_id')
-        .equals(threadId)
-        .sortBy('index')
-        .then((res) =>
-            hooks.applyFilters('db.messages.byThread:filter:output', res)
-        );
-}
-
-export function getMessage(id: string) {
-    const hooks = useHooks();
-    return db.messages
-        .get(id)
-        .then((res) =>
-            hooks.applyFilters('db.messages.get:filter:output', res)
-        );
-}
-
-export function messageByStream(streamId: string) {
-    const hooks = useHooks();
-    return db.messages
-        .where('stream_id')
-        .equals(streamId)
-        .first()
-        .then((res) =>
-            hooks.applyFilters('db.messages.byStream:filter:output', res)
-        );
-}
-
-export async function softDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, async () => {
-        const m = await db.messages.get(id);
-        if (!m) return;
-        await hooks.doAction('db.messages.delete:action:soft:before', m);
-        await db.messages.put({ ...m, deleted: true, updated_at: nowSec() });
-        await hooks.doAction('db.messages.delete:action:soft:after', m);
-    });
-}
-
-export async function hardDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.messages.get(id);
-    await hooks.doAction(
-        'db.messages.delete:action:hard:before',
-        existing ?? id
-    );
-    await db.messages.delete(id);
-    await hooks.doAction('db.messages.delete:action:hard:after', id);
-}
-
-// Append a message to a thread and update thread timestamps atomically
-export async function appendMessage(input: MessageCreate): Promise<Message> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.messages, db.threads, async () => {
-        if (Array.isArray((input as any).file_hashes)) {
-            (input as any).file_hashes = serializeFileHashes(
-                (input as any).file_hashes
-            );
-        }
-        const value = parseOrThrow(MessageCreateSchema, input);
-        await hooks.doAction('db.messages.append:action:before', value);
-        // If index not set, compute next sparse index in thread
-        if (value.index === undefined || value.index === null) {
-            const last = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [value.thread_id, Dexie.minKey],
-                    [value.thread_id, Dexie.maxKey]
-                )
-                .last();
-            const lastIdx = last?.index ?? 0;
-            value.index = last ? lastIdx + 1000 : 1000;
-        }
-        const finalized = parseOrThrow(MessageSchema, value);
-        await db.messages.put(finalized);
-        const t = await db.threads.get(value.thread_id);
-        if (t) {
-            const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        }
-        await hooks.doAction('db.messages.append:action:after', finalized);
-        return finalized;
-    });
-}
-
-// Move a message to another thread, computing next index in destination
-export async function moveMessage(
-    messageId: string,
-    toThreadId: string
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, db.threads, async () => {
-        const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.move:action:before', {
-            message: m,
-            toThreadId,
-        });
-        const last = await db.messages
-            .where('[thread_id+index]')
-            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
-            .last();
-        const nextIdx = last ? last.index + 1000 : 1000;
-        await db.messages.put({
-            ...m,
-            thread_id: toThreadId,
-            index: nextIdx,
-            updated_at: nowSec(),
-        });
-
-        const now = nowSec();
-        const t = await db.threads.get(toThreadId);
-        if (t)
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        await hooks.doAction('db.messages.move:action:after', {
-            messageId,
-            toThreadId,
-        });
-    });
-}
-
-// Copy a message into another thread (new id) and update dest thread timestamps
-export async function copyMessage(
-    messageId: string,
-    toThreadId: string
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, db.threads, async () => {
-        const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.copy:action:before', {
-            message: m,
-            toThreadId,
-        });
-        const last = await db.messages
-            .where('[thread_id+index]')
-            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
-            .last();
-        const nextIdx = last ? last.index + 1000 : 1000;
-        await db.messages.put({
-            ...m,
-            id: newId(),
-            thread_id: toThreadId,
-            index: nextIdx,
-            created_at: nowSec(),
-            updated_at: nowSec(),
-        });
-
-        const now = nowSec();
-        const t = await db.threads.get(toThreadId);
-        if (t)
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        await hooks.doAction('db.messages.copy:action:after', {
-            from: messageId,
-            toThreadId,
-        });
-    });
-}
-
-// Insert a message right after a given message id, adjusting index using sparse spacing
-export async function insertMessageAfter(
-    afterMessageId: string,
-    input: Omit<MessageCreate, 'index'>
-): Promise<Message> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.messages, db.threads, async () => {
-        const after = await db.messages.get(afterMessageId);
-        if (!after) throw new Error('after message not found');
-        const next = await db.messages
-            .where('[thread_id+index]')
-            .above([after.thread_id, after.index])
-            .first();
-        let newIndex: number;
-        if (!next) {
-            newIndex = after.index + 1000;
-        } else if (next.index - after.index > 1) {
-            newIndex = after.index + Math.floor((next.index - after.index) / 2);
-        } else {
-            // No gap, normalize thread then place after
-            await normalizeThreadIndexes(after.thread_id);
-            newIndex = after.index + 1000;
-        }
-        if (Array.isArray((input as any).file_hashes)) {
-            (input as any).file_hashes = serializeFileHashes(
-                (input as any).file_hashes
-            );
-        }
-        const value = parseOrThrow(MessageCreateSchema, {
-            ...input,
-            index: newIndex,
-            thread_id: after.thread_id,
-        });
-        await hooks.doAction('db.messages.insertAfter:action:before', {
-            after,
-            value,
-        });
-        const finalized = parseOrThrow(MessageSchema, value);
-        await db.messages.put(finalized);
-        const t = await db.threads.get(after.thread_id);
-        if (t) {
-            const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-            });
-        }
-        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
-        return finalized;
-    });
-}
-
-// Compact / normalize indexes for a thread to 1000, 2000, 3000...
-export async function normalizeThreadIndexes(
-    threadId: string,
-    start = 1000,
-    step = 1000
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.messages, async () => {
-        await hooks.doAction('db.messages.normalize:action:before', {
-            threadId,
-            start,
-            step,
-        });
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
-            .toArray();
-        msgs.sort((a, b) => a.index - b.index);
-        let idx = start;
-        for (const m of msgs) {
-            if (m.index !== idx) {
-                await db.messages.put({
-                    ...m,
-                    index: idx,
-                    updated_at: nowSec(),
-                });
-            }
-            idx += step;
-        }
-        await hooks.doAction('db.messages.normalize:action:after', {
-            threadId,
-        });
-    });
-}
-```
-
-## File: app/db/posts.ts
-```typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { nowSec, parseOrThrow } from './util';
-import {
-    PostSchema,
-    PostCreateSchema,
-    type Post,
-    type PostCreate,
-} from './schema';
-
-// Normalize meta to stored string form (JSON) regardless of input shape
-function normalizeMeta(meta: any): string | null | undefined {
-    if (meta == null) return meta; // keep null/undefined as-is
-    if (typeof meta === 'string') return meta; // assume already JSON or raw string
-    try {
-        return JSON.stringify(meta);
-    } catch {
-        return undefined; // fallback: drop invalid meta
-    }
-}
-
-export async function createPost(input: PostCreate): Promise<Post> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.posts.create:filter:input',
-        input
-    );
-    // Ensure title present & trimmed early (schema will enforce non-empty)
-    if (typeof (filtered as any).title === 'string') {
-        (filtered as any).title = (filtered as any).title.trim();
-    }
-    if ((filtered as any).meta !== undefined) {
-        (filtered as any).meta = normalizeMeta((filtered as any).meta);
-    }
-    const prepared = parseOrThrow(PostCreateSchema, filtered);
-    const value = parseOrThrow(PostSchema, prepared);
-    await hooks.doAction('db.posts.create:action:before', value);
-    await db.posts.put(value);
-    await hooks.doAction('db.posts.create:action:after', value);
-    return value;
-}
-
-export async function upsertPost(value: Post): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.posts.upsert:filter:input',
-        value
-    );
-    if (typeof (filtered as any).title === 'string') {
-        (filtered as any).title = (filtered as any).title.trim();
-    }
-    if ((filtered as any).meta !== undefined) {
-        (filtered as any).meta = normalizeMeta((filtered as any).meta);
-    }
-    await hooks.doAction('db.posts.upsert:action:before', filtered);
-    parseOrThrow(PostSchema, filtered);
-    await db.posts.put(filtered);
-    await hooks.doAction('db.posts.upsert:action:after', filtered);
-}
-
-export function getPost(id: string) {
-    const hooks = useHooks();
-    return db.posts
-        .get(id)
-        .then((res) => hooks.applyFilters('db.posts.get:filter:output', res));
-}
-
-export function allPosts() {
-    const hooks = useHooks();
-    return db.posts
-        .toArray()
-        .then((res) => hooks.applyFilters('db.posts.all:filter:output', res));
-}
-
-export function searchPosts(term: string) {
-    const q = term.toLowerCase();
-    const hooks = useHooks();
-    return db.posts
-        .filter((p) => p.title.toLowerCase().includes(q))
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.posts.search:filter:output', res)
-        );
-}
-
-export async function softDeletePost(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.posts, async () => {
-        const p = await db.posts.get(id);
-        if (!p) return;
-        await hooks.doAction('db.posts.delete:action:soft:before', p);
-        await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
-        await hooks.doAction('db.posts.delete:action:soft:after', p);
-    });
-}
-
-export async function hardDeletePost(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.posts.get(id);
-    await hooks.doAction('db.posts.delete:action:hard:before', existing ?? id);
-    await db.posts.delete(id);
-    await hooks.doAction('db.posts.delete:action:hard:after', id);
-}
-```
-
-## File: app/db/projects.ts
-```typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
-import { ProjectSchema, type Project } from './schema';
-
-export async function createProject(input: Project): Promise<Project> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.projects.create:filter:input',
-        input
-    );
-    await hooks.doAction('db.projects.create:action:before', filtered);
-    const value = parseOrThrow(ProjectSchema, filtered);
-    await db.projects.put(value);
-    await hooks.doAction('db.projects.create:action:after', value);
-    return value;
-}
-
-export async function upsertProject(value: Project): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.projects.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.projects.upsert:action:before', filtered);
-    parseOrThrow(ProjectSchema, filtered);
-    await db.projects.put(filtered);
-    await hooks.doAction('db.projects.upsert:action:after', filtered);
-}
-
-export async function softDeleteProject(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.projects, async () => {
-        const p = await db.projects.get(id);
-        if (!p) return;
-        await hooks.doAction('db.projects.delete:action:soft:before', p);
-        await db.projects.put({
-            ...p,
-            deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        await hooks.doAction('db.projects.delete:action:soft:after', p);
-    });
-}
-
-export async function hardDeleteProject(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.projects.get(id);
-    await hooks.doAction(
-        'db.projects.delete:action:hard:before',
-        existing ?? id
-    );
-    await db.projects.delete(id);
-    await hooks.doAction('db.projects.delete:action:hard:after', id);
-}
-
-export async function getProject(id: string) {
-    const hooks = useHooks();
-    const res = await db.projects.get(id);
-    return hooks.applyFilters('db.projects.get:filter:output', res);
 }
 ```
 
@@ -6147,199 +6783,6 @@ export const FileMetaCreateSchema = FileMetaSchema.omit({
     clock: z.number().int().default(0),
 });
 export type FileMetaCreate = z.infer<typeof FileMetaCreateSchema>;
-```
-
-## File: app/db/threads.ts
-```typescript
-import { db } from './client';
-import { useHooks } from '../composables/useHooks';
-import { newId, nowSec, parseOrThrow } from './util';
-import {
-    ThreadCreateSchema,
-    ThreadSchema,
-    type Thread,
-    type ThreadCreate,
-} from './schema';
-
-export async function createThread(input: ThreadCreate): Promise<Thread> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.threads.create:filter:input',
-        input
-    );
-    // Apply create-time defaults (id/clock/timestamps, etc.)
-    const prepared = parseOrThrow(ThreadCreateSchema, filtered);
-    // Validate against full schema so required defaults (status/pinned/etc.) are present
-    const value = parseOrThrow(ThreadSchema, prepared);
-    await hooks.doAction('db.threads.create:action:before', value);
-    await db.threads.put(value);
-    await hooks.doAction('db.threads.create:action:after', value);
-    return value;
-}
-
-export async function upsertThread(value: Thread): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.threads.upsert:filter:input',
-        value
-    );
-    await hooks.doAction('db.threads.upsert:action:before', filtered);
-    parseOrThrow(ThreadSchema, filtered);
-    await db.threads.put(filtered);
-    await hooks.doAction('db.threads.upsert:action:after', filtered);
-}
-
-export function threadsByProject(projectId: string) {
-    const hooks = useHooks();
-    const promise = db.threads.where('project_id').equals(projectId).toArray();
-    return promise.then((res) =>
-        hooks.applyFilters('db.threads.byProject:filter:output', res)
-    );
-}
-
-export function searchThreadsByTitle(term: string) {
-    const q = term.toLowerCase();
-    const hooks = useHooks();
-    return db.threads
-        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
-        );
-}
-
-export function getThread(id: string) {
-    const hooks = useHooks();
-    return db.threads
-        .get(id)
-        .then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
-}
-
-export function childThreads(parentThreadId: string) {
-    const hooks = useHooks();
-    return db.threads
-        .where('parent_thread_id')
-        .equals(parentThreadId)
-        .toArray()
-        .then((res) =>
-            hooks.applyFilters('db.threads.children:filter:output', res)
-        );
-}
-
-export async function softDeleteThread(id: string): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.threads, async () => {
-        const t = await db.threads.get(id);
-        if (!t) return;
-        await hooks.doAction('db.threads.delete:action:soft:before', t);
-        await db.threads.put({
-            ...t,
-            deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
-        await hooks.doAction('db.threads.delete:action:soft:after', t);
-    });
-}
-
-export async function hardDeleteThread(id: string): Promise<void> {
-    const hooks = useHooks();
-    const existing = await db.threads.get(id);
-    await db.transaction('rw', db.threads, db.messages, async () => {
-        await hooks.doAction(
-            'db.threads.delete:action:hard:before',
-            existing ?? id
-        );
-        await db.messages.where('thread_id').equals(id).delete();
-        await db.threads.delete(id);
-        await hooks.doAction('db.threads.delete:action:hard:after', id);
-    });
-}
-
-// Fork a thread: clone thread metadata and optionally copy messages
-export async function forkThread(
-    sourceThreadId: string,
-    overrides: Partial<ThreadCreate> = {},
-    options: { copyMessages?: boolean } = {}
-): Promise<Thread> {
-    const hooks = useHooks();
-    return db.transaction('rw', db.threads, db.messages, async () => {
-        const src = await db.threads.get(sourceThreadId);
-        if (!src) throw new Error('Source thread not found');
-        const now = nowSec();
-        const forkId = newId();
-        const fork = parseOrThrow(ThreadSchema, {
-            ...src,
-            id: forkId,
-            forked: true,
-            parent_thread_id: src.id,
-            created_at: now,
-            updated_at: now,
-            last_message_at: null,
-            ...overrides,
-        });
-        await hooks.doAction('db.threads.fork:action:before', {
-            source: src,
-            fork,
-        });
-        await db.threads.put(fork);
-
-        if (options.copyMessages) {
-            const msgs = await db.messages
-                .where('thread_id')
-                .equals(src.id)
-                .sortBy('index');
-            for (const m of msgs) {
-                await db.messages.put({ ...m, id: newId(), thread_id: forkId });
-            }
-            if (msgs.length > 0) {
-                await db.threads.put({
-                    ...fork,
-                    last_message_at: now,
-                    updated_at: now,
-                });
-            }
-        }
-        await hooks.doAction('db.threads.fork:action:after', fork);
-        return fork;
-    });
-}
-
-export async function updateThreadSystemPrompt(
-    threadId: string,
-    promptId: string | null
-): Promise<void> {
-    const hooks = useHooks();
-    await db.transaction('rw', db.threads, async () => {
-        const thread = await db.threads.get(threadId);
-        if (!thread) return;
-        const updated = {
-            ...thread,
-            system_prompt_id: promptId,
-            updated_at: nowSec(),
-        };
-        await hooks.doAction('db.threads.updateSystemPrompt:action:before', {
-            thread,
-            promptId,
-        });
-        await db.threads.put(updated);
-        await hooks.doAction('db.threads.updateSystemPrompt:action:after', {
-            thread: updated,
-            promptId,
-        });
-    });
-}
-
-export async function getThreadSystemPrompt(
-    threadId: string
-): Promise<string | null> {
-    const hooks = useHooks();
-    const thread = await db.threads.get(threadId);
-    const result = thread?.system_prompt_id ?? null;
-    return hooks.applyFilters(
-        'db.threads.getSystemPrompt:filter:output',
-        result
-    );
-}
 ```
 
 ## File: app/db/util.ts
@@ -6979,463 +7422,6 @@ export type ORStreamEvent =
 // Central export for max files per message so UI & DB stay in sync.
 // Source of truth defined in app/db/files-util.ts
 export { MAX_FILES_PER_MESSAGE } from '../db/files-util';
-```
-
-## File: app/utils/hooks.ts
-```typescript
-// Lightweight, type-safe hook engine for Nuxt/Vue apps
-// - Supports actions (side-effects) and filters (value transform)
-// - Priority scheduling (lower runs earlier)
-// - Sync/async execution APIs
-// - Error and timing wrappers
-// - Optional wildcard matching via simple glob to RegExp
-
-export type HookKind = 'action' | 'filter';
-
-type AnyFn = (...args: any[]) => any;
-
-export interface RegisterOptions {
-    priority?: number; // default 10
-    acceptedArgs?: number; // reserved for compatibility, not used
-}
-
-export interface OnOptions extends RegisterOptions {
-    kind?: HookKind;
-}
-
-interface CallbackEntry<F extends AnyFn = AnyFn> {
-    fn: F;
-    priority: number;
-    id: number; // tiebreaker to preserve insertion order
-    name: string; // original name/pattern used to register
-}
-
-interface CompiledPattern {
-    pattern: string;
-    regex: RegExp;
-}
-
-function globToRegExp(glob: string): RegExp {
-    // Escape regex special chars, then replace '*' with '.*'
-    const escaped = glob
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*');
-    return new RegExp(`^${escaped}$`);
-}
-
-function sortCallbacks<T extends CallbackEntry>(arr: T[]): T[] {
-    return arr.sort((a, b) => a.priority - b.priority || a.id - b.id);
-}
-
-export interface HookEngine {
-    // filters
-    addFilter: <F extends AnyFn>(
-        name: string,
-        fn: F,
-        priority?: number,
-        acceptedArgs?: number
-    ) => void;
-    removeFilter: <F extends AnyFn>(
-        name: string,
-        fn: F,
-        priority?: number
-    ) => void;
-    applyFilters: <T>(name: string, value: T, ...args: any[]) => Promise<T>;
-    applyFiltersSync: <T>(name: string, value: T, ...args: any[]) => T;
-
-    // actions
-    addAction: <F extends AnyFn>(
-        name: string,
-        fn: F,
-        priority?: number,
-        acceptedArgs?: number
-    ) => void;
-    removeAction: <F extends AnyFn>(
-        name: string,
-        fn: F,
-        priority?: number
-    ) => void;
-    doAction: (name: string, ...args: any[]) => Promise<void>;
-    doActionSync: (name: string, ...args: any[]) => void;
-
-    // utils
-    hasFilter: (name?: string, fn?: AnyFn) => boolean | number;
-    hasAction: (name?: string, fn?: AnyFn) => boolean | number;
-    removeAllCallbacks: (priority?: number) => void;
-    currentPriority: () => number | false;
-
-    // ergonomics
-    onceAction: (name: string, fn: AnyFn, priority?: number) => () => void;
-    on: (name: string, fn: AnyFn, opts?: OnOptions) => () => void; // disposer
-    off: (disposer: () => void) => void;
-
-    // diagnostics (best-effort)
-    _diagnostics: {
-        timings: Record<string, number[]>; // name -> array of durations (ms)
-        errors: Record<string, number>; // name -> error count
-        callbacks(actionOrFilter?: HookKind): number; // total callbacks registered
-    };
-}
-
-export function createHookEngine(): HookEngine {
-    const DEFAULT_PRIORITY = 10;
-    let counter = 0; // id tiebreaker
-    const currentPriorityStack: number[] = [];
-
-    // Separate stores for actions and filters
-    const actions = new Map<string, CallbackEntry[]>();
-    const filters = new Map<string, CallbackEntry[]>();
-
-    // Wildcard registrations are stored separately with compiled regex for fast matching
-    const actionWildcards: {
-        pattern: CompiledPattern;
-        entry: CallbackEntry;
-    }[] = [];
-    const filterWildcards: {
-        pattern: CompiledPattern;
-        entry: CallbackEntry;
-    }[] = [];
-
-    // Helpers to get matching callbacks (exact + wildcards)
-    function getMatching(
-        map: Map<string, CallbackEntry[]>,
-        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
-        name: string
-    ): CallbackEntry[] {
-        const list = map.get(name)
-            ? [...(map.get(name) as CallbackEntry[])]
-            : [];
-        if (wildcards.length) {
-            for (const { pattern, entry } of wildcards) {
-                if (pattern.regex.test(name)) list.push(entry);
-            }
-        }
-        return sortCallbacks(list);
-    }
-
-    function add(
-        map: Map<string, CallbackEntry[]>,
-        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
-        name: string,
-        fn: AnyFn,
-        priority?: number
-    ) {
-        const p = typeof priority === 'number' ? priority : DEFAULT_PRIORITY;
-        const entry: CallbackEntry = { fn, priority: p, id: ++counter, name };
-        if (name.includes('*')) {
-            wildcards.push({
-                pattern: { pattern: name, regex: globToRegExp(name) },
-                entry,
-            });
-        } else {
-            const arr = map.get(name) || [];
-            arr.push(entry);
-            map.set(name, arr);
-        }
-    }
-
-    function remove(
-        map: Map<string, CallbackEntry[]>,
-        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
-        name: string,
-        fn: AnyFn,
-        priority?: number
-    ) {
-        const p = typeof priority === 'number' ? priority : undefined;
-        if (name.includes('*')) {
-            const idx = wildcards.findIndex(
-                (wc) =>
-                    wc.pattern.pattern === name &&
-                    wc.entry.fn === fn &&
-                    (p === undefined || wc.entry.priority === p)
-            );
-            if (idx >= 0) wildcards.splice(idx, 1);
-        } else {
-            const arr = map.get(name);
-            if (!arr) return;
-            const filtered = arr.filter(
-                (e) => !(e.fn === fn && (p === undefined || e.priority === p))
-            );
-            if (filtered.length) map.set(name, filtered);
-            else map.delete(name);
-        }
-    }
-
-    function has(
-        map: Map<string, CallbackEntry[]>,
-        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
-        name?: string,
-        fn?: AnyFn
-    ): boolean | number {
-        if (!name) {
-            // any callbacks at all?
-            return (
-                Array.from(map.values()).some((a) => a.length > 0) ||
-                wildcards.length > 0
-            );
-        }
-        if (fn) {
-            const arr = map.get(name) || [];
-            const found = arr.find((e) => e.fn === fn);
-            if (found) return found.priority;
-            // also check wildcards matching the same original pattern string
-            const wc = wildcards.find(
-                (wc) => wc.pattern.pattern === name && wc.entry.fn === fn
-            );
-            return wc ? wc.entry.priority : false;
-        }
-        const arr = map.get(name) || [];
-        const any =
-            arr.length > 0 ||
-            wildcards.some((wc) => wc.pattern.regex.test(name));
-        return any;
-    }
-
-    function removeAll(
-        map: Map<string, CallbackEntry[]>,
-        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
-        priority?: number
-    ) {
-        if (priority === undefined) {
-            map.clear();
-            wildcards.length = 0;
-            return;
-        }
-        for (const [k, arr] of map) {
-            const filtered = arr.filter((e) => e.priority !== priority);
-            if (filtered.length) map.set(k, filtered);
-            else map.delete(k);
-        }
-        for (let i = wildcards.length - 1; i >= 0; i--) {
-            const wc = wildcards[i];
-            if (wc && wc.entry.priority === priority) wildcards.splice(i, 1);
-        }
-    }
-
-    function recordTiming(name: string, ms: number) {
-        (diagnostics.timings[name] ||= []).push(ms);
-    }
-
-    function recordError(name: string) {
-        diagnostics.errors[name] = (diagnostics.errors[name] || 0) + 1;
-    }
-
-    async function callAsync(
-        cbs: CallbackEntry[],
-        name: string,
-        args: any[],
-        isFilter: boolean,
-        initialValue?: any
-    ) {
-        {
-            const firstPriority =
-                cbs.length > 0 ? cbs[0]!.priority : DEFAULT_PRIORITY;
-            currentPriorityStack.push(firstPriority);
-        }
-        try {
-            let value = initialValue;
-            for (const { fn, priority } of cbs) {
-                // Maintain current priority during execution
-                if (currentPriorityStack.length)
-                    currentPriorityStack[currentPriorityStack.length - 1] =
-                        priority;
-                const start =
-                    typeof performance !== 'undefined' && performance.now
-                        ? performance.now()
-                        : Date.now();
-                try {
-                    if (isFilter) {
-                        value = await fn(value, ...args);
-                    } else {
-                        await fn(...args);
-                    }
-                } catch (err) {
-                    // eslint-disable-next-line no-console
-                    console.error(
-                        `[hooks] Error in ${
-                            isFilter ? 'filter' : 'action'
-                        } "${name}":`,
-                        err
-                    );
-                    recordError(name);
-                } finally {
-                    const end =
-                        typeof performance !== 'undefined' && performance.now
-                            ? performance.now()
-                            : Date.now();
-                    recordTiming(name, end - start);
-                }
-            }
-            return value;
-        } finally {
-            currentPriorityStack.pop();
-        }
-    }
-
-    function callSync(
-        cbs: CallbackEntry[],
-        name: string,
-        args: any[],
-        isFilter: boolean,
-        initialValue?: any
-    ) {
-        {
-            const firstPriority =
-                cbs.length > 0 ? cbs[0]!.priority : DEFAULT_PRIORITY;
-            currentPriorityStack.push(firstPriority);
-        }
-        try {
-            let value = initialValue;
-            for (const { fn, priority } of cbs) {
-                if (currentPriorityStack.length)
-                    currentPriorityStack[currentPriorityStack.length - 1] =
-                        priority;
-                const start =
-                    typeof performance !== 'undefined' && performance.now
-                        ? performance.now()
-                        : Date.now();
-                try {
-                    if (isFilter) {
-                        value = fn(value, ...args);
-                    } else {
-                        fn(...args);
-                    }
-                } catch (err) {
-                    // eslint-disable-next-line no-console
-                    console.error(
-                        `[hooks] Error in ${
-                            isFilter ? 'filter' : 'action'
-                        } "${name}":`,
-                        err
-                    );
-                    recordError(name);
-                } finally {
-                    const end =
-                        typeof performance !== 'undefined' && performance.now
-                            ? performance.now()
-                            : Date.now();
-                    recordTiming(name, end - start);
-                }
-            }
-            return value;
-        } finally {
-            currentPriorityStack.pop();
-        }
-    }
-
-    const diagnostics = {
-        timings: {} as Record<string, number[]>,
-        errors: {} as Record<string, number>,
-        callbacks(kind?: HookKind) {
-            const count = (
-                map: Map<string, CallbackEntry[]>,
-                wc: { pattern: CompiledPattern; entry: CallbackEntry }[]
-            ) =>
-                Array.from(map.values()).reduce((acc, a) => acc + a.length, 0) +
-                wc.length;
-            if (!kind)
-                return (
-                    count(actions, actionWildcards) +
-                    count(filters, filterWildcards)
-                );
-            return kind === 'action'
-                ? count(actions, actionWildcards)
-                : count(filters, filterWildcards);
-        },
-    };
-
-    const engine: HookEngine = {
-        // filters
-        addFilter(name, fn, priority, _acceptedArgs) {
-            add(filters, filterWildcards, name, fn, priority);
-        },
-        removeFilter(name, fn, priority) {
-            remove(filters, filterWildcards, name, fn, priority);
-        },
-        async applyFilters(name, value, ...args) {
-            const cbs = getMatching(filters, filterWildcards, name);
-            if (cbs.length === 0) return value;
-            return await callAsync(cbs, name, args, true, value);
-        },
-        applyFiltersSync(name, value, ...args) {
-            const cbs = getMatching(filters, filterWildcards, name);
-            if (cbs.length === 0) return value;
-            return callSync(cbs, name, args, true, value);
-        },
-
-        // actions
-        addAction(name, fn, priority, _acceptedArgs) {
-            add(actions, actionWildcards, name, fn, priority);
-        },
-        removeAction(name, fn, priority) {
-            remove(actions, actionWildcards, name, fn, priority);
-        },
-        async doAction(name, ...args) {
-            const cbs = getMatching(actions, actionWildcards, name);
-            if (cbs.length === 0) return;
-            await callAsync(cbs, name, args, false);
-        },
-        doActionSync(name, ...args) {
-            const cbs = getMatching(actions, actionWildcards, name);
-            if (cbs.length === 0) return;
-            callSync(cbs, name, args, false);
-        },
-
-        // utils
-        hasFilter(name?: string, fn?: AnyFn) {
-            return has(filters, filterWildcards, name, fn);
-        },
-        hasAction(name?: string, fn?: AnyFn) {
-            return has(actions, actionWildcards, name, fn);
-        },
-        removeAllCallbacks(priority?: number) {
-            removeAll(actions, actionWildcards, priority);
-            removeAll(filters, filterWildcards, priority);
-        },
-        currentPriority() {
-            return currentPriorityStack.length
-                ? currentPriorityStack[currentPriorityStack.length - 1]!
-                : false;
-        },
-
-        // ergonomics
-        onceAction(name: string, fn: AnyFn, priority?: number) {
-            const wrapper = (...args: any[]) => {
-                try {
-                    fn(...args);
-                } finally {
-                    engine.removeAction(name, wrapper, priority);
-                }
-            };
-            engine.addAction(name, wrapper, priority);
-            return () => engine.removeAction(name, wrapper, priority);
-        },
-        on(name: string, fn: AnyFn, opts?: OnOptions) {
-            const kind = opts?.kind ?? 'action';
-            const priority = opts?.priority;
-            if (kind === 'filter') engine.addFilter(name, fn, priority);
-            else engine.addAction(name, fn, priority);
-            return () => {
-                if (kind === 'filter') engine.removeFilter(name, fn, priority);
-                else engine.removeAction(name, fn, priority);
-            };
-        },
-        off(disposer: () => void) {
-            try {
-                disposer();
-            } catch {
-                /* noop */
-            }
-        },
-
-        _diagnostics: diagnostics,
-    };
-
-    return engine;
-}
-
-// Convenience type for imports in .d.ts
-export type { AnyFn as HookFn };
 ```
 
 ## File: app/utils/models-service.ts
@@ -8264,742 +8250,79 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 }
 ```
 
-## File: app/assets/css/main.css
-```css
-/* Tailwind v4: single import includes preflight + utilities */
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
+## File: app/components/chat/file-upload-utils.ts
+```typescript
+import { reportError, err } from '~/utils/errors';
+import { createOrRefFile } from '~/db/files';
 
-/* Nuxt UI base styles (load first so we can override its tokens below) */
-@import "@nuxt/ui";
+export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB
 
-/* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
-	so classes used in Nuxt UI theme overrides are generated. */
-@source "../../../app.config.ts";
-
-
-/* Your Material theme variable files (scoped: .light, .dark, etc.) */
-@import "./theme.css";
-
-/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
-@import "~/assets/css/nuxt-ui-map.css";
-
-/* Font setup: body uses VT323, headings use Press Start 2P */
-:root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
-    --ui-radius: 3px;
+export function classifyKind(mime: string): 'image' | 'pdf' | null {
+    if (mime.startsWith('image/')) return 'image';
+    if (mime === 'application/pdf') return 'pdf';
+    return null;
 }
 
-.font-ps2 {
-	font-family: var(--font-heading) !important;
+export function validateFile(
+    file: File
+):
+    | { ok: true; kind: 'image' | 'pdf' }
+    | { ok: false; code: 'ERR_FILE_VALIDATION'; message: string } {
+    const mime = file.type || '';
+    const kind = classifyKind(mime);
+    if (!kind)
+        return {
+            ok: false,
+            code: 'ERR_FILE_VALIDATION',
+            message: 'Unsupported file type',
+        };
+    if (file.size > MAX_FILE_BYTES)
+        return {
+            ok: false,
+            code: 'ERR_FILE_VALIDATION',
+            message: 'File too large (max 20MB)',
+        };
+    return { ok: true, kind };
 }
 
-.font-vt323 {
-	font-family: var(--font-sans) !important;
+export interface AttachmentLike {
+    file: File;
+    name: string;
+    status: 'pending' | 'ready' | 'error';
+    mime?: string;
+    kind?: string | null;
+    hash?: string;
+    meta?: any;
+    error?: string;
 }
 
-html, body {
-	font-family: var(--font-sans) !important;
-    font-size: 20px; 
-}
-
-/* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
-.scrollbars {
-	scrollbar-width: thin;
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* Hide scrollbar but keep scrolling (WebKit + Firefox) */
-.scrollbar-hidden {
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE/Edge legacy */
-}
-.scrollbar-hidden::-webkit-scrollbar {
-	width: 0;
-	height: 0;
-}
-
-h1, h2, h3, h4, h5, h6, .font-heading {
-	font-family: var(--font-heading) !important;
-}
-
-.retro-btn { 
-	display: inline-flex;
-	line-height: 1; /* avoid extra vertical space from font metrics */
-	position: relative;
-	border-radius: 3px;                               /* default */
-	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-
-/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
-.retro-btn.aspect-square {
-	padding: 0; /* our button variant already sets px-0, this enforces it */
-	place-items: center;
-}
-
-/* Physical press: move button into its shadow and add subtle inner bevel */
-.retro-btn:active {
-	transform: translate(2px, 2px);
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-.active-element {
-		box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-/* Keyboard accessibility: preserve pixel look while focused */
-.retro-btn:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-/* Global thin colored scrollbars (WebKit + Firefox) */
-/* Firefox */
-html {
-	scrollbar-width: thin;
-	/* thumb color, then track color */
-	scrollbar-color: var(--md-primary) transparent;
-}
-
-/* WebKit (Chromium, Safari) */
-/* Apply to all scrollable elements */
-*::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
-}
-*::-webkit-scrollbar-track {
-	background: transparent;
-	border-radius: 9999px;
-}
-*::-webkit-scrollbar-thumb {
-	background: var(--md-primary);
-	border-radius: 9999px;
-	border: 2px solid transparent; /* creates padding so the thumb appears thinner */
-	background-clip: padding-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--md-primary) 85%, black);
-}
-*::-webkit-scrollbar-corner { background: transparent; }
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern-flipped {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    rotate: 180deg;
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Hardcoded header pattern repeating horizontally */
-.header-pattern {
-    background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-
-/* Typography plugin sets its own strong color; ensure dark mode bold text uses on-surface token */
-.dark .prose strong,
-.dark .prosemirror-host :where(.ProseMirror) strong {
-	color: var(--md-on-surface);
-}
-
-.hljs {
-	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
-}
-```
-
-## File: app/components/chat/ChatPageShell.vue
-```vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
-                ref="sideNavExpandedRef"
-                :active-thread="panes[0]?.threadId || ''"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
-                :active-thread="panes[0]?.threadId || ''"
-                @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
-            />
-        </template>
-        <div class="flex-1 min-h-[100dvh] w-full relative">
-            <div
-                id="top-nav"
-                :class="{
-                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
-                        panes.length > 1 || isMobile,
-                }"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
-            >
-                <!-- New Window Button -->
-                <div
-                    v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
-                >
-                    <UTooltip :delay-duration="0" text="Open sidebar">
-                        <UButton
-                            label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            aria-label="Open sidebar"
-                            title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
-                            @click="openMobileSidebar"
-                        >
-                            <UIcon
-                                name="pixelarticons:arrow-bar-right"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <div
-                    class="h-full items-center justify-center px-4 hidden md:flex"
-                >
-                    <UTooltip :delay-duration="0" :text="newWindowTooltip">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :disabled="!canAddPane"
-                            :class="
-                                'retro-btn pointer-events-auto mr-2 ' +
-                                (!canAddPane
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
-                            aria-label="New window"
-                            title="New window"
-                            @click="addPane"
-                        >
-                            <UIcon
-                                name="pixelarticons:card-plus"
-                                class="w-5 h-5"
-                            />
-                        </UButton>
-                    </UTooltip>
-                </div>
-                <!-- Theme Toggle Button -->
-                <div class="h-full flex items-center justify-center px-4">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <!-- Panes Container -->
-            <div
-                :class="[
-                    showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                    @keydown.left.prevent="focusPrev(i)"
-                    @keydown.right.prevent="focusNext(i)"
-                >
-                    <!-- Close button (only if >1 pane) -->
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
-
-                    <template v-if="pane.mode === 'chat'">
-                        <ChatContainer
-                            class="flex-1 min-h-0"
-                            :message-history="pane.messages"
-                            :thread-id="pane.threadId"
-                            @thread-selected="
-                                (id: string) => onInternalThreadCreated(id, i)
-                            "
-                        />
-                    </template>
-                    <template v-else-if="pane.mode === 'doc'">
-                        <LazyDocumentsDocumentEditor
-                            v-if="pane.documentId"
-                            :document-id="pane.documentId"
-                            class="flex-1 min-h-0"
-                        ></LazyDocumentsDocumentEditor>
-                        <div
-                            v-else
-                            class="flex-1 flex items-center justify-center text-sm opacity-70"
-                        >
-                            No document.
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script setup lang="ts">
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
-import { db } from '~/db';
-import { useHookEffect } from '~/composables/useHookEffect';
-// No route pushes; we mutate the URL directly to avoid Nuxt remounts between /chat and /chat/<id>
-
-/**
- * ChatPageShell centralizes the logic shared by /chat and /chat/[id]
- * Props:
- *  - initialThreadId: optional id to load immediately (deep link)
- *  - validateInitial: if true, ensure the initial thread exists else redirect + toast
- *  - routeSync: keep URL in sync with active thread id (default true)
- */
-const props = withDefaults(
-    defineProps<{
-        initialThreadId?: string;
-        validateInitial?: boolean;
-        routeSync?: boolean;
-    }>(),
-    {
-        validateInitial: false,
-        routeSync: true,
-    }
-);
-
-const router = useRouter();
-const toast = useToast();
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-const sideNavExpandedRef = ref<any | null>(null);
-
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    file_hashes?: string | null;
-    id?: string;
-    stream_id?: string;
-};
-
-// ---------------- Multi-pane via composable ----------------
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-const {
-    panes,
-    activePaneIndex,
-    canAddPane,
-    newWindowTooltip,
-    addPane,
-    closePane,
-    setActive,
-    focusPrev,
-    focusNext,
-    setPaneThread,
-    loadMessagesFor,
-    ensureAtLeastOne,
-} = useMultiPane({
-    initialThreadId: props.initialThreadId,
-    maxPanes: 3,
-    onFlushDocument: (id) => flushDocument(id),
-});
-
-// Removed legacy aliases (threadId/messageHistory/validating); use pane[0] directly where needed
-let validateToken = 0; // token for initial validation
-
-// Watch pane add/remove to sync URL for active pane type
-watch(
-    () => panes.value.map((p) => p.id).join(','),
-    () => {
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        if (pane.mode === 'chat') updateUrlThread(pane.threadId || undefined);
-        else updateUrlThread(undefined);
-    }
-);
-
-async function ensureDbOpen() {
-    try {
-        if (!db.isOpen()) await db.open();
-    } catch {}
-}
-
-async function validateThread(id: string): Promise<boolean> {
-    await ensureDbOpen();
-    const ATTEMPTS = 5;
-    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        try {
-            const t = await db.threads.get(id);
-            if (t) return !t.deleted;
-        } catch {}
-        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-function redirectNotFound() {
-    router.replace('/chat');
-    toast.add({
-        title: 'Not found',
-        description: 'This chat does not exist.',
-        color: 'error',
-    });
-}
-
-async function initInitialThread() {
-    if (!process.client) return;
-    if (!props.initialThreadId) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.validateInitial) {
-        pane.validating = true;
-        const token = ++validateToken;
-        const ok = await validateThread(props.initialThreadId);
-        if (token !== validateToken) return; // superseded
-        if (!ok) {
-            redirectNotFound();
-            return;
-        }
-    }
-    await setPaneThread(0, props.initialThreadId);
-    pane.validating = false;
-}
-
-// Theme toggle (SSR safe)
-const nuxtApp = useNuxtApp();
-const getThemeSafe = () => {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client) {
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-        }
-    } catch {}
-    return 'light';
-};
-const themeName = ref<string>(getThemeSafe());
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    const api = nuxtApp.$theme as any;
-    if (api?.toggle) api.toggle();
-    // After toggle, re-read
-    syncTheme();
-}
-if (process.client) {
-    const root = document.documentElement;
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => observer.disconnect());
-    } else {
-        onUnmounted(() => observer.disconnect());
-    }
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// Mobile detection to keep padding on small screens
-import { isMobile } from '~/state/global';
-
-if (process.client) {
-    onMounted(() => {
-        const mq = window.matchMedia('(max-width: 640px)');
-        const apply = () => (isMobile.value = mq.matches);
-        apply();
-        mq.addEventListener('change', apply);
-        if (import.meta.hot) {
-            import.meta.hot.dispose(() =>
-                mq.removeEventListener('change', apply)
-            );
-        } else {
-            onUnmounted(() => mq.removeEventListener('change', apply));
-        }
-    });
-}
-
-// Only offset content when multi-pane OR on mobile (toolbar overlap avoidance)
-const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
-
-onMounted(() => {
-    initInitialThread();
-    syncTheme();
-    ensureAtLeastOne();
-});
-
-// Previous watcher removed; pane thread changes now go through setPaneThread (Task 1.6 cleanup)
-
-function updateUrlThread(id?: string) {
-    if (!process.client || !props.routeSync) return;
-    const newPath = id ? `/chat/${id}` : '/chat';
-    if (window.location.pathname === newPath) return; // no-op
-    // Preserve existing history.state so back button stack stays intact
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-// Sidebar selection
-function onSidebarSelected(id: string) {
-    if (!id) return;
-    const target = activePaneIndex.value;
-    setPaneThread(target, id);
-    const pane = panes.value[target];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-    }
-    if (target === activePaneIndex.value) updateUrlThread(id);
-}
-
-// ChatContainer emitted new thread (first user send)
-function onInternalThreadCreated(id: string, paneIndex?: number) {
-    if (!id) return;
-    const idx =
-        typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
-    const pane = panes.value[idx];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    if (pane.threadId !== id) setPaneThread(idx, id);
-    if (idx === activePaneIndex.value) updateUrlThread(id);
-}
-
-function onNewChat() {
-    const pane = panes.value[activePaneIndex.value];
-    if (pane) {
-        pane.mode = 'chat';
-        pane.documentId = undefined;
-        pane.messages = [];
-        pane.threadId = '';
-    }
-    updateUrlThread(undefined);
-}
-
-// --------------- Documents Integration (minimal) ---------------
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
-
-// Document operations abstracted
-const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
-    panes,
-    activePaneIndex,
-    createNewDoc,
-    flushDocument: (id) => flushDocument(id),
-});
-
-async function onNewDocument(initial?: { title?: string }) {
-    await newDocumentInActive(initial);
-}
-
-async function onDocumentSelected(id: string) {
-    await selectDocumentInActive(id);
-}
-
-// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document in active pane
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            // Ignore if focused in input/textarea/contentEditable
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
-        }
+export async function persistAttachment(att: AttachmentLike) {
+    const persist = async () => {
+        const meta = await createOrRefFile(att.file, att.name);
+        att.hash = meta.hash;
+        att.meta = meta;
+        att.status = 'ready';
     };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    } else {
-        onUnmounted(() => window.removeEventListener('keydown', down));
+    try {
+        await persist();
+    } catch (e: any) {
+        att.status = 'error';
+        att.error = e?.message || 'failed';
+        reportError(e, {
+            code: 'ERR_FILE_PERSIST',
+            toast: true,
+            retry: () => {
+                att.status = 'pending';
+                persist().catch((err2) => {
+                    att.status = 'error';
+                    att.error = err2?.message || 'failed';
+                });
+            },
+            tags: { domain: 'files', stage: 'persist', name: att.name },
+            retryable: true,
+        });
     }
 }
-
-// Mobile sidebar control
-function openMobileSidebar() {
-    // call exposed method on layout to force open
-    (layoutRef.value as any)?.openSidebar?.();
-}
-
-// Exposed to collapsed sidebar search button via emit
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    // Focus via exposed method on SideNavContent
-    requestAnimationFrame(() => {
-        sideNavExpandedRef.value?.focusSearchInput?.();
-    });
-}
-
-// ---------------- Auto-reset pane when active thread or document is deleted ----------------
-// If the currently loaded thread/doc is deleted (soft or hard), switch that pane to a blank chat.
-function resetPaneToBlank(paneIndex: number) {
-    const pane = panes.value[paneIndex];
-    if (!pane) return;
-    pane.mode = 'chat';
-    pane.documentId = undefined;
-    pane.threadId = '';
-    pane.messages = [];
-    // If this pane is the active one, update URL to /chat (blank)
-    if (paneIndex === activePaneIndex.value) updateUrlThread(undefined);
-}
-
-function handleThreadDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'chat' && p.threadId === deletedId) {
-            resetPaneToBlank(i);
-        }
-    });
-}
-
-function handleDocumentDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
-    if (!deletedId) return;
-    panes.value.forEach((p, i) => {
-        if (p.mode === 'doc' && p.documentId === deletedId) {
-            resetPaneToBlank(i);
-        }
-    });
-}
-
-// Register hook listeners (both soft + hard delete events)
-useHookEffect(
-    'db.threads.delete:action:soft:after',
-    (t: any) => handleThreadDeletion(t),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.threads.delete:action:hard:after',
-    (id: any) => handleThreadDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:soft:after',
-    (row: any) => handleDocumentDeletion(row),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:hard:after',
-    (id: any) => handleDocumentDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-</script>
-
-<style scoped>
-body {
-    overflow-y: hidden;
-}
-
-/* Active pane visual indicator (retro glow using primary color) */
-.pane-active {
-    position: relative;
-    /* Smooth color / shadow transition when switching panes */
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0; /* cover full pane */
-    border: 1px solid var(--md-primary);
-
-    /* Layered shadows for a subtle glow while still retro / crisp */
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
 ```
 
 ## File: app/components/documents/DocumentEditor.vue
@@ -9272,363 +8595,6 @@ const statusText = computed(() => {
 </style>
 ```
 
-## File: app/components/documents/DocumentsPageShell.vue
-```vue
-<template>
-    <resizable-sidebar-layout ref="layoutRef">
-        <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
-                ref="sideNavExpandedRef"
-                :active-thread="''"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
-                @chatSelected="onSidebarChatSelected"
-                @new-chat="onSidebarNewChat"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
-                :active-thread="''"
-                @focusSearch="focusSidebarSearch"
-                @chatSelected="onSidebarChatSelected"
-                @new-chat="onSidebarNewChat"
-            />
-        </template>
-        <div class="flex-1 min-h-[100dvh] w-full relative">
-            <div
-                id="top-nav"
-                class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-end pr-2 gap-2 pointer-events-none"
-            >
-                <div class="h-full flex items-center justify-center px-2">
-                    <UTooltip :delay-duration="0" text="Toggle theme">
-                        <UButton
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
-                            :square="true"
-                            :class="'retro-btn pointer-events-auto '"
-                            :ui="{ base: 'retro-btn' }"
-                            :aria-label="themeAriaLabel"
-                            :title="themeAriaLabel"
-                            @click="toggleTheme"
-                        >
-                            <UIcon :name="themeIcon" class="w-5 h-5" />
-                        </UButton>
-                    </UTooltip>
-                </div>
-            </div>
-            <div
-                :class="[
-                    'pt-[46px]',
-                    'h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
-                ]"
-            >
-                <div
-                    v-for="(pane, i) in panes"
-                    :key="pane.id"
-                    class="flex-1 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
-                    :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
-                        'transition-colors',
-                    ]"
-                    tabindex="0"
-                    @focus="setActive(i)"
-                    @click="setActive(i)"
-                >
-                    <div
-                        v-if="panes.length > 1"
-                        class="absolute top-1 right-1 z-10"
-                    >
-                        <UTooltip :delay-duration="0" text="Close window">
-                            <UButton
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
-                                :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
-                                aria-label="Close window"
-                                title="Close window"
-                                @click.stop="closePane(i)"
-                            >
-                                <UIcon
-                                    name="pixelarticons:close"
-                                    class="w-4 h-4"
-                                />
-                            </UButton>
-                        </UTooltip>
-                    </div>
-                    <LazyDocumentsDocumentEditor
-                        v-if="pane.documentId"
-                        :document-id="pane.documentId"
-                        class="flex-1 min-h-0"
-                    />
-                    <div
-                        v-else
-                        class="flex-1 flex items-center justify-center text-sm opacity-70"
-                    >
-                        No document.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-<script setup lang="ts">
-import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
-import { ensureDbOpen as ensureDocumentsDbOpen } from '~/db/documents';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
-import { db } from '~/db';
-
-const props = withDefaults(
-    defineProps<{
-        initialDocumentId?: string;
-        validateInitial?: boolean;
-        routeSync?: boolean;
-    }>(),
-    { validateInitial: false, routeSync: true }
-);
-
-// Multi-pane: we only use doc mode; thread related fields remain unused.
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-const {
-    panes,
-    activePaneIndex,
-    canAddPane,
-    newWindowTooltip,
-    addPane,
-    closePane,
-    setActive,
-    focusPrev,
-    focusNext,
-    setPaneThread,
-    ensureAtLeastOne,
-} = useMultiPane({ onFlushDocument: (id) => flushDocument(id) });
-
-// Convert first pane to doc mode when loading an existing document
-watch(
-    () => props.initialDocumentId,
-    (id) => {
-        if (!id) return;
-        const pane = panes.value[0];
-        if (pane) {
-            pane.mode = 'doc';
-            pane.documentId = id;
-            pane.threadId = '';
-        }
-    },
-    { immediate: true }
-);
-
-const router = useRouter();
-const toast = useToast();
-
-async function validateDocument(id: string): Promise<boolean> {
-    await ensureDocumentsDbOpen();
-    const ATTEMPTS = 5;
-    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        try {
-            const row = await db.posts.get(id);
-            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
-                return true;
-        } catch {}
-        if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
-    }
-    return false;
-}
-
-function redirectNotFound() {
-    router.replace('/docs');
-    toast.add({
-        title: 'Not found',
-        description: 'This document does not exist.',
-        color: 'error',
-    });
-}
-
-let validateToken = 0;
-async function initInitialDocument() {
-    if (!process.client) return;
-    if (!props.initialDocumentId) return;
-    const pane = panes.value[0];
-    if (!pane) return;
-    if (props.validateInitial) {
-        pane.validating = true;
-        const token = ++validateToken;
-        const ok = await validateDocument(props.initialDocumentId);
-        if (token !== validateToken) return;
-        if (!ok) return redirectNotFound();
-    }
-    pane.mode = 'doc';
-    pane.documentId = props.initialDocumentId;
-    pane.threadId = '';
-    pane.validating = false;
-    updateUrlDocument(props.initialDocumentId);
-}
-
-function updateUrlDocument(id?: string) {
-    if (!process.client || !props.routeSync) return;
-    const newPath = id ? `/docs/${id}` : '/docs';
-    if (window.location.pathname === newPath) return;
-    window.history.replaceState(window.history.state, '', newPath);
-}
-
-// Watch active pane doc changes to sync URL
-watch(
-    () =>
-        panes.value
-            .map((p) => `${p.id}:${p.documentId || ''}:${p.mode}`)
-            .join(','),
-    () => {
-        const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
-        if (pane.mode === 'doc') updateUrlDocument(pane.documentId);
-        else updateUrlDocument(undefined);
-    }
-);
-
-// Documents operations
-const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
-    panes,
-    activePaneIndex,
-    createNewDoc,
-    flushDocument: (id) => flushDocument(id),
-});
-
-async function onNewDocument(initial?: { title?: string }) {
-    const doc = await newDocumentInActive(initial);
-    if (doc) updateUrlDocument(doc.id);
-}
-async function onDocumentSelected(id: string) {
-    await selectDocumentInActive(id);
-    updateUrlDocument(id);
-}
-
-// If user picks a chat in sidebar, navigate to chat route (keeps consistent behavior with unified sidebar)
-function onSidebarChatSelected(id: string) {
-    if (!id) return;
-    router.push(`/chat/${id}`);
-}
-function onSidebarNewChat() {
-    router.push('/chat');
-}
-
-// Theme toggle (copied minimal from chat shell)
-const nuxtApp = useNuxtApp();
-const themeName = ref('light');
-function getThemeSafe() {
-    try {
-        const api = nuxtApp.$theme as any;
-        if (api && typeof api.get === 'function') return api.get();
-        if (process.client)
-            return document.documentElement.classList.contains('dark')
-                ? 'dark'
-                : 'light';
-    } catch {}
-    return 'light';
-}
-function syncTheme() {
-    themeName.value = getThemeSafe();
-}
-function toggleTheme() {
-    (nuxtApp.$theme as any)?.toggle?.();
-    syncTheme();
-}
-if (process.client) {
-    onMounted(() => {
-        syncTheme();
-        const root = document.documentElement;
-        const observer = new MutationObserver(syncTheme);
-        observer.observe(root, {
-            attributes: true,
-            attributeFilter: ['class'],
-        });
-        if (import.meta.hot)
-            import.meta.hot.dispose(() => observer.disconnect());
-        else onUnmounted(() => observer.disconnect());
-    });
-}
-const themeIcon = computed(() =>
-    themeName.value === 'dark' ? 'pixelarticons:sun' : 'pixelarticons:moon-star'
-);
-const themeAriaLabel = computed(() =>
-    themeName.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-);
-
-// Sidebar focus (collapsed)
-const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
-const sideNavExpandedRef = ref<any | null>(null);
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
-    requestAnimationFrame(() => sideNavExpandedRef.value?.focusSearchInput?.());
-}
-
-onMounted(() => {
-    ensureAtLeastOne();
-    initInitialDocument();
-});
-
-// Keyboard shortcut: Cmd/Ctrl + Shift + D => new document
-if (process.client) {
-    const down = (e: KeyboardEvent) => {
-        if (!e.shiftKey) return;
-        const mod = e.metaKey || e.ctrlKey;
-        if (!mod) return;
-        if (e.key.toLowerCase() === 'd') {
-            const target = e.target as HTMLElement | null;
-            if (target) {
-                const tag = target.tagName;
-                if (
-                    tag === 'INPUT' ||
-                    tag === 'TEXTAREA' ||
-                    target.isContentEditable
-                )
-                    return;
-            }
-            e.preventDefault();
-            onNewDocument();
-        }
-    };
-    window.addEventListener('keydown', down);
-    if (import.meta.hot)
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', down)
-        );
-    else onUnmounted(() => window.removeEventListener('keydown', down));
-}
-</script>
-<style scoped>
-.pane-active {
-    position: relative;
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
-}
-.pane-active::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    border: 1px solid var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
-}
-</style>
-```
-
 ## File: app/components/documents/ToolbarButton.vue
 ```vue
 <template>
@@ -9675,329 +8641,395 @@ button {
 </style>
 ```
 
-## File: app/components/prompts/PromptEditor.vue
+## File: app/components/modal/dashboard/PluginIcons.vue
 ```vue
 <template>
-    <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
-    >
-        <div
-            class="flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
+    <div class="flex flex-col items-center select-none" :style="wrapperStyle">
+        <!-- Icon Shell -->
+        <button
+            type="button"
+            :class="[
+                'group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]',
+                retro
+                    ? ' shadow-[0_0_0_2px_var(--md-outline),0_2px_0_0_#000,0_2px_0_2px_var(--md-outline)] active:shadow-[0_0_0_2px_var(--md-outline),0_1px_0_0_#000,0_1px_0_1px_var(--md-outline)] transition-all duration-150 bg-[linear-gradient(145deg,var(--md-surface-container-high)_0%,var(--md-surface-container)_60%,var(--md-surface)_100%)]'
+                    : ' ring-1 ring-black/5 dark:ring-white/10 bg-gradient-to-br from-gray-800/40 to-gray-700/20 backdrop-blur-sm shadow',
+            ]"
+            :style="iconBoxStyle"
         >
-            <UButton
-                @click="emit('back')"
-                variant="outline"
-                class="flex items-center justify-center h-[40px] w-[40px] mr-3"
-                color="neutral"
-                icon="pixelarticons:arrow-left"
-                aria-label="Back to list"
+            <!-- Subtle pixel noise / scanline using layered gradients -->
+            <div
+                v-if="retro"
+                class="pointer-events-none absolute inset-0 mix-blend-overlay opacity-60"
+                :class="'bg-[repeating-linear-gradient(0deg,rgba(255,255,255,0.12)_0_1px,rgba(255,255,255,0)_1px_2px),repeating-linear-gradient(90deg,rgba(0,0,0,0.05)_0_2px,rgba(255,255,255,0.05)_2px_4px)]'"
+            ></div>
+
+            <img
+                v-if="image"
+                :src="image"
+                class="w-full h-full object-cover"
+                :alt="label"
+                draggable="false"
             />
-            <UInput
-                v-model="titleDraft"
-                placeholder="Untitled Prompt"
-                label="Prompt Title"
-                size="md"
-                :ui="{
-                    base: 'retro-shadow',
-                }"
-                class="flex-1"
-                @update:model-value="onTitleChange"
+            <UIcon
+                v-else-if="icon"
+                :name="icon"
+                :class="[
+                    'transition-transform duration-150',
+                    retro
+                        ? 'text-[color:var(--md-on-surface)] drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] group-active:translate-y-[1px]'
+                        : 'text-gray-200',
+                ]"
+                :style="iconStyle"
             />
-            <div class="flex items-center gap-1">
-                <UTooltip :text="statusText">
-                    <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
-                        >{{ statusText }}</span
-                    >
-                </UTooltip>
-            </div>
-        </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
-            <div v-if="loading" class="p-6 text-sm text-neutral-500">
-                Loading…
-            </div>
-            <div v-else-if="!record" class="p-6 text-sm text-error">
-                Prompt not found.
-            </div>
             <div
                 v-else
-                class="w-full max-h-[70dvh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
-            >
-                <EditorContent
-                    :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
-                />
-            </div>
+                class="w-full h-full bg-gray-500/40"
+                :style="{ borderRadius: cornerRadius }"
+            ></div>
+
+            <!-- Inner highlight for retro -->
+            <div
+                v-if="retro"
+                class="pointer-events-none absolute inset-0 rounded-[4px] bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.35),transparent_55%),radial-gradient(circle_at_75%_70%,rgba(0,0,0,0.35),transparent_70%)] mix-blend-soft-light"
+            />
+        </button>
+        <!-- Label -->
+        <div
+            class="mt-1.5 text-[10px] sm:text-[11px] font-medium text-center text-[color:var(--md-on-surface-variant,var(--md-on-surface))] max-w-[90px] truncate tracking-wide"
+            :title="label"
+        >
+            {{ label }}
         </div>
     </div>
 </template>
-
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
-import { Editor, EditorContent } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import { Placeholder } from '@tiptap/extensions';
-import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
+import { computed } from 'vue';
 
-const props = defineProps<{ promptId: string }>();
-const emit = defineEmits<{ (e: 'back'): void }>();
+const props = defineProps<{
+    icon?: string;
+    image?: string;
+    label: string;
+    size?: number; // square icon box size (default 64)
+    radius?: number; // corner radius override
+    retro?: boolean; // enable retro shell (default true)
+}>();
 
-const record = ref<PromptRecord | null>(null);
-const loading = ref(true);
-const titleDraft = ref('');
-const editor = ref<Editor | null>(null);
-const pendingTitle = ref<string | undefined>();
-const pendingContent = ref<any | undefined>();
-const saveTimer = ref<any | null>(null);
-const status = ref<'idle' | 'saving' | 'error' | 'loading'>('loading');
-
-async function load(id: string) {
-    loading.value = true;
-    status.value = 'loading';
-    try {
-        const rec = await getPrompt(id);
-        record.value = rec || null;
-        if (rec) {
-            titleDraft.value = rec.title;
-            if (editor.value) {
-                editor.value.commands.setContent(
-                    rec.content || { type: 'doc', content: [] },
-                    { emitUpdate: false }
-                );
-            }
-            status.value = 'idle';
-        } else {
-            status.value = 'error';
-        }
-    } catch (e) {
-        status.value = 'error';
-        console.warn('[PromptEditor] load failed', e);
-    } finally {
-        loading.value = false;
-    }
-}
-
-function scheduleSave() {
-    if (saveTimer.value) clearTimeout(saveTimer.value);
-    saveTimer.value = setTimeout(flush, 600);
-}
-
-async function flush() {
-    if (!record.value) return;
-    if (pendingTitle.value === undefined && pendingContent.value === undefined)
-        return;
-    status.value = 'saving';
-    try {
-        const patch: any = {};
-        if (pendingTitle.value !== undefined) patch.title = pendingTitle.value;
-        if (pendingContent.value !== undefined)
-            patch.content = pendingContent.value;
-        const updated = await updatePrompt(record.value.id, patch);
-        if (updated) {
-            record.value = updated;
-            titleDraft.value = updated.title;
-            status.value = 'idle';
-        } else {
-            status.value = 'error';
-        }
-    } catch (e) {
-        status.value = 'error';
-        console.warn('[PromptEditor] save failed', e);
-    } finally {
-        pendingTitle.value = undefined;
-        pendingContent.value = undefined;
-    }
-}
-
-function onTitleChange() {
-    pendingTitle.value = titleDraft.value;
-    scheduleSave();
-}
-
-function emitContent() {
-    if (!editor.value) return;
-    pendingContent.value = editor.value.getJSON();
-    scheduleSave();
-}
-
-function makeEditor() {
-    editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2] } }),
-            Placeholder.configure({
-                placeholder: 'Type your system instructions…',
-            }),
-        ],
-        content: record.value?.content || { type: 'doc', content: [] },
-        autofocus: false,
-        onUpdate: () => emitContent(),
-    });
-}
-
-onMounted(async () => {
-    await load(props.promptId);
-    makeEditor();
-});
-
-watch(
-    () => props.promptId,
-    async (id) => {
-        await load(id);
-    }
-);
-
-onBeforeUnmount(() => {
-    editor.value?.destroy();
-    if (saveTimer.value) clearTimeout(saveTimer.value);
-});
-
-const statusText = computed(() => {
-    switch (status.value) {
-        case 'saving':
-            return 'Saving…';
-        case 'idle':
-            return 'Ready';
-        case 'error':
-            return 'Error';
-        case 'loading':
-            return 'Loading…';
-    }
-});
+const size = computed(() => props.size ?? 64);
+const cornerRadius = computed(() => `${props.radius ?? 14}px`);
+const iconPadding = computed(() => Math.round(size.value * 0.18));
+const retro = computed(() => props.retro !== false);
+const iconBoxStyle = computed(() => ({
+    width: `${size.value}px`,
+    height: `${size.value}px`,
+    borderRadius: cornerRadius.value,
+    padding: `${iconPadding.value}px`,
+}));
+const iconStyle = computed(() => ({
+    width: `100%`,
+    height: `100%`,
+}));
+const wrapperStyle = computed(() => ({
+    width: `${size.value + 12}px`, // small breathing room for label truncation alignment
+}));
 </script>
-
-<style scoped>
-.prose :where(h1, h2) {
-    font-family: 'Press Start 2P', monospace;
-}
-.prosemirror-host :deep(.ProseMirror) {
-    outline: none;
-    white-space: pre-wrap;
-}
-.prosemirror-host :deep(.ProseMirror p) {
-    margin: 0;
-}
-.prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    opacity: 0.85;
-}
-</style>
 ```
 
-## File: app/components/sidebar/SidebarHeader.vue
+## File: app/components/modal/dashboard/SettingsPage.vue
+```vue
+<template>hello world</template>
+<script setup lang="ts"></script>
+```
+
+## File: app/components/modal/ModelCatalog.vue
 ```vue
 <template>
-    <div
-        :class="{
-            'px-0 justify-center': collapsed,
-            'px-3 justify-between': !collapsed,
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-t-2',
+            body: 'p-0!',
         }"
-        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+        title="Model settings"
+        description="Browse and favorite models from the OpenRouter catalog."
+        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
-        <div v-show="!collapsed">
-            <slot name="sidebar-header">
-                <div class="flex items-center space-x-2">
-                    <div
-                        class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
-                    >
-                        <div
-                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
-                        >
-                            <div>Or</div>
-                            <div class="text-[17px]">3</div>
+        <template #body>
+            <div class="flex flex-col h-full">
+                <div
+                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                >
+                    <div class="flex items-center gap-3 w-full">
+                        <div class="relative w-full max-w-md">
+                            <UInput
+                                v-model="searchQuery"
+                                icon="pixelarticons:search"
+                                placeholder="Search models (id, name, description, modality)"
+                                size="sm"
+                                class="w-full pr-8"
+                                :ui="{ base: 'w-full' }"
+                                autofocus
+                            />
+                            <button
+                                v-if="searchQuery"
+                                type="button"
+                                aria-label="Clear search"
+                                class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
+                                @click="searchQuery = ''"
+                            >
+                                <UIcon
+                                    name="i-heroicons-x-mark"
+                                    class="h-4 w-4"
+                                />
+                            </button>
                         </div>
-                        <span
-                            class="text-[18px] pb-[1.5px] -ml-0.5 font-vt323 font-bold text-primary"
-                            >.chat</span
+                        <UButton
+                            :disabled="refreshing"
+                            size="sm"
+                            variant="ghost"
+                            :square="true"
+                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
+                            aria-label="Refresh model catalog"
+                            :title="
+                                refreshing
+                                    ? 'Refreshing…'
+                                    : 'Force refresh models (bypass cache)'
+                            "
+                            @click="doRefresh"
                         >
+                            <UIcon
+                                v-if="!refreshing"
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4"
+                            />
+                            <UIcon
+                                v-else
+                                name="i-heroicons-arrow-path"
+                                class="h-4 w-4 animate-spin"
+                            />
+                        </UButton>
                     </div>
                 </div>
-            </slot>
-        </div>
-
-        <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
-            <UButton
-                size="xs"
-                :square="true"
-                color="neutral"
-                variant="ghost"
-                :class="'retro-btn'"
-                @click="onToggle"
-                :ui="{ base: 'retro-btn' }"
-                :aria-label="toggleAria"
-                :title="toggleAria"
-            >
-                <UIcon :name="toggleIcon" class="w-5 h-5" />
-            </UButton>
-        </slot>
-    </div>
+                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
+                    Indexing models…
+                </div>
+                <div v-else class="flex-1 min-h-0">
+                    <VList
+                        :data="chunkedModels as OpenRouterModel[][]"
+                        style="height: 100%"
+                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
+                        :overscan="4"
+                        #default="{ item: row }"
+                    >
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 pt-2 sm:pt-0 px-2 sm:px-6 w-full"
+                            :class="gridColsClass"
+                        >
+                            <div
+                                v-for="m in row"
+                                :key="m.id"
+                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                            >
+                                <div
+                                    class="flex items-start justify-between gap-2"
+                                >
+                                    <div class="flex flex-col min-w-0">
+                                        <div
+                                            class="font-medium text-sm truncate"
+                                            :title="m.canonical_slug"
+                                        >
+                                            {{ m.canonical_slug }}
+                                        </div>
+                                        <div
+                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+                                        >
+                                            CTX {{ m.context_length }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
+                                        :aria-pressed="isFavorite(m)"
+                                        @click.stop="toggleFavorite(m)"
+                                        :title="
+                                            isFavorite(m)
+                                                ? 'Unfavorite'
+                                                : 'Favorite'
+                                        "
+                                    >
+                                        <span v-if="isFavorite(m)">★</span>
+                                        <span v-else>☆</span>
+                                    </button>
+                                </div>
+                                <div
+                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
+                                >
+                                    <div class="flex flex-col">
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Input</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.prompt,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="flex flex-col items-end text-right"
+                                    >
+                                        <span
+                                            class="text-neutral-500 dark:text-neutral-400"
+                                            >Output</span
+                                        >
+                                        <span
+                                            class="font-semibold tabular-nums"
+                                            >{{
+                                                formatPerMillion(
+                                                    m.pricing.completion,
+                                                    m.pricing?.currency
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </div>
+                                <div
+                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    <span>{{
+                                        m.architecture?.modality || 'text'
+                                    }}</span>
+                                    <span class="opacity-60">/1M tokens</span>
+                                </div>
+                                <div
+                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
+                                />
+                            </div>
+                        </div>
+                    </VList>
+                    <div
+                        v-if="!chunkedModels.length && searchQuery"
+                        class="px-6 pb-6 text-xs text-neutral-500"
+                    >
+                        No models match "{{ searchQuery }}".
+                    </div>
+                </div>
+            </div>
+        </template>
+        <template #footer> </template>
+    </UModal>
 </template>
-
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
+import { computed } from 'vue';
+import { VList } from 'virtua/vue';
+import { useModelSearch } from '~/composables/useModelSearch';
+import type { OpenRouterModel } from '~/utils/models-service';
+import { useModelStore } from '~/composables/useModelStore';
 
-const props = defineProps({
-    collapsed: { type: Boolean, required: true },
-    toggleIcon: { type: String, required: true },
-    toggleAria: { type: String, required: true },
+const props = defineProps<{
+    showModal: boolean;
+}>();
+const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
+
+// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
 });
-const emit = defineEmits(['toggle']);
 
-function onToggle() {
-    emit('toggle');
+const modelCatalog = ref<OpenRouterModel[]>([]);
+// Search state (Orama index built client-side)
+const {
+    query: searchQuery,
+    results: searchResults,
+    ready: searchReady,
+} = useModelSearch(modelCatalog);
+
+// Fixed 3-column layout for consistent rows
+const COLS = 2;
+const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
+
+const chunkedModels = computed(() => {
+    const source = searchQuery.value.trim()
+        ? searchResults.value
+        : modelCatalog.value;
+    const cols = COLS;
+    const rows: OpenRouterModel[][] = [];
+    for (let i = 0; i < source.length; i += cols) {
+        rows.push(source.slice(i, i + cols));
+    }
+    return rows;
+});
+
+const {
+    favoriteModels,
+    getFavoriteModels,
+    catalog,
+    fetchModels,
+    refreshModels,
+    addFavoriteModel,
+    removeFavoriteModel,
+} = useModelStore();
+
+// Refresh state
+const refreshing = ref(false);
+
+async function doRefresh() {
+    if (refreshing.value) return;
+    refreshing.value = true;
+    try {
+        await refreshModels();
+        modelCatalog.value = catalog.value.slice();
+    } catch (e) {
+        console.warn('[SettingsModal] model refresh failed', e);
+    } finally {
+        refreshing.value = false;
+    }
+}
+
+onMounted(() => {
+    fetchModels().then(() => {
+        modelCatalog.value = catalog.value;
+    });
+
+    getFavoriteModels().then((models) => {
+        favoriteModels.value = models;
+    });
+});
+
+function isFavorite(m: OpenRouterModel) {
+    return favoriteModels.value.some((f) => f.id === m.id);
+}
+
+function toggleFavorite(m: OpenRouterModel) {
+    if (isFavorite(m)) {
+        removeFavoriteModel(m);
+    } else {
+        addFavoriteModel(m);
+    }
+}
+
+/**
+ * Format a per-token price into a "per 1,000,000 tokens" currency string.
+ * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
+ */
+function formatPerMillion(raw: unknown, currency = 'USD') {
+    const perToken = Number(raw ?? 0);
+    const perMillion = perToken * 1_000_000;
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 2,
+        }).format(perMillion);
+    } catch (e) {
+        // Fallback: simple fixed formatting
+        return `$${perMillion.toFixed(2)}`;
+    }
 }
 </script>
-
-<style scoped>
-/* Gradient already supplied by global pattern image; we just ensure better dark base */
-.header-pattern {
-    background-image: url('/gradient-x.webp');
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-}
-.dark .header-pattern {
-    /* Elevated surface tone for dark mode header to distinguish from main background */
-    background-color: var(--md-surface-container-high) !important;
-}
-
-/* Retro logo title: pixel shadow + underline accent (no stroke) */
-.header-title {
-    font-family: 'Press Start 2P', monospace;
-
-    letter-spacing: 1px;
-    color: var(--md-primary);
-    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
-    padding: 2px 4px 3px 4px; /* subtle padding for readability */
-}
-
-.dark .header-title {
-    color: var(--md-on-primary-container);
-    text-shadow: 2px 2px 0 var(--md-primary);
-}
-.dark .header-title::after {
-    background: var(--md-on-primary-container);
-    box-shadow: 2px 2px 0 var(--md-primary);
-}
-
-/* Logo rendering tweaks */
-.logo {
-    width: 20px; /* lock display size */
-    height: 20px;
-    aspect-ratio: 1 / 1;
-    display: block;
-    /* Remove any default smoothing hinting if you later swap to pixel-art variant */
-    /* image-rendering: pixelated; */
-}
-
-/* When you add smaller dedicated raster exports (e.g. logo-20.png, logo-40.png, logo-60.png),
-   switch to a DPR-based srcset for sharper sampling:
-   src="/logo-20.png"
-   srcset="/logo-20.png 1x, /logo-40.png 2x, /logo-60.png 3x" */
-</style>
 ```
 
 ## File: app/components/sidebar/SidebarProjectTree.vue
@@ -10316,483 +9348,6 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
 </script>
 
 <style scoped></style>
-```
-
-## File: app/components/sidebar/SidebarVirtualList.vue
-```vue
-<template>
-    <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <VList
-            :data="flatItems"
-            :style="{ height: 'calc(100dvh - 318px)' }"
-            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
-            #default="{ item, index }"
-        >
-            <div :key="item.key || index">
-                <h1
-                    v-if="item.type === 'sectionHeader'"
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
-                >
-                    {{ item.label }}
-                </h1>
-                <SidebarProjectTree
-                    v-else-if="item.type === 'projectsTree'"
-                    :projects="projects"
-                    v-model:expanded="expandedProjectsLocal"
-                    @chatSelected="emit('chatSelected', $event)"
-                    @documentSelected="emit('documentSelected', $event)"
-                    @addChat="emit('addChat', $event)"
-                    @addDocument="emit('addDocument', $event)"
-                    @renameProject="emit('renameProject', $event)"
-                    @deleteProject="emit('deleteProject', $event)"
-                    @renameEntry="emit('renameEntry', $event)"
-                    @removeFromProject="emit('removeFromProject', $event)"
-                />
-                <div v-else-if="item.type === 'thread'" class="mr-1">
-                    <SidebarThreadItem
-                        :thread="item.thread"
-                        :active="activeThreadSet.has(item.thread.id)"
-                        class="mb-2"
-                        @select="emit('selectThread', $event)"
-                        @rename="emit('renameThread', $event)"
-                        @delete="emit('deleteThread', $event)"
-                        @add-to-project="emit('addThreadToProject', $event)"
-                    />
-                </div>
-                <div v-else-if="item.type === 'doc'" class="mr-1">
-                    <SidebarDocumentItem
-                        :doc="item.doc"
-                        class="mb-2"
-                        :active="activeDocumentSet.has(item.doc.id)"
-                        @select="emit('selectDocument', $event)"
-                        @rename="emit('renameDocument', $event)"
-                        @delete="emit('deleteDocument', $event)"
-                        @add-to-project="emit('addDocumentToProject', $event)"
-                    />
-                </div>
-            </div>
-        </VList>
-    </div>
-</template>
-
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
-import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
-import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
-
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind: 'chat' | 'doc';
-}
-interface Project {
-    id: string;
-    name: string;
-    data?: any;
-}
-interface Thread {
-    id: string;
-    title?: string;
-    forked?: boolean;
-}
-interface DocLite {
-    id: string;
-    title: string;
-    updated_at?: number;
-    created_at?: number;
-    postType?: string;
-}
-
-// Row item discriminated union
-interface SectionHeaderItem {
-    type: 'sectionHeader';
-    key: string;
-    label: string;
-}
-interface ProjectsTreeItem {
-    type: 'projectsTree';
-    key: string;
-}
-interface ThreadItem {
-    type: 'thread';
-    key: string;
-    thread: Thread;
-}
-interface DocItem {
-    type: 'doc';
-    key: string;
-    doc: DocLite;
-}
-
-type SidebarRowItem =
-    | SectionHeaderItem
-    | ProjectsTreeItem
-    | ThreadItem
-    | DocItem;
-
-const props = defineProps<{
-    projects: Project[];
-    threads: Thread[];
-    documents: any[]; // possibly full posts containing heavy fields
-    displayDocuments?: any[]; // optional filtered docs from search
-    expandedProjects: string[]; // mutated in place (passed to tree)
-    activeSections: { projects?: boolean; threads?: boolean; docs?: boolean };
-    activeThread?: string; // legacy single selection
-    activeDocument?: string; // legacy single selection
-    activeThreads?: string[]; // new multi-active selection
-    activeDocuments?: string[]; // new multi-active selection
-    height: number; // required external measured height
-}>();
-
-// Simplified emit typing (broad) to accommodate both legacy kebab-case and new camelCase events during transition
-// TODO: tighten types once integration finalized
-// eslint-disable-next-line @typescript-eslint/ban-types
-const emit = defineEmits<(e: string, ...args: any[]) => void>();
-
-// Lightweight docs mapping (strip heavy fields like content)
-const lightweightDocs = computed<DocLite[]>(() =>
-    (props.documents || []).map((d: any) => ({
-        id: d.id,
-        title: d.title || '(untitled document)',
-        updated_at: d.updated_at,
-        created_at: d.created_at,
-        postType: d.postType,
-    }))
-);
-
-const effectiveDocs = computed<DocLite[]>(() => {
-    if (props.displayDocuments && props.displayDocuments.length) {
-        return props.displayDocuments.map((d: any) => ({
-            id: d.id,
-            title: d.title || '(untitled document)',
-            updated_at: d.updated_at,
-            created_at: d.created_at,
-            postType: d.postType,
-        }));
-    }
-    return lightweightDocs.value;
-});
-
-// Local mirror for v-model with tree (keep reference semantics for parent array)
-const expandedProjectsLocal = computed({
-    get: () => props.expandedProjects,
-    set: (val: string[]) => {
-        // mutate original array for parent expectations
-        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
-    },
-});
-
-const flatItems = computed<SidebarRowItem[]>(() => {
-    const out: SidebarRowItem[] = [];
-    if (props.activeSections.projects && props.projects.length) {
-        out.push({ type: 'projectsTree', key: 'projectsTree' });
-    }
-    // Threads section
-    if (props.activeSections.threads && props.threads.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
-        for (const t of props.threads) {
-            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
-        }
-    }
-    // Docs section
-    if (props.activeSections.docs && effectiveDocs.value.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
-        for (const d of effectiveDocs.value) {
-            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
-        }
-    }
-    return out;
-});
-
-// Constant row size estimate
-const rowSize = 36;
-
-// ---- Multi-active support ----
-const activeThreadSet = computed(() => {
-    if (Array.isArray(props.activeThreads))
-        return new Set(props.activeThreads.filter(Boolean));
-    return new Set(props.activeThread ? [props.activeThread] : []);
-});
-const activeDocumentSet = computed(() => {
-    if (Array.isArray(props.activeDocuments))
-        return new Set(props.activeDocuments.filter(Boolean));
-    return new Set(props.activeDocument ? [props.activeDocument] : []);
-});
-</script>
-```
-
-## File: app/components/sidebar/SideBottomNav.vue
-```vue
-<template>
-    <div
-        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
-    >
-        <!-- Removed previously added extra div; using pseudo-element for top pattern -->
-        <div
-            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container)] border-2 border-[var(--md-outline-variant)]"
-        >
-            <div class="h-[10px] top-10 header-pattern-flipped"></div>
-            <div
-                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] dark:bg-[var(--md-surface-container-low)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
-            >
-                <!-- MY INFO -->
-                <UPopover>
-                    <button
-                        type="button"
-                        aria-label="My Info"
-                        class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                    >
-                        <div
-                            class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                        >
-                            <UIcon
-                                name="pixelarticons:user"
-                                class="h-5 w-5"
-                            ></UIcon>
-                        </div>
-                        <div
-                            class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                        >
-                            <div
-                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                            >
-                                INFO
-                            </div>
-                            <div
-                                class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                            >
-                                <div class="h-[2px] bg-current"></div>
-                                <div class="h-[2px] bg-current"></div>
-                            </div>
-                        </div>
-                    </button>
-                    <template #content>
-                        <div class="flex flex-col items-start w-[140px]">
-                            <button
-                                class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
-                                @click="navigateToActivity"
-                            >
-                                <UIcon
-                                    name="pixelarticons:human-run"
-                                    class="mr-1.5"
-                                />
-                                Activity
-                            </button>
-                            <button
-                                class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
-                                @click="navigateToCredits"
-                            >
-                                <UIcon
-                                    name="pixelarticons:coin"
-                                    class="mr-1.5"
-                                />
-                                Credits
-                            </button>
-                        </div>
-                    </template>
-                </UPopover>
-
-                <!-- Connect -->
-                <button
-                    label="Open"
-                    @click="onConnectButtonClick"
-                    type="button"
-                    aria-label="Connect"
-                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                >
-                    <div
-                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                    >
-                        <svg
-                            class="w-4 h-4"
-                            viewBox="0 0 512 512"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="currentColor"
-                            stroke="currentColor"
-                        >
-                            <g clip-path="url(#clip0_205_3)">
-                                <path
-                                    d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
-                                    stroke-width="90"
-                                />
-                                <path
-                                    d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
-                                />
-                                <path
-                                    d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
-                                    stroke-width="90"
-                                />
-                                <path
-                                    d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
-                                />
-                            </g>
-                        </svg>
-                    </div>
-                    <div
-                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                    >
-                        <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                        >
-                            <!-- Hydration guard: render stable 'Connect' on SSR & first client paint -->
-                            <template v-if="hydrated">
-                                {{ orIsConnected ? 'Disconnect' : 'Connect' }}
-                            </template>
-                            <template v-else>Connect</template>
-                        </div>
-                        <div
-                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                        >
-                            <div
-                                :class="
-                                    hydrated
-                                        ? orIsConnected
-                                            ? 'bg-green-600'
-                                            : 'bg-error'
-                                        : 'bg-error'
-                                "
-                                class="h-[2px]"
-                            ></div>
-                            <div
-                                :class="
-                                    hydrated
-                                        ? orIsConnected
-                                            ? 'bg-success'
-                                            : 'bg-error'
-                                        : 'bg-error'
-                                "
-                                class="h-[2px]"
-                            ></div>
-                        </div>
-                    </div>
-                </button>
-
-                <!-- HELP -->
-                <button
-                    @click="showSettingsModal = true"
-                    type="button"
-                    aria-label="Help"
-                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
-                >
-                    <div
-                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
-                    >
-                        <UIcon
-                            class="w-5 h-5"
-                            name="pixelarticons:sliders-2"
-                        ></UIcon>
-                    </div>
-                    <div
-                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
-                    >
-                        <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
-                        >
-                            HELP
-                        </div>
-                        <div
-                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
-                        >
-                            <div class="h-[2px] bg-current"></div>
-                            <div class="h-[2px] bg-current"></div>
-                        </div>
-                    </div>
-                </button>
-            </div>
-            <div class="h-[10px] top-10"></div>
-        </div>
-    </div>
-    <lazy-modal-settings-modal
-        hydrate-on-visible
-        v-model:showModal="showSettingsModal"
-    />
-</template>
-
-<script lang="ts" setup>
-import { state } from '~/state/global';
-
-const openrouter = useOpenRouterAuth();
-const orIsConnected = computed(() => state.value.openrouterKey);
-// Hydration mismatch fix: only show dynamic connection state after client mounted
-const hydrated = ref(false);
-onMounted(() => {
-    hydrated.value = true;
-});
-const showSettingsModal = ref(false);
-
-function onConnectButtonClick() {
-    if (orIsConnected.value) {
-        if (import.meta.dev) console.debug(orIsConnected);
-        // Logic to disconnect
-        state.value.openrouterKey = null;
-        openrouter.logoutOpenRouter();
-    } else {
-        // Logic to connect
-        openrouter.startLogin();
-    }
-}
-
-function navigateToActivity() {
-    window.open('https://openrouter.ai/activity', '_blank');
-}
-
-function navigateToCredits() {
-    window.open('https://openrouter.ai/settings/credits', '_blank');
-}
-</script>
-
-<style scoped>
-/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
-.retro-bar {
-    position: relative;
-    isolation: isolate; /* contain blend */
-}
-.retro-bar::before {
-    /* Chrome gloss + bevel hint */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background: linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.18),
-        rgba(255, 255, 255, 0.06) 28%,
-        rgba(0, 0, 0, 0) 40%,
-        rgba(0, 0, 0, 0.1) 100%
-    );
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-.retro-bar::after {
-    /* Scanlines + speckle noise, extremely subtle */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background-image: repeating-linear-gradient(
-            0deg,
-            rgba(255, 255, 255, 0.045) 0px,
-            rgba(255, 255, 255, 0.045) 1px,
-            rgba(0, 0, 0, 0) 1px,
-            rgba(0, 0, 0, 0) 3px
-        ),
-        radial-gradient(
-            1px 1px at 12% 18%,
-            rgba(255, 255, 255, 0.04),
-            transparent 100%
-        ),
-        radial-gradient(
-            1px 1px at 64% 62%,
-            rgba(0, 0, 0, 0.04),
-            transparent 100%
-        );
-    opacity: 0.25;
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-</style>
 ```
 
 ## File: app/components/sidebar/SideNavHeader.vue
@@ -11375,6 +9930,150 @@ async function submitCreateDocument() {
 </script>
 ```
 
+## File: app/components/ErrorToasts.vue
+```vue
+<template>
+    <div
+        class="fixed inset-x-0 top-2 flex flex-col items-center gap-2 z-[60] pointer-events-none"
+    >
+        <transition-group
+            name="fade"
+            tag="div"
+            class="flex flex-col gap-2 w-full max-w-xl px-2"
+        >
+            <div
+                v-for="t in toasts"
+                :key="t.id"
+                class="pointer-events-auto border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[3px] bg-[var(--md-surface)]/90 dark:bg-[var(--md-surface)]/80 backdrop-blur px-3 py-2 flex flex-col gap-1"
+            >
+                <div class="flex items-start gap-2">
+                    <strong class="text-sm font-semibold leading-tight">{{
+                        humanTitle(t.error)
+                    }}</strong>
+                    <span class="ml-auto text-xs opacity-70">{{
+                        t.error.code
+                    }}</span>
+                </div>
+                <p
+                    class="text-xs leading-snug break-words"
+                    v-text="t.error.message"
+                />
+                <div
+                    class="flex items-center gap-2 mt-1"
+                    v-if="t.retry && t.error.retryable !== false"
+                >
+                    <UButton size="xs" variant="subtle" @click="doRetry(t)"
+                        >Retry</UButton
+                    >
+                </div>
+            </div>
+        </transition-group>
+    </div>
+</template>
+<script setup lang="ts">
+import { useErrorToasts } from '~/utils/errors';
+const { toasts } = useErrorToasts();
+
+function humanTitle(e: any) {
+    switch (e.code) {
+        case 'ERR_STREAM_FAILURE':
+        case 'ERR_NETWORK':
+            return 'Network issue';
+        case 'ERR_FILE_VALIDATION':
+            return 'Invalid file';
+        case 'ERR_FILE_PERSIST':
+            return 'File save failed';
+        case 'ERR_DB_QUOTA_EXCEEDED':
+            return 'Storage full';
+        case 'ERR_AUTH':
+            return 'Auth error';
+        default:
+            return 'Error';
+    }
+}
+
+function doRetry(t: any) {
+    try {
+        t.retry && t.retry();
+    } catch {}
+}
+</script>
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+    transition: all 0.16s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+</style>
+```
+
+## File: app/components/FatalErrorBoundary.vue
+```vue
+<template>
+    <div
+        v-if="fatal"
+        class="p-4 md:p-6 text-center flex flex-col items-center gap-3"
+    >
+        <h2 class="font-semibold text-lg">Something went wrong</h2>
+        <p class="text-sm opacity-80 max-w-md">
+            An unrecoverable error occurred. You can try reloading the app.
+        </p>
+        <div class="flex gap-2">
+            <UButton size="sm" @click="reload">Reload</UButton>
+            <UButton
+                size="sm"
+                variant="subtle"
+                v-if="detailsOpen === false"
+                @click="detailsOpen = true"
+                >Details</UButton
+            >
+            <UButton
+                size="sm"
+                variant="subtle"
+                v-else
+                @click="detailsOpen = false"
+                >Hide</UButton
+            >
+        </div>
+        <pre
+            v-if="detailsOpen"
+            class="mt-2 max-w-full overflow-auto text-left text-xs p-2 border-2 border-[var(--md-inverse-surface)] rounded-[3px] bg-black/5 dark:bg-white/5"
+            >{{ fatal?.code }}: {{ fatal?.message }}
+</pre
+        >
+    </div>
+    <slot v-else />
+</template>
+<script setup lang="ts">
+import { ref, onErrorCaptured } from 'vue';
+import { err, reportError } from '~/utils/errors';
+
+const fatal = ref<any | null>(null);
+const detailsOpen = ref(false);
+
+function reload() {
+    try {
+        location.reload();
+    } catch {}
+}
+
+onErrorCaptured((e) => {
+    if (fatal.value) return false; // already captured
+    const appErr = reportError(e, { code: 'ERR_INTERNAL', toast: true });
+    // promote to fatal boundary only if severity fatal OR generic internal unexpected
+    if (appErr.severity === 'fatal' || appErr.code === 'ERR_INTERNAL') {
+        fatal.value = appErr;
+        return false; // stop further propagation
+    }
+    return false;
+});
+</script>
+```
+
 ## File: app/composables/__tests__/__snapshots__/hookOrder.test.ts.snap
 ```
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
@@ -11932,6 +10631,1694 @@ if (import.meta.dev) {
 }
 ```
 
+## File: app/db/attachments.ts
+```typescript
+import { db } from './client';
+import { dbTry } from './dbTry';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import {
+    AttachmentCreateSchema,
+    AttachmentSchema,
+    type Attachment,
+    type AttachmentCreate,
+} from './schema';
+
+export async function createAttachment(
+    input: AttachmentCreate
+): Promise<Attachment> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.attachments.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.attachments.create:action:before', filtered);
+    const value = parseOrThrow(AttachmentCreateSchema, filtered);
+    await dbTry(
+        () => db.attachments.put(value),
+        { op: 'write', entity: 'attachments', action: 'create' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.attachments.create:action:after', value);
+    return value;
+}
+
+export async function upsertAttachment(value: Attachment): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.attachments.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.attachments.upsert:action:before', filtered);
+    parseOrThrow(AttachmentSchema, filtered);
+    await dbTry(
+        () => db.attachments.put(filtered),
+        { op: 'write', entity: 'attachments', action: 'upsert' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.attachments.upsert:action:after', filtered);
+}
+
+export async function softDeleteAttachment(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.attachments, async () => {
+        const a = await dbTry(() => db.attachments.get(id), {
+            op: 'read',
+            entity: 'attachments',
+            action: 'get',
+        });
+        if (!a) return;
+        await hooks.doAction('db.attachments.delete:action:soft:before', a);
+        await db.attachments.put({
+            ...a,
+            deleted: true,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        await hooks.doAction('db.attachments.delete:action:soft:after', a);
+    });
+}
+
+export async function hardDeleteAttachment(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.attachments.get(id), {
+        op: 'read',
+        entity: 'attachments',
+        action: 'get',
+    });
+    await hooks.doAction(
+        'db.attachments.delete:action:hard:before',
+        existing ?? id
+    );
+    await db.attachments.delete(id);
+    await hooks.doAction('db.attachments.delete:action:hard:after', id);
+}
+
+export async function getAttachment(id: string) {
+    const hooks = useHooks();
+    const res = await dbTry(() => db.attachments.get(id), {
+        op: 'read',
+        entity: 'attachments',
+        action: 'get',
+    });
+    return hooks.applyFilters('db.attachments.get:filter:output', res);
+}
+```
+
+## File: app/db/documents.ts
+```typescript
+import { db } from './client';
+import { dbTry } from './dbTry';
+import { newId, nowSec } from './util';
+import { useHooks } from '../composables/useHooks';
+
+/**
+ * Internal stored row shape (reuses posts table with postType = 'doc').
+ * We intentionally DO NOT add a new Dexie version / table to keep scope minimal.
+ * Content is persisted as a JSON string (TipTap JSON) for flexibility.
+ */
+export interface DocumentRow {
+    id: string;
+    title: string; // non-empty trimmed
+    content: string; // JSON string
+    postType: string; // always 'doc'
+    created_at: number; // seconds
+    updated_at: number; // seconds
+    deleted: boolean;
+}
+
+/** Public facing record with content already parsed. */
+export interface DocumentRecord {
+    id: string;
+    title: string;
+    content: any; // TipTap JSON object
+    created_at: number;
+    updated_at: number;
+    deleted: boolean;
+}
+
+function emptyDocJSON() {
+    return { type: 'doc', content: [] };
+}
+
+function normalizeTitle(title?: string | null): string {
+    const t = (title ?? '').trim();
+    return t.length ? t : 'Untitled';
+}
+
+function parseContent(raw: string | null | undefined): any {
+    if (!raw) return emptyDocJSON();
+    try {
+        const parsed = JSON.parse(raw);
+        // Basic structural guard
+        if (parsed && typeof parsed === 'object' && parsed.type) return parsed;
+        return emptyDocJSON();
+    } catch {
+        return emptyDocJSON();
+    }
+}
+
+function rowToRecord(row: DocumentRow): DocumentRecord {
+    return {
+        id: row.id,
+        title: row.title,
+        content: parseContent(row.content),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted: row.deleted,
+    };
+}
+
+export interface CreateDocumentInput {
+    title?: string | null;
+    content?: any; // TipTap JSON object
+}
+
+export async function createDocument(
+    input: CreateDocumentInput = {}
+): Promise<DocumentRecord> {
+    const hooks = useHooks();
+    const prepared: DocumentRow = {
+        id: newId(),
+        title: normalizeTitle(input.title),
+        content: JSON.stringify(input.content ?? emptyDocJSON()),
+        postType: 'doc',
+        created_at: nowSec(),
+        updated_at: nowSec(),
+        deleted: false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.create:filter:input',
+        prepared
+    )) as DocumentRow;
+    await hooks.doAction('db.documents.create:action:before', filtered);
+    await dbTry(
+        () => db.posts.put(filtered as any),
+        { op: 'write', entity: 'posts', action: 'createDocument' },
+        { rethrow: true }
+    ); // reuse posts table
+    await hooks.doAction('db.documents.create:action:after', filtered);
+    return rowToRecord(filtered);
+}
+
+export async function getDocument(
+    id: string
+): Promise<DocumentRecord | undefined> {
+    const hooks = useHooks();
+    const row = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
+    if (!row || (row as any).postType !== 'doc') return undefined;
+    const filtered = (await hooks.applyFilters(
+        'db.documents.get:filter:output',
+        row
+    )) as DocumentRow | undefined;
+    return filtered ? rowToRecord(filtered) : undefined;
+}
+
+export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
+    const hooks = useHooks();
+    // Filter by postType (indexed) and non-deleted
+    const rows = await dbTry(
+        () =>
+            db.posts
+                .where('postType')
+                .equals('doc')
+                .and((r) => !(r as any).deleted)
+                .reverse()
+                .toArray(),
+        { op: 'read', entity: 'posts', action: 'listDocuments' }
+    );
+    if (!rows) return [];
+    // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
+    rows.sort((a, b) => b.updated_at - a.updated_at);
+    const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
+    const filtered = (await hooks.applyFilters(
+        'db.documents.list:filter:output',
+        sliced
+    )) as DocumentRow[];
+    return filtered.map(rowToRecord);
+}
+
+export interface UpdateDocumentPatch {
+    title?: string;
+    content?: any; // TipTap JSON object
+}
+
+export async function updateDocument(
+    id: string,
+    patch: UpdateDocumentPatch
+): Promise<DocumentRecord | undefined> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
+    if (!existing || (existing as any).postType !== 'doc') return undefined;
+    const updated: DocumentRow = {
+        id: existing.id,
+        title: patch.title ? normalizeTitle(patch.title) : existing.title,
+        content: patch.content
+            ? JSON.stringify(patch.content)
+            : (existing as any).content,
+        postType: 'doc',
+        created_at: existing.created_at,
+        updated_at: nowSec(),
+        deleted: (existing as any).deleted ?? false,
+    };
+    const filtered = (await hooks.applyFilters(
+        'db.documents.update:filter:input',
+        { existing, updated, patch }
+    )) as { updated: DocumentRow } | DocumentRow;
+    const row = (filtered as any).updated
+        ? (filtered as any).updated
+        : (filtered as any as DocumentRow);
+    await hooks.doAction('db.documents.update:action:before', row);
+    await dbTry(
+        () => db.posts.put(row as any),
+        { op: 'write', entity: 'posts', action: 'updateDocument' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.documents.update:action:after', row);
+    return rowToRecord(row);
+}
+
+export async function softDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
+    if (!existing || (existing as any).postType !== 'doc') return;
+    const row = {
+        ...(existing as any),
+        deleted: true,
+        updated_at: nowSec(),
+    };
+    await hooks.doAction('db.documents.delete:action:soft:before', row);
+    await dbTry(
+        () => db.posts.put(row),
+        { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.documents.delete:action:soft:after', row);
+}
+
+export async function hardDeleteDocument(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'getDocument',
+    });
+    if (!existing || (existing as any).postType !== 'doc') return;
+    await hooks.doAction('db.documents.delete:action:hard:before', existing);
+    await dbTry(
+        () => db.posts.delete(id),
+        { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.documents.delete:action:hard:after', id);
+}
+
+// Convenience for ensuring DB open (mirrors pattern in other modules)
+export async function ensureDbOpen() {
+    if (!db.isOpen()) await db.open();
+}
+
+export type { DocumentRecord as Document };
+```
+
+## File: app/db/files.ts
+```typescript
+import { db } from './client';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import { nowSec } from './util';
+import {
+    FileMetaCreateSchema,
+    FileMetaSchema,
+    type FileMeta,
+    type FileMetaCreate,
+} from './schema';
+import { computeFileHash } from '../utils/hash';
+import { reportError, err } from '../utils/errors';
+
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
+
+/** Internal helper to change ref_count and fire hook */
+async function changeRefCount(hash: string, delta: number) {
+    await db.transaction('rw', db.file_meta, async () => {
+        const meta = await db.file_meta.get(hash);
+        if (!meta) return;
+        const next = {
+            ...meta,
+            ref_count: Math.max(0, meta.ref_count + delta),
+            updated_at: nowSec(),
+        };
+        await db.file_meta.put(next);
+        const hooks = useHooks();
+        await hooks.doAction('db.files.refchange:action:after', {
+            before: meta,
+            after: next,
+            delta,
+        });
+    });
+}
+
+/** Create or reference existing file by content hash (dedupe). */
+export async function createOrRefFile(
+    file: Blob,
+    name: string
+): Promise<FileMeta> {
+    const dev = (import.meta as any).dev;
+    const hasPerf = typeof performance !== 'undefined';
+    const markId =
+        dev && hasPerf
+            ? `filestore-${Date.now()}-${Math.random().toString(36).slice(2)}`
+            : undefined;
+    if (markId && hasPerf) performance.mark(`${markId}:start`);
+    if (file.size > MAX_FILE_SIZE_BYTES) throw new Error('file too large');
+    const hooks = useHooks();
+    const hash = await computeFileHash(file);
+    const existing = await db.file_meta.get(hash);
+    if (existing) {
+        await changeRefCount(hash, 1);
+        if ((import.meta as any).dev) {
+            // eslint-disable-next-line no-console
+            console.debug('[files] ref existing', {
+                hash: hash.slice(0, 8),
+                size: existing.size_bytes,
+                ref_count: existing.ref_count + 1,
+            });
+        }
+        if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
+        return existing;
+    }
+    const mime = (file as any).type || 'application/octet-stream';
+    // Basic image dimension extraction if image
+    let width: number | undefined;
+    let height: number | undefined;
+    if (mime.startsWith('image/')) {
+        try {
+            const bmp = await blobImageSize(file);
+            width = bmp?.width;
+            height = bmp?.height;
+        } catch {}
+    }
+    const base: FileMetaCreate = {
+        hash,
+        name,
+        mime_type: mime,
+        kind: mime === 'application/pdf' ? 'pdf' : 'image',
+        size_bytes: file.size,
+        width,
+        height,
+        page_count: undefined,
+    } as any;
+    const filtered = await hooks.applyFilters(
+        'db.files.create:filter:input',
+        base
+    );
+    const value = parseOrThrow(FileMetaCreateSchema, filtered);
+    const meta = parseOrThrow(FileMetaSchema, value);
+    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
+        await hooks.doAction('db.files.create:action:before', meta);
+        await db.file_meta.put(meta);
+        await db.file_blobs.put({ hash, blob: file });
+        await hooks.doAction('db.files.create:action:after', meta);
+    });
+    if ((import.meta as any).dev) {
+        // eslint-disable-next-line no-console
+        console.debug('[files] created', {
+            hash: hash.slice(0, 8),
+            size: file.size,
+            mime,
+        });
+    }
+    if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
+    return meta;
+}
+
+/** Get file metadata by hash */
+export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
+    const hooks = useHooks();
+    const meta = await db.file_meta.get(hash);
+    return hooks.applyFilters('db.files.get:filter:output', meta);
+}
+
+/** Get binary Blob by hash */
+export async function getFileBlob(hash: string): Promise<Blob | undefined> {
+    const row = await db.file_blobs.get(hash);
+    return row?.blob;
+}
+
+/** Soft delete file (mark deleted flag only) */
+export async function softDeleteFile(hash: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.file_meta, async () => {
+        const meta = await db.file_meta.get(hash);
+        if (!meta) return;
+        await hooks.doAction('db.files.delete:action:soft:before', meta);
+        await db.file_meta.put({
+            ...meta,
+            deleted: true,
+            updated_at: nowSec(),
+        });
+        await hooks.doAction('db.files.delete:action:soft:after', hash);
+    });
+}
+
+/** Remove one reference to a file; if dropping to 0 we keep data (GC future) */
+export async function derefFile(hash: string): Promise<void> {
+    await changeRefCount(hash, -1);
+}
+
+// Export internal for testing / tasks list mapping
+export { changeRefCount };
+
+// Lightweight image dimension extraction without full decode (creates object URL)
+async function blobImageSize(
+    blob: Blob
+): Promise<{ width: number; height: number } | undefined> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const res = { width: img.naturalWidth, height: img.naturalHeight };
+            URL.revokeObjectURL(img.src);
+            resolve(res);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(img.src);
+            resolve(undefined);
+        };
+        img.src = URL.createObjectURL(blob);
+    });
+}
+
+function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
+    try {
+        performance.mark(`${id}:end`);
+        performance.measure(
+            `file:${kind}:bytes=${bytes}`,
+            `${id}:start`,
+            `${id}:end`
+        );
+        const entry = performance
+            .getEntriesByName(`file:${kind}:bytes=${bytes}`)
+            .slice(-1)[0];
+        if (entry) {
+            // eslint-disable-next-line no-console
+            console.debug(
+                '[perf] file store',
+                kind,
+                `${(bytes / 1024).toFixed(1)}KB`,
+                `${entry.duration.toFixed(1)}ms`
+            );
+        }
+    } catch (e) {
+        // Perf metric finalize is best-effort only
+        reportError(err('ERR_INTERNAL', 'file perf finalize failed'), {
+            silent: true,
+            tags: { domain: 'files', stage: 'perf_finalize' },
+        });
+    }
+}
+```
+
+## File: app/db/kv.ts
+```typescript
+import { db } from './client';
+import { dbTry } from './dbTry';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
+
+export async function createKv(input: KvCreate): Promise<Kv> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.kv.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.kv.create:action:before', filtered);
+    const value = parseOrThrow(KvCreateSchema, filtered);
+    await dbTry(
+        () => db.kv.put(value),
+        { op: 'write', entity: 'kv', action: 'create' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.kv.create:action:after', value);
+    return value;
+}
+
+export async function upsertKv(value: Kv): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.kv.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.kv.upsert:action:before', filtered);
+    parseOrThrow(KvSchema, filtered);
+    await dbTry(
+        () => db.kv.put(filtered),
+        { op: 'write', entity: 'kv', action: 'upsert' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.kv.upsert:action:after', filtered);
+}
+
+export async function hardDeleteKv(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.kv.get(id), {
+        op: 'read',
+        entity: 'kv',
+        action: 'get',
+    });
+    await hooks.doAction('db.kv.delete:action:hard:before', existing ?? id);
+    await db.kv.delete(id);
+    await hooks.doAction('db.kv.delete:action:hard:after', id);
+}
+
+export async function getKv(id: string) {
+    const hooks = useHooks();
+    const res = await dbTry(() => db.kv.get(id), {
+        op: 'read',
+        entity: 'kv',
+        action: 'get',
+    });
+    return hooks.applyFilters('db.kv.get:filter:output', res);
+}
+
+export async function getKvByName(name: string) {
+    const hooks = useHooks();
+    const res = await dbTry(() => db.kv.where('name').equals(name).first(), {
+        op: 'read',
+        entity: 'kv',
+        action: 'getByName',
+    });
+    return hooks.applyFilters('db.kv.getByName:filter:output', res);
+}
+
+// Convenience helpers for auth/session flows
+export async function setKvByName(
+    name: string,
+    value: string | null
+): Promise<Kv> {
+    const hooks = useHooks();
+    const existing = await dbTry(
+        () => db.kv.where('name').equals(name).first(),
+        { op: 'read', entity: 'kv', action: 'getByName' }
+    );
+    const now = Math.floor(Date.now() / 1000);
+    const record: Kv = {
+        id: existing?.id ?? `kv:${name}`,
+        name,
+        value,
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+        clock: (existing?.clock ?? 0) + 1,
+    };
+    const filtered = await hooks.applyFilters(
+        'db.kv.upsertByName:filter:input',
+        record
+    );
+    parseOrThrow(KvSchema, filtered);
+    await dbTry(
+        () => db.kv.put(filtered),
+        { op: 'write', entity: 'kv', action: 'upsertByName' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.kv.upsertByName:action:after', filtered);
+    return filtered;
+}
+
+export async function hardDeleteKvByName(name: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(
+        () => db.kv.where('name').equals(name).first(),
+        { op: 'read', entity: 'kv', action: 'getByName' }
+    );
+    if (!existing) return; // nothing to do
+    await hooks.doAction('db.kv.deleteByName:action:hard:before', existing);
+    await dbTry(
+        () => db.kv.delete(existing.id),
+        { op: 'write', entity: 'kv', action: 'deleteByName' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.kv.deleteByName:action:hard:after', existing.id);
+}
+```
+
+## File: app/db/messages.ts
+```typescript
+import Dexie from 'dexie';
+import { db } from './client';
+import { dbTry } from './dbTry';
+import { useHooks } from '../composables/useHooks';
+import { newId, nowSec, parseOrThrow } from './util';
+import {
+    MessageCreateSchema,
+    MessageSchema,
+    type Message,
+    type MessageCreate,
+} from './schema';
+import { serializeFileHashes } from './files-util';
+
+export async function createMessage(input: MessageCreate): Promise<Message> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.create:filter:input',
+        input
+    );
+    // Support passing file_hashes as string[] for convenience
+    if (Array.isArray((filtered as any).file_hashes)) {
+        (filtered as any).file_hashes = serializeFileHashes(
+            (filtered as any).file_hashes
+        );
+    }
+    // Apply defaults (id/clock/timestamps) then validate fully
+    const prepared = parseOrThrow(MessageCreateSchema, filtered);
+    const value = parseOrThrow(MessageSchema, prepared);
+    await hooks.doAction('db.messages.create:action:before', value);
+    await dbTry(
+        () => db.messages.put(value),
+        { op: 'write', entity: 'messages', action: 'create' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.messages.create:action:after', value);
+    return value;
+}
+
+export async function upsertMessage(value: Message): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.messages.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.messages.upsert:action:before', filtered);
+    parseOrThrow(MessageSchema, filtered);
+    await dbTry(
+        () => db.messages.put(filtered),
+        { op: 'write', entity: 'messages', action: 'upsert' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.messages.upsert:action:after', filtered);
+}
+
+export function messagesByThread(threadId: string) {
+    const hooks = useHooks();
+    return dbTry(
+        () => db.messages.where('thread_id').equals(threadId).sortBy('index'),
+        { op: 'read', entity: 'messages', action: 'byThread' }
+    )?.then((res) =>
+        hooks.applyFilters('db.messages.byThread:filter:output', res as any)
+    );
+}
+
+export function getMessage(id: string) {
+    const hooks = useHooks();
+    return dbTry(() => db.messages.get(id), {
+        op: 'read',
+        entity: 'messages',
+        action: 'get',
+    })?.then((res) => hooks.applyFilters('db.messages.get:filter:output', res));
+}
+
+export function messageByStream(streamId: string) {
+    const hooks = useHooks();
+    return dbTry(
+        () => db.messages.where('stream_id').equals(streamId).first(),
+        { op: 'read', entity: 'messages', action: 'byStream' }
+    )?.then((res) =>
+        hooks.applyFilters('db.messages.byStream:filter:output', res)
+    );
+}
+
+export async function softDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, async () => {
+        const m = await dbTry(() => db.messages.get(id), {
+            op: 'read',
+            entity: 'messages',
+            action: 'get',
+        });
+        if (!m) return;
+        await hooks.doAction('db.messages.delete:action:soft:before', m);
+        await dbTry(
+            () =>
+                db.messages.put({ ...m, deleted: true, updated_at: nowSec() }),
+            { op: 'write', entity: 'messages', action: 'softDelete' }
+        );
+        await hooks.doAction('db.messages.delete:action:soft:after', m);
+    });
+}
+
+export async function hardDeleteMessage(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.messages.get(id), {
+        op: 'read',
+        entity: 'messages',
+        action: 'get',
+    });
+    await hooks.doAction(
+        'db.messages.delete:action:hard:before',
+        existing ?? id
+    );
+    await dbTry(() => db.messages.delete(id), {
+        op: 'write',
+        entity: 'messages',
+        action: 'hardDelete',
+    });
+    await hooks.doAction('db.messages.delete:action:hard:after', id);
+}
+
+// Append a message to a thread and update thread timestamps atomically
+export async function appendMessage(input: MessageCreate): Promise<Message> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.messages, db.threads, async () => {
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
+        }
+        const value = parseOrThrow(MessageCreateSchema, input);
+        await hooks.doAction('db.messages.append:action:before', value);
+        // If index not set, compute next sparse index in thread
+        if (value.index === undefined || value.index === null) {
+            const last = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [value.thread_id, Dexie.minKey],
+                    [value.thread_id, Dexie.maxKey]
+                )
+                .last();
+            const lastIdx = last?.index ?? 0;
+            value.index = last ? lastIdx + 1000 : 1000;
+        }
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(value.thread_id);
+        if (t) {
+            const now = nowSec();
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        }
+        await hooks.doAction('db.messages.append:action:after', finalized);
+        return finalized;
+    });
+}
+
+// Move a message to another thread, computing next index in destination
+export async function moveMessage(
+    messageId: string,
+    toThreadId: string
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, db.threads, async () => {
+        const m = await db.messages.get(messageId);
+        if (!m) return;
+        await hooks.doAction('db.messages.move:action:before', {
+            message: m,
+            toThreadId,
+        });
+        const last = await db.messages
+            .where('[thread_id+index]')
+            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
+            .last();
+        const nextIdx = last ? last.index + 1000 : 1000;
+        await db.messages.put({
+            ...m,
+            thread_id: toThreadId,
+            index: nextIdx,
+            updated_at: nowSec(),
+        });
+
+        const now = nowSec();
+        const t = await db.threads.get(toThreadId);
+        if (t)
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        await hooks.doAction('db.messages.move:action:after', {
+            messageId,
+            toThreadId,
+        });
+    });
+}
+
+// Copy a message into another thread (new id) and update dest thread timestamps
+export async function copyMessage(
+    messageId: string,
+    toThreadId: string
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, db.threads, async () => {
+        const m = await db.messages.get(messageId);
+        if (!m) return;
+        await hooks.doAction('db.messages.copy:action:before', {
+            message: m,
+            toThreadId,
+        });
+        const last = await db.messages
+            .where('[thread_id+index]')
+            .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
+            .last();
+        const nextIdx = last ? last.index + 1000 : 1000;
+        await db.messages.put({
+            ...m,
+            id: newId(),
+            thread_id: toThreadId,
+            index: nextIdx,
+            created_at: nowSec(),
+            updated_at: nowSec(),
+        });
+
+        const now = nowSec();
+        const t = await db.threads.get(toThreadId);
+        if (t)
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        await hooks.doAction('db.messages.copy:action:after', {
+            from: messageId,
+            toThreadId,
+        });
+    });
+}
+
+// Insert a message right after a given message id, adjusting index using sparse spacing
+export async function insertMessageAfter(
+    afterMessageId: string,
+    input: Omit<MessageCreate, 'index'>
+): Promise<Message> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.messages, db.threads, async () => {
+        const after = await db.messages.get(afterMessageId);
+        if (!after) throw new Error('after message not found');
+        const next = await db.messages
+            .where('[thread_id+index]')
+            .above([after.thread_id, after.index])
+            .first();
+        let newIndex: number;
+        if (!next) {
+            newIndex = after.index + 1000;
+        } else if (next.index - after.index > 1) {
+            newIndex = after.index + Math.floor((next.index - after.index) / 2);
+        } else {
+            // No gap, normalize thread then place after
+            await normalizeThreadIndexes(after.thread_id);
+            newIndex = after.index + 1000;
+        }
+        if (Array.isArray((input as any).file_hashes)) {
+            (input as any).file_hashes = serializeFileHashes(
+                (input as any).file_hashes
+            );
+        }
+        const value = parseOrThrow(MessageCreateSchema, {
+            ...input,
+            index: newIndex,
+            thread_id: after.thread_id,
+        });
+        await hooks.doAction('db.messages.insertAfter:action:before', {
+            after,
+            value,
+        });
+        const finalized = parseOrThrow(MessageSchema, value);
+        await db.messages.put(finalized);
+        const t = await db.threads.get(after.thread_id);
+        if (t) {
+            const now = nowSec();
+            await db.threads.put({
+                ...t,
+                last_message_at: now,
+                updated_at: now,
+            });
+        }
+        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
+        return finalized;
+    });
+}
+
+// Compact / normalize indexes for a thread to 1000, 2000, 3000...
+export async function normalizeThreadIndexes(
+    threadId: string,
+    start = 1000,
+    step = 1000
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.messages, async () => {
+        await hooks.doAction('db.messages.normalize:action:before', {
+            threadId,
+            start,
+            step,
+        });
+        const msgs = await db.messages
+            .where('[thread_id+index]')
+            .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
+            .toArray();
+        msgs.sort((a, b) => a.index - b.index);
+        let idx = start;
+        for (const m of msgs) {
+            if (m.index !== idx) {
+                await db.messages.put({
+                    ...m,
+                    index: idx,
+                    updated_at: nowSec(),
+                });
+            }
+            idx += step;
+        }
+        await hooks.doAction('db.messages.normalize:action:after', {
+            threadId,
+        });
+    });
+}
+```
+
+## File: app/db/posts.ts
+```typescript
+import { db } from './client';
+import { dbTry } from './dbTry';
+import { useHooks } from '../composables/useHooks';
+import { nowSec, parseOrThrow } from './util';
+import {
+    PostSchema,
+    PostCreateSchema,
+    type Post,
+    type PostCreate,
+} from './schema';
+
+// Normalize meta to stored string form (JSON) regardless of input shape
+function normalizeMeta(meta: any): string | null | undefined {
+    if (meta == null) return meta; // keep null/undefined as-is
+    if (typeof meta === 'string') return meta; // assume already JSON or raw string
+    try {
+        return JSON.stringify(meta);
+    } catch {
+        return undefined; // fallback: drop invalid meta
+    }
+}
+
+export async function createPost(input: PostCreate): Promise<Post> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.posts.create:filter:input',
+        input
+    );
+    // Ensure title present & trimmed early (schema will enforce non-empty)
+    if (typeof (filtered as any).title === 'string') {
+        (filtered as any).title = (filtered as any).title.trim();
+    }
+    if ((filtered as any).meta !== undefined) {
+        (filtered as any).meta = normalizeMeta((filtered as any).meta);
+    }
+    const prepared = parseOrThrow(PostCreateSchema, filtered);
+    const value = parseOrThrow(PostSchema, prepared);
+    await hooks.doAction('db.posts.create:action:before', value);
+    await dbTry(
+        () => db.posts.put(value),
+        { op: 'write', entity: 'posts', action: 'create' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.posts.create:action:after', value);
+    return value;
+}
+
+export async function upsertPost(value: Post): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.posts.upsert:filter:input',
+        value
+    );
+    if (typeof (filtered as any).title === 'string') {
+        (filtered as any).title = (filtered as any).title.trim();
+    }
+    if ((filtered as any).meta !== undefined) {
+        (filtered as any).meta = normalizeMeta((filtered as any).meta);
+    }
+    await hooks.doAction('db.posts.upsert:action:before', filtered);
+    parseOrThrow(PostSchema, filtered);
+    await dbTry(
+        () => db.posts.put(filtered),
+        { op: 'write', entity: 'posts', action: 'upsert' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.posts.upsert:action:after', filtered);
+}
+
+export function getPost(id: string) {
+    const hooks = useHooks();
+    return dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'get',
+    })?.then((res) => hooks.applyFilters('db.posts.get:filter:output', res));
+}
+
+export function allPosts() {
+    const hooks = useHooks();
+    return dbTry(() => db.posts.toArray(), {
+        op: 'read',
+        entity: 'posts',
+        action: 'all',
+    })?.then((res) => hooks.applyFilters('db.posts.all:filter:output', res));
+}
+
+export function searchPosts(term: string) {
+    const q = term.toLowerCase();
+    const hooks = useHooks();
+    return dbTry(
+        () =>
+            db.posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
+        { op: 'read', entity: 'posts', action: 'search' }
+    )?.then((res) => hooks.applyFilters('db.posts.search:filter:output', res));
+}
+
+export async function softDeletePost(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.posts, async () => {
+        const p = await dbTry(() => db.posts.get(id), {
+            op: 'read',
+            entity: 'posts',
+            action: 'get',
+        });
+        if (!p) return;
+        await hooks.doAction('db.posts.delete:action:soft:before', p);
+        await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
+        await hooks.doAction('db.posts.delete:action:soft:after', p);
+    });
+}
+
+export async function hardDeletePost(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.posts.get(id), {
+        op: 'read',
+        entity: 'posts',
+        action: 'get',
+    });
+    await hooks.doAction('db.posts.delete:action:hard:before', existing ?? id);
+    await db.posts.delete(id);
+    await hooks.doAction('db.posts.delete:action:hard:after', id);
+}
+```
+
+## File: app/db/projects.ts
+```typescript
+import { db } from './client';
+import { dbTry } from './dbTry';
+import { useHooks } from '../composables/useHooks';
+import { parseOrThrow } from './util';
+import { ProjectSchema, type Project } from './schema';
+
+export async function createProject(input: Project): Promise<Project> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.projects.create:filter:input',
+        input
+    );
+    await hooks.doAction('db.projects.create:action:before', filtered);
+    const value = parseOrThrow(ProjectSchema, filtered);
+    await dbTry(
+        () => db.projects.put(value),
+        { op: 'write', entity: 'projects', action: 'create' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.projects.create:action:after', value);
+    return value;
+}
+
+export async function upsertProject(value: Project): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.projects.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.projects.upsert:action:before', filtered);
+    parseOrThrow(ProjectSchema, filtered);
+    await dbTry(
+        () => db.projects.put(filtered),
+        { op: 'write', entity: 'projects', action: 'upsert' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.projects.upsert:action:after', filtered);
+}
+
+export async function softDeleteProject(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.projects, async () => {
+        const p = await dbTry(() => db.projects.get(id), {
+            op: 'read',
+            entity: 'projects',
+            action: 'get',
+        });
+        if (!p) return;
+        await hooks.doAction('db.projects.delete:action:soft:before', p);
+        await db.projects.put({
+            ...p,
+            deleted: true,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        await hooks.doAction('db.projects.delete:action:soft:after', p);
+    });
+}
+
+export async function hardDeleteProject(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.projects.get(id), {
+        op: 'read',
+        entity: 'projects',
+        action: 'get',
+    });
+    await hooks.doAction(
+        'db.projects.delete:action:hard:before',
+        existing ?? id
+    );
+    await db.projects.delete(id);
+    await hooks.doAction('db.projects.delete:action:hard:after', id);
+}
+
+export async function getProject(id: string) {
+    const hooks = useHooks();
+    const res = await dbTry(() => db.projects.get(id), {
+        op: 'read',
+        entity: 'projects',
+        action: 'get',
+    });
+    return hooks.applyFilters('db.projects.get:filter:output', res);
+}
+```
+
+## File: app/db/threads.ts
+```typescript
+import { db } from './client';
+import { dbTry } from './dbTry';
+import { useHooks } from '../composables/useHooks';
+import { newId, nowSec, parseOrThrow } from './util';
+import {
+    ThreadCreateSchema,
+    ThreadSchema,
+    type Thread,
+    type ThreadCreate,
+} from './schema';
+
+export async function createThread(input: ThreadCreate): Promise<Thread> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.threads.create:filter:input',
+        input
+    );
+    // Apply create-time defaults (id/clock/timestamps, etc.)
+    const prepared = parseOrThrow(ThreadCreateSchema, filtered);
+    // Validate against full schema so required defaults (status/pinned/etc.) are present
+    const value = parseOrThrow(ThreadSchema, prepared);
+    await hooks.doAction('db.threads.create:action:before', value);
+    await dbTry(
+        () => db.threads.put(value),
+        { op: 'write', entity: 'threads', action: 'create' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.threads.create:action:after', value);
+    return value;
+}
+
+export async function upsertThread(value: Thread): Promise<void> {
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters(
+        'db.threads.upsert:filter:input',
+        value
+    );
+    await hooks.doAction('db.threads.upsert:action:before', filtered);
+    parseOrThrow(ThreadSchema, filtered);
+    await dbTry(
+        () => db.threads.put(filtered),
+        { op: 'write', entity: 'threads', action: 'upsert' },
+        { rethrow: true }
+    );
+    await hooks.doAction('db.threads.upsert:action:after', filtered);
+}
+
+export function threadsByProject(projectId: string) {
+    const hooks = useHooks();
+    const promise = dbTry(
+        () => db.threads.where('project_id').equals(projectId).toArray(),
+        { op: 'read', entity: 'threads', action: 'byProject' }
+    );
+    return promise.then((res) =>
+        hooks.applyFilters('db.threads.byProject:filter:output', res)
+    );
+}
+
+export function searchThreadsByTitle(term: string) {
+    const q = term.toLowerCase();
+    const hooks = useHooks();
+    return db.threads
+        .filter((t) => (t.title ?? '').toLowerCase().includes(q))
+        .toArray()
+        .then((res) =>
+            hooks.applyFilters('db.threads.searchByTitle:filter:output', res)
+        );
+}
+
+export function getThread(id: string) {
+    const hooks = useHooks();
+    return dbTry(() => db.threads.get(id), {
+        op: 'read',
+        entity: 'threads',
+        action: 'get',
+    })?.then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
+}
+
+export function childThreads(parentThreadId: string) {
+    const hooks = useHooks();
+    return db.threads
+        .where('parent_thread_id')
+        .equals(parentThreadId)
+        .toArray()
+        .then((res) =>
+            hooks.applyFilters('db.threads.children:filter:output', res)
+        );
+}
+
+export async function softDeleteThread(id: string): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.threads, async () => {
+        const t = await dbTry(() => db.threads.get(id), {
+            op: 'read',
+            entity: 'threads',
+            action: 'get',
+        });
+        if (!t) return;
+        await hooks.doAction('db.threads.delete:action:soft:before', t);
+        await db.threads.put({
+            ...t,
+            deleted: true,
+            updated_at: Math.floor(Date.now() / 1000),
+        });
+        await hooks.doAction('db.threads.delete:action:soft:after', t);
+    });
+}
+
+export async function hardDeleteThread(id: string): Promise<void> {
+    const hooks = useHooks();
+    const existing = await dbTry(() => db.threads.get(id), {
+        op: 'read',
+        entity: 'threads',
+        action: 'get',
+    });
+    await db.transaction('rw', db.threads, db.messages, async () => {
+        await hooks.doAction(
+            'db.threads.delete:action:hard:before',
+            existing ?? id
+        );
+        await db.messages.where('thread_id').equals(id).delete();
+        await db.threads.delete(id);
+        await hooks.doAction('db.threads.delete:action:hard:after', id);
+    });
+}
+
+// Fork a thread: clone thread metadata and optionally copy messages
+export async function forkThread(
+    sourceThreadId: string,
+    overrides: Partial<ThreadCreate> = {},
+    options: { copyMessages?: boolean } = {}
+): Promise<Thread> {
+    const hooks = useHooks();
+    return db.transaction('rw', db.threads, db.messages, async () => {
+        const src = await dbTry(
+            () => db.threads.get(sourceThreadId),
+            { op: 'read', entity: 'threads', action: 'get' },
+            { rethrow: true }
+        );
+        if (!src) throw new Error('Source thread not found');
+        const now = nowSec();
+        const forkId = newId();
+        const fork = parseOrThrow(ThreadSchema, {
+            ...src,
+            id: forkId,
+            forked: true,
+            parent_thread_id: src.id,
+            created_at: now,
+            updated_at: now,
+            last_message_at: null,
+            ...overrides,
+        });
+        await hooks.doAction('db.threads.fork:action:before', {
+            source: src,
+            fork,
+        });
+        await dbTry(
+            () => db.threads.put(fork),
+            { op: 'write', entity: 'threads', action: 'fork' },
+            { rethrow: true }
+        );
+
+        if (options.copyMessages) {
+            const msgs =
+                (await dbTry(
+                    () =>
+                        db.messages
+                            .where('thread_id')
+                            .equals(src.id)
+                            .sortBy('index'),
+                    {
+                        op: 'read',
+                        entity: 'messages',
+                        action: 'forkCopyMessages',
+                    }
+                )) || [];
+            for (const m of msgs) {
+                await dbTry(
+                    () =>
+                        db.messages.put({
+                            ...m,
+                            id: newId(),
+                            thread_id: forkId,
+                        }),
+                    {
+                        op: 'write',
+                        entity: 'messages',
+                        action: 'forkCopyMessage',
+                    },
+                    { rethrow: true }
+                );
+            }
+            if (msgs.length > 0) {
+                await dbTry(
+                    () =>
+                        db.threads.put({
+                            ...fork,
+                            last_message_at: now,
+                            updated_at: now,
+                        }),
+                    {
+                        op: 'write',
+                        entity: 'threads',
+                        action: 'forkUpdateMeta',
+                    },
+                    { rethrow: true }
+                );
+            }
+        }
+        await hooks.doAction('db.threads.fork:action:after', fork);
+        return fork;
+    });
+}
+
+export async function updateThreadSystemPrompt(
+    threadId: string,
+    promptId: string | null
+): Promise<void> {
+    const hooks = useHooks();
+    await db.transaction('rw', db.threads, async () => {
+        const thread = await dbTry(() => db.threads.get(threadId), {
+            op: 'read',
+            entity: 'threads',
+            action: 'get',
+        });
+        if (!thread) return;
+        const updated = {
+            ...thread,
+            system_prompt_id: promptId,
+            updated_at: nowSec(),
+        };
+        await hooks.doAction('db.threads.updateSystemPrompt:action:before', {
+            thread,
+            promptId,
+        });
+        await dbTry(
+            () => db.threads.put(updated),
+            { op: 'write', entity: 'threads', action: 'updateSystemPrompt' },
+            { rethrow: true }
+        );
+        await hooks.doAction('db.threads.updateSystemPrompt:action:after', {
+            thread: updated,
+            promptId,
+        });
+    });
+}
+
+export async function getThreadSystemPrompt(
+    threadId: string
+): Promise<string | null> {
+    const hooks = useHooks();
+    const thread = await dbTry(() => db.threads.get(threadId), {
+        op: 'read',
+        entity: 'threads',
+        action: 'get',
+    });
+    const result = thread?.system_prompt_id ?? null;
+    return hooks.applyFilters(
+        'db.threads.getSystemPrompt:filter:output',
+        result
+    );
+}
+```
+
+## File: app/pages/openrouter-auth.ts
+```typescript
+import { err, reportError } from '~/utils/errors';
+
+export interface ExchangeResultSuccess {
+    ok: true;
+    userKey: string;
+    status: number;
+}
+export interface ExchangeResultFail {
+    ok: false;
+    status: number;
+    reason: 'network' | 'bad-response' | 'no-key';
+}
+export type ExchangeResult = ExchangeResultSuccess | ExchangeResultFail;
+
+export interface ExchangeParams {
+    code: string;
+    verifier: string;
+    codeMethod: string;
+    fetchImpl?: typeof fetch;
+    attempt?: number;
+}
+
+export async function exchangeOpenRouterCode(
+    p: ExchangeParams
+): Promise<ExchangeResult> {
+    const fetchFn = p.fetchImpl || fetch;
+    let resp: Response;
+    try {
+        resp = await fetchFn('https://openrouter.ai/api/v1/auth/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: p.code,
+                code_verifier: p.verifier,
+                code_challenge_method: p.codeMethod,
+            }),
+        });
+    } catch (e) {
+        reportError(e, {
+            code: 'ERR_NETWORK',
+            tags: {
+                domain: 'auth',
+                stage: 'exchange',
+                attempt: p.attempt || 1,
+            },
+            toast: true,
+            retryable: true,
+        });
+        return { ok: false, status: 0, reason: 'network' };
+    }
+    let json: any = null;
+    try {
+        json = await resp.json();
+    } catch {
+        /* ignore parse */
+    }
+    if (!resp.ok || !json) {
+        reportError(
+            err('ERR_NETWORK', 'Auth code exchange failed', {
+                severity: 'error',
+                tags: {
+                    domain: 'auth',
+                    stage: 'exchange',
+                    status: resp.status,
+                    attempt: p.attempt || 1,
+                },
+                retryable: true,
+            }),
+            { toast: true }
+        );
+        return { ok: false, status: resp.status, reason: 'bad-response' };
+    }
+    const userKey = json.key || json.access_token;
+    if (!userKey) {
+        reportError(
+            err('ERR_AUTH', 'Auth exchange returned no key', {
+                severity: 'error',
+                tags: {
+                    domain: 'auth',
+                    stage: 'exchange',
+                    keys: Object.keys(json || {}).length,
+                },
+            }),
+            { toast: true }
+        );
+        return { ok: false, status: resp.status, reason: 'no-key' };
+    }
+    return { ok: true, userKey, status: resp.status };
+}
+```
+
+## File: app/plugins/examples/examples/dashboard/PagesDemoDetails.vue
+```vue
+<template>
+    <div class="space-y-4">
+        <h2 class="text-lg font-semibold flex items-center gap-2">
+            <UIcon name="pixelarticons:list-check" class="w-5 h-5" /> Details
+        </h2>
+        <p class="text-sm opacity-80 max-w-prose">
+            A second lazily loaded page to demonstrate multi-page navigation.
+            Add more complex UI, forms, or data visualizations here.
+        </p>
+        <ul class="list-disc pl-5 text-sm space-y-1">
+            <li>Lazy-loaded component code-splits automatically.</li>
+            <li>
+                Navigation back to the dashboard keeps page cache in memory.
+            </li>
+            <li>Edit this file to see HMR update while open.</li>
+        </ul>
+    </div>
+</template>
+<script setup lang="ts">
+// Demo page only
+</script>
+```
+
+## File: app/plugins/examples/examples/dashboard/PagesDemoOverview.vue
+```vue
+<template>
+    <div class="space-y-4">
+        <h2 class="text-lg font-semibold flex items-center gap-2">
+            <UIcon name="pixelarticons:dashboard" class="w-5 h-5" /> Overview
+        </h2>
+        <p class="text-sm opacity-80 max-w-prose">
+            This is a lazily loaded overview page. Modify this component inside
+            the example plugin to test HMR and page switching.
+        </p>
+        <div class="grid sm:grid-cols-3 gap-4">
+            <div
+                class="p-3 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+            >
+                <div class="text-xs opacity-60 mb-1">Metric A</div>
+                <div class="text-xl font-bold tracking-tight">42</div>
+            </div>
+            <div
+                class="p-3 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+            >
+                <div class="text-xs opacity-60 mb-1">Metric B</div>
+                <div class="text-xl font-bold tracking-tight">3.14</div>
+            </div>
+            <div
+                class="p-3 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+            >
+                <div class="text-xs opacity-60 mb-1">Metric C</div>
+                <div class="text-xl font-bold tracking-tight">99%</div>
+            </div>
+        </div>
+    </div>
+</template>
+<script setup lang="ts">
+// Simple demo content only
+</script>
+```
+
+## File: app/plugins/examples/dashboard-pages-example.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    registerDashboardPlugin({
+        id: 'example:pages-demo',
+        icon: 'pixelarticons:layers',
+        label: 'Pages Demo',
+        description: 'Shows multi-page plugin support',
+        order: 120,
+        pages: [
+            {
+                id: 'overview',
+                title: 'Overview',
+                icon: 'pixelarticons:dashboard',
+                description: 'High level metrics and quick links',
+                component: async () =>
+                    await import('./examples/dashboard/PagesDemoOverview.vue'),
+            },
+            {
+                id: 'details',
+                title: 'Details',
+                icon: 'pixelarticons:list-check',
+                description: 'Detailed breakdown and debug info',
+                component: async () =>
+                    await import('./examples/dashboard/PagesDemoDetails.vue'),
+            },
+        ],
+    });
+});
+```
+
+## File: app/plugins/examples/dashboard-plugins-example.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    try {
+        registerDashboardPlugin({
+            id: 'example:hello',
+            icon: 'pixelarticons:star',
+            label: 'Hello',
+            description: 'Example dashboard plugin',
+            order: 250,
+            handler() {
+                useToast().add({
+                    title: 'Hello plugin',
+                    description: 'Example plugin clicked',
+                    duration: 2500,
+                });
+            },
+        });
+    } catch (e) {
+        console.error('[dashboard-plugins-example] failed', e);
+    }
+});
+```
+
+## File: app/plugins/examples/dashboard-signal-test.client.ts
+```typescript
+export default defineNuxtPlugin(() => {
+    try {
+        registerDashboardPlugin({
+            id: 'example:signal-strength',
+            icon: 'pixelarticons:cellular-signal-3',
+            label: 'Signal',
+            description: 'Demo plugin showing signal strength widget.',
+            order: 0.5,
+            handler() {
+                useToast().add({
+                    title: 'Signal Plugin',
+                    description: 'Signal plugin activated.',
+                    duration: 2500,
+                });
+            },
+        });
+    } catch (e) {
+        console.error('[dashboard-signal-test] register failed', e);
+    }
+});
+```
+
 ## File: app/plugins/examples/dev-debug-console.client.ts
 ```typescript
 // Dev helper: ensure console.debug messages are visible even if browser "Verbose" is disabled.
@@ -12433,45 +12820,6 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
-## File: app/plugins/openrouter-capture.client.ts
-```typescript
-// Early capture of OpenRouter OAuth params to reduce chance of SW/navigation race.
-// If landing on /openrouter-callback with code/state in query, persist them ASAP
-// (in both sessionStorage and localStorage) then strip them from the visible URL
-// so future reloads don't rely on SW matching query variants.
-export default defineNuxtPlugin(() => {
-    if (process.server) return;
-    try {
-        const loc = window.location;
-        if (loc.pathname === '/openrouter-callback') {
-            const url = new URL(loc.href);
-            const code = url.searchParams.get('code');
-            const state = url.searchParams.get('state');
-            if (code) {
-                sessionStorage.setItem(
-                    'openrouter_code_verifier',
-                    sessionStorage.getItem('openrouter_code_verifier') ||
-                        localStorage.getItem('openrouter_code_verifier') ||
-                        ''
-                );
-                sessionStorage.setItem('openrouter_state', state || '');
-                // Mirror to localStorage for resilience
-                if (state) localStorage.setItem('openrouter_state', state);
-                // Remove query params (preserve history entry) so SW matching without params works
-                if (url.search) {
-                    const clean = loc.origin + loc.pathname;
-                    window.history.replaceState(
-                        window.history.state,
-                        '',
-                        clean
-                    );
-                }
-            }
-        }
-    } catch {}
-});
-```
-
 ## File: app/state/global.ts
 ```typescript
 import { ref } from 'vue';
@@ -12577,118 +12925,466 @@ export function normalizeImagesParam(
 }
 ```
 
-## File: app/utils/hash.ts
+## File: app/utils/hooks.ts
 ```typescript
-/**
- * Hashing utilities for file deduplication.
- * Implements async chunked MD5 with Web Crypto fallback to spark-md5.
- * Chunk size kept small (256KB) to avoid blocking the main thread.
- */
+import { reportError, err } from '~/utils/errors';
+// Lightweight, type-safe hook engine for Nuxt/Vue apps
+// - Supports actions (side-effects) and filters (value transform)
+// - Priority scheduling (lower runs earlier)
+// - Sync/async execution APIs
+// - Error and timing wrappers
+// - Optional wildcard matching via simple glob to RegExp
 
-const CHUNK_SIZE = 256 * 1024; // 256KB
+export type HookKind = 'action' | 'filter';
 
-// Lazy import spark-md5 only if needed (returns default export class)
-async function loadSpark() {
-    const mod = await import('spark-md5');
-    return (mod as any).default; // SparkMD5 constructor with ArrayBuffer helper
+type AnyFn = (...args: any[]) => any;
+
+export interface RegisterOptions {
+    priority?: number; // default 10
+    acceptedArgs?: number; // reserved for compatibility, not used
 }
 
-/** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
-export async function computeFileHash(blob: Blob): Promise<string> {
-    const dev = (import.meta as any).dev;
-    const hasPerf = typeof performance !== 'undefined';
-    const markId =
-        dev && hasPerf
-            ? `hash-${Date.now()}-${Math.random().toString(36).slice(2)}`
-            : undefined;
-    let t0 = 0;
-    if (markId && hasPerf) {
-        t0 = performance.now();
-        performance.mark(`${markId}:start`);
-    }
-    try {
-        // Try Web Crypto subtle.digest if md5 supported (some browsers may block MD5; if so, fallback)
-        try {
-            if (
-                blob.size <= 4 * 1024 * 1024 &&
-                'crypto' in globalThis &&
-                (globalThis as any).crypto?.subtle
-            ) {
-                const buf = await blob.arrayBuffer();
-                // @ts-ignore - MD5 not in TypeScript lib, but some browsers support it; fallback otherwise
-                const digest = await (globalThis as any).crypto.subtle.digest(
-                    'MD5',
-                    buf
-                );
-                const hex = bufferToHex(new Uint8Array(digest));
-                if (markId && hasPerf) finishMark(markId, blob.size, 'subtle');
-                return hex;
+export interface OnOptions extends RegisterOptions {
+    kind?: HookKind;
+}
+
+interface CallbackEntry<F extends AnyFn = AnyFn> {
+    fn: F;
+    priority: number;
+    id: number; // tiebreaker to preserve insertion order
+    name: string; // original name/pattern used to register
+}
+
+interface CompiledPattern {
+    pattern: string;
+    regex: RegExp;
+}
+
+function globToRegExp(glob: string): RegExp {
+    // Escape regex special chars, then replace '*' with '.*'
+    const escaped = glob
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*');
+    return new RegExp(`^${escaped}$`);
+}
+
+function sortCallbacks<T extends CallbackEntry>(arr: T[]): T[] {
+    return arr.sort((a, b) => a.priority - b.priority || a.id - b.id);
+}
+
+export interface HookEngine {
+    // filters
+    addFilter: <F extends AnyFn>(
+        name: string,
+        fn: F,
+        priority?: number,
+        acceptedArgs?: number
+    ) => void;
+    removeFilter: <F extends AnyFn>(
+        name: string,
+        fn: F,
+        priority?: number
+    ) => void;
+    applyFilters: <T>(name: string, value: T, ...args: any[]) => Promise<T>;
+    applyFiltersSync: <T>(name: string, value: T, ...args: any[]) => T;
+
+    // actions
+    addAction: <F extends AnyFn>(
+        name: string,
+        fn: F,
+        priority?: number,
+        acceptedArgs?: number
+    ) => void;
+    removeAction: <F extends AnyFn>(
+        name: string,
+        fn: F,
+        priority?: number
+    ) => void;
+    doAction: (name: string, ...args: any[]) => Promise<void>;
+    doActionSync: (name: string, ...args: any[]) => void;
+
+    // utils
+    hasFilter: (name?: string, fn?: AnyFn) => boolean | number;
+    hasAction: (name?: string, fn?: AnyFn) => boolean | number;
+    removeAllCallbacks: (priority?: number) => void;
+    currentPriority: () => number | false;
+
+    // ergonomics
+    onceAction: (name: string, fn: AnyFn, priority?: number) => () => void;
+    on: (name: string, fn: AnyFn, opts?: OnOptions) => () => void; // disposer
+    off: (disposer: () => void) => void;
+
+    // diagnostics (best-effort)
+    _diagnostics: {
+        timings: Record<string, number[]>; // name -> array of durations (ms)
+        errors: Record<string, number>; // name -> error count
+        callbacks(actionOrFilter?: HookKind): number; // total callbacks registered
+    };
+}
+
+export function createHookEngine(): HookEngine {
+    const DEFAULT_PRIORITY = 10;
+    let counter = 0; // id tiebreaker
+    const currentPriorityStack: number[] = [];
+
+    // Separate stores for actions and filters
+    const actions = new Map<string, CallbackEntry[]>();
+    const filters = new Map<string, CallbackEntry[]>();
+
+    // Wildcard registrations are stored separately with compiled regex for fast matching
+    const actionWildcards: {
+        pattern: CompiledPattern;
+        entry: CallbackEntry;
+    }[] = [];
+    const filterWildcards: {
+        pattern: CompiledPattern;
+        entry: CallbackEntry;
+    }[] = [];
+
+    // Helpers to get matching callbacks (exact + wildcards)
+    function getMatching(
+        map: Map<string, CallbackEntry[]>,
+        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
+        name: string
+    ): CallbackEntry[] {
+        const list = map.get(name)
+            ? [...(map.get(name) as CallbackEntry[])]
+            : [];
+        if (wildcards.length) {
+            for (const { pattern, entry } of wildcards) {
+                if (pattern.regex.test(name)) list.push(entry);
             }
-        } catch (_) {
-            // ignore and fallback to streaming spark-md5
         }
-        // Streaming approach with spark-md5
-        const SparkMD5 = await loadSpark();
-        const hash = new SparkMD5.ArrayBuffer();
-        let offset = 0;
-        while (offset < blob.size) {
-            const slice = blob.slice(offset, offset + CHUNK_SIZE);
-            const buf = await slice.arrayBuffer();
-            hash.append(buf as ArrayBuffer);
-            offset += CHUNK_SIZE;
-            if (offset < blob.size) await microTask();
+        return sortCallbacks(list);
+    }
+
+    function add(
+        map: Map<string, CallbackEntry[]>,
+        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
+        name: string,
+        fn: AnyFn,
+        priority?: number
+    ) {
+        const p = typeof priority === 'number' ? priority : DEFAULT_PRIORITY;
+        const entry: CallbackEntry = { fn, priority: p, id: ++counter, name };
+        if (name.includes('*')) {
+            wildcards.push({
+                pattern: { pattern: name, regex: globToRegExp(name) },
+                entry,
+            });
+        } else {
+            const arr = map.get(name) || [];
+            arr.push(entry);
+            map.set(name, arr);
         }
-        const hex = hash.end();
-        if (markId && hasPerf) finishMark(markId, blob.size, 'stream');
-        return hex;
-    } catch (e) {
-        if (markId && hasPerf) {
-            performance.mark(`${markId}:error`);
-            performance.measure(
-                `hash:md5:error:${(e as any)?.message || 'unknown'}`,
-                `${markId}:start`
+    }
+
+    function remove(
+        map: Map<string, CallbackEntry[]>,
+        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
+        name: string,
+        fn: AnyFn,
+        priority?: number
+    ) {
+        const p = typeof priority === 'number' ? priority : undefined;
+        if (name.includes('*')) {
+            const idx = wildcards.findIndex(
+                (wc) =>
+                    wc.pattern.pattern === name &&
+                    wc.entry.fn === fn &&
+                    (p === undefined || wc.entry.priority === p)
+            );
+            if (idx >= 0) wildcards.splice(idx, 1);
+        } else {
+            const arr = map.get(name);
+            if (!arr) return;
+            const filtered = arr.filter(
+                (e) => !(e.fn === fn && (p === undefined || e.priority === p))
+            );
+            if (filtered.length) map.set(name, filtered);
+            else map.delete(name);
+        }
+    }
+
+    function has(
+        map: Map<string, CallbackEntry[]>,
+        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
+        name?: string,
+        fn?: AnyFn
+    ): boolean | number {
+        if (!name) {
+            // any callbacks at all?
+            return (
+                Array.from(map.values()).some((a) => a.length > 0) ||
+                wildcards.length > 0
             );
         }
-        throw e;
-    }
-}
-
-function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
-    try {
-        performance.mark(`${id}:end`);
-        performance.measure(
-            `hash:md5:${mode}:bytes=${size}`,
-            `${id}:start`,
-            `${id}:end`
-        );
-        const entry = performance
-            .getEntriesByName(`hash:md5:${mode}:bytes=${size}`)
-            .slice(-1)[0];
-        if (entry && entry.duration && entry.duration > 0) {
-            if ((import.meta as any).dev) {
-                // eslint-disable-next-line no-console
-                console.debug(
-                    '[perf] computeFileHash',
-                    mode,
-                    `${(size / 1024).toFixed(1)}KB`,
-                    `${entry.duration.toFixed(1)}ms`
-                );
-            }
+        if (fn) {
+            const arr = map.get(name) || [];
+            const found = arr.find((e) => e.fn === fn);
+            if (found) return found.priority;
+            // also check wildcards matching the same original pattern string
+            const wc = wildcards.find(
+                (wc) => wc.pattern.pattern === name && wc.entry.fn === fn
+            );
+            return wc ? wc.entry.priority : false;
         }
-    } catch {}
-}
-
-function bufferToHex(buf: Uint8Array): string {
-    let hex = '';
-    for (const b of buf) {
-        hex += b.toString(16).padStart(2, '0');
+        const arr = map.get(name) || [];
+        const any =
+            arr.length > 0 ||
+            wildcards.some((wc) => wc.pattern.regex.test(name));
+        return any;
     }
-    return hex;
+
+    function removeAll(
+        map: Map<string, CallbackEntry[]>,
+        wildcards: { pattern: CompiledPattern; entry: CallbackEntry }[],
+        priority?: number
+    ) {
+        if (priority === undefined) {
+            map.clear();
+            wildcards.length = 0;
+            return;
+        }
+        for (const [k, arr] of map) {
+            const filtered = arr.filter((e) => e.priority !== priority);
+            if (filtered.length) map.set(k, filtered);
+            else map.delete(k);
+        }
+        for (let i = wildcards.length - 1; i >= 0; i--) {
+            const wc = wildcards[i];
+            if (wc && wc.entry.priority === priority) wildcards.splice(i, 1);
+        }
+    }
+
+    function recordTiming(name: string, ms: number) {
+        (diagnostics.timings[name] ||= []).push(ms);
+    }
+
+    function recordError(name: string) {
+        diagnostics.errors[name] = (diagnostics.errors[name] || 0) + 1;
+    }
+
+    async function callAsync(
+        cbs: CallbackEntry[],
+        name: string,
+        args: any[],
+        isFilter: boolean,
+        initialValue?: any
+    ) {
+        {
+            const firstPriority =
+                cbs.length > 0 ? cbs[0]!.priority : DEFAULT_PRIORITY;
+            currentPriorityStack.push(firstPriority);
+        }
+        try {
+            let value = initialValue;
+            for (const { fn, priority } of cbs) {
+                // Maintain current priority during execution
+                if (currentPriorityStack.length)
+                    currentPriorityStack[currentPriorityStack.length - 1] =
+                        priority;
+                const start =
+                    typeof performance !== 'undefined' && performance.now
+                        ? performance.now()
+                        : Date.now();
+                try {
+                    if (isFilter) {
+                        value = await fn(value, ...args);
+                    } else {
+                        await fn(...args);
+                    }
+                } catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.error(
+                        `[hooks] Error in ${
+                            isFilter ? 'filter' : 'action'
+                        } "${name}":`,
+                        err
+                    );
+                    recordError(name);
+                } finally {
+                    const end =
+                        typeof performance !== 'undefined' && performance.now
+                            ? performance.now()
+                            : Date.now();
+                    recordTiming(name, end - start);
+                }
+            }
+            return value;
+        } finally {
+            currentPriorityStack.pop();
+        }
+    }
+
+    function callSync(
+        cbs: CallbackEntry[],
+        name: string,
+        args: any[],
+        isFilter: boolean,
+        initialValue?: any
+    ) {
+        {
+            const firstPriority =
+                cbs.length > 0 ? cbs[0]!.priority : DEFAULT_PRIORITY;
+            currentPriorityStack.push(firstPriority);
+        }
+        try {
+            let value = initialValue;
+            for (const { fn, priority } of cbs) {
+                if (currentPriorityStack.length)
+                    currentPriorityStack[currentPriorityStack.length - 1] =
+                        priority;
+                const start =
+                    typeof performance !== 'undefined' && performance.now
+                        ? performance.now()
+                        : Date.now();
+                try {
+                    if (isFilter) {
+                        value = fn(value, ...args);
+                    } else {
+                        fn(...args);
+                    }
+                } catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.error(
+                        `[hooks] Error in ${
+                            isFilter ? 'filter' : 'action'
+                        } "${name}":`,
+                        err
+                    );
+                    recordError(name);
+                } finally {
+                    const end =
+                        typeof performance !== 'undefined' && performance.now
+                            ? performance.now()
+                            : Date.now();
+                    recordTiming(name, end - start);
+                }
+            }
+            return value;
+        } finally {
+            currentPriorityStack.pop();
+        }
+    }
+
+    const diagnostics = {
+        timings: {} as Record<string, number[]>,
+        errors: {} as Record<string, number>,
+        callbacks(kind?: HookKind) {
+            const count = (
+                map: Map<string, CallbackEntry[]>,
+                wc: { pattern: CompiledPattern; entry: CallbackEntry }[]
+            ) =>
+                Array.from(map.values()).reduce((acc, a) => acc + a.length, 0) +
+                wc.length;
+            if (!kind)
+                return (
+                    count(actions, actionWildcards) +
+                    count(filters, filterWildcards)
+                );
+            return kind === 'action'
+                ? count(actions, actionWildcards)
+                : count(filters, filterWildcards);
+        },
+    };
+
+    const engine: HookEngine = {
+        // filters
+        addFilter(name, fn, priority, _acceptedArgs) {
+            add(filters, filterWildcards, name, fn, priority);
+        },
+        removeFilter(name, fn, priority) {
+            remove(filters, filterWildcards, name, fn, priority);
+        },
+        async applyFilters(name, value, ...args) {
+            const cbs = getMatching(filters, filterWildcards, name);
+            if (cbs.length === 0) return value;
+            return await callAsync(cbs, name, args, true, value);
+        },
+        applyFiltersSync(name, value, ...args) {
+            const cbs = getMatching(filters, filterWildcards, name);
+            if (cbs.length === 0) return value;
+            return callSync(cbs, name, args, true, value);
+        },
+
+        // actions
+        addAction(name, fn, priority, _acceptedArgs) {
+            add(actions, actionWildcards, name, fn, priority);
+        },
+        removeAction(name, fn, priority) {
+            remove(actions, actionWildcards, name, fn, priority);
+        },
+        async doAction(name, ...args) {
+            const cbs = getMatching(actions, actionWildcards, name);
+            if (cbs.length === 0) return;
+            await callAsync(cbs, name, args, false);
+        },
+        doActionSync(name, ...args) {
+            const cbs = getMatching(actions, actionWildcards, name);
+            if (cbs.length === 0) return;
+            callSync(cbs, name, args, false);
+        },
+
+        // utils
+        hasFilter(name?: string, fn?: AnyFn) {
+            return has(filters, filterWildcards, name, fn);
+        },
+        hasAction(name?: string, fn?: AnyFn) {
+            return has(actions, actionWildcards, name, fn);
+        },
+        removeAllCallbacks(priority?: number) {
+            removeAll(actions, actionWildcards, priority);
+            removeAll(filters, filterWildcards, priority);
+        },
+        currentPriority() {
+            return currentPriorityStack.length
+                ? currentPriorityStack[currentPriorityStack.length - 1]!
+                : false;
+        },
+
+        // ergonomics
+        onceAction(name: string, fn: AnyFn, priority?: number) {
+            const wrapper = (...args: any[]) => {
+                try {
+                    fn(...args);
+                } finally {
+                    engine.removeAction(name, wrapper, priority);
+                }
+            };
+            engine.addAction(name, wrapper, priority);
+            return () => engine.removeAction(name, wrapper, priority);
+        },
+        on(name: string, fn: AnyFn, opts?: OnOptions) {
+            const kind = opts?.kind ?? 'action';
+            const priority = opts?.priority;
+            if (kind === 'filter') engine.addFilter(name, fn, priority);
+            else engine.addAction(name, fn, priority);
+            return () => {
+                if (kind === 'filter') engine.removeFilter(name, fn, priority);
+                else engine.removeAction(name, fn, priority);
+            };
+        },
+        off(disposer: () => void) {
+            try {
+                disposer();
+            } catch (e) {
+                // Disposer failures are non-critical; log silently
+                reportError(err('ERR_INTERNAL', 'hook disposer failed'), {
+                    silent: true,
+                    tags: { domain: 'hooks', stage: 'off' },
+                });
+            }
+        },
+
+        _diagnostics: diagnostics,
+    };
+
+    return engine;
 }
 
-function microTask() {
-    return new Promise((resolve) => setTimeout(resolve, 0));
-}
+// Convenience type for imports in .d.ts
+export type { AnyFn as HookFn };
 ```
 
 ## File: tests/stubs/nuxt-app.ts
@@ -14163,6 +14859,231 @@ export function useMessageEditing(message: any) {
 }
 ```
 
+## File: app/db/dbTry.ts
+```typescript
+import { reportError, err } from '~/utils/errors';
+
+// Quota guidance (Req 20.2) exported for UI/doc reuse
+export const DB_QUOTA_GUIDANCE =
+    'Storage quota exceeded. Clear older chats, files, or browser site data to free space.';
+
+// Lightweight DB operation wrapper (Task 7.1)
+// Usage: const res = await dbTry(() => db.table.put(obj), { op: 'write', entity: 'message' })
+// - Maps Dexie/IndexedDB quota errors -> ERR_DB_QUOTA_EXCEEDED (non-retryable)
+// - Maps generic errors to read/write codes
+// - Attaches domain:'db', op, entity tags for hooks & diagnostics
+
+export interface DbTryTags {
+    op: 'read' | 'write';
+    entity?: string; // table/entity name for context
+    [k: string]: any;
+}
+
+export async function dbTry<T>(
+    fn: () => Promise<T> | T,
+    tags: DbTryTags,
+    opts: { rethrow?: boolean } = {}
+): Promise<T | undefined> {
+    try {
+        return await fn();
+    } catch (e: any) {
+        // Quota detection: DOMException name or message heuristic
+        const name = e?.name || '';
+        const msg: string = e?.message || '';
+        const isQuota = /quota/i.test(name) || /quota/i.test(msg);
+        if (isQuota) {
+            reportError(
+                err('ERR_DB_QUOTA_EXCEEDED', DB_QUOTA_GUIDANCE, {
+                    severity: 'error',
+                    retryable: false,
+                    tags: { ...tags, domain: 'db', rw: tags.op }, // add rw tag (Req 20.1)
+                }),
+                { toast: true }
+            );
+            if (opts.rethrow) throw e;
+            return undefined;
+        }
+        const code =
+            tags.op === 'read' ? 'ERR_DB_READ_FAILED' : 'ERR_DB_WRITE_FAILED';
+        reportError(
+            err(code, 'Database operation failed', {
+                severity: 'error',
+                retryable: tags.op === 'read' ? true : true, // allow manual re-invoke upstream
+                tags: { ...tags, domain: 'db', rw: tags.op }, // include rw convenience tag (Req 20.1)
+                cause: e,
+            }),
+            { toast: true }
+        );
+        if (opts.rethrow) throw e;
+        return undefined;
+    }
+}
+```
+
+## File: app/pages/_test.vue
+```vue
+<template>
+    <resizable-sidebar-layout>
+        <template #sidebar>
+            <div class="flex flex-col h-full relative">
+                <div class="p-2 flex flex-col space-y-2">
+                    <UButton class="w-full flex items-center justify-center"
+                        >New Chat</UButton
+                    >
+                    <UInput
+                        icon="i-lucide-search"
+                        size="md"
+                        variant="outline"
+                        placeholder="Search..."
+                        class="w-full ml-[1px]"
+                    ></UInput>
+                </div>
+                <div class="flex flex-col p-2 space-y-1.5">
+                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about aids</UButton
+                    >
+                    <UButton
+                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
+                        >Chat about dogs</UButton
+                    >
+                </div>
+                <sidebar-side-bottom-nav />
+            </div>
+        </template>
+
+        <!-- Default slot = main content (right side) -->
+        <div class="min-h-[100dvh] overflow-y-scroll">
+            <div
+                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
+            ></div>
+
+            <div class="p-6 space-y-4">
+                <div class="flex flex-row space-x-2">
+                    <UButton @click="showToast" size="sm" color="primary"
+                        >Nuxt UI Button</UButton
+                    >
+                    <UButton color="success">Nuxt UI Button</UButton>
+                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
+                </div>
+                <div class="flex flex-row space-x-2">
+                    <UButtonGroup size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                    <UButtonGroup orientation="vertical" size="lg">
+                        <UButton @click="showToast" color="primary"
+                            >Nuxt UI Button</UButton
+                        >
+                        <UButton color="success">Nuxt UI Button</UButton>
+                        <UButton color="warning">Nuxt UI Button</UButton>
+                    </UButtonGroup>
+                </div>
+
+                <div class="flex space-x-2">
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="sm"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="md"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                    <UFormField
+                        label="Email"
+                        help="We won't share your email."
+                        required
+                    >
+                        <UInput
+                            size="lg"
+                            placeholder="Enter email"
+                            :ui="{ base: 'peer' }"
+                        >
+                        </UInput>
+                    </UFormField>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
+                        @click="toggle()"
+                    >
+                        Toggle Light/Dark
+                    </button>
+                    <span class="text-[var(--md-on-surface)]"
+                        >Current: {{ theme }}</span
+                    >
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div
+                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
+                    >
+                        Surface / On-Surface
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
+                    >
+                        Secondary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
+                    >
+                        Tertiary Container
+                    </div>
+                    <div
+                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
+                    >
+                        Error Container
+                    </div>
+                </div>
+
+                <chat-input-dropper />
+            </div>
+        </div>
+    </resizable-sidebar-layout>
+</template>
+
+<script setup lang="ts">
+import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+
+const nuxtApp = useNuxtApp();
+// Theme plugin is client-only (theme.client.ts). During SSR/prerender $theme is undefined.
+// Guard with optional chaining so SSR does not crash trying to read .get on undefined.
+const theme = computed(() => (nuxtApp.$theme as any)?.get?.() ?? 'light');
+const toggle = () => (nuxtApp.$theme as any)?.toggle?.();
+const toast = useToast();
+
+function showToast() {
+    toast.add({
+        title: 'Success',
+        description: 'Your action was completed successfully.',
+        color: 'success',
+    });
+}
+</script>
+```
+
 ## File: app/plugins/examples/dual-llm-relay.client.ts
 ```typescript
 // dual-llm-relay.client.ts
@@ -14304,348 +15225,125 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
-## File: app/plugins/pane-plugin-api.client.ts
+## File: app/plugins/openrouter-capture.client.ts
 ```typescript
-import { nowSec } from '~/db/util';
-import { create, tx } from '~/db';
-import { useNuxtApp } from '#app';
-import {
-    setDocumentContent,
-    setDocumentTitle,
-    useDocumentState,
-} from '~/composables/useDocumentsStore';
-import type { Ref } from 'vue';
-import type { PaneState } from '~/composables/useMultiPane';
+// Early capture of OpenRouter OAuth params to reduce chance of SW/navigation race.
+// If landing on /openrouter-callback with code/state in query, persist them ASAP
+// (in both sessionStorage and localStorage) then strip them from the visible URL
+// so future reloads don't rely on SW matching query variants.
+import { reportError, err } from '~/utils/errors';
 
-/** All error codes emitted by the Pane Plugin API */
-export type PaneApiErrorCode =
-    | 'missing_source'
-    | 'missing_pane'
-    | 'invalid_text'
-    | 'not_found'
-    | 'pane_not_chat'
-    | 'pane_not_doc'
-    | 'no_thread'
-    | 'no_thread_bind'
-    | 'append_failed'
-    | 'no_document'
-    | 'no_active_pane'
-    | 'no_panes';
-
-/** Success result helper */
-export type Ok<T extends object = {}> = { ok: true } & T;
-/** Error result helper */
-export interface Err<C extends PaneApiErrorCode = PaneApiErrorCode> {
-    ok: false;
-    code: C;
-    message: string;
-}
-
-/** Unified result type */
-export type Result<T extends object = {}> = Ok<T> | Err;
-interface MultiPaneApi {
-    panes: Ref<PaneState[]>;
-    activePaneIndex: Ref<number>;
-    setPaneThread(i: number, id: string): Promise<void> | void;
-}
-interface HookBus {
-    doAction?(name: string, ...a: unknown[]): void;
-}
-
-/** Input options for sendMessage */
-export interface SendMessageOptions {
-    paneId: string;
-    text: string;
-    role?: 'user' | 'assistant';
-    createIfMissing?: boolean; // when true, auto-creates a thread for chat panes without one
-    source: string; // required identifier for auditing
-    stream?: boolean; // if true (default) trigger assistant streaming for chat pane
-}
-export type SendMessageResult = Result<{ messageId: string; threadId: string }>;
-
-/** Document replace options */
-export interface UpdateDocumentOptions {
-    paneId: string;
-    content: unknown; // caller supplies fully replaced doc JSON
-    source: string;
-}
-/** Document patch options */
-export interface PatchDocumentOptions {
-    paneId: string;
-    patch: unknown; // shallow merge rules (arrays concatenated)
-    source: string;
-}
-/** Set document title options */
-export interface SetDocumentTitleOptions {
-    paneId: string;
-    title: string;
-    source: string;
-}
-
-export interface ActivePaneInfo {
-    paneId: string;
-    mode: string;
-    threadId?: string;
-    documentId?: string;
-    contentSnapshot?: unknown;
-}
-
-export interface PaneDescriptor {
-    paneId: string;
-    mode: PaneState['mode'];
-    threadId?: string;
-    documentId?: string;
-}
-export interface PanePluginApi {
-    /**
-     * Append a new message into a chat pane's thread. Optionally creates a thread if missing.
-     * Returns message & thread identifiers on success.
-     */
-    sendMessage(opts: SendMessageOptions): Promise<SendMessageResult>;
-
-    /** Replace the full document content for a doc pane. */
-    updateDocumentContent(opts: UpdateDocumentOptions): Result;
-
-    /** Shallow patch merge into a document (arrays concatenated, other keys overwritten). */
-    patchDocumentContent(opts: PatchDocumentOptions): Result;
-
-    /** Update the document title associated with a doc pane. */
-    setDocumentTitle(opts: SetDocumentTitleOptions): Result;
-
-    /** Retrieve metadata + optional cloned content for the active pane. */
-    getActivePaneData(): Result<ActivePaneInfo>;
-
-    /** List all panes (lightweight descriptors) and the current active index. */
-    getPanes(): Result<{ panes: PaneDescriptor[]; activeIndex: number }>;
-}
-const err = <C extends PaneApiErrorCode>(code: C, message: string): Err<C> => ({
-    ok: false,
-    code,
-    message,
-});
-const mp = (): MultiPaneApi | undefined =>
-    (globalThis as any).__or3MultiPaneApi;
-function getPaneEntry(
-    id: string
-): { pane: PaneState; index: number; mp: MultiPaneApi } | null {
-    const m = mp();
-    const ps = m?.panes?.value;
-    if (!ps) return null;
-    const index = ps.findIndex((p) => p.id === id);
-    if (index < 0) return null;
-    const pane = ps[index];
-    if (!pane) return null;
-    return { pane, index, mp: m! };
-}
-async function ensureThread(
-    p: PaneState,
-    i: number,
-    h: HookBus,
-    title: string
-): Promise<string | Err> {
-    if (p.threadId) return p.threadId;
-    const m = mp();
-    if (!m?.setPaneThread) return err('no_thread_bind', 'Cannot bind thread');
-    const t: { id: string } = await create.thread({
-        title: title.split(/\s+/).slice(0, 6).join(' ') || 'New Thread',
-        last_message_at: nowSec(),
-        parent_thread_id: null,
-        system_prompt_id: null,
-    });
-    await m.setPaneThread(i, t.id);
+export default defineNuxtPlugin(() => {
+    if (process.server) return;
     try {
-        h.doAction?.('ui.pane.thread:action:changed', p, '', t.id, 0);
-    } catch {}
-    return t.id;
-}
-type DocJson = { type: string; content?: unknown[]; [k: string]: unknown };
-function patchDoc(base: unknown, patch: unknown): DocJson {
-    let b: DocJson =
-        base && typeof base === 'object'
-            ? (base as DocJson)
-            : { type: 'doc', content: [] };
-    if (patch && typeof patch === 'object') {
-        const p = patch as DocJson;
-        if (Array.isArray(b.content) && Array.isArray(p.content))
-            b.content = [...b.content, ...p.content];
-        else if (Array.isArray(p.content)) b.content = p.content;
-        for (const k of Object.keys(p))
-            if (k !== 'content') (b as any)[k] = (p as any)[k];
-    }
-    return b;
-}
-const log = (tag: string, meta: unknown) => {
-    if (import.meta.dev)
-        try {
-            console.debug('[pane-plugin-api] ' + tag, meta);
-        } catch {}
-};
-async function makeApi(): Promise<PanePluginApi> {
-    const hooks: HookBus = (useNuxtApp() as any).$hooks;
-    return {
-        async sendMessage({
-            paneId,
-            text,
-            role = 'user',
-            createIfMissing,
-            source,
-            stream = true,
-        }: SendMessageOptions) {
-            if (!source) return err('missing_source', 'source required');
-            if (!paneId) return err('missing_pane', 'paneId required');
-            if (typeof text !== 'string' || !text.trim())
-                return err('invalid_text', 'text required');
-            const entry = getPaneEntry(paneId);
-            if (!entry) return err('not_found', 'pane not found');
-            const { pane: p, index } = entry;
-            if (p.mode !== 'chat') return err('pane_not_chat', 'pane not chat');
-            let threadId = p.threadId;
-            if (!threadId) {
-                if (!createIfMissing) return err('no_thread', 'no thread');
-                const t = await ensureThread(p, index, hooks, text);
-                if (typeof t !== 'string') return t;
-                threadId = t;
-            }
-            try {
-                // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
-                if (role === 'user' && stream) {
-                    const { programmaticSend, hasPane } = await import(
-                        '~/composables/useChatInputBridge'
-                    );
-                    if (hasPane(p.id)) {
-                        const okBridge = programmaticSend(p.id, text);
-                        if (okBridge) {
-                            log('sendMessage-bridge', {
-                                source,
-                                paneId,
-                                threadId,
-                            });
-                            return {
-                                ok: true,
-                                messageId: 'bridge',
-                                threadId,
-                            } as any;
-                        }
-                    }
-                }
-                // Fallback: direct append (no streaming)
-                const dbMsg = await tx.appendMessage({
-                    thread_id: threadId,
-                    role: role === 'assistant' ? 'assistant' : 'user',
-                    data: { content: text, attachments: [] },
-                });
-                try {
-                    hooks.doAction?.('ui.pane.msg:action:sent', p, {
-                        id: dbMsg.id,
-                        threadId,
-                        length: text.length,
-                        fileHashes: null,
-                        paneIndex: -1,
-                        source,
-                    });
-                } catch {}
-                log('sendMessage-fallback', {
-                    source,
-                    paneId,
-                    threadId,
-                    id: dbMsg.id,
-                });
-                return { ok: true, messageId: dbMsg.id, threadId };
-            } catch (e: unknown) {
-                return err(
-                    'append_failed',
-                    e instanceof Error ? e.message : 'append failed'
+        const loc = window.location;
+        if (loc.pathname === '/openrouter-callback') {
+            const url = new URL(loc.href);
+            const code = url.searchParams.get('code');
+            const state = url.searchParams.get('state');
+            if (code) {
+                sessionStorage.setItem(
+                    'openrouter_code_verifier',
+                    sessionStorage.getItem('openrouter_code_verifier') ||
+                        localStorage.getItem('openrouter_code_verifier') ||
+                        ''
                 );
+                sessionStorage.setItem('openrouter_state', state || '');
+                // Mirror to localStorage for resilience
+                if (state) localStorage.setItem('openrouter_state', state);
+                // Remove query params (preserve history entry) so SW matching without params works
+                if (url.search) {
+                    const clean = loc.origin + loc.pathname;
+                    window.history.replaceState(
+                        window.history.state,
+                        '',
+                        clean
+                    );
+                }
             }
-        },
-        updateDocumentContent({
-            paneId,
-            content,
-            source,
-        }: UpdateDocumentOptions) {
-            if (!source) return err('missing_source', 'source required');
-            const entry = getPaneEntry(paneId);
-            if (!entry) return err('not_found', 'pane not found');
-            const p = entry.pane;
-            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
-            if (!p.documentId) return err('no_document', 'no document');
-            setDocumentContent(p.documentId, content);
-            log('updateDocumentContent', { source, paneId });
-            return { ok: true };
-        },
-        patchDocumentContent({ paneId, patch, source }: PatchDocumentOptions) {
-            if (!source) return err('missing_source', 'source required');
-            const entry = getPaneEntry(paneId);
-            if (!entry) return err('not_found', 'pane not found');
-            const p = entry.pane;
-            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
-            if (!p.documentId) return err('no_document', 'no document');
-            const st = useDocumentState(p.documentId) as {
-                record?: { content?: unknown };
-            };
-            const merged = patchDoc(st?.record?.content, patch);
-            setDocumentContent(p.documentId, merged);
-            log('patchDocumentContent', { source, paneId });
-            return { ok: true };
-        },
-        setDocumentTitle({ paneId, title, source }: SetDocumentTitleOptions) {
-            if (!source) return err('missing_source', 'source required');
-            const entry = getPaneEntry(paneId);
-            if (!entry) return err('not_found', 'pane not found');
-            const p = entry.pane;
-            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
-            if (!p.documentId) return err('no_document', 'no document');
-            setDocumentTitle(p.documentId, title);
-            log('setDocumentTitle', { source, paneId });
-            return { ok: true };
-        },
-        getActivePaneData() {
-            const m = mp();
-            const panes = m?.panes?.value;
-            const idx = m?.activePaneIndex?.value ?? -1;
-            if (!panes || idx < 0 || idx >= panes.length)
-                return err('no_active_pane', 'no active pane');
-            const p = panes[idx];
-            if (!p) return err('no_active_pane', 'no active pane');
-            const base: ActivePaneInfo = { paneId: p.id, mode: p.mode };
-            if (p.mode === 'chat' && p.threadId) base.threadId = p.threadId;
-            if (p.mode === 'doc' && p.documentId) {
-                base.documentId = p.documentId;
-                try {
-                    const st = useDocumentState(p.documentId) as {
-                        record?: { content?: unknown };
-                    };
-                    const c = st?.record?.content;
-                    base.contentSnapshot = c
-                        ? JSON.parse(JSON.stringify(c))
-                        : undefined;
-                } catch {}
-            }
-            return { ok: true, ...base };
-        },
-        getPanes() {
-            const m = mp();
-            const panes = m?.panes?.value;
-            if (!panes) return err('no_panes', 'no panes');
-            const activeIndex = m?.activePaneIndex?.value ?? -1;
-            const mapped: PaneDescriptor[] = panes.map((p) => ({
-                paneId: p.id,
-                mode: p.mode,
-                threadId: p.threadId || undefined,
-                documentId: p.documentId || undefined,
-            }));
-            return { ok: true, panes: mapped, activeIndex };
-        },
-    };
-}
-export default defineNuxtPlugin(async () => {
-    if ((globalThis as any).__or3PanePluginApi) return;
-    try {
-        (globalThis as any).__or3PanePluginApi = await makeApi();
-        if (import.meta.dev) console.log('[pane-plugin-api] ready');
+        }
     } catch (e) {
-        console.error('[pane-plugin-api] failed to init', e);
+        // Non-fatal: capture failure only reduces resilience of auth callback; log silently
+        reportError(err('ERR_INTERNAL', 'OpenRouter param capture failed'), {
+            silent: true,
+            tags: { domain: 'auth', stage: 'capture' },
+        });
     }
+});
+```
+
+## File: app/plugins/theme.client.ts
+```typescript
+import 'katex/dist/katex.min.css';
+import { useShikiHighlighter } from 'streamdown-vue';
+import { ref } from 'vue';
+useShikiHighlighter();
+
+export default defineNuxtPlugin((nuxtApp) => {
+    const THEME_CLASSES = [
+        'light',
+        'dark',
+        'light-high-contrast',
+        'dark-high-contrast',
+        'light-medium-contrast',
+        'dark-medium-contrast',
+    ];
+
+    const storageKey = 'theme';
+    const root = document.documentElement;
+
+    const getSystemPref = () =>
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+
+    const apply = (name: string) => {
+        for (const cls of THEME_CLASSES) root.classList.remove(cls);
+        root.classList.add(name);
+    };
+
+    const read = () => localStorage.getItem(storageKey) as string | null;
+
+    const current = ref(read() || getSystemPref());
+    apply(current.value);
+
+    const set = (name: string) => {
+        current.value = name;
+        localStorage.setItem(storageKey, name);
+        apply(name);
+    };
+
+    const toggle = () =>
+        set(current.value.startsWith('dark') ? 'light' : 'dark');
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => {
+        if (!read()) {
+            current.value = e.matches ? 'dark' : 'light';
+            apply(current.value);
+        }
+    };
+    media.addEventListener('change', onChange);
+
+    nuxtApp.hook('app:beforeMount', () => {
+        current.value = read() || getSystemPref();
+        apply(current.value);
+    });
+
+    // Cleanup for HMR in dev so we don't stack listeners
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() =>
+            media.removeEventListener('change', onChange)
+        );
+    }
+
+    nuxtApp.provide('theme', {
+        set,
+        toggle,
+        get: () => current.value,
+        system: getSystemPref,
+        current, // expose ref for reactivity if needed
+    });
 });
 ```
 
@@ -14777,6 +15475,127 @@ export function getRawMessages(): readonly any[] {
 }
 ```
 
+## File: app/utils/hash.ts
+```typescript
+import { reportError, err } from '~/utils/errors';
+/**
+ * Hashing utilities for file deduplication.
+ * Implements async chunked MD5 with Web Crypto fallback to spark-md5.
+ * Chunk size kept small (256KB) to avoid blocking the main thread.
+ */
+
+const CHUNK_SIZE = 256 * 1024; // 256KB
+
+// Lazy import spark-md5 only if needed (returns default export class)
+async function loadSpark() {
+    const mod = await import('spark-md5');
+    return (mod as any).default; // SparkMD5 constructor with ArrayBuffer helper
+}
+
+/** Compute MD5 hash (hex lowercase) for a Blob using chunked reads. */
+export async function computeFileHash(blob: Blob): Promise<string> {
+    const dev = (import.meta as any).dev;
+    const hasPerf = typeof performance !== 'undefined';
+    const markId =
+        dev && hasPerf
+            ? `hash-${Date.now()}-${Math.random().toString(36).slice(2)}`
+            : undefined;
+    let t0 = 0;
+    if (markId && hasPerf) {
+        t0 = performance.now();
+        performance.mark(`${markId}:start`);
+    }
+    try {
+        // Try Web Crypto subtle.digest if md5 supported (some browsers may block MD5; if so, fallback)
+        try {
+            if (
+                blob.size <= 4 * 1024 * 1024 &&
+                'crypto' in globalThis &&
+                (globalThis as any).crypto?.subtle
+            ) {
+                const buf = await blob.arrayBuffer();
+                // @ts-ignore - MD5 not in TypeScript lib, but some browsers support it; fallback otherwise
+                const digest = await (globalThis as any).crypto.subtle.digest(
+                    'MD5',
+                    buf
+                );
+                const hex = bufferToHex(new Uint8Array(digest));
+                if (markId && hasPerf) finishMark(markId, blob.size, 'subtle');
+                return hex;
+            }
+        } catch (_) {
+            // ignore and fallback to streaming spark-md5
+        }
+        // Streaming approach with spark-md5
+        const SparkMD5 = await loadSpark();
+        const hash = new SparkMD5.ArrayBuffer();
+        let offset = 0;
+        while (offset < blob.size) {
+            const slice = blob.slice(offset, offset + CHUNK_SIZE);
+            const buf = await slice.arrayBuffer();
+            hash.append(buf as ArrayBuffer);
+            offset += CHUNK_SIZE;
+            if (offset < blob.size) await microTask();
+        }
+        const hex = hash.end();
+        if (markId && hasPerf) finishMark(markId, blob.size, 'stream');
+        return hex;
+    } catch (e) {
+        if (markId && hasPerf) {
+            performance.mark(`${markId}:error`);
+            performance.measure(
+                `hash:md5:error:${(e as any)?.message || 'unknown'}`,
+                `${markId}:start`
+            );
+        }
+        throw e;
+    }
+}
+
+function finishMark(id: string, size: number, mode: 'subtle' | 'stream') {
+    try {
+        performance.mark(`${id}:end`);
+        performance.measure(
+            `hash:md5:${mode}:bytes=${size}`,
+            `${id}:start`,
+            `${id}:end`
+        );
+        const entry = performance
+            .getEntriesByName(`hash:md5:${mode}:bytes=${size}`)
+            .slice(-1)[0];
+        if (entry && entry.duration && entry.duration > 0) {
+            if ((import.meta as any).dev) {
+                // eslint-disable-next-line no-console
+                console.debug(
+                    '[perf] computeFileHash',
+                    mode,
+                    `${(size / 1024).toFixed(1)}KB`,
+                    `${entry.duration.toFixed(1)}ms`
+                );
+            }
+        }
+    } catch (e) {
+        // Perf instrumentation failure is non-fatal
+        reportError(err('ERR_INTERNAL', 'perf mark failed'), {
+            silent: true,
+            tags: { domain: 'files', stage: 'hash_perf' },
+        });
+    }
+}
+
+function bufferToHex(buf: Uint8Array): string {
+    let hex = '';
+    for (const b of buf) {
+        hex += b.toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+function microTask() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+```
+
 ## File: vitest.config.ts
 ```typescript
 import { defineConfig } from 'vitest/config';
@@ -14824,307 +15643,1087 @@ export default defineConfig({
 });
 ```
 
-## File: app/components/modal/SettingsModal.vue
+## File: app/components/chat/SystemPromptsModal.vue
 ```vue
 <template>
     <UModal
         v-model:open="open"
         :ui="{
-            footer: 'justify-end border-t-2',
-            body: 'p-0!',
+            footer: 'justify-end border-none',
+            body: 'p-0! border-b-0! overflow-hidden',
         }"
-        title="Model settings"
-        description="Browse and favorite models from the OpenRouter catalog."
-        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
+        title="System Prompts"
+        description="Manage and select system prompts to customize AI behavior."
+        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
         <template #body>
-            <div class="flex flex-col h-full">
+            <div class="flex flex-col h-full" @keydown="handleKeydown">
                 <div
-                    class="px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                    v-show="!editingPrompt"
+                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
                 >
-                    <div class="flex items-center gap-3 w-full">
-                        <div class="relative w-full max-w-md">
-                            <UInput
-                                v-model="searchQuery"
-                                icon="pixelarticons:search"
-                                placeholder="Search models (id, name, description, modality)"
-                                size="sm"
-                                class="w-full pr-8"
-                                :ui="{ base: 'w-full' }"
-                                autofocus
-                            />
-                            <button
-                                v-if="searchQuery"
-                                type="button"
-                                aria-label="Clear search"
-                                class="absolute inset-y-0 right-2 my-auto h-5 w-5 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-white transition"
-                                @click="searchQuery = ''"
-                            >
-                                <UIcon
-                                    name="i-heroicons-x-mark"
-                                    class="h-4 w-4"
-                                />
-                            </button>
-                        </div>
+                    <div
+                        class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
+                    >
                         <UButton
-                            :disabled="refreshing"
+                            @click="createNewPrompt"
                             size="sm"
-                            variant="ghost"
-                            :square="true"
-                            class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
-                            aria-label="Refresh model catalog"
-                            :title="
-                                refreshing
-                                    ? 'Refreshing…'
-                                    : 'Force refresh models (bypass cache)'
-                            "
-                            @click="doRefresh"
+                            color="primary"
+                            class="retro-btn"
                         >
-                            <UIcon
-                                v-if="!refreshing"
-                                name="i-heroicons-arrow-path"
-                                class="h-4 w-4"
-                            />
-                            <UIcon
-                                v-else
-                                name="i-heroicons-arrow-path"
-                                class="h-4 w-4 animate-spin"
-                            />
+                            New Prompt
+                        </UButton>
+                        <UButton
+                            v-if="currentActivePromptId"
+                            @click="clearActivePrompt"
+                            size="sm"
+                            color="neutral"
+                            variant="outline"
+                        >
+                            Clear Active
                         </UButton>
                     </div>
+                    <UInput
+                        v-model="searchQuery"
+                        placeholder="Search prompts..."
+                        :size="isMobile ? 'md' : 'sm'"
+                        class="w-full my-2 sm:my-0 sm:max-w-xs"
+                        icon="i-heroicons-magnifying-glass"
+                    />
                 </div>
-                <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
-                    Indexing models…
-                </div>
-                <div v-else class="flex-1 min-h-0">
-                    <VList
-                        :data="chunkedModels as OpenRouterModel[][]"
-                        style="height: 100%"
-                        class="[scrollbar-color:rgb(156_163_175)_transparent] [scrollbar-width:thin] sm:py-4 w-full px-0!"
-                        :overscan="4"
-                        #default="{ item: row }"
+                <div class="flex-1 overflow-hidden">
+                    <!-- List View -->
+                    <div
+                        v-if="!editingPrompt"
+                        class="max-h-full overflow-y-auto"
                     >
                         <div
-                            class="grid grid-cols-1 sm:grid-cols-2 sm:gap-5 pt-2 sm:pt-0 px-2 sm:px-6 w-full"
-                            :class="gridColsClass"
+                            v-if="filteredPrompts.length === 0"
+                            class="flex flex-col items-center justify-center h-full text-center p-8"
                         >
-                            <div
-                                v-for="m in row"
-                                :key="m.id"
-                                class="group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                            <UIcon
+                                name="pixelarticons:script-text"
+                                class="w-16 h-16 text-gray-400 mb-4"
+                            />
+                            <h3
+                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
                             >
-                                <div
-                                    class="flex items-start justify-between gap-2"
-                                >
-                                    <div class="flex flex-col min-w-0">
-                                        <div
-                                            class="font-medium text-sm truncate"
-                                            :title="m.canonical_slug"
-                                        >
-                                            {{ m.canonical_slug }}
-                                        </div>
-                                        <div
-                                            class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
-                                        >
-                                            CTX {{ m.context_length }}
-                                        </div>
-                                    </div>
-                                    <button
-                                        class="text-yellow-400 hover:text-yellow-500 hover:text-shadow-sm transition text-[24px] cursor-pointer"
-                                        :aria-pressed="isFavorite(m)"
-                                        @click.stop="toggleFavorite(m)"
-                                        :title="
-                                            isFavorite(m)
-                                                ? 'Unfavorite'
-                                                : 'Favorite'
-                                        "
+                                No system prompts yet
+                            </h3>
+                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                                Create your first system prompt to customize AI
+                                behavior.
+                            </p>
+                            <UButton @click="createNewPrompt" color="primary">
+                                Create Your First Prompt
+                            </UButton>
+                        </div>
+
+                        <div v-else class="p-4 space-y-3">
+                            <div
+                                v-for="prompt in filteredPrompts"
+                                :key="prompt.id"
+                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
+                                :data-active="
+                                    prompt.id === currentActivePromptId
+                                        ? 'true'
+                                        : 'false'
+                                "
+                            >
+                                <!-- Left / Main meta -->
+                                <div class="flex-1 min-w-0">
+                                    <div
+                                        class="flex flex-wrap items-center gap-2 mb-1"
                                     >
-                                        <span v-if="isFavorite(m)">★</span>
-                                        <span v-else>☆</span>
-                                    </button>
-                                </div>
-                                <div
-                                    class="mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
-                                >
-                                    <div class="flex flex-col">
+                                        <h4
+                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
+                                            :class="{
+                                                'italic opacity-60':
+                                                    !prompt.title,
+                                            }"
+                                        >
+                                            {{
+                                                prompt.title ||
+                                                'Untitled Prompt'
+                                            }}
+                                        </h4>
                                         <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Input</span
+                                            v-if="prompt.id === defaultPromptId"
+                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            >Default</span
                                         >
                                         <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.prompt,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
+                                            v-if="
+                                                prompt.id ===
+                                                    currentActivePromptId &&
+                                                prompt.id !== defaultPromptId
+                                            "
+                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
+                                            >Active</span
                                         >
                                     </div>
                                     <div
-                                        class="flex flex-col items-end text-right"
+                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
                                     >
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:clock"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            Updated
+                                            {{ formatDate(prompt.updated_at) }}
+                                        </span>
                                         <span
-                                            class="text-neutral-500 dark:text-neutral-400"
-                                            >Output</span
+                                            class="hidden sm:inline opacity-40"
+                                            >|</span
                                         >
-                                        <span
-                                            class="font-semibold tabular-nums"
-                                            >{{
-                                                formatPerMillion(
-                                                    m.pricing.completion,
-                                                    m.pricing?.currency
-                                                )
-                                            }}</span
-                                        >
+                                        <span class="flex items-center gap-1">
+                                            <UIcon
+                                                name="pixelarticons:chart-bar"
+                                                class="w-3.5 h-3.5 opacity-70"
+                                            />
+                                            {{ tokenCounts[prompt.id] || 0 }}
+                                            tokens
+                                        </span>
                                     </div>
                                 </div>
+
+                                <!-- Actions -->
                                 <div
-                                    class="mt-auto pt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400"
+                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
                                 >
-                                    <span>{{
-                                        m.architecture?.modality || 'text'
-                                    }}</span>
-                                    <span class="opacity-60">/1M tokens</span>
+                                    <UTooltip
+                                        :delay-duration="0"
+                                        :text="
+                                            prompt.id === defaultPromptId
+                                                ? 'Remove default prompt'
+                                                : 'Set as default prompt'
+                                        "
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            :variant="
+                                                prompt.id === defaultPromptId
+                                                    ? 'solid'
+                                                    : 'outline'
+                                            "
+                                            :color="
+                                                prompt.id === defaultPromptId
+                                                    ? 'primary'
+                                                    : 'neutral'
+                                            "
+                                            :square="true"
+                                            :ui="{
+                                                base: 'retro-btn px-1! text-nowrap',
+                                            }"
+                                            class="retro-btn"
+                                            aria-label="Toggle default prompt"
+                                            @click.stop="
+                                                toggleDefault(prompt.id)
+                                            "
+                                            >{{
+                                                prompt.id === defaultPromptId
+                                                    ? 'default'
+                                                    : 'set default'
+                                            }}</UButton
+                                        >
+                                    </UTooltip>
+                                    <UButton
+                                        @click="selectPrompt(prompt.id)"
+                                        size="sm"
+                                        :color="
+                                            prompt.id === currentActivePromptId
+                                                ? 'primary'
+                                                : 'neutral'
+                                        "
+                                        :variant="
+                                            prompt.id === currentActivePromptId
+                                                ? 'solid'
+                                                : 'outline'
+                                        "
+                                        :aria-pressed="
+                                            prompt.id === currentActivePromptId
+                                        "
+                                    >
+                                        {{
+                                            prompt.id === currentActivePromptId
+                                                ? 'Selected'
+                                                : 'Select'
+                                        }}
+                                    </UButton>
+                                    <UPopover
+                                        :popper="{ placement: 'bottom-end' }"
+                                    >
+                                        <UButton
+                                            size="sm"
+                                            variant="outline"
+                                            color="neutral"
+                                            class="flex items-center justify-center"
+                                            :square="true"
+                                            icon="pixelarticons:more-vertical"
+                                            aria-label="More actions"
+                                        />
+                                        <template #content>
+                                            <div
+                                                class="flex flex-col py-1 w-36 text-sm"
+                                            >
+                                                <button
+                                                    @click="
+                                                        startEditing(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:edit"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button
+                                                    @click="
+                                                        deletePrompt(prompt.id)
+                                                    "
+                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <UIcon
+                                                        name="pixelarticons:trash"
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </UPopover>
                                 </div>
-                                <div
-                                    class="absolute inset-0 pointer-events-none border border-black/5 dark:border-white/5 rounded-xl"
-                                />
                             </div>
                         </div>
-                    </VList>
-                    <div
-                        v-if="!chunkedModels.length && searchQuery"
-                        class="px-6 pb-6 text-xs text-neutral-500"
-                    >
-                        No models match "{{ searchQuery }}".
+                    </div>
+
+                    <!-- Editor View -->
+                    <div v-else class="h-full overflow-hidden flex flex-col">
+                        <div class="flex-1 p-4 overflow-hidden">
+                            <LazyPromptsPromptEditor
+                                :prompt-id="editingPrompt.id"
+                                @back="stopEditing"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
         </template>
-        <template #footer> </template>
     </UModal>
 </template>
-<script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import { useModelSearch } from '~/composables/useModelSearch';
-import type { OpenRouterModel } from '~/utils/models-service';
-import { useModelStore } from '~/composables/useModelStore';
 
+<script setup lang="ts">
+import { ref, onMounted, computed, watch } from 'vue';
+import {
+    listPrompts,
+    createPrompt,
+    softDeletePrompt,
+    type PromptRecord,
+} from '~/db/prompts';
+import { useActivePrompt } from '~/composables/useActivePrompt';
+import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
+import { encode } from 'gpt-tokenizer';
+import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+import { isMobile } from '~/state/global';
+
+// Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{
     showModal: boolean;
+    threadId?: string;
+    paneId?: string; // isolate pending selection per pane (before thread exists)
 }>();
-const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
+const emit = defineEmits({
+    'update:showModal': (value: boolean) => typeof value === 'boolean',
+    selected: (id: string) => typeof id === 'string',
+    closed: () => true,
+    threadCreated: (threadId: string, promptId: string | null) => true,
+});
 
-// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
 const open = computed({
     get: () => props.showModal,
     set: (value: boolean) => emit('update:showModal', value),
 });
 
-const modelCatalog = ref<OpenRouterModel[]>([]);
-// Search state (Orama index built client-side)
-const {
-    query: searchQuery,
-    results: searchResults,
-    ready: searchReady,
-} = useModelSearch(modelCatalog);
-
-// Fixed 3-column layout for consistent rows
-const COLS = 2;
-const gridColsClass = computed(() => ''); // class already on container; keep placeholder if future tweaks
-
-const chunkedModels = computed(() => {
-    const source = searchQuery.value.trim()
-        ? searchResults.value
-        : modelCatalog.value;
-    const cols = COLS;
-    const rows: OpenRouterModel[][] = [];
-    for (let i = 0; i < source.length; i += cols) {
-        rows.push(source.slice(i, i + cols));
+watch(
+    () => props.showModal,
+    (v, ov) => {
+        if (!v && ov) emit('closed');
     }
-    return rows;
+);
+
+const {
+    activePromptId,
+    setActivePrompt,
+    clearActivePrompt: clearGlobalActivePrompt,
+} = useActivePrompt();
+
+const prompts = ref<PromptRecord[]>([]);
+const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
+    useDefaultPrompt();
+const editingPrompt = ref<PromptRecord | null>(null);
+const showDeleteConfirm = ref<string | null>(null);
+
+const searchQuery = ref('');
+const filteredPrompts = computed(() => {
+    if (!searchQuery.value) return prompts.value;
+    return prompts.value.filter((p) =>
+        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
 });
 
-const {
-    favoriteModels,
-    getFavoriteModels,
-    catalog,
-    fetchModels,
-    refreshModels,
-    addFavoriteModel,
-    removeFavoriteModel,
-} = useModelStore();
+// Thread-specific system prompt handling
+const threadSystemPromptId = ref<string | null>(null);
+const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet (pane scoped)
 
-// Refresh state
-const refreshing = ref(false);
+// Computed for current active prompt (thread-specific or global)
+const currentActivePromptId = computed(() => {
+    if (props.threadId) return threadSystemPromptId.value;
+    // If no thread yet use pane-scoped pending first, else fall back to global active
+    return pendingPromptId.value || activePromptId.value;
+});
 
-async function doRefresh() {
-    if (refreshing.value) return;
-    refreshing.value = true;
-    try {
-        await refreshModels();
-        modelCatalog.value = catalog.value.slice();
-    } catch (e) {
-        console.warn('[SettingsModal] model refresh failed', e);
-    } finally {
-        refreshing.value = false;
+// Extract plain text from TipTap JSON recursively
+function extractText(node: any): string {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    const type = node.type;
+    let acc = '';
+    if (type === 'text') {
+        acc += node.text || '';
     }
+    if (node.content && Array.isArray(node.content)) {
+        const inner = node.content.map(extractText).join('');
+        acc += inner;
+    }
+    // Block separators to avoid word merging
+    if (
+        [
+            'paragraph',
+            'heading',
+            'bulletList',
+            'orderedList',
+            'listItem',
+        ].includes(type)
+    ) {
+        acc += '\n';
+    }
+    return acc;
 }
+
+function contentToText(content: any): string {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    // TipTap root usually { type: 'doc', content: [...] }
+    if (content.type === 'doc' && Array.isArray(content.content)) {
+        return extractText(content)
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+    }
+    if (Array.isArray(content.content)) return extractText(content).trim();
+    return '';
+}
+
+// Cached token counts per prompt id (recomputed when prompts list changes)
+const tokenCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of prompts.value) {
+        try {
+            const text = contentToText(p.content);
+            map[p.id] = text ? encode(text).length : 0;
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token encode failed', e);
+            map[p.id] = 0;
+        }
+    }
+    return map;
+});
+
+// Totals derived from cached counts
+const totalTokens = computed(() =>
+    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
+);
+const filteredTokens = computed(() =>
+    filteredPrompts.value.reduce(
+        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
+        0
+    )
+);
+
+// (Events moved above with prop bridging)
+
+const loadPrompts = async () => {
+    try {
+        prompts.value = await listPrompts();
+        if (
+            defaultPromptId.value &&
+            !prompts.value.find((p) => p.id === defaultPromptId.value)
+        ) {
+            await clearDefaultPrompt();
+        }
+    } catch (error) {
+        console.error('Failed to load prompts:', error);
+    }
+};
+
+const loadThreadSystemPrompt = async () => {
+    if (props.threadId) {
+        try {
+            threadSystemPromptId.value = await getThreadSystemPrompt(
+                props.threadId
+            );
+        } catch (error) {
+            console.error('Failed to load thread system prompt:', error);
+            threadSystemPromptId.value = null;
+        }
+    } else {
+        threadSystemPromptId.value = null;
+    }
+};
+
+const createNewPrompt = async () => {
+    try {
+        const newPrompt = await createPrompt();
+        prompts.value.unshift(newPrompt);
+        startEditing(newPrompt.id);
+    } catch (error) {
+        console.error('Failed to create prompt:', error);
+    }
+};
+
+const selectPrompt = async (id: string) => {
+    try {
+        if (props.threadId) {
+            // Update thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, id);
+            threadSystemPromptId.value = id;
+        } else {
+            // Store as pending for when thread is created
+            pendingPromptId.value = id;
+            // Also update global for immediate feedback
+            // Do NOT override global active prompt; keep pane scoped selection only
+        }
+        emit('selected', id);
+    } catch (error) {
+        console.error('Failed to select prompt:', error);
+    }
+};
+
+const clearActivePrompt = async () => {
+    try {
+        if (props.threadId) {
+            // Clear thread-specific system prompt
+            await updateThreadSystemPrompt(props.threadId, null);
+            threadSystemPromptId.value = null;
+        } else {
+            // Clear pending and global active prompt
+            pendingPromptId.value = null;
+            // Don't clear global active prompt automatically (leave global state untouched)
+        }
+    } catch (error) {
+        console.error('Failed to clear active prompt:', error);
+    }
+};
+
+const startEditing = (id: string) => {
+    const prompt = prompts.value.find((p) => p.id === id);
+    if (prompt) {
+        editingPrompt.value = prompt;
+    }
+};
+
+const stopEditing = () => {
+    editingPrompt.value = null;
+    loadPrompts(); // Refresh list in case of changes
+};
+
+const applyPendingPromptToThread = async (threadId: string) => {
+    if (pendingPromptId.value) {
+        try {
+            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
+            emit('threadCreated', threadId, pendingPromptId.value);
+            pendingPromptId.value = null;
+        } catch (error) {
+            console.error('Failed to apply pending prompt to thread:', error);
+        }
+    }
+};
+
+const deletePrompt = async (id: string) => {
+    if (confirm('Are you sure you want to delete this prompt?')) {
+        try {
+            await softDeletePrompt(id);
+            if (activePromptId.value === id) {
+                clearActivePrompt();
+            }
+            if (defaultPromptId.value === id) {
+                await clearDefaultPrompt();
+            }
+            loadPrompts();
+        } catch (error) {
+            console.error('Failed to delete prompt:', error);
+        }
+    }
+};
+
+const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (editingPrompt.value) return;
+    const key = event.key;
+    if (key >= '1' && key <= '9') {
+        const index = parseInt(key) - 1;
+        if (index < filteredPrompts.value.length) {
+            const prompt = filteredPrompts.value[index];
+            if (prompt) {
+                selectPrompt(prompt.id);
+                event.preventDefault();
+            }
+        }
+    }
+};
 
 onMounted(() => {
-    fetchModels().then(() => {
-        modelCatalog.value = catalog.value;
-    });
-
-    getFavoriteModels().then((models) => {
-        favoriteModels.value = models;
-    });
+    loadPrompts();
+    loadThreadSystemPrompt();
 });
 
-function isFavorite(m: OpenRouterModel) {
-    return favoriteModels.value.some((f) => f.id === m.id);
-}
-
-function toggleFavorite(m: OpenRouterModel) {
-    if (isFavorite(m)) {
-        removeFavoriteModel(m);
-    } else {
-        addFavoriteModel(m);
+// Watch for threadId changes to reload thread-specific prompt
+watch(
+    () => props.threadId,
+    () => {
+        loadThreadSystemPrompt();
     }
-}
+);
 
-/**
- * Format a per-token price into a "per 1,000,000 tokens" currency string.
- * Accepts numbers or numeric strings. Defaults to USD when no currency provided.
- */
-function formatPerMillion(raw: unknown, currency = 'USD') {
-    const perToken = Number(raw ?? 0);
-    const perMillion = perToken * 1_000_000;
-    try {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 2,
-        }).format(perMillion);
-    } catch (e) {
-        // Fallback: simple fixed formatting
-        return `$${perMillion.toFixed(2)}`;
+function toggleDefault(id: string) {
+    if (defaultPromptId.value === id) {
+        clearDefaultPrompt();
+    } else {
+        setDefaultPrompt(id);
     }
 }
 </script>
+
+<style scoped>
+/* Mobile full-screen adjustments */
+@media (max-width: 640px) {
+    .sp-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-width: 0 !important;
+    }
+}
+
+/* Smooth scrolling area */
+.sp-modal :deep(.n-modal-body),
+.sp-modal :deep(.n-card__content) {
+    /* ensure body grows */
+    height: 100%;
+}
+</style>
 ```
 
-## File: app/composables/index.ts
+## File: app/components/sidebar/SideBottomNav.vue
+```vue
+<template>
+    <div
+        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+    >
+        <!-- Removed previously added extra div; using pseudo-element for top pattern -->
+        <div
+            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container)] border-2 border-[var(--md-outline-variant)]"
+        >
+            <div class="h-[10px] top-10 header-pattern-flipped"></div>
+            <div
+                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] dark:bg-[var(--md-surface-container-low)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
+            >
+                <!-- MY INFO -->
+                <UPopover>
+                    <button
+                        type="button"
+                        aria-label="My Info"
+                        class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                    >
+                        <div
+                            class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                        >
+                            <UIcon
+                                name="pixelarticons:user"
+                                class="h-5 w-5"
+                            ></UIcon>
+                        </div>
+                        <div
+                            class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                        >
+                            <div
+                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                            >
+                                INFO
+                            </div>
+                            <div
+                                class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                            >
+                                <div class="h-[2px] bg-current"></div>
+                                <div class="h-[2px] bg-current"></div>
+                            </div>
+                        </div>
+                    </button>
+                    <template #content>
+                        <div class="flex flex-col items-start w-[140px]">
+                            <button
+                                class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToActivity"
+                            >
+                                <UIcon
+                                    name="pixelarticons:human-run"
+                                    class="mr-1.5"
+                                />
+                                Activity
+                            </button>
+                            <button
+                                class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
+                                @click="navigateToCredits"
+                            >
+                                <UIcon
+                                    name="pixelarticons:coin"
+                                    class="mr-1.5"
+                                />
+                                Credits
+                            </button>
+                        </div>
+                    </template>
+                </UPopover>
+
+                <!-- Connect -->
+                <button
+                    label="Open"
+                    @click="onConnectButtonClick"
+                    type="button"
+                    aria-label="Connect"
+                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                >
+                    <div
+                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                    >
+                        <svg
+                            class="w-4 h-4"
+                            viewBox="0 0 512 512"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="currentColor"
+                            stroke="currentColor"
+                        >
+                            <g clip-path="url(#clip0_205_3)">
+                                <path
+                                    d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
+                                />
+                                <path
+                                    d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
+                                    stroke-width="90"
+                                />
+                                <path
+                                    d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
+                                />
+                            </g>
+                        </svg>
+                    </div>
+                    <div
+                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                    >
+                        <div
+                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                        >
+                            <!-- Hydration guard: render stable 'Connect' on SSR & first client paint -->
+                            <template v-if="hydrated">
+                                {{ orIsConnected ? 'Disconnect' : 'Connect' }}
+                            </template>
+                            <template v-else>Connect</template>
+                        </div>
+                        <div
+                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                        >
+                            <div
+                                :class="
+                                    hydrated
+                                        ? orIsConnected
+                                            ? 'bg-green-600'
+                                            : 'bg-error'
+                                        : 'bg-error'
+                                "
+                                class="h-[2px]"
+                            ></div>
+                            <div
+                                :class="
+                                    hydrated
+                                        ? orIsConnected
+                                            ? 'bg-success'
+                                            : 'bg-error'
+                                        : 'bg-error'
+                                "
+                                class="h-[2px]"
+                            ></div>
+                        </div>
+                    </div>
+                </button>
+
+                <!-- HELP -->
+                <button
+                    @click="showDashboardModal = true"
+                    type="button"
+                    aria-label="Help"
+                    class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
+                >
+                    <div
+                        class="absolute left-0 right-0 top-1 bottom-[calc(50%+4px)] flex items-center justify-center"
+                    >
+                        <UIcon
+                            class="w-5 h-5"
+                            name="pixelarticons:dashboard"
+                        ></UIcon>
+                    </div>
+                    <div
+                        class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
+                    >
+                        <div
+                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                        >
+                            DASHBOARD
+                        </div>
+                        <div
+                            class="w-2/3 h-3 flex flex-col justify-between opacity-[0.85]"
+                        >
+                            <div class="h-[2px] bg-current"></div>
+                            <div class="h-[2px] bg-current"></div>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div class="h-[10px] top-10"></div>
+        </div>
+    </div>
+    <lazy-modal-model-catalog
+        hydrate-on-visible
+        v-model:showModal="showSettingsModal"
+    />
+    <lazy-modal-dashboard v-model:showModal="showDashboardModal" />
+</template>
+
+<script lang="ts" setup>
+import { state } from '~/state/global';
+
+const openrouter = useOpenRouterAuth();
+const orIsConnected = computed(() => state.value.openrouterKey);
+// Hydration mismatch fix: only show dynamic connection state after client mounted
+const hydrated = ref(false);
+onMounted(() => {
+    hydrated.value = true;
+});
+const showSettingsModal = ref(false);
+const showDashboardModal = ref(false);
+
+function onConnectButtonClick() {
+    if (orIsConnected.value) {
+        if (import.meta.dev) console.debug(orIsConnected);
+        // Logic to disconnect
+        state.value.openrouterKey = null;
+        openrouter.logoutOpenRouter();
+    } else {
+        // Logic to connect
+        openrouter.startLogin();
+    }
+}
+
+function navigateToActivity() {
+    window.open('https://openrouter.ai/activity', '_blank');
+}
+
+function navigateToCredits() {
+    window.open('https://openrouter.ai/settings/credits', '_blank');
+}
+</script>
+
+<style scoped>
+/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
+.retro-bar {
+    position: relative;
+    isolation: isolate; /* contain blend */
+}
+.retro-bar::before {
+    /* Chrome gloss + bevel hint */
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* render under content */
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.18),
+        rgba(255, 255, 255, 0.06) 28%,
+        rgba(0, 0, 0, 0) 40%,
+        rgba(0, 0, 0, 0.1) 100%
+    );
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+.retro-bar::after {
+    /* Scanlines + speckle noise, extremely subtle */
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1; /* render under content */
+    background-image: repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.045) 0px,
+            rgba(255, 255, 255, 0.045) 1px,
+            rgba(0, 0, 0, 0) 1px,
+            rgba(0, 0, 0, 0) 3px
+        ),
+        radial-gradient(
+            1px 1px at 12% 18%,
+            rgba(255, 255, 255, 0.04),
+            transparent 100%
+        ),
+        radial-gradient(
+            1px 1px at 64% 62%,
+            rgba(0, 0, 0, 0.04),
+            transparent 100%
+        );
+    opacity: 0.25;
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+</style>
+```
+
+## File: app/composables/ui-extensions/dashboard/useDashboardPlugins.ts
 ```typescript
-/** Barrel export for chat-related composables (Task 1.6) */
-export * from './useStreamAccumulator';
-export * from './useObservedElementSize';
-export * from './ui-extensions/messages/useMessageActions';
-export * from './ui-extensions/documents/useDocumentHistoryActions';
-export * from './ui-extensions/threads/useThreadHistoryActions';
-export * from './ui-extensions/projects/useProjectTreeActions';
+import { reactive, computed, type Component } from 'vue';
+
+export interface DashboardPlugin {
+    /** Unique id across all dashboard plugins */
+    id: string;
+    /** Icon name (Iconify) shown in the grid */
+    icon: string;
+    /** Short label shown under the icon */
+    label: string;
+    /** Optional longer description (tooltip or detail panel later) */
+    description?: string;
+    /** Optional order (lower = earlier). Defaults to 200. */
+    order?: number;
+    /** Optional click handler when user activates the icon. */
+    handler?: (ctx: { id: string }) => void | Promise<void>;
+    /** Optional pages declared inline on registration (normalized into page registry). */
+    pages?: DashboardPluginPage[];
+}
+
+export interface DashboardPluginPage {
+    /** Unique within the plugin. */
+    id: string;
+    /** Display title. */
+    title: string;
+    /** Optional icon for page navigation lists. */
+    icon?: string;
+    /** Ordering (lower first). Defaults to 200. */
+    order?: number;
+    /** Optional description used in landing list. */
+    description?: string;
+    /** Component or async factory returning component (lazy loaded). */
+    component: Component | (() => Promise<any>);
+}
+
+// Global singleton (survives HMR)
+const g: any = globalThis as any;
+const registry: Map<string, DashboardPlugin> =
+    g.__or3DashboardPluginsRegistry ||
+    (g.__or3DashboardPluginsRegistry = new Map());
+
+// Reactive projection for consumers
+const reactiveList = reactive<{ items: DashboardPlugin[] }>({ items: [] });
+
+// Pages registry (per plugin -> page map)
+const pageRegistry: Map<
+    string,
+    Map<string, DashboardPluginPage>
+> = g.__or3DashboardPluginPagesRegistry ||
+(g.__or3DashboardPluginPagesRegistry = new Map());
+
+const reactivePages = reactive<{ [pluginId: string]: DashboardPluginPage[] }>(
+    {}
+);
+
+// Order constant (avoid magic number repetition)
+const DEFAULT_ORDER = 200;
+
+// Component resolution cache
+const pageComponentCache = new Map<string, Component>();
+
+function deletePageCache(pluginId: string, pageId: string) {
+    pageComponentCache.delete(`${pluginId}:${pageId}`);
+}
+
+function deleteAllPluginPageCache(pluginId: string) {
+    for (const key of pageComponentCache.keys()) {
+        if (key.startsWith(pluginId + ':')) pageComponentCache.delete(key);
+    }
+}
+
+function syncPages(pluginId: string) {
+    const m = pageRegistry.get(pluginId);
+    reactivePages[pluginId] = m ? Array.from(m.values()) : [];
+}
+
+function sync() {
+    // Expose a shallow copy array so that consumer sorts don't mutate source
+    reactiveList.items = Array.from(registry.values());
+}
+
+export function registerDashboardPlugin(plugin: DashboardPlugin) {
+    if (process.dev && registry.has(plugin.id)) {
+        // eslint-disable-next-line no-console
+        console.warn(
+            `[dashboard] Overwriting existing plugin id "${plugin.id}"`
+        );
+    }
+    // Freeze to prevent external mutation; copy pages array so later mutations by caller don't leak in.
+    const frozen = Object.freeze({
+        ...plugin,
+        pages: plugin.pages ? [...plugin.pages] : undefined,
+    });
+    registry.set(plugin.id, frozen as DashboardPlugin);
+    sync();
+    // If inline pages provided, replace existing pages for that plugin in a single pass (avoid redundant sync cycles)
+    if (plugin.pages) {
+        unregisterDashboardPluginPage(plugin.id); // clear existing pages + cache
+        for (const p of plugin.pages) registerDashboardPluginPage(plugin.id, p);
+    }
+}
+
+export function unregisterDashboardPlugin(id: string) {
+    if (registry.delete(id)) sync();
+    unregisterDashboardPluginPage(id); // also clears pages + cache + reactivePages entry
+    deleteAllPluginPageCache(id);
+    delete (reactivePages as any)[id];
+}
+
+export function useDashboardPlugins() {
+    return computed(() =>
+        [...reactiveList.items].sort(
+            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+        )
+    );
+}
+
+export function listRegisteredDashboardPluginIds(): string[] {
+    return Array.from(registry.keys());
+}
+
+// ----- Pages API -----
+
+export function registerDashboardPluginPage(
+    pluginId: string,
+    page: DashboardPluginPage
+) {
+    let m = pageRegistry.get(pluginId);
+    if (!m) {
+        m = new Map();
+        pageRegistry.set(pluginId, m);
+    }
+    // Invalidate any cached component for this page id prior to replacement
+    deletePageCache(pluginId, page.id);
+    const frozen = Object.freeze({ ...page });
+    m.set(page.id, frozen);
+    syncPages(pluginId);
+}
+
+export function unregisterDashboardPluginPage(
+    pluginId: string,
+    pageId?: string
+) {
+    const m = pageRegistry.get(pluginId);
+    if (!m) return;
+    if (pageId) {
+        m.delete(pageId);
+        deletePageCache(pluginId, pageId);
+    } else {
+        // remove all pages + their cache entries
+        for (const id of m.keys()) deletePageCache(pluginId, id);
+        pageRegistry.delete(pluginId);
+        deleteAllPluginPageCache(pluginId);
+    }
+    if (!pageId) {
+        delete (reactivePages as any)[pluginId];
+    }
+    syncPages(pluginId);
+}
+
+export function useDashboardPluginPages(pluginId: () => string | undefined) {
+    return computed(() => {
+        const id = pluginId();
+        if (!id) return [] as DashboardPluginPage[];
+        const list = reactivePages[id] || [];
+        return [...list].sort(
+            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+        );
+    });
+}
+
+export function listDashboardPluginPages(
+    pluginId: string
+): DashboardPluginPage[] {
+    const list = reactivePages[pluginId] || [];
+    return [...list].sort(
+        (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+    );
+}
+
+export function getDashboardPluginPage(
+    pluginId: string,
+    pageId: string
+): DashboardPluginPage | undefined {
+    return pageRegistry.get(pluginId)?.get(pageId);
+}
+
+export async function resolveDashboardPluginPageComponent(
+    pluginId: string,
+    pageId: string
+): Promise<Component | undefined> {
+    const key = `${pluginId}:${pageId}`;
+    if (pageComponentCache.has(key)) return pageComponentCache.get(key);
+    const page = getDashboardPluginPage(pluginId, pageId);
+    if (!page) return;
+    let comp: any = page.component;
+    if (
+        typeof comp === 'function' &&
+        !(comp as any).render &&
+        !(comp as any).setup
+    ) {
+        const loaded = await (comp as () => Promise<any>)();
+        comp = loaded?.default || loaded;
+        if (process.dev && (typeof comp !== 'object' || !comp)) {
+            // eslint-disable-next-line no-console
+            console.warn(
+                `[dashboard] Async page loader for ${pluginId}:${pageId} returned non-component`,
+                comp
+            );
+        }
+    }
+    pageComponentCache.set(key, comp);
+    return comp;
+}
+
+// Minimal built‑in examples can be registered in a plugin file separately; keeping
+// this composable focused only on registry mechanics (mirrors other ui-extension patterns).
 ```
 
 ## File: app/composables/useDocumentsStore.ts
@@ -15920,1228 +17519,372 @@ export function useStreamAccumulator() {
 export type { StreamingState as UnifiedStreamingState };
 ```
 
-## File: app/pages/_test.vue
-```vue
-<template>
-    <resizable-sidebar-layout>
-        <template #sidebar>
-            <div class="flex flex-col h-full relative">
-                <div class="p-2 flex flex-col space-y-2">
-                    <UButton class="w-full flex items-center justify-center"
-                        >New Chat</UButton
-                    >
-                    <UInput
-                        icon="i-lucide-search"
-                        size="md"
-                        variant="outline"
-                        placeholder="Search..."
-                        class="w-full ml-[1px]"
-                    ></UInput>
-                </div>
-                <div class="flex flex-col p-2 space-y-1.5">
-                    <RetroGlassBtn>Chat about tacos</RetroGlassBtn>
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about aids</UButton
-                    >
-                    <UButton
-                        class="w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]"
-                        >Chat about dogs</UButton
-                    >
-                </div>
-                <sidebar-side-bottom-nav />
-            </div>
-        </template>
+## File: app/plugins/pane-plugin-api.client.ts
+```typescript
+import { nowSec } from '~/db/util';
+import { create, tx } from '~/db';
+import { reportError, err as coreErr } from '~/utils/errors';
+import { useNuxtApp } from '#app';
+import {
+    setDocumentContent,
+    setDocumentTitle,
+    useDocumentState,
+} from '~/composables/useDocumentsStore';
+import type { Ref } from 'vue';
+import type { PaneState } from '~/composables/useMultiPane';
 
-        <!-- Default slot = main content (right side) -->
-        <div class="min-h-[100dvh] overflow-y-scroll">
-            <div
-                class="ml-5 mt-5 flex w-full md:w-[820px] h-[250px] bg-white/5 border-2 retro-shadow backdrop-blur-sm"
-            ></div>
+/** All error codes emitted by the Pane Plugin API */
+export type PaneApiErrorCode =
+    | 'missing_source'
+    | 'missing_pane'
+    | 'invalid_text'
+    | 'not_found'
+    | 'pane_not_chat'
+    | 'pane_not_doc'
+    | 'no_thread'
+    | 'no_thread_bind'
+    | 'append_failed'
+    | 'no_document'
+    | 'no_active_pane'
+    | 'no_panes';
 
-            <div class="p-6 space-y-4">
-                <div class="flex flex-row space-x-2">
-                    <UButton @click="showToast" size="sm" color="primary"
-                        >Nuxt UI Button</UButton
-                    >
-                    <UButton color="success">Nuxt UI Button</UButton>
-                    <UButton size="lg" color="warning">Nuxt UI Button</UButton>
-                </div>
-                <div class="flex flex-row space-x-2">
-                    <UButtonGroup size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                    <UButtonGroup orientation="vertical" size="lg">
-                        <UButton @click="showToast" color="primary"
-                            >Nuxt UI Button</UButton
-                        >
-                        <UButton color="success">Nuxt UI Button</UButton>
-                        <UButton color="warning">Nuxt UI Button</UButton>
-                    </UButtonGroup>
-                </div>
-
-                <div class="flex space-x-2">
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="sm"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="md"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                    <UFormField
-                        label="Email"
-                        help="We won't share your email."
-                        required
-                    >
-                        <UInput
-                            size="lg"
-                            placeholder="Enter email"
-                            :ui="{ base: 'peer' }"
-                        >
-                        </UInput>
-                    </UFormField>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button
-                        class="px-3 py-1.5 rounded border text-sm bg-[var(--md-primary)] text-[var(--md-on-primary)] border-[var(--md-outline)]"
-                        @click="toggle()"
-                    >
-                        Toggle Light/Dark
-                    </button>
-                    <span class="text-[var(--md-on-surface)]"
-                        >Current: {{ theme }}</span
-                    >
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div
-                        class="p-4 rounded bg-[var(--md-surface)] text-[var(--md-on-surface)] border border-[var(--md-outline-variant)]"
-                    >
-                        Surface / On-Surface
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)]"
-                    >
-                        Secondary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-tertiary-container)] text-[var(--md-on-tertiary-container)]"
-                    >
-                        Tertiary Container
-                    </div>
-                    <div
-                        class="p-4 rounded bg-[var(--md-error-container)] text-[var(--md-on-error-container)]"
-                    >
-                        Error Container
-                    </div>
-                </div>
-
-                <chat-input-dropper />
-            </div>
-        </div>
-    </resizable-sidebar-layout>
-</template>
-
-<script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
-
-const nuxtApp = useNuxtApp();
-// Theme plugin is client-only (theme.client.ts). During SSR/prerender $theme is undefined.
-// Guard with optional chaining so SSR does not crash trying to read .get on undefined.
-const theme = computed(() => (nuxtApp.$theme as any)?.get?.() ?? 'light');
-const toggle = () => (nuxtApp.$theme as any)?.toggle?.();
-const toast = useToast();
-
-function showToast() {
-    toast.add({
-        title: 'Success',
-        description: 'Your action was completed successfully.',
-        color: 'success',
-    });
+/** Success result helper */
+export type Ok<T extends object = {}> = { ok: true } & T;
+/** Error result helper */
+export interface Err<C extends PaneApiErrorCode = PaneApiErrorCode> {
+    ok: false;
+    code: C;
+    message: string;
 }
-</script>
-```
 
-## File: app/pages/openrouter-callback.vue
-```vue
-<template>
-    <div
-        class="min-h-[100dvh] flex items-center justify-center p-6"
-        data-page="openrouter-callback"
-    >
-        <div
-            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
-        >
-            <p class="text-base font-medium mb-2">
-                {{ title }}
-            </p>
-            <p class="text-sm text-neutral-500 mb-4">
-                {{ subtitle }}
-            </p>
-            <div class="flex items-center justify-center gap-3">
-                <div
-                    v-if="loading"
-                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
-                />
-                <button
-                    v-if="ready"
-                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
-                    @click="goHome"
-                >
-                    Continue
-                </button>
-                <button
-                    v-if="errorMessage"
-                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
-                    @click="goHome"
-                >
-                    Go Home
-                </button>
-            </div>
-        </div>
-    </div>
-</template>
+/** Unified result type */
+export type Result<T extends object = {}> = Ok<T> | Err;
+interface MultiPaneApi {
+    panes: Ref<PaneState[]>;
+    activePaneIndex: Ref<number>;
+    setPaneThread(i: number, id: string): Promise<void> | void;
+}
+interface HookBus {
+    doAction?(name: string, ...a: unknown[]): void;
+}
 
-<script setup>
-import { kv } from '~/db';
-import { state } from '~/state/global';
+/** Input options for sendMessage */
+export interface SendMessageOptions {
+    paneId: string;
+    text: string;
+    role?: 'user' | 'assistant';
+    createIfMissing?: boolean; // when true, auto-creates a thread for chat panes without one
+    source: string; // required identifier for auditing
+    stream?: boolean; // if true (default) trigger assistant streaming for chat pane
+}
+export type SendMessageResult = Result<{ messageId: string; threadId: string }>;
 
-const route = useRoute();
-const router = useRouter();
-const rc = useRuntimeConfig();
+/** Document replace options */
+export interface UpdateDocumentOptions {
+    paneId: string;
+    content: unknown; // caller supplies fully replaced doc JSON
+    source: string;
+}
+/** Document patch options */
+export interface PatchDocumentOptions {
+    paneId: string;
+    patch: unknown; // shallow merge rules (arrays concatenated)
+    source: string;
+}
+/** Set document title options */
+export interface SetDocumentTitleOptions {
+    paneId: string;
+    title: string;
+    source: string;
+}
 
-const loading = ref(true);
-const ready = ref(false);
-const redirecting = ref(false);
-const errorMessage = ref('');
-const title = computed(() =>
-    errorMessage.value
-        ? 'Login completed with warnings'
-        : ready.value
-        ? 'Login complete'
-        : 'Completing login…'
-);
-const subtitle = computed(() => {
-    if (errorMessage.value) return errorMessage.value;
-    if (ready.value && !redirecting.value)
-        return 'If this page doesn’t redirect automatically, tap Continue.';
-    return 'Please wait while we finish setup.';
+export interface ActivePaneInfo {
+    paneId: string;
+    mode: string;
+    threadId?: string;
+    documentId?: string;
+    contentSnapshot?: unknown;
+}
+
+export interface PaneDescriptor {
+    paneId: string;
+    mode: PaneState['mode'];
+    threadId?: string;
+    documentId?: string;
+}
+export interface PanePluginApi {
+    /**
+     * Append a new message into a chat pane's thread. Optionally creates a thread if missing.
+     * Returns message & thread identifiers on success.
+     */
+    sendMessage(opts: SendMessageOptions): Promise<SendMessageResult>;
+
+    /** Replace the full document content for a doc pane. */
+    updateDocumentContent(opts: UpdateDocumentOptions): Result;
+
+    /** Shallow patch merge into a document (arrays concatenated, other keys overwritten). */
+    patchDocumentContent(opts: PatchDocumentOptions): Result;
+
+    /** Update the document title associated with a doc pane. */
+    setDocumentTitle(opts: SetDocumentTitleOptions): Result;
+
+    /** Retrieve metadata + optional cloned content for the active pane. */
+    getActivePaneData(): Result<ActivePaneInfo>;
+
+    /** List all panes (lightweight descriptors) and the current active index. */
+    getPanes(): Result<{ panes: PaneDescriptor[]; activeIndex: number }>;
+}
+const err = <C extends PaneApiErrorCode>(code: C, message: string): Err<C> => ({
+    ok: false,
+    code,
+    message,
 });
-
-function log(...args) {
-    try {
-        if (import.meta.dev) {
-            // eslint-disable-next-line no-console
-            console.debug('[openrouter-callback]', ...args);
-        }
-    } catch {}
+const mp = (): MultiPaneApi | undefined =>
+    (globalThis as any).__or3MultiPaneApi;
+function getPaneEntry(
+    id: string
+): { pane: PaneState; index: number; mp: MultiPaneApi } | null {
+    const m = mp();
+    const ps = m?.panes?.value;
+    if (!ps) return null;
+    const index = ps.findIndex((p) => p.id === id);
+    if (index < 0) return null;
+    const pane = ps[index];
+    if (!pane) return null;
+    return { pane, index, mp: m! };
 }
-
-async function setKVNonBlocking(key, value, timeoutMs = 300) {
-    try {
-        if (!kv?.set) return;
-        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
-        const result = await Promise.race([
-            kv.set(key, value),
-            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
-        ]);
-        if (result === 'timeout') log('setKV timed out; continuing');
-        else log('setKV resolved');
-    } catch (e) {
-        log('setKV failed', e?.message || e);
-    }
-}
-
-async function goHome() {
-    redirecting.value = true;
-    log("goHome() invoked. Trying router.replace('/').");
-    try {
-        await router.replace('/');
-        log("router.replace('/') resolved");
-    } catch (e) {
-        log("router.replace('/') failed:", e?.message || e);
-    }
-    try {
-        // Fallback to full document navigation
-        log("Attempting window.location.replace('/')");
-        window.location.replace('/');
-    } catch (e) {
-        log("window.location.replace('/') failed:", e?.message || e);
-    }
-    // Last-chance fallback on browsers that ignore replace
-    setTimeout(() => {
-        try {
-            log("Attempting final window.location.assign('/')");
-            window.location.assign('/');
-        } catch (e) {
-            log("window.location.assign('/') failed:", e?.message || e);
-        }
-    }, 150);
-}
-
-onMounted(async () => {
-    log('mounted at', window.location.href, 'referrer:', document.referrer);
-    const code = route.query.code;
-    const state = route.query.state;
-    // Primary in sessionStorage (original), fallback to localStorage if a reload or restore lost it.
-    const verifier =
-        sessionStorage.getItem('openrouter_code_verifier') ||
-        localStorage.getItem('openrouter_code_verifier') ||
-        '';
-    const savedState =
-        sessionStorage.getItem('openrouter_state') ||
-        localStorage.getItem('openrouter_state') ||
-        '';
-    const codeMethod =
-        sessionStorage.getItem('openrouter_code_method') ||
-        localStorage.getItem('openrouter_code_method') ||
-        'S256';
-    log('query params present:', {
-        code: Boolean(code),
-        state: Boolean(state),
+async function ensureThread(
+    p: PaneState,
+    i: number,
+    h: HookBus,
+    title: string
+): Promise<string | Err> {
+    if (p.threadId) return p.threadId;
+    const m = mp();
+    if (!m?.setPaneThread) return err('no_thread_bind', 'Cannot bind thread');
+    const t: { id: string } = await create.thread({
+        title: title.split(/\s+/).slice(0, 6).join(' ') || 'New Thread',
+        last_message_at: nowSec(),
+        parent_thread_id: null,
+        system_prompt_id: null,
     });
-    log('session present:', {
-        verifier: Boolean(verifier),
-        savedState: Boolean(savedState),
-        codeMethod,
-    });
-
-    if (!code || !verifier) {
-        console.error('[openrouter-callback] Missing code or verifier');
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Missing code or verifier. Tap Continue to return.';
-        return;
-    }
-    if (savedState && state !== savedState) {
-        console.error('[openrouter-callback] State mismatch, potential CSRF', {
-            incoming: state,
-            savedState,
-        });
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value = 'State mismatch. Tap Continue to return.';
-        return;
-    }
-
+    await m.setPaneThread(i, t.id);
     try {
-        // Call OpenRouter directly per docs: https://openrouter.ai/api/v1/auth/keys
-        log('exchanging code with OpenRouter', {
-            endpoint: 'https://openrouter.ai/api/v1/auth/keys',
-            codeLength: String(code).length,
-            method: codeMethod,
-            usingHTTPS: true,
+        h.doAction?.('ui.pane.thread:action:changed', p, '', t.id, 0);
+    } catch (e) {
+        // Hook errors should not abort thread creation
+        reportError(coreErr('ERR_INTERNAL', 'pane thread hook failed'), {
+            silent: true,
+            tags: { domain: 'pane', stage: 'thread_hook' },
         });
-        const directResp = await fetch(
-            'https://openrouter.ai/api/v1/auth/keys',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: String(code),
-                    code_verifier: verifier,
-                    code_challenge_method: codeMethod,
-                }),
-            }
-        );
-        const directJson = await directResp.json().catch(async () => {
-            const text = await directResp.text().catch(() => '<no-body>');
-            log('non-JSON response body snippet:', text?.slice(0, 300));
-            return null;
-        });
-        if (!directResp.ok || !directJson) {
-            console.error(
-                '[openrouter-callback] Direct exchange failed',
-                directResp.status,
-                directJson
-            );
-            return;
-        }
-        const userKey = directJson.key || directJson.access_token;
-        if (!userKey) {
-            console.error(
-                '[openrouter-callback] Direct exchange returned no key',
-                {
-                    keys: Object.keys(directJson || {}),
-                }
-            );
-            return;
-        }
-        // store in localStorage for use by front-end
-        log('storing key in localStorage (length)', String(userKey).length);
-        // Save a human-readable name and the value; id/clock are handled
-        // inside the helper to match your schema
+    }
+    return t.id;
+}
+type DocJson = { type: string; content?: unknown[]; [k: string]: unknown };
+function patchDoc(base: unknown, patch: unknown): DocJson {
+    let b: DocJson =
+        base && typeof base === 'object'
+            ? (base as DocJson)
+            : { type: 'doc', content: [] };
+    if (patch && typeof patch === 'object') {
+        const p = patch as DocJson;
+        if (Array.isArray(b.content) && Array.isArray(p.content))
+            b.content = [...b.content, ...p.content];
+        else if (Array.isArray(p.content)) b.content = p.content;
+        for (const k of Object.keys(p))
+            if (k !== 'content') (b as any)[k] = (p as any)[k];
+    }
+    return b;
+}
+const log = (tag: string, meta: unknown) => {
+    if (import.meta.dev)
         try {
-            await kv.set('openrouter_api_key', userKey);
-            // Update global state immediately so UI reacts even before listeners.
-            try {
-                state.value.openrouterKey = userKey;
-            } catch {}
-        } catch (e) {
-            log('kvByName.set failed', e?.message || e);
-        }
-        try {
-            log('dispatching openrouter:connected event');
-            window.dispatchEvent(new CustomEvent('openrouter:connected'));
-            // Best-effort: also persist to synced KV
-            try {
-                await setKVNonBlocking('openrouter_api_key', userKey, 300);
-            } catch {}
+            console.debug('[pane-plugin-api] ' + tag, meta);
         } catch {}
-        log('clearing session markers (verifier/state/method)');
-        const keys = [
-            'openrouter_code_verifier',
-            'openrouter_state',
-            'openrouter_code_method',
-        ];
-        keys.forEach((k) => {
-            sessionStorage.removeItem(k);
-            localStorage.removeItem(k);
-        });
-        // Allow event loop to process storage events in other tabs/components
-        await new Promise((r) => setTimeout(r, 10));
-        loading.value = false;
-        ready.value = true;
-        log('ready to redirect');
-        // Attempt auto-redirect but keep the Continue button visible
-        setTimeout(() => {
-            // first SPA attempt
-            log("auto: router.replace('/')");
-            router.replace('/').catch((e) => {
-                log('auto: router.replace failed', e?.message || e);
-            });
-
-            setTimeout(() => {
+};
+async function makeApi(): Promise<PanePluginApi> {
+    const hooks: HookBus = (useNuxtApp() as any).$hooks;
+    return {
+        async sendMessage({
+            paneId,
+            text,
+            role = 'user',
+            createIfMissing,
+            source,
+            stream = true,
+        }: SendMessageOptions) {
+            if (!source) return err('missing_source', 'source required');
+            if (!paneId) return err('missing_pane', 'paneId required');
+            if (typeof text !== 'string' || !text.trim())
+                return err('invalid_text', 'text required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const { pane: p, index } = entry;
+            if (p.mode !== 'chat') return err('pane_not_chat', 'pane not chat');
+            let threadId = p.threadId;
+            if (!threadId) {
+                if (!createIfMissing) return err('no_thread', 'no thread');
+                const t = await ensureThread(p, index, hooks, text);
+                if (typeof t !== 'string') return t;
+                threadId = t;
+            }
+            try {
+                // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
+                if (role === 'user' && stream) {
+                    const { programmaticSend, hasPane } = await import(
+                        '~/composables/useChatInputBridge'
+                    );
+                    if (hasPane(p.id)) {
+                        const okBridge = programmaticSend(p.id, text);
+                        if (okBridge) {
+                            log('sendMessage-bridge', {
+                                source,
+                                paneId,
+                                threadId,
+                            });
+                            return {
+                                ok: true,
+                                messageId: 'bridge',
+                                threadId,
+                            } as any;
+                        }
+                    }
+                }
+                // Fallback: direct append (no streaming)
+                const dbMsg = await tx.appendMessage({
+                    thread_id: threadId,
+                    role: role === 'assistant' ? 'assistant' : 'user',
+                    data: { content: text, attachments: [] },
+                });
                 try {
-                    log("auto: window.location.replace('/')");
-                    window.location.replace('/');
+                    hooks.doAction?.('ui.pane.msg:action:sent', p, {
+                        id: dbMsg.id,
+                        threadId,
+                        length: text.length,
+                        fileHashes: null,
+                        paneIndex: -1,
+                        source,
+                    });
                 } catch (e) {
-                    log(
-                        'auto: window.location.replace failed',
-                        e?.message || e
+                    reportError(
+                        coreErr('ERR_INTERNAL', 'pane msg hook failed'),
+                        {
+                            silent: true,
+                            tags: { domain: 'pane', stage: 'msg_hook' },
+                        }
                     );
                 }
-            }, 250);
-        }, 50);
-    } catch (err) {
-        console.error('[openrouter-callback] Exchange failed', err);
-        loading.value = false;
-        ready.value = true;
-        errorMessage.value =
-            'Authentication finished, but we couldn’t auto-redirect.';
-    }
-    // Safety: if nothing happened within 4s (no ready), force a hard reload to bust SW fallback
-    setTimeout(() => {
-        if (!ready.value && !errorMessage.value) {
-            try {
-                log('safety reload firing');
-                window.location.reload();
-            } catch {}
-        }
-    }, 4000);
-});
-</script>
-```
-
-## File: app/app.config.ts
-```typescript
-export default defineAppConfig({
-    ui: {
-        tree: {
-            slots: {
-                root: '',
-                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
-                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
-            },
-        },
-        modal: {
-            slots: {
-                content:
-                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
-                header: 'border-b-2 border-black bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
-                title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
-                description: 'hidden',
-                close: 'top-0 end-0 flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white dark:text-black  dark:hover:bg-white/80',
-            },
-        },
-        button: {
-            slots: {
-                // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
-                ],
-                // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
-                leadingIcon: 'shrink-0',
-                leadingAvatar: 'shrink-0',
-                leadingAvatarSize: '',
-                trailingIcon: 'shrink-0',
-            },
-            variants: {
-                variant: {
-                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                },
-                color: {
-                    'inverse-primary':
-                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
-                },
-                // Override size variant so padding wins over defaults
-                size: {
-                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-                square: {
-                    true: 'px-0! aspect-square!',
-                },
-                buttonGroup: {
-                    horizontal:
-                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
-                    vertical:
-                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
-                },
-            },
-        },
-        input: {
-            slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
-            },
-            variants: {
-                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
-                leading: { true: 'ps-10!' },
-                trailing: { true: 'pe-10!' },
-                size: {
-                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
-                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
-                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
-            },
-        },
-        formField: {
-            slots: {
-                base: 'flex flex-col ',
-                label: 'text-sm font-medium -mb-1 px-1',
-                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
-            },
-        },
-        buttonGroup: {
-            base: 'relative',
-            variants: {
-                orientation: {
-                    horizontal: 'inline-flex -space-x-px',
-                    vertical: 'flex flex-col -space-y-px',
-                },
-            },
-        },
-        // Make the toast close button md-sized by default
-        toast: {
-            slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
-                // Match our md button height (40px) and enforce perfect centering
-                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
-            },
-        },
-        popover: {
-            slots: {
-                content:
-                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
-            },
-        },
-        tooltip: {
-            slots: {
-                content: 'border-2 text-[18px]!',
-            },
-        },
-        switch: {
-            // Retro styled switch theme (square, hard borders, pixel shadow)
-            slots: {
-                root: 'relative inline-flex items-center select-none ',
-                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
-                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
-                label: 'block font-medium text-default cursor-pointer',
-            },
-        },
-    },
-});
-```
-
-## File: app/app.vue
-```vue
-<template>
-    <UApp>
-        <!-- Register the PWA web manifest on all pages -->
-        <VitePwaManifest />
-        <NuxtPage />
-    </UApp>
-</template>
-<script setup lang="ts">
-// Apply initial theme class to <html> so CSS variables cascade app-wide
-const nuxtApp = useNuxtApp();
-const isDark = computed(() =>
-    (
-        (nuxtApp as any).$theme?.current?.value ||
-        (nuxtApp as any).$theme?.get?.() ||
-        'light'
-    ).startsWith('dark')
-);
-const themeColor = computed(() => (isDark.value ? '#1A1F24' : '#F1F4FB'));
-const statusBarStyle = computed(() =>
-    isDark.value ? 'black-translucent' : 'default'
-);
-
-useHead({
-    htmlAttrs: {
-        class: 'light',
-    },
-    title: 'or3 chat',
-    link: [
-        { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
-        // Provide an Apple touch icon to avoid 404s in Safari/iOS
-        { rel: 'apple-touch-icon', href: '/logos/logo-192.png' },
-    ],
-    meta: [
-        // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
-        { name: 'theme-color', content: themeColor },
-        // Enable iOS PWA full-screen and control status bar style
-        { name: 'mobile-web-app-capable', content: 'yes' },
-        {
-            name: 'apple-mobile-web-app-status-bar-style',
-            content: statusBarStyle,
-        },
-        // Ensure content can extend under the notch when using black-translucent
-        {
-            name: 'viewport',
-            content: 'width=device-width, initial-scale=1, viewport-fit=cover',
-        },
-    ],
-});
-
-// Fire app.init:action:after once after the root app mounts (client-only)
-onMounted(() => {
-    const g: any = globalThis as any;
-    if (g.__OR3_APP_INIT_FIRED__) return;
-    g.__OR3_APP_INIT_FIRED__ = true;
-    const hooks: any = nuxtApp.$hooks;
-    if (hooks && typeof hooks.doAction === 'function') {
-        hooks.doAction('app.init:action:after', nuxtApp);
-    }
-});
-</script>
-```
-
-## File: app/components/chat/SystemPromptsModal.vue
-```vue
-<template>
-    <UModal
-        v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-none',
-            body: 'p-0! border-b-0! overflow-hidden',
-        }"
-        title="System Prompts"
-        description="Manage and select system prompts to customize AI behavior."
-        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
-    >
-        <template #body>
-            <div class="flex flex-col h-full" @keydown="handleKeydown">
-                <div
-                    v-show="!editingPrompt"
-                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
-                >
-                    <div
-                        class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
-                    >
-                        <UButton
-                            @click="createNewPrompt"
-                            size="sm"
-                            color="primary"
-                            class="retro-btn"
-                        >
-                            New Prompt
-                        </UButton>
-                        <UButton
-                            v-if="currentActivePromptId"
-                            @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
-                        >
-                            Clear Active
-                        </UButton>
-                    </div>
-                    <UInput
-                        v-model="searchQuery"
-                        placeholder="Search prompts..."
-                        :size="isMobile ? 'md' : 'sm'"
-                        class="w-full my-2 sm:my-0 sm:max-w-xs"
-                        icon="i-heroicons-magnifying-glass"
-                    />
-                </div>
-                <div class="flex-1 overflow-hidden">
-                    <!-- List View -->
-                    <div
-                        v-if="!editingPrompt"
-                        class="max-h-full overflow-y-auto"
-                    >
-                        <div
-                            v-if="filteredPrompts.length === 0"
-                            class="flex flex-col items-center justify-center h-full text-center p-8"
-                        >
-                            <UIcon
-                                name="pixelarticons:script-text"
-                                class="w-16 h-16 text-gray-400 mb-4"
-                            />
-                            <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
-                            >
-                                No system prompts yet
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
-                                Create your first system prompt to customize AI
-                                behavior.
-                            </p>
-                            <UButton @click="createNewPrompt" color="primary">
-                                Create Your First Prompt
-                            </UButton>
-                        </div>
-
-                        <div v-else class="p-4 space-y-3">
-                            <div
-                                v-for="prompt in filteredPrompts"
-                                :key="prompt.id"
-                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
-                                :data-active="
-                                    prompt.id === currentActivePromptId
-                                        ? 'true'
-                                        : 'false'
-                                "
-                            >
-                                <!-- Left / Main meta -->
-                                <div class="flex-1 min-w-0">
-                                    <div
-                                        class="flex flex-wrap items-center gap-2 mb-1"
-                                    >
-                                        <h4
-                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
-                                            :class="{
-                                                'italic opacity-60':
-                                                    !prompt.title,
-                                            }"
-                                        >
-                                            {{
-                                                prompt.title ||
-                                                'Untitled Prompt'
-                                            }}
-                                        </h4>
-                                        <span
-                                            v-if="prompt.id === defaultPromptId"
-                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
-                                            >Default</span
-                                        >
-                                        <span
-                                            v-if="
-                                                prompt.id ===
-                                                    currentActivePromptId &&
-                                                prompt.id !== defaultPromptId
-                                            "
-                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
-                                            >Active</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
-                                    >
-                                        <span class="flex items-center gap-1">
-                                            <UIcon
-                                                name="pixelarticons:clock"
-                                                class="w-3.5 h-3.5 opacity-70"
-                                            />
-                                            Updated
-                                            {{ formatDate(prompt.updated_at) }}
-                                        </span>
-                                        <span
-                                            class="hidden sm:inline opacity-40"
-                                            >|</span
-                                        >
-                                        <span class="flex items-center gap-1">
-                                            <UIcon
-                                                name="pixelarticons:chart-bar"
-                                                class="w-3.5 h-3.5 opacity-70"
-                                            />
-                                            {{ tokenCounts[prompt.id] || 0 }}
-                                            tokens
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <!-- Actions -->
-                                <div
-                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
-                                >
-                                    <UTooltip
-                                        :delay-duration="0"
-                                        :text="
-                                            prompt.id === defaultPromptId
-                                                ? 'Remove default prompt'
-                                                : 'Set as default prompt'
-                                        "
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            :variant="
-                                                prompt.id === defaultPromptId
-                                                    ? 'solid'
-                                                    : 'outline'
-                                            "
-                                            :color="
-                                                prompt.id === defaultPromptId
-                                                    ? 'primary'
-                                                    : 'neutral'
-                                            "
-                                            :square="true"
-                                            :ui="{
-                                                base: 'retro-btn px-1! text-nowrap',
-                                            }"
-                                            class="retro-btn"
-                                            aria-label="Toggle default prompt"
-                                            @click.stop="
-                                                toggleDefault(prompt.id)
-                                            "
-                                            >{{
-                                                prompt.id === defaultPromptId
-                                                    ? 'default'
-                                                    : 'set default'
-                                            }}</UButton
-                                        >
-                                    </UTooltip>
-                                    <UButton
-                                        @click="selectPrompt(prompt.id)"
-                                        size="sm"
-                                        :color="
-                                            prompt.id === currentActivePromptId
-                                                ? 'primary'
-                                                : 'neutral'
-                                        "
-                                        :variant="
-                                            prompt.id === currentActivePromptId
-                                                ? 'solid'
-                                                : 'outline'
-                                        "
-                                        :aria-pressed="
-                                            prompt.id === currentActivePromptId
-                                        "
-                                    >
-                                        {{
-                                            prompt.id === currentActivePromptId
-                                                ? 'Selected'
-                                                : 'Select'
-                                        }}
-                                    </UButton>
-                                    <UPopover
-                                        :popper="{ placement: 'bottom-end' }"
-                                    >
-                                        <UButton
-                                            size="sm"
-                                            variant="outline"
-                                            color="neutral"
-                                            class="flex items-center justify-center"
-                                            :square="true"
-                                            icon="pixelarticons:more-vertical"
-                                            aria-label="More actions"
-                                        />
-                                        <template #content>
-                                            <div
-                                                class="flex flex-col py-1 w-36 text-sm"
-                                            >
-                                                <button
-                                                    @click="
-                                                        startEditing(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-primary/10 flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:edit"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Edit</span>
-                                                </button>
-                                                <button
-                                                    @click="
-                                                        deletePrompt(prompt.id)
-                                                    "
-                                                    class="text-left px-3 py-1.5 hover:bg-error/10 text-error flex items-center gap-2 cursor-pointer"
-                                                >
-                                                    <UIcon
-                                                        name="pixelarticons:trash"
-                                                        class="w-4 h-4"
-                                                    />
-                                                    <span>Delete</span>
-                                                </button>
-                                            </div>
-                                        </template>
-                                    </UPopover>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Editor View -->
-                    <div v-else class="h-full overflow-hidden flex flex-col">
-                        <div class="flex-1 p-4 overflow-hidden">
-                            <LazyPromptsPromptEditor
-                                :prompt-id="editingPrompt.id"
-                                @back="stopEditing"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
-    </UModal>
-</template>
-
-<script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import {
-    listPrompts,
-    createPrompt,
-    softDeletePrompt,
-    type PromptRecord,
-} from '~/db/prompts';
-import { useActivePrompt } from '~/composables/useActivePrompt';
-import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-import { encode } from 'gpt-tokenizer';
-import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
-import { isMobile } from '~/state/global';
-
-// Props & modal open bridging (like SettingsModal pattern)
-const props = defineProps<{
-    showModal: boolean;
-    threadId?: string;
-    paneId?: string; // isolate pending selection per pane (before thread exists)
-}>();
-const emit = defineEmits({
-    'update:showModal': (value: boolean) => typeof value === 'boolean',
-    selected: (id: string) => typeof id === 'string',
-    closed: () => true,
-    threadCreated: (threadId: string, promptId: string | null) => true,
-});
-
-const open = computed({
-    get: () => props.showModal,
-    set: (value: boolean) => emit('update:showModal', value),
-});
-
-watch(
-    () => props.showModal,
-    (v, ov) => {
-        if (!v && ov) emit('closed');
-    }
-);
-
-const {
-    activePromptId,
-    setActivePrompt,
-    clearActivePrompt: clearGlobalActivePrompt,
-} = useActivePrompt();
-
-const prompts = ref<PromptRecord[]>([]);
-const { defaultPromptId, setDefaultPrompt, clearDefaultPrompt } =
-    useDefaultPrompt();
-const editingPrompt = ref<PromptRecord | null>(null);
-const showDeleteConfirm = ref<string | null>(null);
-
-const searchQuery = ref('');
-const filteredPrompts = computed(() => {
-    if (!searchQuery.value) return prompts.value;
-    return prompts.value.filter((p) =>
-        (p.title || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    );
-});
-
-// Thread-specific system prompt handling
-const threadSystemPromptId = ref<string | null>(null);
-const pendingPromptId = ref<string | null>(null); // For when thread doesn't exist yet (pane scoped)
-
-// Computed for current active prompt (thread-specific or global)
-const currentActivePromptId = computed(() => {
-    if (props.threadId) return threadSystemPromptId.value;
-    // If no thread yet use pane-scoped pending first, else fall back to global active
-    return pendingPromptId.value || activePromptId.value;
-});
-
-// Extract plain text from TipTap JSON recursively
-function extractText(node: any): string {
-    if (!node) return '';
-    if (typeof node === 'string') return node;
-    if (Array.isArray(node)) return node.map(extractText).join('');
-    const type = node.type;
-    let acc = '';
-    if (type === 'text') {
-        acc += node.text || '';
-    }
-    if (node.content && Array.isArray(node.content)) {
-        const inner = node.content.map(extractText).join('');
-        acc += inner;
-    }
-    // Block separators to avoid word merging
-    if (
-        [
-            'paragraph',
-            'heading',
-            'bulletList',
-            'orderedList',
-            'listItem',
-        ].includes(type)
-    ) {
-        acc += '\n';
-    }
-    return acc;
-}
-
-function contentToText(content: any): string {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    // TipTap root usually { type: 'doc', content: [...] }
-    if (content.type === 'doc' && Array.isArray(content.content)) {
-        return extractText(content)
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-    }
-    if (Array.isArray(content.content)) return extractText(content).trim();
-    return '';
-}
-
-// Cached token counts per prompt id (recomputed when prompts list changes)
-const tokenCounts = computed<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const p of prompts.value) {
-        try {
-            const text = contentToText(p.content);
-            map[p.id] = text ? encode(text).length : 0;
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token encode failed', e);
-            map[p.id] = 0;
-        }
-    }
-    return map;
-});
-
-// Totals derived from cached counts
-const totalTokens = computed(() =>
-    Object.values(tokenCounts.value).reduce((a, b) => a + b, 0)
-);
-const filteredTokens = computed(() =>
-    filteredPrompts.value.reduce(
-        (sum, p) => sum + (tokenCounts.value[p.id] || 0),
-        0
-    )
-);
-
-// (Events moved above with prop bridging)
-
-const loadPrompts = async () => {
-    try {
-        prompts.value = await listPrompts();
-        if (
-            defaultPromptId.value &&
-            !prompts.value.find((p) => p.id === defaultPromptId.value)
-        ) {
-            await clearDefaultPrompt();
-        }
-    } catch (error) {
-        console.error('Failed to load prompts:', error);
-    }
-};
-
-const loadThreadSystemPrompt = async () => {
-    if (props.threadId) {
-        try {
-            threadSystemPromptId.value = await getThreadSystemPrompt(
-                props.threadId
-            );
-        } catch (error) {
-            console.error('Failed to load thread system prompt:', error);
-            threadSystemPromptId.value = null;
-        }
-    } else {
-        threadSystemPromptId.value = null;
-    }
-};
-
-const createNewPrompt = async () => {
-    try {
-        const newPrompt = await createPrompt();
-        prompts.value.unshift(newPrompt);
-        startEditing(newPrompt.id);
-    } catch (error) {
-        console.error('Failed to create prompt:', error);
-    }
-};
-
-const selectPrompt = async (id: string) => {
-    try {
-        if (props.threadId) {
-            // Update thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, id);
-            threadSystemPromptId.value = id;
-        } else {
-            // Store as pending for when thread is created
-            pendingPromptId.value = id;
-            // Also update global for immediate feedback
-            // Do NOT override global active prompt; keep pane scoped selection only
-        }
-        emit('selected', id);
-    } catch (error) {
-        console.error('Failed to select prompt:', error);
-    }
-};
-
-const clearActivePrompt = async () => {
-    try {
-        if (props.threadId) {
-            // Clear thread-specific system prompt
-            await updateThreadSystemPrompt(props.threadId, null);
-            threadSystemPromptId.value = null;
-        } else {
-            // Clear pending and global active prompt
-            pendingPromptId.value = null;
-            // Don't clear global active prompt automatically (leave global state untouched)
-        }
-    } catch (error) {
-        console.error('Failed to clear active prompt:', error);
-    }
-};
-
-const startEditing = (id: string) => {
-    const prompt = prompts.value.find((p) => p.id === id);
-    if (prompt) {
-        editingPrompt.value = prompt;
-    }
-};
-
-const stopEditing = () => {
-    editingPrompt.value = null;
-    loadPrompts(); // Refresh list in case of changes
-};
-
-const applyPendingPromptToThread = async (threadId: string) => {
-    if (pendingPromptId.value) {
-        try {
-            await updateThreadSystemPrompt(threadId, pendingPromptId.value);
-            emit('threadCreated', threadId, pendingPromptId.value);
-            pendingPromptId.value = null;
-        } catch (error) {
-            console.error('Failed to apply pending prompt to thread:', error);
-        }
-    }
-};
-
-const deletePrompt = async (id: string) => {
-    if (confirm('Are you sure you want to delete this prompt?')) {
-        try {
-            await softDeletePrompt(id);
-            if (activePromptId.value === id) {
-                clearActivePrompt();
+                log('sendMessage-fallback', {
+                    source,
+                    paneId,
+                    threadId,
+                    id: dbMsg.id,
+                });
+                return { ok: true, messageId: dbMsg.id, threadId };
+            } catch (e: unknown) {
+                return err(
+                    'append_failed',
+                    e instanceof Error ? e.message : 'append failed'
+                );
             }
-            if (defaultPromptId.value === id) {
-                await clearDefaultPrompt();
+        },
+        updateDocumentContent({
+            paneId,
+            content,
+            source,
+        }: UpdateDocumentOptions) {
+            if (!source) return err('missing_source', 'source required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const p = entry.pane;
+            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
+            if (!p.documentId) return err('no_document', 'no document');
+            setDocumentContent(p.documentId, content);
+            log('updateDocumentContent', { source, paneId });
+            return { ok: true };
+        },
+        patchDocumentContent({ paneId, patch, source }: PatchDocumentOptions) {
+            if (!source) return err('missing_source', 'source required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const p = entry.pane;
+            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
+            if (!p.documentId) return err('no_document', 'no document');
+            const st = useDocumentState(p.documentId) as {
+                record?: { content?: unknown };
+            };
+            const merged = patchDoc(st?.record?.content, patch);
+            setDocumentContent(p.documentId, merged);
+            log('patchDocumentContent', { source, paneId });
+            return { ok: true };
+        },
+        setDocumentTitle({ paneId, title, source }: SetDocumentTitleOptions) {
+            if (!source) return err('missing_source', 'source required');
+            const entry = getPaneEntry(paneId);
+            if (!entry) return err('not_found', 'pane not found');
+            const p = entry.pane;
+            if (p.mode !== 'doc') return err('pane_not_doc', 'pane not doc');
+            if (!p.documentId) return err('no_document', 'no document');
+            setDocumentTitle(p.documentId, title);
+            log('setDocumentTitle', { source, paneId });
+            return { ok: true };
+        },
+        getActivePaneData() {
+            const m = mp();
+            const panes = m?.panes?.value;
+            const idx = m?.activePaneIndex?.value ?? -1;
+            if (!panes || idx < 0 || idx >= panes.length)
+                return err('no_active_pane', 'no active pane');
+            const p = panes[idx];
+            if (!p) return err('no_active_pane', 'no active pane');
+            const base: ActivePaneInfo = { paneId: p.id, mode: p.mode };
+            if (p.mode === 'chat' && p.threadId) base.threadId = p.threadId;
+            if (p.mode === 'doc' && p.documentId) {
+                base.documentId = p.documentId;
+                try {
+                    const st = useDocumentState(p.documentId) as {
+                        record?: { content?: unknown };
+                    };
+                    const c = st?.record?.content;
+                    base.contentSnapshot = c
+                        ? JSON.parse(JSON.stringify(c))
+                        : undefined;
+                } catch (e) {
+                    reportError(
+                        coreErr('ERR_INTERNAL', 'pane doc snapshot failed'),
+                        {
+                            silent: true,
+                            tags: { domain: 'pane', stage: 'snapshot' },
+                        }
+                    );
+                }
             }
-            loadPrompts();
-        } catch (error) {
-            console.error('Failed to delete prompt:', error);
-        }
+            return { ok: true, ...base };
+        },
+        getPanes() {
+            const m = mp();
+            const panes = m?.panes?.value;
+            if (!panes) return err('no_panes', 'no panes');
+            const activeIndex = m?.activePaneIndex?.value ?? -1;
+            const mapped: PaneDescriptor[] = panes.map((p) => ({
+                paneId: p.id,
+                mode: p.mode,
+                threadId: p.threadId || undefined,
+                documentId: p.documentId || undefined,
+            }));
+            return { ok: true, panes: mapped, activeIndex };
+        },
+    };
+}
+export default defineNuxtPlugin(async () => {
+    if ((globalThis as any).__or3PanePluginApi) return;
+    try {
+        (globalThis as any).__or3PanePluginApi = await makeApi();
+        if (import.meta.dev) console.log('[pane-plugin-api] ready');
+    } catch (e) {
+        console.error('[pane-plugin-api] failed to init', e);
     }
-};
-
-const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-    if (editingPrompt.value) return;
-    const key = event.key;
-    if (key >= '1' && key <= '9') {
-        const index = parseInt(key) - 1;
-        if (index < filteredPrompts.value.length) {
-            const prompt = filteredPrompts.value[index];
-            if (prompt) {
-                selectPrompt(prompt.id);
-                event.preventDefault();
-            }
-        }
-    }
-};
-
-onMounted(() => {
-    loadPrompts();
-    loadThreadSystemPrompt();
 });
-
-// Watch for threadId changes to reload thread-specific prompt
-watch(
-    () => props.threadId,
-    () => {
-        loadThreadSystemPrompt();
-    }
-);
-
-function toggleDefault(id: string) {
-    if (defaultPromptId.value === id) {
-        clearDefaultPrompt();
-    } else {
-        setDefaultPrompt(id);
-    }
-}
-</script>
-
-<style scoped>
-/* Mobile full-screen adjustments */
-@media (max-width: 640px) {
-    .sp-modal {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh !important;
-        max-height: 100dvh !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border-width: 0 !important;
-    }
-}
-
-/* Smooth scrolling area */
-.sp-modal :deep(.n-modal-body),
-.sp-modal :deep(.n-card__content) {
-    /* ensure body grows */
-    height: 100%;
-}
-</style>
 ```
 
 ## File: app/components/ResizableSidebarLayout.vue
@@ -17586,585 +18329,211 @@ aside > *:not(.resize-handle-layer) {
 </style>
 ```
 
-## File: app/components/chat/VirtualMessageList.vue
-```vue
-<template>
-    <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" class="flex flex-col min-w-0" :class="wrapperClass">
-        <Virtualizer
-            :data="messages"
-            :itemSize="effectiveItemSize || undefined"
-            :overscan="overscan"
-            :scrollRef="scrollParent || undefined"
-            @scroll="onScroll"
-            @scroll-end="onScrollEnd"
-            v-slot="{ item, index }"
-        >
-            <div :key="item.id || index">
-                <slot name="item" :message="item" :index="index" />
-            </div>
-        </Virtualizer>
-        <!-- Tail slot for streaming message appended after virtualized stable messages -->
-        <slot name="tail" />
-    </div>
-</template>
-
-<script setup lang="ts">
-/**
- * VirtualMessageList
- * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
- * Thin abstraction over virtua's <VList>. Purpose:
- *  - Decouple higher-level chat code from 3p library specifics (swap easier).
- *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
- *    auto-scroll + lazy fetch triggers without leaking scroll math.
- *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
- *    don't sprinkle magic numbers.
- *
- * Task 2.3: Centralize scroll state and behavior here using VueUse utilities.
- * - useScroll: passive scroll tracking
- * - useResizeObserver: respond to size/DOM changes (messages/streaming)
- * - useRafFn: batch scroll-to-bottom to next frame to avoid jank
- */
-import {
-    onMounted,
-    ref,
-    watch,
-    computed,
-    nextTick,
-    watchEffect,
-    type PropType,
-} from 'vue';
-// eslint-disable-next-line import/no-unresolved
-import { Virtualizer } from 'virtua/vue';
-import {
-    useScroll,
-    useResizeObserver,
-    useRafFn,
-    useEventListener,
-} from '@vueuse/core';
-
-interface ChatMessage {
-    id: string;
-    role?: string;
-    content?: string;
-    [k: string]: any;
-}
-
-const props = defineProps({
-    messages: { type: Array as PropType<ChatMessage[]>, required: true },
-    itemSizeEstimation: { type: Number, default: 500 }, // baseline heuristic average row height
-    overscan: { type: Number, default: 4 },
-    wrapperClass: { type: String, default: '' },
-    scrollParent: {
-        type: Object as PropType<HTMLElement | null>,
-        default: null,
-    },
-    // Task 3.2: streaming maintenance
-    isStreaming: { type: Boolean, default: false },
-    // Task 3.1: adjustable threshold (design 100px; we default 100 while retaining legacy 64 logic internally)
-    autoScrollThreshold: { type: Number, default: 100 },
-    // Task 3.3: external editing suppression of auto-scroll
-    editingActive: { type: Boolean, default: false },
-    // Task 3.4: enable dynamic estimation of item size from growth deltas
-    dynamicItemSize: { type: Boolean, default: true },
-});
-
-const emit = defineEmits<{
-    (e: 'visible-range-change', range: { start: number; end: number }): void;
-    (e: 'reached-top'): void;
-    (e: 'reached-bottom'): void;
-    (e: 'scroll-state', state: { atBottom: boolean; stick: boolean }): void; // Task 5.1.2
-}>();
-
-const root = ref<HTMLElement | null>(null);
-// Accept both HTMLElement and Ref<HTMLElement|null> for scrollParent prop
-const scrollParentRef = computed<HTMLElement | null>(() => {
-    const sp: any = props.scrollParent as any;
-    const el = sp && typeof sp === 'object' && 'value' in sp ? sp.value : sp;
-    return el || root.value;
-});
-// Tunables (defined BEFORE any immediate watchers that call compute to avoid TDZ during HMR)
-// Use provided threshold for deciding auto-scroll near-bottom detection (Req 1.1/3.1.3)
-const thresholdPx = computed(() => props.autoScrollThreshold);
-const disengageDeltaPx = 12; // small intentional upward scroll disengages
-const USER_SCROLL_INACTIVE_TIMEOUT = 800;
-
-// Scroll / stick state
-let stick = true; // whether we are willing to auto-scroll
-const atBottom = ref(true); // updated by compute(); default true so first append snaps
-let lastScrollTop = 0;
-let lastScrollHeight = 0;
-let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
-
-// Initialize scroll metrics once scroll parent becomes available (after variables above are defined)
-watch(
-    scrollParentRef,
-    (el) => {
-        if (!el) return;
-        try {
-            lastScrollHeight = (el as any).scrollHeight || 0;
-            lastScrollTop = (el as any).scrollTop || 0;
-        } catch {}
-        compute();
-    },
-    { immediate: true }
-);
-
-// Scroll state emission tracking (Task 5.1.2)
-let lastEmittedStick: boolean | null = null;
-let lastEmittedAtBottom: boolean | null = null;
-function maybeEmitScrollState() {
-    const a = atBottom.value;
-    if (a !== lastEmittedAtBottom || stick !== lastEmittedStick) {
-        try {
-            emit('scroll-state', { atBottom: a, stick });
-        } catch {}
-        lastEmittedAtBottom = a;
-        lastEmittedStick = stick;
-    }
-}
-
-// Passive scroll monitoring
-useScroll(scrollParentRef, {
-    eventListenerOptions: { passive: true },
-});
-
-function compute() {
-    const el =
-        (props.scrollParent as any) || scrollParentRef.value || root.value;
-    if (!el) return;
-    const currentTop = el.scrollTop;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const atBottomNow = dist <= thresholdPx.value;
-    // Disengage if user scrolled upward a meaningful amount.
-    const upward = currentTop < lastScrollTop - disengageDeltaPx;
-    if (upward) {
-        stick = false; // user explicitly left bottom intent
-    } else if (atBottomNow && currentTop > lastScrollTop) {
-        // Only (re)enable stick when user actively scrolled downward into bottom zone.
-        stick = true;
-    }
-    atBottom.value = atBottomNow;
-    lastScrollTop = currentTop;
-    lastScrollHeight = el.scrollHeight;
-    maybeEmitScrollState();
-}
-
-function markUserScroll() {
-    if (userScrollTimer) clearTimeout(userScrollTimer);
-    userScrollTimer = setTimeout(() => {}, USER_SCROLL_INACTIVE_TIMEOUT);
-}
-
-useEventListener(scrollParentRef, 'scroll', compute, {
-    passive: true,
-});
-useEventListener(scrollParentRef, 'wheel', markUserScroll, { passive: true });
-useEventListener(scrollParentRef, 'touchstart', markUserScroll, {
-    passive: true,
-});
-useEventListener(scrollParentRef, 'touchmove', markUserScroll, {
-    passive: true,
-});
-
-// Minimal: auto-scroll only if user is at bottom and not editing.
-const shouldAutoScroll = computed(
-    () => stick && atBottom.value && !props.editingActive
-);
-
-// (Restick delay removed for simplicity.)
-
-function scrollToBottom(opts: { smooth?: boolean } = {}) {
-    if (!stick) return; // respect disengaged reading state
-    const baseEl = scrollParentRef.value || root.value;
-    if (!baseEl) return;
-    const smooth = opts.smooth === true;
-    const targets: any[] = [];
-    if (baseEl) targets.push(baseEl);
-    if (root.value && root.value !== baseEl) targets.push(root.value);
-    for (const t of targets) {
-        try {
-            const bottomPos = t.scrollHeight - t.clientHeight;
-            if (typeof t.scrollTo === 'function') {
-                t.scrollTo({
-                    top: bottomPos,
-                    behavior: (smooth ? 'smooth' : 'auto') as ScrollBehavior,
-                });
-            } else {
-                t.scrollTop = bottomPos;
-            }
-        } catch {}
-    }
-    stick = true;
-    (scrollToBottom as any)._count = ((scrollToBottom as any)._count || 0) + 1;
-    try {
-        lastScrollTop = baseEl.scrollTop ?? lastScrollTop;
-        lastScrollHeight = baseEl.scrollHeight ?? lastScrollHeight;
-    } catch {}
-}
-
-let pendingSmooth = false;
-const raf = useRafFn(
-    () => {
-        raf.pause();
-        scrollToBottom({ smooth: pendingSmooth });
-        pendingSmooth = false;
-    },
-    { immediate: false }
-);
-function scrollToBottomRaf(smooth = false) {
-    pendingSmooth = smooth;
-    if (!raf.isActive.value) raf.resume();
-}
-
-function onContentIncrease() {
-    const el =
-        (props.scrollParent as any) || scrollParentRef.value || root.value;
-    if (!el) return;
-    if (shouldAutoScroll.value) {
-        scrollToBottom({ smooth: false });
-    } else {
-        // Just refresh metrics, do not adjust position.
-        lastScrollHeight = el.scrollHeight;
-    }
-}
-
-useResizeObserver(root, () => {
-    nextTick(onContentIncrease);
-});
-watch(
-    () => props.scrollParent,
-    (el) => {
-        if (!el) return;
-        useResizeObserver(el, () => {
-            nextTick(onContentIncrease);
-        });
-    },
-    { immediate: true }
-);
-
-function computeRange(): { start: number; end: number } {
-    const total = props.messages.length;
-    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
-    return { start: 0, end: total - 1 };
-}
-
-function onInternalUpdate() {
-    const range = computeRange();
-    emit('visible-range-change', range);
-    if (range.start === 0) emit('reached-top');
-    if (range.end >= props.messages.length - 1) emit('reached-bottom');
-}
-
-function onScroll() {
-    onInternalUpdate();
-}
-function onScrollEnd() {
-    onInternalUpdate();
-}
-
-const averageItemSize = ref<number>(props.itemSizeEstimation);
-let prevLength = props.messages.length;
-let prevScrollHeight = 0;
-
-watch(
-    () => props.messages.length,
-    () => {
-        const el = scrollParentRef.value || root.value;
-        const beforeAtBottom = atBottom.value;
-        const added = props.messages.length - prevLength;
-        if (el && added > 0) {
-            prevScrollHeight = el.scrollHeight;
-        }
-        onInternalUpdate();
-        nextTick(() => {
-            const el2 = scrollParentRef.value || root.value;
-            if (props.dynamicItemSize && el2 && added > 0) {
-                const deltaH = el2.scrollHeight - prevScrollHeight;
-                if (deltaH > 0) {
-                    const per = deltaH / added;
-                    averageItemSize.value = Math.max(
-                        32,
-                        Math.min(1200, averageItemSize.value * 0.7 + per * 0.3)
-                    );
-                } else if (
-                    deltaH === 0 &&
-                    averageItemSize.value === props.itemSizeEstimation
-                ) {
-                    averageItemSize.value = props.itemSizeEstimation;
-                }
-            }
-            if (added > 0) {
-                if (shouldAutoScroll.value && beforeAtBottom) {
-                    scrollToBottomRaf(true);
-                } else {
-                    onContentIncrease();
-                }
-            }
-            prevLength = props.messages.length;
-        });
-    }
-);
-
-const effectiveItemSize = computed(() => {
-    return props.dynamicItemSize
-        ? Math.round(averageItemSize.value)
-        : props.itemSizeEstimation;
-});
-
-watchEffect(() => {
-    if (!props.isStreaming) return;
-    if (!shouldAutoScroll.value) return; // includes stick check
-    nextTick(() => scrollToBottomRaf(false));
-});
-
-// --- Finalize clamp (retry over a few macrotasks to catch synthetic jump) ---
-// --- Finalize stabilization: simplest form (capture reading position while streaming, restore once) ---
-let readingPos: number | null = null;
-// Capture reading position anytime user is disengaged during streaming
-useEventListener(scrollParentRef, 'scroll', () => {
-    if (!props.isStreaming) return;
-    if (stick || atBottom.value) return; // following bottom; no need
-    const el = scrollParentRef.value || root.value;
-    if (!el) return;
-    readingPos = el.scrollTop;
-});
-
-watch(
-    () => props.isStreaming,
-    (v, prev) => {
-        if (!(prev && !v)) return; // only when streaming just ended
-        if (stick || atBottom.value) {
-            readingPos = null;
-            return;
-        }
-        const target = readingPos;
-        if (target == null) return;
-        const apply = () => {
-            const el = scrollParentRef.value || root.value;
-            if (!el) {
-                readingPos = null;
-                return;
-            }
-            if (stick || atBottom.value) {
-                readingPos = null;
-                return;
-            }
-            // If user scrolled further up after finalize, respect it
-            if (el.scrollTop < target - 4) {
-                readingPos = null;
-                return;
-            }
-            if (Math.abs(el.scrollTop - target) > 4) {
-                try {
-                    if (typeof (el as any).scrollTo === 'function')
-                        (el as any).scrollTo({ top: target });
-                } catch {}
-                try {
-                    (el as any).scrollTop = target;
-                } catch {}
-            }
-            readingPos = null;
-        };
-        // Stage corrections so synthetic test mutation (immediate) is seen:
-        nextTick(() => {
-            apply();
-            queueMicrotask(apply);
-            requestAnimationFrame(apply);
-        });
-    },
-    { flush: 'post' }
-);
-
-onMounted(() => {
-    onInternalUpdate();
-    nextTick(() => {
-        compute();
-        if (atBottom.value) {
-            scrollToBottom({ smooth: false });
-        }
-    });
-    const sp: any = props.scrollParent as any;
-    if (
-        sp &&
-        typeof sp === 'object' &&
-        'value' in sp &&
-        !sp.value &&
-        root.value instanceof HTMLElement
-    ) {
-        try {
-            sp.value = root.value;
-        } catch {}
-    }
-});
-
-defineExpose({
-    atBottom,
-    onContentIncrease,
-    scrollToBottom,
-    stickBottom: () => {
-        stick = true;
-        scrollToBottom({ smooth: true });
-    },
-    release: () => {
-        stick = false;
-        // no-op; stick will restore only when user reaches bottom again
-    },
-    effectiveItemSize,
-    _devMetrics: () => ({ scrollCalls: (scrollToBottom as any)._count || 0 }),
-});
-</script>
-
-<style scoped>
-/* Keep retro feel: no extra styling here; rely on parent theme utilities */
-</style>
+## File: app/composables/index.ts
+```typescript
+/** Barrel export for chat-related composables (Task 1.6) */
+export * from './useStreamAccumulator';
+export * from './useObservedElementSize';
+export * from './ui-extensions/messages/useMessageActions';
+export * from './ui-extensions/documents/useDocumentHistoryActions';
+export * from './ui-extensions/threads/useThreadHistoryActions';
+export * from './ui-extensions/projects/useProjectTreeActions';
+export * from './ui-extensions/dashboard/useDashboardPlugins';
 ```
 
-## File: nuxt.config.ts
+## File: app/app.config.ts
 ```typescript
-// https://nuxt.com/docs/api/configuration/nuxt-config
-
-export default defineNuxtConfig({
-    compatibilityDate: '2025-07-15',
-    devtools: { enabled: true },
-    modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
-    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
-    srcDir: 'app',
-    // Load Tailwind + theme variables globally
-    css: ['~/assets/css/main.css'],
-    fonts: {
-        families: [
-            { name: 'Press Start 2P', provider: 'google' },
-            { name: 'VT323', provider: 'google' },
-        ],
+export default defineAppConfig({
+    errors: {
+        showAbortInfo: false,
+        maxToasts: 5,
     },
-    nitro: { prerender: { routes: ['/openrouter-callback'] } },
-    // PWA configuration
-    pwa: {
-        // Auto update SW when new content is available
-        registerType: 'autoUpdate',
-        // Enable PWA in dev so you can install/test while developing
-        devOptions: {
-            enabled: false,
-            suppressWarnings: true,
+    ui: {
+        tree: {
+            slots: {
+                root: '',
+                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
+            },
         },
-        // Expose $pwa and intercept install prompt
-        client: {
-            installPrompt: true,
-            registerPlugin: true,
-            periodicSyncForUpdates: 12 * 60 * 60, // Check every 12 hours
+        modal: {
+            slots: {
+                content:
+                    'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
+                header: 'border-b-2 border-black bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
+                title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
+                description: 'hidden',
+                close: 'top-0 end-0 flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white dark:text-black  dark:hover:bg-white/80',
+            },
         },
-        // Basic offline support; let Workbox handle common assets
-        workbox: {
-            skipWaiting: true, // activate new SW immediately
-            clientsClaim: true, // control pages right away
-            cleanupOutdatedCaches: true,
-            // Ensure the prerendered callback HTML can be matched regardless of auth params
-            ignoreURLParametersMatching: [/^code$/, /^state$/],
-            // Never serve the generic SPA fallback for the auth callback (with or without params)
-            navigateFallbackDenylist: [
-                /\/openrouter-callback$/,
-                /\/openrouter-callback\?.*$/,
-            ],
-            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
-            runtimeCaching: [
-                // Auth callback: prefer fresh network, but fall back to cached prerender if offline
-                {
-                    urlPattern: /\/openrouter-callback(\?.*)?$/,
-                    handler: 'NetworkOnly',
+        button: {
+            slots: {
+                // Make base styles clearly different so it's obvious when applied
+                base: [
+                    'transition-colors',
+                    'retro-btn dark:retro-btn cursor-pointer',
+                ],
+                // Label tweaks are rarely overridden by variants, good to verify
+                label: 'truncate uppercase tracking-wider',
+                leadingIcon: 'shrink-0',
+                leadingAvatar: 'shrink-0',
+                leadingAvatarSize: '',
+                trailingIcon: 'shrink-0',
+            },
+            variants: {
+                variant: {
+                    subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
                 },
-                // Nuxt chunks
-                {
-                    urlPattern: /^\/_nuxt\//,
-                    handler: 'NetworkFirst',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'nuxt-dev-chunks',
-                        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
-                    },
+                color: {
+                    'inverse-primary':
+                        'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
                 },
-                // Static images
-                {
-                    urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
-                    handler: 'CacheFirst',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'static-images',
-                        expiration: {
-                            maxEntries: 200,
-                            maxAgeSeconds: 7 * 24 * 60 * 60,
-                        },
-                    },
+                // Override size variant so padding wins over defaults
+                size: {
+                    xs: { base: 'h-[24px] w-[24px] px-0! text-[14px]' },
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
                 },
-                // Fonts
-                {
-                    urlPattern: /^\/_fonts\//,
-                    handler: 'CacheFirst',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'nuxt-fonts',
-                        expiration: {
-                            maxEntries: 50,
-                            maxAgeSeconds: 30 * 24 * 60 * 60,
-                        },
-                    },
+                square: {
+                    true: 'px-0! aspect-square!',
                 },
-                // Icon API
-                {
-                    urlPattern: /\/api\/_nuxt_icon\/.*$/,
-                    handler: 'StaleWhileRevalidate',
-                    method: 'GET',
-                    options: {
-                        cacheName: 'nuxt-icons',
-                        expiration: {
-                            maxEntries: 200,
-                            maxAgeSeconds: 30 * 24 * 60 * 60,
-                        },
-                    },
+                buttonGroup: {
+                    horizontal:
+                        'first:rounded-l-[3px]! first:rounded-r-none! rounded-none! last:rounded-l-none! last:rounded-r-[3px]!',
+                    vertical:
+                        'first:rounded-t-[3px]! first:rounded-b-none! rounded-none! last:rounded-t-none! last:rounded-b-[3px]!',
                 },
-            ],
+            },
         },
-        // Web App Manifest
-        manifest: {
-            name: 'Or3 Chat',
-            short_name: 'Or3.Chat',
-            description:
-                'The open, extensible AI chat platform for the people.',
-            start_url: '/',
-            display: 'standalone',
-            background_color: '#0b0f1a',
-            theme_color: '#0b0f1a',
-            icons: [
-                {
-                    src: '/logos/logo-192.png',
-                    sizes: '192x192',
-                    type: 'image/png',
+        input: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+            variants: {
+                // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
+                leading: { true: 'ps-10!' },
+                trailing: { true: 'pe-10!' },
+                size: {
+                    sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
+                    md: { base: 'h-[40px] px-[16px]! text-[17px]' },
+                    lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
                 },
-                {
-                    src: '/logos/logo-512.png',
-                    sizes: '512x512',
-                    type: 'image/png',
+            },
+        },
+        formField: {
+            slots: {
+                base: 'flex flex-col ',
+                label: 'text-sm font-medium -mb-1 px-1',
+                help: 'mt-[4px] text-xs text-[var(--md-secondary)] px-1!',
+            },
+        },
+        buttonGroup: {
+            base: 'relative',
+            variants: {
+                orientation: {
+                    horizontal: 'inline-flex -space-x-px',
+                    vertical: 'flex flex-col -space-y-px',
                 },
-                // WebP is fine in many browsers; PNGs above cover platforms requiring PNG
-                {
-                    src: '/logos/logo-1024.webp',
-                    sizes: '1024x1024',
-                    type: 'image/webp',
-                    purpose: 'any maskable',
-                },
-            ],
+            },
+        },
+        // Make the toast close button md-sized by default
+        toast: {
+            slots: {
+                root: 'border border-2 retro-shadow rounded-[3px]',
+                // Match our md button height (40px) and enforce perfect centering
+                close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
+            },
+        },
+        popover: {
+            slots: {
+                content:
+                    'bg-white dark:bg-black rounded-[3px] border-black border-2 p-0.5',
+            },
+        },
+        tooltip: {
+            slots: {
+                content: 'border-2 text-[18px]!',
+            },
+        },
+        switch: {
+            // Retro styled switch theme (square, hard borders, pixel shadow)
+            slots: {
+                root: 'relative inline-flex items-center select-none ',
+                base: 'border-2 border-black rounded-[3px] h-[20px] w-[39px]! cursor-pointer',
+                thumb: 'border-2 border-black h-[14px]! w-[14px]! ml-[0.5px] rounded-[3px] ',
+                label: 'block font-medium text-default cursor-pointer',
+            },
         },
     },
-    // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
-    ignore: [
-        '**/*.test.*',
-        '**/__tests__/**',
-        'tests/**',
-        // Example plugins (dev only); keep them out of production build
-        process.env.NODE_ENV === 'production'
-            ? 'app/plugins/examples/**'
-            : undefined,
-    ].filter(Boolean) as string[],
 });
+```
+
+## File: app/app.vue
+```vue
+<template>
+    <UApp>
+        <!-- Register the PWA web manifest on all pages -->
+        <VitePwaManifest />
+        <FatalErrorBoundary>
+            <NuxtPage />
+        </FatalErrorBoundary>
+    </UApp>
+</template>
+<script setup lang="ts">
+// Apply initial theme class to <html> so CSS variables cascade app-wide
+const nuxtApp = useNuxtApp();
+const isDark = computed(() =>
+    (
+        (nuxtApp as any).$theme?.current?.value ||
+        (nuxtApp as any).$theme?.get?.() ||
+        'light'
+    ).startsWith('dark')
+);
+const themeColor = computed(() => (isDark.value ? '#1A1F24' : '#F1F4FB'));
+const statusBarStyle = computed(() =>
+    isDark.value ? 'black-translucent' : 'default'
+);
+
+useHead({
+    htmlAttrs: {
+        class: 'light',
+    },
+    title: 'or3 chat',
+    link: [
+        { rel: 'icon', type: 'image/webp', href: '/butthole-logo.webp' },
+        // Provide an Apple touch icon to avoid 404s in Safari/iOS
+        { rel: 'apple-touch-icon', href: '/logos/logo-192.png' },
+    ],
+    meta: [
+        // Dynamic browser/UI theme color (Chrome, Android, iOS 15+ Safari)
+        { name: 'theme-color', content: themeColor },
+        // Enable iOS PWA full-screen and control status bar style
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        {
+            name: 'apple-mobile-web-app-status-bar-style',
+            content: statusBarStyle,
+        },
+        // Ensure content can extend under the notch when using black-translucent
+        {
+            name: 'viewport',
+            content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+        },
+    ],
+});
+
+// Fire app.init:action:after once after the root app mounts (client-only)
+onMounted(() => {
+    const g: any = globalThis as any;
+    if (g.__OR3_APP_INIT_FIRED__) return;
+    g.__OR3_APP_INIT_FIRED__ = true;
+    const hooks: any = nuxtApp.$hooks;
+    if (hooks && typeof hooks.doAction === 'function') {
+        hooks.doAction('app.init:action:after', nuxtApp);
+    }
+});
+</script>
 ```
 
 ## File: app/components/chat/ChatInputDropper.vue
@@ -18469,7 +18838,7 @@ export default defineNuxtConfig({
                 </p>
             </div>
         </div>
-        <lazy-modal-settings-modal v-model:showModal="showModelCatalog" />
+        <lazy-modal-model-catalog v-model:showModal="showModelCatalog" />
         <LazyChatSystemPromptsModal hydrate-on-visible
         v-model:showModal="showSystemPrompts" :thread-id="props.threadId" "
         :pane-id="props.paneId" @selected="handlePromptSelected"
@@ -18489,6 +18858,8 @@ import {
 } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
 import { createOrRefFile } from '~/db/files';
+import { reportError, err } from '~/utils/errors';
+import { validateFile, persistAttachment } from './file-upload-utils';
 import type { FileMeta } from '~/db/schema';
 import { useModelStore } from '~/composables/useModelStore';
 import { Editor, EditorContent } from '@tiptap/vue-3';
@@ -18782,12 +19153,15 @@ const MAX_IMAGES = MAX_FILES_PER_MESSAGE;
 
 async function processAttachment(file: File, name?: string) {
     const mime = file.type || '';
-    const kind = mime.startsWith('image/')
-        ? 'image'
-        : mime === 'application/pdf'
-        ? 'pdf'
-        : null;
-    if (!kind) return; // only images and PDFs
+    const validation = validateFile(file);
+    if (!validation.ok) {
+        reportError(err(validation.code, validation.message), {
+            toast: true,
+            tags: { domain: 'files', stage: 'select', mime, size: file.size },
+        });
+        return;
+    }
+    const kind = validation.kind;
     // Fast preview first
     const dataUrl: string = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -18811,16 +19185,7 @@ async function processAttachment(file: File, name?: string) {
     };
     attachments.value.push(attachment);
     emit('image-add', attachment);
-    try {
-        const meta = await createOrRefFile(file, attachment.name);
-        attachment.hash = meta.hash;
-        attachment.meta = meta;
-        attachment.status = 'ready';
-    } catch (err: any) {
-        attachment.status = 'error';
-        attachment.error = err?.message || 'failed';
-        console.warn('[ChatInputDropper] pipeline error', attachment.name, err);
-    }
+    await persistAttachment(attachment as any);
 }
 
 const processFiles = async (files: FileList | null) => {
@@ -19064,6 +19429,1286 @@ textarea::-webkit-scrollbar-thumb:hover {
     font-weight: normal;
 }
 </style>
+```
+
+## File: app/pages/openrouter-callback.vue
+```vue
+<template>
+    <div
+        class="min-h-[100dvh] flex items-center justify-center p-6"
+        data-page="openrouter-callback"
+    >
+        <div
+            class="w-full max-w-md rounded-xl border border-neutral-200/60 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/70 backdrop-blur p-5 text-center"
+        >
+            <p class="text-base font-medium mb-2">
+                {{ title }}
+            </p>
+            <p class="text-sm text-neutral-500 mb-4">
+                {{ subtitle }}
+            </p>
+            <div class="flex items-center justify-center gap-3">
+                <div
+                    v-if="loading"
+                    class="w-5 h-5 rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-white animate-spin"
+                />
+                <button
+                    v-if="ready"
+                    class="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-500"
+                    @click="goHome"
+                >
+                    Continue
+                </button>
+                <button
+                    v-if="errorMessage"
+                    class="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500"
+                    @click="goHome"
+                >
+                    Go Home
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { reportError, err } from '~/utils/errors';
+import { kv } from '~/db';
+import { state } from '~/state/global';
+import { exchangeOpenRouterCode } from './openrouter-auth';
+
+const route = useRoute();
+const router = useRouter();
+const rc = useRuntimeConfig();
+
+const loading = ref(true);
+const ready = ref(false);
+const redirecting = ref(false);
+const errorMessage = ref('');
+const title = computed(() =>
+    errorMessage.value
+        ? 'Login completed with warnings'
+        : ready.value
+        ? 'Login complete'
+        : 'Completing login…'
+);
+const subtitle = computed(() => {
+    if (errorMessage.value) return errorMessage.value;
+    if (ready.value && !redirecting.value)
+        return 'If this page doesn’t redirect automatically, tap Continue.';
+    return 'Please wait while we finish setup.';
+});
+
+function log(...args: any[]) {
+    try {
+        if (import.meta.dev) {
+            // eslint-disable-next-line no-console
+            console.debug('[openrouter-callback]', ...args);
+        }
+    } catch (e) {
+        // intentionally ignored: debug logging failure (dev-only)
+    }
+}
+
+async function setKVNonBlocking(key: string, value: string, timeoutMs = 300) {
+    try {
+        if (!kv?.set) return;
+        log(`syncing key to KV via kvByName.set (timeout ${timeoutMs}ms)`);
+        const result = await Promise.race([
+            kv.set(key, value),
+            new Promise((res) => setTimeout(() => res('timeout'), timeoutMs)),
+        ]);
+        if (result === 'timeout') log('setKV timed out; continuing');
+        else log('setKV resolved');
+    } catch (e: any) {
+        // intentionally ignored: non-critical KV sync failure
+    }
+}
+
+async function goHome() {
+    redirecting.value = true;
+    log("goHome() invoked. Trying router.replace('/').");
+    try {
+        await router.replace('/');
+        log("router.replace('/') resolved");
+    } catch (e: any) {
+        // intentionally ignored: navigation fallback
+    }
+    try {
+        // Fallback to full document navigation
+        log("Attempting window.location.replace('/')");
+        window.location.replace('/');
+    } catch (e: any) {
+        // intentionally ignored: navigation fallback
+    }
+    // Last-chance fallback on browsers that ignore replace
+    setTimeout(() => {
+        try {
+            log("Attempting final window.location.assign('/')");
+            window.location.assign('/');
+        } catch (e: any) {
+            // intentionally ignored: navigation fallback
+        }
+    }, 150);
+}
+
+onMounted(async () => {
+    log('mounted at', window.location.href, 'referrer:', document.referrer);
+    const code = route.query.code;
+    const state = route.query.state;
+    // Primary in sessionStorage (original), fallback to localStorage if a reload or restore lost it.
+    const verifier =
+        sessionStorage.getItem('openrouter_code_verifier') ||
+        localStorage.getItem('openrouter_code_verifier') ||
+        '';
+    const savedState =
+        sessionStorage.getItem('openrouter_state') ||
+        localStorage.getItem('openrouter_state') ||
+        '';
+    const codeMethod =
+        sessionStorage.getItem('openrouter_code_method') ||
+        localStorage.getItem('openrouter_code_method') ||
+        'S256';
+    log('query params present:', {
+        code: Boolean(code),
+        state: Boolean(state),
+    });
+    log('session present:', {
+        verifier: Boolean(verifier),
+        savedState: Boolean(savedState),
+        codeMethod,
+    });
+
+    if (!code || !verifier) {
+        reportError(
+            err('ERR_AUTH', 'Missing code or verifier', {
+                severity: 'warn',
+                tags: { domain: 'auth', page: 'openrouter-callback' },
+            }),
+            { toast: true }
+        );
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value =
+            'Missing code or verifier. Tap Continue to return.';
+        return;
+    }
+    if (savedState && state !== savedState) {
+        reportError(
+            err('ERR_AUTH', 'State mismatch (possible CSRF)', {
+                severity: 'error',
+                tags: { domain: 'auth', page: 'openrouter-callback' },
+            }),
+            { toast: true }
+        );
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value = 'State mismatch. Tap Continue to return.';
+        return;
+    }
+
+    let attempt = 0;
+    const doExchange = async (): Promise<boolean> => {
+        attempt++;
+        const result = await exchangeOpenRouterCode({
+            code: String(code),
+            verifier,
+            codeMethod,
+            attempt,
+        });
+        if (!result.ok) {
+            // Provide user-facing message for first failure
+            errorMessage.value =
+                result.reason === 'no-key'
+                    ? 'No key returned. Continue to finish.'
+                    : 'Exchange failed. Retry or continue home.';
+            // Attach retry closure only if network/bad-response
+            if (result.reason !== 'no-key') {
+                reportError(
+                    err('ERR_NETWORK', 'Auth code exchange failed', {
+                        severity: 'error',
+                        tags: {
+                            domain: 'auth',
+                            page: 'openrouter-callback',
+                            status: result.status,
+                            attempt,
+                        },
+                        retryable: true,
+                    }),
+                    { toast: true, retry: doExchange }
+                );
+            }
+            loading.value = false;
+            ready.value = true;
+            return false;
+        }
+        const userKey = result.userKey;
+        // store in localStorage for use by front-end
+        log('storing key in localStorage (length)', String(userKey).length);
+        // Save a human-readable name and the value; id/clock are handled
+        // inside the helper to match your schema
+        try {
+            await kv.set('openrouter_api_key', userKey);
+            // Update global state immediately so UI reacts even before listeners.
+            try {
+                (state as any).value.openrouterKey = userKey;
+            } catch (e) {
+                // intentionally ignored: dispatch failure (no user impact)
+            }
+        } catch (e: any) {
+            log('kvByName.set failed', (e && e.message) || e);
+        }
+        try {
+            log('dispatching openrouter:connected event');
+            window.dispatchEvent(new CustomEvent('openrouter:connected'));
+            // Best-effort: also persist to synced KV
+            try {
+                await setKVNonBlocking('openrouter_api_key', userKey, 300);
+            } catch (e) {
+                // intentionally ignored: optional synced KV persistence
+            }
+        } catch (e) {
+            // intentionally ignored: event dispatch failure
+        }
+        log('clearing session markers (verifier/state/method)');
+        const keys = [
+            'openrouter_code_verifier',
+            'openrouter_state',
+            'openrouter_code_method',
+        ];
+        keys.forEach((k) => {
+            sessionStorage.removeItem(k);
+            localStorage.removeItem(k);
+        });
+        // Allow event loop to process storage events in other tabs/components
+        await new Promise((r) => setTimeout(r, 10));
+        loading.value = false;
+        ready.value = true;
+        log('ready to redirect');
+        setTimeout(() => {
+            log("auto: router.replace('/')");
+            router.replace('/').catch((e: any) => {
+                log('auto: router.replace failed', (e && e.message) || e);
+            });
+            setTimeout(() => {
+                try {
+                    log("auto: window.location.replace('/')");
+                    window.location.replace('/');
+                } catch (e: any) {
+                    log(
+                        'auto: window.location.replace failed',
+                        (e && e.message) || e
+                    );
+                }
+            }, 250);
+        }, 50);
+        return true;
+    };
+    const success = await doExchange();
+    if (!success) return;
+    loading.value = false;
+    ready.value = true;
+    // Safety: if nothing happened within 4s (no ready), force a hard reload to bust SW fallback
+    setTimeout(() => {
+        if (!ready.value && !errorMessage.value) {
+            try {
+                log('safety reload firing');
+                window.location.reload();
+            } catch (e) {
+                // intentionally ignored: safety reload failure
+            }
+        }
+    }, 4000);
+});
+</script>
+```
+
+## File: app/utils/errors.ts
+```typescript
+// Minimal centralized error utility (Task 1.1)
+// Provides: types, err(), isAppError(), asAppError(), reportError(), simpleRetry(), light scrub & duplicate suppression.
+
+import { useHooks } from '~/composables/useHooks';
+import { useToast } from '#imports';
+
+export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';
+
+export type ErrorCode =
+    | 'ERR_INTERNAL'
+    | 'ERR_STREAM_ABORTED'
+    | 'ERR_STREAM_FAILURE'
+    | 'ERR_NETWORK'
+    | 'ERR_TIMEOUT'
+    | 'ERR_DB_WRITE_FAILED'
+    | 'ERR_DB_READ_FAILED'
+    | 'ERR_DB_QUOTA_EXCEEDED'
+    | 'ERR_FILE_VALIDATION'
+    | 'ERR_FILE_PERSIST'
+    | 'ERR_VALIDATION'
+    | 'ERR_AUTH'
+    | 'ERR_RATE_LIMIT'
+    | 'ERR_UNSUPPORTED_MODEL'
+    | 'ERR_HOOK_FAILURE';
+
+export interface AppError extends Error {
+    code: ErrorCode;
+    severity: ErrorSeverity; // default 'error'
+    retryable?: boolean;
+    tags?: Record<string, string | number | boolean | undefined>;
+    timestamp: number; // ms epoch
+}
+
+export type StandardError = AppError; // alias for wording continuity
+
+// Factory
+export function err(
+    code: ErrorCode,
+    message: string,
+    o: {
+        severity?: ErrorSeverity;
+        retryable?: boolean;
+        tags?: Record<string, any>;
+        cause?: unknown;
+    } = {}
+): AppError {
+    const e = new Error(message) as AppError & { cause?: unknown };
+    e.code = code;
+    e.severity = o.severity || 'error';
+    e.retryable = o.retryable;
+    e.tags = o.tags;
+    e.timestamp = Date.now();
+    if (o.cause && e.cause === undefined) e.cause = o.cause;
+    return e as AppError;
+}
+
+export function isAppError(v: unknown): v is AppError {
+    return (
+        !!v &&
+        typeof v === 'object' &&
+        'code' in (v as any) &&
+        'severity' in (v as any)
+    );
+}
+
+export function asAppError(
+    v: unknown,
+    fb: { code?: ErrorCode; message?: string } = {}
+): AppError {
+    if (isAppError(v)) return v;
+    if (v instanceof Error)
+        return err(
+            fb.code || 'ERR_INTERNAL',
+            v.message || fb.message || 'Error',
+            { cause: (v as any).cause }
+        );
+    if (typeof v === 'string') return err(fb.code || 'ERR_INTERNAL', v);
+    return err(fb.code || 'ERR_INTERNAL', fb.message || 'Unknown error');
+}
+
+// Lightweight secret scrub (only obvious tokens)
+function scrubValue(val: unknown): unknown {
+    if (typeof val !== 'string') return val;
+    if (/(api|key|secret|token)/i.test(val) && val.length > 8) return '***';
+    return val.length > 8192 ? val.slice(0, 8192) + '…' : val;
+}
+
+// Duplicate suppression (code|message within window)
+const recent = new Map<string, number>();
+const SUPPRESS_MS = 300;
+function shouldLog(code: string, message: string): boolean {
+    const key = code + '|' + message;
+    const now = Date.now();
+    const last = recent.get(key) || 0;
+    const dup = now - last < SUPPRESS_MS;
+    recent.set(key, now);
+    // Opportunistic prune (>1s old) every access (Req 14.1)
+    // Map sizes expected to remain tiny (< few hundred); full scan OK.
+    for (const [k, t] of recent) if (now - t > 1000) recent.delete(k);
+    return !dup;
+}
+
+// Use Nuxt UI toast directly; no custom store.
+function pushToast(error: AppError, retry?: () => any) {
+    try {
+        const { add } = useToast();
+        add({
+            id: error.timestamp + '-' + error.code,
+            title: error.code,
+            description: error.message,
+            actions: retry
+                ? [
+                      {
+                          label: 'Retry',
+                          onClick: () => {
+                              try {
+                                  retry();
+                              } catch {}
+                          },
+                      },
+                  ]
+                : undefined,
+            color:
+                error.severity === 'fatal'
+                    ? 'error'
+                    : error.severity === 'warn'
+                    ? 'warning'
+                    : error.severity === 'info'
+                    ? 'info'
+                    : 'error',
+        });
+    } catch {}
+}
+
+export interface ReportOptions {
+    code?: ErrorCode;
+    message?: string;
+    tags?: Record<string, any>;
+    toast?: boolean; // force toast even if info
+    silent?: boolean; // never show toast
+    retry?: () => any; // optional retry closure
+    severity?: ErrorSeverity; // override severity if wrapping non-error
+    retryable?: boolean; // override retryable
+}
+
+export function reportError(
+    input: unknown,
+    opts: ReportOptions = {}
+): AppError {
+    let e: AppError;
+    try {
+        e = asAppError(input, { code: opts.code, message: opts.message });
+        if (opts.severity) e.severity = opts.severity;
+        if (opts.retryable !== undefined) e.retryable = opts.retryable;
+        if (opts.tags) e.tags = { ...(e.tags || {}), ...opts.tags };
+        // Scrub shallow string fields
+        e.message = scrubValue(e.message) as string;
+        if (e.tags) {
+            for (const k in e.tags) e.tags[k] = scrubValue(e.tags[k]) as any;
+        }
+        if (shouldLog(e.code, e.message)) {
+            const level =
+                e.severity === 'warn'
+                    ? 'warn'
+                    : e.severity === 'info'
+                    ? 'info'
+                    : 'error';
+            (console as any)[level]('[err]', {
+                code: e.code,
+                msg: e.message,
+                severity: e.severity,
+                retryable: !!e.retryable,
+                tags: e.tags,
+            });
+        }
+        const hooks = useHooks();
+        hooks.doAction('error:raised', e);
+        const domain = e.tags?.domain as string | undefined;
+        if (domain) hooks.doAction('error:' + domain, e);
+        if (domain === 'chat')
+            hooks.doAction('ai.chat.error:action', { error: e });
+        if (
+            !opts.silent &&
+            !(e.code === 'ERR_STREAM_ABORTED' && e.severity === 'info')
+        ) {
+            if (opts.toast || e.severity !== 'info') pushToast(e, opts.retry);
+        }
+        return e;
+    } catch (inner) {
+        try {
+            console.error('[reportError-fallback]', inner, input);
+        } catch {}
+        // Best effort fallback error
+        return err('ERR_INTERNAL', 'Reporting failed');
+    }
+}
+
+export async function simpleRetry<T>(
+    fn: () => Promise<T>,
+    attempts = 2,
+    delayMs = 400
+): Promise<T> {
+    let lastErr: any;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastErr = e;
+            if (i < attempts - 1)
+                await new Promise((r) => setTimeout(r, delayMs));
+        }
+    }
+    throw lastErr;
+}
+
+// Deprecated: legacy hook-based toast accessor maintained for backward compatibility.
+// New code should rely on reportError + Nuxt UI useToast directly.
+export function useErrorToasts() {
+    console.warn(
+        '[useErrorToasts] deprecated – rely on reportError to surface toasts'
+    );
+    // Provide minimal shape expected by any legacy components.
+    return { toasts: [] as any[] };
+}
+```
+
+## File: app/components/chat/VirtualMessageList.vue
+```vue
+<template>
+    <!-- Wrapper around virtua's virtual list for messages -->
+    <div ref="root" class="flex flex-col min-w-0" :class="wrapperClass">
+        <Virtualizer
+            :data="messages"
+            :itemSize="effectiveItemSize || undefined"
+            :overscan="overscan"
+            :scrollRef="scrollParent || undefined"
+            @scroll="onScroll"
+            @scroll-end="onScrollEnd"
+            v-slot="{ item, index }"
+        >
+            <div :key="item.id || index">
+                <slot name="item" :message="item" :index="index" />
+            </div>
+        </Virtualizer>
+        <!-- Tail slot for streaming message appended after virtualized stable messages -->
+        <slot name="tail" />
+    </div>
+</template>
+
+<script setup lang="ts">
+/**
+ * VirtualMessageList
+ * Requirements: 3.1 (Virtualization isolation), 4 (Docs)
+ * Thin abstraction over virtua's <VList>. Purpose:
+ *  - Decouple higher-level chat code from 3p library specifics (swap easier).
+ *  - Emit semantic events (visible-range-change, reached-top/bottom) to drive
+ *    auto-scroll + lazy fetch triggers without leaking scroll math.
+ *  - Centralize perf tuning knobs (itemSizeEstimation, overscan) so callers
+ *    don't sprinkle magic numbers.
+ *
+ * Task 2.3: Centralize scroll state and behavior here using VueUse utilities.
+ * - useScroll: passive scroll tracking
+ * - useResizeObserver: respond to size/DOM changes (messages/streaming)
+ * - useRafFn: batch scroll-to-bottom to next frame to avoid jank
+ */
+import {
+    onMounted,
+    ref,
+    watch,
+    computed,
+    nextTick,
+    watchEffect,
+    type PropType,
+} from 'vue';
+// eslint-disable-next-line import/no-unresolved
+import { Virtualizer } from 'virtua/vue';
+import {
+    useScroll,
+    useResizeObserver,
+    useRafFn,
+    useEventListener,
+} from '@vueuse/core';
+
+interface ChatMessage {
+    id: string;
+    role?: string;
+    content?: string;
+    [k: string]: any;
+}
+
+const props = defineProps({
+    messages: { type: Array as PropType<ChatMessage[]>, required: true },
+    itemSizeEstimation: { type: Number, default: 500 }, // baseline heuristic average row height
+    overscan: { type: Number, default: 4 },
+    wrapperClass: { type: String, default: '' },
+    scrollParent: {
+        type: Object as PropType<HTMLElement | null>,
+        default: null,
+    },
+    // Task 3.2: streaming maintenance
+    isStreaming: { type: Boolean, default: false },
+    // Task 3.1: adjustable threshold (design 100px; we default 100 while retaining legacy 64 logic internally)
+    autoScrollThreshold: { type: Number, default: 100 },
+    // Task 3.3: external editing suppression of auto-scroll
+    editingActive: { type: Boolean, default: false },
+    // Task 3.4: enable dynamic estimation of item size from growth deltas
+    dynamicItemSize: { type: Boolean, default: true },
+});
+
+const emit = defineEmits<{
+    (e: 'visible-range-change', range: { start: number; end: number }): void;
+    (e: 'reached-top'): void;
+    (e: 'reached-bottom'): void;
+    (e: 'scroll-state', state: { atBottom: boolean; stick: boolean }): void; // Task 5.1.2
+}>();
+
+const root = ref<HTMLElement | null>(null);
+// Accept both HTMLElement and Ref<HTMLElement|null> for scrollParent prop
+const scrollParentRef = computed<HTMLElement | null>(() => {
+    const sp: any = props.scrollParent as any;
+    const el = sp && typeof sp === 'object' && 'value' in sp ? sp.value : sp;
+    return el || root.value;
+});
+// Tunables (defined BEFORE any immediate watchers that call compute to avoid TDZ during HMR)
+// Use provided threshold for deciding auto-scroll near-bottom detection (Req 1.1/3.1.3)
+const thresholdPx = computed(() => props.autoScrollThreshold);
+const disengageDeltaPx = 12; // small intentional upward scroll disengages
+const USER_SCROLL_INACTIVE_TIMEOUT = 800;
+
+// Scroll / stick state
+let stick = true; // whether we are willing to auto-scroll
+const atBottom = ref(true); // updated by compute(); default true so first append snaps
+let lastScrollTop = 0;
+let lastScrollHeight = 0;
+let userScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Initialize scroll metrics once scroll parent becomes available (after variables above are defined)
+watch(
+    scrollParentRef,
+    (el) => {
+        if (!el) return;
+        try {
+            lastScrollHeight = (el as any).scrollHeight || 0;
+            lastScrollTop = (el as any).scrollTop || 0;
+        } catch (e) {
+            // intentionally ignored: initial scroll metrics fetch may fail if element not ready
+        }
+        compute();
+    },
+    { immediate: true }
+);
+
+// Scroll state emission tracking (Task 5.1.2)
+let lastEmittedStick: boolean | null = null;
+let lastEmittedAtBottom: boolean | null = null;
+function maybeEmitScrollState() {
+    const a = atBottom.value;
+    if (a !== lastEmittedAtBottom || stick !== lastEmittedStick) {
+        try {
+            emit('scroll-state', { atBottom: a, stick });
+        } catch (e) {
+            // intentionally ignored: emit failure should not break scrolling
+        }
+        lastEmittedAtBottom = a;
+        lastEmittedStick = stick;
+    }
+}
+
+// Passive scroll monitoring
+useScroll(scrollParentRef, {
+    eventListenerOptions: { passive: true },
+});
+
+function compute() {
+    const el =
+        (props.scrollParent as any) || scrollParentRef.value || root.value;
+    if (!el) return;
+    const currentTop = el.scrollTop;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottomNow = dist <= thresholdPx.value;
+    // Disengage if user scrolled upward a meaningful amount.
+    const upward = currentTop < lastScrollTop - disengageDeltaPx;
+    if (upward) {
+        stick = false; // user explicitly left bottom intent
+    } else if (atBottomNow && currentTop > lastScrollTop) {
+        // Only (re)enable stick when user actively scrolled downward into bottom zone.
+        stick = true;
+    }
+    atBottom.value = atBottomNow;
+    lastScrollTop = currentTop;
+    lastScrollHeight = el.scrollHeight;
+    maybeEmitScrollState();
+}
+
+function markUserScroll() {
+    if (userScrollTimer) clearTimeout(userScrollTimer);
+    userScrollTimer = setTimeout(() => {}, USER_SCROLL_INACTIVE_TIMEOUT);
+}
+
+useEventListener(scrollParentRef, 'scroll', compute, {
+    passive: true,
+});
+useEventListener(scrollParentRef, 'wheel', markUserScroll, { passive: true });
+useEventListener(scrollParentRef, 'touchstart', markUserScroll, {
+    passive: true,
+});
+useEventListener(scrollParentRef, 'touchmove', markUserScroll, {
+    passive: true,
+});
+
+// Minimal: auto-scroll only if user is at bottom and not editing.
+const shouldAutoScroll = computed(
+    () => stick && atBottom.value && !props.editingActive
+);
+
+// (Restick delay removed for simplicity.)
+
+function scrollToBottom(opts: { smooth?: boolean } = {}) {
+    if (!stick) return; // respect disengaged reading state
+    const baseEl = scrollParentRef.value || root.value;
+    if (!baseEl) return;
+    const smooth = opts.smooth === true;
+    const targets: any[] = [];
+    if (baseEl) targets.push(baseEl);
+    if (root.value && root.value !== baseEl) targets.push(root.value);
+    for (const t of targets) {
+        try {
+            const bottomPos = t.scrollHeight - t.clientHeight;
+            if (typeof t.scrollTo === 'function') {
+                t.scrollTo({
+                    top: bottomPos,
+                    behavior: (smooth ? 'smooth' : 'auto') as ScrollBehavior,
+                });
+            } else {
+                t.scrollTop = bottomPos;
+            }
+        } catch (e) {
+            // intentionally ignored: scrollTo API unsupported
+        }
+    }
+    stick = true;
+    (scrollToBottom as any)._count = ((scrollToBottom as any)._count || 0) + 1;
+    try {
+        lastScrollTop = baseEl.scrollTop ?? lastScrollTop;
+        lastScrollHeight = baseEl.scrollHeight ?? lastScrollHeight;
+    } catch (e) {
+        // intentionally ignored: metrics update
+    }
+}
+
+let pendingSmooth = false;
+const raf = useRafFn(
+    () => {
+        raf.pause();
+        scrollToBottom({ smooth: pendingSmooth });
+        pendingSmooth = false;
+    },
+    { immediate: false }
+);
+function scrollToBottomRaf(smooth = false) {
+    pendingSmooth = smooth;
+    if (!raf.isActive.value) raf.resume();
+}
+
+function onContentIncrease() {
+    const el =
+        (props.scrollParent as any) || scrollParentRef.value || root.value;
+    if (!el) return;
+    if (shouldAutoScroll.value) {
+        scrollToBottom({ smooth: false });
+    } else {
+        // Just refresh metrics, do not adjust position.
+        lastScrollHeight = el.scrollHeight;
+    }
+}
+
+useResizeObserver(root, () => {
+    nextTick(onContentIncrease);
+});
+watch(
+    () => props.scrollParent,
+    (el) => {
+        if (!el) return;
+        useResizeObserver(el, () => {
+            nextTick(onContentIncrease);
+        });
+    },
+    { immediate: true }
+);
+
+function computeRange(): { start: number; end: number } {
+    const total = props.messages.length;
+    if (!root.value) return { start: 0, end: Math.max(0, total - 1) };
+    return { start: 0, end: total - 1 };
+}
+
+function onInternalUpdate() {
+    const range = computeRange();
+    emit('visible-range-change', range);
+    if (range.start === 0) emit('reached-top');
+    if (range.end >= props.messages.length - 1) emit('reached-bottom');
+}
+
+function onScroll() {
+    onInternalUpdate();
+}
+function onScrollEnd() {
+    onInternalUpdate();
+}
+
+const averageItemSize = ref<number>(props.itemSizeEstimation);
+let prevLength = props.messages.length;
+let prevScrollHeight = 0;
+
+watch(
+    () => props.messages.length,
+    () => {
+        const el = scrollParentRef.value || root.value;
+        const beforeAtBottom = atBottom.value;
+        const added = props.messages.length - prevLength;
+        if (el && added > 0) {
+            prevScrollHeight = el.scrollHeight;
+        }
+        onInternalUpdate();
+        nextTick(() => {
+            const el2 = scrollParentRef.value || root.value;
+            if (props.dynamicItemSize && el2 && added > 0) {
+                const deltaH = el2.scrollHeight - prevScrollHeight;
+                if (deltaH > 0) {
+                    const per = deltaH / added;
+                    averageItemSize.value = Math.max(
+                        32,
+                        Math.min(1200, averageItemSize.value * 0.7 + per * 0.3)
+                    );
+                } else if (
+                    deltaH === 0 &&
+                    averageItemSize.value === props.itemSizeEstimation
+                ) {
+                    averageItemSize.value = props.itemSizeEstimation;
+                }
+            }
+            if (added > 0) {
+                if (shouldAutoScroll.value && beforeAtBottom) {
+                    scrollToBottomRaf(true);
+                } else {
+                    onContentIncrease();
+                }
+            }
+            prevLength = props.messages.length;
+        });
+    }
+);
+
+const effectiveItemSize = computed(() => {
+    return props.dynamicItemSize
+        ? Math.round(averageItemSize.value)
+        : props.itemSizeEstimation;
+});
+
+watchEffect(() => {
+    if (!props.isStreaming) return;
+    if (!shouldAutoScroll.value) return; // includes stick check
+    nextTick(() => scrollToBottomRaf(false));
+});
+
+// --- Finalize clamp (retry over a few macrotasks to catch synthetic jump) ---
+// --- Finalize stabilization: simplest form (capture reading position while streaming, restore once) ---
+let readingPos: number | null = null;
+// Capture reading position anytime user is disengaged during streaming
+useEventListener(scrollParentRef, 'scroll', () => {
+    if (!props.isStreaming) return;
+    if (stick || atBottom.value) return; // following bottom; no need
+    const el = scrollParentRef.value || root.value;
+    if (!el) return;
+    readingPos = el.scrollTop;
+});
+
+watch(
+    () => props.isStreaming,
+    (v, prev) => {
+        if (!(prev && !v)) return; // only when streaming just ended
+        if (stick || atBottom.value) {
+            readingPos = null;
+            return;
+        }
+        const target = readingPos;
+        if (target == null) return;
+        const apply = () => {
+            const el = scrollParentRef.value || root.value;
+            if (!el) {
+                readingPos = null;
+                return;
+            }
+            if (stick || atBottom.value) {
+                readingPos = null;
+                return;
+            }
+            // If user scrolled further up after finalize, respect it
+            if (el.scrollTop < target - 4) {
+                readingPos = null;
+                return;
+            }
+            if (Math.abs(el.scrollTop - target) > 4) {
+                try {
+                    if (typeof (el as any).scrollTo === 'function')
+                        (el as any).scrollTo({ top: target });
+                } catch (e) {
+                    // intentionally ignored: scrollTo unsupported
+                }
+                try {
+                    (el as any).scrollTop = target;
+                } catch (e) {
+                    // intentionally ignored: direct scrollTop set failure
+                }
+            }
+            readingPos = null;
+        };
+        // Stage corrections so synthetic test mutation (immediate) is seen:
+        nextTick(() => {
+            apply();
+            queueMicrotask(apply);
+            requestAnimationFrame(apply);
+        });
+    },
+    { flush: 'post' }
+);
+
+onMounted(() => {
+    onInternalUpdate();
+    nextTick(() => {
+        compute();
+        if (atBottom.value) {
+            scrollToBottom({ smooth: false });
+        }
+    });
+    const sp: any = props.scrollParent as any;
+    if (
+        sp &&
+        typeof sp === 'object' &&
+        'value' in sp &&
+        !sp.value &&
+        root.value instanceof HTMLElement
+    ) {
+        try {
+            sp.value = root.value;
+        } catch (e) {
+            // intentionally ignored: cannot assign scroll parent
+        }
+    }
+});
+
+defineExpose({
+    atBottom,
+    onContentIncrease,
+    scrollToBottom,
+    stickBottom: () => {
+        stick = true;
+        scrollToBottom({ smooth: true });
+    },
+    release: () => {
+        stick = false;
+        // no-op; stick will restore only when user reaches bottom again
+    },
+    effectiveItemSize,
+    _devMetrics: () => ({ scrollCalls: (scrollToBottom as any)._count || 0 }),
+});
+</script>
+
+<style scoped>
+/* Keep retro feel: no extra styling here; rely on parent theme utilities */
+</style>
+```
+
+## File: app/components/modal/dashboard/Dashboard.vue
+```vue
+<template>
+    <UModal
+        v-model:open="open"
+        :ui="{
+            footer: 'justify-end border-t-2',
+            body: 'p-0!',
+        }"
+        title="Dashboard"
+        description="Browse all apps, plugins, and settings."
+        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden"
+    >
+        <template #body>
+            <!-- iOS style springboard grid: fixed icon cell width per breakpoint, centered, nice vertical rhythm -->
+            <div
+                v-if="activeView === 'dashboard'"
+                class="p-4 flex justify-center"
+            >
+                <div
+                    class="grid gap-y-6 gap-x-4 place-items-center grid-cols-4 xs:grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8"
+                >
+                    <plugin-icons
+                        v-for="item in dashboardItems"
+                        :key="item.id"
+                        :icon="item.icon"
+                        :label="item.label"
+                        :size="74"
+                        :retro="true"
+                        :radius="3"
+                        @click="onPluginClick(item)"
+                    />
+                </div>
+            </div>
+            <div v-if="activeView === 'page'">
+                <div class="flex h-[40px] items-center border-b-2 pr-2">
+                    <UButton
+                        variant="subtle"
+                        color="primary"
+                        size="sm"
+                        class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10!"
+                        @click="goBack()"
+                    >
+                        <UIcon
+                            class="h-6 w-6"
+                            :name="'pixelarticons:chevron-left'"
+                        />
+                    </UButton>
+                    <div class="ml-2 font-semibold text-sm truncate">
+                        {{ headerPluginLabel }}
+                        <span v-if="activePageTitle" class="opacity-60"
+                            >/ {{ activePageTitle }}</span
+                        >
+                    </div>
+                </div>
+                <!-- Landing list if multiple pages and none chosen -->
+                <div
+                    v-if="!activePageId && landingPages.length > 1"
+                    class="p-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                >
+                    <button
+                        v-for="p in landingPages"
+                        :key="p.id"
+                        class="group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left"
+                        @click="openPage(activePluginId!, p.id)"
+                    >
+                        <div class="flex items-center gap-2">
+                            <UIcon
+                                v-if="p.icon"
+                                :name="p.icon"
+                                class="w-5 h-5 opacity-80 group-hover:opacity-100"
+                            />
+                            <span class="font-medium text-sm">{{
+                                p.title
+                            }}</span>
+                        </div>
+                        <p
+                            v-if="p.description"
+                            class="text-xs opacity-70 leading-snug line-clamp-3"
+                        >
+                            {{ p.description }}
+                        </p>
+                    </button>
+                </div>
+                <!-- Single page or chosen page -->
+                <div v-else class="p-4">
+                    <div v-if="loadingPage" class="text-sm opacity-70">
+                        Loading…
+                    </div>
+                    <component
+                        v-else-if="resolvedPageComp"
+                        :is="resolvedPageComp"
+                    />
+                    <div
+                        v-else-if="!activePageId && landingPages.length === 1"
+                        class="text-xs opacity-60"
+                    >
+                        Preparing page…
+                    </div>
+                    <div v-else-if="!landingPages.length" class="text-xs">
+                        No pages registered for this plugin.
+                    </div>
+                </div>
+            </div>
+        </template>
+    </UModal>
+</template>
+<script setup lang="ts">
+import { computed, ref, shallowRef } from 'vue';
+import PluginIcons from './PluginIcons.vue';
+import {
+    useDashboardPlugins,
+    useDashboardPluginPages,
+    resolveDashboardPluginPageComponent,
+    listDashboardPluginPages,
+    registerDashboardPluginPage,
+    type DashboardPlugin,
+} from '~/composables';
+
+const props = defineProps<{
+    showModal: boolean;
+}>();
+
+const activeView = ref<'page' | 'dashboard'>('dashboard');
+const activePluginId = ref<string | null>(null);
+const activePageId = ref<string | null>(null);
+const loadingPage = ref(false);
+const resolvedPageComp = shallowRef<any>(null);
+
+const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
+
+// Bridge prop showModal to UModal's v-model:open (which emits update:open) by mapping update to parent event
+const open = computed({
+    get: () => props.showModal,
+    set: (value: boolean) => emit('update:showModal', value),
+});
+
+// Reactive list of registered dashboard plugins (external + future built-ins)
+const registered = useDashboardPlugins();
+
+// Core (built-in) items; can be overridden by external plugin with same id
+const coreItems: DashboardPlugin[] = [
+    {
+        id: 'core:settings',
+        icon: 'pixelarticons:sliders',
+        label: 'Settings',
+        order: 1,
+        handler: (item: any) => {
+            // Example handler to open settings
+            activeView.value = 'page';
+        },
+        pages: [
+            {
+                id: 'general-settings',
+                title: 'General Settings',
+                description: 'Configure application preferences and options.',
+                icon: 'pixelarticons:sliders',
+                component: () => import('./SettingsPage.vue'),
+            },
+            {
+                id: 'theme-settings',
+                title: 'Theme Settings',
+                description: 'Configure application theme and appearance.',
+                icon: 'pixelarticons:visible',
+                component: () => import('./ThemePage.vue'),
+            },
+            {
+                id: 'ai-settings',
+                title: 'AI Settings',
+                description: 'Configure AI-related preferences and options.',
+                icon: 'pixelarticons:zap',
+                component: () => import('./AiPage.vue'),
+            },
+        ],
+    },
+    {
+        id: 'core:images',
+        icon: 'pixelarticons:image',
+        label: 'Images',
+        order: 10,
+    },
+    {
+        id: 'core:prompts',
+        icon: 'pixelarticons:script-text',
+        label: 'Prompts',
+        order: 20,
+    },
+    {
+        id: 'core:files',
+        icon: 'pixelarticons:folder',
+        label: 'Files',
+        order: 30,
+    },
+];
+
+// Register any inline pages defined on core items with the shared dashboard page registry
+// so that onPluginClick() finds them (core items themselves are not registered as plugins).
+for (const item of coreItems) {
+    if (Array.isArray((item as any).pages)) {
+        for (const p of (item as any).pages) {
+            registerDashboardPluginPage(item.id, p as any);
+        }
+    }
+}
+
+// Merge + sort (lower order first). If no registered, show core only.
+const dashboardItems = computed(() => {
+    const reg = registered.value;
+    if (!reg.length)
+        return [...coreItems].sort(
+            (a, b) => (a.order ?? 200) - (b.order ?? 200)
+        );
+    const map = new Map<string, any>();
+    for (const c of coreItems) map.set(c.id, c);
+    for (const r of reg) map.set(r.id, r); // registered can override core by id
+    return Array.from(map.values()).sort(
+        (a, b) => (a.order ?? 200) - (b.order ?? 200)
+    );
+});
+
+// Pages for the currently active plugin
+const activePluginPages = useDashboardPluginPages(
+    () => activePluginId.value || undefined
+);
+
+const landingPages = computed(() => activePluginPages.value);
+
+const headerPluginLabel = computed(() => {
+    if (!activePluginId.value) return 'Dashboard';
+    const found = dashboardItems.value.find(
+        (p: any) => p.id === activePluginId.value
+    );
+    return found?.label || activePluginId.value;
+});
+const activePageTitle = computed(() => {
+    if (!activePluginId.value || !activePageId.value) return '';
+    const page = listDashboardPluginPages(activePluginId.value).find(
+        (p) => p.id === activePageId.value
+    );
+    return page?.title || activePageId.value;
+});
+
+async function openPage(pluginId: string, pageId: string) {
+    loadingPage.value = true;
+    activePluginId.value = pluginId;
+    activePageId.value = pageId;
+    activeView.value = 'page';
+    try {
+        const comp = await resolveDashboardPluginPageComponent(
+            pluginId,
+            pageId
+        );
+        resolvedPageComp.value = comp || null;
+    } catch (e) {
+        console.error('[dashboard] failed to load page', e);
+        resolvedPageComp.value = null;
+    } finally {
+        loadingPage.value = false;
+    }
+}
+
+function resetToGrid() {
+    activeView.value = 'dashboard';
+    activePluginId.value = null;
+    activePageId.value = null;
+    resolvedPageComp.value = null;
+}
+
+function goBack() {
+    // If we're on the main dashboard already, nothing to do
+    if (activeView.value === 'dashboard') return;
+    // If inside a plugin context
+    if (activeView.value === 'page' && activePluginId.value) {
+        // If currently viewing a specific page, step back to landing list (if multi-page)
+        if (activePageId.value) {
+            const pages = listDashboardPluginPages(activePluginId.value);
+            activePageId.value = null;
+            resolvedPageComp.value = null;
+            // If there is only one (or zero) page, there is no landing list UX -> go all the way back
+            if (pages.length <= 1) {
+                resetToGrid();
+            }
+            return;
+        }
+        // We are already at the landing list (no active page) -> go to dashboard grid
+        resetToGrid();
+        return;
+    }
+    // Fallback safety
+    resetToGrid();
+}
+
+function onPluginClick(item: any) {
+    try {
+        activePluginId.value = item.id;
+        activePageId.value = null;
+        const pages = listDashboardPluginPages(item.id);
+        if (!pages.length) {
+            item.handler?.({ id: item.id });
+            return;
+        }
+        if (pages.length === 1) {
+            openPage(item.id, pages[0]!.id);
+            return;
+        }
+        activeView.value = 'page';
+    } catch (e) {
+        console.error('[dashboard] plugin handler error', e);
+    }
+}
+</script>
 ```
 
 ## File: app/components/PageShell.vue
@@ -19668,78 +21313,151 @@ body {
 </style>
 ```
 
-## File: app/plugins/theme.client.ts
+## File: nuxt.config.ts
 ```typescript
-import 'katex/dist/katex.min.css';
-import { useShikiHighlighter } from 'streamdown-vue';
-import { ref } from 'vue';
-useShikiHighlighter();
+// https://nuxt.com/docs/api/configuration/nuxt-config
 
-export default defineNuxtPlugin((nuxtApp) => {
-    const THEME_CLASSES = [
-        'light',
-        'dark',
-        'light-high-contrast',
-        'dark-high-contrast',
-        'light-medium-contrast',
-        'dark-medium-contrast',
-    ];
-
-    const storageKey = 'theme';
-    const root = document.documentElement;
-
-    const getSystemPref = () =>
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-            ? 'dark'
-            : 'light';
-
-    const apply = (name: string) => {
-        for (const cls of THEME_CLASSES) root.classList.remove(cls);
-        root.classList.add(name);
-    };
-
-    const read = () => localStorage.getItem(storageKey) as string | null;
-
-    const current = ref(read() || getSystemPref());
-    apply(current.value);
-
-    const set = (name: string) => {
-        current.value = name;
-        localStorage.setItem(storageKey, name);
-        apply(name);
-    };
-
-    const toggle = () =>
-        set(current.value.startsWith('dark') ? 'light' : 'dark');
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => {
-        if (!read()) {
-            current.value = e.matches ? 'dark' : 'light';
-            apply(current.value);
-        }
-    };
-    media.addEventListener('change', onChange);
-
-    nuxtApp.hook('app:beforeMount', () => {
-        current.value = read() || getSystemPref();
-        apply(current.value);
-    });
-
-    // Cleanup for HMR in dev so we don't stack listeners
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() =>
-            media.removeEventListener('change', onChange)
-        );
-    }
-
-    nuxtApp.provide('theme', {
-        set,
-        toggle,
-        get: () => current.value,
-        system: getSystemPref,
-        current, // expose ref for reactivity if needed
-    });
+export default defineNuxtConfig({
+    compatibilityDate: '2025-07-15',
+    devtools: { enabled: true },
+    modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
+    // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
+    srcDir: 'app',
+    // Load Tailwind + theme variables globally
+    css: ['~/assets/css/main.css'],
+    fonts: {
+        families: [
+            { name: 'Press Start 2P', provider: 'google' },
+            { name: 'VT323', provider: 'google' },
+        ],
+    },
+    nitro: { prerender: { routes: ['/openrouter-callback'] } },
+    // PWA configuration
+    pwa: {
+        // Auto update SW when new content is available
+        registerType: 'autoUpdate',
+        // Enable PWA in dev so you can install/test while developing
+        devOptions: {
+            enabled: false,
+            suppressWarnings: true,
+        },
+        // Expose $pwa and intercept install prompt
+        client: {
+            installPrompt: true,
+            registerPlugin: true,
+            periodicSyncForUpdates: 12 * 60 * 60, // Check every 12 hours
+        },
+        // Basic offline support; let Workbox handle common assets
+        workbox: {
+            skipWaiting: true, // activate new SW immediately
+            clientsClaim: true, // control pages right away
+            cleanupOutdatedCaches: true,
+            // Ensure the prerendered callback HTML can be matched regardless of auth params
+            ignoreURLParametersMatching: [/^code$/, /^state$/],
+            // Never serve the generic SPA fallback for the auth callback (with or without params)
+            navigateFallbackDenylist: [
+                /\/openrouter-callback$/,
+                /\/openrouter-callback\?.*$/,
+            ],
+            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+            runtimeCaching: [
+                // Auth callback: prefer fresh network, but fall back to cached prerender if offline
+                {
+                    urlPattern: /\/openrouter-callback(\?.*)?$/,
+                    handler: 'NetworkOnly',
+                },
+                // Nuxt chunks
+                {
+                    urlPattern: /^\/_nuxt\//,
+                    handler: 'NetworkFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-dev-chunks',
+                        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
+                    },
+                },
+                // Static images
+                {
+                    urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'static-images',
+                        expiration: {
+                            maxEntries: 200,
+                            maxAgeSeconds: 7 * 24 * 60 * 60,
+                        },
+                    },
+                },
+                // Fonts
+                {
+                    urlPattern: /^\/_fonts\//,
+                    handler: 'CacheFirst',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-fonts',
+                        expiration: {
+                            maxEntries: 50,
+                            maxAgeSeconds: 30 * 24 * 60 * 60,
+                        },
+                    },
+                },
+                // Icon API
+                {
+                    urlPattern: /\/api\/_nuxt_icon\/.*$/,
+                    handler: 'StaleWhileRevalidate',
+                    method: 'GET',
+                    options: {
+                        cacheName: 'nuxt-icons',
+                        expiration: {
+                            maxEntries: 200,
+                            maxAgeSeconds: 30 * 24 * 60 * 60,
+                        },
+                    },
+                },
+            ],
+        },
+        // Web App Manifest
+        manifest: {
+            name: 'Or3 Chat',
+            short_name: 'Or3.Chat',
+            description:
+                'The open, extensible AI chat platform for the people.',
+            start_url: '/',
+            display: 'standalone',
+            background_color: '#0b0f1a',
+            theme_color: '#0b0f1a',
+            icons: [
+                {
+                    src: '/logos/logo-192.png',
+                    sizes: '192x192',
+                    type: 'image/png',
+                },
+                {
+                    src: '/logos/logo-512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                },
+                // WebP is fine in many browsers; PNGs above cover platforms requiring PNG
+                {
+                    src: '/logos/logo-1024.webp',
+                    sizes: '1024x1024',
+                    type: 'image/webp',
+                    purpose: 'any maskable',
+                },
+            ],
+        },
+    },
+    // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
+    ignore: [
+        '**/*.test.*',
+        '**/__tests__/**',
+        'tests/**',
+        // Example plugins (dev only); keep them out of production build
+        process.env.NODE_ENV === 'production'
+            ? 'app/plugins/examples/**'
+            : undefined,
+    ].filter(Boolean) as string[],
 });
 ```
 
@@ -19794,968 +21512,6 @@ export default defineNuxtPlugin((nuxtApp) => {
         "vite": "^5.4.8",
         "vitest": "^2.1.2"
     }
-}
-```
-
-## File: app/composables/useAi.ts
-```typescript
-import { ref } from 'vue';
-import { createStreamAccumulator } from './useStreamAccumulator';
-import { useToast } from '#imports';
-import { nowSec, newId } from '~/db/util';
-import { useUserApiKey } from './useUserApiKey';
-import { useHooks } from './useHooks';
-import { useActivePrompt } from './useActivePrompt';
-import { getDefaultPromptId } from './useDefaultPrompt';
-import { create, db, tx, upsert } from '~/db';
-import { createOrRefFile } from '~/db/files';
-import { serializeFileHashes } from '~/db/files-util';
-import {
-    parseHashes,
-    mergeAssistantFileHashes,
-} from '~/utils/files/attachments';
-import { getThreadSystemPrompt } from '~/db/threads';
-import { getPrompt } from '~/db/prompts';
-import type {
-    ContentPart,
-    ChatMessage,
-    SendMessageParams,
-    TextPart,
-} from '~/utils/chat/types';
-import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
-import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import {
-    buildParts,
-    mergeFileHashes,
-    trimOrMessagesImages,
-} from '~/utils/chat/messages';
-// getTextFromContent removed for UI messages; raw messages maintain original parts if needed
-import { openRouterStream } from '~/utils/chat/openrouterStream';
-import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
-import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
-import { promptJsonToString } from '~/utils/prompt-utils';
-import { state } from '~/state/global';
-
-const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
-
-// NOTE: Previous global tail map removed; we keep per-instance tail state so
-// each chat composable manages its own streaming tail.
-
-export function useChat(
-    msgs: ChatMessage[] = [],
-    initialThreadId?: string,
-    pendingPromptId?: string
-) {
-    // Messages and basic state
-    // UI-facing normalized messages
-    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
-    // Raw legacy messages (content parts / strings) used for history & hooks
-    const rawMessages = ref<ChatMessage[]>([...msgs]);
-    const getRawMessages = () => {
-        if (import.meta.dev) {
-            console.warn(
-                '[useChat] getRawMessages() is deprecated; prefer UiChatMessage via messages ref'
-            );
-        }
-        return rawMessages.value;
-    }; // transitional
-    const loading = ref(false);
-    const abortController = ref<AbortController | null>(null);
-    const aborted = ref(false);
-    let { apiKey, setKey } = useUserApiKey();
-    const hooks = useHooks();
-    const { activePromptContent } = useActivePrompt();
-    const threadIdRef = ref<string | undefined>(initialThreadId);
-    const historyLoadedFor = ref<string | null>(null);
-
-    if (import.meta.dev) {
-        if (state.value.openrouterKey && apiKey) {
-            setKey(state.value.openrouterKey);
-        }
-    }
-
-    // Unified streaming accumulator only (legacy removed)
-    const streamAcc = createStreamAccumulator();
-    const streamState = streamAcc.state;
-    const streamId = ref<string | null>(null);
-    function resetStream() {
-        streamAcc.reset();
-        streamId.value = null;
-    }
-
-    async function getSystemPromptContent(): Promise<string | null> {
-        if (!threadIdRef.value) return null;
-        try {
-            const promptId = await getThreadSystemPrompt(threadIdRef.value);
-            if (promptId) {
-                const prompt = await getPrompt(promptId);
-                if (prompt) return promptJsonToString(prompt.content);
-            }
-        } catch (e) {
-            console.warn('Failed to load thread system prompt', e);
-        }
-        return activePromptContent.value
-            ? promptJsonToString(activePromptContent.value)
-            : null;
-    }
-
-    // Tail assistant UI message (not added to messages[] until next user send)
-    const tailAssistant = ref<UiChatMessage | null>(null);
-    // When retrying we may intentionally remove the previous tail assistant (finalized answer)
-    // and must ensure the next send() does NOT flush it into history. We keep the removed id
-    // here and skip a single automatic flush if it matches.
-    let lastSuppressedAssistantId: string | null = null;
-    function flushTailAssistant() {
-        if (!tailAssistant.value) return;
-        if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
-            messages.value.push(tailAssistant.value!);
-        }
-        tailAssistant.value = null;
-    }
-
-    async function sendMessage(
-        content: string,
-        sendMessagesParams: SendMessageParams = {
-            files: [],
-            model: DEFAULT_AI_MODEL,
-            file_hashes: [],
-            online: false,
-        }
-    ) {
-        if (!apiKey.value) return;
-
-        // --- DEBUG ENTRY (pane/mpApi snapshot) ---
-        try {
-            const mpApiDbg: any = (globalThis as any).__or3MultiPaneApi;
-            console.debug('[useChat] sendMessage:entry', {
-                threadIdRef: threadIdRef.value,
-                hasMpApi: !!mpApiDbg,
-                panesLen: mpApiDbg?.panes?.value?.length,
-                activePaneIndex: mpApiDbg?.activePaneIndex?.value,
-                paneThreadIds: Array.isArray(mpApiDbg?.panes?.value)
-                    ? mpApiDbg.panes.value.map((p: any, i: number) => ({
-                          i,
-                          mode: p.mode,
-                          threadId: p.threadId,
-                      }))
-                    : null,
-            });
-        } catch {}
-
-        if (!threadIdRef.value) {
-            // Resolve system prompt: pending > default
-            let effectivePromptId: string | null = pendingPromptId || null;
-            if (!effectivePromptId) {
-                try {
-                    effectivePromptId = await getDefaultPromptId();
-                } catch {}
-            }
-            const newThread = await create.thread({
-                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
-                last_message_at: nowSec(),
-                parent_thread_id: null,
-                system_prompt_id: effectivePromptId || null,
-            });
-            threadIdRef.value = newThread.id;
-            // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
-            try {
-                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
-                if (
-                    mpApi?.panes?.value &&
-                    mpApi.activePaneIndex?.value != null &&
-                    mpApi.activePaneIndex.value >= 0
-                ) {
-                    const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
-                    if (pane && pane.mode === 'chat' && !pane.threadId) {
-                        if (typeof mpApi.setPaneThread === 'function') {
-                            try {
-                                await mpApi.setPaneThread(
-                                    mpApi.activePaneIndex.value,
-                                    newThread.id
-                                );
-                            } catch {
-                                pane.threadId = newThread.id;
-                            }
-                        } else {
-                            pane.threadId = newThread.id;
-                        }
-                        try {
-                            console.debug('[useChat] thread-bound-to-pane', {
-                                newThreadId: newThread.id,
-                                activePaneIndex: mpApi.activePaneIndex?.value,
-                                paneId: pane?.id,
-                                paneThreadId: pane?.threadId,
-                            });
-                        } catch {}
-                    }
-                } else {
-                    try {
-                        console.debug(
-                            '[useChat] thread-bound: no panes present',
-                            {
-                                newThreadId: newThread.id,
-                            }
-                        );
-                    } catch {}
-                }
-            } catch {}
-        } // END create-new-thread block
-
-        // Promote previous tail assistant (completed prior answer) into history unless
-        // we intentionally suppressed it during a retry (duplicate would appear before
-        // the re-sent user message otherwise).
-        if (
-            tailAssistant.value &&
-            lastSuppressedAssistantId &&
-            tailAssistant.value.id === lastSuppressedAssistantId
-        ) {
-            // Drop without flushing
-            tailAssistant.value = null;
-            lastSuppressedAssistantId = null;
-        } else {
-            flushTailAssistant();
-            lastSuppressedAssistantId = null; // clear in normal path too
-        }
-
-        // Prior assistant hashes for image carry-over
-        const prevAssistantRaw = [...rawMessages.value]
-            .reverse()
-            .find((m) => m.role === 'assistant');
-        const prevAssistant = prevAssistantRaw
-            ? messages.value.find((m) => m.id === prevAssistantRaw.id)
-            : null;
-        const assistantHashes = prevAssistantRaw?.file_hashes
-            ? parseHashes(prevAssistantRaw.file_hashes)
-            : [];
-
-        // Prepare accumulator
-        streamAcc.reset();
-        // Normalize params
-        let { files, model, file_hashes, extraTextParts, online } =
-            sendMessagesParams as any;
-        if (
-            (!files || files.length === 0) &&
-            Array.isArray((sendMessagesParams as any)?.images)
-        ) {
-            files = (sendMessagesParams as any).images.map((img: any) => {
-                const url = typeof img === 'string' ? img : img.url;
-                const provided = typeof img === 'object' ? img.type : undefined;
-                return { type: inferMimeFromUrl(url, provided), url } as any;
-            });
-        }
-        if (!model) model = DEFAULT_AI_MODEL;
-        if (online === true) model = model + ':online';
-
-        const outgoing = await hooks.applyFilters(
-            'ui.chat.message:filter:outgoing',
-            content
-        );
-
-        file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
-        const userDbMsg = await tx.appendMessage({
-            thread_id: threadIdRef.value!,
-            role: 'user',
-            data: { content: outgoing, attachments: files ?? [] },
-            file_hashes:
-                file_hashes && file_hashes.length
-                    ? (file_hashes as any)
-                    : undefined,
-        });
-        const parts: ContentPart[] = buildParts(
-            outgoing,
-            files,
-            extraTextParts
-        );
-        const rawUser: ChatMessage = {
-            role: 'user',
-            content: parts,
-            id: (userDbMsg as any).id,
-            file_hashes: userDbMsg.file_hashes,
-        };
-        recordRawMessage(rawUser);
-        rawMessages.value.push(rawUser);
-        messages.value.push(ensureUiMessage(rawUser));
-
-        // Pane-scoped message sent hook (after append)
-        try {
-            const mpApi: any = (globalThis as any).__or3MultiPaneApi;
-            if (mpApi && mpApi.panes?.value) {
-                try {
-                    console.debug('[useChat] pane-search:sent', {
-                        threadId: threadIdRef.value,
-                        paneThreads: mpApi.panes.value.map(
-                            (p: any, i: number) => ({
-                                i,
-                                mode: p.mode,
-                                threadId: p.threadId,
-                            })
-                        ),
-                    });
-                } catch {}
-                const pane = mpApi.panes.value.find(
-                    (p: any) =>
-                        p.mode === 'chat' && p.threadId === threadIdRef.value
-                );
-                if (pane) {
-                    if (import.meta.dev) {
-                        try {
-                            console.debug('[useChat] pane msg:sent', {
-                                paneIndex: mpApi.panes.value.indexOf(pane),
-                                threadId: threadIdRef.value,
-                                msgId: userDbMsg.id,
-                                length: outgoing.length,
-                                fileHashes: userDbMsg.file_hashes || null,
-                            });
-                        } catch {}
-                    }
-                    hooks.doAction('ui.pane.msg:action:sent', pane, {
-                        id: userDbMsg.id,
-                        paneIndex: mpApi.panes.value.indexOf(pane),
-                        threadId: threadIdRef.value,
-                        length: outgoing.length,
-                        fileHashes: userDbMsg.file_hashes || null,
-                    });
-                } else if (import.meta.dev) {
-                    try {
-                        console.debug(
-                            '[useChat] pane msg:sent (no pane found)',
-                            {
-                                threadId: threadIdRef.value,
-                                msgId: userDbMsg.id,
-                                panes: Array.isArray(mpApi.panes.value)
-                                    ? mpApi.panes.value.map(
-                                          (p: any, i: number) => ({
-                                              i,
-                                              mode: p.mode,
-                                              threadId: p.threadId,
-                                          })
-                                      )
-                                    : null,
-                                activePaneIndex: mpApi.activePaneIndex?.value,
-                                reason: !mpApi.panes.value.length
-                                    ? 'no-panes'
-                                    : 'thread-mismatch',
-                            }
-                        );
-                    } catch {}
-                }
-            } else {
-                try {
-                    console.debug(
-                        '[useChat] pane-search:sent mpApi missing or no panes',
-                        {
-                            threadId: threadIdRef.value,
-                            hasMpApi: !!mpApi,
-                        }
-                    );
-                } catch {}
-            }
-        } catch {}
-
-        loading.value = true;
-        streamId.value = null;
-
-        try {
-            const startedAt = Date.now();
-            const modelId = await hooks.applyFilters(
-                'ai.chat.model:filter:select',
-                model
-            );
-
-            // Inject system message
-            let messagesWithSystemRaw = [...rawMessages.value];
-            const systemText = await getSystemPromptContent();
-            if (systemText && systemText.trim()) {
-                messagesWithSystemRaw.unshift({
-                    role: 'system',
-                    content: systemText,
-                    id: `system-${newId()}`,
-                });
-            }
-
-            const effectiveMessages = await hooks.applyFilters(
-                'ai.chat.messages:filter:input',
-                messagesWithSystemRaw
-            );
-
-            // --- Sanitization: remove prior empty assistant placeholder messages ---
-            // Root cause investigation: Anthropic (via OpenRouter) rejects a conversation
-            // when an earlier assistant message has empty content, emitting:
-            //   "messages.1: all messages must have non-empty content except for the optional final assistant message"
-            // This occurs if a previous streamed assistant was aborted / failed before
-            // any delta arrived, leaving an empty assistant entry in rawMessages.
-            // We exclude such empty assistant messages from the request payload.
-            const sanitizedEffectiveMessages = (
-                effectiveMessages as any[]
-            ).filter((m) => {
-                if (m.role !== 'assistant') return true;
-                const c = m.content;
-                if (c == null) return false;
-                if (typeof c === 'string') return c.trim().length > 0;
-                if (Array.isArray(c)) {
-                    // Content parts: keep if any part has non-empty text OR is an image / media part
-                    return c.some((p) => {
-                        if (!p) return false;
-                        if (typeof p === 'string') return p.trim().length > 0;
-                        if (p.type === 'text' && typeof p.text === 'string')
-                            return p.text.trim().length > 0;
-                        // Treat image / media parts as content-bearing
-                        if (
-                            p.type === 'image' ||
-                            p.type === 'image_url' ||
-                            (p.mediaType && /image\//.test(p.mediaType))
-                        )
-                            return true;
-                        return false;
-                    });
-                }
-                return true; // unknown shape: keep defensively
-            });
-            if (
-                sanitizedEffectiveMessages.length !==
-                (effectiveMessages as any[]).length
-            ) {
-                try {
-                    console.debug(
-                        '[useChat] removed empty assistant placeholders:',
-                        (effectiveMessages as any[])
-                            .filter((m: any) => m.role === 'assistant')
-                            .map((m: any) => ({
-                                id: m.id,
-                                kept: sanitizedEffectiveMessages.includes(m),
-                                contentPreview:
-                                    typeof m.content === 'string'
-                                        ? m.content.slice(0, 30)
-                                        : JSON.stringify(m.content).slice(
-                                              0,
-                                              60
-                                          ),
-                            }))
-                    );
-                } catch {}
-            }
-
-            const { buildOpenRouterMessages } = await import(
-                '~/utils/openrouter-build'
-            );
-
-            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
-            const modelInputMessages: any[] = (
-                sanitizedEffectiveMessages as any[]
-            ).map((m: any) => ({ ...m }));
-            if (assistantHashes.length && prevAssistant?.id) {
-                const target = modelInputMessages.find(
-                    (m) => m.id === prevAssistant.id
-                );
-                if (target) target.file_hashes = null;
-            }
-            const orMessages = await buildOpenRouterMessages(
-                modelInputMessages as any,
-                {
-                    maxImageInputs: 16,
-                    imageInclusionPolicy: 'all',
-                    debug: false,
-                }
-            );
-            trimOrMessagesImages(orMessages, 5);
-
-            const hasImageInput = (modelInputMessages as any[]).some((m) =>
-                Array.isArray(m.content)
-                    ? (m.content as any[]).some(
-                          (p) =>
-                              p?.type === 'image_url' ||
-                              p?.type === 'image' ||
-                              p?.mediaType?.startsWith('image/')
-                      )
-                    : false
-            );
-            const modelImageHint = /image|vision|flash/i.test(modelId);
-            const modalities =
-                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
-
-            const newStreamId = newId();
-            streamId.value = newStreamId;
-            const assistantDbMsg = await tx.appendMessage({
-                thread_id: threadIdRef.value!,
-                role: 'assistant',
-                stream_id: newStreamId,
-                data: { content: '', attachments: [], reasoning_text: null },
-            });
-
-            await hooks.doAction('ai.chat.send:action:before', {
-                threadId: threadIdRef.value,
-                modelId,
-                user: { id: userDbMsg.id, length: outgoing.length },
-                assistant: { id: assistantDbMsg.id, streamId: newStreamId },
-                messagesCount: Array.isArray(effectiveMessages)
-                    ? (effectiveMessages as any[]).length
-                    : undefined,
-            });
-
-            aborted.value = false;
-            abortController.value = new AbortController();
-            const stream = openRouterStream({
-                apiKey: apiKey.value!,
-                model: modelId,
-                orMessages,
-                modalities,
-                signal: abortController.value.signal,
-            });
-
-            const rawAssistant: ChatMessage = {
-                role: 'assistant',
-                content: '',
-                id: (assistantDbMsg as any).id,
-                stream_id: newStreamId,
-                reasoning_text: null,
-            } as any;
-            recordRawMessage(rawAssistant);
-            rawMessages.value.push(rawAssistant);
-            const uiAssistant = ensureUiMessage(rawAssistant);
-            uiAssistant.pending = true;
-            tailAssistant.value = uiAssistant; // keep out of main messages until next user send
-            const current = uiAssistant;
-            let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 500;
-            let lastPersistAt = 0;
-            const assistantFileHashes: string[] = [];
-
-            for await (const ev of stream) {
-                if (ev.type === 'reasoning') {
-                    if (current.reasoning_text === null)
-                        current.reasoning_text = ev.text;
-                    else current.reasoning_text += ev.text;
-                    streamAcc.append(ev.text, { kind: 'reasoning' });
-                    try {
-                        await hooks.doAction(
-                            'ai.chat.stream:action:reasoning',
-                            ev.text,
-                            {
-                                threadId: threadIdRef.value,
-                                assistantId: assistantDbMsg.id,
-                                streamId: newStreamId,
-                                reasoningLength:
-                                    current.reasoning_text?.length || 0,
-                            }
-                        );
-                    } catch {}
-                } else if (ev.type === 'text') {
-                    if (current.pending) current.pending = false;
-                    const delta = ev.text;
-                    streamAcc.append(delta, { kind: 'text' });
-                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                        threadId: threadIdRef.value,
-                        assistantId: assistantDbMsg.id,
-                        streamId: newStreamId,
-                        deltaLength: String(delta ?? '').length,
-                        totalLength:
-                            current.text.length + String(delta ?? '').length,
-                        chunkIndex: chunkIndex++,
-                    });
-                    current.text += delta;
-                } else if (ev.type === 'image') {
-                    if (current.pending) current.pending = false;
-                    // Append markdown placeholder exactly once per image URL
-                    const placeholder = `![generated image](${ev.url})`;
-                    const already = current.text.includes(placeholder);
-                    if (!already) {
-                        current.text +=
-                            (current.text ? '\n\n' : '') + placeholder;
-                    }
-                    if (import.meta.dev) {
-                        console.debug('[stream:image:event]', {
-                            url: ev.url?.slice(0, 80),
-                            placeholderInserted: !already,
-                            currentLength: current.text.length,
-                            fileHashes: assistantFileHashes.slice(),
-                        });
-                    }
-                    if (assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/'))
-                            blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            try {
-                                const r = await fetch(ev.url);
-                                if (r.ok) blob = await r.blob();
-                            } catch {}
-                        }
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(
-                                    blob,
-                                    'gen-image'
-                                );
-                                assistantFileHashes.push(meta.hash);
-                                const serialized =
-                                    serializeFileHashes(assistantFileHashes);
-                                const updatedMsg = {
-                                    ...assistantDbMsg,
-                                    data: {
-                                        ...((assistantDbMsg as any).data || {}),
-                                        reasoning_text:
-                                            current.reasoning_text ?? null,
-                                    },
-                                    file_hashes: serialized,
-                                    updated_at: nowSec(),
-                                } as any;
-                                await upsert.message(updatedMsg);
-                                (current as any).file_hashes = serialized;
-                                if (import.meta.dev) {
-                                    console.debug('[stream:image:persist]', {
-                                        hash: meta.hash,
-                                        total: assistantFileHashes.length,
-                                        serialized,
-                                    });
-                                }
-                            } catch {}
-                        }
-                    }
-                }
-
-                const now = Date.now();
-                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent = current.text;
-                    const updated = {
-                        ...assistantDbMsg,
-                        data: {
-                            ...((assistantDbMsg as any).data || {}),
-                            content: textContent,
-                            reasoning_text: current.reasoning_text ?? null,
-                        },
-                        file_hashes: assistantFileHashes.length
-                            ? serializeFileHashes(assistantFileHashes)
-                            : (assistantDbMsg as any).file_hashes,
-                        updated_at: nowSec(),
-                    } as any;
-                    await upsert.message(updated);
-                    if (assistantFileHashes.length)
-                        (current as any).file_hashes =
-                            serializeFileHashes(assistantFileHashes);
-                    lastPersistAt = now;
-                }
-            }
-
-            const fullText = current.text;
-            const incoming = await hooks.applyFilters(
-                'ui.chat.message:filter:incoming',
-                fullText,
-                threadIdRef.value
-            );
-            if (current.pending) current.pending = false;
-            current.text = incoming as string;
-            const finalized = {
-                ...assistantDbMsg,
-                data: {
-                    ...((assistantDbMsg as any).data || {}),
-                    content: incoming,
-                    reasoning_text: current.reasoning_text ?? null,
-                },
-                file_hashes: assistantFileHashes.length
-                    ? serializeFileHashes(assistantFileHashes)
-                    : (assistantDbMsg as any).file_hashes,
-                updated_at: nowSec(),
-            } as any;
-            await upsert.message(finalized);
-            // Pane-scoped assistant received hook
-            try {
-                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
-                if (mpApi && mpApi.panes?.value) {
-                    try {
-                        console.debug('[useChat] pane-search:received', {
-                            threadId: threadIdRef.value,
-                            paneThreads: mpApi.panes.value.map(
-                                (p: any, i: number) => ({
-                                    i,
-                                    mode: p.mode,
-                                    threadId: p.threadId,
-                                })
-                            ),
-                        });
-                    } catch {}
-                    const pane = mpApi.panes.value.find(
-                        (p: any) =>
-                            p.mode === 'chat' &&
-                            p.threadId === threadIdRef.value
-                    );
-                    if (pane) {
-                        if (import.meta.dev) {
-                            try {
-                                console.debug('[useChat] pane msg:received', {
-                                    paneIndex: mpApi.panes.value.indexOf(pane),
-                                    threadId: threadIdRef.value,
-                                    msgId: finalized.id,
-                                    length: (incoming as string).length,
-                                    reasoningLength: (
-                                        current.reasoning_text || ''
-                                    ).length,
-                                    fileHashes: finalized.file_hashes || null,
-                                });
-                            } catch {}
-                        }
-                        hooks.doAction('ui.pane.msg:action:received', pane, {
-                            id: finalized.id,
-                            threadId: threadIdRef.value,
-                            paneIndex: mpApi.panes.value.indexOf(pane),
-                            msgId: finalized.id,
-                            length: (incoming as string).length,
-                            fileHashes: finalized.file_hashes || null,
-                            reasoningLength: (current.reasoning_text || '')
-                                .length,
-                        });
-                    } else if (import.meta.dev) {
-                        try {
-                            console.debug(
-                                '[useChat] pane msg:received (no pane found)',
-                                {
-                                    threadId: threadIdRef.value,
-                                    msgId: finalized.id,
-                                    length: (incoming as string).length,
-                                    panes: Array.isArray(mpApi.panes.value)
-                                        ? mpApi.panes.value.map(
-                                              (p: any, i: number) => ({
-                                                  i,
-                                                  mode: p.mode,
-                                                  threadId: p.threadId,
-                                              })
-                                          )
-                                        : null,
-                                    activePaneIndex:
-                                        mpApi.activePaneIndex?.value,
-                                    reason: !mpApi.panes.value.length
-                                        ? 'no-panes'
-                                        : 'thread-mismatch',
-                                }
-                            );
-                        } catch {}
-                    }
-                } else {
-                    try {
-                        console.debug(
-                            '[useChat] pane-search:received mpApi missing or no panes',
-                            {
-                                threadId: threadIdRef.value,
-                                hasMpApi: !!mpApi,
-                            }
-                        );
-                    } catch {}
-                }
-            } catch {}
-            const endedAt = Date.now();
-            await hooks.doAction('ai.chat.send:action:after', {
-                threadId: threadIdRef.value,
-                request: { modelId, userId: userDbMsg.id },
-                response: {
-                    assistantId: assistantDbMsg.id,
-                    length: (incoming as string).length,
-                },
-                timings: {
-                    startedAt,
-                    endedAt,
-                    durationMs: endedAt - startedAt,
-                },
-                aborted: false,
-            });
-            streamAcc.finalize();
-        } catch (err) {
-            if (aborted.value) {
-                if (tailAssistant.value?.pending)
-                    (tailAssistant.value as any).pending = false;
-                await hooks.doAction('ai.chat.send:action:after', {
-                    threadId: threadIdRef.value,
-                    aborted: true,
-                });
-            } else {
-                await hooks.doAction('ai.chat.error:action', {
-                    threadId: threadIdRef.value,
-                    stage: 'stream',
-                    error: err,
-                });
-                try {
-                    const lastUser = [...messages.value]
-                        .reverse()
-                        .find((m) => m.role === 'user');
-                    const toast = useToast();
-                    toast.add({
-                        title: 'Message failed',
-                        description: (err as any)?.message || 'Request failed',
-                        color: 'error',
-                        actions: lastUser
-                            ? [
-                                  {
-                                      label: 'Retry',
-                                      onClick: () => {
-                                          if (lastUser?.id)
-                                              retryMessage(lastUser.id as any);
-                                      },
-                                  },
-                              ]
-                            : undefined,
-                        duration: 6000,
-                    });
-                } catch {}
-                const e = err instanceof Error ? err : new Error(String(err));
-                streamAcc.finalize({ error: e });
-                // Drop empty failed assistant
-                if (!tailAssistant.value?.text) tailAssistant.value = null;
-                else if (tailAssistant.value?.pending)
-                    (tailAssistant.value as any).pending = false;
-            }
-        } finally {
-            loading.value = false;
-            abortController.value = null;
-            setTimeout(() => {
-                if (!loading.value && streamState.finalized) resetStream();
-            }, 0);
-        }
-    }
-
-    // END sendMessage
-
-    async function retryMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || !threadIdRef.value) return;
-        try {
-            const target: any = await db.messages.get(messageId);
-            if (!target || target.thread_id !== threadIdRef.value) return;
-            let userMsg: any = target.role === 'user' ? target : null;
-            if (!userMsg && target.role === 'assistant') {
-                const DexieMod = (await import('dexie')).default;
-                userMsg = await db.messages
-                    .where('[thread_id+index]')
-                    .between(
-                        [target.thread_id, DexieMod.minKey],
-                        [target.thread_id, target.index]
-                    )
-                    .filter(
-                        (m: any) =>
-                            m.role === 'user' &&
-                            !m.deleted &&
-                            m.index < target.index
-                    )
-                    .last();
-            }
-            if (!userMsg) return;
-            const DexieMod2 = (await import('dexie')).default;
-            const assistant = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [userMsg.thread_id, userMsg.index + 1],
-                    [userMsg.thread_id, DexieMod2.maxKey]
-                )
-                .filter((m: any) => m.role === 'assistant' && !m.deleted)
-                .first();
-
-            // Suppress flushing of the previous tail assistant if it corresponds to the
-            // assistant we are removing for retry. We cannot rely solely on clearing the ref
-            // because sendMessage() calls flushTailAssistant() unconditionally; instead we
-            // record the id and skip a single flush on next send.
-            if (assistant && tailAssistant.value?.id === assistant.id) {
-                lastSuppressedAssistantId = assistant.id;
-                tailAssistant.value = null;
-            } else if (
-                target.role === 'assistant' &&
-                tailAssistant.value?.id === target.id
-            ) {
-                lastSuppressedAssistantId = target.id;
-                tailAssistant.value = null;
-            }
-
-            await hooks.doAction('ai.chat.retry:action:before', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                triggeredBy: target.role,
-            });
-            await db.transaction('rw', db.messages, async () => {
-                await db.messages.delete(userMsg.id);
-                if (assistant) await db.messages.delete(assistant.id);
-            });
-            rawMessages.value = rawMessages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-            messages.value = messages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-            const originalText = (userMsg.data as any)?.content || '';
-            let hashes: string[] = [];
-            if (userMsg.file_hashes) {
-                const { parseFileHashes } = await import('~/db/files-util');
-                hashes = parseFileHashes(userMsg.file_hashes);
-            }
-            await sendMessage(originalText, {
-                model: modelOverride || DEFAULT_AI_MODEL,
-                file_hashes: hashes,
-                files: [],
-                online: false,
-            });
-            const tail = messages.value.slice(-2);
-            const newUser = tail.find((m: any) => m.role === 'user');
-            const newAssistant = tail.find((m: any) => m.role === 'assistant');
-            await hooks.doAction('ai.chat.retry:action:after', {
-                threadId: threadIdRef.value,
-                originalUserId: userMsg.id,
-                originalAssistantId: assistant?.id,
-                newUserId: newUser?.id,
-                newAssistantId: newAssistant?.id,
-            });
-        } catch (e) {
-            console.error('[useChat.retryMessage] failed', e);
-        }
-    }
-
-    /** Free all in-memory message arrays (UI + raw) and abort any active stream. */
-    function clear() {
-        try {
-            if (abortController.value) {
-                aborted.value = true;
-                try {
-                    abortController.value.abort();
-                } catch {}
-                streamAcc.finalize({ aborted: true });
-                abortController.value = null;
-            }
-        } catch {}
-        rawMessages.value = [];
-        messages.value = [];
-        // Defensive: if any lingering refs still hold many messages, let GC reclaim by slicing to empty
-        if (
-            (rawMessages as any)._value &&
-            (rawMessages as any)._value.length > 1000
-        ) {
-            (rawMessages as any)._value = [];
-        }
-        if (
-            (messages as any)._value &&
-            (messages as any)._value.length > 1000
-        ) {
-            (messages as any)._value = [];
-        }
-        streamAcc.reset();
-    }
-
-    return {
-        messages,
-        sendMessage,
-        retryMessage,
-        loading,
-        threadId: threadIdRef,
-        streamId,
-        resetStream,
-        streamState,
-        tailAssistant,
-        flushTailAssistant,
-        abort: () => {
-            if (!loading.value || !abortController.value) return;
-            aborted.value = true;
-            try {
-                abortController.value.abort();
-            } catch {}
-            streamAcc.finalize({ aborted: true });
-            if (tailAssistant.value?.pending)
-                (tailAssistant.value as any).pending = false;
-        },
-        clear,
-    };
 }
 ```
 
@@ -21792,6 +22548,989 @@ const streamMdClasses = [
     padding-left: 0;
 }
 </style>
+```
+
+## File: app/composables/useAi.ts
+```typescript
+import { ref } from 'vue';
+import { createStreamAccumulator } from './useStreamAccumulator';
+import { useToast, useAppConfig } from '#imports';
+import { nowSec, newId } from '~/db/util';
+import { useUserApiKey } from './useUserApiKey';
+import { useHooks } from './useHooks';
+import { useActivePrompt } from './useActivePrompt';
+import { getDefaultPromptId } from './useDefaultPrompt';
+import { create, db, tx, upsert } from '~/db';
+import { createOrRefFile } from '~/db/files';
+import { serializeFileHashes } from '~/db/files-util';
+import {
+    parseHashes,
+    mergeAssistantFileHashes,
+} from '~/utils/files/attachments';
+import { getThreadSystemPrompt } from '~/db/threads';
+import { getPrompt } from '~/db/prompts';
+import type {
+    ContentPart,
+    ChatMessage,
+    SendMessageParams,
+    TextPart,
+} from '~/utils/chat/types';
+import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
+import { reportError, err } from '~/utils/errors';
+import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import {
+    buildParts,
+    mergeFileHashes,
+    trimOrMessagesImages,
+} from '~/utils/chat/messages';
+// getTextFromContent removed for UI messages; raw messages maintain original parts if needed
+import { openRouterStream } from '~/utils/chat/openrouterStream';
+import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
+import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
+import { promptJsonToString } from '~/utils/prompt-utils';
+import { state } from '~/state/global';
+
+const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
+
+// NOTE: Previous global tail map removed; we keep per-instance tail state so
+// each chat composable manages its own streaming tail.
+
+export function useChat(
+    msgs: ChatMessage[] = [],
+    initialThreadId?: string,
+    pendingPromptId?: string
+) {
+    // Messages and basic state
+    // UI-facing normalized messages
+    const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
+    // Raw legacy messages (content parts / strings) used for history & hooks
+    const rawMessages = ref<ChatMessage[]>([...msgs]);
+    const getRawMessages = () => {
+        if (import.meta.dev) {
+            console.warn(
+                '[useChat] getRawMessages() is deprecated; prefer UiChatMessage via messages ref'
+            );
+        }
+        return rawMessages.value;
+    }; // transitional
+    const loading = ref(false);
+    const abortController = ref<AbortController | null>(null);
+    const aborted = ref(false);
+    let { apiKey, setKey } = useUserApiKey();
+    const hooks = useHooks();
+    const { activePromptContent } = useActivePrompt();
+    const threadIdRef = ref<string | undefined>(initialThreadId);
+    const historyLoadedFor = ref<string | null>(null);
+
+    if (import.meta.dev) {
+        if (state.value.openrouterKey && apiKey) {
+            setKey(state.value.openrouterKey);
+        }
+    }
+
+    // Unified streaming accumulator only (legacy removed)
+    const streamAcc = createStreamAccumulator();
+    const streamState = streamAcc.state;
+    const streamId = ref<string | null>(null);
+    function resetStream() {
+        streamAcc.reset();
+        streamId.value = null;
+    }
+
+    async function getSystemPromptContent(): Promise<string | null> {
+        if (!threadIdRef.value) return null;
+        try {
+            const promptId = await getThreadSystemPrompt(threadIdRef.value);
+            if (promptId) {
+                const prompt = await getPrompt(promptId);
+                if (prompt) return promptJsonToString(prompt.content);
+            }
+        } catch (e) {
+            console.warn('Failed to load thread system prompt', e);
+        }
+        return activePromptContent.value
+            ? promptJsonToString(activePromptContent.value)
+            : null;
+    }
+
+    // Tail assistant UI message (not added to messages[] until next user send)
+    const tailAssistant = ref<UiChatMessage | null>(null);
+    // When retrying we may intentionally remove the previous tail assistant (finalized answer)
+    // and must ensure the next send() does NOT flush it into history. We keep the removed id
+    // here and skip a single automatic flush if it matches.
+    let lastSuppressedAssistantId: string | null = null;
+    function flushTailAssistant() {
+        if (!tailAssistant.value) return;
+        if (!messages.value.find((m) => m.id === tailAssistant.value!.id)) {
+            messages.value.push(tailAssistant.value!);
+        }
+        tailAssistant.value = null;
+    }
+
+    async function sendMessage(
+        content: string,
+        sendMessagesParams: SendMessageParams = {
+            files: [],
+            model: DEFAULT_AI_MODEL,
+            file_hashes: [],
+            online: false,
+        }
+    ) {
+        if (!apiKey.value) return;
+
+        // --- DEBUG ENTRY (pane/mpApi snapshot) ---
+        try {
+            const mpApiDbg: any = (globalThis as any).__or3MultiPaneApi;
+            console.debug('[useChat] sendMessage:entry', {
+                threadIdRef: threadIdRef.value,
+                hasMpApi: !!mpApiDbg,
+                panesLen: mpApiDbg?.panes?.value?.length,
+                activePaneIndex: mpApiDbg?.activePaneIndex?.value,
+                paneThreadIds: Array.isArray(mpApiDbg?.panes?.value)
+                    ? mpApiDbg.panes.value.map((p: any, i: number) => ({
+                          i,
+                          mode: p.mode,
+                          threadId: p.threadId,
+                      }))
+                    : null,
+            });
+        } catch {}
+
+        if (!threadIdRef.value) {
+            // Resolve system prompt: pending > default
+            let effectivePromptId: string | null = pendingPromptId || null;
+            if (!effectivePromptId) {
+                try {
+                    effectivePromptId = await getDefaultPromptId();
+                } catch {}
+            }
+            const newThread = await create.thread({
+                title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
+                last_message_at: nowSec(),
+                parent_thread_id: null,
+                system_prompt_id: effectivePromptId || null,
+            });
+            threadIdRef.value = newThread.id;
+            // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
+            try {
+                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                if (
+                    mpApi?.panes?.value &&
+                    mpApi.activePaneIndex?.value != null &&
+                    mpApi.activePaneIndex.value >= 0
+                ) {
+                    const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
+                    if (pane && pane.mode === 'chat' && !pane.threadId) {
+                        if (typeof mpApi.setPaneThread === 'function') {
+                            try {
+                                await mpApi.setPaneThread(
+                                    mpApi.activePaneIndex.value,
+                                    newThread.id
+                                );
+                            } catch {
+                                pane.threadId = newThread.id;
+                            }
+                        } else {
+                            pane.threadId = newThread.id;
+                        }
+                        try {
+                            console.debug('[useChat] thread-bound-to-pane', {
+                                newThreadId: newThread.id,
+                                activePaneIndex: mpApi.activePaneIndex?.value,
+                                paneId: pane?.id,
+                                paneThreadId: pane?.threadId,
+                            });
+                        } catch {}
+                    }
+                } else {
+                    try {
+                        console.debug(
+                            '[useChat] thread-bound: no panes present',
+                            {
+                                newThreadId: newThread.id,
+                            }
+                        );
+                    } catch {}
+                }
+            } catch {}
+        } // END create-new-thread block
+
+        // Promote previous tail assistant (completed prior answer) into history unless
+        // we intentionally suppressed it during a retry (duplicate would appear before
+        // the re-sent user message otherwise).
+        if (
+            tailAssistant.value &&
+            lastSuppressedAssistantId &&
+            tailAssistant.value.id === lastSuppressedAssistantId
+        ) {
+            // Drop without flushing
+            tailAssistant.value = null;
+            lastSuppressedAssistantId = null;
+        } else {
+            flushTailAssistant();
+            lastSuppressedAssistantId = null; // clear in normal path too
+        }
+
+        // Prior assistant hashes for image carry-over
+        const prevAssistantRaw = [...rawMessages.value]
+            .reverse()
+            .find((m) => m.role === 'assistant');
+        const prevAssistant = prevAssistantRaw
+            ? messages.value.find((m) => m.id === prevAssistantRaw.id)
+            : null;
+        const assistantHashes = prevAssistantRaw?.file_hashes
+            ? parseHashes(prevAssistantRaw.file_hashes)
+            : [];
+
+        // Prepare accumulator
+        streamAcc.reset();
+        // Normalize params
+        let { files, model, file_hashes, extraTextParts, online } =
+            sendMessagesParams as any;
+        if (
+            (!files || files.length === 0) &&
+            Array.isArray((sendMessagesParams as any)?.images)
+        ) {
+            files = (sendMessagesParams as any).images.map((img: any) => {
+                const url = typeof img === 'string' ? img : img.url;
+                const provided = typeof img === 'object' ? img.type : undefined;
+                return { type: inferMimeFromUrl(url, provided), url } as any;
+            });
+        }
+        if (!model) model = DEFAULT_AI_MODEL;
+        if (online === true) model = model + ':online';
+
+        const outgoing = await hooks.applyFilters(
+            'ui.chat.message:filter:outgoing',
+            content
+        );
+
+        file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
+        const userDbMsg = await tx.appendMessage({
+            thread_id: threadIdRef.value!,
+            role: 'user',
+            data: { content: outgoing, attachments: files ?? [] },
+            file_hashes:
+                file_hashes && file_hashes.length
+                    ? (file_hashes as any)
+                    : undefined,
+        });
+        const parts: ContentPart[] = buildParts(
+            outgoing,
+            files,
+            extraTextParts
+        );
+        const rawUser: ChatMessage = {
+            role: 'user',
+            content: parts,
+            id: (userDbMsg as any).id,
+            file_hashes: userDbMsg.file_hashes,
+        };
+        recordRawMessage(rawUser);
+        rawMessages.value.push(rawUser);
+        messages.value.push(ensureUiMessage(rawUser));
+
+        // Pane-scoped message sent hook (after append)
+        try {
+            const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+            if (mpApi && mpApi.panes?.value) {
+                try {
+                    console.debug('[useChat] pane-search:sent', {
+                        threadId: threadIdRef.value,
+                        paneThreads: mpApi.panes.value.map(
+                            (p: any, i: number) => ({
+                                i,
+                                mode: p.mode,
+                                threadId: p.threadId,
+                            })
+                        ),
+                    });
+                } catch {}
+                const pane = mpApi.panes.value.find(
+                    (p: any) =>
+                        p.mode === 'chat' && p.threadId === threadIdRef.value
+                );
+                if (pane) {
+                    if (import.meta.dev) {
+                        try {
+                            console.debug('[useChat] pane msg:sent', {
+                                paneIndex: mpApi.panes.value.indexOf(pane),
+                                threadId: threadIdRef.value,
+                                msgId: userDbMsg.id,
+                                length: outgoing.length,
+                                fileHashes: userDbMsg.file_hashes || null,
+                            });
+                        } catch {}
+                    }
+                    hooks.doAction('ui.pane.msg:action:sent', pane, {
+                        id: userDbMsg.id,
+                        paneIndex: mpApi.panes.value.indexOf(pane),
+                        threadId: threadIdRef.value,
+                        length: outgoing.length,
+                        fileHashes: userDbMsg.file_hashes || null,
+                    });
+                } else if (import.meta.dev) {
+                    try {
+                        console.debug(
+                            '[useChat] pane msg:sent (no pane found)',
+                            {
+                                threadId: threadIdRef.value,
+                                msgId: userDbMsg.id,
+                                panes: Array.isArray(mpApi.panes.value)
+                                    ? mpApi.panes.value.map(
+                                          (p: any, i: number) => ({
+                                              i,
+                                              mode: p.mode,
+                                              threadId: p.threadId,
+                                          })
+                                      )
+                                    : null,
+                                activePaneIndex: mpApi.activePaneIndex?.value,
+                                reason: !mpApi.panes.value.length
+                                    ? 'no-panes'
+                                    : 'thread-mismatch',
+                            }
+                        );
+                    } catch {}
+                }
+            } else {
+                try {
+                    console.debug(
+                        '[useChat] pane-search:sent mpApi missing or no panes',
+                        {
+                            threadId: threadIdRef.value,
+                            hasMpApi: !!mpApi,
+                        }
+                    );
+                } catch {}
+            }
+        } catch {}
+
+        loading.value = true;
+        streamId.value = null;
+
+        let currentModelId: string | undefined;
+        try {
+            const startedAt = Date.now();
+            const modelId = await hooks.applyFilters(
+                'ai.chat.model:filter:select',
+                model
+            );
+            currentModelId = modelId;
+
+            // Inject system message
+            let messagesWithSystemRaw = [...rawMessages.value];
+            const systemText = await getSystemPromptContent();
+            if (systemText && systemText.trim()) {
+                messagesWithSystemRaw.unshift({
+                    role: 'system',
+                    content: systemText,
+                    id: `system-${newId()}`,
+                });
+            }
+
+            const effectiveMessages = await hooks.applyFilters(
+                'ai.chat.messages:filter:input',
+                messagesWithSystemRaw
+            );
+
+            // --- Sanitization: remove prior empty assistant placeholder messages ---
+            // Root cause investigation: Anthropic (via OpenRouter) rejects a conversation
+            // when an earlier assistant message has empty content, emitting:
+            //   "messages.1: all messages must have non-empty content except for the optional final assistant message"
+            // This occurs if a previous streamed assistant was aborted / failed before
+            // any delta arrived, leaving an empty assistant entry in rawMessages.
+            // We exclude such empty assistant messages from the request payload.
+            const sanitizedEffectiveMessages = (
+                effectiveMessages as any[]
+            ).filter((m) => {
+                if (m.role !== 'assistant') return true;
+                const c = m.content;
+                if (c == null) return false;
+                if (typeof c === 'string') return c.trim().length > 0;
+                if (Array.isArray(c)) {
+                    // Content parts: keep if any part has non-empty text OR is an image / media part
+                    return c.some((p) => {
+                        if (!p) return false;
+                        if (typeof p === 'string') return p.trim().length > 0;
+                        if (p.type === 'text' && typeof p.text === 'string')
+                            return p.text.trim().length > 0;
+                        // Treat image / media parts as content-bearing
+                        if (
+                            p.type === 'image' ||
+                            p.type === 'image_url' ||
+                            (p.mediaType && /image\//.test(p.mediaType))
+                        )
+                            return true;
+                        return false;
+                    });
+                }
+                return true; // unknown shape: keep defensively
+            });
+            if (
+                sanitizedEffectiveMessages.length !==
+                (effectiveMessages as any[]).length
+            ) {
+                try {
+                    console.debug(
+                        '[useChat] removed empty assistant placeholders:',
+                        (effectiveMessages as any[])
+                            .filter((m: any) => m.role === 'assistant')
+                            .map((m: any) => ({
+                                id: m.id,
+                                kept: sanitizedEffectiveMessages.includes(m),
+                                contentPreview:
+                                    typeof m.content === 'string'
+                                        ? m.content.slice(0, 30)
+                                        : JSON.stringify(m.content).slice(
+                                              0,
+                                              60
+                                          ),
+                            }))
+                    );
+                } catch {}
+            }
+
+            const { buildOpenRouterMessages } = await import(
+                '~/utils/openrouter-build'
+            );
+
+            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
+            const modelInputMessages: any[] = (
+                sanitizedEffectiveMessages as any[]
+            ).map((m: any) => ({ ...m }));
+            if (assistantHashes.length && prevAssistant?.id) {
+                const target = modelInputMessages.find(
+                    (m) => m.id === prevAssistant.id
+                );
+                if (target) target.file_hashes = null;
+            }
+            const orMessages = await buildOpenRouterMessages(
+                modelInputMessages as any,
+                {
+                    maxImageInputs: 16,
+                    imageInclusionPolicy: 'all',
+                    debug: false,
+                }
+            );
+            trimOrMessagesImages(orMessages, 5);
+
+            const hasImageInput = (modelInputMessages as any[]).some((m) =>
+                Array.isArray(m.content)
+                    ? (m.content as any[]).some(
+                          (p) =>
+                              p?.type === 'image_url' ||
+                              p?.type === 'image' ||
+                              p?.mediaType?.startsWith('image/')
+                      )
+                    : false
+            );
+            const modelImageHint = /image|vision|flash/i.test(modelId);
+            const modalities =
+                hasImageInput || modelImageHint ? ['image', 'text'] : ['text'];
+
+            const newStreamId = newId();
+            streamId.value = newStreamId;
+            const assistantDbMsg = await tx.appendMessage({
+                thread_id: threadIdRef.value!,
+                role: 'assistant',
+                stream_id: newStreamId,
+                data: { content: '', attachments: [], reasoning_text: null },
+            });
+
+            await hooks.doAction('ai.chat.send:action:before', {
+                threadId: threadIdRef.value,
+                modelId,
+                user: { id: userDbMsg.id, length: outgoing.length },
+                assistant: { id: assistantDbMsg.id, streamId: newStreamId },
+                messagesCount: Array.isArray(effectiveMessages)
+                    ? (effectiveMessages as any[]).length
+                    : undefined,
+            });
+
+            aborted.value = false;
+            abortController.value = new AbortController();
+            const stream = openRouterStream({
+                apiKey: apiKey.value!,
+                model: modelId,
+                orMessages,
+                modalities,
+                signal: abortController.value.signal,
+            });
+
+            const rawAssistant: ChatMessage = {
+                role: 'assistant',
+                content: '',
+                id: (assistantDbMsg as any).id,
+                stream_id: newStreamId,
+                reasoning_text: null,
+            } as any;
+            recordRawMessage(rawAssistant);
+            rawMessages.value.push(rawAssistant);
+            const uiAssistant = ensureUiMessage(rawAssistant);
+            uiAssistant.pending = true;
+            tailAssistant.value = uiAssistant; // keep out of main messages until next user send
+            const current = uiAssistant;
+            let chunkIndex = 0;
+            const WRITE_INTERVAL_MS = 500;
+            let lastPersistAt = 0;
+            const assistantFileHashes: string[] = [];
+
+            for await (const ev of stream) {
+                if (ev.type === 'reasoning') {
+                    if (current.reasoning_text === null)
+                        current.reasoning_text = ev.text;
+                    else current.reasoning_text += ev.text;
+                    streamAcc.append(ev.text, { kind: 'reasoning' });
+                    try {
+                        await hooks.doAction(
+                            'ai.chat.stream:action:reasoning',
+                            ev.text,
+                            {
+                                threadId: threadIdRef.value,
+                                assistantId: assistantDbMsg.id,
+                                streamId: newStreamId,
+                                reasoningLength:
+                                    current.reasoning_text?.length || 0,
+                            }
+                        );
+                    } catch {}
+                } else if (ev.type === 'text') {
+                    if (current.pending) current.pending = false;
+                    const delta = ev.text;
+                    streamAcc.append(delta, { kind: 'text' });
+                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
+                        threadId: threadIdRef.value,
+                        assistantId: assistantDbMsg.id,
+                        streamId: newStreamId,
+                        deltaLength: String(delta ?? '').length,
+                        totalLength:
+                            current.text.length + String(delta ?? '').length,
+                        chunkIndex: chunkIndex++,
+                    });
+                    current.text += delta;
+                } else if (ev.type === 'image') {
+                    if (current.pending) current.pending = false;
+                    // Append markdown placeholder exactly once per image URL
+                    const placeholder = `![generated image](${ev.url})`;
+                    const already = current.text.includes(placeholder);
+                    if (!already) {
+                        current.text +=
+                            (current.text ? '\n\n' : '') + placeholder;
+                    }
+                    if (import.meta.dev) {
+                        console.debug('[stream:image:event]', {
+                            url: ev.url?.slice(0, 80),
+                            placeholderInserted: !already,
+                            currentLength: current.text.length,
+                            fileHashes: assistantFileHashes.slice(),
+                        });
+                    }
+                    if (assistantFileHashes.length < 6) {
+                        let blob: Blob | null = null;
+                        if (ev.url.startsWith('data:image/'))
+                            blob = dataUrlToBlob(ev.url);
+                        else if (/^https?:/.test(ev.url)) {
+                            try {
+                                const r = await fetch(ev.url);
+                                if (r.ok) blob = await r.blob();
+                            } catch {}
+                        }
+                        if (blob) {
+                            try {
+                                const meta = await createOrRefFile(
+                                    blob,
+                                    'gen-image'
+                                );
+                                assistantFileHashes.push(meta.hash);
+                                const serialized =
+                                    serializeFileHashes(assistantFileHashes);
+                                const updatedMsg = {
+                                    ...assistantDbMsg,
+                                    data: {
+                                        ...((assistantDbMsg as any).data || {}),
+                                        reasoning_text:
+                                            current.reasoning_text ?? null,
+                                    },
+                                    file_hashes: serialized,
+                                    updated_at: nowSec(),
+                                } as any;
+                                await upsert.message(updatedMsg);
+                                (current as any).file_hashes = serialized;
+                                if (import.meta.dev) {
+                                    console.debug('[stream:image:persist]', {
+                                        hash: meta.hash,
+                                        total: assistantFileHashes.length,
+                                        serialized,
+                                    });
+                                }
+                            } catch {}
+                        }
+                    }
+                }
+
+                const now = Date.now();
+                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                    const textContent = current.text;
+                    const updated = {
+                        ...assistantDbMsg,
+                        data: {
+                            ...((assistantDbMsg as any).data || {}),
+                            content: textContent,
+                            reasoning_text: current.reasoning_text ?? null,
+                        },
+                        file_hashes: assistantFileHashes.length
+                            ? serializeFileHashes(assistantFileHashes)
+                            : (assistantDbMsg as any).file_hashes,
+                        updated_at: nowSec(),
+                    } as any;
+                    await upsert.message(updated);
+                    if (assistantFileHashes.length)
+                        (current as any).file_hashes =
+                            serializeFileHashes(assistantFileHashes);
+                    lastPersistAt = now;
+                }
+            }
+
+            const fullText = current.text;
+            const incoming = await hooks.applyFilters(
+                'ui.chat.message:filter:incoming',
+                fullText,
+                threadIdRef.value
+            );
+            if (current.pending) current.pending = false;
+            current.text = incoming as string;
+            const finalized = {
+                ...assistantDbMsg,
+                data: {
+                    ...((assistantDbMsg as any).data || {}),
+                    content: incoming,
+                    reasoning_text: current.reasoning_text ?? null,
+                },
+                file_hashes: assistantFileHashes.length
+                    ? serializeFileHashes(assistantFileHashes)
+                    : (assistantDbMsg as any).file_hashes,
+                updated_at: nowSec(),
+            } as any;
+            await upsert.message(finalized);
+            // Pane-scoped assistant received hook
+            try {
+                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+                if (mpApi && mpApi.panes?.value) {
+                    try {
+                        console.debug('[useChat] pane-search:received', {
+                            threadId: threadIdRef.value,
+                            paneThreads: mpApi.panes.value.map(
+                                (p: any, i: number) => ({
+                                    i,
+                                    mode: p.mode,
+                                    threadId: p.threadId,
+                                })
+                            ),
+                        });
+                    } catch {}
+                    const pane = mpApi.panes.value.find(
+                        (p: any) =>
+                            p.mode === 'chat' &&
+                            p.threadId === threadIdRef.value
+                    );
+                    if (pane) {
+                        if (import.meta.dev) {
+                            try {
+                                console.debug('[useChat] pane msg:received', {
+                                    paneIndex: mpApi.panes.value.indexOf(pane),
+                                    threadId: threadIdRef.value,
+                                    msgId: finalized.id,
+                                    length: (incoming as string).length,
+                                    reasoningLength: (
+                                        current.reasoning_text || ''
+                                    ).length,
+                                    fileHashes: finalized.file_hashes || null,
+                                });
+                            } catch {}
+                        }
+                        hooks.doAction('ui.pane.msg:action:received', pane, {
+                            id: finalized.id,
+                            threadId: threadIdRef.value,
+                            paneIndex: mpApi.panes.value.indexOf(pane),
+                            msgId: finalized.id,
+                            length: (incoming as string).length,
+                            fileHashes: finalized.file_hashes || null,
+                            reasoningLength: (current.reasoning_text || '')
+                                .length,
+                        });
+                    } else if (import.meta.dev) {
+                        try {
+                            console.debug(
+                                '[useChat] pane msg:received (no pane found)',
+                                {
+                                    threadId: threadIdRef.value,
+                                    msgId: finalized.id,
+                                    length: (incoming as string).length,
+                                    panes: Array.isArray(mpApi.panes.value)
+                                        ? mpApi.panes.value.map(
+                                              (p: any, i: number) => ({
+                                                  i,
+                                                  mode: p.mode,
+                                                  threadId: p.threadId,
+                                              })
+                                          )
+                                        : null,
+                                    activePaneIndex:
+                                        mpApi.activePaneIndex?.value,
+                                    reason: !mpApi.panes.value.length
+                                        ? 'no-panes'
+                                        : 'thread-mismatch',
+                                }
+                            );
+                        } catch {}
+                    }
+                } else {
+                    try {
+                        console.debug(
+                            '[useChat] pane-search:received mpApi missing or no panes',
+                            {
+                                threadId: threadIdRef.value,
+                                hasMpApi: !!mpApi,
+                            }
+                        );
+                    } catch {}
+                }
+            } catch {}
+            const endedAt = Date.now();
+            await hooks.doAction('ai.chat.send:action:after', {
+                threadId: threadIdRef.value,
+                request: { modelId, userId: userDbMsg.id },
+                response: {
+                    assistantId: assistantDbMsg.id,
+                    length: (incoming as string).length,
+                },
+                timings: {
+                    startedAt,
+                    endedAt,
+                    durationMs: endedAt - startedAt,
+                },
+                aborted: false,
+            });
+            streamAcc.finalize();
+        } catch (err) {
+            if (aborted.value) {
+                if (tailAssistant.value?.pending)
+                    (tailAssistant.value as any).pending = false;
+                await hooks.doAction('ai.chat.send:action:after', {
+                    threadId: threadIdRef.value,
+                    aborted: true,
+                });
+            } else {
+                const lastUser = [...messages.value]
+                    .reverse()
+                    .find((m) => m.role === 'user');
+                const retryFn = lastUser
+                    ? () => retryMessage(lastUser.id as any)
+                    : undefined;
+                // Inline tag object (Req 18.1) for clarity & tree-shaking
+                reportError(err, {
+                    code: 'ERR_STREAM_FAILURE',
+                    tags: {
+                        domain: 'chat',
+                        threadId: threadIdRef.value || '',
+                        streamId: streamId.value || '',
+                        modelId: currentModelId || '',
+                        stage: 'stream',
+                    },
+                    retry: retryFn,
+                    toast: true,
+                    retryable: !!retryFn,
+                });
+                const e = err instanceof Error ? err : new Error(String(err));
+                streamAcc.finalize({ error: e });
+                // Drop empty failed assistant
+                if (!tailAssistant.value?.text) tailAssistant.value = null;
+                else if (tailAssistant.value?.pending)
+                    (tailAssistant.value as any).pending = false;
+            }
+        } finally {
+            loading.value = false;
+            abortController.value = null;
+            setTimeout(() => {
+                if (!loading.value && streamState.finalized) resetStream();
+            }, 0);
+        }
+    }
+
+    // END sendMessage
+
+    async function retryMessage(messageId: string, modelOverride?: string) {
+        if (loading.value || !threadIdRef.value) return;
+        try {
+            const target: any = await db.messages.get(messageId);
+            if (!target || target.thread_id !== threadIdRef.value) return;
+            let userMsg: any = target.role === 'user' ? target : null;
+            if (!userMsg && target.role === 'assistant') {
+                const DexieMod = (await import('dexie')).default;
+                userMsg = await db.messages
+                    .where('[thread_id+index]')
+                    .between(
+                        [target.thread_id, DexieMod.minKey],
+                        [target.thread_id, target.index]
+                    )
+                    .filter(
+                        (m: any) =>
+                            m.role === 'user' &&
+                            !m.deleted &&
+                            m.index < target.index
+                    )
+                    .last();
+            }
+            if (!userMsg) return;
+            const DexieMod2 = (await import('dexie')).default;
+            const assistant = await db.messages
+                .where('[thread_id+index]')
+                .between(
+                    [userMsg.thread_id, userMsg.index + 1],
+                    [userMsg.thread_id, DexieMod2.maxKey]
+                )
+                .filter((m: any) => m.role === 'assistant' && !m.deleted)
+                .first();
+
+            // Suppress flushing of the previous tail assistant if it corresponds to the
+            // assistant we are removing for retry. We cannot rely solely on clearing the ref
+            // because sendMessage() calls flushTailAssistant() unconditionally; instead we
+            // record the id and skip a single flush on next send.
+            if (assistant && tailAssistant.value?.id === assistant.id) {
+                lastSuppressedAssistantId = assistant.id;
+                tailAssistant.value = null;
+            } else if (
+                target.role === 'assistant' &&
+                tailAssistant.value?.id === target.id
+            ) {
+                lastSuppressedAssistantId = target.id;
+                tailAssistant.value = null;
+            }
+
+            await hooks.doAction('ai.chat.retry:action:before', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                triggeredBy: target.role,
+            });
+            await db.transaction('rw', db.messages, async () => {
+                await db.messages.delete(userMsg.id);
+                if (assistant) await db.messages.delete(assistant.id);
+            });
+            rawMessages.value = rawMessages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            messages.value = messages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            const originalText = (userMsg.data as any)?.content || '';
+            let hashes: string[] = [];
+            if (userMsg.file_hashes) {
+                const { parseFileHashes } = await import('~/db/files-util');
+                hashes = parseFileHashes(userMsg.file_hashes);
+            }
+            await sendMessage(originalText, {
+                model: modelOverride || DEFAULT_AI_MODEL,
+                file_hashes: hashes,
+                files: [],
+                online: false,
+            });
+            const tail = messages.value.slice(-2);
+            const newUser = tail.find((m: any) => m.role === 'user');
+            const newAssistant = tail.find((m: any) => m.role === 'assistant');
+            await hooks.doAction('ai.chat.retry:action:after', {
+                threadId: threadIdRef.value,
+                originalUserId: userMsg.id,
+                originalAssistantId: assistant?.id,
+                newUserId: newUser?.id,
+                newAssistantId: newAssistant?.id,
+            });
+        } catch (e) {
+            reportError(
+                e instanceof Error
+                    ? e
+                    : err('ERR_INTERNAL', '[retryMessage] failed', {
+                          tags: { domain: 'chat', op: 'retryMessage' },
+                      }),
+                {
+                    code: 'ERR_INTERNAL',
+                    tags: { domain: 'chat', op: 'retryMessage' },
+                }
+            );
+        }
+    }
+
+    /** Free all in-memory message arrays (UI + raw) and abort any active stream. */
+    function clear() {
+        try {
+            if (abortController.value) {
+                aborted.value = true;
+                try {
+                    abortController.value.abort();
+                } catch {}
+                streamAcc.finalize({ aborted: true });
+                abortController.value = null;
+            }
+        } catch {}
+        rawMessages.value = [];
+        messages.value = [];
+        // Defensive: if any lingering refs still hold many messages, let GC reclaim by slicing to empty
+        if (
+            (rawMessages as any)._value &&
+            (rawMessages as any)._value.length > 1000
+        ) {
+            (rawMessages as any)._value = [];
+        }
+        if (
+            (messages as any)._value &&
+            (messages as any)._value.length > 1000
+        ) {
+            (messages as any)._value = [];
+        }
+        streamAcc.reset();
+    }
+
+    return {
+        messages,
+        sendMessage,
+        retryMessage,
+        loading,
+        threadId: threadIdRef,
+        streamId,
+        resetStream,
+        streamState,
+        tailAssistant,
+        flushTailAssistant,
+        abort: () => {
+            if (!loading.value || !abortController.value) return;
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch {}
+            streamAcc.finalize({ aborted: true });
+            if (tailAssistant.value?.pending)
+                (tailAssistant.value as any).pending = false;
+            try {
+                const appConfig = useAppConfig?.() as any;
+                const showAbort = appConfig?.errors?.showAbortInfo === true;
+                reportError(
+                    err('ERR_STREAM_ABORTED', 'Generation aborted', {
+                        severity: 'info',
+                        tags: {
+                            domain: 'chat',
+                            threadId: threadIdRef.value || '',
+                            streamId: streamId.value || '',
+                            stage: 'abort',
+                        },
+                    }),
+                    { code: 'ERR_STREAM_ABORTED', toast: showAbort }
+                );
+            } catch {}
+        },
+        clear,
+    };
+}
 ```
 
 ## File: app/components/chat/ChatContainer.vue
