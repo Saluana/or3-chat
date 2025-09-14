@@ -448,7 +448,7 @@
                             : undefined
                     "
                     @update:model-value="(c: string | undefined)=> c && set({ contentBg2Color: c })"
-                    class="scale-75 origin-left"
+                    class="scale-60 origin-left"
                 />
                 <div class="flex items-center gap-2">
                     <input
@@ -619,7 +619,7 @@
                             : undefined
                     "
                     @update:model-value="(c: string | undefined)=> c && set({ sidebarBgColor: c })"
-                    class="scale-75 origin-left"
+                    class="scale-60 origin-left"
                 />
                 <div class="flex items-center gap-2">
                     <input
@@ -722,7 +722,7 @@
                             : undefined
                     "
                     @update:model-value="(c: string | undefined)=> c && set({ headerBgColor: c })"
-                    class="scale-75 origin-left"
+                    class="scale-60 origin-left"
                 />
                 <div class="flex items-center gap-2">
                     <input
@@ -801,7 +801,7 @@
                             : undefined
                     "
                     @update:model-value="(c: string | undefined)=> c && set({ bottomBarBgColor: c })"
-                    class="scale-75 origin-left"
+                    class="scale-60 origin-left"
                 />
                 <div class="flex items-center gap-2">
                     <input
