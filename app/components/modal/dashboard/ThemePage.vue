@@ -122,6 +122,18 @@
                     local.contentBg1Opacity.toFixed(2)
                 }}</span>
             </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32 text-xs">Fallback Color</label>
+                <UColorPicker
+                    :model-value="
+                        settings.contentBg1Color.startsWith('#')
+                            ? settings.contentBg1Color
+                            : undefined
+                    "
+                    @update:model-value="(c: string | undefined)=> c && set({ contentBg1Color: c })"
+                    class="scale-75 origin-left"
+                />
+            </div>
         </section>
 
         <!-- Content Background Layer 2 -->
@@ -203,6 +215,18 @@
                 <span class="w-12 text-right tabular-nums">{{
                     local.contentBg2Opacity.toFixed(2)
                 }}</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32 text-xs">Fallback Color</label>
+                <UColorPicker
+                    :model-value="
+                        settings.contentBg2Color.startsWith('#')
+                            ? settings.contentBg2Color
+                            : undefined
+                    "
+                    @update:model-value="(c: string | undefined)=> c && set({ contentBg2Color: c })"
+                    class="scale-75 origin-left"
+                />
             </div>
         </section>
 
@@ -295,6 +319,18 @@
                     local.sidebarBgOpacity.toFixed(2)
                 }}</span>
             </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32 text-xs">Fallback Color</label>
+                <UColorPicker
+                    :model-value="
+                        settings.sidebarBgColor.startsWith('#')
+                            ? settings.sidebarBgColor
+                            : undefined
+                    "
+                    @update:model-value="(c: string | undefined)=> c && set({ sidebarBgColor: c })"
+                    class="scale-75 origin-left"
+                />
+            </div>
         </section>
 
         <!-- Accessibility -->
@@ -312,6 +348,94 @@
                     >Reduce pattern opacity in high contrast modes</span
                 >
             </label>
+        </section>
+
+        <!-- Navigation Header -->
+        <section class="space-y-4">
+            <h2 class="font-heading text-base uppercase tracking-wide">
+                Navigation Header
+            </h2>
+            <div class="flex items-center gap-3 text-xs">
+                <span class="opacity-70">Gradient:</span>
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    :disabled="settings.showHeaderGradient"
+                    @click="set({ showHeaderGradient: true })"
+                    >Default</UButton
+                >
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    :disabled="!settings.showHeaderGradient"
+                    @click="set({ showHeaderGradient: false })"
+                    >Remove</UButton
+                >
+                <span class="opacity-60"
+                    >Current:
+                    {{
+                        settings.showHeaderGradient ? 'Default' : 'Removed'
+                    }}</span
+                >
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32 text-xs">Background Color</label>
+                <UColorPicker
+                    :model-value="
+                        settings.headerBgColor.startsWith('#')
+                            ? settings.headerBgColor
+                            : undefined
+                    "
+                    @update:model-value="(c: string | undefined)=> c && set({ headerBgColor: c })"
+                    class="scale-75 origin-left"
+                />
+            </div>
+        </section>
+
+        <!-- Navigation Footer -->
+        <section class="space-y-4">
+            <h2 class="font-heading text-base uppercase tracking-wide">
+                Navigation Footer
+            </h2>
+            <div class="flex items-center gap-3 text-xs">
+                <span class="opacity-70">Gradient:</span>
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    :disabled="settings.showBottomBarGradient"
+                    @click="set({ showBottomBarGradient: true })"
+                    >Default</UButton
+                >
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    :disabled="!settings.showBottomBarGradient"
+                    @click="set({ showBottomBarGradient: false })"
+                    >Remove</UButton
+                >
+                <span class="opacity-60"
+                    >Current:
+                    {{
+                        settings.showBottomBarGradient ? 'Default' : 'Removed'
+                    }}</span
+                >
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32 text-xs">Background Color</label>
+                <UColorPicker
+                    :model-value="
+                        settings.bottomBarBgColor.startsWith('#')
+                            ? settings.bottomBarBgColor
+                            : undefined
+                    "
+                    @update:model-value="(c: string | undefined)=> c && set({ bottomBarBgColor: c })"
+                    class="scale-75 origin-left"
+                />
+            </div>
         </section>
 
         <!-- Reset -->

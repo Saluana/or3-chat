@@ -366,7 +366,7 @@ const toggleAria = computed(() =>
 .content-bg {
     position: relative;
     /* Base matches sidebar/header */
-    background-color: var(--md-surface);
+    background-color: var(--app-content-bg-1-color, var(--md-surface));
 }
 
 .content-bg::before {
@@ -383,6 +383,8 @@ const toggleAria = computed(() =>
     background-size: var(--content-bg-size) var(--content-bg-size);
     opacity: var(--app-content-bg-1-opacity, var(--content-bg-opacity));
     z-index: 0;
+    /* Keep transparent so base element's background-color always visible/tint */
+    background-color: transparent;
 }
 
 /* Ensure the real content sits above the pattern */
@@ -405,6 +407,7 @@ const toggleAria = computed(() =>
     background-size: var(--content-overlay-size) var(--content-overlay-size);
     opacity: var(--app-content-bg-2-opacity, var(--content-overlay-opacity));
     z-index: 0.5;
+    background-color: var(--app-content-bg-2-color, transparent);
 }
 
 /* Hardcoded header pattern repeating horizontally */
@@ -428,6 +431,11 @@ aside::before {
     background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
     opacity: var(--app-sidebar-bg-1-opacity, var(--sidebar-rep-opacity));
     z-index: 0;
+    background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
+}
+
+aside {
+    background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
 }
 
 /* Ensure sidebar children render above the pattern, but keep handle on top */

@@ -4,7 +4,7 @@
             'px-0 justify-center': collapsed,
             'px-3 justify-between': !collapsed,
         }"
-        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+        class="flex items-center max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)]"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
@@ -63,14 +63,16 @@ function onToggle() {
 <style scoped>
 /* Gradient already supplied by global pattern image; we just ensure better dark base */
 .header-pattern {
-    background-image: url('/gradient-x.webp');
+    background-image: var(--app-header-gradient, url('/gradient-x.webp')) !important;
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;
+    /* Use user-selected color (falls back by theme). Important to override legacy utility classes */
+    background-color: var(--app-header-bg-color, var(--md-surface-variant)) !important;
 }
+/* Dark mode still honors custom color */
 .dark .header-pattern {
-    /* Elevated surface tone for dark mode header to distinguish from main background */
-    background-color: var(--md-surface-container-high) !important;
+    background-color: var(--app-header-bg-color, var(--md-surface-container-high)) !important;
 }
 
 /* Retro logo title: pixel shadow + underline accent (no stroke) */

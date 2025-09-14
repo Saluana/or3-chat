@@ -7,6 +7,14 @@ import { ref, reactive, watch, toRaw } from 'vue';
 export interface ThemeSettings {
     baseFontPx: number; // 14..24
     useSystemFont: boolean; // when true, override both body and heading fonts with system stack
+    showHeaderGradient: boolean; // controls header gradient visibility
+    showBottomBarGradient: boolean; // controls bottom nav gradient visibility
+    // Color overrides when images/gradients are disabled
+    contentBg1Color: string; // css color or var()
+    contentBg2Color: string; // css color or var()
+    sidebarBgColor: string; // css color or var()
+    headerBgColor: string; // css color or var()
+    bottomBarBgColor: string; // css color or var()
     contentBg1: string | null;
     contentBg2: string | null;
     contentBg1Opacity: number; // 0..1
@@ -23,6 +31,13 @@ export const THEME_SETTINGS_STORAGE_KEY = 'theme:settings:v1';
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = Object.freeze({
     baseFontPx: 20,
     useSystemFont: false,
+    showHeaderGradient: true,
+    showBottomBarGradient: true,
+    contentBg1Color: 'var(--md-surface)',
+    contentBg2Color: 'var(--md-surface)',
+    sidebarBgColor: 'var(--md-surface-variant)',
+    headerBgColor: 'var(--md-surface-variant)',
+    bottomBarBgColor: 'var(--md-surface-variant)',
     contentBg1: '/bg-repeat.webp',
     contentBg2: '/bg-repeat-2.webp',
     contentBg1Opacity: 0.08,
@@ -66,6 +81,20 @@ function sanitize(s: ThemeSettings): ThemeSettings {
     const out: ThemeSettings = { ...s } as ThemeSettings;
     out.baseFontPx = clamp(Math.round(out.baseFontPx), 14, 24);
     out.useSystemFont = !!out.useSystemFont;
+    out.showHeaderGradient = !!out.showHeaderGradient;
+    out.showBottomBarGradient = !!out.showBottomBarGradient;
+    const isColor = (v: any) =>
+        typeof v === 'string' && (v.startsWith('#') || v.startsWith('var('));
+    if (!isColor(out.contentBg1Color))
+        out.contentBg1Color = DEFAULT_THEME_SETTINGS.contentBg1Color;
+    if (!isColor(out.contentBg2Color))
+        out.contentBg2Color = DEFAULT_THEME_SETTINGS.contentBg2Color;
+    if (!isColor(out.sidebarBgColor))
+        out.sidebarBgColor = DEFAULT_THEME_SETTINGS.sidebarBgColor;
+    if (!isColor(out.headerBgColor))
+        out.headerBgColor = DEFAULT_THEME_SETTINGS.headerBgColor;
+    if (!isColor(out.bottomBarBgColor))
+        out.bottomBarBgColor = DEFAULT_THEME_SETTINGS.bottomBarBgColor;
     out.contentBg1 =
         out.contentBg1 && isValidImageValue(out.contentBg1)
             ? out.contentBg1
@@ -87,6 +116,16 @@ function sanitize(s: ThemeSettings): ThemeSettings {
         out.contentRepeat === 'no-repeat' ? 'no-repeat' : 'repeat';
     out.reducePatternsInHighContrast = !!out.reducePatternsInHighContrast;
     return out;
+}
+
+// Defensive runtime completeness guard (in case older persisted objects or external code
+// accidentally removed keys). Ensures every key from DEFAULT_THEME_SETTINGS exists.
+function ensureComplete(partial: any): ThemeSettings {
+    const base: any = { ...DEFAULT_THEME_SETTINGS };
+    for (const k of Object.keys(base)) {
+        if (partial[k] === undefined) partial[k] = base[k];
+    }
+    return partial as ThemeSettings;
 }
 
 function isBrowser() {
@@ -117,6 +156,21 @@ function applyToRoot(settings: ThemeSettings) {
             '"Press Start 2P", ui-sans-serif, system-ui, sans-serif'
         );
     }
+    // Gradient visibility toggles
+    r.setProperty(
+        '--app-header-gradient',
+        settings.showHeaderGradient ? 'url("/gradient-x.webp")' : 'none'
+    );
+    r.setProperty(
+        '--app-bottomnav-gradient',
+        settings.showBottomBarGradient ? 'url("/gradient-x.webp")' : 'none'
+    );
+    // Color overrides (always set so components can reference directly)
+    r.setProperty('--app-content-bg-1-color', settings.contentBg1Color);
+    r.setProperty('--app-content-bg-2-color', settings.contentBg2Color);
+    r.setProperty('--app-sidebar-bg-color', settings.sidebarBgColor);
+    r.setProperty('--app-header-bg-color', settings.headerBgColor);
+    r.setProperty('--app-bottomnav-bg-color', settings.bottomBarBgColor);
     r.setProperty(
         '--app-content-bg-1',
         settings.contentBg1 ? `url("${settings.contentBg1}")` : 'none'
@@ -125,22 +179,26 @@ function applyToRoot(settings: ThemeSettings) {
         '--app-content-bg-2',
         settings.contentBg2 ? `url("${settings.contentBg2}")` : 'none'
     );
-    r.setProperty(
-        '--app-content-bg-1-opacity',
-        String(settings.contentBg1Opacity)
-    );
-    r.setProperty(
-        '--app-content-bg-2-opacity',
-        String(settings.contentBg2Opacity)
-    );
+    // If an image layer is removed (null) we want the solid color to show, so force opacity 1
+    const effectiveBg1Opacity = settings.contentBg1
+        ? settings.contentBg1Opacity
+        : 1;
+    const effectiveBg2Opacity = settings.contentBg2
+        ? settings.contentBg2Opacity
+        : 1;
+    r.setProperty('--app-content-bg-1-opacity', String(effectiveBg1Opacity));
+    r.setProperty('--app-content-bg-2-opacity', String(effectiveBg2Opacity));
     r.setProperty('--app-content-bg-repeat', settings.contentRepeat);
     r.setProperty(
         '--app-sidebar-bg-1',
         settings.sidebarBg ? `url("${settings.sidebarBg}")` : 'none'
     );
+    const effectiveSidebarOpacity = settings.sidebarBg
+        ? settings.sidebarBgOpacity
+        : 1;
     r.setProperty(
         '--app-sidebar-bg-1-opacity',
-        String(settings.sidebarBgOpacity)
+        String(effectiveSidebarOpacity)
     );
     r.setProperty('--app-sidebar-bg-repeat', settings.sidebarRepeat);
     maybeClampForHighContrast(settings);
@@ -158,18 +216,25 @@ function maybeClampForHighContrast(settings: ThemeSettings) {
     if (!isHighContrastActive()) return;
     const r = document.documentElement.style;
     const clampOpacity = (v: number) => Math.min(v, 0.04);
-    r.setProperty(
-        '--app-content-bg-1-opacity',
-        String(clampOpacity(settings.contentBg1Opacity))
-    );
-    r.setProperty(
-        '--app-content-bg-2-opacity',
-        String(clampOpacity(settings.contentBg2Opacity))
-    );
-    r.setProperty(
-        '--app-sidebar-bg-1-opacity',
-        String(clampOpacity(settings.sidebarBgOpacity))
-    );
+    // Only clamp if image layer present (patterns); if removed we keep solid color full opacity
+    if (settings.contentBg1) {
+        r.setProperty(
+            '--app-content-bg-1-opacity',
+            String(clampOpacity(settings.contentBg1Opacity))
+        );
+    }
+    if (settings.contentBg2) {
+        r.setProperty(
+            '--app-content-bg-2-opacity',
+            String(clampOpacity(settings.contentBg2Opacity))
+        );
+    }
+    if (settings.sidebarBg) {
+        r.setProperty(
+            '--app-sidebar-bg-1-opacity',
+            String(clampOpacity(settings.sidebarBgOpacity))
+        );
+    }
 }
 
 function persist(settings: ThemeSettings) {
@@ -216,7 +281,7 @@ export function useThemeSettings() {
             ...base,
             ...patch,
         } as ThemeSettings;
-        const merged = sanitize(mergedInput);
+        const merged = sanitize(ensureComplete(mergedInput));
         store.settings.value = merged as ThemeSettings;
         applyToRoot(merged as ThemeSettings);
         persist(merged as ThemeSettings);
