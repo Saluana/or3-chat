@@ -52,34 +52,65 @@ const reactivePages = reactive<{ [pluginId: string]: DashboardPluginPage[] }>(
     {}
 );
 
+// Order constant (avoid magic number repetition)
+const DEFAULT_ORDER = 200;
+
+// Component resolution cache
+const pageComponentCache = new Map<string, Component>();
+
+function deletePageCache(pluginId: string, pageId: string) {
+    pageComponentCache.delete(`${pluginId}:${pageId}`);
+}
+
+function deleteAllPluginPageCache(pluginId: string) {
+    for (const key of pageComponentCache.keys()) {
+        if (key.startsWith(pluginId + ':')) pageComponentCache.delete(key);
+    }
+}
+
 function syncPages(pluginId: string) {
     const m = pageRegistry.get(pluginId);
     reactivePages[pluginId] = m ? Array.from(m.values()) : [];
 }
 
 function sync() {
+    // Expose a shallow copy array so that consumer sorts don't mutate source
     reactiveList.items = Array.from(registry.values());
 }
 
 export function registerDashboardPlugin(plugin: DashboardPlugin) {
-    registry.set(plugin.id, plugin);
+    if (process.dev && registry.has(plugin.id)) {
+        // eslint-disable-next-line no-console
+        console.warn(
+            `[dashboard] Overwriting existing plugin id "${plugin.id}"`
+        );
+    }
+    // Freeze to prevent external mutation; copy pages array so later mutations by caller don't leak in.
+    const frozen = Object.freeze({
+        ...plugin,
+        pages: plugin.pages ? [...plugin.pages] : undefined,
+    });
+    registry.set(plugin.id, frozen as DashboardPlugin);
     sync();
-    // If inline pages provided, replace existing pages for that plugin
+    // If inline pages provided, replace existing pages for that plugin in a single pass (avoid redundant sync cycles)
     if (plugin.pages) {
-        unregisterDashboardPluginPage(plugin.id); // clear existing pages
+        unregisterDashboardPluginPage(plugin.id); // clear existing pages + cache
         for (const p of plugin.pages) registerDashboardPluginPage(plugin.id, p);
     }
 }
 
 export function unregisterDashboardPlugin(id: string) {
     if (registry.delete(id)) sync();
-    // Optionally keep pages? For now remove associated pages for cleanliness.
-    unregisterDashboardPluginPage(id);
+    unregisterDashboardPluginPage(id); // also clears pages + cache + reactivePages entry
+    deleteAllPluginPageCache(id);
+    delete (reactivePages as any)[id];
 }
 
 export function useDashboardPlugins() {
     return computed(() =>
-        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
+        [...reactiveList.items].sort(
+            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+        )
     );
 }
 
@@ -98,7 +129,10 @@ export function registerDashboardPluginPage(
         m = new Map();
         pageRegistry.set(pluginId, m);
     }
-    m.set(page.id, page);
+    // Invalidate any cached component for this page id prior to replacement
+    deletePageCache(pluginId, page.id);
+    const frozen = Object.freeze({ ...page });
+    m.set(page.id, frozen);
     syncPages(pluginId);
 }
 
@@ -108,8 +142,18 @@ export function unregisterDashboardPluginPage(
 ) {
     const m = pageRegistry.get(pluginId);
     if (!m) return;
-    if (pageId) m.delete(pageId);
-    else pageRegistry.delete(pluginId);
+    if (pageId) {
+        m.delete(pageId);
+        deletePageCache(pluginId, pageId);
+    } else {
+        // remove all pages + their cache entries
+        for (const id of m.keys()) deletePageCache(pluginId, id);
+        pageRegistry.delete(pluginId);
+        deleteAllPluginPageCache(pluginId);
+    }
+    if (!pageId) {
+        delete (reactivePages as any)[pluginId];
+    }
     syncPages(pluginId);
 }
 
@@ -118,7 +162,9 @@ export function useDashboardPluginPages(pluginId: () => string | undefined) {
         const id = pluginId();
         if (!id) return [] as DashboardPluginPage[];
         const list = reactivePages[id] || [];
-        return [...list].sort((a, b) => (a.order ?? 200) - (b.order ?? 200));
+        return [...list].sort(
+            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+        );
     });
 }
 
@@ -126,7 +172,9 @@ export function listDashboardPluginPages(
     pluginId: string
 ): DashboardPluginPage[] {
     const list = reactivePages[pluginId] || [];
-    return [...list].sort((a, b) => (a.order ?? 200) - (b.order ?? 200));
+    return [...list].sort(
+        (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+    );
 }
 
 export function getDashboardPluginPage(
@@ -135,9 +183,6 @@ export function getDashboardPluginPage(
 ): DashboardPluginPage | undefined {
     return pageRegistry.get(pluginId)?.get(pageId);
 }
-
-// Component resolution cache
-const pageComponentCache = new Map<string, Component>();
 
 export async function resolveDashboardPluginPageComponent(
     pluginId: string,
@@ -155,6 +200,13 @@ export async function resolveDashboardPluginPageComponent(
     ) {
         const loaded = await (comp as () => Promise<any>)();
         comp = loaded?.default || loaded;
+        if (process.dev && (typeof comp !== 'object' || !comp)) {
+            // eslint-disable-next-line no-console
+            console.warn(
+                `[dashboard] Async page loader for ${pluginId}:${pageId} returned non-component`,
+                comp
+            );
+        }
     }
     pageComponentCache.set(key, comp);
     return comp;

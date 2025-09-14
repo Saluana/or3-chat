@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     registerDashboardPlugin,
     unregisterDashboardPlugin,
@@ -265,5 +265,189 @@ describe('dashboard plugin registry', () => {
             'nope'
         );
         expect(resolved).toBeUndefined();
+    });
+
+    it('re-registering same page id invalidates cached component', async () => {
+        registerDashboardPlugin({
+            id: 'test:cache-invalidate',
+            icon: 'i',
+            label: 'CI',
+        });
+        registerDashboardPluginPage('test:cache-invalidate', {
+            id: 'p',
+            title: 'P',
+            component: { name: 'CompV1', render: () => null },
+        });
+        const first = await resolveDashboardPluginPageComponent(
+            'test:cache-invalidate',
+            'p'
+        );
+        registerDashboardPluginPage('test:cache-invalidate', {
+            id: 'p',
+            title: 'P',
+            component: { name: 'CompV2', render: () => null },
+        });
+        const second = await resolveDashboardPluginPageComponent(
+            'test:cache-invalidate',
+            'p'
+        );
+        expect((first as any)?.name).toBe('CompV1');
+        expect((second as any)?.name).toBe('CompV2');
+    });
+
+    it('unregister single page clears its cached component', async () => {
+        registerDashboardPlugin({
+            id: 'test:cache-remove',
+            icon: 'i',
+            label: 'CR',
+        });
+        registerDashboardPluginPage('test:cache-remove', {
+            id: 'p',
+            title: 'P',
+            component: { name: 'CompA', render: () => null },
+        });
+        const a = await resolveDashboardPluginPageComponent(
+            'test:cache-remove',
+            'p'
+        );
+        unregisterDashboardPluginPage('test:cache-remove', 'p');
+        registerDashboardPluginPage('test:cache-remove', {
+            id: 'p',
+            title: 'P',
+            component: { name: 'CompB', render: () => null },
+        });
+        const b = await resolveDashboardPluginPageComponent(
+            'test:cache-remove',
+            'p'
+        );
+        expect((a as any)?.name).toBe('CompA');
+        expect((b as any)?.name).toBe('CompB');
+    });
+
+    it('unregister plugin clears all its page caches', async () => {
+        registerDashboardPlugin({
+            id: 'test:plugin-remove-cache',
+            icon: 'i',
+            label: 'PRC',
+        });
+        registerDashboardPluginPage('test:plugin-remove-cache', {
+            id: 'p1',
+            title: 'P1',
+            component: { name: 'Old1', render: () => null },
+        });
+        registerDashboardPluginPage('test:plugin-remove-cache', {
+            id: 'p2',
+            title: 'P2',
+            component: { name: 'Old2', render: () => null },
+        });
+        const r1 = await resolveDashboardPluginPageComponent(
+            'test:plugin-remove-cache',
+            'p1'
+        );
+        const r2 = await resolveDashboardPluginPageComponent(
+            'test:plugin-remove-cache',
+            'p2'
+        );
+        unregisterDashboardPlugin('test:plugin-remove-cache');
+        registerDashboardPlugin({
+            id: 'test:plugin-remove-cache',
+            icon: 'i',
+            label: 'PRC2',
+        });
+        registerDashboardPluginPage('test:plugin-remove-cache', {
+            id: 'p1',
+            title: 'P1',
+            component: { name: 'New1', render: () => null },
+        });
+        registerDashboardPluginPage('test:plugin-remove-cache', {
+            id: 'p2',
+            title: 'P2',
+            component: { name: 'New2', render: () => null },
+        });
+        const n1 = await resolveDashboardPluginPageComponent(
+            'test:plugin-remove-cache',
+            'p1'
+        );
+        const n2 = await resolveDashboardPluginPageComponent(
+            'test:plugin-remove-cache',
+            'p2'
+        );
+        expect((r1 as any)?.name).toBe('Old1');
+        expect((r2 as any)?.name).toBe('Old2');
+        expect((n1 as any)?.name).toBe('New1');
+        expect((n2 as any)?.name).toBe('New2');
+    });
+
+    it('useDashboardPlugins returns a defensive sorted copy', async () => {
+        registerDashboardPlugin({
+            id: 'test:sort-a',
+            icon: 'i',
+            label: 'A',
+            order: 300,
+        });
+        registerDashboardPlugin({
+            id: 'test:sort-b',
+            icon: 'i',
+            label: 'B',
+            order: 100,
+        });
+        const comp = useDashboardPlugins();
+        const first = comp.value;
+        expect(first.map((p) => p.id)).toEqual(['test:sort-b', 'test:sort-a']);
+        (first as any).push({ id: 'fake', icon: 'x', label: 'Fake' });
+        let threw = false;
+        try {
+            (first[0] as any).label = 'CHANGED';
+        } catch {
+            threw = true;
+        }
+        expect(threw).toBe(true); // frozen object prevented mutation
+        // Force recompute by registering another plugin
+        registerDashboardPlugin({
+            id: 'test:sort-c',
+            icon: 'i',
+            label: 'C',
+            order: 200,
+        });
+        await flush();
+        const second = comp.value; // newly computed array
+        expect(second.find((p) => p.id === 'fake')).toBeUndefined();
+        const orig = second.find((p) => p.id === 'test:sort-b');
+        expect(orig?.label).toBe('B');
+    });
+
+    it('dev overwriting plugin emits a warning', async () => {
+        const prevDev = (process as any).dev;
+        (process as any).dev = true;
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        registerDashboardPlugin({ id: 'test:warn', icon: 'i', label: 'W1' });
+        registerDashboardPlugin({ id: 'test:warn', icon: 'i', label: 'W2' });
+        expect(warnSpy).toHaveBeenCalled();
+        warnSpy.mockRestore();
+        (process as any).dev = prevDev;
+    });
+
+    it('warns when async loader returns non-component object', async () => {
+        const prevDev = (process as any).dev;
+        (process as any).dev = true;
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        registerDashboardPlugin({
+            id: 'test:bad-loader',
+            icon: 'i',
+            label: 'BL',
+        });
+        registerDashboardPluginPage('test:bad-loader', {
+            id: 'p',
+            title: 'P',
+            component: () => Promise.resolve(42 as any),
+        });
+        const resolved = await resolveDashboardPluginPageComponent(
+            'test:bad-loader',
+            'p'
+        );
+        expect(resolved).toBe(42 as any);
+        expect(warnSpy).toHaveBeenCalled();
+        warnSpy.mockRestore();
+        (process as any).dev = prevDev;
     });
 });
