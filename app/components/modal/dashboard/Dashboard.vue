@@ -111,6 +111,7 @@ import {
     useDashboardPluginPages,
     resolveDashboardPluginPageComponent,
     listDashboardPluginPages,
+    type DashboardPlugin,
 } from '~/composables';
 
 const props = defineProps<{
@@ -135,7 +136,7 @@ const open = computed({
 const registered = useDashboardPlugins();
 
 // Core (built-in) items; can be overridden by external plugin with same id
-const coreItems = [
+const coreItems: DashboardPlugin[] = [
     {
         id: 'core:settings',
         icon: 'pixelarticons:sliders',
