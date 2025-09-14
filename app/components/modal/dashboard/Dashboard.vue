@@ -7,7 +7,7 @@
         }"
         title="Dashboard"
         description="Browse all apps, plugins, and settings."
-        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
+        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden"
     >
         <template #body>
             <!-- iOS style springboard grid: fixed icon cell width per breakpoint, centered, nice vertical rhythm -->
@@ -111,6 +111,7 @@ import {
     useDashboardPluginPages,
     resolveDashboardPluginPageComponent,
     listDashboardPluginPages,
+    registerDashboardPluginPage,
     type DashboardPlugin,
 } from '~/composables';
 
@@ -146,6 +147,29 @@ const coreItems: DashboardPlugin[] = [
             // Example handler to open settings
             activeView.value = 'page';
         },
+        pages: [
+            {
+                id: 'general-settings',
+                title: 'General Settings',
+                description: 'Configure application preferences and options.',
+                icon: 'pixelarticons:sliders',
+                component: () => import('./SettingsPage.vue'),
+            },
+            {
+                id: 'theme-settings',
+                title: 'Theme Settings',
+                description: 'Configure application theme and appearance.',
+                icon: 'pixelarticons:visible',
+                component: () => import('./SettingsPage.vue'),
+            },
+            {
+                id: 'ai-settings',
+                title: 'AI Settings',
+                description: 'Configure AI-related preferences and options.',
+                icon: 'pixelarticons:zap',
+                component: () => import('./SettingsPage.vue'),
+            },
+        ],
     },
     {
         id: 'core:images',
@@ -166,6 +190,16 @@ const coreItems: DashboardPlugin[] = [
         order: 30,
     },
 ];
+
+// Register any inline pages defined on core items with the shared dashboard page registry
+// so that onPluginClick() finds them (core items themselves are not registered as plugins).
+for (const item of coreItems) {
+    if (Array.isArray((item as any).pages)) {
+        for (const p of (item as any).pages) {
+            registerDashboardPluginPage(item.id, p as any);
+        }
+    }
+}
 
 // Merge + sort (lower order first). If no registered, show core only.
 const dashboardItems = computed(() => {
