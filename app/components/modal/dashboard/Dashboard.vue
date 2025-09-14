@@ -37,7 +37,7 @@
                         color="primary"
                         size="sm"
                         class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10!"
-                        @click="resetToGrid()"
+                        @click="goBack()"
                     >
                         <UIcon
                             class="h-6 w-6"
@@ -227,6 +227,30 @@ function resetToGrid() {
     activePluginId.value = null;
     activePageId.value = null;
     resolvedPageComp.value = null;
+}
+
+function goBack() {
+    // If we're on the main dashboard already, nothing to do
+    if (activeView.value === 'dashboard') return;
+    // If inside a plugin context
+    if (activeView.value === 'page' && activePluginId.value) {
+        // If currently viewing a specific page, step back to landing list (if multi-page)
+        if (activePageId.value) {
+            const pages = listDashboardPluginPages(activePluginId.value);
+            activePageId.value = null;
+            resolvedPageComp.value = null;
+            // If there is only one (or zero) page, there is no landing list UX -> go all the way back
+            if (pages.length <= 1) {
+                resetToGrid();
+            }
+            return;
+        }
+        // We are already at the landing list (no active page) -> go to dashboard grid
+        resetToGrid();
+        return;
+    }
+    // Fallback safety
+    resetToGrid();
 }
 
 function onPluginClick(item: any) {
