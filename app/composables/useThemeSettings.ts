@@ -1,4 +1,5 @@
 import { ref, watch, computed } from 'vue';
+import { getFileBlob } from '~/db/files';
 
 /**
  * Theme customization settings (v1)
@@ -135,6 +136,7 @@ function isValidImageValue(v: string) {
         v.startsWith('/') ||
         v.startsWith('data:image/') ||
         v.startsWith('blob:') ||
+        v.startsWith('internal-file://') ||
         v.startsWith('http://') ||
         v.startsWith('https://')
     );
@@ -233,6 +235,29 @@ function isBrowser() {
 function applyToRoot(settings: ThemeSettings) {
     if (!isBrowser()) return; // SSR/test guard
     const r = document.documentElement.style;
+    // Global cached object URLs for internal-file tokens (persist across reapply)
+    const gAny: any = g;
+    if (!gAny.__or3ThemeFileUrlCache) {
+        gAny.__or3ThemeFileUrlCache = new Map<string, string>();
+    }
+    const fileUrlCache: Map<string, string> = gAny.__or3ThemeFileUrlCache;
+    async function resolveToken(token: string): Promise<string | null> {
+        if (!token.startsWith('internal-file://')) return token;
+        const hash = token.slice('internal-file://'.length);
+        if (fileUrlCache.has(hash)) return fileUrlCache.get(hash)!;
+        try {
+            const blob = await getFileBlob(hash);
+            if (!blob) return null;
+            const url = URL.createObjectURL(blob);
+            fileUrlCache.set(hash, url);
+            return url;
+        } catch {
+            return null;
+        }
+    }
+    function setBgVar(varName: string, urlOrNone: string | null) {
+        r.setProperty(varName, urlOrNone ? `url("${urlOrNone}")` : 'none');
+    }
     r.setProperty('--app-font-size-root', settings.baseFontPx + 'px');
     // Font overrides
     if (settings.useSystemFont) {
@@ -277,14 +302,22 @@ function applyToRoot(settings: ThemeSettings) {
         r.removeProperty('--app-header-bg-color');
         r.removeProperty('--app-bottomnav-bg-color');
     }
-    r.setProperty(
-        '--app-content-bg-1',
-        settings.contentBg1 ? `url("${settings.contentBg1}")` : 'none'
-    );
-    r.setProperty(
-        '--app-content-bg-2',
-        settings.contentBg2 ? `url("${settings.contentBg2}")` : 'none'
-    );
+    // Start with placeholders (will update asynchronously if internal tokens)
+    setBgVar('--app-content-bg-1', null);
+    setBgVar('--app-content-bg-2', null);
+    // Resolve (async) then set; race-safe by capturing current token
+    const t1 = settings.contentBg1;
+    const t2 = settings.contentBg2;
+    if (t1) {
+        resolveToken(t1).then((u) => {
+            if (settings.contentBg1 === t1) setBgVar('--app-content-bg-1', u);
+        });
+    } else setBgVar('--app-content-bg-1', null);
+    if (t2) {
+        resolveToken(t2).then((u) => {
+            if (settings.contentBg2 === t2) setBgVar('--app-content-bg-2', u);
+        });
+    } else setBgVar('--app-content-bg-2', null);
     // If an image layer is removed (null) we want the solid color to show, so force opacity 1
     const effectiveBg1Opacity = settings.contentBg1
         ? settings.contentBg1Opacity
@@ -308,10 +341,13 @@ function applyToRoot(settings: ThemeSettings) {
         '--app-content-bg-2-size',
         settings.contentBg2Fit ? 'cover' : settings.contentBg2SizePx + 'px'
     );
-    r.setProperty(
-        '--app-sidebar-bg-1',
-        settings.sidebarBg ? `url("${settings.sidebarBg}")` : 'none'
-    );
+    setBgVar('--app-sidebar-bg-1', null);
+    const ts = settings.sidebarBg;
+    if (ts) {
+        resolveToken(ts).then((u) => {
+            if (settings.sidebarBg === ts) setBgVar('--app-sidebar-bg-1', u);
+        });
+    } else setBgVar('--app-sidebar-bg-1', null);
     const effectiveSidebarOpacity = settings.sidebarBg
         ? settings.sidebarBgOpacity
         : 1;

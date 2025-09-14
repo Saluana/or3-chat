@@ -117,12 +117,7 @@
                             ? 'opacity-30'
                             : ''
                     "
-                    :style="{
-                        backgroundImage: settings.contentBg1
-                            ? `url(${settings.contentBg1})`
-                            : 'none',
-                        backgroundRepeat: settings.contentBg1Repeat,
-                    }"
+                    :style="contentBg1PreviewStyle"
                     aria-label="Content background layer 1 preview"
                 />
                 <span
@@ -277,12 +272,7 @@
                             ? 'opacity-30'
                             : ''
                     "
-                    :style="{
-                        backgroundImage: settings.contentBg2
-                            ? `url(${settings.contentBg2})`
-                            : 'none',
-                        backgroundRepeat: settings.contentBg2Repeat,
-                    }"
+                    :style="contentBg2PreviewStyle"
                     aria-label="Content background layer 2 preview"
                 />
                 <span
@@ -437,12 +427,7 @@
                             ? 'opacity-30'
                             : ''
                     "
-                    :style="{
-                        backgroundImage: settings.sidebarBg
-                            ? `url(${settings.sidebarBg})`
-                            : 'none',
-                        backgroundRepeat: settings.sidebarRepeat,
-                    }"
+                    :style="sidebarBgPreviewStyle"
                     aria-label="Sidebar background preview"
                 />
                 <span
@@ -761,7 +746,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch, onBeforeUnmount } from 'vue';
+import { reactive, watch, onBeforeUnmount, ref, computed } from 'vue';
+import { createOrRefFile } from '~/db/files';
+import { getFileBlob } from '~/db/files';
 // Relative import (no alias friction inside /app)
 import {
     useThemeSettings,
@@ -906,8 +893,27 @@ function applyPreset(
         set({ sidebarBg: src, sidebarBgOpacity: opacity });
 }
 
+// Cache of resolved object URLs for internal-file tokens
+const internalUrlCache = new Map<string, string>();
+async function resolveInternalPath(v: string | null): Promise<string | null> {
+    if (!v) return null;
+    if (!v.startsWith('internal-file://')) return v;
+    const hash = v.slice('internal-file://'.length);
+    if (internalUrlCache.has(hash)) return internalUrlCache.get(hash)!;
+    try {
+        const blob = await getFileBlob(hash);
+        if (!blob) return null;
+        const u = URL.createObjectURL(blob);
+        internalUrlCache.set(hash, u);
+        registerObjectUrl(u);
+        return u;
+    } catch {
+        return null;
+    }
+}
 function displayName(path: string | null) {
     if (!path) return '';
+    if (path.startsWith('internal-file://')) return 'Saved Image';
     try {
         if (path.startsWith('blob:')) return 'Uploaded';
         const url = new URL(path, window.location.origin);
@@ -916,6 +922,54 @@ function displayName(path: string | null) {
         return path.split('/').pop() || path;
     }
 }
+
+// Reactive resolved URLs
+const resolvedContentBg1 = ref<string | null>(null);
+const resolvedContentBg2 = ref<string | null>(null);
+const resolvedSidebarBg = ref<string | null>(null);
+
+async function refreshResolved() {
+    resolvedContentBg1.value = await resolveInternalPath(
+        settings.value.contentBg1 || null
+    );
+    resolvedContentBg2.value = await resolveInternalPath(
+        settings.value.contentBg2 || null
+    );
+    resolvedSidebarBg.value = await resolveInternalPath(
+        settings.value.sidebarBg || null
+    );
+}
+
+watch(
+    () => [
+        settings.value.contentBg1,
+        settings.value.contentBg2,
+        settings.value.sidebarBg,
+    ],
+    () => {
+        refreshResolved();
+    },
+    { immediate: true }
+);
+
+const contentBg1PreviewStyle = computed(() => ({
+    backgroundImage: resolvedContentBg1.value
+        ? `url(${resolvedContentBg1.value})`
+        : 'none',
+    backgroundRepeat: settings.value.contentBg1Repeat,
+}));
+const contentBg2PreviewStyle = computed(() => ({
+    backgroundImage: resolvedContentBg2.value
+        ? `url(${resolvedContentBg2.value})`
+        : 'none',
+    backgroundRepeat: settings.value.contentBg2Repeat,
+}));
+const sidebarBgPreviewStyle = computed(() => ({
+    backgroundImage: resolvedSidebarBg.value
+        ? `url(${resolvedSidebarBg.value})`
+        : 'none',
+    backgroundRepeat: settings.value.sidebarRepeat,
+}));
 
 function isPresetActive(
     which: 'contentBg1' | 'contentBg2' | 'sidebarBg',
@@ -941,26 +995,35 @@ function notify(title: string, description?: string) {
     console.warn('[theme-settings]', title, description || '');
 }
 
-function onUpload(ev: Event, which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
+async function onUpload(
+    ev: Event,
+    which: 'contentBg1' | 'contentBg2' | 'sidebarBg'
+) {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-        notify('Invalid image type');
-        input.value = '';
-        return;
+    try {
+        if (!file.type.startsWith('image/')) {
+            notify('Invalid image type');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            notify('Image too large', 'Max 2MB');
+            return;
+        }
+        // Persist via file store (dedup by content hash)
+        const meta = await createOrRefFile(file, file.name || 'upload');
+        // Store as synthetic scheme so we can resolve later
+        const token = `internal-file://${meta.hash}`;
+        if (which === 'contentBg1') set({ contentBg1: token });
+        else if (which === 'contentBg2') set({ contentBg2: token });
+        else if (which === 'sidebarBg') set({ sidebarBg: token });
+        notify('Background image saved', meta.hash.slice(0, 8));
+    } catch (e: any) {
+        notify('Upload failed', e?.message || 'unknown error');
+    } finally {
+        if (input) input.value = '';
     }
-    if (file.size > 2 * 1024 * 1024) {
-        notify('Image too large', 'Max 2MB');
-        input.value = '';
-        return;
-    }
-    const url = URL.createObjectURL(file);
-    registerObjectUrl(url);
-    if (which === 'contentBg1') set({ contentBg1: url });
-    else if (which === 'contentBg2') set({ contentBg2: url });
-    else if (which === 'sidebarBg') set({ sidebarBg: url });
-    input.value = '';
 }
 
 function onResetAll() {
