@@ -121,7 +121,7 @@
                         backgroundImage: settings.contentBg1
                             ? `url(${settings.contentBg1})`
                             : 'none',
-                        backgroundRepeat: settings.contentRepeat,
+                        backgroundRepeat: settings.contentBg1Repeat,
                     }"
                     aria-label="Content background layer 1 preview"
                 />
@@ -172,11 +172,23 @@
                     size="sm"
                     variant="basic"
                     class="retro-chip"
-                    @click="toggleRepeat('contentRepeat')"
+                    @click="toggleRepeat('contentBg1Repeat')"
                 >
                     Repeat:
-                    {{ settings.contentRepeat === 'repeat' ? 'On' : 'Off' }}
+                    {{ settings.contentBg1Repeat === 'repeat' ? 'On' : 'Off' }}
                 </UButton>
+                <label
+                    class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
+                >
+                    <input
+                        type="checkbox"
+                        :checked="settings.contentBg1Fit"
+                        @change="
+                            set({ contentBg1Fit: !settings.contentBg1Fit })
+                        "
+                    />
+                    Fit
+                </label>
             </div>
             <div class="flex items-center gap-4">
                 <label class="w-32">Opacity</label>
@@ -191,6 +203,23 @@
                 />
                 <span class="w-12 text-right tabular-nums">{{
                     local.contentBg1Opacity.toFixed(2)
+                }}</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32">Size</label>
+                <input
+                    type="range"
+                    min="8"
+                    max="1200"
+                    :disabled="settings.contentBg1Fit"
+                    :value="local.contentBg1SizePx"
+                    @input="onSizeRange($event, 'contentBg1SizePx')"
+                    class="flex-1"
+                />
+                <span class="w-16 text-right tabular-nums text-xs">{{
+                    settings.contentBg1Fit
+                        ? 'cover'
+                        : local.contentBg1SizePx + 'px'
                 }}</span>
             </div>
             <div class="flex items-center gap-4">
@@ -252,7 +281,7 @@
                         backgroundImage: settings.contentBg2
                             ? `url(${settings.contentBg2})`
                             : 'none',
-                        backgroundRepeat: settings.contentRepeat,
+                        backgroundRepeat: settings.contentBg2Repeat,
                     }"
                     aria-label="Content background layer 2 preview"
                 />
@@ -299,6 +328,27 @@
                         @change="onUpload($event, 'contentBg2')"
                     />
                 </label>
+                <UButton
+                    size="sm"
+                    variant="basic"
+                    class="retro-chip"
+                    @click="toggleRepeat('contentBg2Repeat')"
+                >
+                    Repeat:
+                    {{ settings.contentBg2Repeat === 'repeat' ? 'On' : 'Off' }}
+                </UButton>
+                <label
+                    class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
+                >
+                    <input
+                        type="checkbox"
+                        :checked="settings.contentBg2Fit"
+                        @change="
+                            set({ contentBg2Fit: !settings.contentBg2Fit })
+                        "
+                    />
+                    Fit
+                </label>
             </div>
             <div class="flex items-center gap-4">
                 <label class="w-32">Opacity</label>
@@ -313,6 +363,23 @@
                 />
                 <span class="w-12 text-right tabular-nums">{{
                     local.contentBg2Opacity.toFixed(2)
+                }}</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32">Size</label>
+                <input
+                    type="range"
+                    min="8"
+                    max="1200"
+                    :disabled="settings.contentBg2Fit"
+                    :value="local.contentBg2SizePx"
+                    @input="onSizeRange($event, 'contentBg2SizePx')"
+                    class="flex-1"
+                />
+                <span class="w-16 text-right tabular-nums text-xs">{{
+                    settings.contentBg2Fit
+                        ? 'cover'
+                        : local.contentBg2SizePx + 'px'
                 }}</span>
             </div>
             <div class="flex items-center gap-4">
@@ -430,6 +497,16 @@
                     Repeat:
                     {{ settings.sidebarRepeat === 'repeat' ? 'On' : 'Off' }}
                 </UButton>
+                <label
+                    class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
+                >
+                    <input
+                        type="checkbox"
+                        :checked="settings.sidebarBgFit"
+                        @change="set({ sidebarBgFit: !settings.sidebarBgFit })"
+                    />
+                    Fit
+                </label>
             </div>
             <div class="flex items-center gap-4">
                 <label class="w-32">Opacity</label>
@@ -444,6 +521,23 @@
                 />
                 <span class="w-12 text-right tabular-nums">{{
                     local.sidebarBgOpacity.toFixed(2)
+                }}</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="w-32">Size</label>
+                <input
+                    type="range"
+                    min="8"
+                    max="1200"
+                    :disabled="settings.sidebarBgFit"
+                    :value="local.sidebarBgSizePx"
+                    @input="onSizeRange($event, 'sidebarBgSizePx')"
+                    class="flex-1"
+                />
+                <span class="w-16 text-right tabular-nums text-xs">{{
+                    settings.sidebarBgFit
+                        ? 'cover'
+                        : local.sidebarBgSizePx + 'px'
                 }}</span>
             </div>
             <div class="flex items-center gap-4">
@@ -691,6 +785,9 @@ const local = reactive({
     contentBg1Opacity: settings.value.contentBg1Opacity,
     contentBg2Opacity: settings.value.contentBg2Opacity,
     sidebarBgOpacity: settings.value.sidebarBgOpacity,
+    contentBg1SizePx: settings.value.contentBg1SizePx,
+    contentBg2SizePx: settings.value.contentBg2SizePx,
+    sidebarBgSizePx: (settings.value as any).sidebarBgSizePx || 240,
 });
 
 // Local hex color text boxes (so user can type partial values without reverting)
@@ -740,10 +837,32 @@ function onOpacityRange(
     commitOpacity(key, v);
 }
 
-function toggleRepeat(key: 'contentRepeat' | 'sidebarRepeat') {
+function toggleRepeat(
+    key:
+        | 'contentRepeat'
+        | 'sidebarRepeat'
+        | 'contentBg1Repeat'
+        | 'contentBg2Repeat'
+) {
     const current = (settings.value as any)[key];
     const next = current === 'repeat' ? 'no-repeat' : 'repeat';
     set({ [key]: next } as any);
+}
+
+const commitSize = debounce(
+    (
+        key: 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx',
+        v: number
+    ) => set({ [key]: v } as any),
+    70
+);
+function onSizeRange(
+    e: Event,
+    key: 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx'
+) {
+    const v = Number((e.target as HTMLInputElement).value);
+    (local as any)[key] = v;
+    commitSize(key, v);
 }
 
 function removeLayer(which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
@@ -893,6 +1012,9 @@ watch(
         local.contentBg1Opacity = s.contentBg1Opacity;
         local.contentBg2Opacity = s.contentBg2Opacity;
         local.sidebarBgOpacity = s.sidebarBgOpacity;
+        local.contentBg1SizePx = s.contentBg1SizePx;
+        local.contentBg2SizePx = s.contentBg2SizePx;
+        local.sidebarBgSizePx = (s as any).sidebarBgSizePx || 240;
         // sync hex boxes (only show hex values)
         localHex.contentBg1Color = s.contentBg1Color.startsWith('#')
             ? s.contentBg1Color

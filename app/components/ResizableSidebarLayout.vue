@@ -371,6 +371,11 @@ const toggleAria = computed(() =>
         var(--md-surface-container-low)
     );
 }
+/* Sidebar background size support */
+:root {
+    /* fallback value if not set */
+    --app-sidebar-bg-size: 240px;
+}
 .dark .content-bg {
     background-color: var(
         --app-content-bg-1-color,
@@ -384,12 +389,15 @@ const toggleAria = computed(() =>
     inset: 0;
     pointer-events: none;
     background-image: var(--app-content-bg-1, url('/bg-repeat.webp'));
-    background-repeat: var(--app-content-bg-repeat, repeat);
+    background-repeat: var(
+        --app-content-bg-1-repeat,
+        var(--app-content-bg-repeat, repeat)
+    );
     background-position: top left;
     /* Default variables; can be overridden via inline style */
-    --content-bg-size: 150px;
+    --content-bg-size: var(--app-content-bg-1-size, 150px);
     --content-bg-opacity: 0.08; /* legacy component var (fallback) */
-    background-size: var(--content-bg-size) var(--content-bg-size);
+    background-size: var(--content-bg-size);
     opacity: var(--app-content-bg-1-opacity, var(--content-bg-opacity));
     z-index: 0;
     /* Keep transparent so base element's background-color always visible/tint */
@@ -409,11 +417,14 @@ const toggleAria = computed(() =>
     inset: 0;
     pointer-events: none;
     background-image: var(--app-content-bg-2, url('/bg-repeat-2.webp'));
-    background-repeat: var(--app-content-bg-repeat, repeat);
+    background-repeat: var(
+        --app-content-bg-2-repeat,
+        var(--app-content-bg-repeat, repeat)
+    );
     background-position: top left;
-    --content-overlay-size: 380px;
+    --content-overlay-size: var(--app-content-bg-2-size, 380px);
     --content-overlay-opacity: 0.125; /* legacy component var (fallback) */
-    background-size: var(--content-overlay-size) var(--content-overlay-size);
+    background-size: var(--content-overlay-size);
     opacity: var(--app-content-bg-2-opacity, var(--content-overlay-opacity));
     z-index: 0.5;
     background-color: var(--app-content-bg-2-color, transparent);
@@ -441,6 +452,8 @@ aside::before {
     opacity: var(--app-sidebar-bg-1-opacity, var(--sidebar-rep-opacity));
     z-index: 0;
     background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
+    background-size: var(--app-sidebar-bg-size, 240px)
+        var(--app-sidebar-bg-size, 240px);
 }
 
 aside {

@@ -21,10 +21,20 @@ export interface ThemeSettings {
     contentBg2: string | null;
     contentBg1Opacity: number; // 0..1
     contentBg2Opacity: number; // 0..1
+    // Per-layer repeat (legacy contentRepeat kept for migration)
+    contentBg1Repeat: 'repeat' | 'no-repeat';
+    contentBg2Repeat: 'repeat' | 'no-repeat';
+    // Pattern sizing / fitting
+    contentBg1SizePx: number; // ignored when fit true
+    contentBg2SizePx: number;
+    contentBg1Fit: boolean; // when true uses cover sizing
+    contentBg2Fit: boolean;
     sidebarBg: string | null;
     sidebarBgOpacity: number; // 0..1
     sidebarRepeat: 'repeat' | 'no-repeat';
-    contentRepeat: 'repeat' | 'no-repeat';
+    sidebarBgSizePx?: number; // optional new: size in px when not fit (legacy undefined -> default)
+    sidebarBgFit?: boolean; // optional new: cover mode
+    contentRepeat: 'repeat' | 'no-repeat'; // legacy shared repeat (pre-split)
     reducePatternsInHighContrast: boolean;
 }
 
@@ -47,9 +57,17 @@ export const DEFAULT_THEME_SETTINGS_LIGHT: ThemeSettings = Object.freeze({
     contentBg2: '/bg-repeat-2.webp',
     contentBg1Opacity: 0.08,
     contentBg2Opacity: 0.125,
+    contentBg1Repeat: 'repeat',
+    contentBg2Repeat: 'repeat',
+    contentBg1SizePx: 150,
+    contentBg2SizePx: 380,
+    contentBg1Fit: false,
+    contentBg2Fit: false,
     sidebarBg: '/sidebar-repeater.webp',
     sidebarBgOpacity: 0.1,
     sidebarRepeat: 'repeat',
+    sidebarBgSizePx: 240,
+    sidebarBgFit: false,
     contentRepeat: 'repeat',
     reducePatternsInHighContrast: true,
 });
@@ -72,9 +90,17 @@ export const DEFAULT_THEME_SETTINGS_DARK: ThemeSettings = Object.freeze({
     contentBg2: '/bg-repeat-2.webp', // disabled for clearer dark differentiation
     contentBg1Opacity: 0.03,
     contentBg2Opacity: 0.05, // kept for when user enables second layer
+    contentBg1Repeat: 'repeat',
+    contentBg2Repeat: 'repeat',
+    contentBg1SizePx: 150,
+    contentBg2SizePx: 380,
+    contentBg1Fit: false,
+    contentBg2Fit: false,
     sidebarBg: '/sidebar-repeater.webp',
     sidebarBgOpacity: 0.12,
     sidebarRepeat: 'repeat',
+    sidebarBgSizePx: 240,
+    sidebarBgFit: false,
     contentRepeat: 'repeat',
     reducePatternsInHighContrast: true,
 });
@@ -147,10 +173,45 @@ function sanitize(s: ThemeSettings, defaults: ThemeSettings): ThemeSettings {
     out.contentBg1Opacity = +clamp(out.contentBg1Opacity, 0, 1).toFixed(3);
     out.contentBg2Opacity = +clamp(out.contentBg2Opacity, 0, 1).toFixed(3);
     out.sidebarBgOpacity = +clamp(out.sidebarBgOpacity, 0, 1).toFixed(3);
+    // Sidebar size / fit (optional fields migration-safe)
+    const defaultSidebarSize = (defaults as any).sidebarBgSizePx || 240;
+    const rawSidebarSize = (out as any).sidebarBgSizePx;
+    const sidebarSize =
+        typeof rawSidebarSize === 'number'
+            ? rawSidebarSize
+            : defaultSidebarSize;
+    (out as any).sidebarBgSizePx = clamp(Math.round(sidebarSize), 8, 1200);
+    (out as any).sidebarBgFit = !!(out as any).sidebarBgFit;
+    // Clamp sizes
+    const clampSize = (n: any, d: number) => {
+        const v = typeof n === 'number' ? n : d;
+        return clamp(Math.round(v), 8, 1200);
+    };
+    out.contentBg1SizePx = clampSize(
+        out.contentBg1SizePx,
+        defaults.contentBg1SizePx
+    );
+    out.contentBg2SizePx = clampSize(
+        out.contentBg2SizePx,
+        defaults.contentBg2SizePx
+    );
+    out.contentBg1Fit = !!out.contentBg1Fit;
+    out.contentBg2Fit = !!out.contentBg2Fit;
     out.sidebarRepeat =
         out.sidebarRepeat === 'no-repeat' ? 'no-repeat' : 'repeat';
     out.contentRepeat =
         out.contentRepeat === 'no-repeat' ? 'no-repeat' : 'repeat';
+    // Per-layer repeats (migrate from legacy if missing)
+    out.contentBg1Repeat =
+        out.contentBg1Repeat === 'no-repeat' ? 'no-repeat' : 'repeat';
+    out.contentBg2Repeat =
+        out.contentBg2Repeat === 'no-repeat' ? 'no-repeat' : 'repeat';
+    if (!('contentBg1Repeat' in s) && 'contentRepeat' in s) {
+        out.contentBg1Repeat = out.contentRepeat;
+    }
+    if (!('contentBg2Repeat' in s) && 'contentRepeat' in s) {
+        out.contentBg2Repeat = out.contentRepeat;
+    }
     out.reducePatternsInHighContrast = !!out.reducePatternsInHighContrast;
     return out;
 }
@@ -233,7 +294,20 @@ function applyToRoot(settings: ThemeSettings) {
         : 1;
     r.setProperty('--app-content-bg-1-opacity', String(effectiveBg1Opacity));
     r.setProperty('--app-content-bg-2-opacity', String(effectiveBg2Opacity));
+    // Legacy shared repeat
     r.setProperty('--app-content-bg-repeat', settings.contentRepeat);
+    // New per-layer repeats
+    r.setProperty('--app-content-bg-1-repeat', settings.contentBg1Repeat);
+    r.setProperty('--app-content-bg-2-repeat', settings.contentBg2Repeat);
+    // Sizes (cover if fit)
+    r.setProperty(
+        '--app-content-bg-1-size',
+        settings.contentBg1Fit ? 'cover' : settings.contentBg1SizePx + 'px'
+    );
+    r.setProperty(
+        '--app-content-bg-2-size',
+        settings.contentBg2Fit ? 'cover' : settings.contentBg2SizePx + 'px'
+    );
     r.setProperty(
         '--app-sidebar-bg-1',
         settings.sidebarBg ? `url("${settings.sidebarBg}")` : 'none'
@@ -246,6 +320,11 @@ function applyToRoot(settings: ThemeSettings) {
         String(effectiveSidebarOpacity)
     );
     r.setProperty('--app-sidebar-bg-repeat', settings.sidebarRepeat);
+    // Sidebar size variables (optional; fallback to 240px if undefined)
+    const sbSize = (settings as any).sidebarBgFit
+        ? 'cover'
+        : ((settings as any).sidebarBgSizePx || 240) + 'px';
+    r.setProperty('--app-sidebar-bg-size', sbSize);
     maybeClampForHighContrast(settings);
 }
 
