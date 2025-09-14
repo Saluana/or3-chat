@@ -80,7 +80,7 @@ function onToggle() {
 .dark .header-pattern {
     background-color: var(
         --app-header-bg-color,
-        var(--md-surface-container-high)
+        var(--md-surface-container-low)
     ) !important;
 }
 

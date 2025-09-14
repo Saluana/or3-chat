@@ -1,6 +1,77 @@
 <template>
     <!-- Root no longer forces full height or its own scroll; parent provides scroll container -->
     <div class="px-4 py-4 space-y-12 text-sm">
+        <!-- Mode Toggle -->
+        <section class="space-y-2">
+            <div class="flex items-center justify-between">
+                <h2 class="font-heading text-base uppercase tracking-wide">
+                    Theme Mode
+                </h2>
+                <div class="flex gap-2 items-center">
+                    <UButton
+                        size="sm"
+                        variant="basic"
+                        class="retro-chip"
+                        :class="activeMode === 'light' ? 'active' : ''"
+                        :disabled="activeMode === 'light'"
+                        @click="switchMode('light')"
+                        >Light</UButton
+                    >
+                    <UButton
+                        size="sm"
+                        variant="basic"
+                        class="retro-chip"
+                        :class="activeMode === 'dark' ? 'active' : ''"
+                        :disabled="activeMode === 'dark'"
+                        @click="switchMode('dark')"
+                        >Dark</UButton
+                    >
+                    <UButton
+                        size="sm"
+                        variant="basic"
+                        class="retro-chip"
+                        @click="onResetCurrent"
+                        :title="'Reset ' + activeMode + ' profile'"
+                        >Reset {{ activeMode }}</UButton
+                    >
+                </div>
+            </div>
+            <p class="text-xs opacity-70">
+                Each mode stores its own backgrounds & colors. Use Reset (mode)
+                for just this profile or Reset All below for both.
+            </p>
+        </section>
+        <!-- Custom Background Colors Master Toggle -->
+        <section class="space-y-2">
+            <h2 class="font-heading text-base uppercase tracking-wide">
+                Custom Background Colors
+            </h2>
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    :checked="settings.customBgColorsEnabled"
+                    @change="
+                        set({
+                            customBgColorsEnabled:
+                                !settings.customBgColorsEnabled,
+                        });
+                        reapply();
+                    "
+                />
+                <span class="text-xs"
+                    >Enable custom background color overrides</span
+                >
+            </label>
+            <p
+                class="text-xs opacity-70"
+                v-if="!settings.customBgColorsEnabled"
+            >
+                Disabled: system/theme background colors shown.
+            </p>
+            <p class="text-xs opacity-70" v-else>
+                Enabled: custom values below override system backgrounds.
+            </p>
+        </section>
         <!-- Typography -->
         <section class="space-y-3">
             <h2 class="font-heading text-base uppercase tracking-wide">
@@ -125,7 +196,9 @@
             <div class="flex items-center gap-4">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
+                    :disabled="!settings.customBgColorsEnabled"
                     :model-value="
+                        settings.customBgColorsEnabled &&
                         settings.contentBg1Color.startsWith('#')
                             ? settings.contentBg1Color
                             : undefined
@@ -142,13 +215,17 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.contentBg1Color"
                         @input="onHexInput('contentBg1Color')"
+                        :disabled="!settings.customBgColorsEnabled"
                         aria-label="Content layer 1 fallback hex color"
                     />
                     <button
                         type="button"
                         class="retro-btn-copy"
                         @click="copyColor('contentBg1Color')"
-                        :disabled="!settings.contentBg1Color.startsWith('#')"
+                        :disabled="
+                            !settings.customBgColorsEnabled ||
+                            !settings.contentBg1Color.startsWith('#')
+                        "
                         aria-label="Copy content layer 1 color"
                         title="Copy"
                     >
@@ -241,7 +318,9 @@
             <div class="flex items-center gap-4">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
+                    :disabled="!settings.customBgColorsEnabled"
                     :model-value="
+                        settings.customBgColorsEnabled &&
                         settings.contentBg2Color.startsWith('#')
                             ? settings.contentBg2Color
                             : undefined
@@ -258,13 +337,17 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.contentBg2Color"
                         @input="onHexInput('contentBg2Color')"
+                        :disabled="!settings.customBgColorsEnabled"
                         aria-label="Content layer 2 fallback hex color"
                     />
                     <button
                         type="button"
                         class="retro-btn-copy"
                         @click="copyColor('contentBg2Color')"
-                        :disabled="!settings.contentBg2Color.startsWith('#')"
+                        :disabled="
+                            !settings.customBgColorsEnabled ||
+                            !settings.contentBg2Color.startsWith('#')
+                        "
                         aria-label="Copy content layer 2 color"
                         title="Copy"
                     >
@@ -366,7 +449,9 @@
             <div class="flex items-center gap-4">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
+                    :disabled="!settings.customBgColorsEnabled"
                     :model-value="
+                        settings.customBgColorsEnabled &&
                         settings.sidebarBgColor.startsWith('#')
                             ? settings.sidebarBgColor
                             : undefined
@@ -383,13 +468,17 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.sidebarBgColor"
                         @input="onHexInput('sidebarBgColor')"
+                        :disabled="!settings.customBgColorsEnabled"
                         aria-label="Sidebar fallback hex color"
                     />
                     <button
                         type="button"
                         class="retro-btn-copy"
                         @click="copyColor('sidebarBgColor')"
-                        :disabled="!settings.sidebarBgColor.startsWith('#')"
+                        :disabled="
+                            !settings.customBgColorsEnabled ||
+                            !settings.sidebarBgColor.startsWith('#')
+                        "
                         aria-label="Copy sidebar color"
                         title="Copy"
                     >
@@ -449,7 +538,9 @@
             <div class="flex items-center gap-4">
                 <label class="w-32 text-xs">Background Color</label>
                 <UColorPicker
+                    :disabled="!settings.customBgColorsEnabled"
                     :model-value="
+                        settings.customBgColorsEnabled &&
                         settings.headerBgColor.startsWith('#')
                             ? settings.headerBgColor
                             : undefined
@@ -466,13 +557,17 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.headerBgColor"
                         @input="onHexInput('headerBgColor')"
+                        :disabled="!settings.customBgColorsEnabled"
                         aria-label="Header background hex color"
                     />
                     <button
                         type="button"
                         class="retro-btn-copy"
                         @click="copyColor('headerBgColor')"
-                        :disabled="!settings.headerBgColor.startsWith('#')"
+                        :disabled="
+                            !settings.customBgColorsEnabled ||
+                            !settings.headerBgColor.startsWith('#')
+                        "
                         aria-label="Copy header color"
                         title="Copy"
                     >
@@ -515,7 +610,9 @@
             <div class="flex items-center gap-4">
                 <label class="w-32 text-xs">Background Color</label>
                 <UColorPicker
+                    :disabled="!settings.customBgColorsEnabled"
                     :model-value="
+                        settings.customBgColorsEnabled &&
                         settings.bottomBarBgColor.startsWith('#')
                             ? settings.bottomBarBgColor
                             : undefined
@@ -532,13 +629,17 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.bottomBarBgColor"
                         @input="onHexInput('bottomBarBgColor')"
+                        :disabled="!settings.customBgColorsEnabled"
                         aria-label="Bottom bar background hex color"
                     />
                     <button
                         type="button"
                         class="retro-btn-copy"
                         @click="copyColor('bottomBarBgColor')"
-                        :disabled="!settings.bottomBarBgColor.startsWith('#')"
+                        :disabled="
+                            !settings.customBgColorsEnabled ||
+                            !settings.bottomBarBgColor.startsWith('#')
+                        "
                         aria-label="Copy bottom bar color"
                         title="Copy"
                     >
@@ -576,10 +677,13 @@ import {
 import type { Ref } from 'vue';
 
 const themeApi = useThemeSettings();
-const settings = themeApi.settings as Ref<ThemeSettings>; // explicit ref typing
+const settings = themeApi.settings as Ref<ThemeSettings>; // active mode settings
 const set = themeApi.set;
-const reset = themeApi.reset;
+const reset = themeApi.reset; // resets active mode by default
+const resetAll = themeApi.resetAll;
 const reapply = themeApi.reapply;
+const activeMode = themeApi.activeMode;
+const switchMode = themeApi.switchMode;
 
 // Local mutable copy for debounced slider interactions
 const local = reactive({
@@ -741,12 +845,14 @@ function onUpload(ev: Event, which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
 }
 
 function onResetAll() {
-    if (confirm('Reset all theme settings to defaults?')) {
+    if (confirm('Reset BOTH light and dark theme settings to defaults?')) {
+        resetAll();
+    }
+}
+
+function onResetCurrent() {
+    if (confirm(`Reset ${activeMode.value} theme settings to defaults?`)) {
         reset();
-        local.baseFontPx = DEFAULT_THEME_SETTINGS.baseFontPx;
-        local.contentBg1Opacity = DEFAULT_THEME_SETTINGS.contentBg1Opacity;
-        local.contentBg2Opacity = DEFAULT_THEME_SETTINGS.contentBg2Opacity;
-        local.sidebarBgOpacity = DEFAULT_THEME_SETTINGS.sidebarBgOpacity;
     }
 }
 

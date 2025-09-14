@@ -1,4 +1,4 @@
-import { ref, reactive, watch, toRaw } from 'vue';
+import { ref, watch, computed } from 'vue';
 
 /**
  * Theme customization settings (v1)
@@ -9,6 +9,8 @@ export interface ThemeSettings {
     useSystemFont: boolean; // when true, override both body and heading fonts with system stack
     showHeaderGradient: boolean; // controls header gradient visibility
     showBottomBarGradient: boolean; // controls bottom nav gradient visibility
+    // Master toggle: when false, custom background color overrides are not applied (system/theme defaults show)
+    customBgColorsEnabled: boolean;
     // Color overrides when images/gradients are disabled
     contentBg1Color: string; // css color or var()
     contentBg2Color: string; // css color or var()
@@ -26,16 +28,19 @@ export interface ThemeSettings {
     reducePatternsInHighContrast: boolean;
 }
 
-export const THEME_SETTINGS_STORAGE_KEY = 'theme:settings:v1';
+export const THEME_SETTINGS_STORAGE_KEY = 'theme:settings:v1'; // legacy single-profile key (kept for migration/back-compat)
+export const THEME_SETTINGS_STORAGE_KEY_LIGHT = 'theme:settings:v1:light';
+export const THEME_SETTINGS_STORAGE_KEY_DARK = 'theme:settings:v1:dark';
 
-export const DEFAULT_THEME_SETTINGS: ThemeSettings = Object.freeze({
+export const DEFAULT_THEME_SETTINGS_LIGHT: ThemeSettings = Object.freeze({
     baseFontPx: 20,
     useSystemFont: false,
     showHeaderGradient: true,
     showBottomBarGradient: true,
+    customBgColorsEnabled: false,
     contentBg1Color: 'var(--md-surface)',
     contentBg2Color: 'var(--md-surface)',
-    sidebarBgColor: 'var(--md-surface-variant)',
+    sidebarBgColor: 'var(--md-surface-container-lowest)',
     headerBgColor: 'var(--md-surface-variant)',
     bottomBarBgColor: 'var(--md-surface-variant)',
     contentBg1: '/bg-repeat.webp',
@@ -49,17 +54,49 @@ export const DEFAULT_THEME_SETTINGS: ThemeSettings = Object.freeze({
     reducePatternsInHighContrast: true,
 });
 
+// Dark defaults tuned for lower luminance (slightly reduced pattern opacity + darker container fallbacks)
+export const DEFAULT_THEME_SETTINGS_DARK: ThemeSettings = Object.freeze({
+    baseFontPx: 20,
+    useSystemFont: false,
+    showHeaderGradient: true,
+    showBottomBarGradient: true,
+    customBgColorsEnabled: false,
+    // Dark mode defaults use darker containers for immediate visual contrast after reset.
+    contentBg1Color: 'var(--md-surface-dim)',
+    contentBg2Color: 'var(--md-surface-container)',
+    sidebarBgColor: 'var(--md-surface)',
+    headerBgColor: 'var(--md-surface-container-high)',
+    bottomBarBgColor: 'var(--md-surface-container-high)',
+    // Use a single subtle pattern layer by default (second disabled) to avoid washed-out light feel.
+    contentBg1: '/bg-repeat.webp',
+    contentBg2: null, // disabled for clearer dark differentiation
+    contentBg1Opacity: 0.05,
+    contentBg2Opacity: 0.08, // kept for when user enables second layer
+    sidebarBg: '/sidebar-repeater.webp',
+    sidebarBgOpacity: 0.06,
+    sidebarRepeat: 'repeat',
+    contentRepeat: 'repeat',
+    reducePatternsInHighContrast: true,
+});
+
+// For backwards compatibility where other modules refer to DEFAULT_THEME_SETTINGS, point to light profile
+export const DEFAULT_THEME_SETTINGS = DEFAULT_THEME_SETTINGS_LIGHT;
+
 // singleton guard (HMR safe)
 const g: any = globalThis as any;
-if (!g.__or3ThemeSettingsStore) {
-    g.__or3ThemeSettingsStore = {
-        settings: ref<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS }),
+if (!g.__or3ThemeSettingsStoreV2) {
+    g.__or3ThemeSettingsStoreV2 = {
+        light: ref<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS_LIGHT }),
+        dark: ref<ThemeSettings>({ ...DEFAULT_THEME_SETTINGS_DARK }),
+        activeMode: ref<'light' | 'dark'>('light'),
         loaded: false,
     };
 }
 
-const store = g.__or3ThemeSettingsStore as {
-    settings: ReturnType<typeof ref<ThemeSettings>>; // guaranteed initialized
+const store = g.__or3ThemeSettingsStoreV2 as {
+    light: ReturnType<typeof ref<ThemeSettings>>;
+    dark: ReturnType<typeof ref<ThemeSettings>>;
+    activeMode: ReturnType<typeof ref<'light' | 'dark'>>;
     loaded: boolean;
 };
 
@@ -77,28 +114,28 @@ function isValidImageValue(v: string) {
     );
 }
 
-function sanitize(s: ThemeSettings): ThemeSettings {
+function sanitize(s: ThemeSettings, defaults: ThemeSettings): ThemeSettings {
     const out: ThemeSettings = { ...s } as ThemeSettings;
     out.baseFontPx = clamp(Math.round(out.baseFontPx), 14, 24);
     out.useSystemFont = !!out.useSystemFont;
     out.showHeaderGradient = !!out.showHeaderGradient;
     out.showBottomBarGradient = !!out.showBottomBarGradient;
+    out.customBgColorsEnabled = !!out.customBgColorsEnabled;
     const isColor = (v: any) =>
         typeof v === 'string' && (v.startsWith('#') || v.startsWith('var('));
     if (!isColor(out.contentBg1Color))
-        out.contentBg1Color = DEFAULT_THEME_SETTINGS.contentBg1Color;
+        out.contentBg1Color = defaults.contentBg1Color;
     if (!isColor(out.contentBg2Color))
-        out.contentBg2Color = DEFAULT_THEME_SETTINGS.contentBg2Color;
+        out.contentBg2Color = defaults.contentBg2Color;
     if (!isColor(out.sidebarBgColor))
-        out.sidebarBgColor = DEFAULT_THEME_SETTINGS.sidebarBgColor;
-    if (!isColor(out.headerBgColor))
-        out.headerBgColor = DEFAULT_THEME_SETTINGS.headerBgColor;
+        out.sidebarBgColor = defaults.sidebarBgColor;
+    if (!isColor(out.headerBgColor)) out.headerBgColor = defaults.headerBgColor;
     if (!isColor(out.bottomBarBgColor))
-        out.bottomBarBgColor = DEFAULT_THEME_SETTINGS.bottomBarBgColor;
+        out.bottomBarBgColor = defaults.bottomBarBgColor;
     out.contentBg1 =
         out.contentBg1 && isValidImageValue(out.contentBg1)
             ? out.contentBg1
-            : DEFAULT_THEME_SETTINGS.contentBg1;
+            : defaults.contentBg1;
     out.contentBg2 =
         out.contentBg2 && isValidImageValue(out.contentBg2)
             ? out.contentBg2
@@ -106,7 +143,7 @@ function sanitize(s: ThemeSettings): ThemeSettings {
     out.sidebarBg =
         out.sidebarBg && isValidImageValue(out.sidebarBg)
             ? out.sidebarBg
-            : DEFAULT_THEME_SETTINGS.sidebarBg;
+            : defaults.sidebarBg;
     out.contentBg1Opacity = +clamp(out.contentBg1Opacity, 0, 1).toFixed(3);
     out.contentBg2Opacity = +clamp(out.contentBg2Opacity, 0, 1).toFixed(3);
     out.sidebarBgOpacity = +clamp(out.sidebarBgOpacity, 0, 1).toFixed(3);
@@ -120,8 +157,8 @@ function sanitize(s: ThemeSettings): ThemeSettings {
 
 // Defensive runtime completeness guard (in case older persisted objects or external code
 // accidentally removed keys). Ensures every key from DEFAULT_THEME_SETTINGS exists.
-function ensureComplete(partial: any): ThemeSettings {
-    const base: any = { ...DEFAULT_THEME_SETTINGS };
+function ensureComplete(partial: any, defaults: ThemeSettings): ThemeSettings {
+    const base: any = { ...defaults };
     for (const k of Object.keys(base)) {
         if (partial[k] === undefined) partial[k] = base[k];
     }
@@ -165,12 +202,20 @@ function applyToRoot(settings: ThemeSettings) {
         '--app-bottomnav-gradient',
         settings.showBottomBarGradient ? 'url("/gradient-x.webp")' : 'none'
     );
-    // Color overrides (always set so components can reference directly)
-    r.setProperty('--app-content-bg-1-color', settings.contentBg1Color);
-    r.setProperty('--app-content-bg-2-color', settings.contentBg2Color);
-    r.setProperty('--app-sidebar-bg-color', settings.sidebarBgColor);
-    r.setProperty('--app-header-bg-color', settings.headerBgColor);
-    r.setProperty('--app-bottomnav-bg-color', settings.bottomBarBgColor);
+    // Color overrides: only apply if enabled, otherwise remove so system/theme defaults cascade
+    if (settings.customBgColorsEnabled) {
+        r.setProperty('--app-content-bg-1-color', settings.contentBg1Color);
+        r.setProperty('--app-content-bg-2-color', settings.contentBg2Color);
+        r.setProperty('--app-sidebar-bg-color', settings.sidebarBgColor);
+        r.setProperty('--app-header-bg-color', settings.headerBgColor);
+        r.setProperty('--app-bottomnav-bg-color', settings.bottomBarBgColor);
+    } else {
+        r.removeProperty('--app-content-bg-1-color');
+        r.removeProperty('--app-content-bg-2-color');
+        r.removeProperty('--app-sidebar-bg-color');
+        r.removeProperty('--app-header-bg-color');
+        r.removeProperty('--app-bottomnav-bg-color');
+    }
     r.setProperty(
         '--app-content-bg-1',
         settings.contentBg1 ? `url("${settings.contentBg1}")` : 'none'
@@ -237,9 +282,16 @@ function maybeClampForHighContrast(settings: ThemeSettings) {
     }
 }
 
-function persist(settings: ThemeSettings) {
+function persist(mode: 'light' | 'dark', settings: ThemeSettings) {
     if (!isBrowser()) return;
     try {
+        // Mode specific key
+        const key =
+            mode === 'light'
+                ? THEME_SETTINGS_STORAGE_KEY_LIGHT
+                : THEME_SETTINGS_STORAGE_KEY_DARK;
+        localStorage.setItem(key, JSON.stringify(settings));
+        // Legacy combined key (write last active for backward compatibility)
         localStorage.setItem(
             THEME_SETTINGS_STORAGE_KEY,
             JSON.stringify(settings)
@@ -250,13 +302,21 @@ function persist(settings: ThemeSettings) {
     }
 }
 
-function loadFromStorage(): ThemeSettings | null {
+function loadFromStorage(mode: 'light' | 'dark'): ThemeSettings | null {
     if (!isBrowser()) return null;
     try {
-        const raw = localStorage.getItem(THEME_SETTINGS_STORAGE_KEY);
+        const key =
+            mode === 'light'
+                ? THEME_SETTINGS_STORAGE_KEY_LIGHT
+                : THEME_SETTINGS_STORAGE_KEY_DARK;
+        const raw = localStorage.getItem(key);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
-        return sanitize({ ...DEFAULT_THEME_SETTINGS, ...parsed });
+        const defaults =
+            mode === 'light'
+                ? DEFAULT_THEME_SETTINGS_LIGHT
+                : DEFAULT_THEME_SETTINGS_DARK;
+        return sanitize({ ...defaults, ...parsed }, defaults);
     } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('[theme-settings] failed to parse stored settings', e);
@@ -264,67 +324,194 @@ function loadFromStorage(): ThemeSettings | null {
     }
 }
 
+function detectModeFromHtml(): 'light' | 'dark' {
+    if (!isBrowser()) return 'light';
+    const cls = document.documentElement.className;
+    // treat any class starting with 'dark' as dark mode variant
+    return /(^|\s)dark(?![a-zA-Z0-9_-])|(^|\s)dark-/.test(cls)
+        ? 'dark'
+        : 'light';
+}
+
 /** Public composable API */
 export function useThemeSettings() {
     if (!store.loaded && isBrowser()) {
-        const loaded = loadFromStorage();
-        if (loaded) store.settings.value = loaded as ThemeSettings;
-        // Apply immediately
-        applyToRoot(store.settings.value as ThemeSettings);
+        // Migration: if legacy single key exists and light-specific is absent, migrate to light
+        try {
+            const legacyRaw = localStorage.getItem(THEME_SETTINGS_STORAGE_KEY);
+            const lightRaw = localStorage.getItem(
+                THEME_SETTINGS_STORAGE_KEY_LIGHT
+            );
+            if (legacyRaw && !lightRaw) {
+                localStorage.setItem(
+                    THEME_SETTINGS_STORAGE_KEY_LIGHT,
+                    legacyRaw
+                );
+            }
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn('[theme-settings] migration failed', e);
+        }
+        const loadedLight = loadFromStorage('light');
+        const loadedDark = loadFromStorage('dark');
+        if (loadedLight) store.light.value = loadedLight;
+        if (loadedDark) store.dark.value = loadedDark;
+        store.activeMode.value = detectModeFromHtml();
+        applyToRoot(
+            (store.activeMode.value === 'light'
+                ? store.light.value
+                : store.dark.value) as ThemeSettings
+        );
+        // Observe html class changes to sync mode automatically
+        if (isBrowser()) {
+            const mo = new MutationObserver(() => {
+                const mode = detectModeFromHtml();
+                if (mode !== store.activeMode.value) {
+                    store.activeMode.value = mode;
+                    applyToRoot(
+                        (mode === 'light'
+                            ? store.light.value
+                            : store.dark.value) as ThemeSettings
+                    );
+                }
+            });
+            mo.observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ['class'],
+            });
+            if (import.meta.hot) {
+                import.meta.hot.dispose(() => mo.disconnect());
+            }
+        }
         store.loaded = true;
     }
 
+    const current = computed<ThemeSettings>(
+        () =>
+            (store.activeMode.value === 'light'
+                ? store.light.value
+                : store.dark.value) as ThemeSettings
+    );
+
     function set(patch: Partial<ThemeSettings>) {
-        const base = store.settings.value as ThemeSettings;
-        // Construct object ensuring all required keys present before sanitize
-        const mergedInput: ThemeSettings = {
-            ...base,
-            ...patch,
-        } as ThemeSettings;
-        const merged = sanitize(ensureComplete(mergedInput));
-        store.settings.value = merged as ThemeSettings;
-        applyToRoot(merged as ThemeSettings);
-        persist(merged as ThemeSettings);
+        const mode = store.activeMode.value;
+        const base = mode === 'light' ? store.light.value : store.dark.value;
+        const defaults =
+            mode === 'light'
+                ? DEFAULT_THEME_SETTINGS_LIGHT
+                : DEFAULT_THEME_SETTINGS_DARK;
+        const mergedInput: ThemeSettings = { ...base, ...patch } as any;
+        const merged = sanitize(
+            ensureComplete(mergedInput, defaults),
+            defaults
+        );
+        if (mode === 'light') store.light.value = merged;
+        else store.dark.value = merged;
+        applyToRoot(merged);
+        persist(mode as 'light' | 'dark', merged);
     }
 
-    function reset() {
-        store.settings.value = { ...DEFAULT_THEME_SETTINGS };
-        applyToRoot(store.settings.value);
-        if (process.client) localStorage.removeItem(THEME_SETTINGS_STORAGE_KEY);
+    function setForMode(mode: 'light' | 'dark', patch: Partial<ThemeSettings>) {
+        const base = mode === 'light' ? store.light.value : store.dark.value;
+        const defaults =
+            mode === 'light'
+                ? DEFAULT_THEME_SETTINGS_LIGHT
+                : DEFAULT_THEME_SETTINGS_DARK;
+        const mergedInput: ThemeSettings = { ...base, ...patch } as any;
+        const merged = sanitize(
+            ensureComplete(mergedInput, defaults),
+            defaults
+        );
+        if (mode === 'light') store.light.value = merged;
+        else store.dark.value = merged;
+        if (mode === store.activeMode.value) {
+            applyToRoot(merged);
+        }
+        persist(mode, merged);
+    }
+
+    function reset(mode?: 'light' | 'dark') {
+        const target = mode || store.activeMode.value;
+        if (target === 'light') {
+            store.light.value = { ...DEFAULT_THEME_SETTINGS_LIGHT };
+            persist('light', store.light.value);
+        } else {
+            store.dark.value = { ...DEFAULT_THEME_SETTINGS_DARK };
+            persist('dark', store.dark.value);
+        }
+        if (target === store.activeMode.value) {
+            applyToRoot(
+                (target === 'light'
+                    ? store.light.value
+                    : store.dark.value) as ThemeSettings
+            );
+        }
+    }
+
+    function resetAll() {
+        reset('light');
+        reset('dark');
     }
 
     function load(): ThemeSettings {
-        if (!isBrowser()) return store.settings.value as ThemeSettings;
-        const fresh = loadFromStorage();
+        const mode = store.activeMode.value;
+        const fresh = loadFromStorage(mode as 'light' | 'dark');
         if (fresh) {
-            store.settings.value = fresh as ThemeSettings;
-            applyToRoot(fresh as ThemeSettings);
+            if (mode === 'light') store.light.value = fresh;
+            else store.dark.value = fresh;
+            applyToRoot(fresh);
         }
-        return store.settings.value as ThemeSettings;
+        return current.value;
     }
 
     function reapply() {
-        applyToRoot(store.settings.value as ThemeSettings);
+        applyToRoot(current.value);
     }
 
-    // Deep watch (client only) to auto-apply variable changes if mutated directly
+    function switchMode(mode: 'light' | 'dark') {
+        if (mode === store.activeMode.value) return;
+        store.activeMode.value = mode;
+        applyToRoot(
+            (mode === 'light'
+                ? store.light.value
+                : store.dark.value) as ThemeSettings
+        );
+    }
+
+    // Watch both profiles for changes (deep) and persist them independently
     if (isBrowser()) {
         watch(
-            store.settings, // ref<ThemeSettings>
+            () => store.light.value,
             (v) => {
-                applyToRoot(v as ThemeSettings);
-                persist(v as ThemeSettings);
+                if (store.activeMode.value === 'light')
+                    applyToRoot(v as ThemeSettings);
+                persist('light', v as ThemeSettings);
+            },
+            { deep: true }
+        );
+        watch(
+            () => store.dark.value,
+            (v) => {
+                if (store.activeMode.value === 'dark')
+                    applyToRoot(v as ThemeSettings);
+                persist('dark', v as ThemeSettings);
             },
             { deep: true }
         );
     }
 
     return {
-        settings: store.settings,
+        settings: current, // active profile (backwards-compatible name)
+        light: store.light,
+        dark: store.dark,
+        activeMode: store.activeMode,
         set,
-        reset,
+        setForMode,
+        reset, // resets current or specified
+        resetAll,
         load,
         reapply,
+        switchMode,
         applyToRoot,
     };
 }

@@ -226,7 +226,7 @@ function navigateToCredits() {
 .dark .bottomnav-root {
     background-color: var(
         --app-bottomnav-bg-color,
-        var(--md-surface-container-high)
+        var(--md-surface-container-low)
     );
 }
 
@@ -236,7 +236,7 @@ function navigateToCredits() {
 .dark .bottomnav-inner {
     background-color: var(
         --app-bottomnav-bg-color,
-        var(--md-surface-container)
+        var(--md-surface-container-low)
     );
 }
 
@@ -305,5 +305,12 @@ function navigateToCredits() {
     background-size: auto 100%;
     transform: scaleY(-1);
     background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
+}
+
+.dark .header-pattern-flipped {
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container-low)
+    );
 }
 </style>

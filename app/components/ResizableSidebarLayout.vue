@@ -366,12 +366,15 @@ const toggleAria = computed(() =>
 .content-bg {
     position: relative;
     /* Base matches sidebar/header */
-    background-color: var(--app-content-bg-1-color, var(--md-surface));
+    background-color: var(
+        --app-content-bg-1-color,
+        var(--md-surface-container-low)
+    );
 }
 .dark .content-bg {
     background-color: var(
         --app-content-bg-1-color,
-        var(--md-surface-container)
+        var(--md-surface-container-low)
     );
 }
 
@@ -441,12 +444,15 @@ aside::before {
 }
 
 aside {
-    background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
+    background-color: var(
+        --app-sidebar-bg-color,
+        var(--md-surface-container-lowest)
+    );
 }
 .dark aside {
     background-color: var(
         --app-sidebar-bg-color,
-        var(--md-surface-container-high)
+        var(--md-surface-container-low)
     );
 }
 
