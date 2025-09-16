@@ -4,7 +4,7 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'flex flex-col bg-white dark:bg-gray-900 border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            'flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',

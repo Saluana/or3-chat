@@ -37,6 +37,15 @@ export interface ThemeSettings {
     sidebarBgFit?: boolean; // optional new: cover mode
     contentRepeat: 'repeat' | 'no-repeat'; // legacy shared repeat (pre-split)
     reducePatternsInHighContrast: boolean;
+    // Palette overrides
+    paletteEnabled?: boolean; // master toggle for palette overrides
+    palettePrimary?: string; // hex or var()
+    paletteSecondary?: string;
+    paletteError?: string;
+    // renamed: previous paletteBorder is actually surface variant
+    paletteSurfaceVariant?: string; // maps to --md-surface-variant
+    // new: true border color maps to inverse surface
+    paletteBorder?: string; // maps to --md-inverse-surface
 }
 
 export const THEME_SETTINGS_STORAGE_KEY = 'theme:settings:v1'; // legacy single-profile key (kept for migration/back-compat)
@@ -71,6 +80,13 @@ export const DEFAULT_THEME_SETTINGS_LIGHT: ThemeSettings = Object.freeze({
     sidebarBgFit: false,
     contentRepeat: 'repeat',
     reducePatternsInHighContrast: true,
+    // Palette (disabled by default; values mirror light.css)
+    paletteEnabled: false,
+    palettePrimary: '#2c638b',
+    paletteSecondary: '#51606f',
+    paletteError: '#ba1a1a',
+    paletteSurfaceVariant: '#dee3eb',
+    paletteBorder: '#2d3135',
 });
 
 // Dark defaults tuned for lower luminance (slightly reduced pattern opacity + darker container fallbacks)
@@ -104,6 +120,13 @@ export const DEFAULT_THEME_SETTINGS_DARK: ThemeSettings = Object.freeze({
     sidebarBgFit: false,
     contentRepeat: 'repeat',
     reducePatternsInHighContrast: true,
+    // Palette (disabled by default; values mirror dark.css)
+    paletteEnabled: false,
+    palettePrimary: '#99ccf9',
+    paletteSecondary: '#b8c8da',
+    paletteError: '#ffb4ab',
+    paletteSurfaceVariant: '#42474e',
+    paletteBorder: '#5a7d96',
 });
 
 // For backwards compatibility where other modules refer to DEFAULT_THEME_SETTINGS, point to light profile
@@ -215,6 +238,33 @@ function sanitize(s: ThemeSettings, defaults: ThemeSettings): ThemeSettings {
         out.contentBg2Repeat = out.contentRepeat;
     }
     out.reducePatternsInHighContrast = !!out.reducePatternsInHighContrast;
+    // Palette overrides
+    (out as any).paletteEnabled = !!(out as any).paletteEnabled;
+    if (!isColor((out as any).palettePrimary))
+        (out as any).palettePrimary = (defaults as any).palettePrimary;
+    if (!isColor((out as any).paletteSecondary))
+        (out as any).paletteSecondary = (defaults as any).paletteSecondary;
+    if (!isColor((out as any).paletteError))
+        (out as any).paletteError = (defaults as any).paletteError;
+    if (!isColor((out as any).paletteSurfaceVariant))
+        (out as any).paletteSurfaceVariant = (
+            defaults as any
+        ).paletteSurfaceVariant;
+    if (!isColor((out as any).paletteBorder))
+        (out as any).paletteBorder = (defaults as any).paletteBorder;
+    // Migration: if older stored object had only paletteBorder (used for surface-variant),
+    // and no paletteSurfaceVariant, move that value to paletteSurfaceVariant.
+    const hadOldBorderOnly =
+        Object.prototype.hasOwnProperty.call(s as any, 'paletteBorder') &&
+        !Object.prototype.hasOwnProperty.call(
+            s as any,
+            'paletteSurfaceVariant'
+        );
+    if (hadOldBorderOnly && isColor((s as any).paletteBorder)) {
+        (out as any).paletteSurfaceVariant = (s as any).paletteBorder;
+        // Reset new border to defaults as it did not exist before
+        (out as any).paletteBorder = (defaults as any).paletteBorder;
+    }
     return out;
 }
 
@@ -301,6 +351,30 @@ function applyToRoot(settings: ThemeSettings) {
         r.removeProperty('--app-sidebar-bg-color');
         r.removeProperty('--app-header-bg-color');
         r.removeProperty('--app-bottomnav-bg-color');
+    }
+    // Palette overrides (primary/secondary/error/surfaceVariant/border)
+    const anySettings: any = settings as any;
+    if (anySettings.paletteEnabled) {
+        if (anySettings.palettePrimary)
+            r.setProperty('--md-primary', anySettings.palettePrimary);
+        if (anySettings.paletteSecondary)
+            r.setProperty('--md-secondary', anySettings.paletteSecondary);
+        if (anySettings.paletteError)
+            r.setProperty('--md-error', anySettings.paletteError);
+        if (anySettings.paletteSurfaceVariant)
+            r.setProperty(
+                '--md-surface-variant',
+                anySettings.paletteSurfaceVariant
+            );
+        if (anySettings.paletteBorder)
+            r.setProperty('--md-inverse-surface', anySettings.paletteBorder);
+    } else {
+        // Remove so base theme css takes effect
+        r.removeProperty('--md-primary');
+        r.removeProperty('--md-secondary');
+        r.removeProperty('--md-error');
+        r.removeProperty('--md-surface-variant');
+        r.removeProperty('--md-inverse-surface');
     }
     // Start with placeholders (will update asynchronously if internal tokens)
     setBgVar('--app-content-bg-1', null);

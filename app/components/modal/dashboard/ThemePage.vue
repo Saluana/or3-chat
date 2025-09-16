@@ -53,6 +53,237 @@
                 for just this profile or Reset All below for both.
             </p>
         </section>
+        <!-- Color Palette Overrides -->
+        <section
+            class="section-card space-y-3"
+            role="group"
+            aria-labelledby="theme-section-palette"
+        >
+            <h2
+                id="theme-section-palette"
+                class="font-heading text-base uppercase tracking-wide group-heading"
+            >
+                Color Palette
+            </h2>
+            <p class="supporting-text">
+                Override core Material colors for this mode. Toggle off to use
+                the theme's defaults.
+            </p>
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    :checked="(settings as any).paletteEnabled"
+                    @change="
+                        set({
+                            paletteEnabled: !(settings as any).paletteEnabled,
+                        } as any)
+                    "
+                />
+                <span class="text-xs">Enable palette overrides</span>
+            </label>
+            <div class="space-y-3 pt-1">
+                <div class="flex items-center gap-4">
+                    <label class="w-32 text-xs">Primary</label>
+                    <UColorPicker
+                        :disabled="!(settings as any).paletteEnabled"
+                        :model-value="
+                            (settings as any).paletteEnabled &&
+                            String((settings as any).palettePrimary || '').startsWith('#')
+                                ? (settings as any).palettePrimary
+                                : undefined
+                        "
+                        @update:model-value="(c: string | undefined)=> c && set({ palettePrimary: c } as any)"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <input
+                            class="retro-input w-24"
+                            type="text"
+                            spellcheck="false"
+                            maxlength="9"
+                            placeholder="#RRGGBB"
+                            v-model="(localHex as any).palettePrimary"
+                            @input="onHexInput('palettePrimary' as any)"
+                            :disabled="!(settings as any).paletteEnabled"
+                            aria-label="Primary hex color"
+                        />
+                        <button
+                            type="button"
+                            class="retro-btn-copy"
+                            @click="copyColor('palettePrimary' as any)"
+                            :disabled="
+                                !(settings as any).paletteEnabled ||
+                                !String((settings as any).palettePrimary || '').startsWith('#')
+                            "
+                            aria-label="Copy primary color"
+                            title="Copy"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="w-32 text-xs">Secondary</label>
+                    <UColorPicker
+                        :disabled="!(settings as any).paletteEnabled"
+                        :model-value="
+                            (settings as any).paletteEnabled &&
+                            String((settings as any).paletteSecondary || '').startsWith('#')
+                                ? (settings as any).paletteSecondary
+                                : undefined
+                        "
+                        @update:model-value="(c: string | undefined)=> c && set({ paletteSecondary: c } as any)"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <input
+                            class="retro-input w-24"
+                            type="text"
+                            spellcheck="false"
+                            maxlength="9"
+                            placeholder="#RRGGBB"
+                            v-model="(localHex as any).paletteSecondary"
+                            @input="onHexInput('paletteSecondary' as any)"
+                            :disabled="!(settings as any).paletteEnabled"
+                            aria-label="Secondary hex color"
+                        />
+                        <button
+                            type="button"
+                            class="retro-btn-copy"
+                            @click="copyColor('paletteSecondary' as any)"
+                            :disabled="
+                                !(settings as any).paletteEnabled ||
+                                !String((settings as any).paletteSecondary || '').startsWith('#')
+                            "
+                            aria-label="Copy secondary color"
+                            title="Copy"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="w-32 text-xs">Error</label>
+                    <UColorPicker
+                        :disabled="!(settings as any).paletteEnabled"
+                        :model-value="
+                            (settings as any).paletteEnabled &&
+                            String((settings as any).paletteError || '').startsWith('#')
+                                ? (settings as any).paletteError
+                                : undefined
+                        "
+                        @update:model-value="(c: string | undefined)=> c && set({ paletteError: c } as any)"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <input
+                            class="retro-input w-24"
+                            type="text"
+                            spellcheck="false"
+                            maxlength="9"
+                            placeholder="#RRGGBB"
+                            v-model="(localHex as any).paletteError"
+                            @input="onHexInput('paletteError' as any)"
+                            :disabled="!(settings as any).paletteEnabled"
+                            aria-label="Error hex color"
+                        />
+                        <button
+                            type="button"
+                            class="retro-btn-copy"
+                            @click="copyColor('paletteError' as any)"
+                            :disabled="
+                                !(settings as any).paletteEnabled ||
+                                !String((settings as any).paletteError || '').startsWith('#')
+                            "
+                            aria-label="Copy error color"
+                            title="Copy"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="w-32 text-xs">Surface Variant</label>
+                    <UColorPicker
+                        :disabled="!(settings as any).paletteEnabled"
+                        :model-value="
+                            (settings as any).paletteEnabled &&
+                            String((settings as any).paletteSurfaceVariant || '').startsWith('#')
+                                ? (settings as any).paletteSurfaceVariant
+                                : undefined
+                        "
+                        @update:model-value="(c: string | undefined)=> c && set({ paletteSurfaceVariant: c } as any)"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <input
+                            class="retro-input w-24"
+                            type="text"
+                            spellcheck="false"
+                            maxlength="9"
+                            placeholder="#RRGGBB"
+                            v-model="(localHex as any).paletteSurfaceVariant"
+                            @input="onHexInput('paletteSurfaceVariant' as any)"
+                            :disabled="!(settings as any).paletteEnabled"
+                            aria-label="Surface Variant hex color"
+                        />
+                        <button
+                            type="button"
+                            class="retro-btn-copy"
+                            @click="copyColor('paletteSurfaceVariant' as any)"
+                            :disabled="
+                                !(settings as any).paletteEnabled ||
+                                !String((settings as any).paletteSurfaceVariant || '').startsWith('#')
+                            "
+                            aria-label="Copy surface variant color"
+                            title="Copy"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="w-32 text-xs">Border</label>
+                    <UColorPicker
+                        :disabled="!(settings as any).paletteEnabled"
+                        :model-value="
+                            (settings as any).paletteEnabled &&
+                            String((settings as any).paletteBorder || '').startsWith('#')
+                                ? (settings as any).paletteBorder
+                                : undefined
+                        "
+                        @update:model-value="(c: string | undefined)=> c && set({ paletteBorder: c } as any)"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <input
+                            class="retro-input w-24"
+                            type="text"
+                            spellcheck="false"
+                            maxlength="9"
+                            placeholder="#RRGGBB"
+                            v-model="(localHex as any).paletteBorder"
+                            @input="onHexInput('paletteBorder' as any)"
+                            :disabled="!(settings as any).paletteEnabled"
+                            aria-label="Border hex color"
+                        />
+                        <button
+                            type="button"
+                            class="retro-btn-copy"
+                            @click="copyColor('paletteBorder' as any)"
+                            :disabled="
+                                !(settings as any).paletteEnabled ||
+                                !String((settings as any).paletteBorder || '').startsWith('#')
+                            "
+                            aria-label="Copy border color"
+                            title="Copy"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
         <!-- Custom Background Colors Master Toggle -->
         <section
             class="section-card space-y-2"
@@ -905,6 +1136,32 @@ const localHex = reactive({
     bottomBarBgColor: settings.value.bottomBarBgColor.startsWith('#')
         ? settings.value.bottomBarBgColor
         : '',
+    // palette hex boxes
+    palettePrimary: String(
+        (settings.value as any).palettePrimary || ''
+    ).startsWith('#')
+        ? String((settings.value as any).palettePrimary)
+        : '',
+    paletteSecondary: String(
+        (settings.value as any).paletteSecondary || ''
+    ).startsWith('#')
+        ? String((settings.value as any).paletteSecondary)
+        : '',
+    paletteError: String((settings.value as any).paletteError || '').startsWith(
+        '#'
+    )
+        ? String((settings.value as any).paletteError)
+        : '',
+    paletteBorder: String(
+        (settings.value as any).paletteBorder || ''
+    ).startsWith('#')
+        ? String((settings.value as any).paletteBorder)
+        : '',
+    paletteSurfaceVariant: String(
+        (settings.value as any).paletteSurfaceVariant || ''
+    ).startsWith('#')
+        ? String((settings.value as any).paletteSurfaceVariant)
+        : '',
 });
 
 // Simple debounce helper
@@ -1271,6 +1528,32 @@ watch(
             : '';
         localHex.bottomBarBgColor = s.bottomBarBgColor.startsWith('#')
             ? s.bottomBarBgColor
+            : '';
+        // palette hex boxes
+        (localHex as any).palettePrimary = String(
+            (s as any).palettePrimary || ''
+        ).startsWith('#')
+            ? String((s as any).palettePrimary)
+            : '';
+        (localHex as any).paletteSecondary = String(
+            (s as any).paletteSecondary || ''
+        ).startsWith('#')
+            ? String((s as any).paletteSecondary)
+            : '';
+        (localHex as any).paletteError = String(
+            (s as any).paletteError || ''
+        ).startsWith('#')
+            ? String((s as any).paletteError)
+            : '';
+        (localHex as any).paletteSurfaceVariant = String(
+            (s as any).paletteSurfaceVariant || ''
+        ).startsWith('#')
+            ? String((s as any).paletteSurfaceVariant)
+            : '';
+        (localHex as any).paletteBorder = String(
+            (s as any).paletteBorder || ''
+        ).startsWith('#')
+            ? String((s as any).paletteBorder)
             : '';
     },
     { deep: true }
