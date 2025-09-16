@@ -46,6 +46,8 @@ export interface ThemeSettings {
     paletteSurfaceVariant?: string; // maps to --md-surface-variant
     // new: true border color maps to inverse surface
     paletteBorder?: string; // maps to --md-inverse-surface
+    // new: surface base color override
+    paletteSurface?: string; // maps to --md-surface
 }
 
 export const THEME_SETTINGS_STORAGE_KEY = 'theme:settings:v1'; // legacy single-profile key (kept for migration/back-compat)
@@ -87,6 +89,7 @@ export const DEFAULT_THEME_SETTINGS_LIGHT: ThemeSettings = Object.freeze({
     paletteError: '#ba1a1a',
     paletteSurfaceVariant: '#dee3eb',
     paletteBorder: '#2d3135',
+    paletteSurface: '#f7f9ff',
 });
 
 // Dark defaults tuned for lower luminance (slightly reduced pattern opacity + darker container fallbacks)
@@ -127,6 +130,7 @@ export const DEFAULT_THEME_SETTINGS_DARK: ThemeSettings = Object.freeze({
     paletteError: '#ffb4ab',
     paletteSurfaceVariant: '#42474e',
     paletteBorder: '#5a7d96',
+    paletteSurface: '#101418',
 });
 
 // For backwards compatibility where other modules refer to DEFAULT_THEME_SETTINGS, point to light profile
@@ -252,6 +256,8 @@ function sanitize(s: ThemeSettings, defaults: ThemeSettings): ThemeSettings {
         ).paletteSurfaceVariant;
     if (!isColor((out as any).paletteBorder))
         (out as any).paletteBorder = (defaults as any).paletteBorder;
+    if (!isColor((out as any).paletteSurface))
+        (out as any).paletteSurface = (defaults as any).paletteSurface;
     // Migration: if older stored object had only paletteBorder (used for surface-variant),
     // and no paletteSurfaceVariant, move that value to paletteSurfaceVariant.
     const hadOldBorderOnly =
@@ -352,7 +358,7 @@ function applyToRoot(settings: ThemeSettings) {
         r.removeProperty('--app-header-bg-color');
         r.removeProperty('--app-bottomnav-bg-color');
     }
-    // Palette overrides (primary/secondary/error/surfaceVariant/border)
+    // Palette overrides (primary/secondary/error/surfaceVariant/border/surface)
     const anySettings: any = settings as any;
     if (anySettings.paletteEnabled) {
         if (anySettings.palettePrimary)
@@ -368,6 +374,8 @@ function applyToRoot(settings: ThemeSettings) {
             );
         if (anySettings.paletteBorder)
             r.setProperty('--md-inverse-surface', anySettings.paletteBorder);
+        if (anySettings.paletteSurface)
+            r.setProperty('--md-surface', anySettings.paletteSurface);
     } else {
         // Remove so base theme css takes effect
         r.removeProperty('--md-primary');
@@ -375,6 +383,7 @@ function applyToRoot(settings: ThemeSettings) {
         r.removeProperty('--md-error');
         r.removeProperty('--md-surface-variant');
         r.removeProperty('--md-inverse-surface');
+        r.removeProperty('--md-surface');
     }
     // Start with placeholders (will update asynchronously if internal tokens)
     setBgVar('--app-content-bg-1', null);

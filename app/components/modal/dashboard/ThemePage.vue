@@ -282,6 +282,46 @@
                         </button>
                     </div>
                 </div>
+                <div class="flex items-center gap-4">
+                    <label class="w-32 text-xs">Surface</label>
+                    <UColorPicker
+                        :disabled="!(settings as any).paletteEnabled"
+                        :model-value="
+                            (settings as any).paletteEnabled &&
+                            String((settings as any).paletteSurface || '').startsWith('#')
+                                ? (settings as any).paletteSurface
+                                : undefined
+                        "
+                        @update:model-value="(c: string | undefined)=> c && set({ paletteSurface: c } as any)"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <input
+                            class="retro-input w-24"
+                            type="text"
+                            spellcheck="false"
+                            maxlength="9"
+                            placeholder="#RRGGBB"
+                            v-model="(localHex as any).paletteSurface"
+                            @input="onHexInput('paletteSurface' as any)"
+                            :disabled="!(settings as any).paletteEnabled"
+                            aria-label="Surface hex color"
+                        />
+                        <button
+                            type="button"
+                            class="retro-btn-copy"
+                            @click="copyColor('paletteSurface' as any)"
+                            :disabled="
+                                !(settings as any).paletteEnabled ||
+                                !String((settings as any).paletteSurface || '').startsWith('#')
+                            "
+                            aria-label="Copy surface color"
+                            title="Copy"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                </div>
             </div>
         </section>
         <!-- Custom Background Colors Master Toggle -->
@@ -1162,6 +1202,11 @@ const localHex = reactive({
     ).startsWith('#')
         ? String((settings.value as any).paletteSurfaceVariant)
         : '',
+    paletteSurface: String(
+        (settings.value as any).paletteSurface || ''
+    ).startsWith('#')
+        ? String((settings.value as any).paletteSurface)
+        : '',
 });
 
 // Simple debounce helper
@@ -1554,6 +1599,11 @@ watch(
             (s as any).paletteBorder || ''
         ).startsWith('#')
             ? String((s as any).paletteBorder)
+            : '';
+        (localHex as any).paletteSurface = String(
+            (s as any).paletteSurface || ''
+        ).startsWith('#')
+            ? String((s as any).paletteSurface)
             : '';
     },
     { deep: true }
