@@ -35,45 +35,22 @@ describe('useAiSettings', () => {
         mockLocalStorage();
     });
 
-    it('sanitizes invalid input and fills defaults', () => {
+    it('sanitizes invalid input and fills defaults (minimal schema)', () => {
         const dirty: any = {
             version: 999,
             masterSystemPrompt: 123,
             defaultModelMode: 'weird',
             fixedModelId: 42,
-            temperature: 9,
-            maxOutputTokens: -5,
-            jsonMode: 'yes',
-            structuredOutput: { enabled: '1', schemaName: '', strict: 'no' },
-            streaming: 'on',
-            toolPolicy: 'nope',
-            toolChoiceDefault: 'none',
-            parallelToolCalls: 'x',
-            provider: {
-                allowFallbacks: 'y',
-                requireParameters: 'n',
-                dataCollection: 'deny',
-                zdr: 1,
-            },
         };
         const s = sanitizeAiSettings(dirty);
         expect(s.version).toBe(1);
         expect(typeof s.masterSystemPrompt).toBe('string');
         expect(s.defaultModelMode).toBe('lastSelected');
         expect(s.fixedModelId).toBeNull();
-        expect(s.temperature).toBeLessThanOrEqual(2);
-        expect(s.maxOutputTokens).toBeNull();
-        expect(typeof s.jsonMode).toBe('boolean');
-        expect(typeof s.streaming).toBe('boolean');
-        expect(['allow', 'disallow', 'ask']).toContain(s.toolPolicy);
-        expect(['auto', 'none']).toContain(s.toolChoiceDefault);
-        expect(typeof s.parallelToolCalls).toBe('boolean');
-        expect(s.structuredOutput.strict).toBeTypeOf('boolean');
-        expect(s.provider.dataCollection).toBe('deny');
     });
 
     it('migrates missing keys to defaults', () => {
-        const partial = { temperature: 0 } as Partial<AiSettingsV1>;
+        const partial = { masterSystemPrompt: 'x' } as Partial<AiSettingsV1>;
         const s = sanitizeAiSettings(partial);
         for (const k of Object.keys(DEFAULT_AI_SETTINGS) as Array<
             keyof AiSettingsV1
@@ -84,13 +61,18 @@ describe('useAiSettings', () => {
 
     it('persists and loads settings', () => {
         const { set, load } = useAiSettings();
-        set({ temperature: 1.2, jsonMode: true });
+        set({
+            masterSystemPrompt: 'hello',
+            defaultModelMode: 'fixed',
+            fixedModelId: 'm1',
+        });
         const loaded = load();
-        expect(loaded.temperature).toBe(1.2);
-        expect(loaded.jsonMode).toBe(true);
+        expect(loaded.masterSystemPrompt).toBe('hello');
+        expect(loaded.defaultModelMode).toBe('fixed');
+        expect(loaded.fixedModelId).toBe('m1');
         const raw = localStorage.getItem(AI_SETTINGS_STORAGE_KEY)!;
         const parsed = JSON.parse(raw);
-        expect(parsed.temperature).toBe(1.2);
+        expect(parsed.masterSystemPrompt).toBe('hello');
     });
 
     it('handles bad JSON in storage gracefully', () => {

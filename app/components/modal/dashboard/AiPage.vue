@@ -158,17 +158,6 @@
                     >
                 </div>
             </div>
-
-            <label
-                class="flex items-center gap-2 cursor-pointer select-none pt-2"
-            >
-                <input
-                    type="checkbox"
-                    :checked="settings.streaming"
-                    @change="set({ streaming: !settings.streaming })"
-                />
-                <span class="text-xs">Enable streaming by default</span>
-            </label>
         </section>
 
         <!-- Reset -->
@@ -241,28 +230,6 @@ onMounted(async () => {
         // Silent; UI shows empty results
     }
 });
-
-// Generation defaults
-function onTempRange(e: Event) {
-    const t = e.target as HTMLInputElement;
-    const n = Math.max(0, Math.min(2, Number(t.value)));
-    set({ temperature: isFinite(n) ? n : 0.7 });
-}
-const maxTokensInput = computed(
-    () => (settings.value.maxOutputTokens ?? '') as any
-);
-function onMaxTokensInput(e: Event) {
-    const t = e.target as HTMLInputElement;
-    const raw = (t.value || '').trim();
-    if (!raw) {
-        set({ maxOutputTokens: null });
-        return;
-    }
-    const n = Number(raw);
-    set({
-        maxOutputTokens: Number.isFinite(n) && n >= 0 ? Math.floor(n) : null,
-    });
-}
 
 function onReset() {
     reset();

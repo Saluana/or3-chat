@@ -1,36 +1,11 @@
 import { ref, computed, watch } from 'vue';
 
-// Types
-export type ToolPolicy = 'allow' | 'disallow' | 'ask';
-
-export interface StructuredOutputSettings {
-    enabled: boolean;
-    schemaName?: string;
-    strict?: boolean;
-    schema?: Record<string, any> | null;
-}
-
-export interface ProviderPrefs {
-    allowFallbacks: boolean;
-    requireParameters: boolean;
-    dataCollection: 'allow' | 'deny';
-    zdr: boolean;
-}
-
+// Minimal settings schema per design
 export interface AiSettingsV1 {
     version: 1;
-    masterSystemPrompt: string;
+    masterSystemPrompt: string; // may be ''
     defaultModelMode: 'lastSelected' | 'fixed';
-    fixedModelId: string | null;
-    temperature: number; // 0.0–2.0
-    maxOutputTokens: number | null; // null = auto/unset
-    jsonMode: boolean; // response_format: json_object when true (if supported)
-    structuredOutput: StructuredOutputSettings; // response_format: json_schema when enabled and schema provided
-    streaming: boolean;
-    toolPolicy: ToolPolicy;
-    toolChoiceDefault: 'auto' | 'none';
-    parallelToolCalls: boolean;
-    provider: ProviderPrefs;
+    fixedModelId: string | null; // null unless defaultModelMode === 'fixed'
 }
 
 export const AI_SETTINGS_STORAGE_KEY = 'or3.ai.settings.v1';
@@ -40,37 +15,10 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     masterSystemPrompt: '',
     defaultModelMode: 'lastSelected',
     fixedModelId: null,
-    temperature: 0.7,
-    maxOutputTokens: null,
-    jsonMode: false,
-    structuredOutput: {
-        enabled: false,
-        schema: null,
-        strict: true,
-        schemaName: 'structured_output',
-    },
-    streaming: true,
-    toolPolicy: 'allow',
-    toolChoiceDefault: 'auto',
-    parallelToolCalls: true,
-    provider: {
-        allowFallbacks: true,
-        requireParameters: false,
-        dataCollection: 'allow',
-        zdr: false,
-    },
 };
 
 function isBrowser() {
     return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-function clamp(n: number, min: number, max: number) {
-    return Math.min(max, Math.max(min, n));
-}
-
-function coerceBool(v: any) {
-    return !!v;
 }
 
 function coerceStringOrNull(v: any) {
@@ -86,78 +34,26 @@ export function sanitizeAiSettings(
     input: any,
     defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS
 ): AiSettingsV1 {
-    const out: any = isObj(input) ? { ...input } : {};
-    out.version = 1 as const;
-    // Scalars
-    out.masterSystemPrompt =
-        typeof out.masterSystemPrompt === 'string'
-            ? out.masterSystemPrompt
+    const inObj: any = isObj(input) ? input : {};
+    const masterSystemPrompt =
+        typeof inObj.masterSystemPrompt === 'string'
+            ? inObj.masterSystemPrompt
             : '';
-    out.defaultModelMode =
-        out.defaultModelMode === 'fixed' ? 'fixed' : 'lastSelected';
-    out.fixedModelId =
-        out.defaultModelMode === 'fixed'
-            ? coerceStringOrNull(out.fixedModelId)
+    const defaultModelMode: 'lastSelected' | 'fixed' =
+        inObj.defaultModelMode === 'fixed' ? 'fixed' : 'lastSelected';
+    const fixedModelId =
+        defaultModelMode === 'fixed'
+            ? coerceStringOrNull(inObj.fixedModelId)
             : null;
-    const t =
-        typeof out.temperature === 'number'
-            ? out.temperature
-            : defaults.temperature;
-    out.temperature = +clamp(t, 0, 2).toFixed(3);
-    if (
-        out.maxOutputTokens === null ||
-        out.maxOutputTokens === undefined ||
-        out.maxOutputTokens === ''
-    ) {
-        out.maxOutputTokens = null;
-    } else {
-        const n = Number(out.maxOutputTokens);
-        out.maxOutputTokens =
-            Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
-    }
-    out.jsonMode = coerceBool(out.jsonMode);
-    out.streaming = coerceBool(out.streaming);
 
-    // Structured outputs
-    const so = isObj(out.structuredOutput) ? out.structuredOutput : {};
-    const soEnabled = coerceBool(so.enabled);
-    const soStrict = so.strict === undefined ? true : coerceBool(so.strict);
-    const soName =
-        typeof so.schemaName === 'string' && so.schemaName.trim()
-            ? so.schemaName
-            : 'structured_output';
-    const soSchema = isObj(so.schema)
-        ? (so.schema as Record<string, any>)
-        : null;
-    out.structuredOutput = {
-        enabled: !!soEnabled,
-        strict: !!soStrict,
-        schemaName: soName,
-        schema: soSchema,
-    } as StructuredOutputSettings;
-
-    // Tools & provider
-    out.toolPolicy =
-        out.toolPolicy === 'disallow' || out.toolPolicy === 'ask'
-            ? out.toolPolicy
-            : 'allow';
-    out.toolChoiceDefault = out.toolChoiceDefault === 'none' ? 'none' : 'auto';
-    out.parallelToolCalls = coerceBool(out.parallelToolCalls);
-
-    const prov = isObj(out.provider) ? out.provider : {};
-    out.provider = {
-        allowFallbacks: coerceBool(prov.allowFallbacks),
-        requireParameters: coerceBool(prov.requireParameters),
-        dataCollection: prov.dataCollection === 'deny' ? 'deny' : 'allow',
-        zdr: coerceBool(prov.zdr),
-    } as ProviderPrefs;
-
-    // Ensure all missing keys from defaults are present
-    const base: any = { ...defaults };
-    for (const k of Object.keys(base)) {
-        if (out[k] === undefined) out[k] = base[k];
-    }
-    return out as AiSettingsV1;
+    // Build a strictly minimal object (drop unknown keys)
+    const result: AiSettingsV1 = {
+        version: 1,
+        masterSystemPrompt,
+        defaultModelMode,
+        fixedModelId: fixedModelId ?? defaults.fixedModelId,
+    };
+    return result;
 }
 
 function persist(settings: AiSettingsV1) {
