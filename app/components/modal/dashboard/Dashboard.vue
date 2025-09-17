@@ -176,7 +176,7 @@ const coreItems: DashboardPlugin[] = [
             },
         ],
     },
-    {
+    /*{
         id: 'core:images',
         icon: 'pixelarticons:image',
         label: 'Images',
@@ -193,7 +193,7 @@ const coreItems: DashboardPlugin[] = [
         icon: 'pixelarticons:folder',
         label: 'Files',
         order: 30,
-    },
+    },*/
 ];
 
 // Register any inline pages defined on core items with the shared dashboard page registry
