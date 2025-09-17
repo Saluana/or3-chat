@@ -1,4 +1,5 @@
 import { ref, watch, computed } from 'vue';
+import { useNuxtApp } from '#app';
 import type { ThemeSettings, ThemeMode } from './theme-types';
 import * as ThemeDefs from './theme-defaults';
 import { applyToRoot } from './theme-apply';
@@ -252,6 +253,11 @@ export function useThemeSettings() {
                 ? store.light.value
                 : store.dark.value) as ThemeSettings
         );
+        // Ensure the theme plugin reflects the detected mode on boot
+        if (isBrowser()) {
+            const nuxtApp: any = useNuxtApp();
+            nuxtApp?.$theme?.set(store.activeMode.value);
+        }
         // Observe html class changes to sync mode automatically
         if (isBrowser()) {
             const mo = new MutationObserver(() => {
@@ -263,6 +269,9 @@ export function useThemeSettings() {
                             ? store.light.value
                             : store.dark.value) as ThemeSettings
                     );
+                    // Keep plugin-applied classes in sync when external changes happen
+                    const nuxtApp: any = useNuxtApp();
+                    nuxtApp?.$theme?.set(mode);
                 }
             });
             mo.observe(document.documentElement, {
@@ -366,6 +375,12 @@ export function useThemeSettings() {
                 ? store.light.value
                 : store.dark.value) as ThemeSettings
         );
+        // Also update the root theme classes via the theme plugin so the site
+        // visually switches (and MutationObserver stays in sync).
+        if (isBrowser()) {
+            const nuxtApp: any = useNuxtApp();
+            nuxtApp?.$theme?.set(mode);
+        }
     }
 
     // Watch both profiles for changes (deep) and persist them independently

@@ -35,7 +35,7 @@
                 class="h-full flex flex-col min-h-0"
             >
                 <div
-                    class="flex h-[40px] shrink-0 items-center border-b-2 pr-2"
+                    class="flex h-[40px] shrink-0 items-center border-b-2 border-[var(--md-inverse-surface)] pr-2"
                 >
                     <UButton
                         variant="subtle"
