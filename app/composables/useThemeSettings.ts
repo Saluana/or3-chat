@@ -11,6 +11,8 @@ export {
     THEME_SETTINGS_STORAGE_KEY_LIGHT,
     THEME_SETTINGS_STORAGE_KEY_DARK,
 } from './theme-defaults';
+// Re-export types so consumers can import the type from this module path
+export type { ThemeSettings, ThemeMode } from './theme-types';
 
 /**
  * Theme customization settings (v1)

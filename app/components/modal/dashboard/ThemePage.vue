@@ -1134,7 +1134,6 @@ import { getFileBlob } from '~/db/files';
 // Relative import (no alias friction inside /app)
 import {
     useThemeSettings,
-    DEFAULT_THEME_SETTINGS,
     type ThemeSettings,
 } from '~/composables/useThemeSettings';
 import type { Ref } from 'vue';
