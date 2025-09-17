@@ -1132,10 +1132,8 @@ import { reactive, watch, onBeforeUnmount, ref, computed } from 'vue';
 import { createOrRefFile } from '~/db/files';
 import { getFileBlob } from '~/db/files';
 // Relative import (no alias friction inside /app)
-import {
-    useThemeSettings,
-    type ThemeSettings,
-} from '~/composables/useThemeSettings';
+import { useThemeSettings } from '~/composables/useThemeSettings';
+import type { ThemeSettings } from '~/composables/theme-types';
 import type { Ref } from 'vue';
 
 const themeApi = useThemeSettings();
