@@ -39,6 +39,7 @@ export default defineAppConfig({
             variants: {
                 variant: {
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
+                    basic: 'border-2 shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)]',
                 },
                 color: {
                     'inverse-primary':

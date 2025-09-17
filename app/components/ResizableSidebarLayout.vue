@@ -366,7 +366,21 @@ const toggleAria = computed(() =>
 .content-bg {
     position: relative;
     /* Base matches sidebar/header */
-    background-color: var(--md-surface);
+    background-color: var(
+        --app-content-bg-1-color,
+        var(--md-surface-container-low)
+    );
+}
+/* Sidebar background size support */
+:root {
+    /* fallback value if not set */
+    --app-sidebar-bg-size: 240px;
+}
+.dark .content-bg {
+    background-color: var(
+        --app-content-bg-1-color,
+        var(--md-surface-container-low)
+    );
 }
 
 .content-bg::before {
@@ -374,15 +388,20 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/bg-repeat.webp');
-    background-repeat: repeat;
+    background-image: var(--app-content-bg-1, url('/bg-repeat.webp'));
+    background-repeat: var(
+        --app-content-bg-1-repeat,
+        var(--app-content-bg-repeat, repeat)
+    );
     background-position: top left;
     /* Default variables; can be overridden via inline style */
-    --content-bg-size: 150px;
-    --content-bg-opacity: 0.08;
-    background-size: var(--content-bg-size) var(--content-bg-size);
-    opacity: var(--content-bg-opacity);
+    --content-bg-size: var(--app-content-bg-1-size, 150px);
+    --content-bg-opacity: 0.08; /* legacy component var (fallback) */
+    background-size: var(--content-bg-size);
+    opacity: var(--app-content-bg-1-opacity, var(--content-bg-opacity));
     z-index: 0;
+    /* Keep transparent so base element's background-color always visible/tint */
+    background-color: transparent;
 }
 
 /* Ensure the real content sits above the pattern */
@@ -397,14 +416,18 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/bg-repeat-2.webp');
-    background-repeat: repeat;
+    background-image: var(--app-content-bg-2, url('/bg-repeat-2.webp'));
+    background-repeat: var(
+        --app-content-bg-2-repeat,
+        var(--app-content-bg-repeat, repeat)
+    );
     background-position: top left;
-    --content-overlay-size: 380px;
-    --content-overlay-opacity: 0.125;
-    background-size: var(--content-overlay-size) var(--content-overlay-size);
-    opacity: var(--content-overlay-opacity);
+    --content-overlay-size: var(--app-content-bg-2-size, 380px);
+    --content-overlay-opacity: 0.125; /* legacy component var (fallback) */
+    background-size: var(--content-overlay-size);
+    opacity: var(--app-content-bg-2-opacity, var(--content-overlay-opacity));
     z-index: 0.5;
+    background-color: var(--app-content-bg-2-color, transparent);
 }
 
 /* Hardcoded header pattern repeating horizontally */
@@ -422,12 +445,28 @@ aside::before {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url('/sidebar-repeater.webp');
-    background-repeat: repeat;
+    background-image: var(--app-sidebar-bg-1, url('/sidebar-repeater.webp'));
+    background-repeat: var(--app-sidebar-bg-repeat, repeat);
     background-position: top left;
     background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
-    opacity: var(--sidebar-rep-opacity);
+    opacity: var(--app-sidebar-bg-1-opacity, var(--sidebar-rep-opacity));
     z-index: 0;
+    background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
+    background-size: var(--app-sidebar-bg-size, 240px)
+        var(--app-sidebar-bg-size, 240px);
+}
+
+aside {
+    background-color: var(
+        --app-sidebar-bg-color,
+        var(--md-surface-container-lowest)
+    );
+}
+.dark aside {
+    background-color: var(
+        --app-sidebar-bg-color,
+        var(--md-surface-container-low)
+    );
 }
 
 /* Ensure sidebar children render above the pattern, but keep handle on top */

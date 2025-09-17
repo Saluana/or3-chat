@@ -1,14 +1,14 @@
 <template>
     <div
-        class="hud absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container-high)]"
+        class="hud bottomnav-root absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)]"
     >
         <!-- Removed previously added extra div; using pseudo-element for top pattern -->
         <div
-            class="w-full relative max-w-[1200px] mx-auto bg-[var(--md-surface-variant)] dark:bg-[var(--md-surface-container)] border-2 border-[var(--md-outline-variant)]"
+            class="bottomnav-inner w-full relative max-w-[1200px] mx-auto border-2 border-[var(--md-outline-variant)]"
         >
             <div class="h-[10px] top-10 header-pattern-flipped"></div>
             <div
-                class="retro-bar flex items-center justify-between gap-2 p-2 rounded-md bg-[var(--md-surface)] dark:bg-[var(--md-surface-container-low)] border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
+                class="retro-bar bottomnav-bar flex items-center justify-between gap-2 p-2 rounded-md border-2 border-[var(--md-outline)] shadow-[inset_0_-2px_0_0_var(--md-surface-bright),inset_0_2px_0_0_var(--md-surface-container-high)] overflow-x-auto"
             >
                 <!-- MY INFO -->
                 <UPopover>
@@ -29,7 +29,7 @@
                             class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
                         >
                             <div
-                                class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                                class="text-[14px]! font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
                             >
                                 INFO
                             </div>
@@ -107,7 +107,7 @@
                         class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
                     >
                         <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                            class="text-[14px]! font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
                         >
                             <!-- Hydration guard: render stable 'Connect' on SSR & first client paint -->
                             <template v-if="hydrated">
@@ -161,7 +161,7 @@
                         class="absolute left-0 right-0 top-[calc(50%+2px)] bottom-1 flex flex-col items-center gap-1"
                     >
                         <div
-                            class="text-sm font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
+                            class="text-[14px]! font-extrabold tracking-[0.06em] leading-none m-0 group-active:text-[var(--md-on-primary-fixed)] dark:group-active:text-[var(--md-on-surface)]"
                         >
                             DASHBOARD
                         </div>
@@ -219,6 +219,36 @@ function navigateToCredits() {
 </script>
 
 <style scoped>
+/* Root area background uses configurable bottom nav color */
+.bottomnav-root {
+    background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
+}
+.dark .bottomnav-root {
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container-low)
+    );
+}
+
+.bottomnav-inner {
+    background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
+}
+.dark .bottomnav-inner {
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container-low)
+    );
+}
+
+.bottomnav-bar {
+    background-color: var(--app-bottomnav-bg-color, var(--md-surface));
+}
+.dark .bottomnav-bar {
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container-low)
+    );
+}
 /* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
 .retro-bar {
     position: relative;
@@ -266,5 +296,21 @@ function navigateToCredits() {
     opacity: 0.25;
     pointer-events: none;
     mix-blend-mode: soft-light;
+}
+/* Use theme variable for gradient stripes (flipped header style) */
+.header-pattern-flipped {
+    background-image: var(--app-bottomnav-gradient, url('/gradient-x.webp'));
+    background-repeat: repeat-x;
+    background-position: left center;
+    background-size: auto 100%;
+    transform: scaleY(-1);
+    background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
+}
+
+.dark .header-pattern-flipped {
+    background-color: var(
+        --app-bottomnav-bg-color,
+        var(--md-surface-container-low)
+    );
 }
 </style>

@@ -191,3 +191,10 @@ Unified error API lives in `~/utils/errors.ts` (see `docs/error-handling.md`). U
 -   `app/plugins/hooks.client.ts` — registers the global hook engine.&#x20;
 -   `app/plugins/examples/*` — message/doc/tree action examples.&#x20;
 -   `app/pages/docs/*` — documents routes/shell.&#x20;
+
+#### Theme settings modules
+
+-   `app/composables/theme-types.ts` — shared types for theme settings (e.g., `ThemeSettings`, `ThemeMode`).
+-   `app/composables/theme-defaults.ts` — source of truth for default light/dark settings and localStorage keys.
+-   `app/composables/theme-apply.ts` — applies a `ThemeSettings` object to the document root by setting CSS variables and resolving internal-file tokens.
+-   `app/composables/useThemeSettings.ts` — public composable that manages light/dark profiles, persistence, and DOM application. It re-exports the defaults and storage key constants for backwards compatibility.
