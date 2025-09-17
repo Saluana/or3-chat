@@ -48,3 +48,21 @@ export function promptJsonToString(json: any): string {
     flushLine();
     return lines.join('\n');
 }
+
+/**
+ * Compose final system prompt from master + per-thread system text.
+ * - Trims both sides
+ * - Returns null if both are empty
+ * - Orders: master then thread, separated by two newlines
+ */
+export function composeSystemPrompt(
+    master: string,
+    threadSystem: string | null
+): string | null {
+    const m = (master || '').trim();
+    const t = (threadSystem || '').trim();
+    if (!m && !t) return null;
+    if (!m) return t;
+    if (!t) return m;
+    return `${m}\n\n${t}`;
+}

@@ -200,3 +200,32 @@ export const modelsService = {
 };
 
 export default modelsService;
+
+// --- Default model resolution (fixed vs last-selected with fallback) ---
+export interface AiSettingsForModel {
+    defaultModelMode: 'lastSelected' | 'fixed';
+    fixedModelId: string | null;
+}
+
+export interface ModelResolverDeps {
+    isAvailable: (id: string) => boolean;
+    lastSelectedModelId: () => string | null;
+    recommendedDefault: () => string;
+}
+
+export function resolveDefaultModel(
+    set: AiSettingsForModel,
+    d: ModelResolverDeps
+): { id: string; reason: 'fixed' | 'lastSelected' | 'recommended' } {
+    if (
+        set.defaultModelMode === 'fixed' &&
+        set.fixedModelId &&
+        d.isAvailable(set.fixedModelId)
+    ) {
+        return { id: set.fixedModelId, reason: 'fixed' };
+    }
+    const last = d.lastSelectedModelId();
+    if (last && d.isAvailable(last))
+        return { id: last, reason: 'lastSelected' };
+    return { id: d.recommendedDefault(), reason: 'recommended' };
+}
