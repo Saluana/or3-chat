@@ -33,7 +33,10 @@ import {
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
-import { promptJsonToString } from '~/utils/prompt-utils';
+import { promptJsonToString, composeSystemPrompt } from '~/utils/prompt-utils';
+import { useAiSettings } from '~/composables/useAiSettings';
+import { resolveDefaultModel } from '~/utils/models-service';
+import { useModelStore } from '~/composables/useModelStore';
 import { state } from '~/state/global';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
@@ -150,6 +153,55 @@ export function useChat(
                     effectivePromptId = await getDefaultPromptId();
                 } catch {}
             }
+            // Resolve default model based on settings (lastSelected vs fixed)
+            try {
+                const { settings } = useAiSettings();
+                const set = (settings && (settings as any).value) || null;
+                const { catalog } = useModelStore();
+                // last selected model from localStorage (component writes under LAST_MODEL_KEY)
+                let lastSelected: string | null = null;
+                try {
+                    if (typeof window !== 'undefined')
+                        lastSelected = localStorage.getItem(
+                            'last_selected_model'
+                        );
+                } catch {}
+                // We don't have a centralized catalog availability here; optimistically accept provided model
+                // and fallback to DEFAULT_AI_MODEL if not provided.
+                const chosen = resolveDefaultModel(
+                    {
+                        defaultModelMode:
+                            (set?.defaultModelMode as any) || 'lastSelected',
+                        fixedModelId: (set?.fixedModelId as any) || null,
+                    },
+                    {
+                        isAvailable: (id: string) =>
+                            !!(catalog?.value || []).some(
+                                (m: any) => m?.id === id
+                            ),
+                        lastSelectedModelId: () => lastSelected,
+                        recommendedDefault: () => DEFAULT_AI_MODEL,
+                    }
+                );
+                // If caller didn't specify a model or specified an empty string, apply chosen.id
+                if (!sendMessagesParams.model) {
+                    (sendMessagesParams as any).model = chosen.id;
+                }
+                // Surface info toast when we didn't honor a fixed model (i.e., reason !== 'fixed')
+                if (
+                    set?.defaultModelMode === 'fixed' &&
+                    chosen.reason !== 'fixed'
+                ) {
+                    try {
+                        useToast()?.add?.({
+                            title: 'Model fallback in effect',
+                            description:
+                                'Your fixed model was not used. Falling back to last selected or default.',
+                            timeout: 3500,
+                        } as any);
+                    } catch {}
+                }
+            } catch {}
             const newThread = await create.thread({
                 title: content.split(' ').slice(0, 6).join(' ') || 'New Thread',
                 last_message_at: nowSec(),
@@ -366,11 +418,24 @@ export function useChat(
 
             // Inject system message
             let messagesWithSystemRaw = [...rawMessages.value];
-            const systemText = await getSystemPromptContent();
-            if (systemText && systemText.trim()) {
+            const threadSystemText = await getSystemPromptContent();
+            // Compose with global master system prompt
+            let finalSystem: string | null = null;
+            try {
+                const { settings } = useAiSettings();
+                const master = ((settings as any)?.value?.masterSystemPrompt ??
+                    '') as string;
+                finalSystem = composeSystemPrompt(
+                    master,
+                    threadSystemText || null
+                );
+            } catch {
+                finalSystem = (threadSystemText || '').trim() || null;
+            }
+            if (finalSystem && finalSystem.trim()) {
                 messagesWithSystemRaw.unshift({
                     role: 'system',
-                    content: systemText,
+                    content: finalSystem,
                     id: `system-${newId()}`,
                 });
             }

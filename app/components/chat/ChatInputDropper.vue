@@ -331,6 +331,7 @@ import { isMobile, state } from '~/state/global';
 import { useUserApiKey } from '~/composables/useUserApiKey';
 import { useOpenRouterAuth } from '~/composables/useOpenrouter';
 import { useToast } from '#imports';
+import { useAiSettings } from '~/composables/useAiSettings';
 import {
     registerPaneInput,
     unregisterPaneInput,
@@ -344,8 +345,11 @@ const props = defineProps<{
 }>();
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
+const { settings: aiSettings } = useAiSettings();
 const webSearchEnabled = ref<boolean>(false);
 const LAST_MODEL_KEY = 'last_selected_model';
+
+const suppressPersist = ref(false);
 
 onMounted(async () => {
     const fave = await getFavoriteModels();
@@ -355,6 +359,18 @@ onMounted(async () => {
             const stored = localStorage.getItem(LAST_MODEL_KEY);
             if (stored && typeof stored === 'string') {
                 selectedModel.value = stored;
+            }
+            // If this is a brand-new chat (no threadId), honor fixed default from AI settings for initial display
+            if (!props.threadId) {
+                const set = (aiSettings as any)?.value;
+                const fixed =
+                    set?.defaultModelMode === 'fixed'
+                        ? set?.fixedModelId
+                        : null;
+                if (fixed) {
+                    suppressPersist.value = true; // don't clobber last_selected_model on initial display
+                    selectedModel.value = fixed;
+                }
             }
         } catch (e) {
             console.warn('[ChatInputDropper] restore last model failed', e);
@@ -429,6 +445,21 @@ onBeforeUnmount(() => {
         console.warn('[ChatInputDropper] TipTap destroy error', err);
     }
 });
+
+// When starting a brand-new chat (threadId becomes falsy), honor fixed default from settings
+watch(
+    () => props.threadId,
+    (tid) => {
+        if (tid) return; // only when there is no thread yet (new chat)
+        try {
+            const set: any = (aiSettings as any)?.value;
+            if (set?.defaultModelMode === 'fixed' && set?.fixedModelId) {
+                suppressPersist.value = true;
+                selectedModel.value = set.fixedModelId;
+            }
+        } catch {}
+    }
+);
 
 interface UploadedImage {
     file: File;
@@ -509,6 +540,11 @@ const showSettingsDropdown = ref(false);
 watch(selectedModel, (newModel) => {
     emit('model-change', newModel);
     if (process.client) {
+        if (suppressPersist.value) {
+            // Skip one-time persist when we programmatically set from settings
+            suppressPersist.value = false;
+            return;
+        }
         try {
             localStorage.setItem(LAST_MODEL_KEY, newModel);
         } catch (e) {
