@@ -153,13 +153,13 @@ const coreItems: DashboardPlugin[] = [
             activeView.value = 'page';
         },
         pages: [
-            {
+            /*{
                 id: 'general-settings',
                 title: 'General Settings',
                 description: 'Configure application preferences and options.',
                 icon: 'pixelarticons:sliders',
                 component: () => import('./SettingsPage.vue'),
-            },
+            },*/
             {
                 id: 'theme-settings',
                 title: 'Theme Settings',

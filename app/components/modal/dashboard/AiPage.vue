@@ -69,11 +69,10 @@
                         size="sm"
                         variant="basic"
                         class="retro-chip"
-                        :class="
-                            settings.defaultModelMode === 'lastSelected'
-                                ? 'active'
-                                : ''
-                        "
+                        :class="{
+                            'bg-primary/50 hover:bg-primary/50':
+                                settings.defaultModelMode === 'lastSelected',
+                        }"
                         :aria-pressed="
                             settings.defaultModelMode === 'lastSelected'
                         "
@@ -85,11 +84,10 @@
                         size="sm"
                         variant="basic"
                         class="retro-chip"
-                        :class="
-                            settings.defaultModelMode === 'fixed'
-                                ? 'active'
-                                : ''
-                        "
+                        :class="{
+                            'bg-primary/50 hover:bg-primary/50':
+                                settings.defaultModelMode === 'fixed',
+                        }"
                         :aria-pressed="settings.defaultModelMode === 'fixed'"
                         :disabled="settings.defaultModelMode === 'fixed'"
                         @click="set({ defaultModelMode: 'fixed' })"
