@@ -1,6 +1,6 @@
 import { ref, watch, computed } from 'vue';
 import { useNuxtApp } from '#app';
-import type { ThemeSettings, ThemeMode } from './theme-types';
+import type { ThemeSettings } from './theme-types';
 import * as ThemeDefs from './theme-defaults';
 import { applyToRoot } from './theme-apply';
 export {
