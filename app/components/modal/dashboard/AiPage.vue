@@ -15,17 +15,20 @@
                 Master System Prompt
             </h2>
             <p id="ai-master-help" class="supporting-text">
-                This prompt is prepended to all new chats. Keep it short and
-                general.
+                This prompt is prepended to all new chats and works alongside
+                the threads system prompts. Keep it short and general.
             </p>
-            <textarea
-                class="retro-input w-full min-h-40 leading-snug"
+            <UTextarea
+                class="w-full leading-snug focus:ring-0 focus:outline-0"
                 :value="local.masterPrompt"
                 @input="onPromptInput"
+                :ui="{
+                    base: 'min-h-40 my-3',
+                }"
                 :aria-describedby="'ai-master-help ai-master-count'"
                 spellcheck="false"
                 placeholder="e.g. You are a concise, helpful assistant who prefers structured, minimal answers."
-            ></textarea>
+            ></UTextarea>
             <div class="flex items-center justify-between">
                 <span
                     id="ai-master-count"
@@ -101,16 +104,16 @@
 
             <div v-if="settings.defaultModelMode === 'fixed'" class="space-y-3">
                 <label class="text-xs" for="model-search">Search models</label>
-                <input
+                <UInput
                     id="model-search"
-                    class="retro-input w-full"
+                    class="w-full"
                     type="text"
                     placeholder="Search by name, id, or description"
-                    v-model="modelSearch.query"
+                    v-model="searchQuery"
                     :disabled="modelsBusy"
                 />
                 <div
-                    class="max-h-56 overflow-auto border-2 p-1 space-y-1"
+                    class="max-h-56 overflow-auto border-2 rounded-[3px] p-1 space-y-1"
                     role="listbox"
                     aria-label="Model results"
                 >
@@ -118,7 +121,7 @@
                         v-for="m in limitedResults"
                         :key="m.id"
                         type="button"
-                        class="retro-btn w-full flex items-center justify-between"
+                        class="retro-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between"
                         :class="m.id === settings.fixedModelId ? 'active' : ''"
                         @click="onPickModel(m.id)"
                         :aria-selected="m.id === settings.fixedModelId"
@@ -213,10 +216,17 @@ async function saveMasterPrompt() {
 // Models
 const { catalog, fetchModels } = useModelStore();
 const modelSearch = useModelSearch(catalog);
+// Bridge query through a computed to ensure the native input always binds a string
+const searchQuery = computed({
+    get: () => String(modelSearch.query.value || ''),
+    set: (v: string) => {
+        modelSearch.query.value = v ?? '';
+    },
+});
 const modelsBusy = computed(() => modelSearch.busy.value);
 const limitedResults = computed(() => modelSearch.results.value.slice(0, 100));
 function onPickModel(id: string) {
-    set({ fixedModelId: id });
+    set({ fixedModelId: id, defaultModelMode: 'fixed' });
     if (liveStatus.value)
         liveStatus.value.textContent = `Selected fixed model: ${id}`;
 }
@@ -238,3 +248,110 @@ function onReset() {
         liveStatus.value.textContent = 'AI settings reset to defaults';
 }
 </script>
+
+<style scoped>
+/* Match ThemePage.vue styling */
+.section-card {
+    position: relative;
+    padding: 1.25rem 1rem 1rem 1rem; /* MD3 dense card spacing */
+    border: 2px solid var(--md-inverse-surface);
+    background: linear-gradient(
+        0deg,
+        color-mix(
+            in oklab,
+            var(--md-surface) 95%,
+            var(--md-surface-variant) 5%
+        ),
+        color-mix(in oklab, var(--md-surface) 92%, var(--md-surface-variant) 8%)
+    );
+    border-radius: 6px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.group-heading {
+    margin-top: -0.25rem; /* optical align */
+    letter-spacing: 0.08em;
+}
+.supporting-text {
+    font-size: 15px;
+    line-height: 1.2;
+    max-width: 82ch;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    opacity: 0.7;
+}
+
+.retro-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.5rem; /* ~py-1 px-2 */
+    font-size: 0.75rem; /* text-xs */
+    font-weight: 500; /* font-medium */
+    user-select: none;
+    transition: background-color 120ms ease, color 120ms ease;
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    border-radius: 3px;
+    background: var(--md-surface);
+    line-height: 1;
+}
+.retro-chip:hover {
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+}
+.retro-chip:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--md-inverse-surface);
+}
+.retro-chip.active {
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+}
+.retro-chip:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+.retro-input {
+    height: 32px;
+    padding: 0 6px;
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1;
+    border: 2px solid var(--md-inverse-surface);
+    background: var(--md-surface);
+    color: var(--md-on-surface);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.retro-input:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+/* Textarea variant keeps the same visual but allows growth */
+textarea.retro-input {
+    height: auto;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    line-height: 1.25;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Motion reduction respect */
+@media (prefers-reduced-motion: reduce) {
+    .retro-chip,
+    .section-card {
+        transition: none;
+    }
+}
+</style>

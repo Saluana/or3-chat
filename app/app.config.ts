@@ -122,5 +122,10 @@ export default defineAppConfig({
                 label: 'block font-medium text-default cursor-pointer',
             },
         },
+        textarea: {
+            slots: {
+                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+            },
+        },
     },
 });
