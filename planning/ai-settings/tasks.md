@@ -4,12 +4,12 @@ Artifact ID: f0fb3d19-2f65-4e31-9b1b-36f1b5a3e9c0
 
 ## 1. Composable and data types
 
--   [ ] 1.1 Create `app/composables/useAiSettings.ts` with:
+-   [x] 1.1 Create `app/composables/useAiSettings.ts` with:
     -   `AiSettingsV1` type, `ToolPolicy` enum-like union.
     -   `DEFAULT_AI_SETTINGS`, storage key, sanitize + migrate helpers.
     -   HMR-safe singleton store with `settings` (Ref), `set`, `reset`, `load`.
     -   Requirements: 1, 2, 3, 4, 5, 6, 7, 8
--   [ ] 1.2 Unit tests: `app/composables/__tests__/useAiSettings.test.ts`
+-   [x] 1.2 Unit tests: `app/composables/__tests__/useAiSettings.test.ts`
     -   Covers sanitize ranges, migration fill-ins, persistence load errors.
     -   Requirements: 3, 6, 7, 9
 
