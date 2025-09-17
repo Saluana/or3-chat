@@ -15,27 +15,27 @@ Artifact ID: f0fb3d19-2f65-4e31-9b1b-36f1b5a3e9c0
 
 ## 2. AiPage.vue UI (match ThemePage.vue)
 
--   [ ] 2.1 Scaffold `app/components/modal/dashboard/AiPage.vue`
+-   [x] 2.1 Scaffold `app/components/modal/dashboard/AiPage.vue`
     -   Use section cards and retro styles (reuse classes from ThemePage.vue).
     -   Requirements: 7, 8
--   [ ] 2.2 Master System Prompt section
+-   [x] 2.2 Master System Prompt section
     -   Large textarea, character count, Save applies `set({ masterSystemPrompt })`.
     -   Requirements: 1, 7, 8
--   [ ] 2.3 Model Defaults section
+-   [x] 2.3 Model Defaults section
     -   Radio/segmented: Use last selected vs Use fixed model.
     -   Conditional model picker (reuse model store + search from `useModelStore`/`useModelSearch`).
     -   Streaming default toggle.
     -   Requirements: 2, 4, 7, 8
--   [ ] 2.4 Generation Defaults section
+-   [x] 2.4 Generation Defaults section
     -   Temperature slider (0–2), Max tokens input (int, nullable), JSON mode toggle.
     -   Requirements: 3, 7, 8
--   [ ] 2.5 Tool Use Policy section
+-   [x] 2.5 Tool Use Policy section
     -   Segmented: allow / disallow / ask.
     -   Requirements: 5, 7, 8
--   [ ] 2.6 Reset section
+-   [x] 2.6 Reset section
     -   Reset to defaults button wired to `reset()`.
     -   Requirements: 7
--   [ ] 2.7 Accessibility pass
+-   [x] 2.7 Accessibility pass
     -   Labels, aria-describedby for helper text, keyboard focus states.
     -   Requirements: 8
 
