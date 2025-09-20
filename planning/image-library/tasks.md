@@ -20,25 +20,25 @@ Status: Draft (all tasks unchecked)
     -   Loads first page (limit 50), keeps `offset`, shows “Load more”
     -   Holds selected item for viewer; wires actions
     -   Requirements: R1, R2, NFR1
--   [ ] 2.2 Implement local `GalleryGrid` inside the page (or `pages/images/GalleryGrid.vue`)
+-   [x] 2.2 Implement local `GalleryGrid` inside the page (or `pages/images/GalleryGrid.vue`)
     -   CSS grid, aspect-ratio from metadata; placeholder on error
     -   Lazily resolve blob and create object URLs on visibility; revoke on unmount
     -   Emits: `view`, `download`, `copy`, `rename`
     -   Requirements: R1, R2, R3, R4, NFR2
--   [ ] 2.3 Implement local `ImageViewer` modal (or `pages/images/ImageViewer.vue`)
+-   [x] 2.3 Implement local `ImageViewer` modal (or `pages/images/ImageViewer.vue`)
     -   Full image preview, duplicate actions, ESC/backdrop/close button; focus trap
     -   Requirements: R2, R3, R4, NFR3
 
 ## 3. Actions
 
--   [ ] 3.1 Download
+-   [x] 3.1 Download
     -   Use `getFileBlob(hash)` -> object URL -> temporary `<a download>` -> revoke URL
     -   Requirements: R3
--   [ ] 3.2 Copy to clipboard
+-   [x] 3.2 Copy to clipboard
     -   Try `navigator.clipboard.write([new ClipboardItem({ [mime]: blob })])`
     -   Fallback: data URL -> `navigator.clipboard.writeText`
     -   Requirements: R3
--   [ ] 3.3 Rename
+-   [x] 3.3 Rename
     -   Prompt/in-place input -> `updateFileName`; optimistic UI; rollback on error
     -   Requirements: R4, NFR4
 

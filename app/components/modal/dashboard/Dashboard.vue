@@ -176,12 +176,21 @@ const coreItems: DashboardPlugin[] = [
             },
         ],
     },
-    /*{
+    {
         id: 'core:images',
         icon: 'pixelarticons:image',
         label: 'Images',
         order: 10,
-    },
+        pages: [
+            {
+                id: 'images-library',
+                title: 'Images',
+                description: 'Browse saved and generated images.',
+                icon: 'pixelarticons:image',
+                component: () => import('~/pages/images/index.vue'),
+            },
+        ],
+    } /*
     {
         id: 'core:prompts',
         icon: 'pixelarticons:script-text',
@@ -193,7 +202,7 @@ const coreItems: DashboardPlugin[] = [
         icon: 'pixelarticons:folder',
         label: 'Files',
         order: 30,
-    },*/
+    },*/,
 ];
 
 // Register any inline pages defined on core items with the shared dashboard page registry
