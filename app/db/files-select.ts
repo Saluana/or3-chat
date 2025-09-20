@@ -12,7 +12,11 @@ export async function listImageMetasPaged(
     return db.file_meta
         .orderBy('updated_at')
         .reverse()
-        .filter((m) => m.kind === 'image' && m.deleted !== true)
+        .filter(
+            (m) =>
+                m.deleted !== true &&
+                (m.kind === 'image' || m.mime_type?.startsWith('image/'))
+        )
         .offset(offset)
         .limit(limit)
         .toArray();

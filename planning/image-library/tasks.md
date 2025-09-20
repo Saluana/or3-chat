@@ -6,17 +6,17 @@ Status: Draft (all tasks unchecked)
 
 ## 1. Minimal data selectors (client-only)
 
--   [ ] 1.1 Create `app/db/files-select.ts` with `listImageMetasPaged(offset, limit)`
+-   [x] 1.1 Create `app/db/files-select.ts` with `listImageMetasPaged(offset, limit)`
     -   Filter: `deleted !== true` AND (`kind === 'image'` OR `mime_type?.startsWith('image/')`)
     -   Sort by `updated_at` desc; slice `[offset, offset+limit)`
     -   Requirements: R1, NFR2
--   [ ] 1.2 Add `updateFileName(hash, name)` to `files-select.ts`
+-   [x] 1.2 Add `updateFileName(hash, name)` to `files-select.ts`
     -   Update `db.file_meta` name and `updated_at`
     -   Requirements: R4
 
 ## 2. Page and components
 
--   [ ] 2.1 Add `pages/images/index.vue`
+-   [x] 2.1 Add `pages/images/index.vue`
     -   Loads first page (limit 50), keeps `offset`, shows “Load more”
     -   Holds selected item for viewer; wires actions
     -   Requirements: R1, R2, NFR1
