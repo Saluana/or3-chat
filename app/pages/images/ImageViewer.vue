@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, reactive, watch, ref, nextTick } from 'vue';
-import type { FileMeta } from '../../db/schema';
-import { getFileBlob } from '../../db/files';
+import type { FileMeta } from '~/db/schema';
+import { getFileBlob } from '~/db/files';
+import { onKeyStroke } from '@vueuse/core';
 
 const props = defineProps<{
     modelValue: boolean;
@@ -16,10 +17,6 @@ const emit = defineEmits<{
 
 const state = reactive<{ url?: string }>({ url: undefined });
 const overlayEl = ref<HTMLElement | null>(null);
-
-function onPointerCapture(e: PointerEvent) {
-    e.stopPropagation();
-}
 
 async function load() {
     revoke();
@@ -48,13 +45,9 @@ function close() {
     emit('update:modelValue', false);
 }
 
-function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-        e.stopPropagation();
-        e.preventDefault();
-        close();
-    }
-}
+onKeyStroke('Escape', (e) => {
+    close();
+});
 
 watch(
     () => props.modelValue,
@@ -107,13 +100,13 @@ watch(
             </div>
             <div
                 class="bg-black/75 dark:bg-white/5 backdrop-blur-xs w-[100dvw] h-[100dvh] z-[1003] overflow-hidden absolute top-0 left-0"
-                @pointerdown="onPointerCapture"
+                @click.self="close"
             >
                 <div
                     ref="overlayEl"
                     class="inset-0 p-4 grid place-items-center h-full w-full"
                     tabindex="-1"
-                    @keydown="onKey"
+                    @click.self="close"
                 >
                     <img
                         v-if="state.url"
