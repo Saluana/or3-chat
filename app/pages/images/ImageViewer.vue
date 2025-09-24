@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, reactive, watch } from 'vue';
+import { onBeforeUnmount, reactive, watch, ref, nextTick } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
 
@@ -15,6 +15,11 @@ const emit = defineEmits<{
 }>();
 
 const state = reactive<{ url?: string }>({ url: undefined });
+const overlayEl = ref<HTMLElement | null>(null);
+
+function onPointerCapture(e: PointerEvent) {
+    e.stopPropagation();
+}
 
 async function load() {
     revoke();
@@ -44,57 +49,82 @@ function close() {
 }
 
 function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') {
+        e.stopPropagation();
+        e.preventDefault();
+        close();
+    }
 }
+
+watch(
+    () => props.modelValue,
+    async (v) => {
+        if (v) await nextTick().then(() => overlayEl.value?.focus());
+    }
+);
+// Keep template overlay at document level so backdrop covers entire screen
 </script>
 
 <template>
     <teleport to="body">
-        <div
+        <UModal
             v-if="modelValue"
-            @keydown.capture="onKey"
-            tabindex="0"
-            class="fixed inset-0 z-50"
+            role="dialog"
+            fullscreen
+            :ui="{
+                footer: 'justify-end border-t-2',
+                body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
+            }"
         >
-            <div class="absolute inset-0 bg-black/70" @click="close"></div>
-            <div class="absolute inset-0 p-4 flex flex-col">
-                <div class="self-end mb-2 flex gap-2">
-                    <button
-                        class="px-2 py-1 bg-white/10 rounded"
-                        @click="meta && emit('download', meta)"
-                    >
-                        Download
-                    </button>
-                    <button
-                        class="px-2 py-1 bg-white/10 rounded"
-                        @click="meta && emit('copy', meta)"
-                    >
-                        Copy
-                    </button>
-                    <button
-                        class="px-2 py-1 bg-white/10 rounded"
-                        @click="meta && emit('rename', meta)"
-                    >
-                        Rename
-                    </button>
-                    <button
-                        class="px-2 py-1 bg-white/10 rounded"
-                        @click="close"
-                    >
-                        Close
-                    </button>
-                </div>
-                <div class="flex-1 min-h-0 grid place-items-center">
+            <div
+                @click.stop.prevent
+                class="fixed top-0 z-[1200] right-0 mt-2 mr-2 flex gap-2 p-1 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-highest)]/95 backdrop-blur"
+            >
+                <button
+                    class="retro-btn px-3 py-1 text-sm"
+                    @click.stop.self="meta && emit('download', meta)"
+                >
+                    Download
+                </button>
+                <button
+                    class="retro-btn px-3 py-1 text-sm"
+                    @click.stop.self="meta && emit('copy', meta)"
+                >
+                    Copy
+                </button>
+                <button
+                    class="retro-btn px-3 py-1 text-sm"
+                    @click.stop.self="meta && emit('rename', meta)"
+                >
+                    Rename
+                </button>
+                <button
+                    class="retro-btn px-3 py-1 text-sm"
+                    @click.stop.self="close"
+                >
+                    Close
+                </button>
+            </div>
+            <div
+                class="bg-black/75 dark:bg-white/5 backdrop-blur-xs w-[100dvw] h-[100dvh] z-[1003] overflow-hidden absolute top-0 left-0"
+                @pointerdown="onPointerCapture"
+            >
+                <div
+                    ref="overlayEl"
+                    class="inset-0 p-4 grid place-items-center h-full w-full"
+                    tabindex="-1"
+                    @keydown="onKey"
+                >
                     <img
                         v-if="state.url"
                         :src="state.url"
                         :alt="meta?.name"
-                        class="max-w-full max-h-full object-contain"
+                        class="max-w-[min(96vw,1400px)] h-[70dvh] object-contain"
                     />
                     <div v-else class="text-white/80 text-sm">Loading…</div>
                 </div>
             </div>
-        </div>
+        </UModal>
     </teleport>
 </template>
 

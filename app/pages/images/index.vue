@@ -90,7 +90,7 @@ function handleView(meta: FileMeta) {
 </script>
 
 <template>
-    <div class="p-4">
+    <div class="p-4 max-w-[1400px] mx-auto">
         <h1 class="text-xl font-semibold mb-4">Images</h1>
         <GalleryGrid
             :items="items"

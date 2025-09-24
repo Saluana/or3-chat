@@ -1,11 +1,14 @@
 <template>
     <UModal
         v-model:open="open"
+        :modal="false"
         :ui="{
+            content: 'z-[10]',
             footer: 'justify-end border-t-2',
             body: 'overflow-hidden h-full flex-1 p-0!',
         }"
         title="Dashboard"
+        :dismissible="false"
         description="Browse all apps, plugins, and settings."
         class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden"
     >

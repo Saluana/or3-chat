@@ -103,7 +103,7 @@ function copy(meta: FileMeta) {
 <template>
     <div
         ref="container"
-        class="grid gap-3"
+        class="grid gap-3 max-w-[1400px] mx-auto"
         style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))"
     >
         <div
