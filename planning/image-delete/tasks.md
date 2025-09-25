@@ -33,7 +33,7 @@ Status: Draft (all tasks unchecked)
 
 ## 4. Image viewer enhancements (`ImageViewer.vue`)
 
--   [ ] 4.1 Add a Delete button next to existing actions; emit `delete` event.
+-   [x] 4.1 Add a Delete button next to existing actions; emit `delete` event.
     -   Requirements: R1, NFR2
 -   [ ] 4.2 Handle external deletion (prop change) by auto-closing and showing contextual notice.
     -   Requirements: R4, NFR3

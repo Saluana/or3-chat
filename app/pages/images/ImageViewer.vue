@@ -13,6 +13,7 @@ const emit = defineEmits<{
     (e: 'download', meta: FileMeta): void;
     (e: 'copy', meta: FileMeta): void;
     (e: 'rename', meta: FileMeta): void;
+    (e: 'delete', meta: FileMeta): void;
 }>();
 
 const state = reactive<{ url?: string }>({ url: undefined });
@@ -90,6 +91,12 @@ watch(
                     @click.stop.self="meta && emit('rename', meta)"
                 >
                     Rename
+                </button>
+                <button
+                    class="retro-btn px-3 py-1 text-sm text-[var(--md-error)]"
+                    @click.stop.self="meta && emit('delete', meta)"
+                >
+                    Delete
                 </button>
                 <button
                     class="retro-btn px-3 py-1 text-sm"
