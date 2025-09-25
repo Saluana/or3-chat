@@ -40,14 +40,14 @@ Status: Draft (all tasks unchecked)
 
 ## 5. Feedback & resiliency
 
--   [ ] 5.1 Wire error handling through `reportError`/toasts for single and bulk operations.
+-   [x] 5.1 Wire error handling through `reportError`/toasts for single and bulk operations.
     -   Requirements: R1, R3, NFR3
--   [ ] 5.2 Maintain selection state after partial failures, highlighting items still present.
+-   [x] 5.2 Maintain selection state after partial failures, highlighting items still present.
     -   Requirements: R3, R4
 
 ## 6. Testing & QA
 
--   [ ] 6.1 Unit tests for `softDeleteMany` (success, noop when already deleted, partial missing hashes).
+-   [x] 6.1 Unit tests for `softDeleteMany` (success, noop when already deleted, partial missing hashes).
     -   Requirements: R3, R5, NFR1
 -   [ ] 6.2 Component tests for multi-select UI (toggle mode, select, delete calls, viewer auto-close).
     -   Requirements: R1, R2, R3, R4

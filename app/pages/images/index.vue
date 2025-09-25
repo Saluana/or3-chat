@@ -23,6 +23,13 @@ const toast = useToast();
 const selectedCount = computed(() => selectedHashes.value.size);
 const hasSelection = computed(() => selectedCount.value > 0);
 
+type DeleteOutcome = {
+    attempted: string[];
+    removed: string[];
+    remaining: string[];
+    aborted: boolean;
+};
+
 async function loadMore() {
     if (loading.value || done.value) return;
     loading.value = true;
@@ -63,10 +70,17 @@ async function handleCopy(meta: FileMeta) {
     const blob = await getFileBlob(meta.hash);
     if (!blob) return;
     const mime = meta.mime_type || 'image/png';
+    const showCopiedToast = () =>
+        toast.add({
+            title: 'Image copied',
+            description: `${meta.name || 'Image'} is ready to paste.`,
+            color: 'success',
+        });
     try {
         // @ts-ignore ClipboardItem may be missing from TS lib
         const item = new ClipboardItem({ [mime]: blob });
         await navigator.clipboard.write([item]);
+        showCopiedToast();
     } catch {
         const url = URL.createObjectURL(blob);
         try {
@@ -74,6 +88,7 @@ async function handleCopy(meta: FileMeta) {
             const ab = await res.arrayBuffer();
             const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
             await navigator.clipboard.writeText(`data:${mime};base64,${b64}`);
+            showCopiedToast();
         } finally {
             URL.revokeObjectURL(url);
         }
@@ -119,52 +134,96 @@ function toggleSelect(hash: string) {
     if (next.size > 0) selectionMode.value = true;
 }
 
-function removeHashesFromState(hashes: string[]): number {
-    if (!hashes.length) return 0;
+function removeHashesFromState(hashes: string[]) {
+    if (!hashes.length) {
+        return { removedHashes: [] as string[], remaining: [] as string[] };
+    }
     const removal = new Set(hashes);
+    const removedSet = new Set<string>();
     const before = items.value.length;
-    items.value = items.value.filter((item) => !removal.has(item.hash));
-    const removed = before - items.value.length;
-    if (removed > 0) {
-        offset.value = Math.max(0, offset.value - removed);
+    items.value = items.value.filter((item) => {
+        if (removal.has(item.hash)) {
+            removedSet.add(item.hash);
+            return false;
+        }
+        return true;
+    });
+    const removedCount = removedSet.size;
+    if (removedCount > 0) {
+        offset.value = Math.max(0, offset.value - removedCount);
     }
     const nextSelected = new Set<string>();
     for (const hash of selectedHashes.value) {
-        if (!removal.has(hash)) nextSelected.add(hash);
+        if (!removedSet.has(hash)) nextSelected.add(hash);
     }
     selectedHashes.value = nextSelected;
-    if (selected.value && removal.has(selected.value.hash)) {
+    if (selected.value && removedSet.has(selected.value.hash)) {
         selected.value = null;
         showViewer.value = false;
     }
-    return removed;
+    const remaining = hashes.filter((hash) => !removedSet.has(hash));
+    return { removedHashes: Array.from(removedSet), remaining };
 }
 
 async function executeDelete(
     hashes: string[],
     confirmMessage: string,
-    successMessage: string
-): Promise<boolean> {
-    if (!hashes.length) return false;
+    successMessage: (count: number) => string
+): Promise<DeleteOutcome> {
+    const attempted = Array.from(new Set(hashes.filter(Boolean)));
+    if (!attempted.length) {
+        return { attempted, removed: [], remaining: [], aborted: true };
+    }
     if (typeof window !== 'undefined') {
         const ok = window.confirm(confirmMessage);
-        if (!ok) return false;
+        if (!ok) {
+            return {
+                attempted,
+                removed: [],
+                remaining: attempted,
+                aborted: true,
+            };
+        }
     }
     isDeleting.value = true;
     try {
-        await softDeleteMany(hashes);
-        const removed = removeHashesFromState(hashes);
-        if (removed > 0) {
+        await softDeleteMany(attempted);
+        const { removedHashes, remaining } = removeHashesFromState(attempted);
+        if (removedHashes.length > 0) {
             toast.add({
                 title: 'Images deleted',
-                description: successMessage,
+                description: successMessage(removedHashes.length),
                 color: 'success',
             });
         }
-        return true;
+        if (remaining.length > 0) {
+            toast.add({
+                title: 'Some images were not removed',
+                description:
+                    'A few selected items are still present. Please retry.',
+                color: 'warning',
+            });
+        }
+        return {
+            attempted,
+            removed: removedHashes,
+            remaining,
+            aborted: false,
+        };
     } catch (error) {
-        reportError(fileDeleteError('Failed to delete images', error));
-        return false;
+        const wrapped = fileDeleteError('Failed to delete images', error);
+        reportError(wrapped);
+        toast.add({
+            title: 'Delete failed',
+            description: 'We could not remove the selected images.',
+            color: 'error',
+        });
+        return {
+            attempted,
+            removed: [],
+            remaining: attempted,
+            aborted: false,
+        };
     } finally {
         isDeleting.value = false;
     }
@@ -174,17 +233,16 @@ async function deleteSingle(meta: FileMeta | null) {
     if (!meta) return false;
     const name = meta.name || 'this image';
     const confirmMessage = `Delete "${name}"? This cannot be undone.`;
-    const successMessage = `Removed "${name}".`;
-    const success = await executeDelete(
+    const outcome = await executeDelete(
         [meta.hash],
         confirmMessage,
-        successMessage
+        () => `Removed "${name}".`
     );
-    if (success) {
+    if (outcome.removed.length > 0 && outcome.remaining.length === 0) {
         clearSelection();
         selectionMode.value = false;
     }
-    return success;
+    return outcome.removed.length > 0;
 }
 
 async function deleteSelected() {
@@ -194,61 +252,81 @@ async function deleteSelected() {
     const confirmMessage = `Delete ${count} image${
         count === 1 ? '' : 's'
     }? This cannot be undone.`;
-    const successMessage = `${count} image${count === 1 ? '' : 's'} removed.`;
-    const success = await executeDelete(hashes, confirmMessage, successMessage);
-    if (success) {
+    const outcome = await executeDelete(
+        hashes,
+        confirmMessage,
+        (removedCount) =>
+            `${removedCount} image${removedCount === 1 ? '' : 's'} removed.`
+    );
+    if (outcome.removed.length > 0 && outcome.remaining.length === 0) {
         clearSelection();
         selectionMode.value = false;
         if (!done.value && items.value.length < PAGE_SIZE) {
             loadMore();
         }
     }
-    return success;
+    return outcome.removed.length > 0;
 }
 </script>
 
 <template>
-    <div class="p-4 max-w-[1400px] mx-auto">
-        <h1 class="text-xl font-semibold mb-4">Images</h1>
-        <div
-            v-if="items.length"
-            class="mb-4 flex flex-wrap items-center gap-2 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 px-3 py-2"
-        >
-            <button
-                class="retro-btn px-3 py-1 text-sm"
+    <div
+        class="p-4 max-w-[1400px] mx-auto relative"
+        :class="{ 'pb-24': selectionMode }"
+    >
+        <div class="flex justify-between">
+            <h1 class="text-xl font-semibold mb-4">Images</h1>
+            <UButton
+                class=""
                 type="button"
+                data-test="multi-toggle"
                 @click="toggleSelectionMode"
                 :disabled="isDeleting"
             >
-                {{
-                    selectionMode
-                        ? 'Disable multi-select'
-                        : 'Enable multi-select'
-                }}
-            </button>
-            <button
-                class="retro-btn px-3 py-1 text-sm"
-                type="button"
-                :disabled="!hasSelection || isDeleting"
-                @click="clearSelection"
+                <UIcon name="pixelarticons:image-multiple" class="mr-0.5" />
+                {{ selectionMode ? 'Cancel' : 'Select' }}
+            </UButton>
+        </div>
+        <div
+            v-if="selectionMode"
+            class="fixed inset-x-0 bottom-0 z-[1000] border-t-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
+        >
+            <div
+                class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-2"
             >
-                Clear selection
-            </button>
-            <button
-                class="retro-btn px-3 py-1 text-sm"
-                type="button"
-                :disabled="!hasSelection || isDeleting"
-                @click="deleteSelected"
-            >
-                {{
-                    isDeleting
-                        ? 'Deleting…'
-                        : `Delete selected (${selectedCount})`
-                }}
-            </button>
-            <span class="ml-auto text-sm opacity-80">
-                Selected: {{ selectedCount }}
-            </span>
+                <button
+                    class="retro-btn px-3 py-1 text-sm"
+                    type="button"
+                    data-test="multi-toggle"
+                    @click="toggleSelectionMode"
+                    :disabled="isDeleting"
+                >
+                    {{ selectionMode ? 'Cancel' : 'Select' }}
+                </button>
+                <button
+                    class="retro-btn px-3 py-1 text-sm"
+                    type="button"
+                    :disabled="!hasSelection || isDeleting"
+                    @click="clearSelection"
+                >
+                    Clear
+                </button>
+                <button
+                    class="retro-btn px-3 py-1 text-sm"
+                    type="button"
+                    :disabled="!hasSelection || isDeleting"
+                    data-test="delete-selected"
+                    @click="deleteSelected"
+                >
+                    {{ isDeleting ? 'Deleting…' : `Delete (${selectedCount})` }}
+                </button>
+                <span
+                    class="ml-auto text-sm opacity-80 hidden sm:inline"
+                    data-test="selected-count"
+                >
+                    Selected: {{ selectedCount }}
+                </span>
+            </div>
         </div>
         <GalleryGrid
             :items="items"

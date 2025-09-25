@@ -109,7 +109,7 @@ function toggleSelect(hash: string) {
 <template>
     <div
         ref="container"
-        class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 max-w-[1400px] mx-auto"
+        class="columns-1 sm:columns-2 lg:columns-3 gap-4 max-w-[1400px] mx-auto"
     >
         <div
             v-for="m in items"
@@ -130,7 +130,7 @@ function toggleSelect(hash: string) {
                     type="button"
                     size="sm"
                     square
-                    class="retro-btn absolute z-[11] top-2 left-2 flex items-center justify-center"
+                    class="retro-btn absolute! z-[11] top-2 left-2 flex items-center justify-center"
                     :aria-pressed="isSelected(m.hash)"
                     role="checkbox"
                     :aria-checked="isSelected(m.hash)"
@@ -180,20 +180,22 @@ function toggleSelect(hash: string) {
                 <div
                     class="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
                 >
-                    <div class="pointer-events-auto mb-3 flex gap-3">
+                    <div class="pointer-events-auto mb-3 flex gap-1.5">
                         <UButton
-                            size="xs"
+                            size="sm"
+                            variant="light"
                             square
-                            class="aspect-square retro-btn hover:translate-y-[-2px]"
+                            class="flex item-center justify-center"
                             :icon="'pixelarticons:download'"
                             :disabled="props.isDeleting"
                             aria-label="Download image"
                             @click.stop="download(m)"
                         />
                         <UButton
-                            size="xs"
+                            size="sm"
                             square
-                            class="aspect-square retro-btn hover:translate-y-[-2px]"
+                            variant="light"
+                            class="flex item-center justify-center"
                             :icon="'pixelarticons:copy'"
                             :disabled="props.isDeleting"
                             aria-label="Copy image"
