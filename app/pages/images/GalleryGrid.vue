@@ -118,7 +118,7 @@ function toggleSelect(hash: string) {
             class="mb-4 break-inside-avoid"
         >
             <div
-                class="group relative w-full overflow-hidden rounded-md border-2 transition"
+                class="group relative w-full overflow-hidden rounded-md border-2 transition duration-150"
                 :class="
                     props.selectionMode && isSelected(m.hash)
                         ? 'border-[var(--md-primary)] shadow-[2px_2px_0_var(--md-primary)]'
@@ -150,32 +150,41 @@ function toggleSelect(hash: string) {
                         class="h-5 w-5"
                     />
                 </UButton>
-                <img
+                <button
                     v-if="state.urlByHash[m.hash] && !state.errorByHash[m.hash]"
-                    class="block w-full h-auto cursor-pointer transition-transform duration-200 group-hover:scale-[1.02]"
-                    :src="state.urlByHash[m.hash]"
-                    :alt="m.name"
-                    loading="lazy"
+                    type="button"
+                    class="block w-full cursor-pointer focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
+                    :aria-label="`View ${m.name}`"
                     @click="view(m)"
-                />
-                <div
+                >
+                    <img
+                        class="w-full h-auto transition-transform duration-200 group-hover:scale-[1.02] group-focus-within:scale-[1.02]"
+                        :src="state.urlByHash[m.hash]"
+                        :alt="m.name"
+                        loading="lazy"
+                    />
+                </button>
+                <button
                     v-else
-                    class="flex min-h-[160px] items-center justify-center bg-[var(--md-surface-container)] text-xs opacity-80"
+                    type="button"
+                    class="flex min-h-[160px] w-full items-center justify-center bg-[var(--md-surface-container)] text-xs opacity-80 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[var(--md-primary)]"
+                    :aria-label="`View ${m.name}`"
+                    @click="view(m)"
                 >
                     <span>Preview unavailable</span>
-                </div>
+                </button>
 
                 <div
-                    class="pointer-events-none absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200 group-hover:opacity-60"
+                    class="pointer-events-none absolute inset-0 bg-black/55 opacity-0 transition-opacity duration-200 group-hover:opacity-60 group-focus-within:opacity-60"
                 ></div>
                 <div
-                    class="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                    class="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
                 >
                     <div class="pointer-events-auto mb-3 flex gap-3">
                         <UButton
                             size="xs"
                             square
-                            class="aspect-square hover:backdrop-blur-md"
+                            class="aspect-square retro-btn hover:translate-y-[-2px]"
                             :icon="'pixelarticons:download'"
                             :disabled="props.isDeleting"
                             aria-label="Download image"
@@ -184,7 +193,7 @@ function toggleSelect(hash: string) {
                         <UButton
                             size="xs"
                             square
-                            class="aspect-square hover:backdrop-blur-md"
+                            class="aspect-square retro-btn hover:translate-y-[-2px]"
                             :icon="'pixelarticons:copy'"
                             :disabled="props.isDeleting"
                             aria-label="Copy image"
