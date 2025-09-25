@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, reactive, toRefs, watch, ref } from 'vue';
+import { onMounted, onBeforeUnmount, reactive, watch, ref } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
 
 const props = defineProps<{
     items: FileMeta[];
+    selectionMode?: boolean;
+    selectedHashes?: Set<string>;
+    isDeleting?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -12,6 +15,8 @@ const emit = defineEmits<{
     (e: 'download', meta: FileMeta): void;
     (e: 'copy', meta: FileMeta): void;
     (e: 'rename', meta: FileMeta): void;
+    (e: 'toggle-select', hash: string): void;
+    (e: 'delete', meta: FileMeta): void;
 }>();
 
 type State = {
@@ -22,6 +27,10 @@ type State = {
 const state = reactive<State>({ urlByHash: {}, errorByHash: {} });
 const container = ref<HTMLElement | null>(null);
 let io: IntersectionObserver | null = null;
+
+function isSelected(hash: string): boolean {
+    return props.selectedHashes?.has?.(hash) ?? false;
+}
 
 function aspectStyle(m: FileMeta) {
     const w = m.width ?? 1;
@@ -98,6 +107,16 @@ function download(meta: FileMeta) {
 function copy(meta: FileMeta) {
     emit('copy', meta);
 }
+
+function toggleSelect(hash: string) {
+    if (!hash || props.isDeleting) return;
+    emit('toggle-select', hash);
+}
+
+function deleteMeta(meta: FileMeta) {
+    if (props.isDeleting) return;
+    emit('delete', meta);
+}
 </script>
 
 <template>
@@ -110,9 +129,39 @@ function copy(meta: FileMeta) {
             v-for="m in items"
             :key="m.hash"
             :data-hash="m.hash"
-            class="border rounded overflow-hidden"
+            class="border-2 rounded-md overflow-hidden transition-colors"
+            :class="
+                props.selectionMode && isSelected(m.hash)
+                    ? 'border-[var(--md-primary)] shadow-[2px_2px_0_var(--md-primary)]'
+                    : 'border-[var(--md-outline-variant)] shadow-[2px_2px_0_var(--md-outline)]'
+            "
         >
             <div class="relative w-full bg-black/5" :style="aspectStyle(m)">
+                <UButton
+                    v-if="props.selectionMode"
+                    type="button"
+                    size="sm"
+                    square
+                    class="retro-btn absolute z-[1000] top-2 left-2 flex items-center justify-center hover:backdrop-blur-md"
+                    :aria-pressed="isSelected(m.hash)"
+                    role="checkbox"
+                    :aria-checked="isSelected(m.hash)"
+                    :title="
+                        isSelected(m.hash)
+                            ? `Deselect ${m.name}`
+                            : `Select ${m.name}`
+                    "
+                    @click.stop="toggleSelect(m.hash)"
+                >
+                    <UIcon
+                        :name="
+                            isSelected(m.hash)
+                                ? 'pixelarticons:check'
+                                : 'pixelarticons:plus'
+                        "
+                        class="h-5 w-5"
+                    />
+                </UButton>
                 <img
                     v-if="state.urlByHash[m.hash] && !state.errorByHash[m.hash]"
                     class="absolute inset-0 w-full h-full object-cover"
@@ -134,6 +183,13 @@ function copy(meta: FileMeta) {
                 <button class="underline" @click="download(m)">Download</button>
                 <button class="underline" @click="copy(m)">Copy</button>
                 <button class="underline" @click="rename(m)">Rename</button>
+                <button
+                    class="underline text-[var(--md-error)] disabled:opacity-60"
+                    :disabled="props.isDeleting"
+                    @click="deleteMeta(m)"
+                >
+                    Delete
+                </button>
             </div>
         </div>
     </div>
