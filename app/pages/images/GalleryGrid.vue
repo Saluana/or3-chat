@@ -32,12 +32,6 @@ function isSelected(hash: string): boolean {
     return props.selectedHashes?.has?.(hash) ?? false;
 }
 
-function aspectStyle(m: FileMeta) {
-    const w = m.width ?? 1;
-    const h = m.height ?? 1;
-    return { aspectRatio: `${w} / ${h}` } as any;
-}
-
 async function ensureUrl(meta: FileMeta) {
     if (state.urlByHash[meta.hash] || state.errorByHash[meta.hash]) return;
     try {
@@ -92,10 +86,6 @@ onBeforeUnmount(() => {
     Object.values(state.urlByHash).forEach((u) => u && URL.revokeObjectURL(u));
 });
 
-function rename(meta: FileMeta) {
-    emit('rename', meta);
-}
-
 function view(meta: FileMeta) {
     emit('view', meta);
 }
@@ -113,36 +103,34 @@ function toggleSelect(hash: string) {
     emit('toggle-select', hash);
 }
 
-function deleteMeta(meta: FileMeta) {
-    if (props.isDeleting) return;
-    emit('delete', meta);
-}
+// Single delete is now handled from viewer; emit hook kept for type safety if needed elsewhere.
 </script>
 
 <template>
     <div
         ref="container"
-        class="grid gap-3 max-w-[1400px] mx-auto"
-        style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))"
+        class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 max-w-[1400px] mx-auto"
     >
         <div
             v-for="m in items"
             :key="m.hash"
             :data-hash="m.hash"
-            class="border-2 rounded-md overflow-hidden transition-colors"
-            :class="
-                props.selectionMode && isSelected(m.hash)
-                    ? 'border-[var(--md-primary)] shadow-[2px_2px_0_var(--md-primary)]'
-                    : 'border-[var(--md-outline-variant)] shadow-[2px_2px_0_var(--md-outline)]'
-            "
+            class="mb-4 break-inside-avoid"
         >
-            <div class="relative w-full bg-black/5" :style="aspectStyle(m)">
+            <div
+                class="group relative w-full overflow-hidden rounded-md border-2 transition"
+                :class="
+                    props.selectionMode && isSelected(m.hash)
+                        ? 'border-[var(--md-primary)] shadow-[2px_2px_0_var(--md-primary)]'
+                        : 'border-[var(--md-outline-variant)] shadow-[2px_2px_0_var(--md-outline)]'
+                "
+            >
                 <UButton
                     v-if="props.selectionMode"
                     type="button"
                     size="sm"
                     square
-                    class="retro-btn absolute z-[1000] top-2 left-2 flex items-center justify-center hover:backdrop-blur-md"
+                    class="retro-btn absolute z-[11] top-2 left-2 flex items-center justify-center"
                     :aria-pressed="isSelected(m.hash)"
                     role="checkbox"
                     :aria-checked="isSelected(m.hash)"
@@ -164,32 +152,46 @@ function deleteMeta(meta: FileMeta) {
                 </UButton>
                 <img
                     v-if="state.urlByHash[m.hash] && !state.errorByHash[m.hash]"
-                    class="absolute inset-0 w-full h-full object-cover"
+                    class="block w-full h-auto cursor-pointer transition-transform duration-200 group-hover:scale-[1.02]"
                     :src="state.urlByHash[m.hash]"
                     :alt="m.name"
+                    loading="lazy"
+                    @click="view(m)"
                 />
                 <div
                     v-else
-                    class="absolute inset-0 flex items-center justify-center text-xs opacity-60"
+                    class="flex min-h-[160px] items-center justify-center bg-[var(--md-surface-container)] text-xs opacity-80"
                 >
                     <span>Preview unavailable</span>
                 </div>
-            </div>
-            <div class="px-2 py-1 text-sm truncate" :title="m.name">
-                {{ m.name }}
-            </div>
-            <div class="px-2 pb-2 flex gap-2 text-xs">
-                <button class="underline" @click="view(m)">View</button>
-                <button class="underline" @click="download(m)">Download</button>
-                <button class="underline" @click="copy(m)">Copy</button>
-                <button class="underline" @click="rename(m)">Rename</button>
-                <button
-                    class="underline text-[var(--md-error)] disabled:opacity-60"
-                    :disabled="props.isDeleting"
-                    @click="deleteMeta(m)"
+
+                <div
+                    class="pointer-events-none absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-200 group-hover:opacity-60"
+                ></div>
+                <div
+                    class="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                 >
-                    Delete
-                </button>
+                    <div class="pointer-events-auto mb-3 flex gap-3">
+                        <UButton
+                            size="xs"
+                            square
+                            class="aspect-square hover:backdrop-blur-md"
+                            :icon="'pixelarticons:download'"
+                            :disabled="props.isDeleting"
+                            aria-label="Download image"
+                            @click.stop="download(m)"
+                        />
+                        <UButton
+                            size="xs"
+                            square
+                            class="aspect-square hover:backdrop-blur-md"
+                            :icon="'pixelarticons:copy'"
+                            :disabled="props.isDeleting"
+                            aria-label="Copy image"
+                            @click.stop="copy(m)"
+                        />
+                    </div>
+                </div>
             </div>
         </div>
     </div>
