@@ -70,48 +70,66 @@ watch(
                 body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
             }"
         >
-            <div
-                @click.stop.prevent
-                class="fixed top-0 z-[1200] right-0 mt-2 mr-2 flex gap-2 p-1 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-highest)]/95 backdrop-blur"
-            >
-                <button
-                    class="retro-btn px-3 py-1 text-sm"
-                    @click.stop.self="meta && emit('download', meta)"
+            <div class="fixed inset-x-0 top-0 z-[1200] px-2 pt-2">
+                <div
+                    @click.stop.prevent
+                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-highest)]/95 p-1 backdrop-blur"
                 >
-                    Download
-                </button>
-                <button
-                    class="retro-btn px-3 py-1 text-sm"
-                    @click.stop.self="meta && emit('copy', meta)"
-                >
-                    Copy
-                </button>
-                <button
-                    class="retro-btn px-3 py-1 text-sm"
-                    @click.stop.self="meta && emit('rename', meta)"
-                >
-                    Rename
-                </button>
-                <button
-                    class="retro-btn px-3 py-1 text-sm text-[var(--md-error)]"
-                    @click.stop.self="meta && emit('delete', meta)"
-                >
-                    Delete
-                </button>
-                <button
-                    class="retro-btn px-3 py-1 text-sm"
-                    @click.stop.self="close"
-                >
-                    Close
-                </button>
+                    <div class="flex items-center">
+                        <UButtonGroup>
+                            <UButton
+                                variant="light"
+                                size="sm"
+                                icon="pixelarticons:download"
+                                @click.stop.self="
+                                    meta && emit('download', meta)
+                                "
+                            >
+                                Download
+                            </UButton>
+                            <UButton
+                                variant="light"
+                                icon="pixelarticons:copy"
+                                size="sm"
+                                @click.stop.self="meta && emit('copy', meta)"
+                            >
+                                Copy
+                            </UButton>
+                            <!--
+                    <button
+                        class="retro-btn px-3 py-1 text-sm"
+                        @click.stop.self="meta && emit('rename', meta)"
+                    >
+                        Rename
+                    </button>
+                    -->
+                            <UButton
+                                variant="light"
+                                class="text-[var(--md-error)]"
+                                size="sm"
+                                icon="pixelarticons:image-delete"
+                                @click.stop.self="meta && emit('delete', meta)"
+                            >
+                                Delete
+                            </UButton>
+                        </UButtonGroup>
+                    </div>
+                    <UButton
+                        icon="pixelarticons:close"
+                        variant="light"
+                        size="sm"
+                        @click="close"
+                    >
+                    </UButton>
+                </div>
             </div>
             <div
-                class="bg-black/75 dark:bg-white/5 backdrop-blur-xs w-[100dvw] h-[100dvh] z-[1003] overflow-hidden absolute top-0 left-0"
+                class="bg-black/75 dark:bg-white/5 backdrop-blur-xs w-[100dvw] h-[100dvh] z-[99] overflow-hidden absolute top-0 left-0"
                 @click.self="close"
             >
                 <div
                     ref="overlayEl"
-                    class="inset-0 p-4 grid place-items-center h-full w-full"
+                    class="inset-0 grid h-full w-full place-items-center px-4 pb-4 pt-24 sm:pt-6"
                     tabindex="-1"
                     @click.self="close"
                 >
@@ -119,7 +137,7 @@ watch(
                         v-if="state.url"
                         :src="state.url"
                         :alt="meta?.name"
-                        class="max-w-[min(96vw,1400px)] h-[70dvh] object-contain"
+                        class="max-w-[90dvw] sm:max-w-[min(96dvw,1400px)] h-[70dvh] object-contain"
                     />
                     <div v-else class="text-white/80 text-sm">Loading…</div>
                 </div>
