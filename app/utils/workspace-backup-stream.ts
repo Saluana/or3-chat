@@ -144,7 +144,7 @@ export async function streamWorkspaceExport({
     const writable = await fileHandle.createWritable();
     const writer: WorkspaceBackupWriter = {
         write: (chunk) => writable.write(chunk as any),
-        close: () => writable.close(),
+        close: () => writable.close().catch(() => undefined),
     };
 
     await streamWorkspaceExportCore({
@@ -171,8 +171,18 @@ export async function streamWorkspaceExportToWritable({
         close: async () => {
             try {
                 await writable.close();
+            } catch (error) {
+                try {
+                    await (writable as any).abort?.();
+                } catch {
+                    // ignore secondary abort failures
+                }
             } finally {
-                writable.releaseLock();
+                try {
+                    writable.releaseLock();
+                } catch {
+                    // lock might already be released
+                }
             }
         },
     };
@@ -359,7 +369,14 @@ async function streamWorkspaceExportCore({
         progress.completedTables = progress.totalTables;
         emitProgress(progress, onProgress);
     } finally {
-        await writer.close();
+        try {
+            await writer.close();
+        } catch (closeError) {
+            console.warn(
+                '[workspace-backup] Failed to close export stream',
+                closeError
+            );
+        }
     }
 }
 
@@ -470,94 +487,104 @@ export async function importWorkspaceStream({
 
         let currentTable: string | null = null;
 
-        while (true) {
-            const next = await Dexie.waitFor(lineIterator.next());
-            if (next.done) break;
-            const raw = next.value.trim();
-            if (!raw) continue;
+        try {
+            while (true) {
+                const next = await Dexie.waitFor(lineIterator.next());
+                if (next.done) break;
+                const raw = next.value.trim();
+                if (!raw) continue;
 
-            const entry = JSON.parse(raw) as WorkspaceBackupLine;
+                const entry = JSON.parse(raw) as WorkspaceBackupLine;
 
-            if (entry.type === 'table-start') {
-                currentTable = entry.table;
-                continue;
-            }
-            if (entry.type === 'table-end') {
-                currentTable = null;
-                progress.completedTables += 1;
-                emitProgress(progress, onProgress);
-                continue;
-            }
-            if (entry.type === 'rows') {
-                if (!currentTable) {
-                    throw new Error('Encountered rows before table start.');
+                if (entry.type === 'table-start') {
+                    currentTable = entry.table;
+                    continue;
                 }
-                const table = tableByName.get(currentTable);
-                if (!table) {
-                    throw new Error(`Unknown table ${currentTable} in backup.`);
-                }
-                const inbound = inboundMap.get(currentTable) ?? true;
-
-                if (currentTable === 'file_blobs') {
-                    const typedRows = entry.rows as Array<{
-                        hash: string;
-                        blob: { data: string; type: string };
-                    }>;
-                    const payload = typedRows.map((row) => ({
-                        hash: row.hash,
-                        blob: base64ToBlob(row.blob),
-                    }));
-                    if (overwriteValues) {
-                        await table.bulkPut(payload);
-                    } else {
-                        await handleConflict(currentTable, () =>
-                            table.bulkAdd(payload)
-                        );
-                    }
-                    progress.completedRows += payload.length;
+                if (entry.type === 'table-end') {
+                    currentTable = null;
+                    progress.completedTables += 1;
                     emitProgress(progress, onProgress);
                     continue;
                 }
-
-                if (inbound) {
-                    const payload = entry.rows as Array<
-                        Record<string, unknown>
-                    >;
-                    if (overwriteValues) {
-                        await table.bulkPut(payload as any[]);
-                    } else {
-                        await handleConflict(currentTable, () =>
-                            table.bulkAdd(payload as any[])
-                        );
+                if (entry.type === 'rows') {
+                    if (!currentTable) {
+                        throw new Error('Encountered rows before table start.');
                     }
-                    progress.completedRows += payload.length;
-                    emitProgress(progress, onProgress);
-                } else {
-                    const tuples = entry.rows as Array<{
-                        key: IndexableType;
-                        value: unknown;
-                    }>;
-                    if (overwriteValues) {
-                        await table.bulkPut(
-                            tuples.map((tuple) => tuple.value as any),
-                            tuples.map((tuple) => tuple.key) as any
-                        );
+                    const table = tableByName.get(currentTable);
+                    if (!table) {
+                        throw new Error(`Unknown table ${currentTable} in backup.`);
+                    }
+                    const inbound = inboundMap.get(currentTable) ?? true;
+
+                    if (currentTable === 'file_blobs') {
+                        const typedRows = entry.rows as Array<{
+                            hash: string;
+                            blob: { data: string; type: string };
+                        }>;
+                        const payload = typedRows.map((row) => ({
+                            hash: row.hash,
+                            blob: base64ToBlob(row.blob),
+                        }));
+                        if (overwriteValues) {
+                            await table.bulkPut(payload);
+                        } else {
+                            await handleConflict(currentTable, () =>
+                                table.bulkAdd(payload)
+                            );
+                        }
+                        progress.completedRows += payload.length;
+                        emitProgress(progress, onProgress);
+                        continue;
+                    }
+
+                    if (inbound) {
+                        const payload = entry.rows as Array<
+                            Record<string, unknown>
+                        >;
+                        if (overwriteValues) {
+                            await table.bulkPut(payload as any[]);
+                        } else {
+                            await handleConflict(currentTable, () =>
+                                table.bulkAdd(payload as any[])
+                            );
+                        }
+                        progress.completedRows += payload.length;
+                        emitProgress(progress, onProgress);
                     } else {
-                        await handleConflict(currentTable, () =>
-                            table.bulkAdd(
+                        const tuples = entry.rows as Array<{
+                            key: IndexableType;
+                            value: unknown;
+                        }>;
+                        if (overwriteValues) {
+                            await table.bulkPut(
                                 tuples.map((tuple) => tuple.value as any),
                                 tuples.map((tuple) => tuple.key) as any
-                            )
-                        );
+                            );
+                        } else {
+                            await handleConflict(currentTable, () =>
+                                table.bulkAdd(
+                                    tuples.map((tuple) => tuple.value as any),
+                                    tuples.map((tuple) => tuple.key) as any
+                                )
+                            );
+                        }
+                        progress.completedRows += tuples.length;
+                        emitProgress(progress, onProgress);
                     }
-                    progress.completedRows += tuples.length;
-                    emitProgress(progress, onProgress);
+                    continue;
                 }
-                continue;
-            }
 
-            if (entry.type === 'end') {
-                break;
+                if (entry.type === 'end') {
+                    break;
+                }
+            }
+        } finally {
+            if (typeof lineIterator.return === 'function') {
+                try {
+                    await Dexie.waitFor(lineIterator.return());
+                } catch {
+                    // ignore iterator cleanup errors
+                }
             }
         }
     });
