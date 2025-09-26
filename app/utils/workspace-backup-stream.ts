@@ -401,14 +401,12 @@ export async function importWorkspaceStream({
     overwriteValues: boolean;
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }): Promise<void> {
-    const lines = iterateLinesFromBlob(file);
-
-    const firstLine = await lines.next();
-    if (firstLine.done || !firstLine.value) {
+    const lineIterator = iterateLinesFromBlob(file);
+    const firstEntry = await lineIterator.next();
+    if (firstEntry.done || !firstEntry.value) {
         throw new Error('Backup file is empty.');
     }
-
-    const header = JSON.parse(firstLine.value) as WorkspaceBackupHeaderLine;
+    const header = JSON.parse(firstEntry.value) as WorkspaceBackupHeaderLine;
     if (
         header.type !== 'meta' ||
         header.format !== WORKSPACE_BACKUP_FORMAT ||
@@ -447,7 +445,7 @@ export async function importWorkspaceStream({
         let currentTable: string | null = null;
 
         while (true) {
-            const next = await lines.next();
+            const next = await Dexie.waitFor(lineIterator.next());
             if (next.done) break;
             const raw = next.value.trim();
             if (!raw) continue;
