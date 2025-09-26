@@ -20,7 +20,7 @@ self.onmessage = (event) => {
     }
 
     const data = event.data;
-    console.info('[StreamSaver][sw] message received', data);
+    console.info('[StreamSaver][sw] onmessage', data);
     const baseScope = self.registration.scope.endsWith('/')
         ? self.registration.scope
         : `${self.registration.scope}/`;
@@ -50,7 +50,6 @@ self.onmessage = (event) => {
     }
 
     map.set(downloadUrl, metadata);
-    console.info('[StreamSaver][sw] stored download URL', downloadUrl);
     port.postMessage({ download: downloadUrl });
 };
 
@@ -98,10 +97,6 @@ self.onfetch = (event) => {
     const [stream, data, port] = hijacke;
 
     map.delete(url);
-    console.info('[StreamSaver][sw] responding with stream', {
-        url,
-        hasStream: Boolean(stream),
-    });
 
     // Not comfortable letting any user control all headers
     // so we only copy over the length & disposition

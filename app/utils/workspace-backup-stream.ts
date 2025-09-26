@@ -71,56 +71,7 @@ async function writeLine(
     line: WorkspaceBackupLine
 ) {
     const text = JSON.stringify(line) + '\n';
-    const chunk = textEncoder.encode(text);
-
-    const summary =
-        line.type === 'meta'
-            ? {
-                  type: line.type,
-                  tables: line.tables.length,
-                  createdAt: line.createdAt,
-              }
-            : line.type === 'rows'
-              ? {
-                    type: line.type,
-                    table: line.table,
-                    rows: line.rows.length,
-                    bytes: chunk.byteLength,
-                }
-              : line.type === 'table-start' || line.type === 'table-end'
-                ? { type: line.type, table: line.table }
-                : { type: line.type };
-
-    if (line.type !== 'rows') {
-        console.info('[workspace-backup] writeLine begin', summary);
-    } else {
-        console.debug('[workspace-backup] writeLine enqueue rows', summary);
-    }
-
-    const writeResult = writer.write(chunk);
-    const warnLabel = `[workspace-backup] writeLine waiting (${summary.type}${
-        'table' in summary ? `:${(summary as any).table}` : ''
-    })`;
-    const warnTimeout =
-        line.type !== 'rows'
-            ? setTimeout(() => {
-                  console.warn(warnLabel, summary);
-              }, 5000)
-            : undefined;
-
-    try {
-        if (writeResult && typeof (writeResult as PromiseLike<void>).then === 'function') {
-            await writeResult;
-        }
-    } finally {
-        if (warnTimeout) {
-            clearTimeout(warnTimeout);
-        }
-    }
-
-    if (line.type !== 'rows') {
-        console.info('[workspace-backup] writeLine complete', summary);
-    }
+    await writer.write(textEncoder.encode(text));
 }
 
 function emitProgress(
@@ -190,9 +141,6 @@ export async function streamWorkspaceExport({
     chunkSize?: number;
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }): Promise<void> {
-    console.info('[workspace-backup] stream export via File System Access API', {
-        chunkSize,
-    });
     const writable = await fileHandle.createWritable();
     const writer: WorkspaceBackupWriter = {
         write: (chunk) => writable.write(chunk as any),
@@ -223,7 +171,6 @@ export async function streamWorkspaceExportToWritable({
         close: async () => {
             try {
                 await writable.close();
-                console.info('[workspace-backup] writable stream closed');
             } catch (error) {
                 try {
                     await (writable as any).abort?.();
@@ -239,11 +186,6 @@ export async function streamWorkspaceExportToWritable({
             }
         },
     };
-
-    console.info('[workspace-backup] stream export to writable', {
-        chunkSize,
-        hasReleaseLock: typeof writable.releaseLock === 'function',
-    });
 
     await streamWorkspaceExportCore({
         db,
@@ -278,10 +220,6 @@ async function streamWorkspaceExportCore({
             }))
         );
 
-        console.info('[workspace-backup] export will process tables', {
-            tables: summaries.map((t) => ({ name: t.name, rows: t.rowCount })),
-        });
-
         const header: WorkspaceBackupHeaderLine = {
             type: 'meta',
             format: WORKSPACE_BACKUP_FORMAT,
@@ -303,10 +241,6 @@ async function streamWorkspaceExportCore({
 
         for (const summary of summaries) {
             const table = db.table(summary.name);
-            console.info('[workspace-backup] table export start', {
-                table: summary.name,
-                rows: summary.rowCount,
-            });
             await writeLine(writer, {
                 type: 'table-start',
                 table: summary.name,
@@ -340,11 +274,6 @@ async function streamWorkspaceExportCore({
                     hasMore = false;
                     break;
                 }
-
-                console.debug('[workspace-backup] rows batch ready', {
-                    table: summary.name,
-                    batchSize: rows.length,
-                });
 
                 let keys: IndexableType[] | undefined;
 
@@ -434,12 +363,6 @@ async function streamWorkspaceExportCore({
 
             progress.completedTables += 1;
             emitProgress(progress, onProgress);
-
-            console.info('[workspace-backup] table export completed', {
-                table: summary.name,
-                processedRows: progress.completedRows,
-                completedTables: progress.completedTables,
-            });
         }
 
         await writeLine(writer, { type: 'end' });
@@ -447,14 +370,9 @@ async function streamWorkspaceExportCore({
         progress.completedRows = progress.totalRows;
         progress.completedTables = progress.totalTables;
         emitProgress(progress, onProgress);
-        console.info('[workspace-backup] export finished', {
-            totalTables: progress.totalTables,
-            totalRows: progress.totalRows,
-        });
     } finally {
         try {
             await writer.close();
-            console.info('[workspace-backup] writer closed');
         } catch (closeError) {
             console.warn(
                 '[workspace-backup] Failed to close export stream',

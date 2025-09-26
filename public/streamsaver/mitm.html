@@ -43,17 +43,18 @@
         return navigator.serviceWorker
             .getRegistration('./')
             .then((swReg) => {
-                const scriptUrl = swReg?.active?.scriptURL || swReg?.installing?.scriptURL || swReg?.waiting?.scriptURL;
+                const scriptUrl =
+                    swReg?.active?.scriptURL ||
+                    swReg?.installing?.scriptURL ||
+                    swReg?.waiting?.scriptURL;
                 if (
                     !swReg ||
                     !(scriptUrl && scriptUrl.includes('/streamsaver/sw.js'))
                 ) {
-                    console.info('[StreamSaver][mitm] registering dedicated worker');
                     return navigator.serviceWorker.register('sw.js', {
                         scope: './',
                     });
                 }
-                console.info('[StreamSaver][mitm] using existing worker', scriptUrl);
                 return swReg;
             })
             .then((swReg) => {
