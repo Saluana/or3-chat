@@ -62,7 +62,7 @@
             </div>
             <div class="flex items-center flex-wrap justify-between gap-3">
                 <UButton
-                    variant="basic"
+                    variant="light"
                     class="retro-btn"
                     :disabled="!canExport"
                     :loading="exporting"
@@ -113,7 +113,7 @@
                     >
                         <div class="flex items-start gap-3 text-left">
                             <UIcon
-                                name="i-ph-cloud-arrow-up-duotone"
+                                name="pixelarticons:cloud-upload"
                                 class="retro-upload-icon"
                                 aria-hidden="true"
                             />
@@ -333,14 +333,17 @@
 
                 <div class="flex flex-wrap gap-3">
                     <UButton
-                        size="sm"
                         color="primary"
-                        variant="basic"
+                        variant="light"
                         class="retro-btn"
                         :disabled="!canImport"
                         :loading="importing"
                         @click="onImport"
                     >
+                        <UIcon
+                            name="pixelarticons:briefcase-upload"
+                            class="h-4 w-4 mr-0.5"
+                        />
                         Import workspace
                     </UButton>
                 </div>
@@ -581,13 +584,6 @@ const numberFormatter = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 0,
 });
 
-const lastExportLabel = computed(() =>
-    lastExportAt.value ? formatDate(lastExportAt.value) : 'never'
-);
-const lastImportLabel = computed(() =>
-    lastImportAt.value ? formatDate(lastImportAt.value) : 'never'
-);
-
 const lastAnnouncement = ref('');
 
 function announce(message: string) {
@@ -616,19 +612,6 @@ function formatBytes(size: number) {
 
 function formatNumber(value: number) {
     return numberFormatter.format(value);
-}
-
-function setImportMode(mode: WorkspaceImportMode) {
-    if (state.importMode.value === mode) return;
-    state.importMode.value = mode;
-    if (mode === 'replace') {
-        state.overwriteValues.value = false;
-    }
-}
-
-function toggleOverwrite(event: Event) {
-    const target = event.target as HTMLInputElement;
-    state.overwriteValues.value = !!target.checked;
 }
 
 function resetFileInputValue() {

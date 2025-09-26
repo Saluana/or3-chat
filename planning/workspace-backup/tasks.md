@@ -29,29 +29,29 @@ created: 2025-09-25
 
 ## 4. Warning and confirmation flow
 
--   [ ] Create `WorkspaceBackupWarningModal.vue` (or reuse existing modal) in `app/components/modal/dashboard/workspace/` with forced acknowledgement checkbox. _(Requirements: 3.1)_
+-   [x] Create `WorkspaceBackupWarningModal.vue` (or reuse existing modal) in `app/components/modal/dashboard/workspace/` with forced acknowledgement checkbox. _(Requirements: 3.1)_
 -   [ ] Block import execution until modal acknowledgement is confirmed; abort cleanly on cancel. _(Requirements: 3.1)_
--   [ ] Display summary of selected mode (replace vs append) in the modal to reinforce consequences. _(Requirements: 3.1, 4.1)_
+-   [x] Display summary of selected mode (replace vs append) in the modal to reinforce consequences. _(Requirements: 3.1, 4.1)_
 
 ## 5. Append vs replace behavior
 
--   [ ] Implement import execution branch: replace → `importDB` with `clearTablesBeforeImport: true`. _(Requirements: 4.1)_
--   [ ] Implement append branch → `importInto` with `overwriteValues` toggle, conflict handling, and toast guidance. _(Requirements: 4.1)_
--   [ ] Surface conflict summary to the user when overwrite is disabled and collisions occur. _(Requirements: 4.1, 5.1)_
+-   [x] Implement import execution branch: replace → `importDB` with `clearTablesBeforeImport: true`. _(Requirements: 4.1)_
+-   [x] Implement append branch → `importInto` with `overwriteValues` toggle, conflict handling, and toast guidance. _(Requirements: 4.1)_
+-   [x] Surface conflict summary to the user when overwrite is disabled and collisions occur. _(Requirements: 4.1, 5.1)_
 
 ## 6. UX polish & accessibility
 
--   [ ] Add progress text (tables completed, rows processed) plus aria-live status updates. _(Requirements: 1.1, 2.1, 6.1)_
--   [ ] Ensure controls auto-reset on success/failure and revoke object URLs after export. _(Requirements: 6.1)_
--   [ ] Add keyboard/focus management for modal and main CTAs. _(Requirements: 3.1, 6.1)_
--   [ ] Reset composable state on component unmount and surface toast when the Dashboard dynamic import fails. _(Requirements: 6.1, 8.1)_
+-   [x] Add progress text (tables completed, rows processed) plus aria-live status updates. _(Requirements: 1.1, 2.1, 6.1)_
+-   [x] Ensure controls auto-reset on success/failure and revoke object URLs after export. _(Requirements: 6.1)_
+-   [x] Add keyboard/focus management for modal and main CTAs. _(Requirements: 3.1, 6.1)_
+-   [x] Reset composable state on component unmount and surface toast when the Dashboard dynamic import fails. _(Requirements: 6.1, 8.1)_
 
 ## 7. Testing & QA
 
--   [ ] Unit tests for composable (modes, validation, error paths) using mocked Dexie export/import. _(Requirements: 1.1, 2.1, 5.1, 6.1)_
--   [ ] Component tests for page UI covering modal flow, state toggles, and accessibility attributes. _(Requirements: 3.1, 4.1, 6.1, 7.1)_
--   [ ] E2E smoke (Playwright/Cypress) simulating export+import loops with stubbed Blob APIs. _(Requirements: 1.1, 2.1, 3.1, 4.1)_
--   [ ] Manual regression checklist: replace import, append import, corrupt file rejection, quota error toast. _(Requirements: 1.1, 2.1, 3.1, 5.1)_
+-   [x] Unit tests for composable (modes, validation, error paths) using mocked Dexie export/import. _(Requirements: 1.1, 2.1, 5.1, 6.1)_
+-   [x] Component tests for page UI covering modal flow, state toggles, and accessibility attributes. _(Requirements: 3.1, 4.1, 6.1, 7.1)_
+-   [x] E2E smoke (Playwright/Cypress) simulating export+import loops with stubbed Blob APIs. _(Requirements: 1.1, 2.1, 3.1, 4.1)_
+-   [x] Manual regression checklist: replace import, append import, corrupt file rejection, quota error toast. _(Requirements: 1.1, 2.1, 3.1, 5.1)_
 
 ## 8. Documentation & rollout
 

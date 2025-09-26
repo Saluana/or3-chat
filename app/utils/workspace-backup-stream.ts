@@ -311,7 +311,9 @@ async function streamWorkspaceExportCore({
                             base64.data.length +
                             base64.type.length +
                             row.hash.length;
-                        if (serializedBytes >= FILE_BLOBS_MAX_SERIALIZED_BYTES) {
+                        if (
+                            serializedBytes >= FILE_BLOBS_MAX_SERIALIZED_BYTES
+                        ) {
                             await flushPayload();
                         }
                     }
@@ -512,7 +514,9 @@ export async function importWorkspaceStream({
                     }
                     const table = tableByName.get(currentTable);
                     if (!table) {
-                        throw new Error(`Unknown table ${currentTable} in backup.`);
+                        throw new Error(
+                            `Unknown table ${currentTable} in backup.`
+                        );
                     }
                     const inbound = inboundMap.get(currentTable) ?? true;
 
@@ -581,7 +585,7 @@ export async function importWorkspaceStream({
         } finally {
             if (typeof lineIterator.return === 'function') {
                 try {
-                    await Dexie.waitFor(lineIterator.return());
+                    await Dexie.waitFor(lineIterator.return(undefined));
                 } catch {
                     // ignore iterator cleanup errors
                 }
