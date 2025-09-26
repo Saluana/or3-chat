@@ -82,7 +82,11 @@ async function loadStreamSaver() {
         if (!streamSaverPromise) {
             streamSaverPromise = import('streamsaver');
         }
-        return await streamSaverPromise;
+        const module = await streamSaverPromise;
+        console.info('[workspace-backup] StreamSaver module loaded', {
+            hasDefault: Boolean((module as any)?.default),
+        });
+        return module;
     } catch (error) {
         streamSaverPromise = null;
         console.warn('[workspace-backup] Failed to load StreamSaver', error);
@@ -166,6 +170,10 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.progress.value = 0;
         state.error.value = null;
 
+        console.info('[workspace-backup] exportWorkspace invoked', {
+            chunkSize: STREAM_CHUNK_SIZE,
+        });
+
         const exportStartedAt = Date.now();
         let exportTelemetry: {
             format: 'stream';
@@ -214,9 +222,19 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     progress.completedTables + progress.completedRows;
                 state.progress.value =
                     total > 0 ? Math.round((completed / total) * 100) : 0;
+                console.info('[workspace-backup] progress update', {
+                    completedTables: progress.completedTables,
+                    totalTables: progress.totalTables,
+                    completedRows: progress.completedRows,
+                    totalRows: progress.totalRows,
+                    pct: state.progress.value,
+                });
             };
 
             if (typeof showSaveFilePicker === 'function') {
+                console.info('[workspace-backup] using File System Access API', {
+                    chunkSize: STREAM_CHUNK_SIZE,
+                });
                 const fileHandle = await showSaveFilePicker({
                     suggestedName,
                     types: [
@@ -243,6 +261,13 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 const hasServiceWorker =
                     hasNavigator && 'serviceWorker' in navigator;
 
+                console.info('[workspace-backup] evaluating StreamSaver export', {
+                    hasWindow,
+                    hasWritableStream,
+                    hasServiceWorker,
+                    chunkSize: STREAM_CHUNK_SIZE,
+                });
+
                 if (!(hasWindow && hasWritableStream && hasServiceWorker)) {
                     throw err(
                         'ERR_INTERNAL',
@@ -266,11 +291,41 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 const streamSaverApi =
                     streamSaver as typeof import('streamsaver');
 
+                if (
+                    navigator?.serviceWorker?.getRegistration &&
+                    typeof navigator.serviceWorker.getRegistration ===
+                        'function'
+                ) {
+                    try {
+                        const reg = await navigator.serviceWorker.getRegistration(
+                            '/streamsaver/'
+                        );
+                        console.info(
+                            '[workspace-backup] streamsaver registration',
+                            {
+                                hasRegistration: Boolean(reg),
+                                scope: reg?.scope,
+                            }
+                        );
+                    } catch (error) {
+                        console.warn(
+                            '[workspace-backup] failed to query streamsaver registration',
+                            error
+                        );
+                    }
+                }
+
                 const localMitmUrl = `${window.location.origin}/streamsaver/mitm.html?version=2.0.0`;
                 if (streamSaverApi.mitm !== localMitmUrl) {
                     streamSaverApi.mitm = localMitmUrl;
+                    console.info('[workspace-backup] StreamSaver mitm updated', {
+                        mitm: streamSaverApi.mitm,
+                    });
                 }
 
+                console.info('[workspace-backup] creating StreamSaver write stream', {
+                    suggestedName,
+                });
                 const fileStream = streamSaverApi.createWriteStream(
                     suggestedName,
                     {
@@ -286,6 +341,11 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                         ? fileStream.getWriter()
                         : null;
 
+                console.info('[workspace-backup] StreamSaver writer ready', {
+                    hasWriter: Boolean(writer),
+                    supportsAbort: Boolean((writer as any)?.abort),
+                });
+
                 if (!writer) {
                     throw err(
                         'ERR_INTERNAL',
@@ -293,6 +353,54 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                         { tags: { domain: 'db', action: 'export' } }
                     );
                 }
+
+                const originalWrite = writer.write.bind(writer);
+                writer.write = ((chunk: Uint8Array) => {
+                    const bytes = chunk?.byteLength ?? 0;
+                    const startedAt = Date.now();
+                    console.info('[workspace-backup] writer.write start', {
+                        bytes,
+                    });
+                    const result = originalWrite(chunk);
+                    if (result && typeof (result as PromiseLike<void>).then === 'function') {
+                        return (result as PromiseLike<void>).then(
+                            () => {
+                                console.info(
+                                    '[workspace-backup] writer.write resolved',
+                                    {
+                                        bytes,
+                                        ms: Date.now() - startedAt,
+                                    }
+                                );
+                            },
+                            (error) => {
+                                console.error(
+                                    '[workspace-backup] writer.write rejected',
+                                    error
+                                );
+                                throw error;
+                            }
+                        );
+                    }
+                    console.info('[workspace-backup] writer.write sync', {
+                        bytes,
+                        ms: Date.now() - startedAt,
+                    });
+                    return result as any;
+                }) as typeof writer.write;
+
+                const originalClose = writer.close.bind(writer);
+                writer.close = (() => {
+                    console.info('[workspace-backup] writer.close start');
+                    const result = originalClose();
+                    if (result && typeof (result as PromiseLike<void>).then === 'function') {
+                        return (result as PromiseLike<void>).then(() => {
+                            console.info('[workspace-backup] writer.close resolved');
+                        });
+                    }
+                    console.info('[workspace-backup] writer.close sync');
+                    return result as any;
+                }) as typeof writer.close;
 
                 await streamWorkspaceExportToWritable({
                     db,
@@ -310,6 +418,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 durationMs: Date.now() - exportStartedAt,
             });
         } catch (e) {
+            console.error('[workspace-backup] exportWorkspace error', e);
             if ((e as DOMException)?.name === 'AbortError') {
                 state.currentStep.value = 'idle';
                 state.progress.value = 0;

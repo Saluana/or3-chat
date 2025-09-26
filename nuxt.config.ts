@@ -41,8 +41,22 @@ export default defineNuxtConfig({
             navigateFallbackDenylist: [
                 /\/openrouter-callback$/,
                 /\/openrouter-callback\?.*$/,
+                /\/streamsaver(?:\/.*)?$/,
+            ],
+            navigateFallback: '/index.html',
+            manifestTransforms: [
+                (entries) => ({
+                    manifest: entries.filter(
+                        (entry) =>
+                            entry.url !== 'streamsaver' &&
+                            entry.url !== 'streamsaver/index.html'
+                    ),
+                    warnings: [],
+                }),
             ],
             globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+            globIgnores: ['streamsaver/**'],
+            importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
                 // Auth callback: prefer fresh network, but fall back to cached prerender if offline
                 {
