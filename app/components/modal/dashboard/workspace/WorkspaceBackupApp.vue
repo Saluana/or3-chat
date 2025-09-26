@@ -72,20 +72,17 @@
                     :value="state.progress"
                     :max="100"
                 />
-                <div class="flex items-center gap-3 flex-wrap text-xs">
-                    <span class="font-medium">Status:</span>
-                    <span>
-                        <template v-if="exporting">
-                            Exporting… {{ state.progress }}%
-                        </template>
-                        <template v-else-if="lastExportStatus === 'done'">
-                            Last export {{ lastExportLabel }}
-                        </template>
-                        <template v-else-if="lastExportStatus === 'error'">
-                            {{ exportError?.message || 'Export failed' }}
-                        </template>
-                        <template v-else> Ready to export </template>
-                    </span>
+                <div class="flex items-center gap-2 flex-wrap text-xs">
+                    <UBadge
+                        :icon="exportStatusBadge.icon"
+                        :class="[
+                            'retro-badge',
+                            badgeToneClass(exportStatusBadge.color),
+                        ]"
+                    >
+                        {{ exportStatusBadge.label }}
+                    </UBadge>
+                    <span class="opacity-80">{{ exportStatusText }}</span>
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
@@ -123,8 +120,8 @@
                 data. Append keeps current records; replace wipes everything
                 first.
             </p>
-            <div class="space-y-3">
-                <div class="flex flex-wrap gap-3 items-center">
+            <div class="space-y-4">
+                <div class="retro-upload-panel">
                     <input
                         ref="fileInput"
                         type="file"
@@ -132,31 +129,75 @@
                         class="hidden"
                         @change="onFilePicked"
                     />
-                    <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-btn"
-                        :disabled="importing || peeking"
-                        @click="onBrowse"
+                    <div
+                        class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
                     >
-                        Choose backup file
-                    </UButton>
-                    <span class="text-xs opacity-70">
-                        <template v-if="selectedFile">
-                            {{ selectedFile.name }}
-                            ({{ formatBytes(selectedFile.size) }})
-                        </template>
-                        <template v-else> No file selected yet </template>
-                    </span>
-                    <UButton
-                        v-if="selectedFile"
-                        size="sm"
-                        variant="subtle"
-                        class="retro-btn"
-                        @click="clearSelection"
-                    >
-                        Clear
-                    </UButton>
+                        <div class="flex items-start gap-3 text-left">
+                            <UIcon
+                                name="i-ph-cloud-arrow-up-duotone"
+                                class="retro-upload-icon"
+                                aria-hidden="true"
+                            />
+                            <div class="space-y-1">
+                                <p
+                                    class="font-heading text-xs uppercase tracking-[0.14em] text-[var(--md-on-surface)]"
+                                >
+                                    Select backup file
+                                </p>
+                                <p class="text-xs opacity-70 leading-snug">
+                                    {{ selectedFileSummary }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <UButton
+                                size="sm"
+                                variant="basic"
+                                class="retro-btn"
+                                :disabled="importing || peeking"
+                                @click="onBrowse"
+                            >
+                                Browse
+                            </UButton>
+                            <UButton
+                                v-if="selectedFile"
+                                size="sm"
+                                color="error"
+                                variant="basic"
+                                class="retro-btn"
+                                :disabled="importing || peeking"
+                                @click="clearSelection"
+                            >
+                                Clear
+                            </UButton>
+                        </div>
+                    </div>
+
+                    <Transition name="fade">
+                        <div
+                            v-if="selectedFile"
+                            class="retro-file-card"
+                            aria-live="polite"
+                        >
+                            <div class="space-y-1">
+                                <p class="font-semibold text-sm leading-tight">
+                                    {{ selectedFile.name }}
+                                </p>
+                                <p class="text-xs opacity-70">
+                                    Size • {{ formatBytes(selectedFile.size) }}
+                                </p>
+                            </div>
+                            <UBadge
+                                icon="i-ph-file-duotone"
+                                :class="[
+                                    'retro-badge',
+                                    badgeToneClass(fileBadgeColor),
+                                ]"
+                            >
+                                {{ fileBadgeLabel }}
+                            </UBadge>
+                        </div>
+                    </Transition>
                 </div>
 
                 <UAlert
@@ -178,84 +219,120 @@
                     {{ peekError.message }}
                 </UAlert>
 
-                <div
-                    v-if="backupMeta"
-                    class="border-2 border-[var(--md-inverse-surface)] rounded-[3px] p-3 space-y-2 bg-[color-mix(in_oklab,var(--md-surface) 96%,var(--md-surface-variant) 4%)]"
-                    aria-live="polite"
-                >
-                    <div class="flex flex-wrap justify-between text-xs">
-                        <span class="font-medium">Database</span>
-                        <span class="tabular-nums">{{
-                            backupMeta.databaseName
-                        }}</span>
-                    </div>
-                    <div class="flex flex-wrap justify-between text-xs">
-                        <span class="font-medium">Schema version</span>
-                        <span class="tabular-nums">{{
-                            backupMeta.databaseVersion
-                        }}</span>
-                    </div>
-                    <div class="text-xs font-medium">Tables</div>
+                <Transition name="fade">
                     <div
-                        class="max-h-40 overflow-auto border-2 border-dashed border-[var(--md-outline-variant)] rounded-[3px] p-2 space-y-1"
+                        v-if="backupMeta"
+                        class="retro-meta-panel"
+                        aria-live="polite"
                     >
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p
+                                    class="text-xs font-semibold uppercase tracking-wide"
+                                >
+                                    {{ backupMeta.databaseName }}
+                                </p>
+                                <p class="text-[11px] opacity-70">
+                                    Schema version
+                                    {{ backupMeta.databaseVersion }}
+                                </p>
+                            </div>
+                            <UBadge
+                                icon="i-ph-database-duotone"
+                                :class="[
+                                    'retro-badge',
+                                    badgeToneClass('primary'),
+                                ]"
+                            >
+                                {{ formatNumber(backupMeta.tables.length) }}
+                                tables
+                            </UBadge>
+                        </div>
                         <div
-                            v-for="table in backupMeta.tables"
-                            :key="table.name"
-                            class="flex justify-between text-xs"
+                            class="retro-meta-table"
+                            role="list"
+                            aria-label="Tables included in backup"
                         >
-                            <span>{{ table.name }}</span>
-                            <span class="tabular-nums">
-                                {{ formatNumber(table.rowCount) }} rows
-                            </span>
+                            <div
+                                v-for="table in backupMeta.tables"
+                                :key="table.name"
+                                class="retro-meta-row"
+                                role="listitem"
+                            >
+                                <span>{{ table.name }}</span>
+                                <span class="tabular-nums">
+                                    {{ formatNumber(table.rowCount) }} rows
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </Transition>
 
-                <div class="space-y-2">
-                    <div class="flex flex-wrap gap-2" role="radiogroup">
-                        <UButton
-                            size="sm"
-                            variant="basic"
-                            class="retro-chip"
-                            :class="importMode === 'replace' ? 'active' : ''"
-                            :aria-pressed="importMode === 'replace'"
-                            :disabled="importMode === 'replace'"
-                            @click="setImportMode('replace')"
+                <div class="space-y-3">
+                    <div class="space-y-2">
+                        <p
+                            class="text-xs font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
                         >
-                            Replace (wipe current data)
-                        </UButton>
-                        <UButton
-                            size="sm"
-                            variant="basic"
-                            class="retro-chip"
-                            :class="importMode === 'append' ? 'active' : ''"
-                            :aria-pressed="importMode === 'append'"
-                            :disabled="importMode === 'append'"
-                            @click="setImportMode('append')"
-                        >
-                            Append (keep existing)
-                        </UButton>
+                            Import mode
+                        </p>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <UButton
+                                v-for="option in importModeOptions"
+                                :key="option.value"
+                                variant="ghost"
+                                color="primary"
+                                class="h-fit"
+                                :class="{
+                                    'bg-primary/20 hover:bg-primary/20':
+                                        importMode === option.value,
+                                }"
+                                block
+                                @click="importModeModel = option.value"
+                                :aria-pressed="importMode === option.value"
+                            >
+                                <div class="flex items-start gap-3 w-full">
+                                    <UIcon
+                                        :name="option.icon"
+                                        class="retro-choice-icon"
+                                        aria-hidden="true"
+                                    />
+                                    <div class="space-y-1 text-left">
+                                        <p
+                                            class="font-semibold text-sm leading-tight"
+                                        >
+                                            {{ option.label }}
+                                        </p>
+                                        <p
+                                            class="text-xs opacity-80 leading-snug"
+                                        >
+                                            {{ option.description }}
+                                        </p>
+                                    </div>
+                                    <UIcon
+                                        v-if="importMode === option.value"
+                                        name="i-ph-check-circle-duotone"
+                                        class="ml-auto text-lg text-[var(--md-primary)]"
+                                    />
+                                </div>
+                            </UButton>
+                        </div>
                     </div>
-                    <label
-                        class="flex items-center gap-2 text-xs"
-                        :class="importMode === 'append' ? '' : 'opacity-60'"
-                    >
-                        <input
-                            type="checkbox"
-                            :checked="overwriteValues"
-                            :disabled="importMode !== 'append'"
-                            @change="toggleOverwrite"
-                        />
-                        Overwrite records on key conflict when appending
-                    </label>
-                </div>
 
+                    <UCheckbox
+                        v-model="overwriteValuesModel"
+                        size="sm"
+                        :disabled="overwriteDisabled"
+                        class="retro-checkbox"
+                        label="Overwrite records on key conflict"
+                        description="When disabled, conflicting rows are skipped and reported."
+                    />
+                </div>
+                <!--
                 <UAlert
                     v-if="importWarning"
                     color="warning"
                     variant="subtle"
-                    icon="pixelarticons:alert"
+                    icon="pixelarticons:warning"
                     class="text-xs"
                 >
                     {{ importWarning }}
@@ -269,6 +346,7 @@
                 >
                     {{ importError.message }}
                 </UAlert>
+                -->
 
                 <div class="space-y-2">
                     <UProgress
@@ -277,28 +355,12 @@
                         :value="state.progress"
                         :max="100"
                     />
-                    <div class="flex items-center gap-3 text-xs flex-wrap">
-                        <span class="font-medium">Status:</span>
-                        <span>
-                            <template v-if="importing">
-                                Importing workspace… {{ state.progress }}%
-                            </template>
-                            <template v-else-if="lastImportStatus === 'done'">
-                                Last import {{ lastImportLabel }}
-                            </template>
-                            <template v-else-if="lastImportStatus === 'error'">
-                                {{ importError?.message || 'Import failed' }}
-                            </template>
-                            <template v-else>
-                                Select a file and validate metadata
-                            </template>
-                        </span>
-                    </div>
                 </div>
 
                 <div class="flex flex-wrap gap-3">
                     <UButton
                         size="sm"
+                        color="primary"
                         variant="basic"
                         class="retro-btn"
                         :disabled="!canImport"
@@ -343,6 +405,18 @@ const pendingAction = ref<'export' | 'import' | 'peek' | null>(null);
 const { state, exportWorkspace, peekBackup, importWorkspace, reset } =
     useWorkspaceBackup();
 
+type BadgeTone =
+    | 'neutral'
+    | 'primary'
+    | 'success'
+    | 'error'
+    | 'info'
+    | 'warning';
+
+function badgeToneClass(tone?: BadgeTone | null) {
+    return tone ? `retro-badge--${tone}` : 'retro-badge--neutral';
+}
+
 const importing = computed(() => state.isImporting.value);
 const exporting = computed(() => state.isExporting.value);
 const peeking = computed(() => state.currentStep.value === 'peeking');
@@ -352,8 +426,22 @@ const busy = computed(
 );
 
 const backupMeta = computed(() => state.backupMeta.value);
-const importMode = computed(() => state.importMode.value);
-const overwriteValues = computed(() => state.overwriteValues.value);
+const importModeModel = computed<WorkspaceImportMode>({
+    get: () => state.importMode.value,
+    set: (value) => {
+        state.importMode.value = value;
+    },
+});
+
+const overwriteValuesModel = computed({
+    get: () => state.overwriteValues.value,
+    set: (value: boolean) => {
+        state.overwriteValues.value = value;
+    },
+});
+
+const importMode = computed(() => importModeModel.value);
+const overwriteValues = computed(() => overwriteValuesModel.value);
 
 const canExport = computed(
     () => !busy.value && !exporting.value && !importing.value
@@ -368,7 +456,8 @@ const canImport = computed(
 );
 
 const exportStatusText = computed(() => {
-    if (exporting.value) return 'Exporting…';
+    if (exporting.value)
+        return `Streaming backup… ${Math.round(state.progress.value)}%`;
     if (lastExportStatus.value === 'done' && lastExportAt.value)
         return `Last export ${formatDate(lastExportAt.value)}`;
     if (lastExportStatus.value === 'error')
@@ -377,8 +466,9 @@ const exportStatusText = computed(() => {
 });
 
 const importStatusText = computed(() => {
-    if (importing.value) return 'Importing…';
-    if (peeking.value) return 'Validating backup…';
+    if (importing.value)
+        return `Applying backup… ${Math.round(state.progress.value)}%`;
+    if (peeking.value) return 'Validating backup metadata…';
     if (lastImportStatus.value === 'done' && lastImportAt.value)
         return `Last import ${formatDate(lastImportAt.value)}`;
     if (lastImportStatus.value === 'error')
@@ -392,6 +482,115 @@ const importWarning = computed(() => {
     if (importMode.value === 'append' && !overwriteValues.value)
         return 'Append mode keeps existing data; enable overwrite to update conflicting records.';
     return '';
+});
+
+const overwriteDisabled = computed(() => importMode.value !== 'append');
+
+const importModeOptions: Array<{
+    value: WorkspaceImportMode;
+    label: string;
+    description: string;
+    icon: string;
+}> = [
+    {
+        value: 'replace',
+        label: 'Replace workspace',
+        description: 'Clear all local data, then restore from the backup.',
+        icon: 'i-ph-warning-diamond-duotone',
+    },
+    {
+        value: 'append',
+        label: 'Append & merge',
+        description: 'Keep existing records and add new rows from the backup.',
+        icon: 'i-ph-arrows-merge-duotone',
+    },
+];
+
+const selectedFileSummary = computed(() => {
+    if (!selectedFile.value)
+        return 'Accepted formats: .or3.jsonl, .jsonl, .json';
+    return `${selectedFile.value.name} • ${formatBytes(
+        selectedFile.value.size
+    )}`;
+});
+
+const fileBadgeLabel = computed(() => {
+    if (!selectedFile.value) return '';
+    if (peeking.value) return 'Validating…';
+    if (backupMeta.value) return 'Metadata validated';
+    return 'Ready to validate';
+});
+
+const fileBadgeColor = computed(() => {
+    if (!selectedFile.value) return 'neutral' as const;
+    if (peeking.value) return 'info' as const;
+    if (backupMeta.value) return 'success' as const;
+    return 'primary' as const;
+});
+
+const exportStatusBadge = computed(() => {
+    if (exporting.value) {
+        return {
+            color: 'primary' as const,
+            icon: 'i-ph-cloud-arrow-down-duotone',
+            label: `Streaming… ${state.progress.value}%`,
+        };
+    }
+    if (lastExportStatus.value === 'done') {
+        return {
+            color: 'success' as const,
+            icon: 'i-ph-check-circle-duotone',
+            label: 'Export complete',
+        };
+    }
+    if (lastExportStatus.value === 'error') {
+        return {
+            color: 'error' as const,
+            icon: 'i-ph-x-circle-duotone',
+            label: 'Export failed',
+        };
+    }
+    return {
+        color: 'neutral' as const,
+        icon: 'i-ph-floppy-disk-duotone',
+        label: 'Ready to export',
+    };
+});
+
+const importStatusBadge = computed(() => {
+    if (importing.value) {
+        return {
+            color: 'primary' as const,
+            icon: 'i-ph-cloud-arrow-up-duotone',
+            label: `Importing… ${state.progress.value}%`,
+        };
+    }
+    if (peeking.value) {
+        return {
+            color: 'info' as const,
+            icon: 'i-ph-magnifying-glass-duotone',
+            label: 'Validating backup…',
+        };
+    }
+    if (lastImportStatus.value === 'done') {
+        return {
+            color: 'success' as const,
+            icon: 'i-ph-check-circle-duotone',
+            label: 'Import complete',
+        };
+    }
+    if (lastImportStatus.value === 'error') {
+        return {
+            color: 'error' as const,
+            icon: 'i-ph-x-circle-duotone',
+            label: 'Import failed',
+        };
+    }
+    return {
+        color: 'neutral' as const,
+        icon: 'i-ph-folder-open-duotone',
+        label: 'Awaiting backup',
+    };
 });
 
 const exportStatusFormatter = new Intl.DateTimeFormat(undefined, {
@@ -542,6 +741,29 @@ async function onImport() {
     }
 }
 
+watch(importModeModel, (mode, previous) => {
+    if (mode !== previous) {
+        const label =
+            mode === 'replace'
+                ? 'Replace workspace mode selected.'
+                : 'Append & merge mode selected.';
+        announce(label);
+    }
+    if (mode === 'replace') {
+        overwriteValuesModel.value = false;
+    }
+});
+
+watch(overwriteValuesModel, (value, previous) => {
+    if (value === previous) return;
+    if (overwriteDisabled.value) return;
+    announce(
+        value
+            ? 'Overwrite conflicts enabled for append mode.'
+            : 'Overwrite conflicts disabled; conflicting rows will be skipped.'
+    );
+});
+
 watch(
     () => state.currentStep.value,
     (step, previous) => {
@@ -674,40 +896,230 @@ defineExpose({
     opacity: 0.75;
 }
 
-.retro-chip {
+.retro-upload-panel {
+    border: 2px dashed
+        color-mix(in oklab, var(--md-outline-variant) 85%, transparent 15%);
+    border-radius: 6px;
+    padding: 1rem;
+    background: color-mix(
+        in oklab,
+        var(--md-surface) 94%,
+        var(--md-surface-variant) 6%
+    );
+    box-shadow: inset 0 0 0 1px
+        color-mix(in oklab, var(--md-outline-variant) 55%, transparent 45%);
+    transition: border-color 150ms ease, background 150ms ease;
+}
+
+.retro-upload-panel:has(button:hover) {
+    border-color: color-mix(in oklab, var(--md-primary) 60%, transparent 40%);
+}
+
+.retro-upload-icon {
+    font-size: 1.5rem;
+    color: var(--md-primary);
+    flex-shrink: 0;
+}
+
+.retro-file-card {
+    margin-top: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 0.9rem;
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 5px;
+    background: color-mix(
+        in oklab,
+        var(--md-surface) 92%,
+        var(--md-surface-variant) 8%
+    );
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-meta-panel {
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 6px;
+    background: color-mix(
+        in oklab,
+        var(--md-surface) 95%,
+        var(--md-surface-variant) 5%
+    );
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    padding: 1rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.retro-meta-table {
+    max-height: 11rem;
+    overflow-y: auto;
+    border: 2px dashed
+        color-mix(in oklab, var(--md-outline-variant) 75%, transparent 25%);
+    border-radius: 4px;
+    padding: 0.5rem;
+    display: grid;
+    gap: 0.35rem;
+}
+
+.retro-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    padding: 0.2rem 0.35rem;
+    background: color-mix(in oklab, var(--md-surface) 92%, transparent 8%);
+    border-radius: 3px;
+}
+
+.retro-choice-btn {
+    border: 2px solid
+        color-mix(in oklab, var(--md-inverse-surface) 92%, transparent 8%);
+    background: color-mix(
+        in oklab,
+        var(--md-surface) 96%,
+        var(--md-surface-variant) 4%
+    );
+    border-radius: 6px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    padding: 0.75rem;
+    transition: box-shadow 120ms ease, background 120ms ease, color 120ms ease,
+        border-color 120ms ease;
+}
+
+.retro-choice-btn:hover {
+    border-color: var(--md-primary);
+    background: color-mix(
+        in oklab,
+        var(--md-secondary-container) 70%,
+        var(--md-surface) 30%
+    );
+    box-shadow: 3px 3px 0 var(--md-inverse-surface);
+}
+
+.retro-choice-btn:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 3px;
+}
+
+.retro-choice-btn--active {
+    background: color-mix(
+        in oklab,
+        var(--md-primary-container) 85%,
+        var(--md-surface) 15%
+    );
+    color: var(--md-on-primary-container);
+    border-color: var(--md-primary);
+    box-shadow: 3px 3px 0
+        color-mix(
+            in oklab,
+            var(--md-primary) 70%,
+            var(--md-inverse-surface) 30%
+        );
+}
+
+.retro-choice-icon {
+    font-size: 1.4rem;
+    color: currentColor;
+}
+
+.retro-checkbox {
+    --checkbox-border: color-mix(
+        in oklab,
+        var(--md-inverse-surface) 80%,
+        transparent 20%
+    );
+    padding: 0.5rem 0.25rem 0.5rem 0;
+}
+
+.retro-badge {
+    --retro-badge-bg: color-mix(
+        in oklab,
+        var(--md-surface) 96%,
+        var(--md-surface-variant) 4%
+    );
+    --retro-badge-fg: var(--md-on-surface);
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    user-select: none;
-    transition: background-color 120ms ease, color 120ms ease;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    min-height: 1.5rem;
     border: 2px solid var(--md-inverse-surface);
+    border-radius: 4px;
+    background: var(--retro-badge-bg);
+    color: var(--retro-badge-fg);
     box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    border-radius: 3px;
-    background: var(--md-surface);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
     line-height: 1;
 }
 
-.retro-chip:hover {
-    background: var(--md-secondary-container);
-    color: var(--md-on-secondary-container);
+.retro-badge--neutral {
+    --retro-badge-bg: color-mix(
+        in oklab,
+        var(--md-surface) 95%,
+        var(--md-surface-variant) 5%
+    );
+    --retro-badge-fg: var(--md-on-surface);
 }
 
-.retro-chip:active {
-    transform: translate(2px, 2px);
-    box-shadow: 0 0 0 var(--md-inverse-surface);
+.retro-badge--primary,
+.retro-badge--info {
+    --retro-badge-bg: color-mix(
+        in oklab,
+        var(--md-primary-container) 85%,
+        var(--md-surface) 15%
+    );
+    --retro-badge-fg: var(--md-on-primary-container);
 }
 
-.retro-chip.active {
-    background: var(--md-primary-container);
-    color: var(--md-on-primary-container);
+.retro-badge--success {
+    --retro-badge-bg: color-mix(
+        in oklab,
+        var(--md-extended-color-success-color-container) 80%,
+        var(--md-surface) 20%
+    );
+    --retro-badge-fg: var(--md-extended-color-success-on-color-container);
 }
 
-.retro-chip:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 2px;
+.retro-badge--error {
+    --retro-badge-bg: color-mix(
+        in oklab,
+        var(--md-error-container) 85%,
+        var(--md-surface) 15%
+    );
+    --retro-badge-fg: var(--md-on-error-container);
+}
+
+.retro-badge--warning {
+    --retro-badge-bg: color-mix(
+        in oklab,
+        var(--md-extended-color-warning-color-container) 80%,
+        var(--md-surface) 20%
+    );
+    --retro-badge-fg: var(--md-extended-color-warning-on-color-container);
+}
+
+.retro-badge :deep(.n-badge-icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-inline-end: 0.35rem;
+}
+
+.retro-badge :deep(.n-badge-icon > *) {
+    font-size: 1rem;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 150ms ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
 }
 
 .sr-only {
@@ -723,7 +1135,9 @@ defineExpose({
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .retro-chip,
+    .retro-choice-btn,
+    .retro-upload-panel,
+    .retro-file-card,
     .section-card {
         transition: none;
     }
