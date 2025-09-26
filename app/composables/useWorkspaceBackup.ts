@@ -3,6 +3,17 @@ import { db } from '~/db/client';
 import { reportError, err, asAppError } from '~/utils/errors';
 import { useHooks } from '~/composables/useHooks';
 import type { ExportProgress } from 'dexie-export-import';
+import {
+    detectWorkspaceBackupFormat,
+    importWorkspaceStream,
+    peekWorkspaceBackupMetadata,
+    streamWorkspaceExport,
+    streamWorkspaceExportToWritable,
+    WORKSPACE_BACKUP_FORMAT,
+    WORKSPACE_BACKUP_VERSION,
+    type WorkspaceBackupHeaderLine,
+    type WorkspaceBackupProgress,
+} from '~/utils/workspace-backup-stream';
 
 export type WorkspaceImportMode = 'replace' | 'append';
 
@@ -22,6 +33,7 @@ export interface WorkspaceBackupState {
     importMode: Ref<WorkspaceImportMode>;
     overwriteValues: Ref<boolean>;
     backupMeta: Ref<ImportMetadata | null>;
+    backupFormat: Ref<'stream' | 'dexie' | null>;
     error: Ref<AppError | null>;
 }
 
@@ -41,13 +53,16 @@ export interface WorkspaceBackupApi {
 
 const DEFAULT_ROWS_PER_CHUNK = 2000;
 const DEFAULT_KILOBYTES_PER_CHUNK = 1024;
+const STREAM_CHUNK_SIZE = 500;
 
 let dexieExportImportPromise: Promise<
     typeof import('dexie-export-import')
 > | null = null;
 
+let streamSaverPromise: Promise<typeof import('streamsaver')> | null = null;
+
 function loadDexieExportImport() {
-    if (!import.meta.client) {
+    if (typeof window === 'undefined') {
         throw err(
             'ERR_INTERNAL',
             'Workspace backup is only available in the browser.',
@@ -58,6 +73,22 @@ function loadDexieExportImport() {
         dexieExportImportPromise = import('dexie-export-import');
     }
     return dexieExportImportPromise;
+}
+
+async function loadStreamSaver() {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    try {
+        if (!streamSaverPromise) {
+            streamSaverPromise = import('streamsaver');
+        }
+        return await streamSaverPromise;
+    } catch (error) {
+        streamSaverPromise = null;
+        console.warn('[workspace-backup] Failed to load StreamSaver', error);
+        return null;
+    }
 }
 
 function validateBackupMeta(meta: any): ImportMetadata {
@@ -107,6 +138,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         importMode: ref('replace'),
         overwriteValues: ref(false),
         backupMeta: ref(null),
+        backupFormat: ref(null),
         error: ref(null),
     };
 
@@ -116,12 +148,13 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.progress.value = 0;
         state.currentStep.value = 'idle';
         state.backupMeta.value = null;
+        state.backupFormat.value = null;
         state.error.value = null;
     }
 
     async function exportWorkspace(): Promise<void> {
         if (state.isExporting.value || state.isImporting.value) return;
-        if (!import.meta.client) {
+        if (typeof window === 'undefined') {
             state.error.value = err(
                 'ERR_INTERNAL',
                 'Workspace export requires a browser environment.',
@@ -135,51 +168,167 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.error.value = null;
 
         try {
-            const { exportDB } = await loadDexieExportImport();
-            const blob = await exportDB(db, {
-                numRowsPerChunk: DEFAULT_ROWS_PER_CHUNK,
-                progressCallback: (progress: ExportProgress) => {
-                    const total =
-                        progress.totalTables + (progress.totalRows || 0);
-                    const completed =
-                        progress.completedTables +
-                        (progress.completedRows || 0);
-                    state.progress.value =
-                        total > 0 ? Math.round((completed / total) * 100) : 0;
-                    return false; // continue
-                },
-            });
+            const showSaveFilePicker =
+                typeof window !== 'undefined'
+                    ? (
+                          window as unknown as {
+                              showSaveFilePicker?: (
+                                  options?: any
+                              ) => Promise<FileSystemFileHandle>;
+                          }
+                      ).showSaveFilePicker
+                    : undefined;
 
-            // Trigger download
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `or3-workspace-${new Date()
+            const filenameBase = `or3-workspace-${new Date()
                 .toISOString()
                 .slice(0, 19)
-                .replace(/:/g, '-')}.json`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+                .replace(/:/g, '-')}`;
+
+            const updateStreamProgress = (
+                progress: WorkspaceBackupProgress
+            ) => {
+                const total = progress.totalTables + progress.totalRows;
+                const completed =
+                    progress.completedTables + progress.completedRows;
+                state.progress.value =
+                    total > 0 ? Math.round((completed / total) * 100) : 0;
+            };
+
+            const legacyExport = async () => {
+                const { exportDB } = await loadDexieExportImport();
+                const blob = await exportDB(db, {
+                    numRowsPerChunk: DEFAULT_ROWS_PER_CHUNK,
+                    progressCallback: (progress: ExportProgress) => {
+                        const total =
+                            progress.totalTables + (progress.totalRows || 0);
+                        const completed =
+                            progress.completedTables +
+                            (progress.completedRows || 0);
+                        state.progress.value =
+                            total > 0
+                                ? Math.round((completed / total) * 100)
+                                : 0;
+                        return false;
+                    },
+                });
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${filenameBase}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            };
+
+            if (typeof showSaveFilePicker === 'function') {
+                const fileHandle = await showSaveFilePicker({
+                    suggestedName: `${filenameBase}.or3.jsonl`,
+                    types: [
+                        {
+                            description: 'OR3 Workspace Backup',
+                            accept: {
+                                'application/json': ['.or3.jsonl', '.jsonl'],
+                            },
+                        },
+                    ],
+                });
+
+                await streamWorkspaceExport({
+                    db,
+                    fileHandle,
+                    chunkSize: STREAM_CHUNK_SIZE,
+                    onProgress: updateStreamProgress,
+                });
+            } else {
+                let streamed = false;
+
+                const hasWindow = typeof window !== 'undefined';
+                const hasWritableStream = hasWindow && 'WritableStream' in window;
+                const hasNavigator = typeof navigator !== 'undefined';
+                const hasServiceWorker = hasNavigator && 'serviceWorker' in navigator;
+
+                if (hasWindow && hasWritableStream && hasServiceWorker) {
+                    const streamSaverModule = await loadStreamSaver();
+                    const streamSaver =
+                        (streamSaverModule as any)?.default ??
+                        streamSaverModule;
+
+                    if (streamSaver) {
+                        const streamSaverApi =
+                            streamSaver as typeof import('streamsaver');
+
+                        const localMitmUrl = `${window.location.origin}/streamsaver/mitm.html?version=2.0.0`;
+                        if (streamSaverApi.mitm !== localMitmUrl) {
+                            streamSaverApi.mitm = localMitmUrl;
+                        }
+
+                        try {
+                            const fileStream = streamSaverApi.createWriteStream(
+                                `${filenameBase}.or3.jsonl`,
+                                {
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Content-Disposition': `attachment; filename="${filenameBase}.or3.jsonl"`,
+                                    },
+                                } as any
+                            );
+                            const writer =
+                                typeof fileStream?.getWriter === 'function'
+                                    ? fileStream.getWriter()
+                                    : null;
+
+                            if (writer) {
+                                await streamWorkspaceExportToWritable({
+                                    db,
+                                    writable: writer,
+                                    chunkSize: STREAM_CHUNK_SIZE,
+                                    onProgress: updateStreamProgress,
+                                });
+
+                                streamed = true;
+                            } else {
+                                console.warn(
+                                    '[workspace-backup] StreamSaver returned a stream without getWriter support; falling back to legacy export'
+                                );
+                            }
+                        } catch (streamErr) {
+                            console.warn(
+                                '[workspace-backup] StreamSaver fallback failed, falling back to legacy export',
+                                streamErr
+                            );
+                        }
+                    }
+                }
+
+                if (!streamed) {
+                    await legacyExport();
+                }
+            }
 
             state.currentStep.value = 'done';
             state.progress.value = 100;
         } catch (e) {
-            state.error.value = asAppError(e);
-            state.currentStep.value = 'error';
-            reportError(state.error.value, {
-                code: 'ERR_DB_READ_FAILED',
-                message: 'Failed to export workspace.',
-                tags: { domain: 'db', action: 'export' },
-            });
+            if ((e as DOMException)?.name === 'AbortError') {
+                state.currentStep.value = 'idle';
+                state.progress.value = 0;
+            } else {
+                state.error.value = asAppError(e);
+                state.currentStep.value = 'error';
+                reportError(state.error.value, {
+                    code: 'ERR_DB_READ_FAILED',
+                    message: 'Failed to export workspace.',
+                    tags: { domain: 'db', action: 'export' },
+                });
+            }
         } finally {
             state.isExporting.value = false;
         }
     }
 
     async function peekBackup(file: Blob): Promise<void> {
-        if (!import.meta.client) {
+        if (typeof window === 'undefined') {
             state.error.value = err(
                 'ERR_INTERNAL',
                 'Workspace backup inspection requires a browser environment.',
@@ -191,10 +340,35 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.currentStep.value = 'peeking';
         state.error.value = null;
         try {
-            const { peakImportFile } = await loadDexieExportImport();
-            const meta = await peakImportFile(file);
-            state.backupMeta.value = validateBackupMeta(meta);
-            state.currentStep.value = 'confirm';
+            const format = await detectWorkspaceBackupFormat(file);
+            if (format === 'dexie') {
+                const { peakImportFile } = await loadDexieExportImport();
+                const meta = await peakImportFile(file);
+                state.backupMeta.value = validateBackupMeta(meta);
+                state.backupFormat.value = 'dexie';
+                state.currentStep.value = 'confirm';
+                return;
+            }
+
+            if (format === 'stream') {
+                const header = await peekWorkspaceBackupMetadata(file);
+                validateStreamHeader(header);
+                state.backupMeta.value = {
+                    databaseName: header.databaseName,
+                    databaseVersion: header.databaseVersion,
+                    tables: header.tables.map((table) => ({
+                        name: table.name,
+                        rowCount: table.rowCount,
+                    })),
+                };
+                state.backupFormat.value = 'stream';
+                state.currentStep.value = 'confirm';
+                return;
+            }
+
+            throw err('ERR_VALIDATION', 'Unrecognized backup format.', {
+                tags: { domain: 'db', action: 'peek' },
+            });
         } catch (e) {
             state.error.value = asAppError(e);
             state.currentStep.value = 'error';
@@ -208,7 +382,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
     async function importWorkspace(file: Blob): Promise<void> {
         if (state.isImporting.value || state.isExporting.value) return;
-        if (!import.meta.client) {
+        if (typeof window === 'undefined') {
             state.error.value = err(
                 'ERR_INTERNAL',
                 'Workspace import requires a browser environment.',
@@ -222,35 +396,65 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.error.value = null;
 
         try {
-            const { importInto } = await loadDexieExportImport();
-            const baseOptions = {
-                chunkSizeBytes: DEFAULT_KILOBYTES_PER_CHUNK,
-                progressCallback: (progress: any) => {
-                    const total =
-                        progress.totalTables + (progress.totalRows || 0);
-                    const completed =
-                        progress.completedTables +
-                        (progress.completedRows || 0);
-                    state.progress.value =
-                        total > 0 ? Math.round((completed / total) * 100) : 0;
-                    return false; // continue
-                },
-            };
+            const format =
+                state.backupFormat.value ??
+                (await detectWorkspaceBackupFormat(file));
 
-            if (state.importMode.value === 'replace') {
-                await importInto(db, file, {
-                    ...baseOptions,
-                    clearTablesBeforeImport: true,
+            if (format === 'stream') {
+                await importWorkspaceStream({
+                    db,
+                    file,
+                    clearTables: state.importMode.value === 'replace',
+                    overwriteValues:
+                        state.importMode.value === 'replace'
+                            ? true
+                            : state.overwriteValues.value,
+                    onProgress: (progress: WorkspaceBackupProgress) => {
+                        const total = progress.totalTables + progress.totalRows;
+                        const completed =
+                            progress.completedTables + progress.completedRows;
+                        state.progress.value =
+                            total > 0
+                                ? Math.round((completed / total) * 100)
+                                : 0;
+                    },
                 });
+            } else if (format === 'dexie') {
+                const { importInto } = await loadDexieExportImport();
+                const baseOptions = {
+                    chunkSizeBytes: DEFAULT_KILOBYTES_PER_CHUNK,
+                    progressCallback: (progress: any) => {
+                        const total =
+                            progress.totalTables + (progress.totalRows || 0);
+                        const completed =
+                            progress.completedTables +
+                            (progress.completedRows || 0);
+                        state.progress.value =
+                            total > 0
+                                ? Math.round((completed / total) * 100)
+                                : 0;
+                        return false; // continue
+                    },
+                };
+
+                if (state.importMode.value === 'replace') {
+                    await importInto(db, file, {
+                        ...baseOptions,
+                        clearTablesBeforeImport: true,
+                    });
+                } else {
+                    await importInto(db, file, {
+                        ...baseOptions,
+                        clearTablesBeforeImport: false,
+                        overwriteValues: state.overwriteValues.value,
+                    });
+                }
             } else {
-                await importInto(db, file, {
-                    ...baseOptions,
-                    clearTablesBeforeImport: false,
-                    overwriteValues: state.overwriteValues.value,
+                throw err('ERR_VALIDATION', 'Unsupported backup format.', {
+                    tags: { domain: 'db', action: 'import' },
                 });
             }
 
-            // Invalidate caches
             hooks.doAction('workspace:reloaded');
 
             state.currentStep.value = 'done';
@@ -275,4 +479,35 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         importWorkspace,
         reset,
     };
+}
+
+function validateStreamHeader(header: WorkspaceBackupHeaderLine) {
+    if (header.format !== WORKSPACE_BACKUP_FORMAT) {
+        throw err('ERR_VALIDATION', 'Invalid backup format.', {
+            tags: { domain: 'db', action: 'validate' },
+        });
+    }
+    if (header.version !== WORKSPACE_BACKUP_VERSION) {
+        throw err(
+            'ERR_VALIDATION',
+            'Unsupported backup version. Please update the app.',
+            {
+                tags: { domain: 'db', action: 'validate' },
+            }
+        );
+    }
+    if (header.databaseName !== 'or3-db') {
+        throw err('ERR_VALIDATION', 'Backup is for a different database.', {
+            tags: { domain: 'db', action: 'validate' },
+        });
+    }
+    if (header.databaseVersion > db.verno) {
+        throw err(
+            'ERR_VALIDATION',
+            'Backup is from a newer app version. Please update.',
+            {
+                tags: { domain: 'db', action: 'validate' },
+            }
+        );
+    }
 }

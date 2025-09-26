@@ -20,12 +20,12 @@ created: 2025-09-25
 
 ## 3. Build Workspace Backup Dashboard app
 
--   [ ] Create `app/components/modal/dashboard/workspace/WorkspaceBackupApp.vue` with export/import cards, progress indicators, and guidance header. _(Requirements: 1.1, 2.1, 6.1, 7.1)_
--   [ ] Register a new `core:workspace-backup` tile in `Dashboard.vue` with icon `pixelarticons:briefcase-upload`, order ~45, and a single page pointing to the new component. _(Requirements: 8.1)_
--   [ ] Implement export card with status badge, percent progress, and disabled state while streaming. _(Requirements: 1.1, 6.1)_
--   [ ] Implement import card with file picker, metadata preview (table counts), mode radios, and overwrite toggle. _(Requirements: 2.1, 4.1, 5.1)_
--   [ ] Wire composable actions to buttons with aria-live updates and integrate `reportError` toasts. _(Requirements: 1.1, 2.1, 6.1)_
--   [ ] Surface inline guidance and link to documentation on safe backups. _(Requirements: 7.1)_
+-   [x] Create `app/components/modal/dashboard/workspace/WorkspaceBackupApp.vue` with export/import cards, progress indicators, and guidance header. _(Requirements: 1.1, 2.1, 6.1, 7.1)_
+-   [x] Register a new `core:workspace-backup` tile in `Dashboard.vue` with icon `pixelarticons:briefcase-upload`, order ~45, and a single page pointing to the new component. _(Requirements: 8.1)_
+-   [x] Implement export card with status badge, percent progress, and disabled state while streaming. _(Requirements: 1.1, 6.1)_
+-   [x] Implement import card with file picker, metadata preview (table counts), mode radios, and overwrite toggle. _(Requirements: 2.1, 4.1, 5.1)_
+-   [x] Wire composable actions to buttons with aria-live updates and integrate `reportError` toasts. _(Requirements: 1.1, 2.1, 6.1)_
+-   [x] Surface inline guidance and link to documentation on safe backups. _(Requirements: 7.1)_
 
 ## 4. Warning and confirmation flow
 
