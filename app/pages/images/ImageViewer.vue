@@ -8,6 +8,7 @@ import { reportError } from '~/utils/errors';
 const props = defineProps<{
     modelValue: boolean;
     meta: FileMeta | null;
+    trashMode?: boolean;
 }>();
 const emit = defineEmits<{
     (e: 'update:modelValue', v: boolean): void;
@@ -15,6 +16,7 @@ const emit = defineEmits<{
     (e: 'copy', meta: FileMeta): void;
     (e: 'rename', meta: FileMeta): void;
     (e: 'delete', meta: FileMeta): void;
+    (e: 'restore', meta: FileMeta): void;
 }>();
 
 const state = reactive<{ url?: string }>({ url: undefined });
@@ -87,7 +89,7 @@ watch(
                     class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-highest)]/95 p-1 backdrop-blur"
                 >
                     <div class="flex items-center">
-                        <UButtonGroup>
+                        <UButtonGroup v-if="!props.trashMode">
                             <UButton
                                 variant="light"
                                 size="sm"
@@ -106,14 +108,6 @@ watch(
                             >
                                 Copy
                             </UButton>
-                            <!--
-                    <button
-                        class="retro-btn px-3 py-1 text-sm"
-                        @click.stop.self="meta && emit('rename', meta)"
-                    >
-                        Rename
-                    </button>
-                    -->
                             <UButton
                                 variant="light"
                                 class="text-[var(--md-error)]"
@@ -122,6 +116,25 @@ watch(
                                 @click.stop.self="meta && emit('delete', meta)"
                             >
                                 Delete
+                            </UButton>
+                        </UButtonGroup>
+                        <UButtonGroup v-else>
+                            <UButton
+                                variant="light"
+                                size="sm"
+                                icon="pixelarticons:refresh"
+                                @click.stop.self="meta && emit('restore', meta)"
+                            >
+                                Restore
+                            </UButton>
+                            <UButton
+                                variant="light"
+                                class="text-[var(--md-error)]"
+                                size="sm"
+                                icon="pixelarticons:trash"
+                                @click.stop.self="meta && emit('delete', meta)"
+                            >
+                                Delete permanently
                             </UButton>
                         </UButtonGroup>
                     </div>

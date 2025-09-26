@@ -9,6 +9,7 @@ const props = defineProps<{
     selectionMode?: boolean;
     selectedHashes?: Set<string>;
     isDeleting?: boolean;
+    trashMode?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -190,6 +191,7 @@ defineExpose({ ensureUrl });
                     class="pointer-events-none absolute inset-0 bg-black/55 opacity-0 transition-opacity duration-200 group-hover:opacity-60 group-focus-within:opacity-60"
                 ></div>
                 <div
+                    v-if="!props.trashMode"
                     class="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
                 >
                     <div class="pointer-events-auto mb-3 flex gap-1.5">

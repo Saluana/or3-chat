@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import type { FileMeta } from '../../db/schema';
-import { listImageMetasPaged, updateFileName } from '../../db/files-select';
-import { getFileBlob, softDeleteMany, fileDeleteError } from '../../db/files';
+import {
+    listImageMetasPaged,
+    listDeletedImageMetasPaged,
+    updateFileName,
+} from '../../db/files-select';
+import {
+    getFileBlob,
+    softDeleteMany,
+    fileDeleteError,
+    restoreMany,
+    hardDeleteMany,
+} from '../../db/files';
 import GalleryGrid from './GalleryGrid.vue';
 import ImageViewer from './ImageViewer.vue';
 import { reportError } from '../../utils/errors';
@@ -17,11 +27,22 @@ const showViewer = ref(false);
 const selected = ref<FileMeta | null>(null);
 const selectionMode = ref(false);
 const selectedHashes = ref<Set<string>>(new Set());
-const isDeleting = ref(false);
+const trashMode = ref(false);
+const mutationState = ref<'idle' | 'soft-delete' | 'hard-delete' | 'restore'>(
+    'idle'
+);
+const isMutating = computed(() => mutationState.value !== 'idle');
+const isSoftDeleting = computed(() => mutationState.value === 'soft-delete');
+const isHardDeleting = computed(() => mutationState.value === 'hard-delete');
+const isRestoring = computed(() => mutationState.value === 'restore');
 const toast = useToast();
 
 const selectedCount = computed(() => selectedHashes.value.size);
 const hasSelection = computed(() => selectedCount.value > 0);
+const hasItems = computed(() => items.value.length > 0);
+const canSelectAll = computed(
+    () => hasItems.value && selectedHashes.value.size < items.value.length
+);
 
 type DeleteOutcome = {
     attempted: string[];
@@ -30,13 +51,26 @@ type DeleteOutcome = {
     aborted: boolean;
 };
 
+type RestoreOutcome = {
+    attempted: string[];
+    restored: string[];
+    remaining: string[];
+    aborted: boolean;
+};
+
 async function loadMore() {
     if (loading.value || done.value) return;
     loading.value = true;
     try {
-        const chunk = await listImageMetasPaged(offset.value, PAGE_SIZE);
+        const fetcher = trashMode.value
+            ? listDeletedImageMetasPaged
+            : listImageMetasPaged;
+        const chunk = await fetcher(offset.value, PAGE_SIZE);
+        const filteredChunk = chunk.filter((item) =>
+            trashMode.value ? item.deleted === true : item.deleted !== true
+        );
         if (chunk.length < PAGE_SIZE) done.value = true;
-        items.value.push(...chunk);
+        items.value.push(...filteredChunk);
         offset.value += chunk.length;
     } finally {
         loading.value = false;
@@ -151,7 +185,25 @@ function handleView(meta: FileMeta) {
     showViewer.value = true;
 }
 
+function resetListing() {
+    items.value = [];
+    offset.value = 0;
+    done.value = false;
+}
+
+function toggleTrashMode() {
+    if (loading.value || isMutating.value) return;
+    trashMode.value = !trashMode.value;
+    selectionMode.value = false;
+    clearSelection();
+    selected.value = null;
+    showViewer.value = false;
+    resetListing();
+    loadMore();
+}
+
 function toggleSelectionMode() {
+    if (isMutating.value) return;
     const next = !selectionMode.value;
     selectionMode.value = next;
     if (!next) clearSelection();
@@ -159,6 +211,14 @@ function toggleSelectionMode() {
 
 function clearSelection() {
     selectedHashes.value = new Set();
+}
+
+function selectAllVisible() {
+    if (!items.value.length) return;
+    selectedHashes.value = new Set(items.value.map((item) => item.hash));
+    if (selectedHashes.value.size > 0) {
+        selectionMode.value = true;
+    }
 }
 
 function toggleSelect(hash: string) {
@@ -224,7 +284,7 @@ async function executeDelete(
             };
         }
     }
-    isDeleting.value = true;
+    mutationState.value = 'soft-delete';
     try {
         await softDeleteMany(attempted);
         const { removedHashes, remaining } = removeHashesFromState(attempted);
@@ -264,13 +324,151 @@ async function executeDelete(
             aborted: false,
         };
     } finally {
-        isDeleting.value = false;
+        mutationState.value = 'idle';
+    }
+}
+
+async function executeHardDelete(
+    hashes: string[],
+    confirmMessage: string,
+    successMessage: (count: number) => string
+): Promise<DeleteOutcome> {
+    const attempted = Array.from(new Set(hashes.filter(Boolean)));
+    if (!attempted.length) {
+        return { attempted, removed: [], remaining: [], aborted: true };
+    }
+    if (typeof window !== 'undefined') {
+        const ok = window.confirm(confirmMessage);
+        if (!ok) {
+            return {
+                attempted,
+                removed: [],
+                remaining: attempted,
+                aborted: true,
+            };
+        }
+    }
+    mutationState.value = 'hard-delete';
+    try {
+        await hardDeleteMany(attempted);
+        const { removedHashes, remaining } = removeHashesFromState(attempted);
+        if (removedHashes.length > 0) {
+            toast.add({
+                title: 'Images permanently deleted',
+                description: successMessage(removedHashes.length),
+                color: 'error',
+            });
+        }
+        if (remaining.length > 0) {
+            toast.add({
+                title: 'Some images remain',
+                description:
+                    'A few selected items are still present. Please retry.',
+                color: 'warning',
+            });
+        }
+        return {
+            attempted,
+            removed: removedHashes,
+            remaining,
+            aborted: false,
+        };
+    } catch (error) {
+        const wrapped = fileDeleteError(
+            'Failed to permanently delete images',
+            error
+        );
+        reportError(wrapped);
+        toast.add({
+            title: 'Permanent delete failed',
+            description: 'We could not remove the selected images.',
+            color: 'error',
+        });
+        return {
+            attempted,
+            removed: [],
+            remaining: attempted,
+            aborted: false,
+        };
+    } finally {
+        mutationState.value = 'idle';
+    }
+}
+
+async function executeRestore(
+    hashes: string[],
+    successMessage: (count: number) => string
+): Promise<RestoreOutcome> {
+    const attempted = Array.from(new Set(hashes.filter(Boolean)));
+    if (!attempted.length) {
+        return { attempted, restored: [], remaining: [], aborted: true };
+    }
+    mutationState.value = 'restore';
+    try {
+        await restoreMany(attempted);
+        const { removedHashes, remaining } = removeHashesFromState(attempted);
+        if (removedHashes.length > 0) {
+            toast.add({
+                title: 'Images restored',
+                description: successMessage(removedHashes.length),
+                color: 'success',
+            });
+        }
+        if (remaining.length > 0) {
+            toast.add({
+                title: 'Some images were not restored',
+                description:
+                    'A few selected items are still in the trash. Please retry.',
+                color: 'warning',
+            });
+        }
+        return {
+            attempted,
+            restored: removedHashes,
+            remaining,
+            aborted: false,
+        };
+    } catch (error) {
+        reportError(error, {
+            code: 'ERR_DB_WRITE_FAILED',
+            message: 'Failed to restore images.',
+            tags: { domain: 'images', action: 'restore' },
+        });
+        toast.add({
+            title: 'Restore failed',
+            description: 'We could not restore the selected images.',
+            color: 'error',
+        });
+        return {
+            attempted,
+            restored: [],
+            remaining: attempted,
+            aborted: false,
+        };
+    } finally {
+        mutationState.value = 'idle';
     }
 }
 
 async function deleteSingle(meta: FileMeta | null) {
     if (!meta) return false;
     const name = meta.name || 'this image';
+    if (trashMode.value) {
+        const confirmMessage = `Permanently delete "${name}"? This cannot be undone.`;
+        const outcome = await executeHardDelete(
+            [meta.hash],
+            confirmMessage,
+            () => `Permanently deleted "${name}".`
+        );
+        if (outcome.removed.length > 0 && outcome.remaining.length === 0) {
+            clearSelection();
+            selectionMode.value = false;
+            if (!done.value && items.value.length < PAGE_SIZE) {
+                loadMore();
+            }
+        }
+        return outcome.removed.length > 0;
+    }
     const confirmMessage = `Delete "${name}"? This cannot be undone.`;
     const outcome = await executeDelete(
         [meta.hash],
@@ -288,6 +486,27 @@ async function deleteSelected() {
     const hashes = Array.from(selectedHashes.value);
     if (!hashes.length) return false;
     const count = hashes.length;
+    if (trashMode.value) {
+        const confirmMessage = `Permanently delete ${count} image${
+            count === 1 ? '' : 's'
+        }? This cannot be undone.`;
+        const outcome = await executeHardDelete(
+            hashes,
+            confirmMessage,
+            (removedCount) =>
+                `${removedCount} image${
+                    removedCount === 1 ? '' : 's'
+                } permanently deleted.`
+        );
+        if (outcome.removed.length > 0 && outcome.remaining.length === 0) {
+            clearSelection();
+            selectionMode.value = false;
+            if (!done.value && items.value.length < PAGE_SIZE) {
+                loadMore();
+            }
+        }
+        return outcome.removed.length > 0;
+    }
     const confirmMessage = `Delete ${count} image${
         count === 1 ? '' : 's'
     }? This cannot be undone.`;
@@ -306,6 +525,41 @@ async function deleteSelected() {
     }
     return outcome.removed.length > 0;
 }
+
+async function restoreSingle(meta: FileMeta | null) {
+    if (!meta) return false;
+    const name = meta.name || 'this image';
+    const outcome = await executeRestore(
+        [meta.hash],
+        () => `Restored "${name}".`
+    );
+    if (outcome.restored.length > 0 && outcome.remaining.length === 0) {
+        clearSelection();
+        selectionMode.value = false;
+        if (!done.value && items.value.length < PAGE_SIZE) {
+            loadMore();
+        }
+    }
+    return outcome.restored.length > 0;
+}
+
+async function restoreSelected() {
+    const hashes = Array.from(selectedHashes.value);
+    if (!hashes.length) return false;
+    const outcome = await executeRestore(
+        hashes,
+        (restoredCount) =>
+            `${restoredCount} image${restoredCount === 1 ? '' : 's'} restored.`
+    );
+    if (outcome.restored.length > 0 && outcome.remaining.length === 0) {
+        clearSelection();
+        selectionMode.value = false;
+        if (!done.value && items.value.length < PAGE_SIZE) {
+            loadMore();
+        }
+    }
+    return outcome.restored.length > 0;
+}
 </script>
 
 <template>
@@ -313,19 +567,44 @@ async function deleteSelected() {
         class="p-4 max-w-[1400px] mx-auto relative"
         :class="{ 'pb-24': selectionMode }"
     >
-        <div class="flex justify-between">
-            <h1 class="text-xl font-semibold mb-4">Images</h1>
-            <UButton
-                class=""
-                type="button"
-                data-test="multi-toggle"
-                @click="toggleSelectionMode"
-                :disabled="isDeleting"
-            >
-                <UIcon name="pixelarticons:image-multiple" class="mr-0.5" />
-                {{ selectionMode ? 'Cancel' : 'Select' }}
-            </UButton>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-xl font-semibold">
+                {{ trashMode ? 'Trash' : 'Images' }}
+            </h1>
+            <div class="flex items-center gap-2">
+                <button
+                    class="retro-btn px-3 py-1 text-sm flex items-center gap-1"
+                    type="button"
+                    data-test="trash-toggle"
+                    :aria-pressed="trashMode"
+                    @click="toggleTrashMode"
+                    :disabled="loading || isMutating"
+                >
+                    <UIcon
+                        :name="
+                            trashMode
+                                ? 'pixelarticons:image-multiple'
+                                : 'pixelarticons:trash'
+                        "
+                        class="mr-0.5"
+                    />
+                    {{ trashMode ? 'Show library' : 'Show trash' }}
+                </button>
+                <button
+                    class="retro-btn px-3 py-1 text-sm flex items-center gap-1"
+                    type="button"
+                    data-test="multi-toggle"
+                    @click="toggleSelectionMode"
+                    :disabled="isMutating"
+                >
+                    <UIcon name="pixelarticons:image-multiple" class="mr-0.5" />
+                    {{ selectionMode ? 'Cancel' : 'Select' }}
+                </button>
+            </div>
         </div>
+        <p v-if="trashMode" class="mb-3 text-sm opacity-80">
+            Showing deleted images. Restore or delete them permanently.
+        </p>
         <div
             v-if="selectionMode"
             class="fixed inset-x-0 bottom-0 z-[1000] border-t-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
@@ -338,27 +617,72 @@ async function deleteSelected() {
                     type="button"
                     data-test="multi-toggle"
                     @click="toggleSelectionMode"
-                    :disabled="isDeleting"
+                    :disabled="isMutating"
                 >
                     {{ selectionMode ? 'Cancel' : 'Select' }}
                 </button>
-                <button
-                    class="retro-btn px-3 py-1 text-sm"
-                    type="button"
-                    :disabled="!hasSelection || isDeleting"
-                    @click="clearSelection"
-                >
-                    Clear
-                </button>
-                <button
-                    class="retro-btn px-3 py-1 text-sm"
-                    type="button"
-                    :disabled="!hasSelection || isDeleting"
-                    data-test="delete-selected"
-                    @click="deleteSelected"
-                >
-                    {{ isDeleting ? 'Deleting…' : `Delete (${selectedCount})` }}
-                </button>
+                <template v-if="trashMode">
+                    <button
+                        class="retro-btn px-3 py-1 text-sm"
+                        type="button"
+                        :disabled="!canSelectAll || isMutating"
+                        @click="selectAllVisible"
+                    >
+                        {{
+                            canSelectAll
+                                ? `Select all (${items.length})`
+                                : 'All selected'
+                        }}
+                    </button>
+                    <button
+                        class="retro-btn px-3 py-1 text-sm"
+                        type="button"
+                        :disabled="!hasSelection || isMutating"
+                        @click="restoreSelected"
+                    >
+                        {{
+                            isRestoring
+                                ? 'Restoring…'
+                                : `Restore (${selectedCount})`
+                        }}
+                    </button>
+                    <button
+                        class="retro-btn px-3 py-1 text-sm"
+                        type="button"
+                        :disabled="!hasSelection || isMutating"
+                        data-test="delete-selected"
+                        @click="deleteSelected"
+                    >
+                        {{
+                            isHardDeleting
+                                ? 'Deleting…'
+                                : `Delete permanently (${selectedCount})`
+                        }}
+                    </button>
+                </template>
+                <template v-else>
+                    <button
+                        class="retro-btn px-3 py-1 text-sm"
+                        type="button"
+                        :disabled="!hasSelection || isMutating"
+                        @click="clearSelection"
+                    >
+                        Clear
+                    </button>
+                    <button
+                        class="retro-btn px-3 py-1 text-sm"
+                        type="button"
+                        :disabled="!hasSelection || isMutating"
+                        data-test="delete-selected"
+                        @click="deleteSelected"
+                    >
+                        {{
+                            isSoftDeleting
+                                ? 'Deleting…'
+                                : `Delete (${selectedCount})`
+                        }}
+                    </button>
+                </template>
                 <span
                     class="ml-auto text-sm opacity-80 hidden sm:inline"
                     data-test="selected-count"
@@ -371,7 +695,8 @@ async function deleteSelected() {
             :items="items"
             :selection-mode="selectionMode"
             :selected-hashes="selectedHashes"
-            :is-deleting="isDeleting"
+            :is-deleting="isMutating"
+            :trash-mode="trashMode"
             @view="handleView"
             @download="handleDownload"
             @copy="handleCopy"
@@ -382,7 +707,7 @@ async function deleteSelected() {
         <div class="mt-4 flex justify-center">
             <button
                 class="px-3 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-50"
-                :disabled="loading || done"
+                :disabled="loading || done || isMutating"
                 @click="loadMore"
             >
                 <span v-if="!done">{{
@@ -394,10 +719,12 @@ async function deleteSelected() {
         <ImageViewer
             v-model="showViewer"
             :meta="selected"
+            :trash-mode="trashMode"
             @download="handleDownload"
             @copy="handleCopy"
             @rename="handleRename"
             @delete="deleteSingle"
+            @restore="restoreSingle"
         />
     </div>
 </template>

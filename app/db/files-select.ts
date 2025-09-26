@@ -22,6 +22,24 @@ export async function listImageMetasPaged(
         .toArray();
 }
 
+// List deleted image FileMeta records, newest first, with paging.
+export async function listDeletedImageMetasPaged(
+    offset = 0,
+    limit = 50
+): Promise<FileMeta[]> {
+    return db.file_meta
+        .orderBy('updated_at')
+        .reverse()
+        .filter(
+            (m) =>
+                m.deleted === true &&
+                (m.kind === 'image' || m.mime_type?.startsWith('image/'))
+        )
+        .offset(offset)
+        .limit(limit)
+        .toArray();
+}
+
 // Update a file's display name and bump updated_at.
 export async function updateFileName(
     hash: string,

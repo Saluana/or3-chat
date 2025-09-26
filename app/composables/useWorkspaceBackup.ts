@@ -2,7 +2,6 @@ import { ref, type Ref } from 'vue';
 import { db } from '~/db/client';
 import { reportError, err, asAppError } from '~/utils/errors';
 import { useHooks } from '~/composables/useHooks';
-import type { ExportProgress } from 'dexie-export-import';
 import {
     detectWorkspaceBackupFormat,
     importWorkspaceStream,
@@ -166,6 +165,17 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.progress.value = 0;
         state.error.value = null;
 
+        const exportStartedAt = Date.now();
+        let exportTelemetry: {
+            format: 'stream';
+            filenameBase: string;
+            suggestedName: string;
+        } = {
+            format: 'stream',
+            filenameBase: '',
+            suggestedName: '',
+        };
+
         try {
             const showSaveFilePicker =
                 typeof window !== 'undefined'
@@ -182,6 +192,18 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 .toISOString()
                 .slice(0, 19)
                 .replace(/:/g, '-')}`;
+            const suggestedName = `${filenameBase}.or3.jsonl`;
+
+            exportTelemetry = {
+                format: 'stream',
+                filenameBase,
+                suggestedName,
+            };
+
+            await hooks.doAction(
+                'workspace.backup.export:action:before',
+                exportTelemetry
+            );
 
             const updateStreamProgress = (
                 progress: WorkspaceBackupProgress
@@ -195,7 +217,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
             if (typeof showSaveFilePicker === 'function') {
                 const fileHandle = await showSaveFilePicker({
-                    suggestedName: `${filenameBase}.or3.jsonl`,
+                    suggestedName,
                     types: [
                         {
                             description: 'OR3 Workspace Backup',
@@ -247,13 +269,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 if (streamSaverApi.mitm !== localMitmUrl) {
                     streamSaverApi.mitm = localMitmUrl;
                 }
-
                 const fileStream = streamSaverApi.createWriteStream(
-                    `${filenameBase}.or3.jsonl`,
+                    suggestedName,
                     {
                         headers: {
                             'Content-Type': 'application/json',
-                            'Content-Disposition': `attachment; filename="${filenameBase}.or3.jsonl"`,
+                            'Content-Disposition': `attachment; filename="${suggestedName}"`,
                         },
                     } as any
                 );
@@ -281,10 +302,22 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
             state.currentStep.value = 'done';
             state.progress.value = 100;
+
+            await hooks.doAction('workspace.backup.export:action:after', {
+                ...exportTelemetry,
+                durationMs: Date.now() - exportStartedAt,
+            });
         } catch (e) {
             if ((e as DOMException)?.name === 'AbortError') {
                 state.currentStep.value = 'idle';
                 state.progress.value = 0;
+                await hooks.doAction(
+                    'workspace.backup.export:action:cancelled',
+                    {
+                        ...exportTelemetry,
+                        durationMs: Date.now() - exportStartedAt,
+                    }
+                );
             } else {
                 state.error.value = asAppError(e);
                 state.currentStep.value = 'error';
@@ -292,6 +325,11 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     code: 'ERR_DB_READ_FAILED',
                     message: 'Failed to export workspace.',
                     tags: { domain: 'db', action: 'export' },
+                });
+                await hooks.doAction('workspace.backup.export:action:error', {
+                    ...exportTelemetry,
+                    durationMs: Date.now() - exportStartedAt,
+                    error: state.error.value,
                 });
             }
         } finally {
@@ -311,21 +349,32 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         }
         state.currentStep.value = 'peeking';
         state.error.value = null;
+
+        const fileName =
+            typeof (file as any).name === 'string' ? (file as any).name : null;
+        const peekStartedAt = Date.now();
+        const peekTelemetryBase = {
+            fileName,
+        };
+
+        await hooks.doAction('workspace.backup.peek:action:before', {
+            ...peekTelemetryBase,
+        });
+
         try {
             const format = await detectWorkspaceBackupFormat(file);
+            let metadata!: ImportMetadata;
+            let resolvedFormat!: 'stream' | 'dexie';
+
             if (format === 'dexie') {
                 const { peakImportFile } = await loadDexieExportImport();
                 const meta = await peakImportFile(file);
-                state.backupMeta.value = validateBackupMeta(meta);
-                state.backupFormat.value = 'dexie';
-                state.currentStep.value = 'confirm';
-                return;
-            }
-
-            if (format === 'stream') {
+                metadata = validateBackupMeta(meta);
+                resolvedFormat = 'dexie';
+            } else if (format === 'stream') {
                 const header = await peekWorkspaceBackupMetadata(file);
                 validateStreamHeader(header);
-                state.backupMeta.value = {
+                metadata = {
                     databaseName: header.databaseName,
                     databaseVersion: header.databaseVersion,
                     tables: header.tables.map((table) => ({
@@ -333,13 +382,22 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                         rowCount: table.rowCount,
                     })),
                 };
-                state.backupFormat.value = 'stream';
-                state.currentStep.value = 'confirm';
-                return;
+                resolvedFormat = 'stream';
+            } else {
+                throw err('ERR_VALIDATION', 'Unrecognized backup format.', {
+                    tags: { domain: 'db', action: 'peek' },
+                });
             }
 
-            throw err('ERR_VALIDATION', 'Unrecognized backup format.', {
-                tags: { domain: 'db', action: 'peek' },
+            state.backupMeta.value = metadata;
+            state.backupFormat.value = resolvedFormat;
+            state.currentStep.value = 'confirm';
+
+            await hooks.doAction('workspace.backup.peek:action:after', {
+                ...peekTelemetryBase,
+                format: resolvedFormat,
+                metadata,
+                durationMs: Date.now() - peekStartedAt,
             });
         } catch (e) {
             state.error.value = asAppError(e);
@@ -348,6 +406,11 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 code: 'ERR_VALIDATION',
                 message: 'Invalid backup file.',
                 tags: { domain: 'db', action: 'peek' },
+            });
+            await hooks.doAction('workspace.backup.peek:action:error', {
+                ...peekTelemetryBase,
+                error: state.error.value,
+                durationMs: Date.now() - peekStartedAt,
             });
         }
     }
@@ -367,10 +430,30 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.progress.value = 0;
         state.error.value = null;
 
+        const fileName =
+            typeof (file as any).name === 'string' ? (file as any).name : null;
+        const baseImportTelemetry = {
+            fileName,
+            mode: state.importMode.value,
+            overwrite: state.overwriteValues.value,
+        };
+        let importTelemetry = {
+            ...baseImportTelemetry,
+            format: 'unknown' as 'stream' | 'dexie' | 'unknown',
+        };
+        const importStartedAt = Date.now();
+
         try {
             const format =
                 state.backupFormat.value ??
                 (await detectWorkspaceBackupFormat(file));
+
+            importTelemetry = { ...baseImportTelemetry, format };
+
+            await hooks.doAction(
+                'workspace.backup.import:action:before',
+                importTelemetry
+            );
 
             if (format === 'stream') {
                 await importWorkspaceStream({
@@ -427,10 +510,15 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 });
             }
 
-            hooks.doAction('workspace:reloaded');
-
             state.currentStep.value = 'done';
             state.progress.value = 100;
+
+            await hooks.doAction('workspace.backup.import:action:after', {
+                ...importTelemetry,
+                durationMs: Date.now() - importStartedAt,
+            });
+
+            await hooks.doAction('workspace:reloaded');
         } catch (e) {
             state.error.value = asAppError(e);
             state.currentStep.value = 'error';
@@ -438,6 +526,11 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 code: 'ERR_DB_WRITE_FAILED',
                 message: 'Failed to import workspace.',
                 tags: { domain: 'db', action: 'import' },
+            });
+            await hooks.doAction('workspace.backup.import:action:error', {
+                ...importTelemetry,
+                durationMs: Date.now() - importStartedAt,
+                error: state.error.value,
             });
         } finally {
             state.isImporting.value = false;

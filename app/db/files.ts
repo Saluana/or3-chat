@@ -158,6 +158,48 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     });
 }
 
+/** Restore multiple files that were soft deleted */
+export async function restoreMany(hashes: string[]): Promise<void> {
+    const unique = Array.from(new Set(hashes.filter(Boolean)));
+    if (!unique.length) return;
+    const hooks = useHooks();
+    await db.transaction('rw', db.file_meta, async () => {
+        const metas = await db.file_meta.bulkGet(unique);
+        for (let i = 0; i < unique.length; i++) {
+            const meta = metas[i];
+            if (!meta || meta.deleted !== true) continue;
+            await hooks.doAction('db.files.restore:action:before', meta);
+            await db.file_meta.put({
+                ...meta,
+                deleted: false,
+                updated_at: nowSec(),
+            });
+            await hooks.doAction('db.files.restore:action:after', meta.hash);
+        }
+    });
+}
+
+/** Hard delete files (remove metadata + blob) */
+export async function hardDeleteMany(hashes: string[]): Promise<void> {
+    const unique = Array.from(new Set(hashes.filter(Boolean)));
+    if (!unique.length) return;
+    const hooks = useHooks();
+    await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
+        const metas = await db.file_meta.bulkGet(unique);
+        for (let i = 0; i < unique.length; i++) {
+            const hash = unique[i]!;
+            const meta = metas[i];
+            await hooks.doAction(
+                'db.files.delete:action:hard:before',
+                meta ?? hash
+            );
+            await db.file_meta.delete(hash);
+            await db.file_blobs.delete(hash);
+            await hooks.doAction('db.files.delete:action:hard:after', hash);
+        }
+    });
+}
+
 /** Remove one reference to a file; if dropping to 0 we keep data (GC future) */
 export async function derefFile(hash: string): Promise<void> {
     await changeRefCount(hash, -1);
