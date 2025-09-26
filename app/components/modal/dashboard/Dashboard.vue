@@ -1,11 +1,14 @@
 <template>
     <UModal
         v-model:open="open"
+        :modal="false"
         :ui="{
+            content: 'z-[10]',
             footer: 'justify-end border-t-2',
             body: 'overflow-hidden h-full flex-1 p-0!',
         }"
         title="Dashboard"
+        :dismissible="false"
         description="Browse all apps, plugins, and settings."
         class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden"
     >
@@ -176,12 +179,21 @@ const coreItems: DashboardPlugin[] = [
             },
         ],
     },
-    /*{
+    {
         id: 'core:images',
         icon: 'pixelarticons:image',
         label: 'Images',
         order: 10,
-    },
+        pages: [
+            {
+                id: 'images-library',
+                title: 'Images',
+                description: 'Browse saved and generated images.',
+                icon: 'pixelarticons:image',
+                component: () => import('~/pages/images/index.vue'),
+            },
+        ],
+    } /*
     {
         id: 'core:prompts',
         icon: 'pixelarticons:script-text',
@@ -193,7 +205,7 @@ const coreItems: DashboardPlugin[] = [
         icon: 'pixelarticons:folder',
         label: 'Files',
         order: 30,
-    },*/
+    },*/,
 ];
 
 // Register any inline pages defined on core items with the shared dashboard page registry
