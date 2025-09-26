@@ -51,9 +51,8 @@ export interface WorkspaceBackupApi {
     reset(): void;
 }
 
-const DEFAULT_ROWS_PER_CHUNK = 2000;
-const DEFAULT_KILOBYTES_PER_CHUNK = 1024;
 const STREAM_CHUNK_SIZE = 500;
+const DEFAULT_KILOBYTES_PER_CHUNK = 1024;
 
 let dexieExportImportPromise: Promise<
     typeof import('dexie-export-import')
@@ -194,34 +193,6 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     total > 0 ? Math.round((completed / total) * 100) : 0;
             };
 
-            const legacyExport = async () => {
-                const { exportDB } = await loadDexieExportImport();
-                const blob = await exportDB(db, {
-                    numRowsPerChunk: DEFAULT_ROWS_PER_CHUNK,
-                    progressCallback: (progress: ExportProgress) => {
-                        const total =
-                            progress.totalTables + (progress.totalRows || 0);
-                        const completed =
-                            progress.completedTables +
-                            (progress.completedRows || 0);
-                        state.progress.value =
-                            total > 0
-                                ? Math.round((completed / total) * 100)
-                                : 0;
-                        return false;
-                    },
-                });
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${filenameBase}.json`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
-            };
-
             if (typeof showSaveFilePicker === 'function') {
                 const fileHandle = await showSaveFilePicker({
                     suggestedName: `${filenameBase}.or3.jsonl`,
@@ -242,69 +213,70 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     onProgress: updateStreamProgress,
                 });
             } else {
-                let streamed = false;
-
                 const hasWindow = typeof window !== 'undefined';
-                const hasWritableStream = hasWindow && 'WritableStream' in window;
+                const hasWritableStream =
+                    hasWindow && 'WritableStream' in window;
                 const hasNavigator = typeof navigator !== 'undefined';
-                const hasServiceWorker = hasNavigator && 'serviceWorker' in navigator;
+                const hasServiceWorker =
+                    hasNavigator && 'serviceWorker' in navigator;
 
-                if (hasWindow && hasWritableStream && hasServiceWorker) {
-                    const streamSaverModule = await loadStreamSaver();
-                    const streamSaver =
-                        (streamSaverModule as any)?.default ??
-                        streamSaverModule;
-
-                    if (streamSaver) {
-                        const streamSaverApi =
-                            streamSaver as typeof import('streamsaver');
-
-                        const localMitmUrl = `${window.location.origin}/streamsaver/mitm.html?version=2.0.0`;
-                        if (streamSaverApi.mitm !== localMitmUrl) {
-                            streamSaverApi.mitm = localMitmUrl;
-                        }
-
-                        try {
-                            const fileStream = streamSaverApi.createWriteStream(
-                                `${filenameBase}.or3.jsonl`,
-                                {
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Content-Disposition': `attachment; filename="${filenameBase}.or3.jsonl"`,
-                                    },
-                                } as any
-                            );
-                            const writer =
-                                typeof fileStream?.getWriter === 'function'
-                                    ? fileStream.getWriter()
-                                    : null;
-
-                            if (writer) {
-                                await streamWorkspaceExportToWritable({
-                                    db,
-                                    writable: writer,
-                                    chunkSize: STREAM_CHUNK_SIZE,
-                                    onProgress: updateStreamProgress,
-                                });
-
-                                streamed = true;
-                            } else {
-                                console.warn(
-                                    '[workspace-backup] StreamSaver returned a stream without getWriter support; falling back to legacy export'
-                                );
-                            }
-                        } catch (streamErr) {
-                            console.warn(
-                                '[workspace-backup] StreamSaver fallback failed, falling back to legacy export',
-                                streamErr
-                            );
-                        }
-                    }
+                if (!(hasWindow && hasWritableStream && hasServiceWorker)) {
+                    throw err(
+                        'ERR_INTERNAL',
+                        'Streaming export requires File System Access API or StreamSaver support.',
+                        { tags: { domain: 'db', action: 'export' } }
+                    );
                 }
 
-                if (!streamed) {
-                    await legacyExport();
+                const streamSaverModule = await loadStreamSaver();
+                const streamSaver =
+                    (streamSaverModule as any)?.default ?? streamSaverModule;
+
+                if (!streamSaver) {
+                    throw err(
+                        'ERR_INTERNAL',
+                        'StreamSaver is unavailable; streaming export cannot continue.',
+                        { tags: { domain: 'db', action: 'export' } }
+                    );
                 }
+
+                const streamSaverApi =
+                    streamSaver as typeof import('streamsaver');
+
+                const localMitmUrl = `${window.location.origin}/streamsaver/mitm.html?version=2.0.0`;
+                if (streamSaverApi.mitm !== localMitmUrl) {
+                    streamSaverApi.mitm = localMitmUrl;
+                }
+
+                const fileStream = streamSaverApi.createWriteStream(
+                    `${filenameBase}.or3.jsonl`,
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Content-Disposition': `attachment; filename="${filenameBase}.or3.jsonl"`,
+                        },
+                    } as any
+                );
+
+                const writer =
+                    typeof fileStream?.getWriter === 'function'
+                        ? fileStream.getWriter()
+                        : null;
+
+                if (!writer) {
+                    throw err(
+                        'ERR_INTERNAL',
+                        'StreamSaver returned an unsupported stream writer.',
+                        { tags: { domain: 'db', action: 'export' } }
+                    );
+                }
+
+                await streamWorkspaceExportToWritable({
+                    db,
+                    writable: writer,
+                    chunkSize: STREAM_CHUNK_SIZE,
+                    onProgress: updateStreamProgress,
+                });
             }
 
             state.currentStep.value = 'done';
