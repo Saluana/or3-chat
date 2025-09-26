@@ -15,6 +15,7 @@
 
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
+@import "./retro.css"; /* shared retro utility classes */
 
 /* Font setup: body uses VT323, headings use Press Start 2P */
 :root {
@@ -75,40 +76,10 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--app-font-heading-current, var(--font-heading)) !important;
 }
 
-.retro-btn { 
-	display: inline-flex;
-	line-height: 1; /* avoid extra vertical space from font metrics */
-	position: relative;
-	border-radius: 3px;                               /* default */
-	border: 2px solid var(--md-inverse-surface);      /* dark 2px outline */
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);  /* hard, pixel shadow (no blur) */
-	transition: transform 80ms ease, box-shadow 80ms ease;
-}
-
-/* Icon-only (aspect-square) buttons: center icon perfectly and remove padding */
-.retro-btn.aspect-square {
-	padding: 0; /* our button variant already sets px-0, this enforces it */
-	place-items: center;
-}
-
-/* Physical press: move button into its shadow and add subtle inner bevel */
-.retro-btn:active {
-	transform: translate(2px, 2px);
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
 .active-element {
-		box-shadow: 0 0 0 var(--md-inverse-surface),
-							inset 0 2px 0 rgba(0, 0, 0, 0.25),
-							inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-/* Keyboard accessibility: preserve pixel look while focused */
-.retro-btn:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+		inset 0 2px 0 rgba(0, 0, 0, 0.25),
+		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
 }
 
 .retro-shadow {
