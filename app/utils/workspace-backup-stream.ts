@@ -435,6 +435,32 @@ export async function importWorkspaceStream({
     };
     emitProgress(progress, onProgress);
 
+    const handleConflict = async <T>(
+        tableName: string,
+        operation: () => Promise<T>
+    ) => {
+        try {
+            return await operation();
+        } catch (error) {
+            if (error instanceof Dexie.BulkError) {
+                const failureCount = error.failures?.length ?? 0;
+                const firstFailure = error.failures?.[0];
+                const detail = firstFailure
+                    ? ` Example: ${String(
+                          (firstFailure as any)?.message ?? firstFailure
+                      )}`
+                    : '';
+                const message = `Import hit ${
+                    failureCount || 'one or more'
+                } key conflicts in table "${tableName}". Enable "Overwrite records on key conflict" or use Replace mode.`;
+                const conflictError = new Error(`${message}${detail}`);
+                (conflictError as any).cause = error;
+                throw conflictError;
+            }
+            throw error;
+        }
+    };
+
     await db.transaction('rw', db.tables, async () => {
         if (clearTables) {
             for (const table of db.tables) {
@@ -484,7 +510,9 @@ export async function importWorkspaceStream({
                     if (overwriteValues) {
                         await table.bulkPut(payload);
                     } else {
-                        await table.bulkAdd(payload);
+                        await handleConflict(currentTable, () =>
+                            table.bulkAdd(payload)
+                        );
                     }
                     progress.completedRows += payload.length;
                     emitProgress(progress, onProgress);
@@ -498,7 +526,9 @@ export async function importWorkspaceStream({
                     if (overwriteValues) {
                         await table.bulkPut(payload as any[]);
                     } else {
-                        await table.bulkAdd(payload as any[]);
+                        await handleConflict(currentTable, () =>
+                            table.bulkAdd(payload as any[])
+                        );
                     }
                     progress.completedRows += payload.length;
                     emitProgress(progress, onProgress);
@@ -513,9 +543,11 @@ export async function importWorkspaceStream({
                             tuples.map((tuple) => tuple.key) as any
                         );
                     } else {
-                        await table.bulkAdd(
-                            tuples.map((tuple) => tuple.value as any),
-                            tuples.map((tuple) => tuple.key) as any
+                        await handleConflict(currentTable, () =>
+                            table.bulkAdd(
+                                tuples.map((tuple) => tuple.value as any),
+                                tuples.map((tuple) => tuple.key) as any
+                            )
                         );
                     }
                     progress.completedRows += tuples.length;
