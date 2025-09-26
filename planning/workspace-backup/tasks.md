@@ -7,8 +7,8 @@ created: 2025-09-25
 
 ## 1. Prepare tooling & dependencies
 
--   [ ] Add `dexie-export-import` to `package.json` and lockfile; ensure bun install updates bundle size minimally. _(Requirements: 1.1, 2.1, 6.1)_
--   [ ] Create TypeScript declaration shim if needed for ESM import default interop. _(Requirements: 1.1, 2.1)_
+-   [x] Add `dexie-export-import` to `package.json` and lockfile; ensure bun install updates bundle size minimally. _(Requirements: 1.1, 2.1, 6.1)_
+-   [x] Create TypeScript declaration shim if needed for ESM import default interop. _(Requirements: 1.1, 2.1)_
 
 ## 2. Implement workspace backup composable
 
