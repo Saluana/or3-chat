@@ -102,6 +102,7 @@ function shouldLog(code: string, message: string): boolean {
 
 // Use Nuxt UI toast directly; no custom store.
 function pushToast(error: AppError, retry?: () => any) {
+    if (!import.meta.client) return;
     try {
         const { add } = useToast();
         add({

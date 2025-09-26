@@ -12,11 +12,11 @@ created: 2025-09-25
 
 ## 2. Implement workspace backup composable
 
--   [ ] Scaffold `useWorkspaceBackup.ts` with reactive state, options, and progress handling. _(Requirements: 1.1, 2.1, 6.1)_
--   [ ] Integrate `exportDB`, `importDB`, `importInto`, `peakImportFile` with streaming progress callbacks. _(Requirements: 1.1, 2.1, 4.1, 6.1)_
--   [ ] Add metadata validation (format name/version, database name, schema version). _(Requirements: 5.1)_
--   [ ] Emit error reporting via `reportError` + `dbTry` wrappers; expose retry-friendly errors. _(Requirements: 1.1, 2.1, 5.1)_
--   [ ] Expose helper for invalidating stores (`workspace:reloaded` hook + store refresh). _(Requirements: 2.1)_
+-   [x] Scaffold `useWorkspaceBackup.ts` with reactive state, options, and progress handling. _(Requirements: 1.1, 2.1, 6.1)_
+-   [x] Integrate `exportDB`, `importDB`, `importInto`, `peakImportFile` with streaming progress callbacks. _(Requirements: 1.1, 2.1, 4.1, 6.1)_
+-   [x] Add metadata validation (format name/version, database name, schema version). _(Requirements: 5.1)_
+-   [x] Emit error reporting via `reportError` + `dbTry` wrappers; expose retry-friendly errors. _(Requirements: 1.1, 2.1, 5.1)_
+-   [x] Expose helper for invalidating stores (`workspace:reloaded` hook + store refresh). _(Requirements: 2.1)_
 
 ## 3. Build Workspace Backup Dashboard app
 
