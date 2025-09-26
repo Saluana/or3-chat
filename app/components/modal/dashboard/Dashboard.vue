@@ -193,6 +193,21 @@ const coreItems: DashboardPlugin[] = [
                 component: () => import('~/pages/images/index.vue'),
             },
         ],
+    },
+    {
+        id: 'core:workspace-backup',
+        icon: 'pixelarticons:briefcase-upload',
+        label: 'Workspace Backup',
+        order: 45,
+        pages: [
+            {
+                id: 'workspace-backup-home',
+                title: 'Workspace Backup',
+                description: 'Export and import full workspace backups.',
+                icon: 'pixelarticons:briefcase-upload',
+                component: () => import('./workspace/WorkspaceBackupApp.vue'),
+            },
+        ],
     } /*
     {
         id: 'core:prompts',
