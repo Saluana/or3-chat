@@ -22,26 +22,15 @@
                         app, so double-check selections before importing.
                     </p>
                 </div>
-                <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-btn"
-                    :href="docsHref"
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    Backup guide
-                </UButton>
+                <div></div>
             </div>
             <UAlert
                 color="warning"
                 variant="subtle"
-                icon="pixelarticons:warning"
+                icon="pixelarticons:warning-box"
                 class="text-xs"
-            >
-                Always create a fresh export before importing a backup—replace
-                mode wipes current data.
-            </UAlert>
+                title="Always create a fresh export before importing a backup—replace mode wipes current data."
+            />
         </section>
 
         <section
@@ -56,9 +45,7 @@
                 >
                     Export workspace
                 </h3>
-                <span class="text-xs opacity-70 tabular-nums">
-                    {{ exportStatusText }}
-                </span>
+                <div></div>
             </div>
             <p class="supporting-text">
                 Downloads a timestamped JSONL backup of the entire IndexedDB.
@@ -72,30 +59,22 @@
                     :value="state.progress"
                     :max="100"
                 />
-                <div class="flex items-center gap-2 flex-wrap text-xs">
-                    <UBadge
-                        :icon="exportStatusBadge.icon"
-                        :class="[
-                            'retro-badge',
-                            badgeToneClass(exportStatusBadge.color),
-                        ]"
-                    >
-                        {{ exportStatusBadge.label }}
-                    </UBadge>
-                    <span class="opacity-80">{{ exportStatusText }}</span>
-                </div>
             </div>
-            <div class="flex flex-wrap gap-3">
+            <div class="flex items-center flex-wrap justify-between gap-3">
                 <UButton
-                    size="sm"
                     variant="basic"
                     class="retro-btn"
                     :disabled="!canExport"
                     :loading="exporting"
                     @click="onExport"
                 >
+                    <UIcon
+                        name="pixelarticons:briefcase-download"
+                        class="h-4 w-4 mr-0.5"
+                    />
                     Export workspace
                 </UButton>
+                <span class="opacity-80 text-xs">{{ exportStatusText }}</span>
             </div>
         </section>
 
@@ -206,18 +185,16 @@
                     variant="subtle"
                     icon="pixelarticons:hourglass"
                     class="text-xs"
-                >
-                    Validating backup metadata…
-                </UAlert>
+                    title="Validating backup metadata…"
+                />
                 <UAlert
-                    v-if="peekError"
+                    v-if="peekErrorMessage"
                     color="error"
                     variant="subtle"
-                    icon="pixelarticons:warning"
+                    icon="pixelarticons:warning-box"
                     class="text-xs"
-                >
-                    {{ peekError.message }}
-                </UAlert>
+                    :title="peekErrorMessage"
+                />
 
                 <Transition name="fade">
                     <div
@@ -327,26 +304,23 @@
                         description="When disabled, conflicting rows are skipped and reported."
                     />
                 </div>
-                <!--
+
                 <UAlert
-                    v-if="importWarning"
+                    v-if="importWarningMessage"
                     color="warning"
                     variant="subtle"
-                    icon="pixelarticons:warning"
+                    icon="pixelarticons:warning-box"
                     class="text-xs"
-                >
-                    {{ importWarning }}
-                </UAlert>
+                    :title="importWarningMessage"
+                />
                 <UAlert
-                    v-if="importError"
+                    v-if="importErrorMessage"
                     color="error"
                     variant="subtle"
-                    icon="pixelarticons:warning"
+                    icon="pixelarticons:warning-box"
                     class="text-xs"
-                >
-                    {{ importError.message }}
-                </UAlert>
-                -->
+                    :title="importErrorMessage"
+                />
 
                 <div class="space-y-2">
                     <UProgress
@@ -483,6 +457,12 @@ const importWarning = computed(() => {
         return 'Append mode keeps existing data; enable overwrite to update conflicting records.';
     return '';
 });
+
+const importWarningMessage = computed(() => importWarning.value.trim());
+const importErrorMessage = computed(
+    () => importError.value?.message?.trim() ?? ''
+);
+const peekErrorMessage = computed(() => peekError.value?.message?.trim() ?? '');
 
 const overwriteDisabled = computed(() => importMode.value !== 'append');
 
