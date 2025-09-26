@@ -54,21 +54,43 @@ function aspectStyle(m: FileMeta) {
 }
 
 async function handleDownload(meta: FileMeta) {
-    const blob = await getFileBlob(meta.hash);
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = meta.name || 'image';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    let url: string | undefined;
+    try {
+        const blob = await getFileBlob(meta.hash);
+        if (!blob) throw new Error('blob missing');
+        url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = meta.name || 'image';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    } catch (error) {
+        reportError(error, {
+            code: 'ERR_DB_READ_FAILED',
+            message: `Couldn't download "${meta.name || 'image'}".`,
+            tags: { domain: 'images', action: 'download', hash: meta.hash },
+        });
+    } finally {
+        if (url) URL.revokeObjectURL(url);
+    }
 }
 
 async function handleCopy(meta: FileMeta) {
-    const blob = await getFileBlob(meta.hash);
-    if (!blob) return;
+    let blob: Blob;
+    try {
+        const resolved = await getFileBlob(meta.hash);
+        if (!resolved) throw new Error('blob missing');
+        blob = resolved;
+    } catch (error) {
+        reportError(error, {
+            code: 'ERR_DB_READ_FAILED',
+            message: `Couldn't copy "${meta.name || 'image'}".`,
+            tags: { domain: 'images', action: 'copy', hash: meta.hash },
+        });
+        return;
+    }
+
     const mime = meta.mime_type || 'image/png';
     const showCopiedToast = () =>
         toast.add({
@@ -81,7 +103,8 @@ async function handleCopy(meta: FileMeta) {
         const item = new ClipboardItem({ [mime]: blob });
         await navigator.clipboard.write([item]);
         showCopiedToast();
-    } catch {
+        return;
+    } catch (primaryError) {
         const url = URL.createObjectURL(blob);
         try {
             const res = await fetch(url);
@@ -89,6 +112,17 @@ async function handleCopy(meta: FileMeta) {
             const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
             await navigator.clipboard.writeText(`data:${mime};base64,${b64}`);
             showCopiedToast();
+        } catch (fallbackError) {
+            reportError(fallbackError || primaryError, {
+                code: 'ERR_INTERNAL',
+                message: `Couldn't copy "${meta.name || 'image'}".`,
+                tags: {
+                    domain: 'images',
+                    action: 'copy',
+                    hash: meta.hash,
+                    stage: 'fallback',
+                },
+            });
         } finally {
             URL.revokeObjectURL(url);
         }
@@ -102,8 +136,13 @@ async function handleRename(meta: FileMeta) {
     meta.name = next;
     try {
         await updateFileName(meta.hash, next);
-    } catch {
+    } catch (error) {
         meta.name = old;
+        reportError(error, {
+            code: 'ERR_DB_WRITE_FAILED',
+            message: `Couldn't rename "${old}".`,
+            tags: { domain: 'images', action: 'rename', hash: meta.hash },
+        });
     }
 }
 

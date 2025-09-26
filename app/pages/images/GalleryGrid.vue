@@ -2,6 +2,7 @@
 import { onMounted, onBeforeUnmount, reactive, watch, ref } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
+import { reportError } from '../../utils/errors';
 
 const props = defineProps<{
     items: FileMeta[];
@@ -39,8 +40,17 @@ async function ensureUrl(meta: FileMeta) {
         if (!blob) throw new Error('blob missing');
         const url = URL.createObjectURL(blob);
         state.urlByHash[meta.hash] = url;
-    } catch {
+    } catch (error) {
         state.errorByHash[meta.hash] = true;
+        reportError(error, {
+            code: 'ERR_DB_READ_FAILED',
+            message: `Couldn't load preview for "${meta.name || meta.hash}".`,
+            tags: {
+                domain: 'images',
+                action: 'preview',
+                hash: meta.hash,
+            },
+        });
     }
 }
 
@@ -104,6 +114,8 @@ function toggleSelect(hash: string) {
 }
 
 // Single delete is now handled from viewer; emit hook kept for type safety if needed elsewhere.
+
+defineExpose({ ensureUrl });
 </script>
 
 <template>

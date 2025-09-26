@@ -3,6 +3,7 @@ import { onBeforeUnmount, reactive, watch, ref, nextTick } from 'vue';
 import type { FileMeta } from '~/db/schema';
 import { getFileBlob } from '~/db/files';
 import { onKeyStroke } from '@vueuse/core';
+import { reportError } from '~/utils/errors';
 
 const props = defineProps<{
     modelValue: boolean;
@@ -26,7 +27,17 @@ async function load() {
         const blob = await getFileBlob(props.meta.hash);
         if (!blob) return;
         state.url = URL.createObjectURL(blob);
-    } catch {}
+    } catch (error) {
+        reportError(error, {
+            code: 'ERR_DB_READ_FAILED',
+            message: `Couldn't load "${props.meta?.name || 'image'}" preview.`,
+            tags: {
+                domain: 'images',
+                action: 'viewer-load',
+                hash: props.meta?.hash,
+            },
+        });
+    }
 }
 
 function revoke() {
