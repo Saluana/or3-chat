@@ -272,6 +272,23 @@ These replace all prior advanced branching / context hooks from the earlier desi
 
 You can also attach analytics or telemetry here without touching the branching logic.
 
+## Workspace backup hooks
+
+Backup export/import flows emit dedicated actions so extensions can observe progress, log telemetry, or persist copies elsewhere. Payloads are plain objects—mutating them has no side effects.
+
+-   `workspace.backup.peek:action:before (ctx)` — about to inspect a backup file. `ctx` contains `{ fileName: string | null }`.
+-   `workspace.backup.peek:action:after (ctx)` — metadata validated successfully. `ctx` extends the base with `{ format: 'stream' | 'dexie', metadata: ImportMetadata, durationMs: number }`.
+-   `workspace.backup.peek:action:error (ctx)` — metadata inspection failed. `ctx` extends the base with `{ error: AppError, durationMs: number }`.
+-   `workspace.backup.export:action:before (ctx)` — user confirmed an export. `ctx` includes `{ format: 'stream', filenameBase: string, suggestedName: string }`.
+-   `workspace.backup.export:action:after (ctx)` — export finished and the file writer closed. `ctx` adds `{ durationMs: number }`.
+-   `workspace.backup.export:action:cancelled (ctx)` — export was cancelled (typically via the file picker). `ctx` adds `{ durationMs: number }`.
+-   `workspace.backup.export:action:error (ctx)` — export hit an error. `ctx` adds `{ durationMs: number, error: AppError }`.
+-   `workspace.backup.import:action:before (ctx)` — ready to import a backup. `ctx` has `{ fileName: string | null, mode: WorkspaceImportMode, overwrite: boolean, format: 'stream' | 'dexie' | 'unknown' }`.
+-   `workspace.backup.import:action:after (ctx)` — import finished and Dexie tables were updated. `ctx` adds `{ durationMs: number }`.
+-   `workspace.backup.import:action:error (ctx)` — import failed. `ctx` adds `{ durationMs: number, error: AppError }`.
+
+All import paths still fire `workspace:reloaded` afterward to let panes refresh data; listen to either hook depending on the granularity you need.
+
 ### Examples
 
 Redact fields from project reads:

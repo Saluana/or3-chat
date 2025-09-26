@@ -331,7 +331,7 @@
                     />
                 </div>
 
-                <div class="flex flex-wrap gap-3">
+                <div class="flex flex-wrap items-center justify-between gap-3">
                     <UButton
                         color="primary"
                         variant="light"
@@ -346,6 +346,9 @@
                         />
                         Import workspace
                     </UButton>
+                    <span class="text-xs opacity-70 tabular-nums">
+                        {{ importStatusText }}
+                    </span>
                 </div>
             </div>
         </section>
