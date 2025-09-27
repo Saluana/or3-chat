@@ -4,6 +4,7 @@ import type { FileMeta } from '~/db/schema';
 import { getFileBlob } from '~/db/files';
 import { onKeyStroke } from '@vueuse/core';
 import { reportError } from '~/utils/errors';
+import { useSharedPreviewCache } from '~/composables/usePreviewCache';
 
 const props = defineProps<{
     modelValue: boolean;
@@ -21,30 +22,46 @@ const emit = defineEmits<{
 
 const state = reactive<{ url?: string }>({ url: undefined });
 const overlayEl = ref<HTMLElement | null>(null);
+const cache = useSharedPreviewCache();
+const currentHash = ref<string | null>(null);
 
 async function load() {
-    revoke();
-    if (!props.meta) return;
+    if (!cache) return;
+    const nextMeta = props.meta;
+    if (currentHash.value && currentHash.value !== nextMeta?.hash) {
+        cache.release(currentHash.value);
+    }
+    currentHash.value = nextMeta?.hash ?? null;
+    state.url = undefined;
+    if (!nextMeta) return;
     try {
-        const blob = await getFileBlob(props.meta.hash);
-        if (!blob) return;
-        state.url = URL.createObjectURL(blob);
+        const url = await cache.ensure(nextMeta.hash, async () => {
+            const blob = await getFileBlob(nextMeta.hash);
+            if (!blob) throw new Error('blob missing');
+            const url = URL.createObjectURL(blob);
+            return { url, bytes: blob.size };
+        });
+        if (url) {
+            state.url = url;
+            cache.promote(nextMeta.hash, 2);
+        }
     } catch (error) {
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
-            message: `Couldn't load "${props.meta?.name || 'image'}" preview.`,
+            message: `Couldn't load "${nextMeta.name || 'image'}" preview.`,
             tags: {
                 domain: 'images',
                 action: 'viewer-load',
-                hash: props.meta?.hash,
+                hash: nextMeta.hash,
             },
         });
     }
 }
 
-function revoke() {
-    if (state.url) URL.revokeObjectURL(state.url);
-    state.url = undefined;
+function downgrade() {
+    if (!cache || !currentHash.value) return;
+    cache.release(currentHash.value);
+    currentHash.value = null;
 }
 
 watch(
@@ -53,9 +70,13 @@ watch(
     { immediate: true }
 );
 
-onBeforeUnmount(revoke);
+onBeforeUnmount(() => {
+    downgrade();
+    state.url = undefined;
+});
 
 function close() {
+    downgrade();
     emit('update:modelValue', false);
 }
 
@@ -66,7 +87,12 @@ onKeyStroke('Escape', (e) => {
 watch(
     () => props.modelValue,
     async (v) => {
-        if (v) await nextTick().then(() => overlayEl.value?.focus());
+        if (v) {
+            await nextTick().then(() => overlayEl.value?.focus());
+        } else {
+            downgrade();
+            state.url = undefined;
+        }
     }
 );
 // Keep template overlay at document level so backdrop covers entire screen
@@ -122,7 +148,7 @@ watch(
                             <UButton
                                 variant="light"
                                 size="sm"
-                                icon="pixelarticons:refresh"
+                                icon="pixelarticons:repeat"
                                 @click.stop.self="meta && emit('restore', meta)"
                             >
                                 Restore

@@ -3,6 +3,7 @@ import { onMounted, onBeforeUnmount, reactive, watch, ref } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
 import { reportError } from '../../utils/errors';
+import { useSharedPreviewCache } from '~/composables/usePreviewCache';
 
 const props = defineProps<{
     items: FileMeta[];
@@ -29,18 +30,49 @@ type State = {
 const state = reactive<State>({ urlByHash: {}, errorByHash: {} });
 const container = ref<HTMLElement | null>(null);
 let io: IntersectionObserver | null = null;
+const cache = useSharedPreviewCache();
+const visibleHashes = new Set<string>();
+let previousHashes = new Set<string>();
+let idleHandle: number | null = null;
+let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+let visibilityHandler: (() => void) | null = null;
 
 function isSelected(hash: string): boolean {
     return props.selectedHashes?.has?.(hash) ?? false;
 }
 
+function dropHash(hash: string) {
+    delete state.urlByHash[hash];
+    delete state.errorByHash[hash];
+    visibleHashes.delete(hash);
+}
+
+function pruneStaleState() {
+    for (const hash of Object.keys(state.urlByHash)) {
+        if (!cache?.peek(hash)) {
+            dropHash(hash);
+        }
+    }
+}
+
 async function ensureUrl(meta: FileMeta) {
-    if (state.urlByHash[meta.hash] || state.errorByHash[meta.hash]) return;
+    if (!cache) return;
+    if (state.errorByHash[meta.hash]) return;
     try {
-        const blob = await getFileBlob(meta.hash);
-        if (!blob) throw new Error('blob missing');
-        const url = URL.createObjectURL(blob);
-        state.urlByHash[meta.hash] = url;
+        const url = await cache.ensure(
+            meta.hash,
+            async () => {
+                const blob = await getFileBlob(meta.hash);
+                if (!blob) throw new Error('blob missing');
+                const url = URL.createObjectURL(blob);
+                return { url, bytes: blob.size };
+            },
+            1
+        );
+        if (url) {
+            state.urlByHash[meta.hash] = url;
+            state.errorByHash[meta.hash] = undefined;
+        }
     } catch (error) {
         state.errorByHash[meta.hash] = true;
         reportError(error, {
@@ -52,49 +84,153 @@ async function ensureUrl(meta: FileMeta) {
                 hash: meta.hash,
             },
         });
+    } finally {
+        pruneStaleState();
     }
 }
 
-function observe() {
-    if (io) io.disconnect();
-    if (typeof IntersectionObserver === 'undefined') return;
-    io = new IntersectionObserver(
-        (entries) => {
-            for (const e of entries) {
-                if (e.isIntersecting) {
-                    const hash = (e.target as HTMLElement).dataset['hash'];
-                    const meta = props.items.find((m) => m.hash === hash);
-                    if (meta) ensureUrl(meta);
-                }
-            }
-        },
-        { root: container.value, rootMargin: '200px 0px', threshold: 0.01 }
-    );
+function releaseHash(hash: string) {
+    if (!cache) return;
+    cache.release(hash);
+}
 
-    // Attach to tiles
-    requestAnimationFrame(() => {
-        container.value
-            ?.querySelectorAll('[data-hash]')
-            ?.forEach((el) => io?.observe(el));
-    });
+function handleVisibilityChange() {
+    if (!cache || typeof document === 'undefined') return;
+    if (document.visibilityState === 'hidden') {
+        const removed = cache.flushAll();
+        removed.forEach((hash) => dropHash(hash));
+    }
+}
+
+function ensureObserver(): IntersectionObserver | null {
+    if (typeof IntersectionObserver === 'undefined') return null;
+    if (!io) {
+        io = new IntersectionObserver(
+            (entries) => {
+                for (const e of entries) {
+                    const hash = (e.target as HTMLElement).dataset['hash'];
+                    if (!hash) continue;
+                    if (e.isIntersecting) {
+                        visibleHashes.add(hash);
+                        const meta = props.items.find((m) => m.hash === hash);
+                        if (meta) {
+                            ensureUrl(meta);
+                            cache?.promote(hash, 1);
+                        }
+                    } else {
+                        visibleHashes.delete(hash);
+                        releaseHash(hash);
+                    }
+                }
+                const removed = cache?.evictIfNeeded('intersection') ?? [];
+                removed.forEach((hash) => dropHash(hash));
+                pruneStaleState();
+            },
+            { root: container.value, rootMargin: '200px 0px', threshold: 0.01 }
+        );
+    }
+    return io;
+}
+
+function bindTiles() {
+    const observer = ensureObserver();
+    if (!observer) return;
+    const root = container.value;
+    if (!root) return;
+
+    observer.disconnect();
+
+    const run = () => {
+        root?.querySelectorAll('[data-hash]')?.forEach((el) =>
+            observer.observe(el)
+        );
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(run);
+    } else {
+        setTimeout(run, 16);
+    }
+}
+
+function cancelScheduledObserve() {
+    const cancelIdle =
+        typeof window !== 'undefined' &&
+        typeof window.cancelIdleCallback === 'function'
+            ? window.cancelIdleCallback.bind(window)
+            : null;
+    if (idleHandle !== null && cancelIdle) {
+        cancelIdle(idleHandle);
+    }
+    if (timeoutHandle !== null) {
+        clearTimeout(timeoutHandle);
+    }
+    idleHandle = null;
+    timeoutHandle = null;
+}
+
+function scheduleObserve() {
+    cancelScheduledObserve();
+
+    const idleScheduler =
+        typeof window !== 'undefined' &&
+        typeof window.requestIdleCallback === 'function'
+            ? window.requestIdleCallback.bind(window)
+            : null;
+
+    if (idleScheduler) {
+        idleHandle = idleScheduler(
+            () => {
+                idleHandle = null;
+                bindTiles();
+            },
+            { timeout: 50 }
+        );
+        return;
+    }
+
+    timeoutHandle = setTimeout(() => {
+        timeoutHandle = null;
+        bindTiles();
+    }, 0);
 }
 
 onMounted(() => {
-    observe();
+    previousHashes = new Set(props.items.map((item) => item.hash));
+    scheduleObserve();
+    if (typeof document !== 'undefined') {
+        visibilityHandler = () => handleVisibilityChange();
+        document.addEventListener('visibilitychange', visibilityHandler);
+    }
 });
 
 watch(
-    () => props.items.map((i) => i.hash).join(','),
-    () => {
-        // re-observe when items change
-        observe();
+    () => props.items.map((i) => i.hash),
+    (hashes) => {
+        const next = new Set(hashes);
+        for (const hash of previousHashes) {
+            if (!next.has(hash)) {
+                cache?.drop(hash);
+                dropHash(hash);
+            }
+        }
+        previousHashes = next;
+        const removed = cache?.evictIfNeeded('items-change') ?? [];
+        removed.forEach((hash) => dropHash(hash));
+        pruneStaleState();
+        scheduleObserve();
     }
 );
 
 onBeforeUnmount(() => {
     if (io) io.disconnect();
-    // revoke URLs
-    Object.values(state.urlByHash).forEach((u) => u && URL.revokeObjectURL(u));
+    cancelScheduledObserve();
+    if (typeof document !== 'undefined' && visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+    }
+    const removed = cache?.flushAll() ?? [];
+    removed.forEach((hash) => dropHash(hash));
+    pruneStaleState();
 });
 
 function view(meta: FileMeta) {
@@ -113,8 +249,6 @@ function toggleSelect(hash: string) {
     if (!hash || props.isDeleting) return;
     emit('toggle-select', hash);
 }
-
-// Single delete is now handled from viewer; emit hook kept for type safety if needed elsewhere.
 
 defineExpose({ ensureUrl });
 </script>

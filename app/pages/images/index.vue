@@ -28,9 +28,9 @@ const selected = ref<FileMeta | null>(null);
 const selectionMode = ref(false);
 const selectedHashes = ref<Set<string>>(new Set());
 const trashMode = ref(false);
-const mutationState = ref<'idle' | 'soft-delete' | 'hard-delete' | 'restore'>(
-    'idle'
-);
+type MutationState = 'idle' | 'soft-delete' | 'hard-delete' | 'restore';
+// Keep this union in sync with the computed helpers below so template logic stays DRY.
+const mutationState = ref<MutationState>('idle');
 const isMutating = computed(() => mutationState.value !== 'idle');
 const isSoftDeleting = computed(() => mutationState.value === 'soft-delete');
 const isHardDeleting = computed(() => mutationState.value === 'hard-delete');
@@ -80,12 +80,6 @@ async function loadMore() {
 onMounted(() => {
     loadMore();
 });
-
-function aspectStyle(m: FileMeta) {
-    const w = m.width ?? 1;
-    const h = m.height ?? 1;
-    return { aspectRatio: `${w} / ${h}` } as any;
-}
 
 async function handleDownload(meta: FileMeta) {
     let url: string | undefined;
