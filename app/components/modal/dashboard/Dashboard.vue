@@ -5,17 +5,17 @@
         :ui="{
             content: 'z-[10]',
             footer: 'justify-end border-t-2',
-            body: 'overflow-hidden h-full flex-1 p-0!',
+            body: 'overflow-hidden h-full flex-1 !p-0',
         }"
         title="Dashboard"
         :dismissible="false"
         description="Browse all apps, plugins, and settings."
-        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden"
+        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden"
     >
         <template #body>
             <!-- iOS style springboard grid: fixed icon cell width per breakpoint, centered, nice vertical rhythm -->
             <div
-                v-if="activeView === 'dashboard'"
+                v-if="state.view === 'dashboard'"
                 class="p-4 flex justify-center"
             >
                 <div
@@ -29,12 +29,12 @@
                         :size="74"
                         :retro="true"
                         :radius="3"
-                        @click="onPluginClick(item)"
+                        @click="handlePluginClick(item.id)"
                     />
                 </div>
             </div>
             <div
-                v-if="activeView === 'page'"
+                v-if="state.view === 'page'"
                 class="h-full flex flex-col min-h-0"
             >
                 <div
@@ -44,7 +44,7 @@
                         variant="subtle"
                         color="primary"
                         size="sm"
-                        class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10!"
+                        class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10"
                         @click="goBack()"
                     >
                         <UIcon
@@ -59,16 +59,22 @@
                         >
                     </div>
                 </div>
+                <div
+                    v-if="state.error"
+                    class="mx-4 mt-3 rounded-md border-2 border-[var(--md-error)] bg-[var(--md-error-container)] px-3 py-2 text-xs text-[var(--md-on-error-container)]"
+                >
+                    {{ state.error.message }}
+                </div>
                 <!-- Landing list if multiple pages and none chosen -->
                 <div
-                    v-if="!activePageId && landingPages.length > 1"
+                    v-if="!state.activePageId && landingPages.length > 1"
                     class="p-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
                 >
                     <button
                         v-for="p in landingPages"
                         :key="p.id"
                         class="group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left"
-                        @click="openPage(activePluginId!, p.id)"
+                        @click="handleLandingPageClick(p.id)"
                     >
                         <div class="flex items-center gap-2">
                             <UIcon
@@ -90,15 +96,20 @@
                 </div>
                 <!-- Single page or chosen page -->
                 <div v-else class="flex-1 min-h-0 overflow-y-auto">
-                    <div v-if="loadingPage" class="text-sm opacity-70 p-4">
+                    <div
+                        v-if="state.loadingPage"
+                        class="text-sm opacity-70 p-4"
+                    >
                         Loading…
                     </div>
                     <component
-                        v-else-if="resolvedPageComp"
-                        :is="resolvedPageComp"
+                        v-else-if="resolvedPageComponent"
+                        :is="resolvedPageComponent"
                     />
                     <div
-                        v-else-if="!activePageId && landingPages.length === 1"
+                        v-else-if="
+                            !state.activePageId && landingPages.length === 1
+                        "
                         class="text-xs opacity-60"
                     >
                         Preparing page…
@@ -112,13 +123,10 @@
     </UModal>
 </template>
 <script setup lang="ts">
-import { computed, ref, shallowRef } from 'vue';
+import { computed } from 'vue';
 import PluginIcons from './PluginIcons.vue';
 import {
-    useDashboardPlugins,
-    useDashboardPluginPages,
-    resolveDashboardPluginPageComponent,
-    listDashboardPluginPages,
+    useDashboardNavigation,
     registerDashboardPluginPage,
     type DashboardPlugin,
 } from '~/composables';
@@ -126,12 +134,6 @@ import {
 const props = defineProps<{
     showModal: boolean;
 }>();
-
-const activeView = ref<'page' | 'dashboard'>('dashboard');
-const activePluginId = ref<string | null>(null);
-const activePageId = ref<string | null>(null);
-const loadingPage = ref(false);
-const resolvedPageComp = shallowRef<any>(null);
 
 const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
 
@@ -141,9 +143,6 @@ const open = computed({
     set: (value: boolean) => emit('update:showModal', value),
 });
 
-// Reactive list of registered dashboard plugins (external + future built-ins)
-const registered = useDashboardPlugins();
-
 // Core (built-in) items; can be overridden by external plugin with same id
 const coreItems: DashboardPlugin[] = [
     {
@@ -151,18 +150,7 @@ const coreItems: DashboardPlugin[] = [
         icon: 'pixelarticons:sliders',
         label: 'Settings',
         order: 1,
-        handler: (item: any) => {
-            // Example handler to open settings
-            activeView.value = 'page';
-        },
         pages: [
-            /*{
-                id: 'general-settings',
-                title: 'General Settings',
-                description: 'Configure application preferences and options.',
-                icon: 'pixelarticons:sliders',
-                component: () => import('./SettingsPage.vue'),
-            },*/
             {
                 id: 'theme-settings',
                 title: 'Theme Settings',
@@ -208,19 +196,7 @@ const coreItems: DashboardPlugin[] = [
                 component: () => import('./workspace/WorkspaceBackupApp.vue'),
             },
         ],
-    } /*
-    {
-        id: 'core:prompts',
-        icon: 'pixelarticons:script-text',
-        label: 'Prompts',
-        order: 20,
     },
-    {
-        id: 'core:files',
-        icon: 'pixelarticons:folder',
-        label: 'Files',
-        order: 30,
-    },*/,
 ];
 
 // Register any inline pages defined on core items with the shared dashboard page registry
@@ -233,109 +209,25 @@ for (const item of coreItems) {
     }
 }
 
-// Merge + sort (lower order first). If no registered, show core only.
-const dashboardItems = computed(() => {
-    const reg = registered.value;
-    if (!reg.length)
-        return [...coreItems].sort(
-            (a, b) => (a.order ?? 200) - (b.order ?? 200)
-        );
-    const map = new Map<string, any>();
-    for (const c of coreItems) map.set(c.id, c);
-    for (const r of reg) map.set(r.id, r); // registered can override core by id
-    return Array.from(map.values()).sort(
-        (a, b) => (a.order ?? 200) - (b.order ?? 200)
-    );
-});
+const {
+    state,
+    resolvedPageComponent,
+    dashboardItems,
+    landingPages,
+    headerPluginLabel,
+    activePageTitle,
+    openPlugin,
+    openPage,
+    goBack,
+} = useDashboardNavigation({ baseItems: coreItems });
 
-// Pages for the currently active plugin
-const activePluginPages = useDashboardPluginPages(
-    () => activePluginId.value || undefined
-);
+const handlePluginClick = (pluginId: string) => {
+    void openPlugin(pluginId);
+};
 
-const landingPages = computed(() => activePluginPages.value);
-
-const headerPluginLabel = computed(() => {
-    if (!activePluginId.value) return 'Dashboard';
-    const found = dashboardItems.value.find(
-        (p: any) => p.id === activePluginId.value
-    );
-    return found?.label || activePluginId.value;
-});
-const activePageTitle = computed(() => {
-    if (!activePluginId.value || !activePageId.value) return '';
-    const page = listDashboardPluginPages(activePluginId.value).find(
-        (p) => p.id === activePageId.value
-    );
-    return page?.title || activePageId.value;
-});
-
-async function openPage(pluginId: string, pageId: string) {
-    loadingPage.value = true;
-    activePluginId.value = pluginId;
-    activePageId.value = pageId;
-    activeView.value = 'page';
-    try {
-        const comp = await resolveDashboardPluginPageComponent(
-            pluginId,
-            pageId
-        );
-        resolvedPageComp.value = comp || null;
-    } catch (e) {
-        console.error('[dashboard] failed to load page', e);
-        resolvedPageComp.value = null;
-    } finally {
-        loadingPage.value = false;
-    }
-}
-
-function resetToGrid() {
-    activeView.value = 'dashboard';
-    activePluginId.value = null;
-    activePageId.value = null;
-    resolvedPageComp.value = null;
-}
-
-function goBack() {
-    // If we're on the main dashboard already, nothing to do
-    if (activeView.value === 'dashboard') return;
-    // If inside a plugin context
-    if (activeView.value === 'page' && activePluginId.value) {
-        // If currently viewing a specific page, step back to landing list (if multi-page)
-        if (activePageId.value) {
-            const pages = listDashboardPluginPages(activePluginId.value);
-            activePageId.value = null;
-            resolvedPageComp.value = null;
-            // If there is only one (or zero) page, there is no landing list UX -> go all the way back
-            if (pages.length <= 1) {
-                resetToGrid();
-            }
-            return;
-        }
-        // We are already at the landing list (no active page) -> go to dashboard grid
-        resetToGrid();
-        return;
-    }
-    // Fallback safety
-    resetToGrid();
-}
-
-function onPluginClick(item: any) {
-    try {
-        activePluginId.value = item.id;
-        activePageId.value = null;
-        const pages = listDashboardPluginPages(item.id);
-        if (!pages.length) {
-            item.handler?.({ id: item.id });
-            return;
-        }
-        if (pages.length === 1) {
-            openPage(item.id, pages[0]!.id);
-            return;
-        }
-        activeView.value = 'page';
-    } catch (e) {
-        console.error('[dashboard] plugin handler error', e);
-    }
-}
+const handleLandingPageClick = (pageId: string) => {
+    const pluginId = state.activePluginId;
+    if (!pluginId) return;
+    void openPage(pluginId, pageId);
+};
 </script>
