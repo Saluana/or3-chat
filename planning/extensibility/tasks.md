@@ -6,11 +6,11 @@ Note: All tasks follow existing patterns (global registries via globalThis, reac
 
 ## 1. Publish Hook Map and Types (Req: 1, 10, 11)
 
--   [ ] 1.1 Create `app/utils/hook-keys.ts` exporting:
-    -   [ ] `HookKey` union covering: ui.chat.message:filter:outgoing/incoming; ai.chat.send:action:before/after; ai.chat.stream:action:delta/reasoning/complete/error; ui.pane.msg:action:sent/received; db._ existing hooks; files._; threads._; documents._
-    -   [ ] Payload interfaces: `AiSendBefore`, `AiStreamDeltaCtx`, `AiStreamReasoningCtx`, `AiStreamCompleteCtx`, `AiStreamErrorCtx`, etc.
-    -   [ ] Optional helper: `typedOn(hooks).on<K extends HookKey>(key: K, fn, opts)` for better IDE help without changing engine.
--   [ ] 1.2 Add docs in `docs/core-hook-map.md` summarizing names, phases, and veto semantics.
+-   [x] 1.1 Create `app/utils/hook-keys.ts` exporting:
+    -   [x] `HookKey` union covering: ui.chat.message:filter:outgoing/incoming; ai.chat.send:action:before/after; ai.chat.stream:action:delta/reasoning/complete/error; ui.pane.msg:action:sent/received; db._ existing hooks; files._; threads._; documents._
+    -   [x] Payload interfaces: `AiSendBefore`, `AiStreamDeltaCtx`, `AiStreamReasoningCtx`, `AiStreamCompleteCtx`, `AiStreamErrorCtx`, etc.
+    -   [x] Optional helper: `typedOn(hooks).on<K extends HookKey>(key: K, fn, opts)` for better IDE help without changing engine.
+-   [x] 1.2 Add docs in `docs/core-hook-map.md` summarizing names, phases, and veto semantics.
 
 ## 2. Message Lifecycle Hooks Completion (Req: 2, 11)
 
