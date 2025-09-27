@@ -9,6 +9,7 @@ import {
     listRegisteredDashboardPluginIds,
     listDashboardPluginPages,
     resolveDashboardPluginPageComponent,
+    useDashboardNavigation,
 } from '../ui-extensions/dashboard/useDashboardPlugins';
 import { nextTick, h, ref } from 'vue';
 
@@ -25,6 +26,7 @@ describe('dashboard plugin registry', () => {
         g.__or3DashboardPluginsRegistry?.clear?.();
         g.__or3DashboardPluginPagesRegistry?.clear?.();
         // Force an empty re-register path by re-registering nothing.
+        useDashboardNavigation({ baseItems: [] }).reset();
     });
 
     it('registers a simple plugin and lists it', async () => {
@@ -449,5 +451,132 @@ describe('dashboard plugin registry', () => {
         expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
         (process as any).dev = prevDev;
+    });
+
+    describe('useDashboardNavigation', () => {
+        it('dispatches handler when plugin has no pages', async () => {
+            const handler = vi.fn();
+            registerDashboardPlugin({
+                id: 'test:nav-handler',
+                icon: 'pixelarticons:star',
+                label: 'Nav Handler',
+                handler,
+            });
+            await flush();
+            const nav = useDashboardNavigation();
+            const result = await nav.openPlugin('test:nav-handler');
+            expect(result.ok).toBe(true);
+            expect(handler).toHaveBeenCalledTimes(1);
+            expect(nav.state.view).toBe('dashboard');
+            expect(nav.state.activePageId).toBeNull();
+            expect(nav.state.error).toBeNull();
+        });
+
+        it('opens single-page plugin directly', async () => {
+            const Comp = { name: 'NavSingle', render: () => null };
+            registerDashboardPlugin({
+                id: 'test:nav-single',
+                icon: 'pixelarticons:circle',
+                label: 'Nav Single',
+                pages: [
+                    {
+                        id: 'main',
+                        title: 'Main',
+                        component: Comp,
+                    },
+                ],
+            });
+            await flush();
+            const nav = useDashboardNavigation();
+            const result = await nav.openPlugin('test:nav-single');
+            expect(result.ok).toBe(true);
+            expect(nav.state.view).toBe('page');
+            expect(nav.state.activePluginId).toBe('test:nav-single');
+            expect(nav.state.activePageId).toBe('main');
+            expect(nav.resolvedPageComponent.value).toBeTruthy();
+            expect((nav.resolvedPageComponent.value as any).name).toBe(
+                'NavSingle'
+            );
+            expect(nav.state.loadingPage).toBe(false);
+            expect(nav.state.error).toBeNull();
+        });
+
+        it('enters landing mode for multi-page plugins and supports back navigation', async () => {
+            const PageA = { name: 'PageA', render: () => null };
+            const PageB = { name: 'PageB', render: () => null };
+            registerDashboardPlugin({
+                id: 'test:nav-multi',
+                icon: 'pixelarticons:square',
+                label: 'Nav Multi',
+                pages: [
+                    {
+                        id: 'one',
+                        title: 'One',
+                        component: PageA,
+                    },
+                    {
+                        id: 'two',
+                        title: 'Two',
+                        component: PageB,
+                    },
+                ],
+            });
+            await flush();
+            const nav = useDashboardNavigation();
+            const result = await nav.openPlugin('test:nav-multi');
+            expect(result.ok).toBe(true);
+            expect(nav.state.view).toBe('page');
+            expect(nav.state.activePluginId).toBe('test:nav-multi');
+            expect(nav.state.activePageId).toBeNull();
+            expect(nav.landingPages.value.map((p) => p.id)).toEqual([
+                'one',
+                'two',
+            ]);
+            const pageResult = await nav.openPage('test:nav-multi', 'one');
+            expect(pageResult.ok).toBe(true);
+            expect(nav.state.activePageId).toBe('one');
+            expect((nav.resolvedPageComponent.value as any).name).toBe('PageA');
+            nav.goBack();
+            expect(nav.state.activePageId).toBeNull();
+            expect(nav.state.view).toBe('page');
+            nav.goBack();
+            expect(nav.state.view).toBe('dashboard');
+            expect(nav.state.activePluginId).toBeNull();
+        });
+
+        it('surfaces structured error for missing plugin', async () => {
+            const nav = useDashboardNavigation();
+            const result = await nav.openPlugin('missing:nav');
+            expect(result.ok).toBe(false);
+            if (!result.ok) {
+                expect(result.error.code).toBe('missing-plugin');
+                expect(result.error.pluginId).toBe('missing:nav');
+            }
+            expect(nav.state.error?.code).toBe('missing-plugin');
+            expect(nav.state.view).toBe('dashboard');
+            expect(nav.state.activePluginId).toBeNull();
+        });
+
+        it('surfaces structured error for missing page', async () => {
+            registerDashboardPlugin({
+                id: 'test:nav-missing-page',
+                icon: 'pixelarticons:triangle',
+                label: 'Nav Missing Page',
+            });
+            await flush();
+            const nav = useDashboardNavigation();
+            const result = await nav.openPage(
+                'test:nav-missing-page',
+                'does-not-exist'
+            );
+            expect(result.ok).toBe(false);
+            if (!result.ok) {
+                expect(result.error.code).toBe('missing-page');
+                expect(result.error.pageId).toBe('does-not-exist');
+            }
+            expect(nav.state.error?.code).toBe('missing-page');
+            expect(nav.state.activePageId).toBeNull();
+            expect(nav.state.view).toBe('page');
+        });
     });
 });

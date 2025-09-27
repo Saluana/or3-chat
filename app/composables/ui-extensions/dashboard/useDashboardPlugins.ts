@@ -1,4 +1,11 @@
-import { reactive, computed, type Component } from 'vue';
+import {
+    reactive,
+    computed,
+    readonly,
+    shallowRef,
+    type Component,
+    type ShallowRef,
+} from 'vue';
 
 export interface DashboardPlugin {
     /** Unique id across all dashboard plugins */
@@ -58,6 +65,42 @@ const DEFAULT_ORDER = 200;
 // Component resolution cache
 const pageComponentCache = new Map<string, Component>();
 
+export type DashboardNavigationErrorCode =
+    | 'missing-plugin'
+    | 'missing-page'
+    | 'handler-error'
+    | 'resolve-error';
+
+export interface DashboardNavigationError {
+    code: DashboardNavigationErrorCode;
+    message: string;
+    pluginId?: string;
+    pageId?: string;
+    cause?: unknown;
+}
+
+export interface DashboardNavigationState {
+    view: 'dashboard' | 'page';
+    activePluginId: string | null;
+    activePageId: string | null;
+    loadingPage: boolean;
+    error: DashboardNavigationError | null;
+}
+
+export type DashboardNavigationResult =
+    | { ok: true }
+    | { ok: false; error: DashboardNavigationError };
+
+export interface UseDashboardNavigationOptions {
+    baseItems?: DashboardPlugin[];
+}
+
+interface DashboardNavigationRuntime {
+    state: DashboardNavigationState;
+    resolvedComponent: ShallowRef<Component | null>;
+    baseItems: ShallowRef<DashboardPlugin[]>;
+}
+
 function deletePageCache(pluginId: string, pageId: string) {
     pageComponentCache.delete(`${pluginId}:${pageId}`);
 }
@@ -67,6 +110,20 @@ function deleteAllPluginPageCache(pluginId: string) {
         if (key.startsWith(pluginId + ':')) pageComponentCache.delete(key);
     }
 }
+
+const navigationRuntime: DashboardNavigationRuntime =
+    g.__or3DashboardNavigationRuntime ||
+    (g.__or3DashboardNavigationRuntime = {
+        state: reactive<DashboardNavigationState>({
+            view: 'dashboard',
+            activePluginId: null,
+            activePageId: null,
+            loadingPage: false,
+            error: null,
+        }),
+        resolvedComponent: shallowRef<Component | null>(null),
+        baseItems: shallowRef<DashboardPlugin[]>([]),
+    });
 
 function syncPages(pluginId: string) {
     const m = pageRegistry.get(pluginId);
@@ -214,3 +271,226 @@ export async function resolveDashboardPluginPageComponent(
 
 // Minimal built‑in examples can be registered in a plugin file separately; keeping
 // this composable focused only on registry mechanics (mirrors other ui-extension patterns).
+
+export function useDashboardNavigation(
+    options: UseDashboardNavigationOptions = {}
+) {
+    if (options.baseItems !== undefined) {
+        navigationRuntime.baseItems.value = [...options.baseItems];
+    } else if (!navigationRuntime.baseItems.value) {
+        navigationRuntime.baseItems.value = [];
+    }
+
+    const state = navigationRuntime.state;
+    const resolved = navigationRuntime.resolvedComponent;
+    const registered = useDashboardPlugins();
+
+    const dashboardItems = computed(() => {
+        const map = new Map<string, DashboardPlugin>();
+        for (const item of navigationRuntime.baseItems.value) {
+            map.set(item.id, item);
+        }
+        for (const plugin of registered.value) {
+            map.set(plugin.id, plugin);
+        }
+        return Array.from(map.values()).sort(
+            (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+        );
+    });
+
+    const landingPages = computed(() => {
+        const pluginId = state.activePluginId;
+        if (!pluginId) return [] as DashboardPluginPage[];
+        return listDashboardPluginPages(pluginId);
+    });
+
+    const headerPluginLabel = computed(() => {
+        if (!state.activePluginId) return 'Dashboard';
+        const match = dashboardItems.value.find(
+            (item) => item.id === state.activePluginId
+        );
+        return match?.label ?? state.activePluginId;
+    });
+
+    const activePageTitle = computed(() => {
+        if (!state.activePluginId || !state.activePageId) return '';
+        const page = listDashboardPluginPages(state.activePluginId).find(
+            (entry) => entry.id === state.activePageId
+        );
+        return page?.title ?? state.activePageId;
+    });
+
+    const clearError = () => {
+        state.error = null;
+    };
+
+    const setError = (
+        error: DashboardNavigationError
+    ): DashboardNavigationResult => {
+        state.error = error;
+        return { ok: false, error };
+    };
+
+    const ensurePlugin = (pluginId: string) =>
+        dashboardItems.value.find((item) => item.id === pluginId);
+
+    const openPlugin = async (
+        pluginId: string
+    ): Promise<DashboardNavigationResult> => {
+        clearError();
+        const plugin = ensurePlugin(pluginId);
+        if (!plugin) {
+            state.view = 'dashboard';
+            state.activePluginId = null;
+            state.activePageId = null;
+            resolved.value = null;
+            state.loadingPage = false;
+            return setError({
+                code: 'missing-plugin',
+                pluginId,
+                message: `Dashboard plugin "${pluginId}" was not found`,
+            });
+        }
+
+        state.activePluginId = pluginId;
+        state.activePageId = null;
+        state.loadingPage = false;
+        resolved.value = null;
+
+        const pages = listDashboardPluginPages(pluginId);
+        if (!pages.length) {
+            try {
+                await plugin.handler?.({ id: pluginId });
+            } catch (cause) {
+                return setError({
+                    code: 'handler-error',
+                    pluginId,
+                    message: `Dashboard plugin "${pluginId}" handler failed`,
+                    cause,
+                });
+            }
+            state.view = 'dashboard';
+            return { ok: true };
+        }
+
+        if (pages.length === 1) {
+            return openPage(pluginId, pages[0]!.id);
+        }
+
+        state.view = 'page';
+        return { ok: true };
+    };
+
+    const openPage = async (
+        pluginId: string,
+        pageId: string
+    ): Promise<DashboardNavigationResult> => {
+        clearError();
+        const plugin = ensurePlugin(pluginId);
+        if (!plugin) {
+            state.view = 'dashboard';
+            state.activePluginId = null;
+            state.activePageId = null;
+            resolved.value = null;
+            state.loadingPage = false;
+            return setError({
+                code: 'missing-plugin',
+                pluginId,
+                pageId,
+                message: `Dashboard plugin "${pluginId}" was not found`,
+            });
+        }
+
+        state.view = 'page';
+        state.activePluginId = pluginId;
+        state.activePageId = pageId;
+        state.loadingPage = true;
+        resolved.value = null;
+
+        const page = getDashboardPluginPage(pluginId, pageId);
+        if (!page) {
+            state.loadingPage = false;
+            state.activePageId = null;
+            return setError({
+                code: 'missing-page',
+                pluginId,
+                pageId,
+                message: `Dashboard page "${pageId}" was not found for plugin "${pluginId}"`,
+            });
+        }
+
+        try {
+            const component = await resolveDashboardPluginPageComponent(
+                pluginId,
+                pageId
+            );
+            state.loadingPage = false;
+            if (!component) {
+                state.activePageId = null;
+                return setError({
+                    code: 'resolve-error',
+                    pluginId,
+                    pageId,
+                    message: `Dashboard page "${pageId}" failed to load`,
+                });
+            }
+            resolved.value = component;
+            return { ok: true };
+        } catch (cause) {
+            state.loadingPage = false;
+            state.activePageId = null;
+            return setError({
+                code: 'resolve-error',
+                pluginId,
+                pageId,
+                message: `Dashboard page "${pageId}" failed to load`,
+                cause,
+            });
+        }
+    };
+
+    const goBack = () => {
+        clearError();
+        if (state.view === 'dashboard') return;
+        const pluginId = state.activePluginId;
+        if (!pluginId) {
+            reset();
+            return;
+        }
+
+        if (state.activePageId) {
+            const pages = listDashboardPluginPages(pluginId);
+            state.activePageId = null;
+            resolved.value = null;
+            state.loadingPage = false;
+            if (pages.length <= 1) {
+                reset();
+            }
+            return;
+        }
+
+        reset();
+    };
+
+    function reset() {
+        state.view = 'dashboard';
+        state.activePluginId = null;
+        state.activePageId = null;
+        state.loadingPage = false;
+        resolved.value = null;
+        state.error = null;
+    }
+
+    return {
+        state: readonly(state),
+        resolvedPageComponent: readonly(resolved),
+        dashboardItems,
+        landingPages,
+        headerPluginLabel,
+        activePageTitle,
+        openPlugin,
+        openPage,
+        goBack,
+        reset,
+    };
+}

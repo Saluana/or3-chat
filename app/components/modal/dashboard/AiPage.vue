@@ -277,77 +277,7 @@ function onReset() {
     opacity: 0.7;
 }
 
-.retro-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.25rem 0.5rem; /* ~py-1 px-2 */
-    font-size: 0.75rem; /* text-xs */
-    font-weight: 500; /* font-medium */
-    user-select: none;
-    transition: background-color 120ms ease, color 120ms ease;
-    border: 2px solid var(--md-inverse-surface);
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    border-radius: 3px;
-    background: var(--md-surface);
-    line-height: 1;
-}
-.retro-chip:hover {
-    background: var(--md-secondary-container);
-    color: var(--md-on-secondary-container);
-}
-.retro-chip:active {
-    transform: translate(2px, 2px);
-    box-shadow: 0 0 0 var(--md-inverse-surface);
-}
-.retro-chip.active {
-    background: var(--md-primary-container);
-    color: var(--md-on-primary-container);
-}
-.retro-chip:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 2px;
-}
-
-.retro-input {
-    height: 32px;
-    padding: 0 6px;
-    font-size: 12px;
-    font-family: inherit;
-    line-height: 1;
-    border: 2px solid var(--md-inverse-surface);
-    background: var(--md-surface);
-    color: var(--md-on-surface);
-    border-radius: 3px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-.retro-input:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 2px;
-}
-/* Textarea variant keeps the same visual but allows growth */
-textarea.retro-input {
-    height: auto;
-    padding-top: 6px;
-    padding-bottom: 6px;
-    line-height: 1.25;
-}
-
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-    border: 0;
-}
-
-/* Motion reduction respect */
 @media (prefers-reduced-motion: reduce) {
-    .retro-chip,
     .section-card {
         transition: none;
     }

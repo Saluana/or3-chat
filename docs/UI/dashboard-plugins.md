@@ -16,6 +16,7 @@ Helpers are auto‑imported by Nuxt (barrel exported from `app/composables/index
 -   `resolveDashboardPluginPageComponent()` (internal utility; you rarely need this directly)
 -   `listRegisteredDashboardPluginIds()`
 -   `listDashboardPluginPages()`
+-   `useDashboardNavigation()` _(modal integration helper)_
 
 Implementation lives at `app/composables/ui-extensions/dashboard/useDashboardPlugins.ts`.
 
@@ -97,6 +98,7 @@ Behavior:
 -   0 pages → clicking tile invokes `handler` (if provided) or does nothing.
 -   1 page → clicking tile opens that page immediately.
 -   2+ pages → clicking tile shows a landing list of pages (title + description). Selecting a page loads it lazily.
+-   All branching above is handled centrally by `useDashboardNavigation()`—the modal no longer duplicates this logic.
 
 ## Incremental page registration
 
@@ -141,12 +143,14 @@ Re-registering the same page id replaces the previous definition (HMR‑friendly
 
 ## Runtime usage in the Dashboard
 
-The `Dashboard.vue` component:
+`Dashboard.vue` now consumes `useDashboardNavigation({ baseItems })`, which merges built-in tiles with anything you register and exposes read-only state for the modal to render:
 
--   Reads `useDashboardPlugins()` for grid tiles.
--   On tile click, determines page count and chooses behavior (handler vs page vs landing list).
--   Uses `useDashboardPluginPages(() => activePluginId)` to list pages for the active plugin.
--   Resolves async components with `resolveDashboardPluginPageComponent()` and renders with `<component :is="..." />`.
+-   `dashboardItems` → sorted grid tiles (core + registered plugins)
+-   `landingPages` → pages for the currently selected plugin (keeps landing cards in sync)
+-   `openPlugin()` / `openPage()` / `goBack()` → navigation actions that wrap handler dispatch and async page resolution
+-   `headerPluginLabel` / `activePageTitle` / `state` → helper values for the modal chrome and loading/errors
+
+Because navigation is centralized, plugin developers only need to register plugins/pages—no additional wiring inside the modal is required. Structured navigation errors bubble through `state.error` so the UI can surface missing plugin/page issues consistently.
 
 ## Unregistering
 
