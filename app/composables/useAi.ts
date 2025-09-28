@@ -54,14 +54,6 @@ export function useChat(
     const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
     // Raw legacy messages (content parts / strings) used for history & hooks
     const rawMessages = ref<ChatMessage[]>([...msgs]);
-    const getRawMessages = () => {
-        if (import.meta.dev) {
-            console.warn(
-                '[useChat] getRawMessages() is deprecated; prefer UiChatMessage via messages ref'
-            );
-        }
-        return rawMessages.value;
-    }; // transitional
     const loading = ref(false);
     const abortController = ref<AbortController | null>(null);
     const aborted = ref(false);
@@ -69,7 +61,6 @@ export function useChat(
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
-    const historyLoadedFor = ref<string | null>(null);
 
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey) {
