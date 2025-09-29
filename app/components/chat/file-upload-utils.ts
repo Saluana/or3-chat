@@ -1,5 +1,7 @@
 import { reportError, err } from '~/utils/errors';
 import { createOrRefFile } from '~/db/files';
+import { useHooks } from '~/composables/useHooks';
+import type { FilesAttachInputPayload } from '~/utils/hook-keys';
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB
 
@@ -44,7 +46,34 @@ export interface AttachmentLike {
 
 export async function persistAttachment(att: AttachmentLike) {
     const persist = async () => {
-        const meta = await createOrRefFile(att.file, att.name);
+        // Apply files.attach:filter:input hook before creating/referencing file
+        const hooks = useHooks();
+        const payload: FilesAttachInputPayload = {
+            file: att.file,
+            name: att.name,
+            mime: att.mime || att.file.type || '',
+            size: att.file.size,
+            kind: (att.kind as 'image' | 'pdf') || 'image',
+        };
+
+        const filtered = (await hooks.applyFilters(
+            'files.attach:filter:input',
+            payload
+        )) as FilesAttachInputPayload | false;
+
+        // If filter returns false or null, reject the attachment
+        if (filtered === false || !filtered) {
+            throw err(
+                'ERR_FILE_VALIDATION',
+                'File attachment was rejected by filter',
+                {
+                    tags: { domain: 'files', stage: 'filter', name: att.name },
+                }
+            );
+        }
+
+        // Use filtered values (in case hook transformed them)
+        const meta = await createOrRefFile(filtered.file, filtered.name);
         att.hash = meta.hash;
         att.meta = meta;
         att.status = 'ready';

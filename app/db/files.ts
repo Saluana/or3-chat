@@ -11,6 +11,25 @@ import {
 import { computeFileHash } from '../utils/hash';
 import { reportError, err } from '../utils/errors';
 
+/**
+ * File storage and deduplication layer with hook integration.
+ *
+ * Hook Points:
+ * - `db.files.create:filter:input` - Transform FileMetaCreate before validation (line 86-89)
+ * - `db.files.create:action:before` - Called before file metadata is written to DB (line 93)
+ * - `db.files.create:action:after` - Called after file metadata and blob are persisted (line 96)
+ * - `db.files.get:filter:output` - Transform FileMeta on retrieval (line 114)
+ * - `db.files.refchange:action:after` - Called after ref_count changes (line 28-32)
+ * - `db.files.delete:action:soft:before` - Called before soft delete (line 129, 150)
+ * - `db.files.delete:action:soft:after` - Called after soft delete (line 135, 156)
+ * - `db.files.delete:action:hard:before` - Called before hard delete (line 192-195)
+ * - `db.files.delete:action:hard:after` - Called after hard delete (line 198)
+ * - `db.files.restore:action:before` - Called before restoring soft-deleted file (line 171)
+ * - `db.files.restore:action:after` - Called after restore (line 177)
+ *
+ * All hooks receive relevant metadata; filters can transform or veto (return false to reject).
+ */
+
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
 
 /** Internal helper to change ref_count and fire hook */

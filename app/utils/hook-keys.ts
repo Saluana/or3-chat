@@ -72,6 +72,16 @@ export interface UiPaneMsgReceivedPayload extends UiPaneMsgSentPayload {
     reasoningLength?: number;
 }
 
+// ---- File attachment payload ----
+
+export interface FilesAttachInputPayload {
+    file: File;
+    name: string;
+    mime: string;
+    size: number;
+    kind: 'image' | 'pdf';
+}
+
 // ---- Key unions ----
 
 // High-signal known hooks used across the app (enumerated for best DX)
@@ -97,7 +107,8 @@ export type KnownHookKey =
     | 'ui.pane.doc:action:changed'
     | 'ui.pane.doc:action:saved'
     | 'ui.pane.msg:action:sent'
-    | 'ui.pane.msg:action:received';
+    | 'ui.pane.msg:action:received'
+    | 'files.attach:filter:input';
 
 // Families for DB hooks as template literal types (broad coverage without listing all)
 export type DbFamily =
@@ -141,6 +152,7 @@ export interface HookPayloads {
     'ui.chat.message:filter:incoming': [string, string | undefined];
     'ai.chat.model:filter:select': [string];
     'ai.chat.messages:filter:input': [any[]];
+    'files.attach:filter:input': [FilesAttachInputPayload | false];
     'ai.chat.retry:action:before': [
         {
             threadId?: string;
@@ -177,5 +189,6 @@ export function typedOn(hooks: HookEngine) {
 // Utility aliases for filter return shapes (documentation aid)
 export type ChatOutgoingFilterReturn = string | false;
 export type ChatIncomingFilterReturn = string;
+export type FilesAttachFilterReturn = FilesAttachInputPayload | false;
 
 // Keep this file small and focused. Add new keys/payloads incrementally as they stabilize.

@@ -47,8 +47,8 @@ Note: All tasks follow existing patterns (global registries via globalThis, reac
 
 ## 6. Document Hooks (Req: 6, 10)
 
--   [ ] 6.1 In `app/db/documents.ts` ensure filters/actions are documented; add optional `db.documents.title:filter` called from `normalizeTitle` path with default pass-through.
--   [ ] 6.2 Write tests that assert `createDocument/updateDocument` call hooks in order and allow title/content transform.
+-   [x] 6.1 In `app/db/documents.ts` ensure filters/actions are documented; add optional `db.documents.title:filter` called from `normalizeTitle` path with default pass-through.
+-   [x] 6.2 Write tests that assert `createDocument/updateDocument` call hooks in order and allow title/content transform.
 
 ## 7. File Pipeline Hooks (Req: 7, 11)
 
