@@ -87,6 +87,15 @@
                 label="Redo"
                 @activate="cmd('redo')"
             />
+            <!-- Plugin-registered toolbar buttons -->
+            <ToolbarButton
+                v-for="btn in pluginButtons"
+                :key="btn.id"
+                :icon="btn.icon"
+                :active="editor && btn.isActive ? btn.isActive(editor as Editor) : false"
+                :label="btn.tooltip || btn.id"
+                @activate="editor && btn.onClick(editor as Editor)"
+            />
         </div>
         <div class="flex-1 min-h-0 overflow-y-auto">
             <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
@@ -112,6 +121,11 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
+import {
+    useEditorToolbarButtons,
+    listEditorNodes,
+    listEditorMarks,
+} from '~/composables';
 
 const props = defineProps<{ documentId: string }>();
 
@@ -135,6 +149,9 @@ watch(
 );
 
 const editor = ref<Editor | null>(null);
+
+// Get plugin-registered toolbar buttons
+const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
 
 function onTitleChange() {
     setDocumentTitle(props.documentId, titleDraft.value);
@@ -163,12 +180,18 @@ function emitContent() {
 }
 
 function makeEditor() {
+    // Collect plugin-registered extensions
+    const pluginNodes = listEditorNodes().map((n) => n.extension);
+    const pluginMarks = listEditorMarks().map((m) => m.extension);
+
     editor.value = new Editor({
         extensions: [
             StarterKit.configure({ heading: { levels: [1, 2] } }),
             Placeholder.configure({
                 placeholder: 'Type your text here...',
             }),
+            ...pluginNodes,
+            ...pluginMarks,
         ],
         content: state.value.record?.content || { type: 'doc', content: [] },
         autofocus: false,
@@ -248,7 +271,7 @@ const statusText = computed(() => {
     outline: none;
     white-space: pre-wrap;
 }
-.prosemirror-host :deep(.ProseMirror p) {
+.prosemmirror-host :deep(.ProseMirror p) {
     margin: 0;
 }
 

@@ -6,4 +6,6 @@ export * from './ui-extensions/documents/useDocumentHistoryActions';
 export * from './ui-extensions/threads/useThreadHistoryActions';
 export * from './ui-extensions/projects/useProjectTreeActions';
 export * from './ui-extensions/dashboard/useDashboardPlugins';
+export * from './ui-extensions/editor/useEditorToolbar';
+export * from './ui-extensions/editor/useEditorNodes';
 export * from './useWorkspaceBackup';

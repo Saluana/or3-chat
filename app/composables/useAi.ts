@@ -294,6 +294,16 @@ export function useChat(
             content
         );
 
+        // Early veto: if filter returns false or empty string, skip append and network
+        if (!outgoing || outgoing === '') {
+            useToast().add({
+                title: 'Message blocked',
+                description: 'Your message was filtered out.',
+                timeout: 3000,
+            } as any);
+            return;
+        }
+
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
         const userDbMsg = await tx.appendMessage({
             thread_id: threadIdRef.value!,
@@ -715,6 +725,14 @@ export function useChat(
                 updated_at: nowSec(),
             } as any;
             await upsert.message(finalized);
+            await hooks.doAction('ai.chat.stream:action:complete', {
+                threadId: threadIdRef.value,
+                assistantId: assistantDbMsg.id,
+                streamId: newStreamId,
+                totalLength: (incoming as string).length,
+                reasoningLength: (current.reasoning_text || '').length,
+                fileHashes: finalized.file_hashes || null,
+            });
             // Pane-scoped assistant received hook
             try {
                 const mpApi: any = (globalThis as any).__or3MultiPaneApi;
@@ -846,6 +864,12 @@ export function useChat(
                 });
                 const e = err instanceof Error ? err : new Error(String(err));
                 streamAcc.finalize({ error: e });
+                await hooks.doAction('ai.chat.stream:action:error', {
+                    threadId: threadIdRef.value,
+                    streamId: streamId.value,
+                    error: e,
+                    aborted: false,
+                });
                 // Drop empty failed assistant
                 if (!tailAssistant.value?.text) tailAssistant.value = null;
                 else if (tailAssistant.value?.pending)
