@@ -42,8 +42,8 @@ Note: All tasks follow existing patterns (global registries via globalThis, reac
 
 ## 5. Thread/Document History Registries Completion (Req: 5)
 
--   [ ] 5.1 Confirm `useThreadHistoryActions.ts` and `useDocumentHistoryActions.ts` export lists and are used in their respective views; if WIP, wire them and add tests.
--   [ ] 5.2 Add README snippets in each composable with order and ID collision guidance.
+-   [x] 5.1 Confirm `useThreadHistoryActions.ts` and `useDocumentHistoryActions.ts` export lists and are used in their respective views; if WIP, wire them and add tests.
+-   [x] 5.2 Add README snippets in each composable with order and ID collision guidance.
 
 ## 6. Document Hooks (Req: 6, 10)
 

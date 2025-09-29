@@ -1,3 +1,65 @@
+/**
+ * Thread History Actions Registry
+ *
+ * Provides a global registry for extending thread history UI with custom actions.
+ * Actions appear in the thread item dropdown menu in the sidebar.
+ *
+ * ## Usage
+ *
+ * ```ts
+ * // Register a custom action (typically in a plugin)
+ * registerThreadHistoryAction({
+ *   id: 'my-plugin:export-thread',
+ *   icon: 'i-carbon-download',
+ *   label: 'Export Thread',
+ *   order: 250, // Optional: controls position (default: 200)
+ *   handler: async ({ document }) => {
+ *     // document is the Thread object
+ *     console.log('Exporting thread:', document.id);
+ *     // Your export logic here
+ *   }
+ * });
+ *
+ * // Use in a component
+ * const actions = useThreadHistoryActions();
+ * // actions.value is a sorted array of ThreadHistoryAction
+ * ```
+ *
+ * ## Order & Positioning
+ *
+ * - **Default order: 200** - Actions without an explicit order appear after built-in actions
+ * - **Lower values appear first** - Use order < 200 to appear before built-ins
+ * - **Higher values appear last** - Use order > 200 to appear after built-ins
+ * - Built-in actions typically use order 100-150
+ *
+ * ## ID Collision
+ *
+ * - **IDs must be unique** - Use a namespace prefix (e.g., 'my-plugin:action-name')
+ * - **Duplicate IDs replace** - Registering the same ID overwrites the previous action
+ * - **Dev warning** - In development, a console warning is shown on duplicate registration
+ * - Use `listRegisteredThreadHistoryActionIds()` to check existing IDs
+ *
+ * ## HMR Safety
+ *
+ * The registry is stored on `globalThis` and survives Hot Module Replacement.
+ * Always unregister actions in cleanup/unmount hooks to prevent duplicates:
+ *
+ * ```ts
+ * onUnmounted(() => {
+ *   unregisterThreadHistoryAction('my-plugin:export-thread');
+ * });
+ * ```
+ *
+ * Or use `useHookEffect` which handles cleanup automatically:
+ *
+ * ```ts
+ * useHookEffect('plugin:init', () => {
+ *   registerThreadHistoryAction({ ... });
+ *   return () => unregisterThreadHistoryAction('my-plugin:export-thread');
+ * });
+ * ```
+ */
+
 import { computed, reactive } from 'vue';
 import type { Post, Thread } from '~/db';
 
