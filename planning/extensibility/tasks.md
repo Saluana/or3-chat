@@ -52,15 +52,15 @@ Note: All tasks follow existing patterns (global registries via globalThis, reac
 
 ## 7. File Pipeline Hooks (Req: 7, 11)
 
--   [ ] 7.1 In `app/db/files.ts` document existing create hooks; add optional `files.attach:filter:input` shim in the chat send path when attachments are included (pre `createOrRefFile`).
--   [ ] 7.2 Add unit tests: reject file via filter; accept and ensure DB writes.
+-   [x] 7.1 In `app/db/files.ts` document existing create hooks; add optional `files.attach:filter:input` shim in the chat send path when attachments are included (pre `createOrRefFile`).
+-   [x] 7.2 Add unit tests: reject file via filter; accept and ensure DB writes.
 
 ## 8. Capability Manifest (Req: 8)
 
--   [ ] 8.1 Extend `DashboardPlugin` type in `useDashboardPlugins.ts` with `capabilities?: string[]`.
--   [ ] 8.2 Add `hasCapability(pluginId, cap)` helper and export.
--   [ ] 8.3 Wire minimal guards where plugin-originated actions invoke sensitive operations (pane/plugin context available). When missing, show toast and no-op.
--   [ ] 8.4 Add a small UI in dashboard plugin detail to list capabilities.
+-   [x] 8.1 Extend `DashboardPlugin` type in `useDashboardPlugins.ts` with `capabilities?: string[]`.
+-   [x] 8.2 Add `hasCapability(pluginId, cap)` helper and export.
+-   [x] 8.3 Wire minimal guards where plugin-originated actions invoke sensitive operations (pane/plugin context available). When missing, show toast and no-op.
+-   [x] 8.4 Add a small UI in dashboard plugin detail to list capabilities.
 
 ## 9. Hook Inspector Dashboard Page (Req: 9, 10, 11)
 
