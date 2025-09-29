@@ -95,6 +95,47 @@
                             <UIcon :name="themeIcon" class="w-5 h-5" />
                         </UButton>
                     </UTooltip>
+                    <div
+                        v-if="headerActions.length"
+                        class="h-full flex items-center gap-1 px-2 pointer-events-auto"
+                    >
+                        <UTooltip
+                            v-for="entry in headerActions"
+                            :key="`header-action-${entry.action.id}`"
+                            :delay-duration="0"
+                            :text="entry.action.tooltip || entry.action.label"
+                        >
+                            <UButton
+                                size="xs"
+                                variant="ghost"
+                                :color="(entry.action.color || 'neutral') as any"
+                                :square="!entry.action.label"
+                                :disabled="entry.disabled"
+                                :class="[
+                                    'retro-btn pointer-events-auto flex items-center gap-1',
+                                    entry.action.label ? 'px-3' : '',
+                                ]"
+                                :ui="{ base: 'retro-btn' }"
+                                :aria-label="
+                                    entry.action.tooltip ||
+                                    entry.action.label ||
+                                    entry.action.id
+                                "
+                                @click="() => handleHeaderAction(entry)"
+                            >
+                                <UIcon
+                                    :name="entry.action.icon"
+                                    class="w-4 h-4"
+                                />
+                                <span
+                                    v-if="entry.action.label"
+                                    class="text-xs font-medium"
+                                >
+                                    {{ entry.action.label }}
+                                </span>
+                            </UButton>
+                        </UTooltip>
+                    </div>
                 </div>
             </div>
             <div
@@ -184,6 +225,10 @@ import { useHookEffect } from '~/composables/useHookEffect';
 import { flush as flushDocument } from '~/composables/useDocumentsStore';
 import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
 import { usePaneDocuments } from '~/composables/usePaneDocuments';
+import {
+    useHeaderActions,
+    type HeaderActionEntry,
+} from '~/composables/ui-extensions/chrome';
 
 const props = withDefaults(
     defineProps<{
@@ -198,6 +243,7 @@ const props = withDefaults(
 
 const router = useRouter();
 const toast = useToast();
+const route = useRoute();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 
@@ -468,6 +514,26 @@ const themeAriaLabel = computed(() =>
 
 // --------------- Mobile + layout ---------------
 import { isMobile } from '~/state/global';
+
+const headerActions = useHeaderActions(() => ({
+    route,
+    isMobile: isMobile.value,
+}));
+
+async function handleHeaderAction(entry: HeaderActionEntry) {
+    if (entry.disabled) return;
+    try {
+        await entry.action.handler({
+            route,
+            isMobile: isMobile.value,
+        });
+    } catch (error) {
+        console.error(
+            `[PageShell] header action "${entry.action.id}" failed`,
+            error
+        );
+    }
+}
 // Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
 if (process.client) {
     const mq = window.matchMedia('(max-width: 640px)');

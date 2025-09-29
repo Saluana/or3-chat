@@ -36,9 +36,9 @@ Note: All tasks follow existing patterns (global registries via globalThis, reac
 
 ## 4. UI Chrome Registries (Req: 4, 10)
 
--   [ ] 4.1 Add `.../chrome/useSidebarSections.ts` (sections + optional footer actions) and integrate into Sidebar component slots.
--   [ ] 4.2 Add `.../chrome/useHeaderActions.ts` and render in header bar (icon button group).
--   [ ] 4.3 Add `.../chrome/useComposerActions.ts` and mount near input send area.
+-   [x] 4.1 Add `.../chrome/useSidebarSections.ts` (sections + optional footer actions) and integrate into Sidebar component slots.
+-   [x] 4.2 Add `.../chrome/useHeaderActions.ts` and render in header bar (icon button group).
+-   [x] 4.3 Add `.../chrome/useComposerActions.ts` and mount near input send area.
 
 ## 5. Thread/Document History Registries Completion (Req: 5)
 

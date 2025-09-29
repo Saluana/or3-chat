@@ -1,16 +1,21 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dbTry } from '../dbTry';
-import { useHooks } from '~/composables/useHooks';
+import { reportError } from '~/utils/errors';
 
-vi.mock('#imports', () => ({ useToast: () => ({ add: vi.fn() }) }));
-vi.mock('~/composables/useHooks', async () => {
-    const hooks: any = { doAction: vi.fn() };
-    return { useHooks: () => hooks };
+vi.mock('~/utils/errors', async () => {
+    const actual = await vi.importActual<any>('~/utils/errors');
+    return {
+        ...actual,
+        reportError: vi.fn(),
+    };
 });
+
+const mockedReportError = reportError as unknown as Mock;
 
 describe('dbTry', () => {
     beforeEach(() => {
-        (useHooks() as any).doAction.mockClear();
+        mockedReportError.mockReset();
     });
 
     it('reports quota exceeded', async () => {
@@ -25,12 +30,13 @@ describe('dbTry', () => {
             { op: 'write', entity: 'messages' }
         );
         expect(res).toBeUndefined();
-        const calls = (useHooks() as any).doAction.mock.calls;
-        const raised = calls.find((c: any[]) => c[0] === 'error:raised');
-        expect(raised).toBeTruthy();
-        const errorObj = raised[1];
+        const calls = mockedReportError.mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        const [errorObj, opts] = calls[calls.length - 1] as [any, any];
         expect(errorObj.code).toBe('ERR_DB_QUOTA_EXCEEDED');
         expect(errorObj.tags.entity).toBe('messages');
+        expect(errorObj.tags.rw).toBe('write');
+        expect(opts.toast).toBe(true);
     });
 
     it('reports generic write failure', async () => {
@@ -41,11 +47,12 @@ describe('dbTry', () => {
             { op: 'write', entity: 'threads' }
         );
         expect(res).toBeUndefined();
-        const calls = (useHooks() as any).doAction.mock.calls;
-        const errorObj = calls
-            .filter((c: any[]) => c[0] === 'error:raised')
-            .pop()[1];
+        const calls = mockedReportError.mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        const [errorObj, opts] = calls[calls.length - 1] as [any, any];
         expect(errorObj.code).toBe('ERR_DB_WRITE_FAILED');
         expect(errorObj.tags.entity).toBe('threads');
+        expect(errorObj.tags.rw).toBe('write');
+        expect(opts.toast).toBe(true);
     });
 });

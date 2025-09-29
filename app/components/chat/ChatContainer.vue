@@ -128,7 +128,7 @@ const effectiveInputHeight = computed(
 );
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
 const bottomPad = computed(() => {
-    const base = Math.round(effectiveInputHeight.value + 0);
+    const base = Math.round(effectiveInputHeight.value + 16); // Add 16px buffer
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
 

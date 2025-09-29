@@ -17,7 +17,6 @@ export default defineNuxtPlugin(() => {
                 icon: 'pixelarticons:sync',
                 description: 'View hook timings, counts, and errors',
                 component: async () =>
-                    // @ts-expect-error - Dynamic import type inference
                     await import('./devtools/HookInspector.vue'),
             },
         ],

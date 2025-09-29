@@ -34,13 +34,48 @@
                 }"
             ></UButton>
         </div>
+        <div
+            v-if="sidebarFooterActions.length"
+            class="px-1 pb-2 flex flex-col space-y-2"
+        >
+            <UTooltip
+                v-for="entry in sidebarFooterActions"
+                :key="`sidebar-collapsed-footer-${entry.action.id}`"
+                :delay-duration="0"
+                :text="entry.action.tooltip || entry.action.label"
+            >
+                <UButton
+                    size="md"
+                    variant="ghost"
+                    :color="(entry.action.color || 'neutral') as any"
+                    :square="!entry.action.label"
+                    :disabled="entry.disabled"
+                    class="retro-btn pointer-events-auto flex items-center justify-center gap-1"
+                    :ui="{ base: 'retro-btn' }"
+                    :aria-label="
+                        entry.action.tooltip ||
+                        entry.action.label ||
+                        entry.action.id
+                    "
+                    @click="() => handleSidebarFooterAction(entry)"
+                >
+                    <UIcon :name="entry.action.icon" class="w-5 h-5" />
+                    <span v-if="entry.action.label" class="text-xs font-medium">
+                        {{ entry.action.label }}
+                    </span>
+                </UButton>
+            </UTooltip>
+        </div>
     </div>
 </template>
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
-import { VList } from 'virtua/vue';
+import {
+    useSidebarFooterActions,
+    type SidebarFooterActionEntry,
+} from '~/composables/ui-extensions/chrome';
 
 const props = defineProps<{
     activeThread?: string;
@@ -53,6 +88,48 @@ const { query: threadSearchQuery, results: threadSearchResults } =
 const displayThreads = computed(() =>
     threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
 );
+
+const activeDocumentIds = computed<string[]>(() => {
+    const api: any = (globalThis as any).__or3MultiPaneApi;
+    if (api && api.panes && Array.isArray(api.panes.value)) {
+        return api.panes.value
+            .filter((p: any) => p.mode === 'doc' && p.documentId)
+            .map((p: any) => p.documentId as string);
+    }
+    return [];
+});
+
+const activeThreadIds = computed<string[]>(() => {
+    const api: any = (globalThis as any).__or3MultiPaneApi;
+    if (api && api.panes && Array.isArray(api.panes.value)) {
+        const ids = api.panes.value
+            .filter((p: any) => p.mode === 'chat' && p.threadId)
+            .map((p: any) => p.threadId as string)
+            .filter(Boolean);
+        if (ids.length) return ids;
+    }
+    return props.activeThread ? [props.activeThread] : [];
+});
+
+const collapsedFooterContext = () => ({
+    activeThreadId: activeThreadIds.value[0] ?? null,
+    activeDocumentId: activeDocumentIds.value[0] ?? null,
+    isCollapsed: true,
+});
+
+const sidebarFooterActions = useSidebarFooterActions(collapsedFooterContext);
+
+async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
+    if (entry.disabled) return;
+    try {
+        await entry.action.handler(collapsedFooterContext());
+    } catch (error) {
+        console.error(
+            `[SidebarCollapsed] footer action "${entry.action.id}" failed`,
+            error
+        );
+    }
+}
 let sub: { unsubscribe: () => void } | null = null;
 
 onMounted(() => {
