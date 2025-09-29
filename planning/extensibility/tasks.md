@@ -64,17 +64,17 @@ Note: All tasks follow existing patterns (global registries via globalThis, reac
 
 ## 9. Hook Inspector Dashboard Page (Req: 9, 10, 11)
 
--   [ ] 9.1 Register `devtools` dashboard plugin with page `hook-inspector`.
--   [ ] 9.2 Implement component to read `useHooks()._diagnostics` and render:
-    -   [ ] Totals (actions/filters), per-hook stats (avg/p95/max), errors.
-    -   [ ] Button: Clear timings.
-    -   [ ] Auto-refresh toggle.
--   [ ] 9.3 Link to `docs/core-hook-map.md`.
+-   [x] 9.1 Register `devtools` dashboard plugin with page `hook-inspector`.
+-   [x] 9.2 Implement component to read `useHooks()._diagnostics` and render:
+    -   [x] Totals (actions/filters), per-hook stats (avg/p95/max), errors.
+    -   [x] Button: Clear timings.
+    -   [x] Auto-refresh toggle.
+-   [x] 9.3 Link to `docs/core-hook-map.md`.
 
 ## 10. Documentation and Examples (Req: 10)
 
--   [ ] 10.1 Add `docs/core-hook-map.md` and update `docs/hooks.md` with new sections.
--   [ ] 10.2 Add example plugin files under `app/plugins/examples/` demonstrating message veto, editor toolbar button, slash command, header action, file filter.
+-   [x] 10.1 Add `docs/core-hook-map.md` and update `docs/hooks.md` with new sections.
+-   [x] 10.2 Add example plugin files under `app/plugins/examples/` demonstrating message veto, editor toolbar button, slash command, header action, file filter.
 
 ## 11. Testing and Quality Gates (Req: 11)
 

@@ -1,6 +1,6 @@
 export default defineNuxtPlugin(() => {
     // Only register devtools in development mode
-    if (!process.dev) {
+    if (import.meta.env.PROD) {
         return;
     }
 
