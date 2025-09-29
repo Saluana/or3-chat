@@ -2,6 +2,12 @@
 import { vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 
+// Mock errors utility globally for all tests
+vi.mock('~/utils/errors', () => ({
+    reportError: vi.fn(),
+    err: vi.fn((_code: string, _message: string, meta: any) => meta),
+}));
+
 vi.mock('virtua/vue', () => {
     const Base = defineComponent({
         name: 'MockVirtualListBase',

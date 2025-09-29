@@ -2,6 +2,7 @@ import { db } from './client';
 import { dbTry } from './dbTry';
 import { newId, nowSec } from './util';
 import { useHooks } from '../composables/useHooks';
+import type { HookEngine } from '../utils/hooks';
 
 /**
  * Internal stored row shape (reuses posts table with postType = 'doc').
@@ -37,6 +38,27 @@ function normalizeTitle(title?: string | null): string {
     return t.length ? t : 'Untitled';
 }
 
+interface TitleFilterContext {
+    phase: 'create' | 'update';
+    id: string;
+    rawTitle?: string | null;
+    existing?: DocumentRow;
+}
+
+/**
+ * Hook: `db.documents.title:filter`
+ *  - Runs after trimming/normalizing the raw title and before persistence.
+ *  - Receives the sanitized title as the value and additional context `{ phase, id, rawTitle, existing }`.
+ */
+async function resolveTitle(
+    hooks: HookEngine,
+    rawTitle: string | null | undefined,
+    context: TitleFilterContext
+): Promise<string> {
+    const base = normalizeTitle(rawTitle);
+    return hooks.applyFilters('db.documents.title:filter', base, context);
+}
+
 function parseContent(raw: string | null | undefined): any {
     if (!raw) return emptyDocJSON();
     try {
@@ -69,25 +91,42 @@ export async function createDocument(
     input: CreateDocumentInput = {}
 ): Promise<DocumentRecord> {
     const hooks = useHooks();
+    const id = newId();
     const prepared: DocumentRow = {
-        id: newId(),
-        title: normalizeTitle(input.title),
+        id,
+        title: await resolveTitle(hooks, input.title ?? null, {
+            phase: 'create',
+            id,
+            rawTitle: input.title ?? null,
+        }),
         content: JSON.stringify(input.content ?? emptyDocJSON()),
         postType: 'doc',
         created_at: nowSec(),
         updated_at: nowSec(),
         deleted: false,
     };
+    /**
+     * Hook: `db.documents.create:filter:input`
+     *  - Filter phase allowing plugins to transform or veto the pending row before persistence.
+     */
     const filtered = (await hooks.applyFilters(
         'db.documents.create:filter:input',
         prepared
     )) as DocumentRow;
+    /**
+     * Hook: `db.documents.create:action:before`
+     *  - Action fired prior to writing the new document row. Can throw to veto.
+     */
     await hooks.doAction('db.documents.create:action:before', filtered);
     await dbTry(
         () => db.posts.put(filtered as any),
         { op: 'write', entity: 'posts', action: 'createDocument' },
         { rethrow: true }
     ); // reuse posts table
+    /**
+     * Hook: `db.documents.create:action:after`
+     *  - Action fired after the row has been persisted.
+     */
     await hooks.doAction('db.documents.create:action:after', filtered);
     return rowToRecord(filtered);
 }
@@ -151,7 +190,14 @@ export async function updateDocument(
     if (!existing || (existing as any).postType !== 'doc') return undefined;
     const updated: DocumentRow = {
         id: existing.id,
-        title: patch.title ? normalizeTitle(patch.title) : existing.title,
+        title: patch.title
+            ? await resolveTitle(hooks, patch.title, {
+                  phase: 'update',
+                  id: existing.id,
+                  rawTitle: patch.title,
+                  existing: existing as DocumentRow,
+              })
+            : existing.title,
         content: patch.content
             ? JSON.stringify(patch.content)
             : (existing as any).content,
@@ -160,6 +206,10 @@ export async function updateDocument(
         updated_at: nowSec(),
         deleted: (existing as any).deleted ?? false,
     };
+    /**
+     * Hook: `db.documents.update:filter:input`
+     *  - Filter phase receives `{ existing, updated, patch }` allowing transforms or veto.
+     */
     const filtered = (await hooks.applyFilters(
         'db.documents.update:filter:input',
         { existing, updated, patch }
@@ -167,12 +217,20 @@ export async function updateDocument(
     const row = (filtered as any).updated
         ? (filtered as any).updated
         : (filtered as any as DocumentRow);
+    /**
+     * Hook: `db.documents.update:action:before`
+     *  - Action fired prior to writing the updated row. Throwing will abort the write.
+     */
     await hooks.doAction('db.documents.update:action:before', row);
     await dbTry(
         () => db.posts.put(row as any),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
+    /**
+     * Hook: `db.documents.update:action:after`
+     *  - Action fired after a successful write.
+     */
     await hooks.doAction('db.documents.update:action:after', row);
     return rowToRecord(row);
 }
