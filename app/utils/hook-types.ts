@@ -195,6 +195,40 @@ export interface FilesAttachInputPayload {
 }
 
 // ============================================================================
+// BRANCHING — payloads & helpers
+// ============================================================================
+
+export type BranchMode = 'reference' | 'copy';
+
+export interface BranchForkOptions {
+    sourceThreadId: string;
+    anchorMessageId: string;
+    mode?: BranchMode;
+    titleOverride?: string;
+}
+
+export interface BranchForkBeforePayload {
+    source: ThreadEntity;
+    anchor: MessageEntity;
+    mode: BranchMode;
+    options?: { titleOverride?: string };
+}
+
+export interface BranchContextAfterPayload {
+    threadId: string;
+    mode: BranchMode;
+    ancestorCount: number;
+    localCount: number;
+    finalCount: number;
+}
+
+/** Optional helper for KV upsert-by-name payloads. */
+export interface KvUpsertByNameInput {
+    name: string;
+    value: any;
+}
+
+// ============================================================================
 // DB ENTITY TYPES (lightweight — expand incrementally as needed)
 // ============================================================================
 
@@ -336,14 +370,22 @@ export type DbActionHookName =
     | `db.${DbEntityName}.${DbOperation}:action:${DbPhase}`
     | `db.${DbEntityName}.delete:action:${DbDeleteType}:${DbPhase}`
     // extra specialized actions seen in docs
-    | `db.files.refchange:action:after`;
+    | `db.files.refchange:action:after`
+    | `db.kv.upsertByName:action:after`
+    | `db.kv.deleteByName:action:hard:${DbPhase}`;
 
 /** Template literal names for DB filter hooks. */
 export type DbFilterHookName =
     | `db.${DbEntityName}.${DbOperation}:filter:input`
     | `db.${DbEntityName}.${DbOperation}:filter:output`
     // extra specialized filters seen in docs
-    | `db.messages.files.validate:filter:hashes`;
+    | `db.messages.files.validate:filter:hashes`
+    | `db.documents.list:filter:output`
+    | `db.documents.title:filter`
+    | `db.kv.getByName:filter:output`
+    | `db.kv.upsertByName:filter:input`
+    | `db.threads.searchByTitle:filter:output`
+    | `db.posts.all:filter:output`;
 
 // Action hooks (fire-and-forget)
 /**
@@ -370,7 +412,7 @@ export type ActionHookName =
  */
 export type CoreFilterHookName = Extract<
     keyof CoreHookPayloadMap,
-    `${string}:filter:${string}`
+    `${string}:filter${string}`
 >;
 export type ExtensionFilterHookName = keyof Or3FilterHooks;
 export type FilterHookName =
@@ -437,12 +479,38 @@ export type CoreHookPayloadMap = {
     'db.files.refchange:action:after': [
         { before: FileEntity; after: FileEntity; delta: number }
     ];
+
+    // Branching lifecycle
+    'branch.fork:filter:options': [BranchForkOptions];
+    'branch.fork:action:before': [BranchForkBeforePayload];
+    'branch.fork:action:after': [ThreadEntity];
+    'branch.context:filter:messages': [
+        MessageEntity[],
+        string /* threadId */,
+        BranchMode
+    ];
+    'branch.context:action:after': [BranchContextAfterPayload];
+
+    // Documents helpers
+    'db.documents.title:filter': [
+        string,
+        {
+            phase: 'create' | 'update';
+            id: string;
+            rawTitle?: string | null;
+            existing?: DocumentEntity;
+        }
+    ];
 };
 
 // Derived payloads for DB action hooks
 type DbActionPayloadFor<K extends DbActionHookName> =
     K extends `db.${string}.${infer Op}:action:${string}`
-        ? Op extends 'create' | 'upsert'
+        ? Op extends 'upsertByName'
+            ? [InferDbEntity<K>]
+            : Op extends 'deleteByName'
+            ? [DbDeletePayload<InferDbEntity<K>>]
+            : Op extends 'create' | 'upsert'
             ? [DbCreatePayload<InferDbEntity<K>>]
             : Op extends 'update'
             ? [DbUpdatePayload<InferDbEntity<K>>]
@@ -469,10 +537,16 @@ type DbFilterPayloadFor<K extends DbFilterHookName> =
                 ? [string]
                 : Op extends 'search' | 'byProject' | 'children'
                 ? [{ query?: any }]
+                : Op extends 'upsertByName'
+                ? [KvUpsertByNameInput | InferDbEntity<K>]
                 : [any]
             : Phase extends 'output'
             ? Op extends 'search' | 'byProject' | 'children'
                 ? [InferDbEntity<K>[]]
+                : Op extends 'list' | 'searchByTitle' | 'all'
+                ? [InferDbEntity<K>[]]
+                : Op extends 'getByName'
+                ? [InferDbEntity<K> | undefined]
                 : [InferDbEntity<K>]
             : [any]
         : [any];
@@ -604,6 +678,40 @@ export type TypeName<T> = T extends string
 
 export type CallbackMismatch<Expected, Got> =
     `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;
+
+// Temporary dev guard to ensure hook names stay registered in types.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const __hook_name_checks__: [
+    ValidateHookName<'branch.fork:filter:options'>,
+    ValidateHookName<'branch.fork:action:before'>,
+    ValidateHookName<'branch.fork:action:after'>,
+    ValidateHookName<'branch.context:filter:messages'>,
+    ValidateHookName<'branch.context:action:after'>,
+    ValidateHookName<'db.documents.title:filter'>,
+    ValidateHookName<'db.documents.list:filter:output'>,
+    ValidateHookName<'db.kv.getByName:filter:output'>,
+    ValidateHookName<'db.kv.upsertByName:filter:input'>,
+    ValidateHookName<'db.kv.upsertByName:action:after'>,
+    ValidateHookName<'db.kv.deleteByName:action:hard:before'>,
+    ValidateHookName<'db.kv.deleteByName:action:hard:after'>,
+    ValidateHookName<'db.threads.searchByTitle:filter:output'>,
+    ValidateHookName<'db.posts.all:filter:output'>
+] = [
+    'branch.fork:filter:options',
+    'branch.fork:action:before',
+    'branch.fork:action:after',
+    'branch.context:filter:messages',
+    'branch.context:action:after',
+    'db.documents.title:filter',
+    'db.documents.list:filter:output',
+    'db.kv.getByName:filter:output',
+    'db.kv.upsertByName:filter:input',
+    'db.kv.upsertByName:action:after',
+    'db.kv.deleteByName:action:hard:before',
+    'db.kv.deleteByName:action:hard:after',
+    'db.threads.searchByTitle:filter:output',
+    'db.posts.all:filter:output'
+];
 
 // Notes
 // - Keep this file focused on public types and utilities.
