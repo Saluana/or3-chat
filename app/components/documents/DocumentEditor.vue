@@ -124,11 +124,11 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
-import { AutocompleteExtension } from '~/plugins/EditorAutocomplete/TiptapExtension';
 import {
     useEditorToolbarButtons,
     listEditorNodes,
     listEditorMarks,
+    listEditorExtensions,
     useHooks,
     type EditorToolbarButton,
 } from '~/composables';
@@ -238,6 +238,22 @@ function makeEditor() {
         })
         .filter((ext): ext is NonNullable<typeof ext> => ext !== null);
 
+    const pluginExtensions = listEditorExtensions()
+        .map((ext) => {
+            try {
+                return ext.extension;
+            } catch (e) {
+                if (import.meta.dev) {
+                    console.error(
+                        `[DocumentEditor] Failed to load generic extension ${ext.id}:`,
+                        e
+                    );
+                }
+                return null;
+            }
+        })
+        .filter((ext): ext is NonNullable<typeof ext> => ext !== null);
+
     try {
         editor.value = new Editor({
             extensions: [
@@ -245,7 +261,7 @@ function makeEditor() {
                 Placeholder.configure({
                     placeholder: 'Type your text here...',
                 }),
-                AutocompleteExtension,
+                ...pluginExtensions,
                 ...pluginNodes,
                 ...pluginMarks,
             ],

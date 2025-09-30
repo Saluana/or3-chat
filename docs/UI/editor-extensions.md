@@ -1,6 +1,6 @@
 # Editor Extensions (TipTap)
 
-This guide explains how to extend the document editor with custom toolbar buttons, nodes, and marks. It follows the same plugin pattern as message actions and other UI registries.
+This guide explains how to extend the document editor with custom toolbar buttons, nodes, marks, and generic extensions. It follows the same plugin pattern as message actions and other UI registries.
 
 ## Where to import
 
@@ -12,6 +12,12 @@ Helpers are auto-imported by Nuxt, so you can call them from plugins or componen
 -   `unregisterEditorToolbarButton()`
 -   `useEditorToolbarButtons(editorRef)`
 -   `listRegisteredEditorToolbarButtonIds()`
+
+**Generic Extensions:**
+
+-   `registerEditorExtension()` / `unregisterEditorExtension()`
+-   `listEditorExtensions()`
+-   `listRegisteredEditorExtensionIds()`
 
 **Nodes & Marks:**
 
@@ -73,6 +79,131 @@ unregisterEditorToolbarButton('my-plugin:strikethrough');
 
 Built-in toolbar buttons use order < 200. External plugins should use `order >= 200` to appear after them unless you intentionally want to appear earlier.
 
+## Generic Extensions
+
+Generic TipTap extensions (like plugins, prosemirror plugins, or other functionality that doesn't fit into Node/Mark) can now be registered dynamically without modifying `DocumentEditor.vue`.
+
+### API contract
+
+```ts
+export interface EditorExtension {
+    id: string; // unique id
+    extension: Extension; // TipTap Extension instance
+    order?: number; // lower = earlier (default 200)
+}
+```
+
+### When to use Generic Extensions
+
+Use `registerEditorExtension()` for:
+
+-   TipTap plugins that provide editor functionality (autocomplete, mentions, etc.)
+-   ProseMirror plugins wrapped in TipTap Extensions
+-   Custom editor behaviors that don't create new nodes or marks
+-   Extensions that modify editor behavior globally
+
+Use `registerEditorNode()` or `registerEditorMark()` for:
+
+-   New content types (blocks, inline elements)
+-   New formatting options (bold, italic, custom marks)
+
+### Registering a generic extension
+
+```ts
+// app/plugins/editor-autocomplete.client.ts
+import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from 'prosemirror-state';
+
+// Create your TipTap extension
+const AutocompleteExtension = Extension.create({
+    name: 'autocomplete',
+
+    addProseMirrorPlugins() {
+        return [
+            new Plugin({
+                key: new PluginKey('autocomplete'),
+                // ... your plugin logic
+            }),
+        ];
+    },
+});
+
+export default defineNuxtPlugin(() => {
+    // Register the extension - it will be automatically included in all editors
+    registerEditorExtension({
+        id: 'editor-autocomplete:extension',
+        extension: AutocompleteExtension,
+        order: 100, // Load before most plugins but after core
+    });
+
+    // Optional: Also register a toolbar button to control it
+    registerEditorToolbarButton({
+        id: 'editor-autocomplete:toggle',
+        icon: 'pixelarticons:zap',
+        tooltip: 'Toggle Autocomplete',
+        order: 300,
+        isActive: (editor) => {
+            // Check if your extension is active
+            return true;
+        },
+        onClick: (editor) => {
+            // Toggle your extension's behavior
+        },
+    });
+});
+```
+
+### Real-world example: Autocomplete Plugin
+
+Here's a complete example of a fully self-contained editor plugin:
+
+```ts
+// app/plugins/editor-autocomplete.client.ts
+import {
+    registerEditorToolbarButton,
+    registerEditorExtension,
+} from '~/composables';
+import type { Editor } from '@tiptap/vue-3';
+import { AutocompleteExtension } from './EditorAutocomplete/TiptapExtension';
+import AutocompleteState from './EditorAutocomplete/state';
+import { computed } from 'vue';
+
+export default defineNuxtPlugin(() => {
+    if (process.client) {
+        // Register the TipTap extension
+        registerEditorExtension({
+            id: 'editor-autocomplete:extension',
+            extension: AutocompleteExtension,
+            order: 100,
+        });
+
+        // Register toolbar toggle button
+        registerEditorToolbarButton({
+            id: 'editor-autocomplete:toggle',
+            icon: 'pixelarticons:zap',
+            tooltip: computed(() =>
+                AutocompleteState.value.isEnabled
+                    ? 'Disable Autocomplete'
+                    : 'Enable Autocomplete'
+            ) as any,
+            order: 300,
+            isActive: (editor: Editor) => AutocompleteState.value.isEnabled,
+            onClick: (editor: Editor) => {
+                AutocompleteState.value.isEnabled =
+                    !AutocompleteState.value.isEnabled;
+            },
+        });
+    }
+});
+```
+
+**Key benefits:**
+
+-   ✅ No modifications to `DocumentEditor.vue` required
+-   ✅ Plugin is fully self-contained
+-   ✅ Works with HMR (Hot Module Replacement)
+-   ✅ Can be enabled/disabled independently
+
 ## Nodes & Marks
 
 ### API contract
@@ -80,13 +211,13 @@ Built-in toolbar buttons use order < 200. External plugins should use `order >= 
 ```ts
 export interface EditorNode {
     id: string; // unique id
-    extension: Extension; // TipTap extension instance
+    extension: Node; // TipTap Node extension instance
     order?: number; // lower = earlier (default 200)
 }
 
 export interface EditorMark {
     id: string; // unique id
-    extension: Extension; // TipTap extension instance
+    extension: Mark; // TipTap Mark extension instance
     order?: number; // lower = earlier (default 200)
 }
 ```

@@ -21,6 +21,16 @@ export interface EditorMark {
     order?: number;
 }
 
+/** Definition for an extendable editor generic extension. */
+export interface EditorExtension {
+    /** Unique id (stable across reloads). */
+    id: string;
+    /** TipTap Extension instance. */
+    extension: Extension;
+    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
+    order?: number;
+}
+
 // Global singleton registries (survive HMR) stored on globalThis to avoid duplication.
 const g: any = globalThis as any;
 
@@ -30,9 +40,16 @@ const nodesRegistry: Map<string, EditorNode> =
 const marksRegistry: Map<string, EditorMark> =
     g.__or3EditorMarksRegistry || (g.__or3EditorMarksRegistry = new Map());
 
+const extensionsRegistry: Map<string, EditorExtension> =
+    g.__or3EditorExtensionsRegistry ||
+    (g.__or3EditorExtensionsRegistry = new Map());
+
 // Reactive wrapper lists we maintain for computed filtering (Map itself not reactive).
 const nodesReactiveList = reactive<{ items: EditorNode[] }>({ items: [] });
 const marksReactiveList = reactive<{ items: EditorMark[] }>({ items: [] });
+const extensionsReactiveList = reactive<{ items: EditorExtension[] }>({
+    items: [],
+});
 
 function syncNodesReactiveList() {
     nodesReactiveList.items = Array.from(nodesRegistry.values());
@@ -40,6 +57,10 @@ function syncNodesReactiveList() {
 
 function syncMarksReactiveList() {
     marksReactiveList.items = Array.from(marksRegistry.values());
+}
+
+function syncExtensionsReactiveList() {
+    extensionsReactiveList.items = Array.from(extensionsRegistry.values());
 }
 
 /** Register (or replace) an editor node extension. */
@@ -70,6 +91,22 @@ export function unregisterEditorMark(id: string) {
     if (marksRegistry.delete(id)) syncMarksReactiveList();
 }
 
+/** Register (or replace) an editor generic extension. */
+export function registerEditorExtension(extension: EditorExtension) {
+    if (import.meta.dev && extensionsRegistry.has(extension.id)) {
+        console.warn(
+            `[useEditorNodes] Overwriting existing extension: ${extension.id}`
+        );
+    }
+    extensionsRegistry.set(extension.id, extension);
+    syncExtensionsReactiveList();
+}
+
+/** Unregister a generic extension by id (optional utility). */
+export function unregisterEditorExtension(id: string) {
+    if (extensionsRegistry.delete(id)) syncExtensionsReactiveList();
+}
+
 /** List all registered node extensions (ordered). */
 export function listEditorNodes(): EditorNode[] {
     return nodesReactiveList.items.sort((a, b) => {
@@ -88,6 +125,15 @@ export function listEditorMarks(): EditorMark[] {
     });
 }
 
+/** List all registered generic extensions (ordered). */
+export function listEditorExtensions(): EditorExtension[] {
+    return extensionsReactiveList.items.sort((a, b) => {
+        const orderDiff = (a.order ?? 200) - (b.order ?? 200);
+        // Stable sort: tie-break by id
+        return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
+    });
+}
+
 /** Convenience for plugin authors to check existing node ids. */
 export function listRegisteredEditorNodeIds(): string[] {
     return Array.from(nodesRegistry.keys());
@@ -96,6 +142,11 @@ export function listRegisteredEditorNodeIds(): string[] {
 /** Convenience for plugin authors to check existing mark ids. */
 export function listRegisteredEditorMarkIds(): string[] {
     return Array.from(marksRegistry.keys());
+}
+
+/** Convenience for plugin authors to check existing extension ids. */
+export function listRegisteredEditorExtensionIds(): string[] {
+    return Array.from(extensionsRegistry.keys());
 }
 
 // Note: Core (built-in) extensions remain hard-coded in DocumentEditor.vue;

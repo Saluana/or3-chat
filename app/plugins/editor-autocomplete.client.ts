@@ -1,20 +1,31 @@
 import {
     registerEditorToolbarButton,
     listRegisteredEditorToolbarButtonIds,
+    registerEditorExtension,
 } from '~/composables';
 import type { Editor } from '@tiptap/vue-3';
 import AutocompleteState from './EditorAutocomplete/state';
+import { AutocompleteExtension } from './EditorAutocomplete/TiptapExtension';
 import { computed } from 'vue';
 
 export default defineNuxtPlugin(() => {
     try {
         console.info('[editor-autocomplete] plugin starting');
 
-        // Note: The AutocompleteExtension needs to be manually added to editors that want it
-        // It checks AutocompleteState.value.isEnabled internally to determine if it should be active
+        // Note: The AutocompleteExtension is now registered dynamically and will be
+        // automatically included in all editors. It checks AutocompleteState.value.isEnabled
+        // internally to determine if it should be active.
 
-        // Wait for next tick to ensure composables are ready
         if (process.client) {
+            console.info('[editor-autocomplete] registering extension');
+
+            // Register the TipTap extension
+            registerEditorExtension({
+                id: 'editor-autocomplete:extension',
+                extension: AutocompleteExtension,
+                order: 100, // Load before most plugins but after core
+            });
+
             console.info('[editor-autocomplete] registering toolbar button');
 
             // Register toolbar button to toggle autocomplete
