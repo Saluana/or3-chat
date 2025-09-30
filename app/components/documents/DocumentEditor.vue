@@ -121,6 +121,7 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
+import { AutocompleteExtension } from '~/plugins/EditorAutocomplete/TiptapExtension';
 import {
     useEditorToolbarButtons,
     listEditorNodes,
@@ -227,6 +228,7 @@ function makeEditor() {
                 Placeholder.configure({
                     placeholder: 'Type your text here...',
                 }),
+                AutocompleteExtension,
                 ...pluginNodes,
                 ...pluginMarks,
             ],
