@@ -710,7 +710,7 @@ const __hook_name_checks__: [
     'db.kv.deleteByName:action:hard:before',
     'db.kv.deleteByName:action:hard:after',
     'db.threads.searchByTitle:filter:output',
-    'db.posts.all:filter:output'
+    'db.posts.all:filter:output',
 ];
 
 // Notes
