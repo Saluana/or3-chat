@@ -87,6 +87,15 @@
                 label="Redo"
                 @activate="cmd('redo')"
             />
+            <!-- Plugin-registered toolbar buttons -->
+            <ToolbarButton
+                v-for="btn in pluginButtons"
+                :key="btn.id"
+                :icon="btn.icon"
+                :active="getButtonActive(btn)"
+                :label="btn.tooltip || btn.id"
+                @activate="handleButtonClick(btn)"
+            />
         </div>
         <div class="flex-1 min-h-0 overflow-y-auto">
             <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
@@ -112,8 +121,17 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
+import {
+    useEditorToolbarButtons,
+    listEditorNodes,
+    listEditorMarks,
+    useHooks,
+    type EditorToolbarButton,
+} from '~/composables';
 
 const props = defineProps<{ documentId: string }>();
+
+const hooks = useHooks();
 
 // Reactive state wrapper (computed to always fetch current map entry)
 const state = computed(() => useDocumentState(props.documentId));
@@ -135,6 +153,9 @@ watch(
 );
 
 const editor = ref<Editor | null>(null);
+
+// Get plugin-registered toolbar buttons
+const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
 
 function onTitleChange() {
     setDocumentTitle(props.documentId, titleDraft.value);
@@ -160,20 +181,72 @@ function emitContent() {
     if (!editor.value) return;
     const json = editor.value.getJSON();
     setDocumentContent(props.documentId, json);
+
+    // Emit hook for plugins to observe updates
+    hooks.doActionSync('editor.updated:action:after', { editor: editor.value });
 }
 
 function makeEditor() {
-    editor.value = new Editor({
-        extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2] } }),
-            Placeholder.configure({
-                placeholder: 'Type your text here...',
-            }),
-        ],
-        content: state.value.record?.content || { type: 'doc', content: [] },
-        autofocus: false,
-        onUpdate: () => emitContent(),
-    });
+    // Collect plugin-registered extensions with defensive error handling
+    const pluginNodes = listEditorNodes()
+        .map((n) => {
+            try {
+                return n.extension;
+            } catch (e) {
+                if (import.meta.dev) {
+                    console.error(
+                        `[DocumentEditor] Failed to load node extension ${n.id}:`,
+                        e
+                    );
+                }
+                return null;
+            }
+        })
+        .filter((ext): ext is NonNullable<typeof ext> => ext !== null);
+
+    const pluginMarks = listEditorMarks()
+        .map((m) => {
+            try {
+                return m.extension;
+            } catch (e) {
+                if (import.meta.dev) {
+                    console.error(
+                        `[DocumentEditor] Failed to load mark extension ${m.id}:`,
+                        e
+                    );
+                }
+                return null;
+            }
+        })
+        .filter((ext): ext is NonNullable<typeof ext> => ext !== null);
+
+    try {
+        editor.value = new Editor({
+            extensions: [
+                StarterKit.configure({ heading: { levels: [1, 2] } }),
+                Placeholder.configure({
+                    placeholder: 'Type your text here...',
+                }),
+                ...pluginNodes,
+                ...pluginMarks,
+            ],
+            content: state.value.record?.content || {
+                type: 'doc',
+                content: [],
+            },
+            autofocus: false,
+            onUpdate: () => emitContent(),
+        });
+
+        // Emit hook for plugins to access editor instance
+        hooks.doActionSync('editor.created:action:after', {
+            editor: editor.value,
+        });
+    } catch (e) {
+        console.error('[DocumentEditor] Failed to create editor:', e);
+        // Rethrow to prevent unusable state
+        throw e;
+    }
 }
 
 onMounted(async () => {
@@ -193,6 +266,37 @@ function isActive(name: string) {
 }
 function isActiveHeading(level: number) {
     return editor.value?.isActive('heading', { level }) || false;
+}
+
+function getButtonActive(btn: EditorToolbarButton): boolean {
+    const ed = editor.value;
+    if (!ed || !btn.isActive) return false;
+    try {
+        return btn.isActive(ed as Editor);
+    } catch (e) {
+        if (import.meta.dev) {
+            console.error(
+                `[DocumentEditor] isActive() threw for button ${btn.id}:`,
+                e
+            );
+        }
+        return false;
+    }
+}
+
+function handleButtonClick(btn: EditorToolbarButton): void {
+    const ed = editor.value;
+    if (!ed) return;
+    try {
+        btn.onClick(ed as Editor);
+    } catch (e) {
+        if (import.meta.dev) {
+            console.error(
+                `[DocumentEditor] onClick() threw for button ${btn.id}:`,
+                e
+            );
+        }
+    }
 }
 
 function toggleHeading(level: number) {
@@ -248,7 +352,7 @@ const statusText = computed(() => {
     outline: none;
     white-space: pre-wrap;
 }
-.prosemirror-host :deep(.ProseMirror p) {
+.prosemmirror-host :deep(.ProseMirror p) {
     margin: 0;
 }
 

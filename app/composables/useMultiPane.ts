@@ -142,13 +142,13 @@ export function useMultiPane(
             pane.threadId = '';
             pane.messages = [];
             if (oldId !== '')
-                hooks.doAction(
-                    'ui.pane.thread:action:changed',
+                hooks.doAction('ui.pane.thread:action:changed', {
                     pane,
-                    oldId,
-                    '',
-                    0
-                );
+                    oldThreadId: oldId,
+                    newThreadId: '',
+                    paneIndex: index,
+                    messageCount: 0,
+                });
             if (import.meta.dev) {
                 try {
                     console.debug('[multiPane] setPaneThread:cleared', {
@@ -162,13 +162,13 @@ export function useMultiPane(
         pane.threadId = requested;
         pane.messages = await loadMessagesFor(requested);
         if (oldId !== requested)
-            hooks.doAction(
-                'ui.pane.thread:action:changed',
+            hooks.doAction('ui.pane.thread:action:changed', {
                 pane,
-                oldId,
-                requested,
-                pane.messages.length
-            );
+                oldThreadId: oldId,
+                newThreadId: requested,
+                paneIndex: index,
+                messageCount: pane.messages.length,
+            });
         if (import.meta.dev) {
             try {
                 console.debug('[multiPane] setPaneThread:applied', {
@@ -187,6 +187,8 @@ export function useMultiPane(
         const prevIndex = activePaneIndex.value;
         const prevPane = panes.value[prevIndex];
         activePaneIndex.value = i;
+        const nextPane = panes.value[i];
+        if (!nextPane) return;
         if (import.meta.dev) {
             try {
                 console.debug('[multiPane] setActive', {
@@ -198,29 +200,47 @@ export function useMultiPane(
             } catch {}
         }
         if (prevPane)
-            hooks.doAction('ui.pane.blur:action', prevPane, prevIndex);
+            hooks.doAction('ui.pane.blur:action', {
+                pane: prevPane,
+                previousIndex: prevIndex,
+            });
         // Preserve existing switch hook for compatibility
-        hooks.doAction('ui.pane.switch:action', panes.value[i], i);
-        hooks.doAction('ui.pane.active:action', panes.value[i], i, prevIndex);
+        hooks.doAction('ui.pane.switch:action', {
+            pane: nextPane,
+            index: i,
+            previousIndex: prevIndex,
+        });
+        hooks.doAction('ui.pane.active:action', {
+            pane: nextPane,
+            index: i,
+            previousIndex: prevIndex,
+        });
     }
 
     function addPane() {
         if (!canAddPane.value) return;
         const pane = createEmptyPane();
         panes.value.push(pane);
-        setActive(panes.value.length - 1);
-        hooks.doAction(
-            'ui.pane.open:action:after',
+        const prevIndex = activePaneIndex.value;
+        const newIndex = panes.value.length - 1;
+        setActive(newIndex);
+        hooks.doAction('ui.pane.open:action:after', {
             pane,
-            panes.value.length - 1
-        );
+            index: newIndex,
+            previousIndex: prevIndex === newIndex ? undefined : prevIndex,
+        });
     }
 
     async function closePane(i: number) {
         if (panes.value.length <= 1) return; // never close last
         const closing = panes.value[i];
+        if (!closing) return;
         // Pre-close hook
-        hooks.doAction('ui.pane.close:action:before', closing, i);
+        hooks.doAction('ui.pane.close:action:before', {
+            pane: closing,
+            index: i,
+            previousIndex: activePaneIndex.value,
+        });
         if (
             closing?.mode === 'doc' &&
             closing.documentId &&

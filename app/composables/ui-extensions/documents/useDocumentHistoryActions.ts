@@ -1,3 +1,65 @@
+/**
+ * Document History Actions Registry
+ *
+ * Provides a global registry for extending document history UI with custom actions.
+ * Actions appear in the document item dropdown menu in the sidebar.
+ *
+ * ## Usage
+ *
+ * ```ts
+ * // Register a custom action (typically in a plugin)
+ * registerDocumentHistoryAction({
+ *   id: 'my-plugin:export-doc',
+ *   icon: 'i-carbon-download',
+ *   label: 'Export Document',
+ *   order: 250, // Optional: controls position (default: 200)
+ *   handler: async ({ document }) => {
+ *     // document is the Post object
+ *     console.log('Exporting document:', document.id);
+ *     // Your export logic here
+ *   }
+ * });
+ *
+ * // Use in a component
+ * const actions = useDocumentHistoryActions();
+ * // actions.value is a sorted array of DocumentHistoryAction
+ * ```
+ *
+ * ## Order & Positioning
+ *
+ * - **Default order: 200** - Actions without an explicit order appear after built-in actions
+ * - **Lower values appear first** - Use order < 200 to appear before built-ins
+ * - **Higher values appear last** - Use order > 200 to appear after built-ins
+ * - Built-in actions typically use order 100-150
+ *
+ * ## ID Collision
+ *
+ * - **IDs must be unique** - Use a namespace prefix (e.g., 'my-plugin:action-name')
+ * - **Duplicate IDs replace** - Registering the same ID overwrites the previous action
+ * - **Dev warning** - In development, a console warning is shown on duplicate registration
+ * - Use `listRegisteredDocumentHistoryActionIds()` to check existing IDs
+ *
+ * ## HMR Safety
+ *
+ * The registry is stored on `globalThis` and survives Hot Module Replacement.
+ * Always unregister actions in cleanup/unmount hooks to prevent duplicates:
+ *
+ * ```ts
+ * onUnmounted(() => {
+ *   unregisterDocumentHistoryAction('my-plugin:export-doc');
+ * });
+ * ```
+ *
+ * Or use `useHookEffect` which handles cleanup automatically:
+ *
+ * ```ts
+ * useHookEffect('plugin:init', () => {
+ *   registerDocumentHistoryAction({ ... });
+ *   return () => unregisterDocumentHistoryAction('my-plugin:export-doc');
+ * });
+ * ```
+ */
+
 import { computed, reactive } from 'vue';
 import type { Post } from '~/db';
 

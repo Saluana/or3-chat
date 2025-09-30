@@ -11,27 +11,15 @@
 // - Skips forwarding if message was injected by this relay (source tagging).
 // - Debounce rapid duplicate forwards (simple last-message-id memory).
 import { useNuxtApp } from '#app';
-import type { PaneState } from '~/composables/useMultiPane';
 import type { PanePluginApi } from '../pane-plugin-api.client';
+import type {
+    UiPaneMsgSentPayload,
+    UiPaneMsgReceivedPayload,
+} from '~/utils/hook-types';
 import { getMessage } from '~/db/messages';
 
 const MAX_HOPS = 3; // prevent runaway ping-pong
 const RELAY_SOURCE = 'relay';
-
-// Hook payload (sent) produced by pane-plugin-api + core chat send path
-interface PaneMsgSentMeta {
-    id: string;
-    threadId: string;
-    paneIndex: number;
-    length: number;
-    fileHashes: string | null;
-    source?: string;
-}
-// Received payload currently mirrors sent with optional reasoning + possible content (future-proof)
-interface PaneMsgReceivedMeta extends PaneMsgSentMeta {
-    reasoningLength?: number;
-    content?: unknown; // currently not populated by core hook
-}
 
 function getApi(): PanePluginApi | undefined {
     return globalThis.__or3PanePluginApi;
@@ -61,8 +49,8 @@ export default defineNuxtPlugin(() => {
 
         hooks.addAction(
             'ui.pane.msg:action:sent',
-            (pane: PaneState, meta: PaneMsgSentMeta) => {
-                //console.log('[dual-llm-relay] sent', pane.id, meta);
+            (_payload: UiPaneMsgSentPayload) => {
+                //console.log('[dual-llm-relay] sent', _payload);
             }
         );
 
@@ -71,7 +59,7 @@ export default defineNuxtPlugin(() => {
 
         hooks.addAction(
             'ui.pane.msg:action:received',
-            async (pane: PaneState, meta: PaneMsgReceivedMeta) => {
+            async (payload: UiPaneMsgReceivedPayload) => {
                 // We only forward assistant messages produced in a pane's thread.
                 const panesRes = api.getPanes();
                 if (!panesRes.ok) return;
@@ -80,17 +68,17 @@ export default defineNuxtPlugin(() => {
 
                 // Derive index from descriptor list (meta.paneIndex not currently provided by core)
                 const fromIndex = paneList.findIndex(
-                    (p) => p.paneId === pane.id
+                    (p) => p.paneId === payload.pane.id
                 );
                 if (fromIndex === -1) return;
                 const targetPaneDesc = paneList[fromIndex === 0 ? 1 : 0];
                 if (!targetPaneDesc) return;
 
                 // Prevent relaying our own injected messages (source flag present only on sent hook currently). If future meta.source appears, respect it.
-                if ((meta as any).source === RELAY_SOURCE) return;
+                if (payload.meta?.source === RELAY_SOURCE) return;
 
                 const key =
-                    meta.threadId +
+                    (payload.message.threadId || payload.pane.threadId || '') +
                     '->' +
                     (targetPaneDesc.threadId || targetPaneDesc.paneId);
                 const hops = hopCounts.get(key) || 0;
@@ -107,7 +95,7 @@ export default defineNuxtPlugin(() => {
                 // Fetch message content (meta.id corresponds to assistant message id)
                 let text = '';
                 try {
-                    const msg: any = await getMessage(meta.id);
+                    const msg: any = await getMessage(payload.message.id);
                     text = msg?.data?.content || '';
                 } catch {}
                 if (!text.trim()) return;

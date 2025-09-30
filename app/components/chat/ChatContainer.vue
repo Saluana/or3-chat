@@ -103,11 +103,13 @@ import { useChat } from '~/composables/useAi';
 import {
     getPanePendingPrompt,
     clearPanePendingPrompt,
+    setPanePendingPrompt,
 } from '~/composables/usePanePrompt';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
+import { ensureUiMessage } from '~/utils/chat/uiMessages';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
@@ -128,7 +130,7 @@ const effectiveInputHeight = computed(
 );
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
 const bottomPad = computed(() => {
-    const base = Math.round(effectiveInputHeight.value + 0);
+    const base = Math.round(effectiveInputHeight.value + 16); // Add 16px buffer
     return isMobile.value ? base + 24 : base; // 24px approximates safe-area + gap
 });
 
@@ -216,11 +218,9 @@ watch(
             return;
         }
         // Prefer to update the internal messages array directly to avoid remount flicker
-        import('~/utils/chat/uiMessages').then(({ ensureUiMessage }) => {
-            chat.value!.messages.value = (mh || []).map((m: any) =>
-                ensureUiMessage(m)
-            );
-        });
+        chat.value!.messages.value = (mh || []).map((m: any) =>
+            ensureUiMessage(m)
+        );
     }
 );
 
@@ -397,10 +397,7 @@ function onPendingPromptSelected(promptId: string | null) {
     pendingPromptId.value = promptId;
     // Store pane-level until thread creation
     if (props.paneId) {
-        // dynamic import to avoid circular
-        import('~/composables/usePanePrompt').then((m) =>
-            m.setPanePendingPrompt(props.paneId!, promptId)
-        );
+        setPanePendingPrompt(props.paneId, promptId);
     }
     // Reinitialize chat with the pending prompt
     chat.value = useChat(

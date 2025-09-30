@@ -95,6 +95,47 @@
                             <UIcon :name="themeIcon" class="w-5 h-5" />
                         </UButton>
                     </UTooltip>
+                    <div
+                        v-if="headerActions.length"
+                        class="h-full flex items-center gap-1 px-2 pointer-events-auto"
+                    >
+                        <UTooltip
+                            v-for="entry in headerActions"
+                            :key="`header-action-${entry.action.id}`"
+                            :delay-duration="0"
+                            :text="entry.action.tooltip || entry.action.label"
+                        >
+                            <UButton
+                                size="xs"
+                                variant="ghost"
+                                :color="(entry.action.color || 'neutral') as any"
+                                :square="!entry.action.label"
+                                :disabled="entry.disabled"
+                                :class="[
+                                    'retro-btn pointer-events-auto flex items-center gap-1',
+                                    entry.action.label ? 'px-3' : '',
+                                ]"
+                                :ui="{ base: 'retro-btn' }"
+                                :aria-label="
+                                    entry.action.tooltip ||
+                                    entry.action.label ||
+                                    entry.action.id
+                                "
+                                @click="() => handleHeaderAction(entry)"
+                            >
+                                <UIcon
+                                    :name="entry.action.icon"
+                                    class="w-4 h-4"
+                                />
+                                <span
+                                    v-if="entry.action.label"
+                                    class="text-xs font-medium"
+                                >
+                                    {{ entry.action.label }}
+                                </span>
+                            </UButton>
+                        </UTooltip>
+                    </div>
                 </div>
             </div>
             <div
@@ -181,9 +222,21 @@ import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import { useMultiPane } from '~/composables/useMultiPane';
 import { db } from '~/db';
 import { useHookEffect } from '~/composables/useHookEffect';
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import {
+    flush as flushDocument,
+    newDocument as createNewDoc,
+    useDocumentState,
+} from '~/composables/useDocumentsStore';
 import { usePaneDocuments } from '~/composables/usePaneDocuments';
+import {
+    useHeaderActions,
+    type HeaderActionEntry,
+} from '~/composables/ui-extensions/chrome';
+import type {
+    DbDeletePayload,
+    ThreadEntity,
+    DocumentEntity,
+} from '~/utils/hook-types';
 
 const props = withDefaults(
     defineProps<{
@@ -198,6 +251,7 @@ const props = withDefaults(
 
 const router = useRouter();
 const toast = useToast();
+const route = useRoute();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 
@@ -360,7 +414,6 @@ watch(
 );
 
 // --------------- Documents Integration ---------------
-const { useDocumentState } = await import('~/composables/useDocumentsStore');
 const hooks = useHooks();
 const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
     panes,
@@ -468,6 +521,26 @@ const themeAriaLabel = computed(() =>
 
 // --------------- Mobile + layout ---------------
 import { isMobile } from '~/state/global';
+
+const headerActions = useHeaderActions(() => ({
+    route,
+    isMobile: isMobile.value,
+}));
+
+async function handleHeaderAction(entry: HeaderActionEntry) {
+    if (entry.disabled) return;
+    try {
+        await entry.action.handler({
+            route,
+            isMobile: isMobile.value,
+        });
+    } catch (error) {
+        console.error(
+            `[PageShell] header action "${entry.action.id}" failed`,
+            error
+        );
+    }
+}
 // Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
 if (process.client) {
     const mq = window.matchMedia('(max-width: 640px)');
@@ -505,40 +578,36 @@ function resetPaneToBlank(paneIndex: number) {
     pane.messages = [];
     if (paneIndex === activePaneIndex.value) updateUrl();
 }
-function handleThreadDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+function handleThreadDeletion(payload: DbDeletePayload<ThreadEntity>) {
+    const deletedId = payload?.id ?? payload?.entity?.id;
     if (!deletedId) return;
     panes.value.forEach((p, i) => {
         if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
     });
 }
-function handleDocumentDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+function handleDocumentDeletion(payload: DbDeletePayload<DocumentEntity>) {
+    const deletedId = payload?.id ?? payload?.entity?.id;
     if (!deletedId) return;
     panes.value.forEach((p, i) => {
         if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
     });
 }
-useHookEffect(
-    'db.threads.delete:action:soft:after',
-    (t: any) => handleThreadDeletion(t),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.threads.delete:action:hard:after',
-    (id: any) => handleThreadDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:soft:after',
-    (row: any) => handleDocumentDeletion(row),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:hard:after',
-    (id: any) => handleDocumentDeletion(id),
-    { kind: 'action', priority: 10 }
-);
+useHookEffect('db.threads.delete:action:soft:after', handleThreadDeletion, {
+    kind: 'action',
+    priority: 10,
+});
+useHookEffect('db.threads.delete:action:hard:after', handleThreadDeletion, {
+    kind: 'action',
+    priority: 10,
+});
+useHookEffect('db.documents.delete:action:soft:after', handleDocumentDeletion, {
+    kind: 'action',
+    priority: 10,
+});
+useHookEffect('db.documents.delete:action:hard:after', handleDocumentDeletion, {
+    kind: 'action',
+    priority: 10,
+});
 
 // --------------- Mount ---------------
 onMounted(() => {

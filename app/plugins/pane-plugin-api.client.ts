@@ -147,7 +147,13 @@ async function ensureThread(
     });
     await m.setPaneThread(i, t.id);
     try {
-        h.doAction?.('ui.pane.thread:action:changed', p, '', t.id, 0);
+        h.doAction?.('ui.pane.thread:action:changed', {
+            pane: p,
+            oldThreadId: '',
+            newThreadId: t.id,
+            paneIndex: i,
+            messageCount: 0,
+        });
     } catch (e) {
         // Hook errors should not abort thread creation
         reportError(coreErr('ERR_INTERNAL', 'pane thread hook failed'), {
@@ -234,13 +240,16 @@ async function makeApi(): Promise<PanePluginApi> {
                     data: { content: text, attachments: [] },
                 });
                 try {
-                    hooks.doAction?.('ui.pane.msg:action:sent', p, {
-                        id: dbMsg.id,
-                        threadId,
-                        length: text.length,
-                        fileHashes: null,
-                        paneIndex: -1,
-                        source,
+                    hooks.doAction?.('ui.pane.msg:action:sent', {
+                        pane: p,
+                        paneIndex: index,
+                        message: {
+                            id: dbMsg.id,
+                            threadId,
+                            length: text.length,
+                            fileHashes: null,
+                        },
+                        meta: { source },
                     });
                 } catch (e) {
                     reportError(

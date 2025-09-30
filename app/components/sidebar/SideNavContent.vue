@@ -17,8 +17,23 @@
             @add-document-to-project="openAddDocumentToProject"
         />
         <!-- Scrollable content area -->
-        <div ref="scrollAreaRef" class="flex-1 min-h-0 px-2">
+        <div
+            ref="scrollAreaRef"
+            class="flex-1 min-h-0 px-2 flex flex-col gap-3 py-3"
+            :style="{ paddingBottom: bottomPad + 'px' }"
+        >
+            <component
+                v-for="section in resolvedSidebarSections.top"
+                :key="`sidebar-section-top-${section.id}`"
+                :is="section.component"
+            />
+            <component
+                v-for="section in resolvedSidebarSections.main"
+                :key="`sidebar-section-main-${section.id}`"
+                :is="section.component"
+            />
             <SidebarVirtualList
+                class="flex-1"
                 :height="listHeight"
                 :projects="displayProjects"
                 :threads="displayThreads"
@@ -51,8 +66,42 @@
                 @deleteDocument="(d:any) => confirmDeleteDocument(d)"
                 @addDocumentToProject="(d:any) => openAddDocumentToProject(d)"
             />
+            <component
+                v-for="section in resolvedSidebarSections.bottom"
+                :key="`sidebar-section-bottom-${section.id}`"
+                :is="section.component"
+            />
         </div>
-        <div ref="bottomNavRef" class="shrink-0">
+        <div ref="bottomNavRef" class="shrink-0 px-2 pb-2 flex flex-col gap-2">
+            <div
+                v-if="sidebarFooterActions.length"
+                class="flex flex-wrap gap-2"
+            >
+                <UTooltip
+                    v-for="entry in sidebarFooterActions"
+                    :key="`sidebar-footer-${entry.action.id}`"
+                    :delay-duration="0"
+                    :text="entry.action.tooltip || entry.action.label"
+                >
+                    <UButton
+                        size="xs"
+                        variant="ghost"
+                        :color="(entry.action.color || 'neutral') as any"
+                        :square="!entry.action.label"
+                        :disabled="entry.disabled"
+                        class="pointer-events-auto"
+                        @click="() => handleSidebarFooterAction(entry)"
+                    >
+                        <UIcon :name="entry.action.icon" class="w-4 h-4" />
+                        <span
+                            v-if="entry.action.label"
+                            class="ml-1 text-xs font-medium"
+                        >
+                            {{ entry.action.label }}
+                        </span>
+                    </UButton>
+                </UTooltip>
+            </div>
             <sidebar-side-bottom-nav />
         </div>
 
@@ -383,7 +432,16 @@
     </div>
 </template>
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed, nextTick } from 'vue';
+import {
+    onMounted,
+    onUnmounted,
+    ref,
+    watch,
+    computed,
+    nextTick,
+    defineAsyncComponent,
+} from 'vue';
+import type { Component } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import { useHooks } from '~/composables/useHooks';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
@@ -392,6 +450,12 @@ import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/useDocumentsStore';
+import {
+    useSidebarSections,
+    useSidebarFooterActions,
+    type SidebarSection,
+    type SidebarFooterActionEntry,
+} from '~/composables/ui-extensions/chrome';
 // (Temporarily removed virtualization for chats — use simple list for now)
 
 // Section visibility (multi-select) defaults to all on
@@ -441,6 +505,75 @@ const activeThreadIds = computed<string[]>(() => {
     }
     return props.activeThread ? [props.activeThread] : [];
 });
+
+const sectionComponentCache = new Map<string, Component>();
+
+function resolveSidebarSectionComponent(
+    id: string,
+    source: SidebarSection['component']
+): Component {
+    if (
+        typeof source === 'function' &&
+        !(source as any).render &&
+        !(source as any).setup
+    ) {
+        const cached = sectionComponentCache.get(id);
+        if (cached) return cached;
+        const asyncComp = defineAsyncComponent(async () => {
+            const mod = await (source as () => Promise<any>)();
+            const comp = mod?.default || mod;
+            if (process.dev && (typeof comp !== 'object' || !comp)) {
+                console.warn(
+                    `[useSidebarSections] Async section loader for ${id} returned invalid component`,
+                    comp
+                );
+            }
+            return comp;
+        });
+        sectionComponentCache.set(id, asyncComp);
+        return asyncComp;
+    }
+    return source as Component;
+}
+
+const sidebarSections = useSidebarSections();
+
+const resolvedSidebarSections = computed(() => {
+    const groups = sidebarSections.value;
+    const mapSections = (entries: SidebarSection[]) =>
+        entries.map((entry) => ({
+            id: entry.id,
+            component: resolveSidebarSectionComponent(
+                entry.id,
+                entry.component
+            ),
+        }));
+    return {
+        top: mapSections(groups.top),
+        main: mapSections(groups.main),
+        bottom: mapSections(groups.bottom),
+    };
+});
+
+const getSidebarFooterContext = () => ({
+    activeThreadId: activeThreadIds.value[0] ?? null,
+    activeDocumentId: activeDocumentIds.value[0] ?? null,
+    isCollapsed: false,
+});
+
+const sidebarFooterActions = useSidebarFooterActions(getSidebarFooterContext);
+
+async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
+    if (entry.disabled) return;
+    try {
+        await entry.action.handler(getSidebarFooterContext());
+    } catch (error) {
+        console.error(
+            `[Sidebar] footer action "${entry.action.id}" failed`,
+            error
+        );
+    }
+}
 
 const {
     query: sidebarQuery,
@@ -595,12 +728,14 @@ watch([containerHeight, bottomNavHeight], () => {
 // (virtualization removed — no watcher required)
 
 // Re-measure bottom pad when data that can change nav size or list height updates (debounced by nextTick)
-watch([projects, expandedProjects], () => {
+watch([projects, expandedProjects, sidebarFooterActions], () => {
     nextTick(() => {
-        const navEl = bottomNavRef.value?.querySelector(
-            '.hud'
-        ) as HTMLElement | null;
-        const h = navEl?.offsetHeight || 0;
+        const navContainer = bottomNavRef.value as HTMLElement | null;
+        const containerHeight = navContainer?.offsetHeight ?? 0;
+        const hudHeight = (
+            navContainer?.querySelector('.hud') as HTMLElement | null
+        )?.offsetHeight;
+        const h = Math.max(containerHeight, hudHeight ?? 0);
         bottomPad.value = h + 12;
     });
 });

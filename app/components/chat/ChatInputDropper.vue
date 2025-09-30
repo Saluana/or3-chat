@@ -144,6 +144,42 @@
                     </div>
                 </div>
 
+                <div
+                    v-if="composerActions.length"
+                    class="flex items-center gap-1 shrink-0"
+                >
+                    <UTooltip
+                        v-for="entry in composerActions"
+                        :key="`composer-action-${entry.action.id}`"
+                        :delay-duration="0"
+                        :text="entry.action.tooltip || entry.action.label"
+                    >
+                        <UButton
+                            size="sm"
+                            variant="ghost"
+                            :color="(entry.action.color || 'neutral') as any"
+                            :square="!entry.action.label"
+                            :disabled="entry.disabled"
+                            class="retro-btn pointer-events-auto flex items-center gap-1"
+                            :ui="{ base: 'retro-btn' }"
+                            :aria-label="
+                                entry.action.tooltip ||
+                                entry.action.label ||
+                                entry.action.id
+                            "
+                            @click="() => handleComposerAction(entry)"
+                        >
+                            <UIcon :name="entry.action.icon" class="w-4 h-4" />
+                            <span
+                                v-if="entry.action.label"
+                                class="text-xs font-medium"
+                            >
+                                {{ entry.action.label }}
+                            </span>
+                        </UButton>
+                    </UTooltip>
+                </div>
+
                 <!-- Model Selector extracted -->
                 <LazyChatModelSelect
                     hydrate-on-interaction="focus"
@@ -336,6 +372,11 @@ import {
     registerPaneInput,
     unregisterPaneInput,
 } from '~/composables/useChatInputBridge';
+import {
+    useComposerActions,
+    type ComposerActionEntry,
+    type ComposerActionContext,
+} from '~/composables/ui-extensions/chrome';
 const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
@@ -510,6 +551,29 @@ const promptText = ref('');
 // Fallback textarea ref (used while TipTap not yet integrated / or fallback active)
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const editor = ref<Editor | null>(null);
+
+const composerActionContext = (): ComposerActionContext => ({
+    editor: (editor.value ?? null) as Editor | null,
+    threadId: props.threadId ?? null,
+    paneId: props.paneId ?? null,
+    isStreaming: !!props.streaming,
+    isMobile: isMobile.value,
+    isLoading: !!props.loading,
+});
+
+const composerActions = useComposerActions(composerActionContext);
+
+async function handleComposerAction(entry: ComposerActionEntry) {
+    if (entry.disabled) return;
+    try {
+        await entry.action.handler(composerActionContext());
+    } catch (error) {
+        console.error(
+            `[ChatInputDropper] composer action "${entry.action.id}" failed`,
+            error
+        );
+    }
+}
 
 const attachments = ref<UploadedImage[]>([]);
 // Backward compatibility: expose as uploadedImages for template

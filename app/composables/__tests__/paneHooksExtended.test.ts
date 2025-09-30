@@ -133,12 +133,14 @@ describe('extended pane hooks coverage', () => {
                 ] as any,
         });
         let changedPayload: any = null;
-        hookEngine.addAction(
-            'ui.pane.thread:action:changed',
-            (_pane: any, _old: string, _new: string, count: number) => {
-                changedPayload = { _old, _new, count };
-            }
-        );
+        hookEngine.addAction('ui.pane.thread:action:changed', (payload) => {
+            changedPayload = {
+                _old: payload.oldThreadId,
+                _new: payload.newThreadId,
+                count: payload.messageCount,
+                paneIndex: payload.paneIndex,
+            };
+        });
         // Veto first
         hookEngine.addFilter('ui.pane.thread:filter:select', (req: string) =>
             req === 'veto' ? false : req
@@ -150,6 +152,7 @@ describe('extended pane hooks coverage', () => {
             _old: '',
             _new: 'thread-ABC',
             count: 2,
+            paneIndex: 0,
         });
         expect(panes.value[0]!.messages.length).toBe(2);
     });
@@ -181,21 +184,23 @@ describe('extended pane hooks coverage', () => {
         });
         let saved: any = null;
         let changed: any = null;
-        hookEngine.addAction(
-            'ui.pane.doc:action:saved',
-            (_pane: any, id: string) => {
-                saved = id;
-            }
-        );
-        hookEngine.addAction(
-            'ui.pane.doc:action:changed',
-            (_pane: any, oldId: string, newId: string) => {
-                changed = { oldId, newId };
-            }
-        );
+        hookEngine.addAction('ui.pane.doc:action:saved', (payload) => {
+            saved = payload.newDocumentId;
+        });
+        hookEngine.addAction('ui.pane.doc:action:changed', (payload) => {
+            changed = {
+                oldId: payload.oldDocumentId,
+                newId: payload.newDocumentId,
+                paneIndex: payload.paneIndex,
+            };
+        });
         await newDocumentInActive({ title: 'New' });
         expect(saved).toBe('doc-old');
-        expect(changed).toEqual({ oldId: 'doc-old', newId: 'doc-new' });
+        expect(changed).toEqual({
+            oldId: 'doc-old',
+            newId: 'doc-new',
+            paneIndex: 0,
+        });
     });
 
     it('document filter transform & veto respected', async () => {
@@ -240,18 +245,12 @@ describe('extended pane hooks coverage', () => {
         const { panes } = useMultiPane({ initialThreadId: 't1' });
         let sent: any = null;
         let received: any = null;
-        hookEngine.addAction(
-            'ui.pane.msg:action:sent',
-            (_pane: any, payload: any) => {
-                sent = payload;
-            }
-        );
-        hookEngine.addAction(
-            'ui.pane.msg:action:received',
-            (_pane: any, payload: any) => {
-                received = payload;
-            }
-        );
+        hookEngine.addAction('ui.pane.msg:action:sent', (payload) => {
+            sent = payload.message;
+        });
+        hookEngine.addAction('ui.pane.msg:action:received', (payload) => {
+            received = payload.message;
+        });
         const chat = useChat([], 't1');
         await chat.sendMessage('Hello AI');
         await flush();

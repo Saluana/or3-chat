@@ -62,13 +62,17 @@ describe('multi-pane new hooks', () => {
         let changed: any = null;
         hookEngine.addAction(
             'ui.pane.thread:action:changed',
-            (_pane: any, oldId: string, newId: string) => {
-                changed = { oldId, newId };
+            ({ oldThreadId, newThreadId, paneIndex }) => {
+                changed = { oldId: oldThreadId, newId: newThreadId, paneIndex };
             }
         );
         await setPaneThread(0, 'thread-1');
         expect(panes.value[0]!.threadId).toBe('thread-X');
-        expect(changed).toEqual({ oldId: '', newId: 'thread-X' });
+        expect(changed).toEqual({
+            oldId: '',
+            newId: 'thread-X',
+            paneIndex: 0,
+        });
     });
 
     it('doc hooks fire on new document', async () => {

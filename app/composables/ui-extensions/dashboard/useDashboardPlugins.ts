@@ -22,6 +22,18 @@ export interface DashboardPlugin {
     handler?: (ctx: { id: string }) => void | Promise<void>;
     /** Optional pages declared inline on registration (normalized into page registry). */
     pages?: DashboardPluginPage[];
+    /**
+     * Optional capability declarations for permission-based access control.
+     * Standard capabilities:
+     * - 'canReadMessages': Read chat messages/history
+     * - 'canWriteDocs': Create/modify documents
+     * - 'canSend': Send messages or trigger AI operations
+     * - 'canReadFiles': Access file attachments
+     * - 'canWriteFiles': Upload or modify files
+     * - 'canManageThreads': Create/delete/modify threads
+     * - 'canAccessSettings': Read or modify app settings
+     */
+    capabilities?: string[];
 }
 
 export interface DashboardPluginPage {
@@ -493,4 +505,60 @@ export function useDashboardNavigation(
         goBack,
         reset,
     };
+}
+
+/**
+ * Check if a dashboard plugin declares a specific capability.
+ * @param pluginId - The unique ID of the plugin
+ * @param capability - The capability string to check (e.g., 'canReadMessages')
+ * @returns true if the plugin declares the capability, false otherwise
+ */
+export function hasCapability(pluginId: string, capability: string): boolean {
+    const plugin = registry.get(pluginId);
+    if (!plugin) return false;
+    if (!plugin.capabilities || !Array.isArray(plugin.capabilities)) {
+        return false;
+    }
+    return plugin.capabilities.includes(capability);
+}
+
+/**
+ * Get all capabilities declared by a plugin.
+ * @param pluginId - The unique ID of the plugin
+ * @returns Array of capability strings, or empty array if none declared
+ */
+export function getPluginCapabilities(pluginId: string): string[] {
+    const plugin = registry.get(pluginId);
+    if (!plugin || !plugin.capabilities) return [];
+    return [...plugin.capabilities];
+}
+
+/**
+ * Check if a plugin has ALL of the specified capabilities.
+ * @param pluginId - The unique ID of the plugin
+ * @param capabilities - Array of capability strings to check
+ * @returns true if plugin has all capabilities, false otherwise
+ */
+export function hasAllCapabilities(
+    pluginId: string,
+    capabilities: string[]
+): boolean {
+    const plugin = registry.get(pluginId);
+    if (!plugin || !plugin.capabilities) return false;
+    return capabilities.every((cap) => plugin.capabilities!.includes(cap));
+}
+
+/**
+ * Check if a plugin has ANY of the specified capabilities.
+ * @param pluginId - The unique ID of the plugin
+ * @param capabilities - Array of capability strings to check
+ * @returns true if plugin has at least one capability, false otherwise
+ */
+export function hasAnyCapability(
+    pluginId: string,
+    capabilities: string[]
+): boolean {
+    const plugin = registry.get(pluginId);
+    if (!plugin || !plugin.capabilities) return false;
+    return capabilities.some((cap) => plugin.capabilities!.includes(cap));
 }
