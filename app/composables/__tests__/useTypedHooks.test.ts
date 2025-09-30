@@ -16,8 +16,14 @@ describe('useHooks typed integration', () => {
         const spy = vi.fn();
         hooks.addAction('ui.pane.blur:action', (payload) => spy(payload));
         await hooks.doAction('ui.pane.blur:action', {
-            pane: { id: 'p1', mode: 'chat', messages: [] },
-            index: 0,
+            pane: {
+                id: 'p1',
+                mode: 'chat',
+                threadId: '',
+                messages: [],
+                validating: false,
+            },
+            previousIndex: 0,
         });
         expect(spy).toHaveBeenCalledTimes(1);
     });
@@ -34,9 +40,7 @@ describe('useHooks typed integration', () => {
 
     it('unified on() registration works for filter + disposer', async () => {
         const hooks = useHooks();
-        const off = hooks.on('files.attach:filter:input', (p) => p, {
-            kind: 'filter',
-        });
+        const off = hooks.on('files.attach:filter:input', (p) => p);
         const payload = {
             file: new File(['x'], 'x.txt'),
             name: 'x.txt',

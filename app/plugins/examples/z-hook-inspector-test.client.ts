@@ -1,3 +1,5 @@
+import type { HookEngine } from '~/utils/hooks';
+
 export default defineNuxtPlugin(() => {
     // Access the global hooks instance (created by hooks.client.ts plugin)
     const g = globalThis as any;
@@ -34,11 +36,11 @@ export default defineNuxtPlugin(() => {
     }, 2000);
 
     // 2. Listen to some real app hooks to show actual activity
-    hooks.on('ui.pane.switch:action', (_pane: any, index: number) => {
-        console.log('[HookInspectorTest] Pane switched to', index);
+    hooks.on('ui.pane.switch:action', (payload: any) => {
+        console.log('[HookInspectorTest] Pane switched to', payload?.index);
     });
 
-    hooks.on('ui.sidebar.select:action:before', (_ctx: any, info: any) => {
+    hooks.on('ui.sidebar.select:action:before', (info: any) => {
         console.log('[HookInspectorTest] Sidebar selection:', info);
     });
 

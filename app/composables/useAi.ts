@@ -71,10 +71,10 @@ export function useChat(
     // Unified streaming accumulator only (legacy removed)
     const streamAcc = createStreamAccumulator();
     const streamState = streamAcc.state;
-    const streamId = ref<string | null>(null);
+    const streamId = ref<string | undefined>(undefined);
     function resetStream() {
         streamAcc.reset();
-        streamId.value = null;
+        streamId.value = undefined;
     }
 
     async function getSystemPromptContent(): Promise<string | null> {
@@ -361,12 +361,16 @@ export function useChat(
                             });
                         } catch {}
                     }
-                    hooks.doAction('ui.pane.msg:action:sent', pane, {
-                        id: userDbMsg.id,
-                        paneIndex: mpApi.panes.value.indexOf(pane),
-                        threadId: threadIdRef.value,
-                        length: outgoing.length,
-                        fileHashes: userDbMsg.file_hashes || null,
+                    const paneIndex = mpApi.panes.value.indexOf(pane);
+                    hooks.doAction('ui.pane.msg:action:sent', {
+                        pane,
+                        paneIndex,
+                        message: {
+                            id: userDbMsg.id,
+                            threadId: threadIdRef.value,
+                            length: outgoing.length,
+                            fileHashes: userDbMsg.file_hashes || null,
+                        },
                     });
                 } else if (import.meta.dev) {
                     try {
@@ -406,7 +410,7 @@ export function useChat(
         } catch {}
 
         loading.value = true;
-        streamId.value = null;
+        streamId.value = undefined;
 
         let currentModelId: string | undefined;
         try {
@@ -769,15 +773,18 @@ export function useChat(
                                 });
                             } catch {}
                         }
-                        hooks.doAction('ui.pane.msg:action:received', pane, {
-                            id: finalized.id,
-                            threadId: threadIdRef.value,
-                            paneIndex: mpApi.panes.value.indexOf(pane),
-                            msgId: finalized.id,
-                            length: (incoming as string).length,
-                            fileHashes: finalized.file_hashes || null,
-                            reasoningLength: (current.reasoning_text || '')
-                                .length,
+                        const paneIndex = mpApi.panes.value.indexOf(pane);
+                        hooks.doAction('ui.pane.msg:action:received', {
+                            pane,
+                            paneIndex,
+                            message: {
+                                id: finalized.id,
+                                threadId: threadIdRef.value,
+                                length: (incoming as string).length,
+                                fileHashes: finalized.file_hashes || null,
+                                reasoningLength: (current.reasoning_text || '')
+                                    .length,
+                            },
                         });
                     } else if (import.meta.dev) {
                         try {

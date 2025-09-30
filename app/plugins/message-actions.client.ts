@@ -35,7 +35,14 @@ export default defineNuxtPlugin(() => {
                 }
             }
 
-            const tiptapDoc = await markdownToTipTapDoc(message.content || '');
+            const markdownSource =
+                typeof (message as any)?.text === 'string'
+                    ? (message as any).text
+                    : typeof (message as any)?.content === 'string'
+                    ? (message as any).content
+                    : '';
+
+            const tiptapDoc = await markdownToTipTapDoc(markdownSource);
 
             const doc = await newDocument({
                 title: (message as any).title || 'Untitled',

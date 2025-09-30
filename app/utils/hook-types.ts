@@ -1,6 +1,7 @@
 // Hook & Plugin Type System — Core Types (non-breaking, types-only)
 // This file provides compile-time types and utilities for amazing DX.
 // Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
+import type { PaneState as MultiPaneState } from '../composables/useMultiPane';
 /**
  * Overview
  * - Strongly-typed hook names (actions and filters)
@@ -101,15 +102,8 @@ export interface AiRetryAfterPayload {
 }
 
 // Pane Hooks
-/** Current UI pane state (minimal, SSR-safe). */
-export interface PaneState {
-    id: string;
-    mode: 'chat' | 'doc';
-    threadId?: string;
-    documentId?: string;
-    messages: any[];
-    validating?: boolean;
-}
+/** Current UI pane state (reuses the core MultiPane definition). */
+type PaneState = MultiPaneState;
 
 export interface UiPaneMsgBase {
     id: string;
@@ -131,12 +125,13 @@ export interface UiPaneActivePayload {
 
 export interface UiPaneBlurPayload {
     pane: PaneState;
-    index: number;
+    previousIndex: number;
 }
 
 export interface UiPaneSwitchPayload {
     pane: PaneState;
     index: number;
+    previousIndex?: number;
 }
 
 export interface UiPaneThreadChangedPayload {
@@ -144,22 +139,29 @@ export interface UiPaneThreadChangedPayload {
     oldThreadId: string | '';
     newThreadId: string;
     paneIndex: number;
+    messageCount?: number;
 }
 
 export interface UiPaneDocChangedPayload {
     pane: PaneState;
     oldDocumentId: string | '';
     newDocumentId: string;
+    paneIndex: number;
+    meta?: Record<string, unknown>;
 }
 
 export interface UiPaneMsgSentPayload {
     pane: PaneState;
+    paneIndex: number;
     message: UiPaneMsgBase;
+    meta?: Record<string, unknown>;
 }
 
 export interface UiPaneMsgReceivedPayload {
     pane: PaneState;
+    paneIndex: number;
     message: UiPaneMsgReceived;
+    meta?: Record<string, unknown>;
 }
 
 // UI / Sidebar
@@ -574,11 +576,12 @@ export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap
 
 // Extract callback return type
 /** Return type for a hook callback based on kind (action vs filter). */
-export type InferHookReturn<K extends HookName> = K extends FilterHookName
-    ? K extends keyof HookPayloadMap
-        ? HookPayloadMap[K][0]
-        : any
-    : void | Promise<void>;
+export type InferHookReturn<K extends HookName> =
+    K extends `${string}:filter${string}`
+        ? K extends keyof HookPayloadMap
+            ? HookPayloadMap[K][0]
+            : any
+        : void;
 
 // Full callback signature
 /** Full callback signature from a hook name. */

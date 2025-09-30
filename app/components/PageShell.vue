@@ -222,13 +222,21 @@ import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import { useMultiPane } from '~/composables/useMultiPane';
 import { db } from '~/db';
 import { useHookEffect } from '~/composables/useHookEffect';
-import { flush as flushDocument } from '~/composables/useDocumentsStore';
-import { newDocument as createNewDoc } from '~/composables/useDocumentsStore';
+import {
+    flush as flushDocument,
+    newDocument as createNewDoc,
+    useDocumentState,
+} from '~/composables/useDocumentsStore';
 import { usePaneDocuments } from '~/composables/usePaneDocuments';
 import {
     useHeaderActions,
     type HeaderActionEntry,
 } from '~/composables/ui-extensions/chrome';
+import type {
+    DbDeletePayload,
+    ThreadEntity,
+    DocumentEntity,
+} from '~/utils/hook-types';
 
 const props = withDefaults(
     defineProps<{
@@ -406,7 +414,6 @@ watch(
 );
 
 // --------------- Documents Integration ---------------
-const { useDocumentState } = await import('~/composables/useDocumentsStore');
 const hooks = useHooks();
 const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
     panes,
@@ -571,40 +578,36 @@ function resetPaneToBlank(paneIndex: number) {
     pane.messages = [];
     if (paneIndex === activePaneIndex.value) updateUrl();
 }
-function handleThreadDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+function handleThreadDeletion(payload: DbDeletePayload<ThreadEntity>) {
+    const deletedId = payload?.id ?? payload?.entity?.id;
     if (!deletedId) return;
     panes.value.forEach((p, i) => {
         if (p.mode === 'chat' && p.threadId === deletedId) resetPaneToBlank(i);
     });
 }
-function handleDocumentDeletion(payload: any) {
-    const deletedId = typeof payload === 'string' ? payload : payload?.id;
+function handleDocumentDeletion(payload: DbDeletePayload<DocumentEntity>) {
+    const deletedId = payload?.id ?? payload?.entity?.id;
     if (!deletedId) return;
     panes.value.forEach((p, i) => {
         if (p.mode === 'doc' && p.documentId === deletedId) resetPaneToBlank(i);
     });
 }
-useHookEffect(
-    'db.threads.delete:action:soft:after',
-    (t: any) => handleThreadDeletion(t),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.threads.delete:action:hard:after',
-    (id: any) => handleThreadDeletion(id),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:soft:after',
-    (row: any) => handleDocumentDeletion(row),
-    { kind: 'action', priority: 10 }
-);
-useHookEffect(
-    'db.documents.delete:action:hard:after',
-    (id: any) => handleDocumentDeletion(id),
-    { kind: 'action', priority: 10 }
-);
+useHookEffect('db.threads.delete:action:soft:after', handleThreadDeletion, {
+    kind: 'action',
+    priority: 10,
+});
+useHookEffect('db.threads.delete:action:hard:after', handleThreadDeletion, {
+    kind: 'action',
+    priority: 10,
+});
+useHookEffect('db.documents.delete:action:soft:after', handleDocumentDeletion, {
+    kind: 'action',
+    priority: 10,
+});
+useHookEffect('db.documents.delete:action:hard:after', handleDocumentDeletion, {
+    kind: 'action',
+    priority: 10,
+});
 
 // --------------- Mount ---------------
 onMounted(() => {

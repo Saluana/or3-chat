@@ -67,16 +67,17 @@ export async function flush(id: string) {
                 const mpApi: any = (globalThis as any).__or3MultiPaneApi;
                 const panes = mpApi?.panes?.value || [];
                 if (hooks && panes.length) {
-                    for (const p of panes) {
+                    panes.forEach((p: any, paneIndex: number) => {
                         if (p?.mode === 'doc' && p?.documentId === id) {
-                            hooks.doAction(
-                                'ui.pane.doc:action:saved',
-                                p,
-                                id,
-                                {}
-                            );
+                            hooks.doAction('ui.pane.doc:action:saved', {
+                                pane: p,
+                                oldDocumentId: id,
+                                newDocumentId: id,
+                                paneIndex,
+                                meta: { reason: 'docStoreFlush' },
+                            });
                         }
-                    }
+                    });
                 }
             }
         } catch {}

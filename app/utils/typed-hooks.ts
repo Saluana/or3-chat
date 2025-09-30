@@ -1,7 +1,7 @@
 // Typed Hook Engine wrapper — Types-first, zero runtime overhead.
 // Delegates to the existing HookEngine, preserving all behavior.
 
-import type { HookEngine, OnOptions } from './hooks';
+import type { HookEngine, HookKind, OnOptions } from './hooks';
 import type {
     ActionHookName,
     FilterHookName,
@@ -22,6 +22,10 @@ export interface TypedHookEngine {
     // Actions (registration)
     /**
      * Register an action callback for a known hook name.
+     * await hooks.doAction('ui.pane.blur:action', {
+     *   pane,
+     *   index: 0,
+     * });
      * @example
      * hooks.addAction('ai.chat.send:action:before', (ctx) => {
      *   console.log(ctx.modelId);
@@ -43,7 +47,10 @@ export interface TypedHookEngine {
     /**
      * Execute an action asynchronously.
      * @example
-     * await hooks.doAction('ui.pane.blur:action', { /* pane *\/ } as any, 0);
+     * await hooks.doAction('ui.pane.blur:action', {
+     *   pane,
+     *   index: 0,
+     * });
      */
     doAction<K extends ActionHookName>(
         name: K,
@@ -169,8 +176,12 @@ export function createTypedHookEngine(engine: HookEngine): TypedHookEngine {
             ) as any,
 
         // Unified
-        on: (name, callback, opts) =>
-            engine.on(name as any, callback as any, opts),
+        on: (name, callback, opts) => {
+            const kind = (opts?.kind ??
+                (name.includes(':filter:') ? 'filter' : 'action')) as HookKind;
+            const merged = { ...opts, kind } as OnOptions;
+            return engine.on(name as any, callback as any, merged);
+        },
         off: (disposer) => engine.off(disposer),
         onceAction: (name, callback, priority) =>
             engine.onceAction(name as any, callback as any, priority),

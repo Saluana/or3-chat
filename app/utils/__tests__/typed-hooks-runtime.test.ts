@@ -14,7 +14,14 @@ describe('typed-hooks runtime', () => {
         const spy = vi.fn();
         hooks.addAction('ui.pane.active:action', () => spy());
         await hooks.doAction('ui.pane.active:action', {
-            pane: { id: 'p', mode: 'chat', messages: [] },
+            pane: {
+                id: 'p',
+                mode: 'chat',
+                threadId: '',
+                documentId: undefined,
+                messages: [],
+                validating: false,
+            },
             index: 0,
             previousIndex: undefined,
         });

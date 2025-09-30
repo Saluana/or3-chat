@@ -51,18 +51,19 @@ export function usePaneDocuments(
                     // Avoid duplicate: only emit if pane still bound and pending flags cleared (meaning flush processed) and no recent status 'saved' dispatch already triggered pane emission.
                     // Simple heuristic: do nothing if pane.documentId changed during flush.
                     if (pane.documentId) {
-                        hooks.doAction(
-                            'ui.pane.doc:action:saved',
+                        hooks.doAction('ui.pane.doc:action:saved', {
                             pane,
-                            pane.documentId,
-                            {}
-                        );
+                            oldDocumentId: pane.documentId,
+                            newDocumentId: pane.documentId,
+                            paneIndex: activePaneIndex.value,
+                            meta: { reason: 'flushPending' },
+                        });
                     }
                 }
                 await releaseDocument(pane.documentId, { flush: false });
             }
             const doc = await createNewDoc(initial);
-            const oldId = pane.documentId;
+            const oldId = pane.documentId || '';
             let newId: string | '' | false = doc.id;
             try {
                 newId = (await hooks.applyFilters(
@@ -78,12 +79,13 @@ export function usePaneDocuments(
             pane.threadId = '';
             pane.messages = [];
             if (oldId !== newId)
-                hooks.doAction(
-                    'ui.pane.doc:action:changed',
+                hooks.doAction('ui.pane.doc:action:changed', {
                     pane,
-                    oldId,
-                    newId || ''
-                );
+                    oldDocumentId: oldId,
+                    newDocumentId: (newId || '') as string,
+                    paneIndex: activePaneIndex.value,
+                    meta: { created: true },
+                });
             return doc;
         } catch {
             return undefined;
@@ -116,12 +118,13 @@ export function usePaneDocuments(
                 await flushDocument(pane.documentId); // central flush may emit
                 if (hadPending) {
                     if (pane.documentId) {
-                        hooks.doAction(
-                            'ui.pane.doc:action:saved',
+                        hooks.doAction('ui.pane.doc:action:saved', {
                             pane,
-                            pane.documentId,
-                            {}
-                        );
+                            oldDocumentId: pane.documentId,
+                            newDocumentId: pane.documentId,
+                            paneIndex: activePaneIndex.value,
+                            meta: { reason: 'flushPending' },
+                        });
                     }
                 }
             } catch {}
@@ -133,12 +136,13 @@ export function usePaneDocuments(
         pane.threadId = '';
         pane.messages = [];
         if (oldId !== requested)
-            hooks.doAction(
-                'ui.pane.doc:action:changed',
+            hooks.doAction('ui.pane.doc:action:changed', {
                 pane,
-                oldId,
-                requested || ''
-            );
+                oldDocumentId: oldId,
+                newDocumentId: (requested || '') as string,
+                paneIndex: activePaneIndex.value,
+                meta: { reason: 'select' },
+            });
     }
 
     return { newDocumentInActive, selectDocumentInActive };

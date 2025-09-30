@@ -572,23 +572,23 @@ Multi-pane chat/document UI emits actions so extensions can react to pane change
 
 Hook names:
 
--   `ui.pane.open:action:after` — after a new pane is created and set active. - Args: `(pane: PaneState, index: number)`
--   `ui.pane.close:action:before` — before a pane is removed (after any pending doc flush attempt). - Args: `(pane: PaneState, index: number)`
--   `ui.pane.switch:action` — when the active pane index changes. - Args: `(pane: PaneState, index: number)`
+-   `ui.pane.open:action:after` — after a new pane is created and set active. Payload: `{ pane, index, previousIndex? }`
+-   `ui.pane.close:action:before` — before a pane is removed (after any pending doc flush attempt). Payload: `{ pane, index, previousIndex? }`
+-   `ui.pane.switch:action` — when the active pane index changes. Payload: `{ pane, index, previousIndex? }`
 
 ### New minimal pane extension hooks
 
 Added for multi-pane extensibility (see planning/multipane-hooks-minimal/plan.md):
 
--   `ui.pane.active:action` — pane becomes active; Args: `(pane, index, previousIndex)`
--   `ui.pane.blur:action` — previous active pane loses focus; Args: `(pane, previousIndex)`
--   `ui.pane.thread:filter:select` — mutate / veto thread selection; Args: `(requestedThreadId, pane, oldThreadId)` Return `string|''|false` (false cancels, '' clears)
--   `ui.pane.thread:action:changed` — after thread + messages loaded; Args: `(pane, oldThreadId, newThreadId, messageCount)`
--   `ui.pane.doc:filter:select` — mutate / veto doc selection; Args: `(requestedDocId, pane, oldDocId)` Return `string|''|false`
--   `ui.pane.doc:action:changed` — after document id bound; Args: `(pane, oldDocId, newDocId)`
--   `ui.pane.doc:action:saved` — after pending changes flushed; Args: `(pane, documentId, meta)`
--   `ui.pane.msg:action:sent` — user message appended (pane context); Args: `(pane, { id, threadId, length, fileHashes })`
--   `ui.pane.msg:action:received` — assistant message finalized; Args: `(pane, { id, threadId, length, fileHashes, reasoningLength })`
+-   `ui.pane.active:action` — pane becomes active; Payload: `{ pane, index, previousIndex? }`
+-   `ui.pane.blur:action` — previous active pane loses focus; Payload: `{ pane, previousIndex }`
+-   `ui.pane.thread:filter:select` — mutate / veto thread selection; Called with `(requestedThreadId, pane, oldThreadId)` and should return `string | '' | false`
+-   `ui.pane.thread:action:changed` — after thread + messages loaded; Payload: `{ pane, oldThreadId, newThreadId, paneIndex, messageCount? }`
+-   `ui.pane.doc:filter:select` — mutate / veto doc selection; Called with `(requestedDocId, pane, oldDocId)` and should return `string | '' | false`
+-   `ui.pane.doc:action:changed` — after document id bound; Payload: `{ pane, oldDocumentId, newDocumentId, paneIndex, meta? }`
+-   `ui.pane.doc:action:saved` — after pending changes flushed; Payload: `{ pane, oldDocumentId, newDocumentId, paneIndex, meta? }`
+-   `ui.pane.msg:action:sent` — user message appended (pane context); Payload: `{ pane, paneIndex, message: { id, threadId?, length?, fileHashes? }, meta? }`
+-   `ui.pane.msg:action:received` — assistant message finalized; Payload: `{ pane, paneIndex, message: { id, threadId?, length?, fileHashes?, reasoningLength? }, meta? }`
 
 Ordering note: on activation change sequence is `blur(previous) -> ui.pane.switch -> active(new)`.
 
@@ -596,17 +596,17 @@ Ordering note: on activation change sequence is `blur(previous) -> ui.pane.switc
 
 Added for per-pane extensibility (see planning doc). All are optional to subscribe.
 
-| Hook                            | Kind   | Description                                  | Args / Return                                                     |
-| ------------------------------- | ------ | -------------------------------------------- | ----------------------------------------------------------------- | --- | --------------------------------- |
-| `ui.pane.active:action`         | action | Pane became active (after switch)            | `(pane, index, previousIndex)`                                    |
-| `ui.pane.blur:action`           | action | Previously active pane lost focus            | `(pane, previousIndex)`                                           |
-| `ui.pane.thread:filter:select`  | filter | Transform / veto thread change               | `(pane, oldThreadId, requestedThreadId)` → `string                | ''  | false` (false cancels, '' clears) |
-| `ui.pane.thread:action:changed` | action | Thread association updated & messages loaded | `(pane, oldThreadId, newThreadId, messageCount)`                  |
-| `ui.pane.doc:filter:select`     | filter | Transform / veto doc change                  | `(pane, oldDocId, requestedDocId)` → `string                      | ''  | false`                            |
-| `ui.pane.doc:action:changed`    | action | Document association updated                 | `(pane, oldDocId, newDocId)`                                      |
-| `ui.pane.doc:action:saved`      | action | Document changes flushed (pane context)      | `(pane, documentId, meta)`                                        |
-| `ui.pane.msg:action:sent`       | action | User message appended in pane's thread       | `(pane, { id, threadId, length, fileHashes? })`                   |
-| `ui.pane.msg:action:received`   | action | Assistant message finalized                  | `(pane, { id, threadId, length, fileHashes?, reasoningLength? })` |
+| Hook                            | Kind   | Description                                  | Payload / Return                                                                                 |
+| ------------------------------- | ------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------ | --- | ------ |
+| `ui.pane.active:action`         | action | Pane became active (after switch)            | `{ pane, index, previousIndex? }`                                                                |
+| `ui.pane.blur:action`           | action | Previously active pane lost focus            | `{ pane, previousIndex }`                                                                        |
+| `ui.pane.thread:filter:select`  | filter | Transform / veto thread change               | `(requestedThreadId, pane, oldThreadId)` → `string                                               | ''  | false` |
+| `ui.pane.thread:action:changed` | action | Thread association updated & messages loaded | `{ pane, oldThreadId, newThreadId, paneIndex, messageCount? }`                                   |
+| `ui.pane.doc:filter:select`     | filter | Transform / veto doc change                  | `(requestedDocId, pane, oldDocId)` → `string                                                     | ''  | false` |
+| `ui.pane.doc:action:changed`    | action | Document association updated                 | `{ pane, oldDocumentId, newDocumentId, paneIndex, meta? }`                                       |
+| `ui.pane.doc:action:saved`      | action | Document changes flushed (pane context)      | `{ pane, oldDocumentId, newDocumentId, paneIndex, meta? }`                                       |
+| `ui.pane.msg:action:sent`       | action | User message appended in pane's thread       | `{ pane, paneIndex, message: { id, threadId?, length?, fileHashes? }, meta? }`                   |
+| `ui.pane.msg:action:received`   | action | Assistant message finalized                  | `{ pane, paneIndex, message: { id, threadId?, length?, fileHashes?, reasoningLength? }, meta? }` |
 
 Ordering notes:
 
@@ -625,16 +625,16 @@ Notes:
 Example: track pane usage metrics
 
 ```ts
-useHookEffect('ui.pane.open:action:after', (_ctx, pane, i) => {
-    console.debug('[pane open]', pane.id, 'at', i, pane.mode);
+useHookEffect('ui.pane.open:action:after', ({ pane, index, previousIndex }) => {
+    console.debug('[pane open]', pane.id, 'at', index, 'prev', previousIndex);
 });
 
-useHookEffect('ui.pane.switch:action', (_ctx, pane, i) => {
-    console.debug('[pane switch] active ->', i, pane.id);
+useHookEffect('ui.pane.switch:action', ({ pane, index, previousIndex }) => {
+    console.debug('[pane switch]', previousIndex, '→', index, pane.id);
 });
 
-useHookEffect('ui.pane.close:action:before', (_ctx, pane, i) => {
-    console.debug('[pane close]', pane.id, 'from', i);
+useHookEffect('ui.pane.close:action:before', ({ pane, index }) => {
+    console.debug('[pane close]', pane.id, 'from', index);
 });
 ```
 

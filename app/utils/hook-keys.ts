@@ -3,84 +3,24 @@
 // without constraining advanced usage. Keep additive and backwards compatible.
 
 import type { HookEngine, OnOptions } from './hooks';
-
-// ---- Payload interfaces (chat send/stream) ----
-
-export interface AiSendBefore {
-    threadId?: string;
-    modelId: string;
-    user: { id: string; length: number };
-    assistant: { id: string; streamId: string };
-    messagesCount?: number;
-}
-
-export interface AiSendAfterTimings {
-    startedAt: number;
-    endedAt: number;
-    durationMs: number;
-}
-
-export interface AiSendAfter {
-    threadId?: string;
-    request?: { modelId?: string; userId?: string };
-    response?: { assistantId?: string; length?: number };
-    timings?: AiSendAfterTimings;
-    aborted?: boolean;
-}
-
-export interface AiStreamDeltaCtx {
-    threadId?: string;
-    assistantId: string;
-    streamId: string;
-    deltaLength: number;
-    totalLength: number;
-    chunkIndex: number;
-}
-
-export interface AiStreamReasoningCtx {
-    threadId?: string;
-    assistantId: string;
-    streamId: string;
-    reasoningLength: number;
-}
-
-export interface AiStreamCompleteCtx {
-    threadId?: string;
-    assistantId: string;
-    streamId: string;
-    totalLength: number;
-    reasoningLength?: number;
-    fileHashes?: string | null;
-}
-
-export interface AiStreamErrorCtx {
-    threadId?: string;
-    streamId?: string;
-    error?: unknown;
-    aborted?: boolean;
-}
-
-export interface UiPaneMsgSentPayload {
-    id: string;
-    paneIndex?: number;
-    threadId?: string;
-    length?: number;
-    fileHashes?: string | null;
-}
-
-export interface UiPaneMsgReceivedPayload extends UiPaneMsgSentPayload {
-    reasoningLength?: number;
-}
-
-// ---- File attachment payload ----
-
-export interface FilesAttachInputPayload {
-    file: File;
-    name: string;
-    mime: string;
-    size: number;
-    kind: 'image' | 'pdf';
-}
+import type {
+    AiSendBeforePayload,
+    AiSendAfterPayload,
+    AiStreamDeltaPayload,
+    AiStreamReasoningPayload,
+    AiStreamCompletePayload,
+    AiStreamErrorPayload,
+    AiRetryBeforePayload,
+    AiRetryAfterPayload,
+    UiPaneMsgSentPayload,
+    UiPaneMsgReceivedPayload,
+    UiPaneActivePayload,
+    UiPaneBlurPayload,
+    UiPaneSwitchPayload,
+    UiPaneThreadChangedPayload,
+    UiPaneDocChangedPayload,
+    FilesAttachInputPayload,
+} from './hook-types';
 
 // ---- Key unions ----
 
@@ -132,44 +72,37 @@ export type HookKey = KnownHookKey | DbHookKey | (string & {});
 // Map known keys to their argument tuple for `on()` convenience.
 // Note: filters vs actions are not distinguished here; the engine decides based on opts.kind.
 export interface HookPayloads {
-    'ai.chat.send:action:before': [AiSendBefore];
-    'ai.chat.send:action:after': [AiSendAfter];
-    'ai.chat.stream:action:delta': [string, AiStreamDeltaCtx];
-    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningCtx];
-    'ai.chat.stream:action:complete': [AiStreamCompleteCtx];
-    'ai.chat.stream:action:error': [AiStreamErrorCtx];
-    'ui.pane.msg:action:sent': [any, UiPaneMsgSentPayload];
-    'ui.pane.msg:action:received': [any, UiPaneMsgReceivedPayload];
-    'ui.pane.active:action': [any, number, number | undefined];
-    'ui.pane.blur:action': [any, number];
-    'ui.pane.switch:action': [any, number];
-    'ui.pane.thread:filter:select': [string];
-    'ui.pane.thread:action:changed': [any, string | '', string, number];
-    'ui.pane.doc:filter:select': [string];
-    'ui.pane.doc:action:changed': [any, string | '', string];
-    'ui.pane.doc:action:saved': [any, string];
+    'ai.chat.send:action:before': [AiSendBeforePayload];
+    'ai.chat.send:action:after': [AiSendAfterPayload];
+    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];
+    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];
+    'ai.chat.stream:action:complete': [AiStreamCompletePayload];
+    'ai.chat.stream:action:error': [AiStreamErrorPayload];
+    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];
+    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];
+    'ui.pane.active:action': [UiPaneActivePayload];
+    'ui.pane.blur:action': [UiPaneBlurPayload];
+    'ui.pane.switch:action': [UiPaneSwitchPayload];
+    'ui.pane.thread:filter:select': [
+        string,
+        UiPaneThreadChangedPayload['pane'],
+        string
+    ];
+    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];
+    'ui.pane.doc:filter:select': [
+        string,
+        UiPaneDocChangedPayload['pane'],
+        string
+    ];
+    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];
+    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];
     'ui.chat.message:filter:outgoing': [string];
     'ui.chat.message:filter:incoming': [string, string | undefined];
     'ai.chat.model:filter:select': [string];
     'ai.chat.messages:filter:input': [any[]];
     'files.attach:filter:input': [FilesAttachInputPayload | false];
-    'ai.chat.retry:action:before': [
-        {
-            threadId?: string;
-            originalUserId: string;
-            originalAssistantId?: string;
-            triggeredBy: 'user' | 'assistant';
-        }
-    ];
-    'ai.chat.retry:action:after': [
-        {
-            threadId?: string;
-            originalUserId: string;
-            originalAssistantId?: string;
-            newUserId?: string;
-            newAssistantId?: string;
-        }
-    ];
+    'ai.chat.retry:action:before': [AiRetryBeforePayload];
+    'ai.chat.retry:action:after': [AiRetryAfterPayload];
 }
 
 type KnownKey = keyof HookPayloads & KnownHookKey;

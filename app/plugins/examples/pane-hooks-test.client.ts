@@ -37,19 +37,22 @@ export default defineNuxtPlugin(() => {
         }
 
         // --- Actions ---
-        on('ui.pane.blur:action', (pane: any, index: number) => {
+        on('ui.pane.blur:action', (payload: any) => {
+            const { pane, previousIndex } = payload || {};
             console.debug('[pane-hooks-test] blur', {
                 ts: Date.now(),
-                index,
+                index: previousIndex,
                 id: pane?.id,
                 mode: pane?.mode,
                 thread: pane?.threadId,
             });
         });
-        on('ui.pane.switch:action', (pane: any, index: number) => {
+        on('ui.pane.switch:action', (payload: any) => {
+            const { pane, index, previousIndex } = payload || {};
             console.debug('[pane-hooks-test] switch', {
                 ts: Date.now(),
                 index,
+                previousIndex,
                 threadId: pane?.threadId,
                 doc: pane?.documentId,
                 msgs: Array.isArray(pane?.messages)
@@ -57,50 +60,48 @@ export default defineNuxtPlugin(() => {
                     : undefined,
             });
         });
-        on(
-            'ui.pane.active:action',
-            (pane: any, index: number, prevIndex: number) => {
-                console.debug('[pane-hooks-test] active', {
-                    ts: Date.now(),
-                    index,
-                    prevIndex,
-                    mode: pane?.mode,
-                    thread: pane?.threadId,
-                });
-            }
-        );
+        on('ui.pane.active:action', (payload: any) => {
+            const { pane, index, previousIndex } = payload || {};
+            console.debug('[pane-hooks-test] active', {
+                ts: Date.now(),
+                index,
+                prevIndex: previousIndex,
+                mode: pane?.mode,
+                thread: pane?.threadId,
+            });
+        });
 
-        on(
-            'ui.pane.thread:action:changed',
-            (pane: any, oldId: string, newId: string, count: number) => {
-                console.info('[pane-hooks-test] thread changed', {
-                    oldId,
-                    newId,
-                    messages: count,
+        on('ui.pane.thread:action:changed', (payload: any) => {
+            const { oldThreadId, newThreadId, messageCount } = payload || {};
+            console.info('[pane-hooks-test] thread changed', {
+                oldId: oldThreadId,
+                newId: newThreadId,
+                messages: messageCount,
+            });
+            try {
+                useToast()?.add?.({
+                    title: 'Pane Thread Changed',
+                    description: `${oldThreadId || '∅'} → ${
+                        newThreadId || '∅'
+                    } (msgs: ${messageCount ?? 'n/a'})`,
+                    duration: 2500,
                 });
-                try {
-                    useToast()?.add?.({
-                        title: 'Pane Thread Changed',
-                        description: `${oldId || '∅'} → ${
-                            newId || '∅'
-                        } (msgs: ${count})`,
-                        duration: 2500,
-                    });
-                } catch {}
-            }
-        );
+            } catch {}
+        });
 
-        on(
-            'ui.pane.doc:action:changed',
-            (pane: any, oldId: string, newId: string) => {
-                console.info('[pane-hooks-test] document changed', {
-                    oldId,
-                    newId,
-                });
-            }
-        );
-        on('ui.pane.doc:action:saved', (pane: any, docId: string) => {
-            console.info('[pane-hooks-test] document saved', { docId });
+        on('ui.pane.doc:action:changed', (payload: any) => {
+            const { oldDocumentId, newDocumentId } = payload || {};
+            console.info('[pane-hooks-test] document changed', {
+                oldId: oldDocumentId,
+                newId: newDocumentId,
+            });
+        });
+        on('ui.pane.doc:action:saved', (payload: any) => {
+            const { newDocumentId, meta } = payload || {};
+            console.info('[pane-hooks-test] document saved', {
+                docId: newDocumentId,
+                meta,
+            });
         });
 
         function paneSnapshot(p: any) {
@@ -115,18 +116,22 @@ export default defineNuxtPlugin(() => {
                   }
                 : null;
         }
-        on('ui.pane.msg:action:sent', (pane: any, payload: any) => {
+        on('ui.pane.msg:action:sent', (payload: any) => {
             console.debug('[pane-hooks-test] msg sent', {
                 ts: Date.now(),
-                pane: paneSnapshot(pane),
-                ...payload,
+                pane: paneSnapshot(payload?.pane),
+                message: payload?.message,
+                meta: payload?.meta,
+                paneIndex: payload?.paneIndex,
             });
         });
-        on('ui.pane.msg:action:received', (pane: any, payload: any) => {
+        on('ui.pane.msg:action:received', (payload: any) => {
             console.debug('[pane-hooks-test] msg received', {
                 ts: Date.now(),
-                pane: paneSnapshot(pane),
-                ...payload,
+                pane: paneSnapshot(payload?.pane),
+                message: payload?.message,
+                meta: payload?.meta,
+                paneIndex: payload?.paneIndex,
             });
         });
 
