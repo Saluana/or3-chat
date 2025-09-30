@@ -63,11 +63,7 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
 
     const completion = res;
 
-    console.log('Autocomplete API response:', res);
-
     const generatedText = completion.choices[0]?.message?.content || '';
-
-    console.log('[Autocomplete] Generated text:', generatedText);
 
     let parsedCompletion = '';
 
@@ -79,23 +75,12 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
         match = /<next_line>(.+)/s.exec(generatedText);
     }
 
-    console.log('[Autocomplete] Regex match:', match);
-
     if (match && match[1]) {
         // Don't trim! The AI handles spacing based on the prompt instructions
         parsedCompletion = match[1];
     }
 
-    console.log(
-        '[Autocomplete] Parsed completion:',
-        parsedCompletion ? `"${parsedCompletion}"` : '<empty>'
-    );
-
     if (!parsedCompletion || parsedCompletion.length === 0) {
-        console.log(
-            '[Autocomplete] No valid completion found in response, returning empty suggestion'
-        );
-
         return { completion: '' };
     }
 
@@ -191,33 +176,18 @@ export const AutocompleteExtension = Extension.create<{}>({
 
         // Use standard debounce for initial setup
         const debouncedFetchAndDispatch = useDebounceFn(async () => {
-            console.log(
-                '[Autocomplete DEBUG] === Debounced function called ==='
-            );
-
             // Check if autocomplete is enabled
             if (!AutocompleteState.value.isEnabled) {
-                console.log('[Autocomplete] Skipped: autocomplete is disabled');
                 return;
             }
 
             if (!editorView) {
-                console.log('[Autocomplete DEBUG] No editorView, returning');
                 return;
             }
 
             const latestState = pluginKey.getState(editorView.state);
-            console.log('[Autocomplete DEBUG] Current plugin state:', {
-                hasSuggestion: !!latestState?.suggestion,
-                suggestionLength: latestState?.suggestion?.length || 0,
-                loading: latestState?.loading,
-                recentlyBackspace: latestState?.recentlyBackspace,
-            });
 
             if (latestState?.recentlyBackspace) {
-                console.log(
-                    '[Autocomplete DEBUG] Skipped: recentlyBackspace is true'
-                );
                 // Ensure loading is false if we skip here and it was somehow true
                 if (latestState.loading) {
                     dispatchStateUpdate(editorView, { loading: false });
@@ -227,7 +197,6 @@ export const AutocompleteExtension = Extension.create<{}>({
 
             // IMPORTANT: Skip if already loading to prevent concurrent fetches
             if (latestState?.loading) {
-                console.log('[Autocomplete DEBUG] Skipped: already loading');
                 return;
             }
 
@@ -256,43 +225,25 @@ export const AutocompleteExtension = Extension.create<{}>({
             const currentLoadingState = pluginKey.getState(
                 viewAtStart.state
             )?.loading;
-            console.log(
-                '[Autocomplete DEBUG] Current loading state before fetch:',
-                currentLoadingState
-            );
 
             if (
                 viewAtStart &&
                 !viewAtStart.isDestroyed &&
                 currentLoadingState === false
             ) {
-                console.log('[Autocomplete DEBUG] Setting loading: true');
                 dispatchStateUpdate(viewAtStart, { loading: true });
                 // Start loading timeout
                 startLoadingTimeout();
-            } else {
-                console.log(
-                    '[Autocomplete DEBUG] NOT setting loading, reasons:',
-                    {
-                        viewValid: !!viewAtStart && !viewAtStart.isDestroyed,
-                        currentLoading: currentLoadingState,
-                    }
-                );
             }
 
             // (Moved contextWithCursor logic above)
             let apiSuggestion: string | null = null;
             try {
-                console.log('[Autocomplete] Fetching suggestion...');
                 const response = await editorAutoComplete(
                     contextWithCursor,
                     signal
                 );
                 apiSuggestion = response?.completion ?? null;
-                console.log(
-                    '[Autocomplete] Received suggestion:',
-                    apiSuggestion
-                );
             } catch (error: any) {
                 if (error?.name === 'AbortError') {
                     if (viewAtStart && !viewAtStart.isDestroyed) {
@@ -325,12 +276,6 @@ export const AutocompleteExtension = Extension.create<{}>({
             }
 
             // Only dispatch if this is the latest request AND context/selection match
-            console.log('[Autocomplete DEBUG] Checking request validity:', {
-                thisRequestId,
-                currentRequestId: requestId,
-                isLatest: thisRequestId === requestId,
-            });
-
             if (thisRequestId === requestId) {
                 const currentContext = getContextWithCursor(viewAtStart.state);
                 const currentSelection = viewAtStart.state.selection;
@@ -340,27 +285,13 @@ export const AutocompleteExtension = Extension.create<{}>({
                     currentSelection.from === lastFetchSelection.from &&
                     currentSelection.to === lastFetchSelection.to;
 
-                console.log('[Autocomplete DEBUG] Context/selection check:', {
-                    contextMatches,
-                    selectionMatches,
-                    currentFrom: currentSelection.from,
-                    lastFrom: lastFetchSelection?.from,
-                });
-
                 if (contextMatches && selectionMatches) {
-                    console.log(
-                        '[Autocomplete DEBUG] Dispatching suggestionFromAPI:',
-                        apiSuggestion
-                    );
                     if (viewAtStart && !viewAtStart.isDestroyed) {
                         dispatchStateUpdate(viewAtStart, {
                             suggestionFromAPI: apiSuggestion,
                         });
                     }
                 } else {
-                    console.log(
-                        '[Autocomplete DEBUG] Fetch result stale, clearing'
-                    );
                     // Always clear loading if fetch result is stale
                     if (viewAtStart && !viewAtStart.isDestroyed) {
                         dispatchStateUpdate(viewAtStart, {
@@ -370,7 +301,6 @@ export const AutocompleteExtension = Extension.create<{}>({
                     }
                 }
             } else {
-                console.log('[Autocomplete DEBUG] Request ID stale, clearing');
                 // Also clear loading state if the request ID is stale
                 if (viewAtStart && !viewAtStart.isDestroyed) {
                     const tr = viewAtStart.state.tr
@@ -582,17 +512,6 @@ export const AutocompleteExtension = Extension.create<{}>({
                             );
                             const firstCharFromSuggestion = value.suggestion[0];
 
-                            console.log(
-                                '[Autocomplete DEBUG] Auto-accept check:',
-                                {
-                                    lastChar: lastCharacterTyped,
-                                    firstSuggestionChar:
-                                        firstCharFromSuggestion,
-                                    currentSuggestion:
-                                        value.suggestion.substring(0, 20),
-                                }
-                            );
-
                             if (lastCharacterTyped && firstCharFromSuggestion) {
                                 if (
                                     lastCharacterTyped.toLowerCase() ===
@@ -600,10 +519,6 @@ export const AutocompleteExtension = Extension.create<{}>({
                                 ) {
                                     // User typed the first character of the suggestion - advance it
                                     const newSug = value.suggestion.slice(1);
-                                    console.log(
-                                        '[Autocomplete DEBUG] Auto-accepting character, new suggestion length:',
-                                        newSug.length
-                                    );
                                     nextState = {
                                         suggestion: newSug,
                                         loading: false,
@@ -612,9 +527,6 @@ export const AutocompleteExtension = Extension.create<{}>({
                                     return nextState; // Exit early after auto-accepting
                                 } else {
                                     // User typed a different character - clear the suggestion
-                                    console.log(
-                                        '[Autocomplete DEBUG] Character mismatch, clearing suggestion'
-                                    );
                                     nextState = {
                                         suggestion: '',
                                         loading: false,
@@ -677,37 +589,8 @@ export const AutocompleteExtension = Extension.create<{}>({
                             !suggestionAccepted &&
                             !suggestionCleared
                         ) {
-                            console.log(
-                                '[Autocomplete] Document changed, triggering fetch',
-                                {
-                                    currentState: {
-                                        suggestion:
-                                            nextState.suggestion?.substring(
-                                                0,
-                                                20
-                                            ),
-                                        loading: nextState.loading,
-                                        recentlyBackspace:
-                                            nextState.recentlyBackspace,
-                                    },
-                                }
-                            );
                             debouncedFetchAndDispatch();
                         }
-
-                        console.log(
-                            '[Autocomplete DEBUG] Final state being returned:',
-                            {
-                                suggestion: nextState.suggestion?.substring(
-                                    0,
-                                    20
-                                ),
-                                suggestionLength:
-                                    nextState.suggestion?.length || 0,
-                                loading: nextState.loading,
-                                recentlyBackspace: nextState.recentlyBackspace,
-                            }
-                        );
 
                         return nextState;
                     },

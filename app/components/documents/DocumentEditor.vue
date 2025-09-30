@@ -161,20 +161,6 @@ const editor = ref<Editor | null>(null);
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
 
-// Debug: Watch for plugin buttons changes
-if (import.meta.dev) {
-    watch(
-        pluginButtons,
-        (buttons) => {
-            console.log(
-                '[DocumentEditor] Plugin buttons updated:',
-                buttons.map((b) => b.id)
-            );
-        },
-        { immediate: true }
-    );
-}
-
 function onTitleChange() {
     setDocumentTitle(props.documentId, titleDraft.value);
 }
