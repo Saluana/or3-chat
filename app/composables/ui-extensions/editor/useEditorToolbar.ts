@@ -54,8 +54,25 @@ export function useEditorToolbarButtons(editorRef: Ref<Editor | null>) {
         if (!editor) return [];
 
         return reactiveList.items
-            .filter((btn) => !btn.visible || btn.visible(editor))
-            .sort((a, b) => (a.order ?? 200) - (b.order ?? 200));
+            .filter((btn) => {
+                if (!btn.visible) return true;
+                try {
+                    return btn.visible(editor);
+                } catch (e) {
+                    if (import.meta.dev) {
+                        console.error(
+                            `[useEditorToolbar] visible() threw for button ${btn.id}:`,
+                            e
+                        );
+                    }
+                    return false; // Hide button on error
+                }
+            })
+            .sort((a, b) => {
+                const orderDiff = (a.order ?? 200) - (b.order ?? 200);
+                // Stable sort: tie-break by id
+                return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
+            });
     });
 }
 

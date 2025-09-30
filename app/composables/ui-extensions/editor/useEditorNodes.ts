@@ -1,12 +1,12 @@
 import { reactive } from 'vue';
-import type { Extension } from '@tiptap/core';
+import type { Node, Mark, Extension } from '@tiptap/core';
 
 /** Definition for an extendable editor node extension. */
 export interface EditorNode {
     /** Unique id (stable across reloads). */
     id: string;
-    /** TipTap extension instance. */
-    extension: Extension;
+    /** TipTap Node extension instance. */
+    extension: Node;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
 }
@@ -15,8 +15,8 @@ export interface EditorNode {
 export interface EditorMark {
     /** Unique id (stable across reloads). */
     id: string;
-    /** TipTap extension instance. */
-    extension: Extension;
+    /** TipTap Mark extension instance. */
+    extension: Mark;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
 }
@@ -72,16 +72,20 @@ export function unregisterEditorMark(id: string) {
 
 /** List all registered node extensions (ordered). */
 export function listEditorNodes(): EditorNode[] {
-    return nodesReactiveList.items.sort(
-        (a, b) => (a.order ?? 200) - (b.order ?? 200)
-    );
+    return nodesReactiveList.items.sort((a, b) => {
+        const orderDiff = (a.order ?? 200) - (b.order ?? 200);
+        // Stable sort: tie-break by id
+        return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
+    });
 }
 
 /** List all registered mark extensions (ordered). */
 export function listEditorMarks(): EditorMark[] {
-    return marksReactiveList.items.sort(
-        (a, b) => (a.order ?? 200) - (b.order ?? 200)
-    );
+    return marksReactiveList.items.sort((a, b) => {
+        const orderDiff = (a.order ?? 200) - (b.order ?? 200);
+        // Stable sort: tie-break by id
+        return orderDiff !== 0 ? orderDiff : a.id.localeCompare(b.id);
+    });
 }
 
 /** Convenience for plugin authors to check existing node ids. */
