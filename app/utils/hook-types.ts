@@ -295,6 +295,14 @@ export interface DbDeletePayload<T = any> {
 // HOOK NAME TYPES
 // ============================================================================
 
+// Allow plugins to extend hook payloads via global augmentation (types-only)
+declare global {
+    interface Or3ActionHooks {} // e.g. { 'my.plugin.ready:action': [MyPayload] }
+    interface Or3FilterHooks {} // e.g. { 'my.plugin.value:filter:transform': [InType] }
+}
+// Ensure this file is always a module so augmentation is picked up
+export {};
+
 // DB hook patterns
 /** All DB table names that emit hooks. */
 export type DbEntityName =
@@ -340,49 +348,36 @@ export type DbFilterHookName =
 // Action hooks (fire-and-forget)
 /**
  * Action hooks fire-and-forget. Callbacks return void or Promise<void>.
+ * Derived from payload map keys to ensure suggestions always exist.
  * @see FilterHookName for value-transforming hooks.
  */
+export type CoreActionHookName = Extract<
+    keyof CoreHookPayloadMap,
+    `${string}:action${string}`
+>;
+export type ExtensionActionHookName = keyof Or3ActionHooks;
 export type ActionHookName =
-    | 'ai.chat.send:action:before'
-    | 'ai.chat.send:action:after'
-    | 'ai.chat.stream:action:delta'
-    | 'ai.chat.stream:action:reasoning'
-    | 'ai.chat.stream:action:complete'
-    | 'ai.chat.stream:action:error'
-    | 'ai.chat.retry:action:before'
-    | 'ai.chat.retry:action:after'
-    | 'ui.pane.active:action'
-    | 'ui.pane.blur:action'
-    | 'ui.pane.switch:action'
-    | 'ui.pane.open:action:after'
-    | 'ui.pane.close:action:before'
-    | 'ui.pane.thread:action:changed'
-    | 'ui.pane.doc:action:changed'
-    | 'ui.pane.doc:action:saved'
-    | 'ui.pane.msg:action:sent'
-    | 'ui.pane.msg:action:received'
-    | 'ui.sidebar.select:action:before'
-    | 'ui.sidebar.select:action:after'
-    | 'ui.chat.new:action:after'
-    | 'app.init:action:after'
+    | CoreActionHookName
     | DbActionHookName
-    | (string & {}); // permissive catch-all for extension
+    | ExtensionActionHookName
+    | (string & {});
 
 // Filter hooks (value-in → value-out)
 /**
  * Filter hooks transform values. Callbacks must return the filtered value.
+ * Derived from payload map keys to ensure suggestions always exist.
  * @see ActionHookName for fire-and-forget hooks.
  */
+export type CoreFilterHookName = Extract<
+    keyof CoreHookPayloadMap,
+    `${string}:filter:${string}`
+>;
+export type ExtensionFilterHookName = keyof Or3FilterHooks;
 export type FilterHookName =
-    | 'ui.chat.message:filter:outgoing'
-    | 'ui.chat.message:filter:incoming'
-    | 'ai.chat.model:filter:select'
-    | 'ai.chat.messages:filter:input'
-    | 'ui.pane.thread:filter:select'
-    | 'ui.pane.doc:filter:select'
-    | 'files.attach:filter:input'
+    | CoreFilterHookName
     | DbFilterHookName
-    | (string & {}); // permissive catch-all for extension
+    | ExtensionFilterHookName
+    | (string & {});
 
 // All hook names
 /** All known hooks (actions + filters). */
@@ -487,7 +482,11 @@ type DbActionMap = { [K in DbActionHookName]: DbActionPayloadFor<K> };
 type DbFilterMap = { [K in DbFilterHookName]: DbFilterPayloadFor<K> };
 
 // Final HookPayloadMap including core hooks and DB-derived hooks.
-export type HookPayloadMap = CoreHookPayloadMap & DbActionMap & DbFilterMap;
+export type HookPayloadMap = CoreHookPayloadMap &
+    DbActionMap &
+    DbFilterMap &
+    Or3ActionHooks &
+    Or3FilterHooks;
 
 // ============================================================================
 // TYPE UTILITIES

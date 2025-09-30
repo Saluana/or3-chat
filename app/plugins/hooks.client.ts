@@ -1,5 +1,6 @@
 import { defineNuxtPlugin } from '#app';
 import { createHookEngine, type HookEngine } from '../utils/hooks';
+import { createTypedHookEngine } from '../utils/typed-hooks';
 
 // Client: keep a singleton across HMR to avoid duplicate engines
 export default defineNuxtPlugin(() => {
@@ -15,9 +16,10 @@ export default defineNuxtPlugin(() => {
         // No-op by default; disposers in useHookEffect handle duplicates.
     }
 
+    const typed = createTypedHookEngine(engine);
     return {
         provide: {
-            hooks: engine,
+            hooks: typed,
         },
     };
 });
