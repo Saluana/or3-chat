@@ -1,16 +1,18 @@
-import type { HookEngine } from '../utils/hooks';
-
 export default defineNuxtPlugin(() => {
     // Access the global hooks instance (created by hooks.client.ts plugin)
     const g = globalThis as any;
     const hooks = g.__NUXT_HOOKS__ as HookEngine;
 
     if (!hooks) {
-        console.error('[HookInspectorTest] ❌ Hooks engine not available - plugin may have loaded too early');
+        console.error(
+            '[HookInspectorTest] ❌ Hooks engine not available - plugin may have loaded too early'
+        );
         return;
     }
 
-    console.log('[HookInspectorTest] ✅ Plugin initialized, hooks engine available');
+    console.log(
+        '[HookInspectorTest] ✅ Plugin initialized, hooks engine available'
+    );
 
     // Register some test hooks that fire on different events
 
@@ -50,9 +52,13 @@ export default defineNuxtPlugin(() => {
         console.log('[HookInspectorTest] Tick:', payload.count);
     });
 
-    hooks.on('test.inspector.filter', (value: string) => {
-        return value.toUpperCase();
-    }, { kind: 'filter' });
+    hooks.on(
+        'test.inspector.filter',
+        (value: string) => {
+            return value.toUpperCase();
+        },
+        { kind: 'filter' }
+    );
 
     // 5. Add a dashboard plugin with a test button
     registerDashboardPlugin({
@@ -96,6 +102,10 @@ export default defineNuxtPlugin(() => {
 
     console.log('[HookInspectorTest] 🎯 Plugin loaded successfully!');
     console.log('[HookInspectorTest] 📊 Background hooks will fire every 2s');
-    console.log('[HookInspectorTest] ⚡ Click "Hook Test" in dashboard for burst test');
-    console.log('[HookInspectorTest] 🔍 Open "Dev Tools" → "Hook Inspector" to see activity');
+    console.log(
+        '[HookInspectorTest] ⚡ Click "Hook Test" in dashboard for burst test'
+    );
+    console.log(
+        '[HookInspectorTest] 🔍 Open "Dev Tools" → "Hook Inspector" to see activity'
+    );
 });

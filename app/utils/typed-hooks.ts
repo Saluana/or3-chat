@@ -20,6 +20,13 @@ type Tail<T extends any[]> = T extends [any, ...infer Rest] ? Rest : [];
  */
 export interface TypedHookEngine {
     // Actions (registration)
+    /**
+     * Register an action callback for a known hook name.
+     * @example
+     * hooks.addAction('ai.chat.send:action:before', (ctx) => {
+     *   console.log(ctx.modelId);
+     * });
+     */
     addAction<K extends ActionHookName>(
         name: K,
         callback: InferHookCallback<K>,
@@ -33,6 +40,11 @@ export interface TypedHookEngine {
     ): void;
 
     // Actions (execution)
+    /**
+     * Execute an action asynchronously.
+     * @example
+     * await hooks.doAction('ui.pane.blur:action', { /* pane *\/ } as any, 0);
+     */
     doAction<K extends ActionHookName>(
         name: K,
         ...args: InferHookParams<K>
@@ -44,6 +56,11 @@ export interface TypedHookEngine {
     ): void;
 
     // Filters (registration)
+    /**
+     * Register a filter callback. Must return the value type.
+     * @example
+     * hooks.addFilter('ui.chat.message:filter:outgoing', (value) => value.trim());
+     */
     addFilter<K extends FilterHookName>(
         name: K,
         callback: InferHookCallback<K>,
@@ -57,6 +74,11 @@ export interface TypedHookEngine {
     ): void;
 
     // Filters (execution)
+    /**
+     * Apply filters asynchronously to a value.
+     * @example
+     * const text = await hooks.applyFilters('ui.chat.message:filter:outgoing', input);
+     */
     applyFilters<K extends FilterHookName>(
         name: K,
         value: InferHookParams<K>[0],
@@ -70,6 +92,11 @@ export interface TypedHookEngine {
     ): InferHookReturn<K>;
 
     // Unified API (typed by hook name)
+    /**
+     * Register either an action or a filter based on the hook name.
+     * @example
+     * const off = hooks.on('files.attach:filter:input', (payload) => payload, { kind: 'filter' });
+     */
     on<K extends HookName>(
         name: K,
         callback: InferHookCallback<K>,

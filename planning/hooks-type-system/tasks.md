@@ -157,23 +157,23 @@
 
 **Requirements**: 9
 
--   [ ] 7.1 Improve TypeScript error messages
+-   [x] 7.1 Improve TypeScript error messages
 
-    -   [ ] Custom error types with helpful messages
-    -   [ ] `ValidateHookName<K>` with suggestions
-    -   [ ] `SuggestSimilar<K>` for typo detection
-    -   [ ] Clear messages for wrong callback signatures
+    -   [x] Custom error types with helpful messages
+    -   [x] `ValidateHookName<K>` with suggestions
+    -   [x] `SuggestSimilar<K>` for typo detection
+    -   [x] Clear messages for wrong callback signatures
 
--   [ ] 7.2 Add JSDoc documentation
+-   [x] 7.2 Add JSDoc documentation
 
-    -   [ ] Document all hook names with descriptions
-    -   [ ] Add `@example` tags for common patterns
-    -   [ ] Document payload structures
-    -   [ ] Add `@see` links to related hooks
+    -   [x] Document all hook names with descriptions
+    -   [x] Add `@example` tags for common patterns
+    -   [x] Document payload structures
+    -   [x] Add `@see` links to related hooks
 
--   [ ] 7.3 Create type-aware linting
-    -   [ ] Warn on untyped hook usage in new code
-    -   [ ] Suggest migration to typed APIs
+-   [~] 7.3 Create type-aware linting
+    -   [~] Warn on untyped hook usage in new code (skipped: no ESLint)
+    -   [~] Suggest migration to typed APIs (skipped: no ESLint)
 
 ### 8. Testing
 

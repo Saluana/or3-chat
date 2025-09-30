@@ -1,12 +1,22 @@
 // Hook & Plugin Type System — Core Types (non-breaking, types-only)
 // This file provides compile-time types and utilities for amazing DX.
 // Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
+/**
+ * Overview
+ * - Strongly-typed hook names (actions and filters)
+ * - Payload interfaces with clear shapes for AI, UI, Pane, and DB hooks
+ * - Utility types to infer callback signatures and returns
+ * - Helpful error helper types for clearer TS diagnostics
+ */
 
 // ============================================================================
 // PAYLOAD INTERFACES
 // ============================================================================
 
 // Chat & AI Hooks
+/**
+ * Context provided right before an AI send call is executed.
+ */
 export interface AiSendBeforePayload {
     threadId?: string;
     modelId: string;
@@ -15,12 +25,16 @@ export interface AiSendBeforePayload {
     messagesCount?: number;
 }
 
+/** Timing breakdown for an AI send request. */
 export interface AiSendAfterPayloadTimings {
     startedAt: number;
     endedAt: number;
     durationMs: number;
 }
 
+/**
+ * Context provided after an AI send completes (or aborts).
+ */
 export interface AiSendAfterPayload {
     threadId?: string;
     request?: { modelId?: string; userId?: string };
@@ -29,6 +43,7 @@ export interface AiSendAfterPayload {
     aborted?: boolean;
 }
 
+/** Streaming token delta context. */
 export interface AiStreamDeltaContext {
     threadId?: string;
     assistantId: string;
@@ -38,6 +53,7 @@ export interface AiStreamDeltaContext {
     chunkIndex: number;
 }
 
+/** Streaming reasoning delta context. */
 export interface AiStreamReasoningContext {
     threadId?: string;
     assistantId: string;
@@ -45,6 +61,7 @@ export interface AiStreamReasoningContext {
     reasoningLength: number;
 }
 
+/** Final streaming completion context. */
 export interface AiStreamCompleteContext {
     threadId?: string;
     assistantId: string;
@@ -54,6 +71,7 @@ export interface AiStreamCompleteContext {
     fileHashes?: string | null;
 }
 
+/** Stream error context (includes aborts). */
 export interface AiStreamErrorContext {
     threadId?: string;
     streamId?: string;
@@ -83,6 +101,7 @@ export interface AiRetryAfterPayload {
 }
 
 // Pane Hooks
+/** Current UI pane state (minimal, SSR-safe). */
 export interface PaneState {
     id: string;
     mode: 'chat' | 'doc';
@@ -144,6 +163,7 @@ export interface UiPaneMsgReceivedPayload {
 }
 
 // UI / Sidebar
+/** Sidebar selection payload (chat vs doc). */
 export interface UiSidebarSelectPayload {
     kind: 'chat' | 'doc';
     id: string;
@@ -165,6 +185,7 @@ export interface FilesAttachPayload extends FilesAttachInputPayload {
 }
 
 // File attachment filter payload
+/** Input payload for file attach filter; return false to reject. */
 export interface FilesAttachInputPayload {
     file: File;
     name: string;
@@ -177,6 +198,7 @@ export interface FilesAttachInputPayload {
 // DB ENTITY TYPES (lightweight — expand incrementally as needed)
 // ============================================================================
 
+/** DB entity: message */
 export interface MessageEntity {
     id: string;
     thread_id: string;
@@ -187,6 +209,7 @@ export interface MessageEntity {
     updated_at?: number;
 }
 
+/** DB entity: thread */
 export interface ThreadEntity {
     id: string;
     project_id?: string;
@@ -195,6 +218,7 @@ export interface ThreadEntity {
     updated_at?: number;
 }
 
+/** DB entity: document */
 export interface DocumentEntity {
     id: string;
     title?: string;
@@ -203,6 +227,7 @@ export interface DocumentEntity {
     updated_at?: number;
 }
 
+/** DB entity: file */
 export interface FileEntity {
     hash: string;
     name: string;
@@ -211,6 +236,7 @@ export interface FileEntity {
     ref_count?: number;
 }
 
+/** DB entity: project */
 export interface ProjectEntity {
     id: string;
     name: string;
@@ -218,6 +244,7 @@ export interface ProjectEntity {
     updated_at?: number;
 }
 
+/** DB entity: post */
 export interface PostEntity {
     id: string;
     title?: string;
@@ -226,18 +253,21 @@ export interface PostEntity {
     updated_at?: number;
 }
 
+/** DB entity: prompt */
 export interface PromptEntity {
     id: string;
     name: string;
     text: string;
 }
 
+/** DB entity: attachment */
 export interface AttachmentEntity {
     id: string;
     message_id?: string;
     file_hash?: string;
 }
 
+/** DB entity: key-value entry */
 export interface KvEntry {
     id?: number;
     name: string;
@@ -266,6 +296,7 @@ export interface DbDeletePayload<T = any> {
 // ============================================================================
 
 // DB hook patterns
+/** All DB table names that emit hooks. */
 export type DbEntityName =
     | 'messages'
     | 'threads'
@@ -276,6 +307,7 @@ export type DbEntityName =
     | 'prompts'
     | 'attachments'
     | 'kv';
+/** All DB operations that can generate hooks. */
 export type DbOperation =
     | 'create'
     | 'upsert'
@@ -287,15 +319,18 @@ export type DbOperation =
     | 'children'
     | 'fork'
     | 'normalize';
+/** Hook execution phase for actions. */
 export type DbPhase = 'before' | 'after';
 export type DbDeleteType = 'soft' | 'hard';
 
+/** Template literal names for DB action hooks. */
 export type DbActionHookName =
     | `db.${DbEntityName}.${DbOperation}:action:${DbPhase}`
     | `db.${DbEntityName}.delete:action:${DbDeleteType}:${DbPhase}`
     // extra specialized actions seen in docs
     | `db.files.refchange:action:after`;
 
+/** Template literal names for DB filter hooks. */
 export type DbFilterHookName =
     | `db.${DbEntityName}.${DbOperation}:filter:input`
     | `db.${DbEntityName}.${DbOperation}:filter:output`
@@ -303,6 +338,10 @@ export type DbFilterHookName =
     | `db.messages.files.validate:filter:hashes`;
 
 // Action hooks (fire-and-forget)
+/**
+ * Action hooks fire-and-forget. Callbacks return void or Promise<void>.
+ * @see FilterHookName for value-transforming hooks.
+ */
 export type ActionHookName =
     | 'ai.chat.send:action:before'
     | 'ai.chat.send:action:after'
@@ -330,6 +369,10 @@ export type ActionHookName =
     | (string & {}); // permissive catch-all for extension
 
 // Filter hooks (value-in → value-out)
+/**
+ * Filter hooks transform values. Callbacks must return the filtered value.
+ * @see ActionHookName for fire-and-forget hooks.
+ */
 export type FilterHookName =
     | 'ui.chat.message:filter:outgoing'
     | 'ui.chat.message:filter:incoming'
@@ -342,6 +385,7 @@ export type FilterHookName =
     | (string & {}); // permissive catch-all for extension
 
 // All hook names
+/** All known hooks (actions + filters). */
 export type HookName = ActionHookName | FilterHookName;
 
 // ============================================================================
@@ -450,11 +494,13 @@ export type HookPayloadMap = CoreHookPayloadMap & DbActionMap & DbFilterMap;
 // ============================================================================
 
 // Extract callback parameters for a hook
+/** Extract callback parameters for a hook name. */
 export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap
     ? HookPayloadMap[K]
     : any[];
 
 // Extract callback return type
+/** Return type for a hook callback based on kind (action vs filter). */
 export type InferHookReturn<K extends HookName> = K extends FilterHookName
     ? K extends keyof HookPayloadMap
         ? HookPayloadMap[K][0]
@@ -462,19 +508,23 @@ export type InferHookReturn<K extends HookName> = K extends FilterHookName
     : void | Promise<void>;
 
 // Full callback signature
+/** Full callback signature from a hook name. */
 export type InferHookCallback<K extends HookName> = (
     ...args: InferHookParams<K>
 ) => InferHookReturn<K> | Promise<InferHookReturn<K>>;
 
 // Kind checks
+/** Type-level boolean: is an Action hook? */
 export type IsAction<K extends HookName> = K extends ActionHookName
     ? true
     : false;
+/** Type-level boolean: is a Filter hook? */
 export type IsFilter<K extends HookName> = K extends FilterHookName
     ? true
     : false;
 
 // Extract just the payload (first arg for filters; first tuple entry otherwise)
+/** First parameter payload for a hook name (handy for actions). */
 export type ExtractHookPayload<K extends HookName> =
     K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : any;
 
@@ -507,6 +557,54 @@ export type InferDbEntity<K extends string> = K extends `db.messages.${string}`
 
 // Utility: Tail of a tuple
 export type Tail<T extends any[]> = T extends [any, ...infer Rest] ? Rest : [];
+
+// ==========================================================================
+// ERROR UTILITIES — clearer TypeScript diagnostics for common mistakes
+// ==========================================================================
+
+/**
+ * Suggest similar hooks by keeping the leftmost prefix before the first dot.
+ * Example: ValidateHookName<'ai.chat.sennd:action:before'> produces candidates
+ * like Extract<HookName, 'ai.chat.*'> in error tooltips.
+ */
+export type SuggestSimilar<K> = K extends `${infer Prefix}.${string}`
+    ? Extract<HookName, `${Prefix}.${string}`>
+    : HookName;
+
+/**
+ * Validate that a given name is a known HookName; otherwise emit a helpful string.
+ */
+export type ValidateHookName<K> = K extends HookName
+    ? K
+    : `Invalid hook name: ${Extract<
+          K,
+          string
+      >}. Did you mean one of: ${SuggestSimilar<K>}`;
+
+/**
+ * Construct a descriptive message when a callback type doesn’t match expectations.
+ */
+// Stringified primitive typename helper used in error messages
+export type TypeName<T> = T extends string
+    ? 'string'
+    : T extends number
+    ? 'number'
+    : T extends boolean
+    ? 'boolean'
+    : T extends bigint
+    ? 'bigint'
+    : T extends undefined
+    ? 'undefined'
+    : T extends null
+    ? 'null'
+    : T extends (...args: any[]) => any
+    ? 'function'
+    : T extends object
+    ? 'object'
+    : 'unknown';
+
+export type CallbackMismatch<Expected, Got> =
+    `Callback signature mismatch. Expected ${TypeName<Expected>}, got ${TypeName<Got>}`;
 
 // Notes
 // - Keep this file focused on public types and utilities.
