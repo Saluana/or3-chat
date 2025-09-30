@@ -338,14 +338,21 @@ export const AutocompleteExtension = Extension.create<{}>({
                                 const atNodeStart = $from.parentOffset === 0;
 
                                 // Check if character before cursor is a space
-                                const charBefore = view.state.doc.textBetween(from - 1, from, '');
+                                const charBefore = view.state.doc.textBetween(
+                                    from - 1,
+                                    from,
+                                    ''
+                                );
                                 const hasSpaceBefore = charBefore === ' ';
 
                                 // Determine text to insert
                                 let textToInsert = pluginState.suggestion;
-                                
+
                                 // Trim leading space if we're at node start OR if there's already a space before cursor
-                                if ((atNodeStart || hasSpaceBefore) && textToInsert.startsWith(' ')) {
+                                if (
+                                    (atNodeStart || hasSpaceBefore) &&
+                                    textToInsert.startsWith(' ')
+                                ) {
                                     textToInsert = textToInsert.trimStart();
                                 }
 
@@ -651,13 +658,25 @@ export const AutocompleteExtension = Extension.create<{}>({
                                                     $from.parentOffset === 0;
 
                                                 // Check if character before cursor is a space
-                                                const charBefore = state.doc.textBetween(from - 1, from, '');
-                                                const hasSpaceBefore = charBefore === ' ';
+                                                const charBefore =
+                                                    state.doc.textBetween(
+                                                        from - 1,
+                                                        from,
+                                                        ''
+                                                    );
+                                                const hasSpaceBefore =
+                                                    charBefore === ' ';
 
-                                                let textToInsert = pluginState.suggestion;
+                                                let textToInsert =
+                                                    pluginState.suggestion;
                                                 // Trim leading space if at node start OR if there's already a space before cursor
-                                                if ((atNodeStart || hasSpaceBefore) && textToInsert.startsWith(' ')) {
-                                                    textToInsert = textToInsert.trimStart();
+                                                if (
+                                                    (atNodeStart ||
+                                                        hasSpaceBefore) &&
+                                                    textToInsert.startsWith(' ')
+                                                ) {
+                                                    textToInsert =
+                                                        textToInsert.trimStart();
                                                 }
 
                                                 const tr = state.tr
@@ -722,14 +741,21 @@ export const AutocompleteExtension = Extension.create<{}>({
                     const atNodeStart = $from.parentOffset === 0;
 
                     // Check if character before cursor is a space
-                    const charBefore = state.doc.textBetween(from - 1, from, '');
+                    const charBefore = state.doc.textBetween(
+                        from - 1,
+                        from,
+                        ''
+                    );
                     const hasSpaceBefore = charBefore === ' ';
 
                     // Determine text to insert
                     let textToInsert = pluginState.suggestion;
-                    
+
                     // Trim leading space if we're at node start OR if there's already a space before cursor
-                    if ((atNodeStart || hasSpaceBefore) && textToInsert.startsWith(' ')) {
+                    if (
+                        (atNodeStart || hasSpaceBefore) &&
+                        textToInsert.startsWith(' ')
+                    ) {
                         textToInsert = textToInsert.trimStart();
                     }
 
@@ -839,12 +865,19 @@ export const AutocompleteExtension = Extension.create<{}>({
                         const atNodeStart = $from.parentOffset === 0;
 
                         // Check if character before cursor is a space
-                        const charBefore = state.doc.textBetween(from - 1, from, '');
+                        const charBefore = state.doc.textBetween(
+                            from - 1,
+                            from,
+                            ''
+                        );
                         const hasSpaceBefore = charBefore === ' ';
 
                         let textToInsert = suggestion;
                         // Trim leading space if at node start OR if there's already a space before cursor
-                        if ((atNodeStart || hasSpaceBefore) && textToInsert.startsWith(' ')) {
+                        if (
+                            (atNodeStart || hasSpaceBefore) &&
+                            textToInsert.startsWith(' ')
+                        ) {
                             textToInsert = textToInsert.trimStart();
                         }
 
