@@ -1,23 +1,35 @@
 import { onBeforeUnmount } from 'vue';
 import { useHooks } from './useHooks';
 import type { HookKind } from '../utils/hooks';
+import type {
+    HookName,
+    ActionHookName,
+    FilterHookName,
+    InferHookCallback,
+} from '../utils/hook-types';
 
-interface Options {
-    kind?: HookKind;
+interface Options<K extends HookName = HookName> {
+    kind?:
+        | HookKind
+        | (K extends ActionHookName
+              ? 'action'
+              : K extends FilterHookName
+              ? 'filter'
+              : HookKind);
     priority?: number;
 }
 
 /**
  * Register a callback to a hook name and clean up on unmount and HMR.
- * Returns a disposer you can call manually as well.
+ * Typed by hook name for great DX. Returns a disposer you can call manually.
  */
-export function useHookEffect(
-    name: string,
-    fn: (...args: any[]) => any,
-    opts?: Options
+export function useHookEffect<K extends HookName>(
+    name: K,
+    fn: InferHookCallback<K>,
+    opts?: Options<K>
 ) {
     const hooks = useHooks();
-    const disposer = hooks.on(name, fn, opts);
+    const disposer = hooks.on(name, fn as any, opts as any);
 
     // Component lifecycle cleanup
     onBeforeUnmount(() => hooks.off(disposer));

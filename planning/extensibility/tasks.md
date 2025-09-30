@@ -78,10 +78,10 @@ Note: All tasks follow existing patterns (global registries via globalThis, reac
 
 ## 11. Testing and Quality Gates (Req: 11)
 
--   [ ] 11.1 Unit tests for new registries.
--   [ ] 11.2 Integration tests for chat send/stream and document update.
--   [ ] 11.3 Lint/typecheck pipeline; ensure no new TS errors.
--   [ ] 11.4 Manual smoke: start app, verify actions and Hook Inspector page.
+-   [x] 11.1 Unit tests for new registries.
+-   [x] 11.2 Integration tests for chat send/stream and document update.
+-   [x] 11.3 Lint/typecheck pipeline; ensure no new TS errors.
+-   [x] 11.4 Manual smoke: start app, verify actions and Hook Inspector page.
 
 ## 12. Follow-ups (deferred)
 

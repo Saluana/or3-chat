@@ -1,0 +1,161 @@
+// Typed Hook Engine wrapper — Types-first, zero runtime overhead.
+// Delegates to the existing HookEngine, preserving all behavior.
+
+import type { HookEngine, OnOptions } from './hooks';
+import type {
+    ActionHookName,
+    FilterHookName,
+    HookName,
+    InferHookCallback,
+    InferHookParams,
+    InferHookReturn,
+} from './hook-types';
+
+// Utility: Tail of a tuple
+type Tail<T extends any[]> = T extends [any, ...infer Rest] ? Rest : [];
+
+/**
+ * Typed wrapper around HookEngine providing full type inference for
+ * actions, filters, and unified on/off ergonomics. Purely types-level.
+ */
+export interface TypedHookEngine {
+    // Actions (registration)
+    addAction<K extends ActionHookName>(
+        name: K,
+        callback: InferHookCallback<K>,
+        priority?: number
+    ): void;
+
+    removeAction<K extends ActionHookName>(
+        name: K,
+        callback: InferHookCallback<K>,
+        priority?: number
+    ): void;
+
+    // Actions (execution)
+    doAction<K extends ActionHookName>(
+        name: K,
+        ...args: InferHookParams<K>
+    ): Promise<void>;
+
+    doActionSync<K extends ActionHookName>(
+        name: K,
+        ...args: InferHookParams<K>
+    ): void;
+
+    // Filters (registration)
+    addFilter<K extends FilterHookName>(
+        name: K,
+        callback: InferHookCallback<K>,
+        priority?: number
+    ): void;
+
+    removeFilter<K extends FilterHookName>(
+        name: K,
+        callback: InferHookCallback<K>,
+        priority?: number
+    ): void;
+
+    // Filters (execution)
+    applyFilters<K extends FilterHookName>(
+        name: K,
+        value: InferHookParams<K>[0],
+        ...args: Tail<InferHookParams<K>>
+    ): Promise<InferHookReturn<K>>;
+
+    applyFiltersSync<K extends FilterHookName>(
+        name: K,
+        value: InferHookParams<K>[0],
+        ...args: Tail<InferHookParams<K>>
+    ): InferHookReturn<K>;
+
+    // Unified API (typed by hook name)
+    on<K extends HookName>(
+        name: K,
+        callback: InferHookCallback<K>,
+        opts?: OnOptions & {
+            // infer sensible default kind when provided
+            kind?: K extends ActionHookName
+                ? 'action'
+                : K extends FilterHookName
+                ? 'filter'
+                : 'action' | 'filter';
+        }
+    ): () => void;
+
+    off(disposer: () => void): void;
+
+    onceAction<K extends ActionHookName>(
+        name: K,
+        callback: InferHookCallback<K>,
+        priority?: number
+    ): () => void;
+
+    // Diagnostics + passthrough
+    hasAction<K extends ActionHookName>(
+        name?: K,
+        fn?: InferHookCallback<K>
+    ): boolean | number;
+    hasFilter<K extends FilterHookName>(
+        name?: K,
+        fn?: InferHookCallback<K>
+    ): boolean | number;
+    removeAllCallbacks(priority?: number): void;
+    currentPriority(): number | false;
+
+    readonly _engine: HookEngine;
+    readonly _diagnostics: HookEngine['_diagnostics'];
+}
+
+/**
+ * Create a typed wrapper around an existing HookEngine.
+ * Zero-cost at runtime; only types improve.
+ */
+export function createTypedHookEngine(engine: HookEngine): TypedHookEngine {
+    return {
+        // Actions
+        addAction: (name, callback, priority) =>
+            engine.addAction(name as any, callback as any, priority),
+        removeAction: (name, callback, priority) =>
+            engine.removeAction(name as any, callback as any, priority),
+        doAction: (name, ...args) =>
+            engine.doAction(name as any, ...(args as any)),
+        doActionSync: (name, ...args) =>
+            engine.doActionSync(name as any, ...(args as any)),
+
+        // Filters
+        addFilter: (name, callback, priority) =>
+            engine.addFilter(name as any, callback as any, priority),
+        removeFilter: (name, callback, priority) =>
+            engine.removeFilter(name as any, callback as any, priority),
+        applyFilters: (name, value, ...args) =>
+            engine.applyFilters(
+                name as any,
+                value as any,
+                ...(args as any)
+            ) as any,
+        applyFiltersSync: (name, value, ...args) =>
+            engine.applyFiltersSync(
+                name as any,
+                value as any,
+                ...(args as any)
+            ) as any,
+
+        // Unified
+        on: (name, callback, opts) =>
+            engine.on(name as any, callback as any, opts),
+        off: (disposer) => engine.off(disposer),
+        onceAction: (name, callback, priority) =>
+            engine.onceAction(name as any, callback as any, priority),
+
+        // Utilities
+        hasAction: (name, fn) => engine.hasAction(name as any, fn as any),
+        hasFilter: (name, fn) => engine.hasFilter(name as any, fn as any),
+        removeAllCallbacks: (priority) => engine.removeAllCallbacks(priority),
+        currentPriority: () => engine.currentPriority(),
+
+        // Direct access
+        _engine: engine,
+        _diagnostics: engine._diagnostics,
+    };
+}

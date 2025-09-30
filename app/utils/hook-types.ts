@@ -1,0 +1,513 @@
+// Hook & Plugin Type System — Core Types (non-breaking, types-only)
+// This file provides compile-time types and utilities for amazing DX.
+// Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
+
+// ============================================================================
+// PAYLOAD INTERFACES
+// ============================================================================
+
+// Chat & AI Hooks
+export interface AiSendBeforePayload {
+    threadId?: string;
+    modelId: string;
+    user: { id: string; length: number };
+    assistant: { id: string; streamId: string };
+    messagesCount?: number;
+}
+
+export interface AiSendAfterPayloadTimings {
+    startedAt: number;
+    endedAt: number;
+    durationMs: number;
+}
+
+export interface AiSendAfterPayload {
+    threadId?: string;
+    request?: { modelId?: string; userId?: string };
+    response?: { assistantId?: string; length?: number };
+    timings?: AiSendAfterPayloadTimings;
+    aborted?: boolean;
+}
+
+export interface AiStreamDeltaContext {
+    threadId?: string;
+    assistantId: string;
+    streamId: string;
+    deltaLength: number;
+    totalLength: number;
+    chunkIndex: number;
+}
+
+export interface AiStreamReasoningContext {
+    threadId?: string;
+    assistantId: string;
+    streamId: string;
+    reasoningLength: number;
+}
+
+export interface AiStreamCompleteContext {
+    threadId?: string;
+    assistantId: string;
+    streamId: string;
+    totalLength: number;
+    reasoningLength?: number;
+    fileHashes?: string | null;
+}
+
+export interface AiStreamErrorContext {
+    threadId?: string;
+    streamId?: string;
+    error?: unknown;
+    aborted?: boolean;
+}
+
+// Aliases with the names used in the task list
+export type AiStreamDeltaPayload = AiStreamDeltaContext;
+export type AiStreamReasoningPayload = AiStreamReasoningContext;
+export type AiStreamCompletePayload = AiStreamCompleteContext;
+export type AiStreamErrorPayload = AiStreamErrorContext;
+
+export interface AiRetryBeforePayload {
+    threadId?: string;
+    originalUserId: string;
+    originalAssistantId?: string;
+    triggeredBy: 'user' | 'assistant';
+}
+
+export interface AiRetryAfterPayload {
+    threadId?: string;
+    originalUserId: string;
+    originalAssistantId?: string;
+    newUserId?: string;
+    newAssistantId?: string;
+}
+
+// Pane Hooks
+export interface PaneState {
+    id: string;
+    mode: 'chat' | 'doc';
+    threadId?: string;
+    documentId?: string;
+    messages: any[];
+    validating?: boolean;
+}
+
+export interface UiPaneMsgBase {
+    id: string;
+    threadId?: string;
+    length?: number;
+    fileHashes?: string | null;
+}
+
+export interface UiPaneMsgReceived extends UiPaneMsgBase {
+    reasoningLength?: number;
+}
+
+// Named pane payloads used by typed composables and docs
+export interface UiPaneActivePayload {
+    pane: PaneState;
+    index: number;
+    previousIndex?: number;
+}
+
+export interface UiPaneBlurPayload {
+    pane: PaneState;
+    index: number;
+}
+
+export interface UiPaneSwitchPayload {
+    pane: PaneState;
+    index: number;
+}
+
+export interface UiPaneThreadChangedPayload {
+    pane: PaneState;
+    oldThreadId: string | '';
+    newThreadId: string;
+    paneIndex: number;
+}
+
+export interface UiPaneDocChangedPayload {
+    pane: PaneState;
+    oldDocumentId: string | '';
+    newDocumentId: string;
+}
+
+export interface UiPaneMsgSentPayload {
+    pane: PaneState;
+    message: UiPaneMsgBase;
+}
+
+export interface UiPaneMsgReceivedPayload {
+    pane: PaneState;
+    message: UiPaneMsgReceived;
+}
+
+// UI / Sidebar
+export interface UiSidebarSelectPayload {
+    kind: 'chat' | 'doc';
+    id: string;
+}
+
+export interface UiChatNewPayload {
+    threadId?: string;
+    createdAt?: number;
+}
+
+export interface AppInitPayload {
+    nuxtApp: any; // kept opaque to avoid heavy imports; intentionally any
+}
+
+export interface FilesAttachPayload extends FilesAttachInputPayload {
+    accepted: boolean;
+    url?: string;
+    hash?: string;
+}
+
+// File attachment filter payload
+export interface FilesAttachInputPayload {
+    file: File;
+    name: string;
+    mime: string;
+    size: number;
+    kind: 'image' | 'pdf';
+}
+
+// ============================================================================
+// DB ENTITY TYPES (lightweight — expand incrementally as needed)
+// ============================================================================
+
+export interface MessageEntity {
+    id: string;
+    thread_id: string;
+    role: 'user' | 'assistant' | 'system';
+    data: any;
+    index: number;
+    created_at: number;
+    updated_at?: number;
+}
+
+export interface ThreadEntity {
+    id: string;
+    project_id?: string;
+    title?: string;
+    created_at: number;
+    updated_at?: number;
+}
+
+export interface DocumentEntity {
+    id: string;
+    title?: string;
+    content?: string;
+    created_at?: number;
+    updated_at?: number;
+}
+
+export interface FileEntity {
+    hash: string;
+    name: string;
+    mime: string;
+    size: number;
+    ref_count?: number;
+}
+
+export interface ProjectEntity {
+    id: string;
+    name: string;
+    created_at?: number;
+    updated_at?: number;
+}
+
+export interface PostEntity {
+    id: string;
+    title?: string;
+    body?: string;
+    created_at?: number;
+    updated_at?: number;
+}
+
+export interface PromptEntity {
+    id: string;
+    name: string;
+    text: string;
+}
+
+export interface AttachmentEntity {
+    id: string;
+    message_id?: string;
+    file_hash?: string;
+}
+
+export interface KvEntry {
+    id?: number;
+    name: string;
+    value: any;
+}
+
+// Generic DB op payloads
+export interface DbCreatePayload<T = any> {
+    entity: T;
+    tableName: string;
+}
+export interface DbUpdatePayload<T = any> {
+    existing: T;
+    updated: T;
+    patch: Partial<T>;
+    tableName: string;
+}
+export interface DbDeletePayload<T = any> {
+    entity: T;
+    id: string;
+    tableName: string;
+}
+
+// ============================================================================
+// HOOK NAME TYPES
+// ============================================================================
+
+// DB hook patterns
+export type DbEntityName =
+    | 'messages'
+    | 'threads'
+    | 'documents'
+    | 'files'
+    | 'projects'
+    | 'posts'
+    | 'prompts'
+    | 'attachments'
+    | 'kv';
+export type DbOperation =
+    | 'create'
+    | 'upsert'
+    | 'update'
+    | 'delete'
+    | 'get'
+    | 'search'
+    | 'byProject'
+    | 'children'
+    | 'fork'
+    | 'normalize';
+export type DbPhase = 'before' | 'after';
+export type DbDeleteType = 'soft' | 'hard';
+
+export type DbActionHookName =
+    | `db.${DbEntityName}.${DbOperation}:action:${DbPhase}`
+    | `db.${DbEntityName}.delete:action:${DbDeleteType}:${DbPhase}`
+    // extra specialized actions seen in docs
+    | `db.files.refchange:action:after`;
+
+export type DbFilterHookName =
+    | `db.${DbEntityName}.${DbOperation}:filter:input`
+    | `db.${DbEntityName}.${DbOperation}:filter:output`
+    // extra specialized filters seen in docs
+    | `db.messages.files.validate:filter:hashes`;
+
+// Action hooks (fire-and-forget)
+export type ActionHookName =
+    | 'ai.chat.send:action:before'
+    | 'ai.chat.send:action:after'
+    | 'ai.chat.stream:action:delta'
+    | 'ai.chat.stream:action:reasoning'
+    | 'ai.chat.stream:action:complete'
+    | 'ai.chat.stream:action:error'
+    | 'ai.chat.retry:action:before'
+    | 'ai.chat.retry:action:after'
+    | 'ui.pane.active:action'
+    | 'ui.pane.blur:action'
+    | 'ui.pane.switch:action'
+    | 'ui.pane.open:action:after'
+    | 'ui.pane.close:action:before'
+    | 'ui.pane.thread:action:changed'
+    | 'ui.pane.doc:action:changed'
+    | 'ui.pane.doc:action:saved'
+    | 'ui.pane.msg:action:sent'
+    | 'ui.pane.msg:action:received'
+    | 'ui.sidebar.select:action:before'
+    | 'ui.sidebar.select:action:after'
+    | 'ui.chat.new:action:after'
+    | 'app.init:action:after'
+    | DbActionHookName
+    | (string & {}); // permissive catch-all for extension
+
+// Filter hooks (value-in → value-out)
+export type FilterHookName =
+    | 'ui.chat.message:filter:outgoing'
+    | 'ui.chat.message:filter:incoming'
+    | 'ai.chat.model:filter:select'
+    | 'ai.chat.messages:filter:input'
+    | 'ui.pane.thread:filter:select'
+    | 'ui.pane.doc:filter:select'
+    | 'files.attach:filter:input'
+    | DbFilterHookName
+    | (string & {}); // permissive catch-all for extension
+
+// All hook names
+export type HookName = ActionHookName | FilterHookName;
+
+// ============================================================================
+// HOOK PAYLOAD MAPPING — tuple of parameters per hook name
+// ============================================================================
+
+// Core (non-db) hook payloads. Keep explicit entries for commonly used hooks.
+export type CoreHookPayloadMap = {
+    // AI/Chat Actions
+    'ai.chat.send:action:before': [AiSendBeforePayload];
+    'ai.chat.send:action:after': [AiSendAfterPayload];
+    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];
+    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];
+    'ai.chat.stream:action:complete': [AiStreamCompletePayload];
+    'ai.chat.stream:action:error': [AiStreamErrorPayload];
+    'ai.chat.retry:action:before': [AiRetryBeforePayload];
+    'ai.chat.retry:action:after': [AiRetryAfterPayload];
+
+    // Pane Actions (now use named payloads)
+    'ui.pane.active:action': [UiPaneActivePayload];
+    'ui.pane.blur:action': [UiPaneBlurPayload];
+    'ui.pane.switch:action': [UiPaneSwitchPayload];
+    'ui.pane.open:action:after': [UiPaneActivePayload];
+    'ui.pane.close:action:before': [UiPaneActivePayload];
+    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];
+    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];
+    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];
+    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];
+    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];
+
+    // Sidebar Actions
+    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];
+    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];
+    'ui.chat.new:action:after': [UiChatNewPayload];
+
+    // App Actions
+    'app.init:action:after': [AppInitPayload];
+
+    // Chat Filters
+    'ui.chat.message:filter:outgoing': [string];
+    'ui.chat.message:filter:incoming': [string, string | undefined];
+    'ai.chat.model:filter:select': [string];
+    'ai.chat.messages:filter:input': [any[]];
+
+    // Pane Filters
+    'ui.pane.thread:filter:select': [string, PaneState, string];
+    'ui.pane.doc:filter:select': [string, PaneState, string];
+
+    // Files Filters
+    'files.attach:filter:input': [FilesAttachInputPayload | false];
+
+    // Small, well-known DB-specialized hooks kept explicit
+    'db.messages.files.validate:filter:hashes': [string[]];
+    'db.files.refchange:action:after': [
+        { before: FileEntity; after: FileEntity; delta: number }
+    ];
+};
+
+// Derived payloads for DB action hooks
+type DbActionPayloadFor<K extends DbActionHookName> =
+    K extends `db.${string}.${infer Op}:action:${string}`
+        ? Op extends 'create' | 'upsert'
+            ? [DbCreatePayload<InferDbEntity<K>>]
+            : Op extends 'update'
+            ? [DbUpdatePayload<InferDbEntity<K>>]
+            : Op extends 'get'
+            ? [{ id: string }]
+            : Op extends 'search' | 'byProject' | 'children'
+            ? [{ query?: any }]
+            : Op extends 'delete'
+            ? K extends `db.${string}.delete:action:${infer DeleteType}:${string}`
+                ? [DbDeletePayload<InferDbEntity<K>>]
+                : [DbDeletePayload<InferDbEntity<K>>]
+            : [any]
+        : [any];
+
+// Derived payloads for DB filter hooks
+type DbFilterPayloadFor<K extends DbFilterHookName> =
+    K extends `db.${string}.${infer Op}:filter:${infer Phase}`
+        ? Phase extends 'input'
+            ? Op extends 'create' | 'upsert'
+                ? [InferDbEntity<K>]
+                : Op extends 'update'
+                ? [DbUpdatePayload<InferDbEntity<K>>]
+                : Op extends 'get'
+                ? [string]
+                : Op extends 'search' | 'byProject' | 'children'
+                ? [{ query?: any }]
+                : [any]
+            : Phase extends 'output'
+            ? Op extends 'search' | 'byProject' | 'children'
+                ? [InferDbEntity<K>[]]
+                : [InferDbEntity<K>]
+            : [any]
+        : [any];
+
+// Map all DB action/filter hook names to inferred payload tuples.
+type DbActionMap = { [K in DbActionHookName]: DbActionPayloadFor<K> };
+type DbFilterMap = { [K in DbFilterHookName]: DbFilterPayloadFor<K> };
+
+// Final HookPayloadMap including core hooks and DB-derived hooks.
+export type HookPayloadMap = CoreHookPayloadMap & DbActionMap & DbFilterMap;
+
+// ============================================================================
+// TYPE UTILITIES
+// ============================================================================
+
+// Extract callback parameters for a hook
+export type InferHookParams<K extends HookName> = K extends keyof HookPayloadMap
+    ? HookPayloadMap[K]
+    : any[];
+
+// Extract callback return type
+export type InferHookReturn<K extends HookName> = K extends FilterHookName
+    ? K extends keyof HookPayloadMap
+        ? HookPayloadMap[K][0]
+        : any
+    : void | Promise<void>;
+
+// Full callback signature
+export type InferHookCallback<K extends HookName> = (
+    ...args: InferHookParams<K>
+) => InferHookReturn<K> | Promise<InferHookReturn<K>>;
+
+// Kind checks
+export type IsAction<K extends HookName> = K extends ActionHookName
+    ? true
+    : false;
+export type IsFilter<K extends HookName> = K extends FilterHookName
+    ? true
+    : false;
+
+// Extract just the payload (first arg for filters; first tuple entry otherwise)
+export type ExtractHookPayload<K extends HookName> =
+    K extends keyof HookPayloadMap ? HookPayloadMap[K][0] : any;
+
+// Wildcard support — basic pattern passthrough (kept simple for perf)
+export type MatchingHooks<Pattern extends string> = Extract<
+    HookName,
+    `${Pattern}`
+>;
+
+// For DB hooks, infer entity type from name
+export type InferDbEntity<K extends string> = K extends `db.messages.${string}`
+    ? MessageEntity
+    : K extends `db.threads.${string}`
+    ? ThreadEntity
+    : K extends `db.documents.${string}`
+    ? DocumentEntity
+    : K extends `db.files.${string}`
+    ? FileEntity
+    : K extends `db.projects.${string}`
+    ? ProjectEntity
+    : K extends `db.posts.${string}`
+    ? PostEntity
+    : K extends `db.prompts.${string}`
+    ? PromptEntity
+    : K extends `db.attachments.${string}`
+    ? AttachmentEntity
+    : K extends `db.kv.${string}`
+    ? KvEntry
+    : any;
+
+// Utility: Tail of a tuple
+export type Tail<T extends any[]> = T extends [any, ...infer Rest] ? Rest : [];
+
+// Notes
+// - Keep this file focused on public types and utilities.
+// - Prefer small, additive expansions to avoid TS performance issues.
