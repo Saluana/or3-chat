@@ -98,7 +98,10 @@
             />
         </div>
         <div class="flex-1 min-h-0 overflow-y-auto">
-            <div class="w-full max-w-[820px] mx-auto p-8 pb-24">
+            <div
+                class="w-full max-w-[820px] mx-auto p-8 pb-24"
+                @click="handleContainerClick"
+            >
                 <EditorContent
                     :editor="editor as Editor"
                     class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
@@ -157,6 +160,20 @@ const editor = ref<Editor | null>(null);
 
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
+
+// Debug: Watch for plugin buttons changes
+if (import.meta.dev) {
+    watch(
+        pluginButtons,
+        (buttons) => {
+            console.log(
+                '[DocumentEditor] Plugin buttons updated:',
+                buttons.map((b) => b.id)
+            );
+        },
+        { immediate: true }
+    );
+}
 
 function onTitleChange() {
     setDocumentTitle(props.documentId, titleDraft.value);
@@ -224,7 +241,7 @@ function makeEditor() {
     try {
         editor.value = new Editor({
             extensions: [
-                StarterKit.configure({ heading: { levels: [1, 2] } }),
+                StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
                 Placeholder.configure({
                     placeholder: 'Type your text here...',
                 }),
@@ -327,6 +344,13 @@ const commands: Record<string, () => void> = {
 function cmd(name: string) {
     commands[name]?.();
     emitContent();
+}
+
+function handleContainerClick(event: MouseEvent) {
+    // Only focus editor if clicking on the container itself, not on the editor content
+    if (editor.value && event.target === event.currentTarget) {
+        editor.value.commands.focus('end');
+    }
 }
 
 const statusText = computed(() => {

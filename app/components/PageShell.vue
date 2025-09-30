@@ -157,8 +157,6 @@
                     tabindex="0"
                     @focus="setActive(i)"
                     @click="setActive(i)"
-                    @keydown.left.prevent="focusPrev(i)"
-                    @keydown.right.prevent="focusNext(i)"
                 >
                     <div
                         v-if="panes.length > 1"
@@ -237,6 +235,7 @@ import type {
     ThreadEntity,
     DocumentEntity,
 } from '~/utils/hook-types';
+import { useMagicKeys, whenever } from '@vueuse/core';
 
 const props = withDefaults(
     defineProps<{
@@ -273,6 +272,49 @@ const {
     initialThreadId: props.initialThreadId,
     maxPanes: 3,
     onFlushDocument: (id) => flushDocument(id),
+});
+
+// Pane navigation with Shift+Arrow keys (using VueUse)
+const keys = useMagicKeys();
+const shiftLeft = keys['Shift+ArrowLeft'] ?? ref(false);
+const shiftRight = keys['Shift+ArrowRight'] ?? ref(false);
+
+// Navigate to previous pane with Shift+Left
+whenever(shiftLeft, () => {
+    // Only work when multiple panes exist
+    if (panes.value.length <= 1) return;
+
+    // Don't interfere if user is editing content
+    const activeEl = document.activeElement as HTMLElement;
+    if (
+        activeEl &&
+        (activeEl.isContentEditable ||
+            activeEl.tagName === 'INPUT' ||
+            activeEl.tagName === 'TEXTAREA')
+    ) {
+        return;
+    }
+
+    focusPrev(activePaneIndex.value);
+});
+
+// Navigate to next pane with Shift+Right
+whenever(shiftRight, () => {
+    // Only work when multiple panes exist
+    if (panes.value.length <= 1) return;
+
+    // Don't interfere if user is editing content
+    const activeEl = document.activeElement as HTMLElement;
+    if (
+        activeEl &&
+        (activeEl.isContentEditable ||
+            activeEl.tagName === 'INPUT' ||
+            activeEl.tagName === 'TEXTAREA')
+    ) {
+        return;
+    }
+
+    focusNext(activePaneIndex.value);
 });
 
 // Active thread convenience (first pane for sidebar highlight)

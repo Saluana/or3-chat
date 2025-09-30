@@ -429,7 +429,7 @@ export const AutocompleteExtension = Extension.create<{}>({
                             }
                         }
 
-                        // Clear suggestions on arrow key navigation
+                        // Clear suggestions on arrow key navigation (don't block the event)
                         if (
                             event.key === 'ArrowLeft' ||
                             event.key === 'ArrowRight' ||
@@ -441,19 +441,20 @@ export const AutocompleteExtension = Extension.create<{}>({
                                 pluginState?.suggestion ||
                                 pluginState?.loading
                             ) {
+                                // Clear suggestions but let the arrow key event through for navigation
                                 dispatchStateUpdate(view, {
                                     suggestionCleared: true,
                                     loading: false,
                                 });
                             }
+                            // Don't prevent default - let TipTap handle arrow key navigation
                         }
                         // REMOVED Backspace handling from here. It's handled in addKeyboardShortcuts.
                     };
 
-                    // Attach listener with capture phase to catch Tab early
-                    view.dom.addEventListener('keydown', handleKeyDown, {
-                        capture: true,
-                    });
+                    // Only use capture for Tab key, otherwise use normal phase
+                    // This prevents interference with arrow key navigation
+                    view.dom.addEventListener('keydown', handleKeyDown);
 
                     // Named focus/blur handlers for proper cleanup
                     function handleBlur() {
@@ -493,8 +494,7 @@ export const AutocompleteExtension = Extension.create<{}>({
                             abortCurrentRequest();
                             view.dom.removeEventListener(
                                 'keydown',
-                                handleKeyDown,
-                                { capture: true }
+                                handleKeyDown
                             );
                             view.dom.removeEventListener('blur', handleBlur);
                             view.dom.removeEventListener('focus', handleFocus);
@@ -932,19 +932,17 @@ export const AutocompleteExtension = Extension.create<{}>({
                     pluginState?.suggestion || pluginState?.loading
                 );
 
-                // ALWAYS dispatch the metadata on Backspace keydown
-                const tr = this.editor.state.tr.setMeta(
-                    'lastKeyBackspace',
-                    true
-                );
+                // Only dispatch metadata if we actually have a suggestion or loading state
                 if (hadSuggestionOrLoading) {
-                    // Also clear suggestion if one existed
-                    tr.setMeta('suggestionCleared', true);
+                    const tr = this.editor.state.tr
+                        .setMeta('lastKeyBackspace', true)
+                        .setMeta('suggestionCleared', true);
+                    this.editor.view.dispatch(tr);
+                    // Return false to allow default backspace to still happen
+                    return false;
                 }
-                this.editor.view.dispatch(tr);
 
-                // Always return false to allow default backspace behavior
-                // This lets text deletion happen simultaneously with clearing suggestions
+                // No suggestion, let backspace work normally without any interference
                 return false;
             },
         };
