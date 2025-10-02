@@ -16,7 +16,7 @@ export default defineAppConfig({
                 content:
                     'fixed border-2 border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
                 body: 'border-y-2 border-y-[var(--md-inverse-surface)]',
-                header: 'border-b-2 border-black bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
+                header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
                 title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
                 description: 'hidden',
                 close: 'top-0 end-0 flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white dark:text-black  dark:hover:bg-white/80',

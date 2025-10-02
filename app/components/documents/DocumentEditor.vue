@@ -22,7 +22,7 @@
             </div>
         </div>
         <div
-            class="flex flex-row items-stretch border-b-2 px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
+            class="flex flex-row items-stretch border-b-2 border-[var(--md-inverse-surface)] px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
         >
             <ToolbarButton
                 icon="carbon:text-bold"
@@ -63,18 +63,18 @@
             <ToolbarButton
                 icon="pixelarticons:list"
                 :active="isActive('bulletList')"
-                label="Bullets"
+                label="Bullet list"
                 @activate="cmd('toggleBulletList')"
             />
             <ToolbarButton
                 icon="carbon:list-numbered"
                 :active="isActive('orderedList')"
-                label="Ordered"
+                label="Ordered list"
                 @activate="cmd('toggleOrderedList')"
             />
             <ToolbarButton
                 icon="pixelarticons:minus"
-                label="HR"
+                label="Horizontal Rule"
                 @activate="cmd('setHorizontalRule')"
             />
             <ToolbarButton
@@ -100,7 +100,7 @@
         <div class="flex-1 min-h-0 overflow-y-auto">
             <div
                 class="w-full max-w-[820px] mx-auto p-8 pb-24"
-                @click="handleContainerClick"
+                @mousedown="handleContainerClick"
             >
                 <EditorContent
                     :editor="editor as Editor"

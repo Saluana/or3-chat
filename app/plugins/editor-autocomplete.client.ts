@@ -14,7 +14,7 @@ export default defineNuxtPlugin(() => {
         // automatically included in all editors. It checks AutocompleteState.value.isEnabled
         // internally to determine if it should be active.
 
-        if (process.client) {
+        if (import.meta.client) {
             // Register the TipTap extension
             registerEditorExtension({
                 id: 'editor-autocomplete:extension',
