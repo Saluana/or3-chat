@@ -8,6 +8,7 @@
                 @chatSelected="onSidebarSelected"
                 @newDocument="onNewDocument"
                 @documentSelected="onDocumentSelected"
+                @toggle-dashboard="showDashboardModal = !showDashboardModal"
             />
         </template>
         <template #sidebar-collapsed>
@@ -16,6 +17,7 @@
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
                 @focusSearch="focusSidebarSearch"
+                @toggle-dashboard="showDashboardModal = !showDashboardModal"
             />
         </template>
         <div class="flex-1 h-[100dvh] w-full relative">
@@ -211,6 +213,7 @@
                 </div>
             </div>
         </div>
+        <lazy-modal-dashboard v-model:showModal="showDashboardModal" />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
@@ -253,6 +256,7 @@ const toast = useToast();
 const route = useRoute();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
+const showDashboardModal = ref(false);
 
 // ---------------- Multi-pane ----------------
 const {

@@ -102,7 +102,9 @@
                     </UButton>
                 </UTooltip>
             </div>
-            <sidebar-side-bottom-nav />
+            <sidebar-side-bottom-nav
+                @toggle-dashboard="emit('toggleDashboard')"
+            />
         </div>
 
         <!-- Rename modal -->
@@ -753,6 +755,7 @@ const emit = defineEmits<{
     (e: 'newChat'): void;
     (e: 'newDocument', initial?: { title?: string }): void;
     (e: 'documentSelected', id: string): void;
+    (e: 'toggleDashboard'): void;
 }>();
 const hooks = useHooks();
 

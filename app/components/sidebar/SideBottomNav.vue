@@ -144,7 +144,7 @@
 
                 <!-- HELP -->
                 <button
-                    @click="showDashboardModal = true"
+                    @click="emit('toggleDashboard')"
                     type="button"
                     aria-label="Help"
                     class="relative flex w-full h-[56px] rounded-sm border-2 border-[var(--md-outline)] outline-2 outline-[var(--md-outline-variant)] outline-offset-[-2px] shadow-[inset_0_4px_0_0_rgba(0,0,0,0.08)] text-[var(--md-on-primary-fixed)] dark:text-[var(--md-on-surface)] uppercase cursor-pointer px-4 bg-[linear-gradient(var(--md-primary-fixed),var(--md-primary-fixed))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-fixed-dim),var(--md-primary-fixed-dim))_0_100%/100%_50%_no-repeat] after:content-[''] after:absolute after:left-[2px] after:right-[2px] after:top-[calc(50%-1px)] after:h-0.5 after:bg-[var(--md-outline)] active:bg-[linear-gradient(var(--md-primary),var(--md-primary))_0_0/100%_50%_no-repeat,linear-gradient(var(--md-primary-container),var(--md-primary-container))_0_100%/100%_50%_no-repeat] active:text-[var(--md-on-primary-fixed)] dark:active:text-[var(--md-on-surface)] active:translate-y-px active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] focus-visible:ring-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--md-surface)] group"
@@ -181,7 +181,6 @@
         hydrate-on-visible
         v-model:showModal="showSettingsModal"
     />
-    <lazy-modal-dashboard v-model:showModal="showDashboardModal" />
 </template>
 
 <script lang="ts" setup>
@@ -195,7 +194,8 @@ onMounted(() => {
     hydrated.value = true;
 });
 const showSettingsModal = ref(false);
-const showDashboardModal = ref(false);
+
+const emit = defineEmits(['toggleDashboard']);
 
 function onConnectButtonClick() {
     if (orIsConnected.value) {
