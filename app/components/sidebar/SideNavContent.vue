@@ -450,16 +450,39 @@ import { useHooks } from '~/composables/useHooks';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel, create, type Post } from '~/db'; // Dexie + barrel helpers
+import {
+    db,
+    upsert,
+    del as dbDel,
+    create,
+    type Post,
+    type Project,
+} from '~/db'; // Dexie + barrel helpers
+import { nowSec, newId } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/useDocumentsStore';
+import { useProjectsCrud } from '~/composables/useProjectsCrud';
+import {
+    normalizeProjectData,
+    type ProjectEntry,
+    type ProjectEntryKind,
+} from '~/utils/projects/normalizeProjectData';
 import {
     useSidebarSections,
     useSidebarFooterActions,
     type SidebarSection,
     type SidebarFooterActionEntry,
 } from '~/composables/ui-extensions/chrome';
+type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)
+
+const {
+    createProject: createProjectCrud,
+    renameProject: renameProjectCrud,
+    deleteProject: deleteProjectCrud,
+    updateProjectEntries,
+    syncProjectEntryTitle,
+} = useProjectsCrud();
 
 // Section visibility (multi-select) defaults to all on
 const activeSections = ref<{
@@ -474,7 +497,7 @@ const props = defineProps<{
 
 const sideNavHeaderRef = ref<InstanceType<typeof SideNavHeader> | null>(null);
 const items = ref<any[]>([]);
-const projects = ref<any[]>([]);
+const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
 const scrollAreaRef = ref<HTMLElement | null>(null);
 const bottomNavRef = ref<HTMLElement | null>(null);
@@ -598,44 +621,38 @@ const existingDocIds = computed(
     () => new Set(docs.value.map((d: any) => d.id))
 );
 const projectsFilteredByExistence = computed(() =>
-    projects.value.map((p: any) => {
-        const dataArr = Array.isArray(p.data) ? p.data : [];
-        const filteredEntries = dataArr.filter((e: any) => {
-            if (!e) return false;
-            const id = e.id;
+    projects.value.map((p) => {
+        const filteredEntries = p.data.filter((entry) => {
+            const id = entry?.id;
             if (!id) return false;
-            const type = e.type || e.kind || 'thread';
-            if (type === 'thread' || type === 'chat')
-                return existingThreadIds.value.has(id);
-            if (type === 'doc' || type === 'document')
-                return existingDocIds.value.has(id);
+            const kind = entry.kind ?? 'chat';
+            if (kind === 'chat') return existingThreadIds.value.has(id);
+            if (kind === 'doc') return existingDocIds.value.has(id);
             return true;
         });
-        // If filtering removed entries, return shallow copy to avoid mutating original p (reactivity safe)
-        return filteredEntries.length === dataArr.length
+        return filteredEntries.length === p.data.length
             ? p
             : { ...p, data: filteredEntries };
     })
 );
 
-const displayProjects = computed(() => {
+const displayProjects = computed<SidebarProject[]>(() => {
     if (!sidebarQuery.value.trim()) return projectsFilteredByExistence.value;
     const threadSet = new Set(threadResults.value.map((t: any) => t.id));
     const docSet = new Set(documentResults.value.map((d: any) => d.id));
     const directProjectSet = new Set(
         projectResults.value.map((p: any) => p.id)
     );
-    return projectsFilteredByExistence.value
-        .map((p: any) => {
-            const filteredEntries = (p.data || []).filter(
-                (e: any) => e && (threadSet.has(e.id) || docSet.has(e.id))
-            );
-            const include =
-                directProjectSet.has(p.id) || filteredEntries.length > 0;
-            if (!include) return null;
-            return { ...p, data: filteredEntries };
-        })
-        .filter(Boolean);
+    const results: SidebarProject[] = [];
+    for (const project of projectsFilteredByExistence.value) {
+        const filteredEntries = project.data.filter(
+            (entry) => threadSet.has(entry.id) || docSet.has(entry.id)
+        );
+        if (directProjectSet.has(project.id) || filteredEntries.length > 0) {
+            results.push({ ...project, data: filteredEntries });
+        }
+    }
+    return results;
 });
 const displayDocuments = computed(() =>
     sidebarQuery.value.trim() ? (documentResults.value as Post[]) : undefined
@@ -689,21 +706,9 @@ onMounted(async () => {
             .toArray()
     ).subscribe({
         next: (res) => {
-            // Normalize data field (ensure array)
-            projects.value = res.map((p: any) => ({
+            projects.value = res.map((p: Project) => ({
                 ...p,
-                data: Array.isArray(p.data)
-                    ? p.data
-                    : typeof p.data === 'string'
-                    ? (() => {
-                          try {
-                              const parsed = JSON.parse(p.data);
-                              return Array.isArray(parsed) ? parsed : [];
-                          } catch {
-                              return [];
-                          }
-                      })()
-                    : [],
+                data: normalizeProjectData(p.data),
             }));
         },
         error: (err) => console.error('projects liveQuery error', err),
@@ -827,7 +832,7 @@ async function saveRename() {
     if (!renameId.value) return;
     // Determine if it's a thread or document by checking posts table first
     const maybeDoc = await db.posts.get(renameId.value);
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSec();
     if (maybeDoc && (maybeDoc as any).postType === 'doc') {
         // Update doc title via documents API (fires hooks for sidebar refresh)
         await updateDocument(renameId.value, { title: renameTitle.value });
@@ -837,34 +842,11 @@ async function saveRename() {
         } catch {}
         // Sync inside projects
         try {
-            const allProjects = await db.projects.toArray();
-            const updates: any[] = [];
-            for (const p of allProjects) {
-                if (!p.data) continue;
-                const arr = Array.isArray(p.data)
-                    ? p.data
-                    : typeof p.data === 'string'
-                    ? (() => {
-                          try {
-                              return JSON.parse(p.data);
-                          } catch {
-                              return [];
-                          }
-                      })()
-                    : [];
-                let changed = false;
-                for (const entry of arr) {
-                    if (
-                        entry.id === maybeDoc.id &&
-                        entry.name !== renameTitle.value
-                    ) {
-                        entry.name = renameTitle.value;
-                        changed = true;
-                    }
-                }
-                if (changed) updates.push({ ...p, data: arr, updated_at: now });
-            }
-            if (updates.length) await db.projects.bulkPut(updates);
+            await syncProjectEntryTitle(
+                renameId.value,
+                'doc',
+                renameTitle.value
+            );
         } catch (e) {
             console.error('project doc title sync failed', e);
         }
@@ -878,31 +860,11 @@ async function saveRename() {
         });
         // Sync title inside any project entries containing this thread
         try {
-            const allProjects = await db.projects.toArray();
-            const updates: any[] = [];
-            for (const p of allProjects) {
-                if (!p.data) continue;
-                const arr = Array.isArray(p.data)
-                    ? p.data
-                    : typeof p.data === 'string'
-                    ? (() => {
-                          try {
-                              return JSON.parse(p.data);
-                          } catch {
-                              return [];
-                          }
-                      })()
-                    : [];
-                let changed = false;
-                for (const entry of arr) {
-                    if (entry.id === t.id && entry.name !== renameTitle.value) {
-                        entry.name = renameTitle.value;
-                        changed = true;
-                    }
-                }
-                if (changed) updates.push({ ...p, data: arr, updated_at: now });
-            }
-            if (updates.length) await db.projects.bulkPut(updates);
+            await syncProjectEntryTitle(
+                renameId.value,
+                'chat',
+                renameTitle.value
+            );
         } catch (e) {
             console.error('project title sync failed', e);
         }
@@ -944,7 +906,7 @@ async function deleteProject() {
     if (!deleteProjectId.value) return;
     try {
         // Use soft delete so project is recoverable like existing handler
-        await dbDel.soft.project(deleteProjectId.value);
+        await deleteProjectCrud(deleteProjectId.value);
     } catch (e) {
         console.error('delete project failed', e);
     } finally {
@@ -1000,8 +962,8 @@ async function onProjectDocumentSelected(id: string) {
 async function handleAddChatToProject(projectId: string) {
     // Create a new chat thread and insert into project data array
     try {
-        const now = Math.floor(Date.now() / 1000);
-        const threadId = crypto.randomUUID();
+        const now = nowSec();
+        const threadId = newId();
         await create.thread({
             id: threadId,
             title: 'New Thread',
@@ -1013,29 +975,13 @@ async function handleAddChatToProject(projectId: string) {
             meta: null,
         } as any);
         const project = await db.projects.get(projectId);
-        if (project) {
-            const dataArr = Array.isArray(project.data)
-                ? project.data
-                : typeof project.data === 'string'
-                ? (() => {
-                      try {
-                          const parsed = JSON.parse(project.data);
-                          return Array.isArray(parsed) ? parsed : [];
-                      } catch {
-                          return [];
-                      }
-                  })()
-                : [];
-            dataArr.push({ id: threadId, name: 'New Thread', kind: 'chat' });
-            await upsert.project({
-                ...project,
-                data: dataArr,
-                updated_at: now,
-            });
-            if (!expandedProjects.value.includes(projectId))
-                expandedProjects.value.push(projectId);
-            emit('chatSelected', threadId);
-        }
+        if (!project) return;
+        const entries = normalizeProjectData(project.data);
+        entries.push({ id: threadId, name: 'New Thread', kind: 'chat' });
+        await updateProjectEntries(projectId, entries);
+        if (!expandedProjects.value.includes(projectId))
+            expandedProjects.value.push(projectId);
+        emit('chatSelected', threadId);
     } catch (e) {
         console.error('add chat to project failed', e);
     }
@@ -1043,43 +989,18 @@ async function handleAddChatToProject(projectId: string) {
 
 async function handleAddDocumentToProject(projectId: string) {
     try {
-        const now = Math.floor(Date.now() / 1000);
         // Create document (minimal title)
         const doc = await create.document({ title: 'Untitled' });
         const project = await db.projects.get(projectId);
-        if (project) {
-            const dataArr = Array.isArray(project.data)
-                ? project.data
-                : typeof project.data === 'string'
-                ? (() => {
-                      try {
-                          const parsed = JSON.parse(project.data);
-                          return Array.isArray(parsed) ? parsed : [];
-                      } catch {
-                          return [];
-                      }
-                  })()
-                : [];
-            dataArr.push({ id: doc.id, name: doc.title, kind: 'doc' });
-            await upsert.project({
-                ...project,
-                data: dataArr,
-                updated_at: now,
-            });
-            if (!expandedProjects.value.includes(projectId))
-                expandedProjects.value.push(projectId);
-            emit('documentSelected', doc.id);
-        }
+        if (!project) return;
+        const entries = normalizeProjectData(project.data);
+        entries.push({ id: doc.id, name: doc.title, kind: 'doc' });
+        await updateProjectEntries(projectId, entries);
+        if (!expandedProjects.value.includes(projectId))
+            expandedProjects.value.push(projectId);
+        emit('documentSelected', doc.id);
     } catch (e) {
         console.error('add document to project failed', e);
-    }
-}
-
-async function handleDeleteProject(projectId: string) {
-    try {
-        await dbDel.soft.project(projectId); // soft delete for recoverability
-    } catch (e) {
-        console.error('delete project failed', e);
     }
 }
 
@@ -1089,7 +1010,9 @@ const renameProjectId = ref<string | null>(null);
 const renameProjectName = ref('');
 
 async function openRenameProject(projectId: string) {
-    const project = await db.projects.get(projectId);
+    const project =
+        projects.value.find((p) => p.id === projectId) ||
+        (await db.projects.get(projectId));
     if (!project) return;
     renameProjectId.value = projectId;
     renameProjectName.value = project.name || '';
@@ -1100,14 +1023,8 @@ async function saveRenameProject() {
     if (!renameProjectId.value) return;
     const name = renameProjectName.value.trim();
     if (!name) return;
-    const project = await db.projects.get(renameProjectId.value);
-    if (!project) return;
     try {
-        await upsert.project({
-            ...project,
-            name,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
+        await renameProjectCrud(renameProjectId.value, name);
         showRenameProjectModal.value = false;
         renameProjectId.value = null;
         renameProjectName.value = '';
@@ -1119,35 +1036,21 @@ async function saveRenameProject() {
 async function handleRenameEntry(payload: {
     projectId: string;
     entryId: string;
-    kind?: string;
+    kind?: ProjectEntryKind;
 }) {
     try {
         const project = await db.projects.get(payload.projectId);
         if (!project) return;
-        const dataArr = Array.isArray(project.data)
-            ? project.data
-            : typeof project.data === 'string'
-            ? (() => {
-                  try {
-                      const parsed = JSON.parse(project.data);
-                      return Array.isArray(parsed) ? parsed : [];
-                  } catch {
-                      return [];
-                  }
-              })()
-            : [];
-        const entry = dataArr.find((d: any) => d.id === payload.entryId);
+        const entries = normalizeProjectData(project.data);
+        const entry = entries.find((d) => d.id === payload.entryId);
         if (!entry) return;
         const newName = prompt('Rename entry', entry.name || '');
         if (newName == null) return;
         const name = newName.trim();
         if (!name) return;
         entry.name = name;
-        await upsert.project({
-            ...project,
-            data: dataArr,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
+        if (!entry.kind && payload.kind) entry.kind = payload.kind;
+        await updateProjectEntries(payload.projectId, entries);
         if (payload.kind === 'chat') {
             // sync thread title too
             const t = await db.threads.get(payload.entryId);
@@ -1155,7 +1058,7 @@ async function handleRenameEntry(payload: {
                 await upsert.thread({
                     ...t,
                     title: name,
-                    updated_at: Math.floor(Date.now() / 1000),
+                    updated_at: nowSec(),
                 });
             }
         }
@@ -1167,31 +1070,16 @@ async function handleRenameEntry(payload: {
 async function handleRemoveFromProject(payload: {
     projectId: string;
     entryId: string;
-    kind?: string;
+    kind?: ProjectEntryKind;
 }) {
     try {
         const project = await db.projects.get(payload.projectId);
         if (!project) return;
-        const dataArr = Array.isArray(project.data)
-            ? project.data
-            : typeof project.data === 'string'
-            ? (() => {
-                  try {
-                      const parsed = JSON.parse(project.data);
-                      return Array.isArray(parsed) ? parsed : [];
-                  } catch {
-                      return [];
-                  }
-              })()
-            : [];
-        const idx = dataArr.findIndex((d: any) => d.id === payload.entryId);
+        const entries = normalizeProjectData(project.data);
+        const idx = entries.findIndex((d) => d.id === payload.entryId);
         if (idx === -1) return;
-        dataArr.splice(idx, 1);
-        await upsert.project({
-            ...project,
-            data: dataArr,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
+        entries.splice(idx, 1);
+        await updateProjectEntries(payload.projectId, entries);
     } catch (e) {
         console.error('remove from project failed', e);
     }
@@ -1224,19 +1112,11 @@ async function submitCreateProject() {
     }
     creatingProject.value = true;
     try {
-        const now = Math.floor(Date.now() / 1000);
-        // data holds ordered list of entities (chat/doc) we include kind now per request
-        const newId = crypto.randomUUID();
-        await create.project({
-            id: newId,
+        const newId = await createProjectCrud({
             name,
-            description: createProjectState.value.description?.trim() || null,
-            data: [], // store as array; schema allows any
-            created_at: now,
-            updated_at: now,
-            deleted: false,
-            clock: 0,
-        } as any);
+            description:
+                createProjectState.value.description?.trim() || undefined,
+        });
         // Auto expand the new project
         if (!expandedProjects.value.includes(newId))
             expandedProjects.value.push(newId);
@@ -1256,7 +1136,7 @@ const addToProjectThreadId = ref<string | null>(null);
 // Support documents
 const addToProjectDocumentId = ref<string | null>(null);
 const addMode = ref<'select' | 'create'>('select');
-const selectedProjectId = ref<string | null>(null);
+const selectedProjectId = ref<string | undefined>(undefined);
 const newProjectName = ref('');
 const newProjectDescription = ref('');
 const addingToProject = ref(false);
@@ -1270,7 +1150,7 @@ function openAddToProject(thread: any) {
     addToProjectThreadId.value = thread.id;
     addToProjectDocumentId.value = null;
     addMode.value = 'select';
-    selectedProjectId.value = null;
+    selectedProjectId.value = undefined;
     newProjectName.value = '';
     newProjectDescription.value = '';
     addToProjectError.value = null;
@@ -1280,7 +1160,7 @@ function openAddDocumentToProject(doc: any) {
     addToProjectDocumentId.value = doc.id;
     addToProjectThreadId.value = null;
     addMode.value = 'select';
-    selectedProjectId.value = null;
+    selectedProjectId.value = undefined;
     newProjectName.value = '';
     newProjectDescription.value = '';
     addToProjectError.value = null;
@@ -1298,7 +1178,7 @@ async function submitAddToProject() {
     addToProjectError.value = null;
     addingToProject.value = true;
     try {
-        let entry: any | null = null;
+        let entry: ProjectEntry | null = null;
         if (addToProjectThreadId.value) {
             const thread = await db.threads.get(addToProjectThreadId.value);
             if (!thread) throw new Error('Thread not found');
@@ -1318,53 +1198,37 @@ async function submitAddToProject() {
             };
         }
         if (!entry) throw new Error('Nothing to add');
-        const now = Math.floor(Date.now() / 1000);
         let projectId: string | null = null;
         if (addMode.value === 'create') {
-            const pid = crypto.randomUUID();
-            await create.project({
-                id: pid,
-                name: newProjectName.value.trim(),
-                description: newProjectDescription.value.trim() || null,
-                data: [entry],
-                created_at: now,
-                updated_at: now,
-                deleted: false,
-                clock: 0,
-            } as any);
+            const projectName = newProjectName.value.trim();
+            if (!projectName) {
+                addToProjectError.value = 'Project name required';
+                return;
+            }
+            const pid = await createProjectCrud({
+                name: projectName,
+                description: newProjectDescription.value.trim() || undefined,
+            });
+            await updateProjectEntries(pid, [entry]);
             projectId = pid;
             if (!expandedProjects.value.includes(pid))
                 expandedProjects.value.push(pid);
         } else {
-            if (!selectedProjectId.value) {
+            const targetProjectId = selectedProjectId.value;
+            if (!targetProjectId) {
                 addToProjectError.value = 'Select a project';
                 return;
             }
-            projectId = selectedProjectId.value;
-            const project = await db.projects.get(projectId);
+            projectId = targetProjectId;
+            const project = await db.projects.get(targetProjectId);
             if (!project) throw new Error('Project not found');
-            const dataArr = Array.isArray(project.data)
-                ? project.data
-                : typeof project.data === 'string'
-                ? (() => {
-                      try {
-                          const parsed = JSON.parse(project.data);
-                          return Array.isArray(parsed) ? parsed : [];
-                      } catch {
-                          return [];
-                      }
-                  })()
-                : [];
-            const existing = dataArr.find(
-                (d: any) => d.id === entry.id && d.kind === entry.kind
+            const entries = normalizeProjectData(project.data);
+            const existing = entries.find(
+                (d) => d.id === entry.id && d.kind === entry.kind
             );
-            if (!existing) dataArr.push(entry);
+            if (!existing) entries.push(entry);
             else existing.name = entry.name;
-            await upsert.project({
-                ...project,
-                data: dataArr,
-                updated_at: now,
-            });
+            await updateProjectEntries(project.id, entries);
         }
         closeAddToProject();
     } catch (e: any) {

@@ -346,7 +346,7 @@
 </template>
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { db, upsert, create } from '~/db';
+import { useProjectsCrud } from '~/composables/useProjectsCrud';
 
 const props = defineProps<{
     sidebarQuery: string;
@@ -368,6 +368,9 @@ const emit = defineEmits<{
     (e: 'add-to-project', thread: any): void;
     (e: 'add-document-to-project', doc: any): void;
 }>();
+
+const { createProject: createProjectCrud, renameProject: renameProjectCrud } =
+    useProjectsCrud();
 
 // Section visibility (multi-select) defaults to all on
 const sectionToggles = [
@@ -438,14 +441,8 @@ async function saveRenameProject() {
     if (!renameProjectId.value) return;
     const name = renameProjectName.value.trim();
     if (!name) return;
-    const project = await db.projects.get(renameProjectId.value);
-    if (!project) return;
     try {
-        await upsert.project({
-            ...project,
-            name,
-            updated_at: Math.floor(Date.now() / 1000),
-        });
+        await renameProjectCrud(renameProjectId.value, name);
         showRenameProjectModal.value = false;
         renameProjectId.value = null;
         renameProjectName.value = '';
@@ -481,19 +478,11 @@ async function submitCreateProject() {
     }
     creatingProject.value = true;
     try {
-        const now = Math.floor(Date.now() / 1000);
-        // data holds ordered list of entities (chat/doc) we include kind now per request
-        const newId = crypto.randomUUID();
-        await create.project({
-            id: newId,
+        await createProjectCrud({
             name,
-            description: createProjectState.value.description?.trim() || null,
-            data: [], // store as array; schema allows any
-            created_at: now,
-            updated_at: now,
-            deleted: false,
-            clock: 0,
-        } as any);
+            description:
+                createProjectState.value.description?.trim() || undefined,
+        });
         closeCreateProject();
     } catch (e) {
         console.error('Failed to create project', e);

@@ -59,16 +59,11 @@ import { VList } from 'virtua/vue';
 import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
 import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
 import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
-
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind: 'chat' | 'doc';
-}
+import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 interface Project {
     id: string;
     name: string;
-    data?: any;
+    data?: ProjectEntry[];
 }
 interface Thread {
     id: string;

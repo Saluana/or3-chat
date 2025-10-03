@@ -168,17 +168,11 @@
 
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
-
-// Distinct kinds of entries that can live under a project.
-// Extend here if we introduce more entry types in the future.
-export type ProjectEntryKind = 'chat' | 'doc';
-
-// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
-}
+import {
+    normalizeProjectData,
+    type ProjectEntry,
+    type ProjectEntryKind,
+} from '~/utils/projects/normalizeProjectData';
 
 interface ProjectRow {
     id: string;
@@ -238,27 +232,12 @@ watch(
 );
 watch(internalExpanded, (val) => emit('update:expanded', val));
 
-function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
-    const raw = p?.data;
-    if (Array.isArray(raw)) return raw as ProjectEntry[];
-    if (typeof raw === 'string') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
-        } catch {
-            // Silently ignore malformed JSON
-        }
-    }
-    return [];
-}
-
 const treeItems = computed<TreeItem[]>(() =>
     props.projects.map<TreeItem>((p) => {
-        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
+        const children: TreeItem[] = normalizeProjectData(p.data).map<TreeItem>(
             (entry) => {
                 // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
-                const kind: ProjectEntryKind =
-                    entry.kind === 'doc' ? 'doc' : 'chat';
+                const kind: ProjectEntryKind = entry.kind;
                 return {
                     label: entry.name || '(untitled)',
                     value: entry.id,

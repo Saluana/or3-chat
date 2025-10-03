@@ -30,12 +30,12 @@ All changes must be behavior-preserving. Run tests after each subsection. Line n
 
 ## 2. Replace duplicated project.data parsing
 
--   [ ] 2.1 `app/components/sidebar/SidebarProjectTree.vue`
+-   [x] 2.1 `app/components/sidebar/SidebarProjectTree.vue`
 
     -   Remove local `normalizeProjectData` (~235–248) and import the util.
     -   Requirements: 1.1
 
--   [ ] 2.2 `app/components/sidebar/SideNavContent.vue`
+-   [x] 2.2 `app/components/sidebar/SideNavContent.vue`
 
     -   Replace parsing blocks at:
         -   ~1012–1069 (add chat)
@@ -45,23 +45,23 @@ All changes must be behavior-preserving. Run tests after each subsection. Line n
         -   ~1312–1366 (add to project create/select)
     -   Requirements: 1.1
 
--   [ ] 2.3 `app/components/sidebar/SideNavHeader.vue`
+-   [x] 2.3 `app/components/sidebar/SideNavHeader.vue`
 
     -   Replace parsing in project create paths (~458–507).
     -   Requirements: 1.1
 
--   [ ] 2.4 `app/components/sidebar/SidebarVirtualList.vue`
+-   [x] 2.4 `app/components/sidebar/SidebarVirtualList.vue`
     -   If needed, import shared types; remove local duplicates.
     -   Requirements: 1.1
 
 ## 3. Migrate project CRUD to composable (no UI changes)
 
--   [ ] 3.1 `SideNavContent.vue`: use `useProjectsCrud()` for create/rename/delete and entry updates.
+-   [x] 3.1 `SideNavContent.vue`: use `useProjectsCrud()` for create/rename/delete and entry updates.
 
     -   Keep current emits and expansion logic.
     -   Requirements: 2, 3
 
--   [ ] 3.2 `SideNavHeader.vue`: use `useProjectsCrud()` for create/rename.
+-   [x] 3.2 `SideNavHeader.vue`: use `useProjectsCrud()` for create/rename.
     -   Requirements: 2
 
 ## 4. Unify registries (internal refactor, preserve API)
