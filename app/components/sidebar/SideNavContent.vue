@@ -4,6 +4,7 @@
         class="flex flex-col h-full relative overflow-hidden"
     >
         <SideNavHeader
+            ref="sideNavHeaderRef"
             :sidebar-query="sidebarQuery"
             :active-sections="activeSections"
             :projects="projects"
@@ -471,6 +472,7 @@ const props = defineProps<{
     activeThread?: string;
 }>();
 
+const sideNavHeaderRef = ref<InstanceType<typeof SideNavHeader> | null>(null);
 const items = ref<any[]>([]);
 const projects = ref<any[]>([]);
 const expandedProjects = ref<string[]>([]);
@@ -1402,4 +1404,11 @@ async function submitCreateDocument() {
         creatingDocument.value = false;
     }
 }
+
+// Expose focusSearchInput to parent components
+function focusSearchInput() {
+    sideNavHeaderRef.value?.focusSearchInput?.();
+}
+
+defineExpose({ focusSearchInput });
 </script>

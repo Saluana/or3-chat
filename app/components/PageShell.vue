@@ -606,10 +606,12 @@ function openMobileSidebar() {
 function focusSidebarSearch() {
     const layout: any = layoutRef.value;
     if (layout?.expand) layout.expand();
-    requestAnimationFrame(() => {
+
+    setTimeout(() => {
         sideNavExpandedRef.value?.focusSearchInput?.();
-    });
+    }, 300);
 }
+
 function closeSidebarIfMobile() {
     if (isMobile.value) (layoutRef.value as any)?.close?.();
 }

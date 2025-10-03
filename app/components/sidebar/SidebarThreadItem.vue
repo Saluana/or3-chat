@@ -30,16 +30,16 @@
                 <div class="p-1 w-44 space-y-1">
                     <UButton
                         color="neutral"
-                        variant="ghost"
+                        variant="popover"
                         size="sm"
-                        class="w-full justify-start"
+                        class="w-full"
                         icon="pixelarticons:edit"
                         @click="emit('rename', thread)"
                         >Rename</UButton
                     >
                     <UButton
                         color="neutral"
-                        variant="ghost"
+                        variant="popover"
                         size="sm"
                         class="w-full justify-start"
                         icon="pixelarticons:folder-plus"
@@ -48,9 +48,9 @@
                     >
                     <UButton
                         color="error"
-                        variant="ghost"
+                        variant="popover"
                         size="sm"
-                        class="w-full justify-start"
+                        class="w-full justify-start text-error-500"
                         icon="pixelarticons:trash"
                         @click="emit('delete', thread)"
                         >Delete</UButton
@@ -59,7 +59,7 @@
                         <UButton
                             :icon="action.icon"
                             color="neutral"
-                            variant="ghost"
+                            variant="popover"
                             size="sm"
                             class="w-full justify-start"
                             @click="() => runExtraAction(action, thread)"

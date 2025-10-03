@@ -61,7 +61,7 @@
                                 <template v-if="level === 0">
                                     <UButton
                                         color="neutral"
-                                        variant="ghost"
+                                        variant="popover"
                                         size="sm"
                                         class="w-full justify-start cursor-pointer"
                                         icon="pixelarticons:edit"
@@ -72,9 +72,9 @@
                                     >
                                     <UButton
                                         color="error"
-                                        variant="ghost"
+                                        variant="popover"
                                         size="sm"
-                                        class="w-full justify-start cursor-pointer"
+                                        class="w-full justify-start cursor-pointer text-error-500"
                                         icon="pixelarticons:trash"
                                         @click.stop.prevent="
                                             emit('deleteProject', item.value)
@@ -92,7 +92,7 @@
                                             "
                                             :icon="action.icon"
                                             color="neutral"
-                                            variant="ghost"
+                                            variant="popover"
                                             size="sm"
                                             class="w-full justify-start"
                                             @click="
@@ -108,7 +108,7 @@
                                 <template v-else>
                                     <UButton
                                         color="neutral"
-                                        variant="ghost"
+                                        variant="popover"
                                         size="sm"
                                         class="w-full justify-start"
                                         icon="pixelarticons:edit"
@@ -123,9 +123,9 @@
                                     >
                                     <UButton
                                         color="error"
-                                        variant="ghost"
+                                        variant="popover"
                                         size="sm"
-                                        class="w-full justify-start"
+                                        class="w-full justify-start text-error-500"
                                         icon="pixelarticons:trash"
                                         @click.stop.prevent="
                                             emit('removeFromProject', {
@@ -144,7 +144,7 @@
                                             v-if="!action.showOn || action.showOn.includes(item.kind as ProjectTreeKind)"
                                             :icon="action.icon"
                                             color="neutral"
-                                            variant="ghost"
+                                            variant="popover"
                                             size="sm"
                                             class="w-full justify-start"
                                             @click="

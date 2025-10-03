@@ -27,7 +27,7 @@ export default defineAppConfig({
                 // Make base styles clearly different so it's obvious when applied
                 base: [
                     'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer',
+                    'retro-btn dark:retro-btn cursor-pointer text-start',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate uppercase tracking-wider',
@@ -41,6 +41,8 @@ export default defineAppConfig({
                     light: 'retro-btn flex items-center justify-center bg-[var(--md-surface)] dark:bg-[var(--md-on-background)] dark:text-black dark:hover:bg-[var(--md-on-background)]/90 backdrop-blur-sm',
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
                     basic: 'border-2 shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)]',
+                    popover:
+                        'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
                 },
                 color: {
                     'inverse-primary':
