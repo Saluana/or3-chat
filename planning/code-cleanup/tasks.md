@@ -9,22 +9,22 @@ All changes must be behavior-preserving. Run tests after each subsection. Line n
 
 ## 1. Add shared utilities
 
--   [ ] 1.1 Create `app/utils/projects/normalizeProjectData.ts`
+-   [x] 1.1 Create `app/utils/projects/normalizeProjectData.ts`
 
     -   Contents: tolerant parser returning `ProjectEntry[]` (see design).
     -   Requirements: 1.1
 
--   [ ] 1.2 Create registry factory `app/composables/ui-extensions/_registry.ts`
+-   [x] 1.2 Create registry factory `app/composables/ui-extensions/_registry.ts`
 
     -   Contents: `createRegistry<T>(key, sort?)` (see design).
     -   Requirements: 5
 
--   [ ] 1.3 Add `tests/utils/scroll.ts`
+-   [x] 1.3 Add `tests/utils/scroll.ts`
 
     -   Export `setScrollMetrics(el, { scrollTop, scrollHeight, clientHeight })`.
     -   Requirements: 4
 
--   [ ] 1.4 Add `app/composables/useProjectsCrud.ts`
+-   [x] 1.4 Add `app/composables/useProjectsCrud.ts`
     -   Expose `createProject`, `renameProject`, `deleteProject`, `updateProjectEntries`, `syncProjectEntryTitle`.
     -   Requirements: 2, 3
 
