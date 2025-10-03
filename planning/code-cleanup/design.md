@@ -167,6 +167,121 @@ export function setScrollMetrics(
 5. Deduplicate test helpers; ensure tests pass.
 6. Remove deprecated shim/alias and update ignores for production.
 
+## Addendum: Additional non-breaking consolidations
+
+### Orama search helpers
+
+Introduce `app/utils/search/orama.ts`:
+
+```ts
+export async function importOrama() {
+    try {
+        return await import('@orama/orama');
+    } catch {
+        throw new Error('Failed to import Orama');
+    }
+}
+export async function createDb(schema: Record<string, string>) {
+    const { create } = await importOrama();
+    return create({ schema });
+}
+export async function buildIndex<T>(db: any, docs: T[], insertMultiple?: any) {
+    const { insertMultiple: im } = await importOrama();
+    await (insertMultiple || im)(db, docs);
+    return db;
+}
+export async function searchWithIndex(db: any, term: string, limit = 100) {
+    const { search } = await importOrama();
+    return search(db, { term, limit });
+}
+```
+
+Refactor `useModelSearch`, `useThreadSearch`, and `useSidebarSearch` to use these helpers without changing public APIs, debounce, or race-guard behavior.
+
+### TipTap JSON and titles utilities
+
+Add `app/utils/tiptap.ts`:
+
+```ts
+export function emptyDocJSON() {
+    return { type: 'doc', content: [] };
+}
+export function parseTipTapJson(raw: any): any {
+    if (!raw) return emptyDocJSON();
+    try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return parsed && parsed.type ? parsed : emptyDocJSON();
+    } catch {
+        return emptyDocJSON();
+    }
+}
+```
+
+Add `app/utils/titles.ts`:
+
+```ts
+export function normalizeTitle(
+    title?: string | null,
+    opts: { fallback?: string; allowEmpty?: boolean } = {
+        fallback: 'Untitled',
+        allowEmpty: true,
+    }
+) {
+    const t = (title ?? '').trim();
+    if (t.length) return t;
+    return opts.allowEmpty ? '' : opts.fallback ?? 'Untitled';
+}
+```
+
+Use these in `db/documents.ts` and `db/prompts.ts` to remove local duplicates, preserving exact fallback values and trimming behavior.
+
+### Capability guards refactor
+
+In `app/utils/capability-guards.ts`, extract a local helper that preserves toast text and error tags:
+
+```ts
+function denyToastAndError(message: string, tags: Record<string, any>) {
+    const toast = useToast();
+    toast?.add?.({
+        title: 'Permission Denied',
+        description: message,
+        color: 'error',
+        timeout: 5000,
+    } as any);
+    reportError(err('ERR_INTERNAL', message, { tags }));
+}
+```
+
+Call from both `guardCapability` and `guardAnyCapability` with the same inputs currently used.
+
+### ErrorToasts removal/migration
+
+If `<ErrorToasts>` isn’t mounted, remove `app/components/ErrorToasts.vue` and deprecated `useErrorToasts()` export in `utils/errors.ts`. If it is mounted, migrate those call sites to rely on `reportError` (which already toasts via Nuxt UI) or an `error:raised` hook listener.
+
+### Storage helpers
+
+Add `app/utils/storage.ts` with SSR guards and small helpers to reduce repetition without changing keys or timing:
+
+```ts
+export function readJSON<T>(key: string): T | null {
+    try {
+        if (typeof window === 'undefined') return null;
+        const raw = localStorage.getItem(key);
+        return raw ? (JSON.parse(raw) as T) : null;
+    } catch {
+        return null;
+    }
+}
+export function writeJSON(key: string, v: any): void {
+    try {
+        if (typeof window === 'undefined') return;
+        localStorage.setItem(key, JSON.stringify(v));
+    } catch {}
+}
+```
+
+Adopt in `useAiSettings`, `models-service`, and `ChatInputDropper` for LAST_MODEL_KEY reads/writes.
+
 ---
 
 title: Design — Codebase Hygiene (Dupes Cleanup, Unused Removal)

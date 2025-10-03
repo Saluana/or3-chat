@@ -155,4 +155,53 @@ This effort removes unused/deprecated code and consolidates duplicated logic int
 -   Type-safe utilities with unit tests for new shared code.
 -   Performance neutral or better (no additional DB round trips on hot paths).
 -   Backward-compatible registries; existing example plugins keep working in dev.
+
+## Additional Requirements (non-breaking)
+
+10. Orama search helpers are centralized
+
+    -   User Story: As a maintainer, I want shared Orama helpers so search composables don’t duplicate import/build/search patterns.
+    -   Acceptance Criteria:
+        -   WHEN search composables import Orama THEN they SHALL use a shared module with SSR guards and friendly errors.
+        -   Debounce timings, result limits, and race-guard semantics SHALL remain unchanged.
+
+11. System prompt JSON→text extraction is unified
+
+    -   User Story: As a maintainer, I want consistent TipTap-to-text conversion.
+    -   Acceptance Criteria:
+        -   WHEN extracting text for previews or prompts THEN code SHALL use `promptJsonToString` instead of ad-hoc walkers.
+        -   Existing whitespace and newlines behavior SHALL be preserved as currently rendered in UI.
+
+12. TipTap parsing and title normalization shared
+
+    -   User Story: As a maintainer, I want a single tolerant TipTap parser and a shared title normalizer.
+    -   Acceptance Criteria:
+        -   WHEN parsing persisted TipTap JSON THEN code SHALL call `parseTipTapJson`; invalid input SHALL return a minimal doc object.
+        -   WHEN normalizing titles across docs/prompts THEN code SHALL call a shared `normalizeTitle` keeping current defaults and trimming.
+
+13. Capability guard toasts/errors are DRY and identical
+
+    -   User Story: As a user, I want the same toast and error tagging whenever a plugin lacks a capability.
+    -   Acceptance Criteria:
+        -   WHEN a guard blocks an operation THEN the toast text, color, and error tags SHALL match existing behavior.
+        -   Duplicate logic SHALL be replaced by a local helper without changing outputs.
+
+14. Legacy ErrorToasts usage is removed or migrated
+
+    -   User Story: As a maintainer, I want a single toast path through `reportError`.
+    -   Acceptance Criteria:
+        -   IF `ErrorToasts.vue` is not mounted THEN it and `useErrorToasts()` SHALL be removed.
+        -   ELSE callers SHALL migrate to `reportError(..., { toast: true })` or subscribe to `error:raised`; then remove the shim.
+
+15. Safe localStorage helpers added (keys unchanged)
+
+    -   User Story: As a maintainer, I want SSR-safe storage helpers to reduce repeated try/catch while preserving behavior.
+    -   Acceptance Criteria:
+        -   WHEN reading/writing JSON to localStorage THEN shared helpers SHALL be used and key names/timing SHALL be identical to today.
+
+16. Optional DB helper for applyFilters is deferred
+    -   User Story: As a maintainer, I want to reduce repetition later without churn now.
+    -   Acceptance Criteria:
+        -   A `withFilters` helper MAY be introduced later; no behavior changes SHALL be made in this pass.
+
 -   All tests pass; add minimal tests for new utilities.
