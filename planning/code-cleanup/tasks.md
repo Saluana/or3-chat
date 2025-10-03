@@ -66,17 +66,17 @@ All changes must be behavior-preserving. Run tests after each subsection. Line n
 
 ## 4. Unify registries (internal refactor, preserve API)
 
--   [ ] 4.1 `app/composables/ui-extensions/projects/useProjectTreeActions.ts`
+-   [x] 4.1 `app/composables/ui-extensions/projects/useProjectTreeActions.ts`
 
     -   Re-implement with `_registry` factory; preserve exported functions and sorting `(a.order ?? 200)`.
     -   Requirements: 5
 
--   [ ] 4.2 `app/composables/ui-extensions/chrome/useHeaderActions.ts`
+-   [x] 4.2 `app/composables/ui-extensions/chrome/useHeaderActions.ts`
 
     -   Swap internal Map+reactive logic to factory. Preserve warnings and API.
     -   Requirements: 5
 
--   [ ] 4.3 `app/composables/ui-extensions/chrome/useSidebarSections.ts`
+-   [x] 4.3 `app/composables/ui-extensions/chrome/useSidebarSections.ts`
     -   Same as 4.2.
     -   Requirements: 5
 
