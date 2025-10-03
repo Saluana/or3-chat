@@ -46,8 +46,3 @@ export function serializeFileHashes(hashes: string[]): string {
     }
     return JSON.stringify(out);
 }
-
-/** Utility to create standard timestamp numbers (proxy re-export) */
-export function nowSecNumber(): number {
-    return nowSec();
-}

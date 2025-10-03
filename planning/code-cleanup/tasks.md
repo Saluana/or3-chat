@@ -90,13 +90,13 @@ All changes must be behavior-preserving. Run tests after each subsection. Line n
 
 ## 6. Remove unused/deprecated shims
 
--   [ ] 6.1 Grep usages of `useErrorToasts(`; migrate or remove.
+-   [x] 6.1 Grep usages of `useErrorToasts(`; migrate or remove.
 
     -   If no usages: delete function from `app/utils/errors.ts` (~199+).
     -   If usages exist: replace with `reportError(..., { toast:true })` or direct `useToast()`.
     -   Requirements: 6
 
--   [ ] 6.2 Remove `nowSecNumber()` alias
+-   [x] 6.2 Remove `nowSecNumber()` alias
     -   Replace with `nowSec()` and delete from `app/db/files-util.ts` (~50–55).
     -   Requirements: 7, 9
 
