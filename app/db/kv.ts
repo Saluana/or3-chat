@@ -1,7 +1,7 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
+import { parseOrThrow, nowSec } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
 
 export async function createKv(input: KvCreate): Promise<Kv> {
@@ -79,7 +79,7 @@ export async function setKvByName(
         () => db.kv.where('name').equals(name).first(),
         { op: 'read', entity: 'kv', action: 'getByName' }
     );
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSec();
     const record: Kv = {
         id: existing?.id ?? `kv:${name}`,
         name,

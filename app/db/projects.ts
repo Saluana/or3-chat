@@ -1,7 +1,7 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
+import { parseOrThrow, nowSec } from './util';
 import { ProjectSchema, type Project } from './schema';
 
 export async function createProject(input: Project): Promise<Project> {
@@ -50,7 +50,7 @@ export async function softDeleteProject(id: string): Promise<void> {
         await db.projects.put({
             ...p,
             deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
+            updated_at: nowSec(),
         });
         await hooks.doAction('db.projects.delete:action:soft:after', p);
     });

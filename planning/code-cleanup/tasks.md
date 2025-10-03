@@ -102,7 +102,7 @@ All changes must be behavior-preserving. Run tests after each subsection. Line n
 
 ## 7. Exclude dev-only files from production
 
--   [ ] 7.1 Update `nuxt.config.ts > ignore` to exclude:
+-   [x] 7.1 Update `nuxt.config.ts > ignore` to exclude:
     -   `app/plugins/examples/**`
     -   `app/pages/_test.vue`
     -   Verify dev still loads examples (ignore only in production build if necessary).

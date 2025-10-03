@@ -100,7 +100,7 @@ export async function softDeleteThread(id: string): Promise<void> {
         await db.threads.put({
             ...t,
             deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
+            updated_at: nowSec(),
         });
         await hooks.doAction('db.threads.delete:action:soft:after', t);
     });

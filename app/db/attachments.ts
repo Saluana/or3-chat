@@ -1,7 +1,7 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { useHooks } from '../composables/useHooks';
-import { parseOrThrow } from './util';
+import { parseOrThrow, nowSec } from './util';
 import {
     AttachmentCreateSchema,
     AttachmentSchema,
@@ -57,7 +57,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
         await db.attachments.put({
             ...a,
             deleted: true,
-            updated_at: Math.floor(Date.now() / 1000),
+            updated_at: nowSec(),
         });
         await hooks.doAction('db.attachments.delete:action:soft:after', a);
     });
