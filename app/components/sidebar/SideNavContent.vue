@@ -965,7 +965,7 @@ async function deleteDocument() {
 
 async function onNewChat() {
     emit('newChat');
-    await hooks.doAction('ui.chat.new:action:after');
+    await hooks.doAction('ui.chat.new:action:after', {});
 }
 
 async function selectChat(id: string) {
