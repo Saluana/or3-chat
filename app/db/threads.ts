@@ -13,19 +13,25 @@ export async function createThread(input: ThreadCreate): Promise<Thread> {
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.threads.create:filter:input',
-        input
+        input as any
     );
     // Apply create-time defaults (id/clock/timestamps, etc.)
     const prepared = parseOrThrow(ThreadCreateSchema, filtered);
     // Validate against full schema so required defaults (status/pinned/etc.) are present
     const value = parseOrThrow(ThreadSchema, prepared);
-    await hooks.doAction('db.threads.create:action:before', value);
+    await hooks.doAction('db.threads.create:action:before', {
+        entity: value,
+        tableName: 'threads',
+    });
     await dbTry(
         () => db.threads.put(value),
         { op: 'write', entity: 'threads', action: 'create' },
         { rethrow: true }
     );
-    await hooks.doAction('db.threads.create:action:after', value);
+    await hooks.doAction('db.threads.create:action:after', {
+        entity: value,
+        tableName: 'threads',
+    });
     return value;
 }
 
@@ -35,14 +41,20 @@ export async function upsertThread(value: Thread): Promise<void> {
         'db.threads.upsert:filter:input',
         value
     );
-    await hooks.doAction('db.threads.upsert:action:before', filtered);
+    await hooks.doAction('db.threads.upsert:action:before', {
+        entity: filtered,
+        tableName: 'threads',
+    });
     parseOrThrow(ThreadSchema, filtered);
     await dbTry(
         () => db.threads.put(filtered),
         { op: 'write', entity: 'threads', action: 'upsert' },
         { rethrow: true }
     );
-    await hooks.doAction('db.threads.upsert:action:after', filtered);
+    await hooks.doAction('db.threads.upsert:action:after', {
+        entity: filtered,
+        tableName: 'threads',
+    });
 }
 
 export function threadsByProject(projectId: string) {
@@ -52,7 +64,7 @@ export function threadsByProject(projectId: string) {
         { op: 'read', entity: 'threads', action: 'byProject' }
     );
     return promise.then((res) =>
-        hooks.applyFilters('db.threads.byProject:filter:output', res)
+        res ? hooks.applyFilters('db.threads.byProject:filter:output', res) : []
     );
 }
 
@@ -73,7 +85,11 @@ export function getThread(id: string) {
         op: 'read',
         entity: 'threads',
         action: 'get',
-    })?.then((res) => hooks.applyFilters('db.threads.get:filter:output', res));
+    })?.then((res) =>
+        res
+            ? hooks.applyFilters('db.threads.get:filter:output', res)
+            : undefined
+    );
 }
 
 export function childThreads(parentThreadId: string) {
@@ -96,13 +112,21 @@ export async function softDeleteThread(id: string): Promise<void> {
             action: 'get',
         });
         if (!t) return;
-        await hooks.doAction('db.threads.delete:action:soft:before', t);
+        await hooks.doAction('db.threads.delete:action:soft:before', {
+            entity: t,
+            id: t.id,
+            tableName: 'threads',
+        });
         await db.threads.put({
             ...t,
             deleted: true,
             updated_at: nowSec(),
         });
-        await hooks.doAction('db.threads.delete:action:soft:after', t);
+        await hooks.doAction('db.threads.delete:action:soft:after', {
+            entity: t,
+            id: t.id,
+            tableName: 'threads',
+        });
     });
 }
 
@@ -114,13 +138,18 @@ export async function hardDeleteThread(id: string): Promise<void> {
         action: 'get',
     });
     await db.transaction('rw', db.threads, db.messages, async () => {
-        await hooks.doAction(
-            'db.threads.delete:action:hard:before',
-            existing ?? id
-        );
+        await hooks.doAction('db.threads.delete:action:hard:before', {
+            entity: existing!,
+            id,
+            tableName: 'threads',
+        });
         await db.messages.where('thread_id').equals(id).delete();
         await db.threads.delete(id);
-        await hooks.doAction('db.threads.delete:action:hard:after', id);
+        await hooks.doAction('db.threads.delete:action:hard:after', {
+            entity: existing!,
+            id,
+            tableName: 'threads',
+        });
     });
 }
 

@@ -2,7 +2,13 @@ import { db } from './client';
 import { dbTry } from './dbTry';
 import { newId, nowSec } from './util';
 import { useHooks } from '../composables/useHooks';
-import type { HookEngine } from '../utils/hooks';
+import type {
+    DbCreatePayload,
+    DbDeletePayload,
+    DbUpdatePayload,
+    DocumentEntity,
+} from '../utils/hook-types';
+import type { TypedHookEngine } from '../utils/typed-hooks';
 
 /**
  * Internal stored row shape (reuses posts table with postType = 'doc').
@@ -29,6 +35,75 @@ export interface DocumentRecord {
     deleted: boolean;
 }
 
+const DOCUMENT_TABLE = 'documents';
+
+function toDocumentEntity(row: DocumentRow): DocumentEntity {
+    return {
+        id: row.id,
+        title: row.title,
+        content: row.content,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    };
+}
+
+function documentEntityToRow(
+    entity: DocumentEntity,
+    base?: DocumentRow
+): DocumentRow {
+    const fallback: DocumentRow =
+        base ??
+        ({
+            id: entity.id,
+            title: normalizeTitle(entity.title ?? null),
+            content: entity.content ?? JSON.stringify(emptyDocJSON()),
+            postType: 'doc',
+            created_at: entity.created_at ?? nowSec(),
+            updated_at: entity.updated_at ?? nowSec(),
+            deleted: false,
+        } as DocumentRow);
+
+    return {
+        ...fallback,
+        id: entity.id ?? fallback.id,
+        title: entity.title ?? fallback.title,
+        content: entity.content ?? fallback.content,
+        created_at: entity.created_at ?? fallback.created_at,
+        updated_at: entity.updated_at ?? fallback.updated_at,
+        postType: 'doc',
+        deleted: fallback.deleted ?? false,
+    };
+}
+
+function mergeDocumentEntities(
+    entities: DocumentEntity[],
+    baseRows: Map<string, DocumentRow>
+): DocumentRow[] {
+    return entities.map((entity) =>
+        documentEntityToRow(entity, baseRows.get(entity.id))
+    );
+}
+
+function buildDocumentUpdatePayload(
+    existingRow: DocumentRow,
+    updatedRow: DocumentRow,
+    patch: UpdateDocumentPatch
+): DbUpdatePayload<DocumentEntity> {
+    const patchEntity: Partial<DocumentEntity> = {
+        id: existingRow.id,
+        updated_at: updatedRow.updated_at,
+    };
+    if (patch.title !== undefined) patchEntity.title = updatedRow.title;
+    if (patch.content !== undefined) patchEntity.content = updatedRow.content;
+
+    return {
+        existing: toDocumentEntity(existingRow),
+        updated: toDocumentEntity(updatedRow),
+        patch: patchEntity,
+        tableName: DOCUMENT_TABLE,
+    };
+}
+
 function emptyDocJSON() {
     return { type: 'doc', content: [] };
 }
@@ -42,7 +117,7 @@ interface TitleFilterContext {
     phase: 'create' | 'update';
     id: string;
     rawTitle?: string | null;
-    existing?: DocumentRow;
+    existing?: DocumentEntity;
 }
 
 /**
@@ -51,12 +126,16 @@ interface TitleFilterContext {
  *  - Receives the sanitized title as the value and additional context `{ phase, id, rawTitle, existing }`.
  */
 async function resolveTitle(
-    hooks: HookEngine,
+    hooks: TypedHookEngine,
     rawTitle: string | null | undefined,
     context: TitleFilterContext
 ): Promise<string> {
     const base = normalizeTitle(rawTitle);
-    return hooks.applyFilters('db.documents.title:filter', base, context);
+    return (hooks.applyFilters as any)(
+        'db.documents.title:filter',
+        base,
+        context
+    ) as Promise<string>;
 }
 
 function parseContent(raw: string | null | undefined): any {
@@ -92,7 +171,7 @@ export async function createDocument(
 ): Promise<DocumentRecord> {
     const hooks = useHooks();
     const id = newId();
-    const prepared: DocumentRow = {
+    const baseRow: DocumentRow = {
         id,
         title: await resolveTitle(hooks, input.title ?? null, {
             phase: 'create',
@@ -105,30 +184,28 @@ export async function createDocument(
         updated_at: nowSec(),
         deleted: false,
     };
-    /**
-     * Hook: `db.documents.create:filter:input`
-     *  - Filter phase allowing plugins to transform or veto the pending row before persistence.
-     */
-    const filtered = (await hooks.applyFilters(
+    const filteredEntity = await hooks.applyFilters(
         'db.documents.create:filter:input',
-        prepared
-    )) as DocumentRow;
-    /**
-     * Hook: `db.documents.create:action:before`
-     *  - Action fired prior to writing the new document row. Can throw to veto.
-     */
-    await hooks.doAction('db.documents.create:action:before', filtered);
+        toDocumentEntity(baseRow)
+    );
+    const filteredRow = documentEntityToRow(filteredEntity, baseRow);
+    let actionPayload: DbCreatePayload<DocumentEntity> = {
+        entity: toDocumentEntity(filteredRow),
+        tableName: DOCUMENT_TABLE,
+    };
+    await hooks.doAction('db.documents.create:action:before', actionPayload);
+    const persistedRow = documentEntityToRow(actionPayload.entity, filteredRow);
     await dbTry(
-        () => db.posts.put(filtered as any),
+        () => db.posts.put(persistedRow as any),
         { op: 'write', entity: 'posts', action: 'createDocument' },
         { rethrow: true }
-    ); // reuse posts table
-    /**
-     * Hook: `db.documents.create:action:after`
-     *  - Action fired after the row has been persisted.
-     */
-    await hooks.doAction('db.documents.create:action:after', filtered);
-    return rowToRecord(filtered);
+    );
+    actionPayload = {
+        ...actionPayload,
+        entity: toDocumentEntity(persistedRow),
+    };
+    await hooks.doAction('db.documents.create:action:after', actionPayload);
+    return rowToRecord(persistedRow);
 }
 
 export async function getDocument(
@@ -141,11 +218,13 @@ export async function getDocument(
         action: 'getDocument',
     });
     if (!row || (row as any).postType !== 'doc') return undefined;
-    const filtered = (await hooks.applyFilters(
+    const baseRow = row as DocumentRow;
+    const filteredEntity = await hooks.applyFilters(
         'db.documents.get:filter:output',
-        row
-    )) as DocumentRow | undefined;
-    return filtered ? rowToRecord(filtered) : undefined;
+        toDocumentEntity(baseRow)
+    );
+    const mergedRow = documentEntityToRow(filteredEntity, baseRow);
+    return rowToRecord(mergedRow);
 }
 
 export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
@@ -165,11 +244,12 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
     // Sort by updated_at desc (Dexie compound index not defined for this pair; manual sort ok for small N)
     rows.sort((a, b) => b.updated_at - a.updated_at);
     const sliced = rows.slice(0, limit) as unknown as DocumentRow[];
-    const filtered = (await hooks.applyFilters(
+    const baseMap = new Map(sliced.map((row) => [row.id, row]));
+    const filteredEntities = await hooks.applyFilters(
         'db.documents.list:filter:output',
-        sliced
-    )) as DocumentRow[];
-    return filtered.map(rowToRecord);
+        sliced.map(toDocumentEntity)
+    );
+    return mergeDocumentEntities(filteredEntities, baseMap).map(rowToRecord);
 }
 
 export interface UpdateDocumentPatch {
@@ -188,51 +268,57 @@ export async function updateDocument(
         action: 'getDocument',
     });
     if (!existing || (existing as any).postType !== 'doc') return undefined;
-    const updated: DocumentRow = {
-        id: existing.id,
+    const existingRow = existing as DocumentRow;
+    const updatedRow: DocumentRow = {
+        id: existingRow.id,
         title: patch.title
             ? await resolveTitle(hooks, patch.title, {
                   phase: 'update',
-                  id: existing.id,
+                  id: existingRow.id,
                   rawTitle: patch.title,
-                  existing: existing as DocumentRow,
+                  existing: toDocumentEntity(existingRow),
               })
-            : existing.title,
+            : existingRow.title,
         content: patch.content
             ? JSON.stringify(patch.content)
-            : (existing as any).content,
+            : existingRow.content,
         postType: 'doc',
-        created_at: existing.created_at,
+        created_at: existingRow.created_at,
         updated_at: nowSec(),
-        deleted: (existing as any).deleted ?? false,
+        deleted: existingRow.deleted ?? false,
     };
-    /**
-     * Hook: `db.documents.update:filter:input`
-     *  - Filter phase receives `{ existing, updated, patch }` allowing transforms or veto.
-     */
-    const filtered = (await hooks.applyFilters(
+
+    const basePayload = buildDocumentUpdatePayload(
+        existingRow,
+        updatedRow,
+        patch
+    );
+    const filteredPayload = await hooks.applyFilters(
         'db.documents.update:filter:input',
-        { existing, updated, patch }
-    )) as { updated: DocumentRow } | DocumentRow;
-    const row = (filtered as any).updated
-        ? (filtered as any).updated
-        : (filtered as any as DocumentRow);
-    /**
-     * Hook: `db.documents.update:action:before`
-     *  - Action fired prior to writing the updated row. Throwing will abort the write.
-     */
-    await hooks.doAction('db.documents.update:action:before', row);
+        basePayload
+    );
+    const mergedRow = documentEntityToRow(filteredPayload.updated, updatedRow);
+
+    let actionPayload: DbUpdatePayload<DocumentEntity> = {
+        ...filteredPayload,
+        updated: toDocumentEntity(mergedRow),
+    };
+
+    await hooks.doAction('db.documents.update:action:before', actionPayload);
+
+    const persistedRow = documentEntityToRow(actionPayload.updated, mergedRow);
     await dbTry(
-        () => db.posts.put(row as any),
+        () => db.posts.put(persistedRow as any),
         { op: 'write', entity: 'posts', action: 'updateDocument' },
         { rethrow: true }
     );
-    /**
-     * Hook: `db.documents.update:action:after`
-     *  - Action fired after a successful write.
-     */
-    await hooks.doAction('db.documents.update:action:after', row);
-    return rowToRecord(row);
+
+    actionPayload = {
+        ...actionPayload,
+        updated: toDocumentEntity(persistedRow),
+    };
+    await hooks.doAction('db.documents.update:action:after', actionPayload);
+    return rowToRecord(persistedRow);
 }
 
 export async function softDeleteDocument(id: string): Promise<void> {
@@ -243,18 +329,24 @@ export async function softDeleteDocument(id: string): Promise<void> {
         action: 'getDocument',
     });
     if (!existing || (existing as any).postType !== 'doc') return;
+    const existingRow = existing as DocumentRow;
+    const payload: DbDeletePayload<DocumentEntity> = {
+        entity: toDocumentEntity(existingRow),
+        id: existingRow.id,
+        tableName: DOCUMENT_TABLE,
+    };
+    await hooks.doAction('db.documents.delete:action:soft:before', payload);
     const row = {
-        ...(existing as any),
+        ...existingRow,
         deleted: true,
         updated_at: nowSec(),
     };
-    await hooks.doAction('db.documents.delete:action:soft:before', row);
     await dbTry(
         () => db.posts.put(row),
         { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
         { rethrow: true }
     );
-    await hooks.doAction('db.documents.delete:action:soft:after', row);
+    await hooks.doAction('db.documents.delete:action:soft:after', payload);
 }
 
 export async function hardDeleteDocument(id: string): Promise<void> {
@@ -265,13 +357,19 @@ export async function hardDeleteDocument(id: string): Promise<void> {
         action: 'getDocument',
     });
     if (!existing || (existing as any).postType !== 'doc') return;
-    await hooks.doAction('db.documents.delete:action:hard:before', existing);
+    const existingRow = existing as DocumentRow;
+    const payload: DbDeletePayload<DocumentEntity> = {
+        entity: toDocumentEntity(existingRow),
+        id: existingRow.id,
+        tableName: DOCUMENT_TABLE,
+    };
+    await hooks.doAction('db.documents.delete:action:hard:before', payload);
     await dbTry(
         () => db.posts.delete(id),
         { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
         { rethrow: true }
     );
-    await hooks.doAction('db.documents.delete:action:hard:after', id);
+    await hooks.doAction('db.documents.delete:action:hard:after', payload);
 }
 
 // Convenience for ensuring DB open (mirrors pattern in other modules)
