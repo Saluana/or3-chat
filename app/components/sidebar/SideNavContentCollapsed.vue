@@ -25,11 +25,12 @@
         </div>
         <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
             <UButton
+                @click="emit('toggleDashboard')"
                 size="md"
                 class="flex item-center justify-center"
-                icon="pixelarticons:sliders-2"
+                icon="pixelarticons:dashboard"
                 :ui="{
-                    base: 'bg-[var(--md-surface-variant)] text-[var(--md-on-surface)] hover:bg-gray-300 active:bg-gray-300',
+                    base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
                     leadingIcon: 'w-5 h-5',
                 }"
             ></UButton>
@@ -157,7 +158,12 @@ onUnmounted(() => {
     sub?.unsubscribe();
 });
 
-const emit = defineEmits(['chatSelected', 'newChat', 'focusSearch']);
+const emit = defineEmits([
+    'chatSelected',
+    'newChat',
+    'focusSearch',
+    'toggleDashboard',
+]);
 
 // ----- Actions: menu, rename, delete -----
 const showRenameModal = ref(false);
