@@ -1,19 +1,21 @@
 import { reportError, err } from '~/utils/errors';
 
-// Quota guidance (Req 20.2) exported for UI/doc reuse
+/** Quota guidance (Req 20.2) exported for UI/doc reuse */
 export const DB_QUOTA_GUIDANCE =
-    'Storage quota exceeded. Clear older chats, files, or browser site data to free space.';
+    'Storage quota exceeded. Clear older chats, files, or browser site data to free space.' as const;
 
-// Lightweight DB operation wrapper (Task 7.1)
-// Usage: const res = await dbTry(() => db.table.put(obj), { op: 'write', entity: 'message' })
-// - Maps Dexie/IndexedDB quota errors -> ERR_DB_QUOTA_EXCEEDED (non-retryable)
-// - Maps generic errors to read/write codes
-// - Attaches domain:'db', op, entity tags for hooks & diagnostics
+/**
+ * Lightweight DB operation wrapper (Task 7.1).
+ * Usage: const res = await dbTry(() => db.table.put(obj), { op: 'write', entity: 'message' })
+ * - Maps Dexie/IndexedDB quota errors -> ERR_DB_QUOTA_EXCEEDED (non-retryable)
+ * - Maps generic errors to read/write codes
+ * - Attaches domain:'db', op, entity tags for hooks & diagnostics
+ */
 
 export interface DbTryTags {
-    op: 'read' | 'write';
-    entity?: string; // table/entity name for context
-    [k: string]: any;
+    readonly op: 'read' | 'write';
+    readonly entity?: string; // table/entity name for context
+    readonly [k: string]: any;
 }
 
 export async function dbTry<T>(
