@@ -8,6 +8,18 @@ import {
     type Post,
     type PostCreate,
 } from './schema';
+import type { PostEntity } from '../utils/hook-types';
+
+// Convert Post schema type to PostEntity for hooks (where applicable)
+function toPostEntity(post: Post): PostEntity {
+    return {
+        id: post.id,
+        title: post.title,
+        body: undefined, // Post schema doesn't have body
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+    };
+}
 
 // Normalize meta to stored string form (JSON) regardless of input shape
 function normalizeMeta(meta: any): string | null | undefined {
@@ -36,7 +48,7 @@ export async function createPost(input: PostCreate): Promise<Post> {
     const prepared = parseOrThrow(PostCreateSchema, filtered);
     const value = parseOrThrow(PostSchema, prepared);
     await hooks.doAction('db.posts.create:action:before', {
-        entity: value as any,
+        entity: toPostEntity(value),
         tableName: 'posts',
     });
     await dbTry(
@@ -45,7 +57,7 @@ export async function createPost(input: PostCreate): Promise<Post> {
         { rethrow: true }
     );
     await hooks.doAction('db.posts.create:action:after', {
-        entity: value as any,
+        entity: toPostEntity(value),
         tableName: 'posts',
     });
     return value;
@@ -63,18 +75,18 @@ export async function upsertPost(value: Post): Promise<void> {
     if ((filtered as any).meta !== undefined) {
         (filtered as any).meta = normalizeMeta((filtered as any).meta);
     }
+    const validated = parseOrThrow(PostSchema, filtered);
     await hooks.doAction('db.posts.upsert:action:before', {
-        entity: filtered as any,
+        entity: toPostEntity(validated),
         tableName: 'posts',
     });
-    parseOrThrow(PostSchema, filtered);
     await dbTry(
-        () => db.posts.put(filtered as any),
+        () => db.posts.put(validated),
         { op: 'write', entity: 'posts', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.posts.upsert:action:after', {
-        entity: filtered as any,
+        entity: toPostEntity(validated),
         tableName: 'posts',
     });
 }
@@ -127,13 +139,13 @@ export async function softDeletePost(id: string): Promise<void> {
         });
         if (!p) return;
         await hooks.doAction('db.posts.delete:action:soft:before', {
-            entity: p as any,
+            entity: toPostEntity(p),
             id: p.id,
             tableName: 'posts',
         });
         await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
         await hooks.doAction('db.posts.delete:action:soft:after', {
-            entity: p as any,
+            entity: toPostEntity(p),
             id: p.id,
             tableName: 'posts',
         });
@@ -148,13 +160,13 @@ export async function hardDeletePost(id: string): Promise<void> {
         action: 'get',
     });
     await hooks.doAction('db.posts.delete:action:hard:before', {
-        entity: existing! as any,
+        entity: toPostEntity(existing!),
         id,
         tableName: 'posts',
     });
     await db.posts.delete(id);
     await hooks.doAction('db.posts.delete:action:hard:after', {
-        entity: existing! as any,
+        entity: toPostEntity(existing!),
         id,
         tableName: 'posts',
     });

@@ -15,10 +15,10 @@ export async function createAttachment(
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.attachments.create:filter:input',
-        input as any
+        input
     );
     await hooks.doAction('db.attachments.create:action:before', {
-        entity: filtered as any,
+        entity: filtered,
         tableName: 'attachments',
     });
     const value = parseOrThrow(AttachmentCreateSchema, filtered);
@@ -28,7 +28,7 @@ export async function createAttachment(
         { rethrow: true }
     );
     await hooks.doAction('db.attachments.create:action:after', {
-        entity: value as any,
+        entity: value,
         tableName: 'attachments',
     });
     return value;
@@ -41,17 +41,17 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
         value
     );
     await hooks.doAction('db.attachments.upsert:action:before', {
-        entity: filtered as any,
+        entity: filtered,
         tableName: 'attachments',
     });
-    parseOrThrow(AttachmentSchema, filtered);
+    const validated = parseOrThrow(AttachmentSchema, filtered);
     await dbTry(
-        () => db.attachments.put(filtered as any),
+        () => db.attachments.put(validated),
         { op: 'write', entity: 'attachments', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.attachments.upsert:action:after', {
-        entity: filtered as any,
+        entity: validated,
         tableName: 'attachments',
     });
 }
@@ -66,7 +66,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
         });
         if (!a) return;
         await hooks.doAction('db.attachments.delete:action:soft:before', {
-            entity: a as any,
+            entity: a,
             id: a.id,
             tableName: 'attachments',
         });
@@ -76,7 +76,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
             updated_at: nowSec(),
         });
         await hooks.doAction('db.attachments.delete:action:soft:after', {
-            entity: a as any,
+            entity: a,
             id: a.id,
             tableName: 'attachments',
         });
@@ -91,13 +91,13 @@ export async function hardDeleteAttachment(id: string): Promise<void> {
         action: 'get',
     });
     await hooks.doAction('db.attachments.delete:action:hard:before', {
-        entity: existing! as any,
+        entity: existing!,
         id,
         tableName: 'attachments',
     });
     await db.attachments.delete(id);
     await hooks.doAction('db.attachments.delete:action:hard:after', {
-        entity: existing! as any,
+        entity: existing!,
         id,
         tableName: 'attachments',
     });
@@ -111,5 +111,5 @@ export async function getAttachment(id: string) {
         action: 'get',
     });
     if (!res) return undefined;
-    return hooks.applyFilters('db.attachments.get:filter:output', res as any);
+    return hooks.applyFilters('db.attachments.get:filter:output', res);
 }

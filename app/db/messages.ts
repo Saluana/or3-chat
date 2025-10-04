@@ -9,7 +9,21 @@ import {
     type Message,
     type MessageCreate,
 } from './schema';
+import type { MessageEntity } from '../utils/hook-types';
 import { serializeFileHashes } from './files-util';
+
+// Convert Message schema type to MessageEntity for hooks
+function toMessageEntity(msg: Message): MessageEntity {
+    return {
+        id: msg.id,
+        thread_id: msg.thread_id,
+        role: msg.role as 'user' | 'assistant' | 'system',
+        data: msg.data,
+        index: msg.index,
+        created_at: msg.created_at,
+        updated_at: msg.updated_at,
+    };
+}
 
 export async function createMessage(input: MessageCreate): Promise<Message> {
     const hooks = useHooks();
@@ -27,7 +41,7 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
     const prepared = parseOrThrow(MessageCreateSchema, filtered);
     const value = parseOrThrow(MessageSchema, prepared);
     await hooks.doAction('db.messages.create:action:before', {
-        entity: value as any,
+        entity: toMessageEntity(value),
         tableName: 'messages',
     });
     await dbTry(
@@ -36,7 +50,7 @@ export async function createMessage(input: MessageCreate): Promise<Message> {
         { rethrow: true }
     );
     await hooks.doAction('db.messages.create:action:after', {
-        entity: value as any,
+        entity: toMessageEntity(value),
         tableName: 'messages',
     });
     return value;
@@ -48,18 +62,18 @@ export async function upsertMessage(value: Message): Promise<void> {
         'db.messages.upsert:filter:input',
         value as any
     );
+    const validated = parseOrThrow(MessageSchema, filtered);
     await hooks.doAction('db.messages.upsert:action:before', {
-        entity: filtered as any,
+        entity: toMessageEntity(validated),
         tableName: 'messages',
     });
-    parseOrThrow(MessageSchema, filtered);
     await dbTry(
-        () => db.messages.put(filtered as any),
+        () => db.messages.put(validated),
         { op: 'write', entity: 'messages', action: 'upsert' },
         { rethrow: true }
     );
     await hooks.doAction('db.messages.upsert:action:after', {
-        entity: filtered as any,
+        entity: toMessageEntity(validated),
         tableName: 'messages',
     });
 }
@@ -70,7 +84,7 @@ export function messagesByThread(threadId: string) {
         () => db.messages.where('thread_id').equals(threadId).sortBy('index'),
         { op: 'read', entity: 'messages', action: 'byThread' }
     )?.then((res) =>
-        hooks.applyFilters('db.messages.byThread:filter:output', res as any)
+        hooks.applyFilters('db.messages.byThread:filter:output', res)
     );
 }
 
@@ -93,7 +107,7 @@ export function messageByStream(streamId: string) {
         () => db.messages.where('stream_id').equals(streamId).first(),
         { op: 'read', entity: 'messages', action: 'byStream' }
     )?.then((res) =>
-        hooks.applyFilters('db.messages.byStream:filter:output', res as any)
+        hooks.applyFilters('db.messages.byStream:filter:output', res)
     );
 }
 
@@ -107,7 +121,7 @@ export async function softDeleteMessage(id: string): Promise<void> {
         });
         if (!m) return;
         await hooks.doAction('db.messages.delete:action:soft:before', {
-            entity: m as any,
+            entity: toMessageEntity(m),
             id: m.id,
             tableName: 'messages',
         });
@@ -117,7 +131,7 @@ export async function softDeleteMessage(id: string): Promise<void> {
             { op: 'write', entity: 'messages', action: 'softDelete' }
         );
         await hooks.doAction('db.messages.delete:action:soft:after', {
-            entity: m as any,
+            entity: toMessageEntity(m),
             id: m.id,
             tableName: 'messages',
         });
@@ -132,7 +146,7 @@ export async function hardDeleteMessage(id: string): Promise<void> {
         action: 'get',
     });
     await hooks.doAction('db.messages.delete:action:hard:before', {
-        entity: existing! as any,
+        entity: toMessageEntity(existing!),
         id,
         tableName: 'messages',
     });
@@ -142,7 +156,7 @@ export async function hardDeleteMessage(id: string): Promise<void> {
         action: 'hardDelete',
     });
     await hooks.doAction('db.messages.delete:action:hard:after', {
-        entity: existing! as any,
+        entity: toMessageEntity(existing!),
         id,
         tableName: 'messages',
     });
