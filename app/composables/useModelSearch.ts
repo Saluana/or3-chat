@@ -1,5 +1,10 @@
 import { ref, watch, type Ref } from 'vue';
 import type { OpenRouterModel } from '~/utils/models-service';
+import {
+    createDb,
+    buildIndex as buildOramaIndex,
+    searchWithIndex,
+} from '~/utils/search/orama';
 
 // Simple Orama-based search composable for the model catalog.
 // Builds an index client-side and performs search across id, slug, name, description, modalities.
@@ -14,36 +19,19 @@ interface ModelDoc {
     modalities: string;
 }
 
-type OramaInstance = any; // avoid type import complexity here
+type OramaInstance = any;
 let currentDb: OramaInstance | null = null;
 let lastQueryToken = 0;
 
-async function importOrama() {
-    try {
-        return await import('@orama/orama');
-    } catch {
-        throw new Error('Failed to import Orama');
-    }
-}
-
-async function createDb() {
-    // dynamic import keeps bundle smaller when modal unused
-    const { create } = await importOrama();
-    return create({
-        schema: {
-            id: 'string',
-            slug: 'string',
-            name: 'string',
-            description: 'string',
-            ctx: 'number',
-            modalities: 'string',
-        },
-    });
-}
-
 async function buildIndex(models: OpenRouterModel[]) {
-    const { insertMultiple } = await importOrama();
-    currentDb = await createDb();
+    currentDb = await createDb({
+        id: 'string',
+        slug: 'string',
+        name: 'string',
+        description: 'string',
+        ctx: 'number',
+        modalities: 'string',
+    });
     if (!currentDb) return null;
     const docs: ModelDoc[] = models.map((m) => ({
         id: m.id,
@@ -56,7 +44,7 @@ async function buildIndex(models: OpenRouterModel[]) {
             ...(m.architecture?.output_modalities || []),
         ].join(' '),
     }));
-    await insertMultiple(currentDb, docs);
+    await buildOramaIndex(currentDb, docs);
     return currentDb;
 }
 
@@ -95,11 +83,7 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
         }
         const token = ++lastQueryToken; // race guard
         try {
-            const { search } = await importOrama();
-            const r = await search(currentDb, {
-                term: raw,
-                limit: 100,
-            });
+            const r = await searchWithIndex(currentDb, raw, 100);
             if (token !== lastQueryToken) return; // stale response
             const hits = Array.isArray(r?.hits) ? r.hits : [];
             const mapped = hits
