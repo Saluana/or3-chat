@@ -15,6 +15,7 @@
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
 import { useModelStore } from '~/composables/useModelStore';
+import { isMobile } from '~/state/global';
 
 interface Emits {
     (e: 'update:model', value: string): void;
@@ -65,13 +66,14 @@ const ui = {
     itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
 };
 
-const searchInput = {
+const searchInput = computed(() => ({
     icon: 'pixelarticons:search',
+    autofocus: !isMobile.value,
     ui: {
         base: 'border-0 border-b-1 rounded-none!',
         leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
     },
-};
+}));
 </script>
 
 <style scoped></style>
