@@ -1,7 +1,9 @@
-import { computed, reactive } from 'vue';
+import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { ChromeActionColor } from './useSidebarSections';
+import { createRegistry } from '../_registry';
+import type { RegistryItem } from '../_registry';
 
 export interface HeaderActionContext {
     route?: RouteLocationNormalizedLoaded | null;
@@ -9,7 +11,7 @@ export interface HeaderActionContext {
     [key: string]: unknown;
 }
 
-export interface HeaderAction {
+export interface HeaderAction extends RegistryItem {
     id: string;
     icon: string;
     tooltip?: string;
@@ -28,37 +30,24 @@ export interface HeaderActionEntry {
 
 const DEFAULT_ORDER = 200;
 
-const g: any = globalThis as any;
-const registry: Map<string, HeaderAction> =
-    g.__or3HeaderActionsRegistry || (g.__or3HeaderActionsRegistry = new Map());
-
-const reactiveList = reactive<{ items: HeaderAction[] }>({ items: [] });
-
-function sync() {
-    reactiveList.items = Array.from(registry.values());
-}
+// Create registry using factory
+const registry = createRegistry<HeaderAction>('__or3HeaderActionsRegistry');
 
 export function registerHeaderAction(action: HeaderAction) {
-    if (import.meta.dev && registry.has(action.id)) {
-        console.warn(
-            `[useHeaderActions] Overwriting existing action: ${action.id}`
-        );
-    }
-    const frozen = Object.freeze({ ...action });
-    registry.set(action.id, frozen);
-    sync();
+    registry.register(action);
 }
 
 export function unregisterHeaderAction(id: string) {
-    if (registry.delete(id)) sync();
+    registry.unregister(id);
 }
 
 export function useHeaderActions(
     context: () => HeaderActionContext = () => ({})
 ): ComputedRef<HeaderActionEntry[]> {
+    const items = registry.useItems();
     return computed(() => {
         const ctx = context() || {};
-        return reactiveList.items
+        return items.value
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(
                 (a, b) =>
@@ -72,5 +61,5 @@ export function useHeaderActions(
 }
 
 export function listRegisteredHeaderActionIds(): string[] {
-    return Array.from(registry.keys());
+    return registry.listIds();
 }

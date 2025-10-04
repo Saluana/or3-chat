@@ -248,10 +248,21 @@ export interface MessageEntity {
 /** DB entity: thread */
 export interface ThreadEntity {
     id: string;
-    project_id?: string;
-    title?: string;
+    title?: string | null;
     created_at: number;
-    updated_at?: number;
+    updated_at: number;
+    last_message_at?: number | null;
+    parent_thread_id?: string | null;
+    anchor_message_id?: string | null;
+    anchor_index?: number | null;
+    branch_mode?: 'reference' | 'copy' | null;
+    status: string;
+    deleted: boolean;
+    pinned: boolean;
+    clock: number;
+    forked: boolean;
+    project_id?: string | null;
+    system_prompt_id?: string | null;
 }
 
 /** DB entity: document */
@@ -276,8 +287,12 @@ export interface FileEntity {
 export interface ProjectEntity {
     id: string;
     name: string;
-    created_at?: number;
-    updated_at?: number;
+    description?: string | null;
+    data: any;
+    created_at: number;
+    updated_at: number;
+    deleted: boolean;
+    clock: number;
 }
 
 /** DB entity: post */
@@ -305,9 +320,12 @@ export interface AttachmentEntity {
 
 /** DB entity: key-value entry */
 export interface KvEntry {
-    id?: number;
+    id: string;
     name: string;
-    value: any;
+    value?: string | null;
+    created_at: number;
+    updated_at: number;
+    clock: number;
 }
 
 // Generic DB op payloads

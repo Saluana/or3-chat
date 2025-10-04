@@ -1,79 +1,128 @@
 <template>
     <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <VList
-            :data="flatItems"
-            :style="{ height: 'calc(100dvh - 318px)' }"
+        <!-- Single scroll container sized by measured height prop -->
+        <div
+            ref="scrollContainerRef"
             class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
-            #default="{ item, index }"
+            :style="{ height: `${height}px` }"
         >
-            <div :key="item.key || index">
-                <h1
-                    v-if="item.type === 'sectionHeader'"
-                    class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
-                >
-                    {{ item.label }}
-                </h1>
-                <SidebarProjectTree
-                    v-else-if="item.type === 'projectsTree'"
-                    :projects="projects"
-                    v-model:expanded="expandedProjectsLocal"
-                    @chatSelected="emit('chatSelected', $event)"
-                    @documentSelected="emit('documentSelected', $event)"
-                    @addChat="emit('addChat', $event)"
-                    @addDocument="emit('addDocument', $event)"
-                    @renameProject="emit('renameProject', $event)"
-                    @deleteProject="emit('deleteProject', $event)"
-                    @renameEntry="emit('renameEntry', $event)"
-                    @removeFromProject="emit('removeFromProject', $event)"
-                />
-                <div v-else-if="item.type === 'thread'" class="mr-1">
-                    <SidebarThreadItem
-                        :thread="item.thread"
-                        :active="activeThreadSet.has(item.thread.id)"
-                        class="mb-2"
-                        @select="emit('selectThread', $event)"
-                        @rename="emit('renameThread', $event)"
-                        @delete="emit('deleteThread', $event)"
-                        @add-to-project="emit('addThreadToProject', $event)"
-                    />
-                </div>
-                <div v-else-if="item.type === 'doc'" class="mr-1">
-                    <SidebarDocumentItem
-                        :doc="item.doc"
-                        class="mb-2"
-                        :active="activeDocumentSet.has(item.doc.id)"
-                        @select="emit('selectDocument', $event)"
-                        @rename="emit('renameDocument', $event)"
-                        @delete="emit('deleteDocument', $event)"
-                        @add-to-project="emit('addDocumentToProject', $event)"
-                    />
-                </div>
-            </div>
-        </VList>
+            <Virtualizer
+                :data="flatItems"
+                :overscan="7"
+                :item-size="40"
+                :scrollRef="scrollContainerRef || undefined"
+            >
+                <template v-slot="{ item }">
+                    <div :key="item.key">
+                        <!-- Section Header -->
+                        <h1
+                            v-if="item.type === 'sectionHeader'"
+                            class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
+                        >
+                            {{ item.label }}
+                        </h1>
+
+                        <!-- Project Group (Root + Children) -->
+                        <div
+                            v-else-if="item.type === 'projectGroup'"
+                            class="mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow"
+                        >
+                            <!-- Project Root -->
+                            <SidebarProjectRoot
+                                :project="item.project"
+                                :expanded="
+                                    expandedProjectsSet.has(item.project.id)
+                                "
+                                @toggle-expand="
+                                    toggleProjectExpand(item.project.id)
+                                "
+                                @add-chat="emit('addChat', item.project.id)"
+                                @add-document="
+                                    emit('addDocument', item.project.id)
+                                "
+                                @rename="emit('renameProject', item.project.id)"
+                                @delete="emit('deleteProject', item.project.id)"
+                            />
+
+                            <!-- Project Children Container -->
+                            <div
+                                v-if="item.children.length > 0"
+                                class="pl-2 mt-1 space-y-1"
+                            >
+                                <SidebarProjectChild
+                                    v-for="child in item.children"
+                                    :key="`${item.project.id}:${child.id}`"
+                                    :child="child"
+                                    :parent-id="item.project.id"
+                                    :active="isProjectChildActive(child)"
+                                    @select="onProjectChildSelect(child)"
+                                    @rename="
+                                        emit('renameEntry', {
+                                            projectId: item.project.id,
+                                            entryId: child.id,
+                                            kind: child.kind,
+                                        })
+                                    "
+                                    @remove="
+                                        emit('removeFromProject', {
+                                            projectId: item.project.id,
+                                            entryId: child.id,
+                                            kind: child.kind,
+                                        })
+                                    "
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Thread Item -->
+                        <div v-else-if="item.type === 'thread'" class="mr-1">
+                            <SidebarThreadItem
+                                :thread="item.thread"
+                                :active="activeThreadSet.has(item.thread.id)"
+                                class="mb-2"
+                                @select="emit('selectThread', $event)"
+                                @rename="emit('renameThread', $event)"
+                                @delete="emit('deleteThread', $event)"
+                                @add-to-project="
+                                    emit('addThreadToProject', $event)
+                                "
+                            />
+                        </div>
+
+                        <!-- Doc Item -->
+                        <div v-else-if="item.type === 'doc'" class="mr-1">
+                            <SidebarDocumentItem
+                                :doc="item.doc"
+                                class="mb-2"
+                                :active="activeDocumentSet.has(item.doc.id)"
+                                @select="emit('selectDocument', $event)"
+                                @rename="emit('renameDocument', $event)"
+                                @delete="emit('deleteDocument', $event)"
+                                @add-to-project="
+                                    emit('addDocumentToProject', $event)
+                                "
+                            />
+                        </div>
+                    </div>
+                </template>
+            </Virtualizer>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { VList } from 'virtua/vue';
-import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
-import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
-import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
+import { computed, ref } from 'vue';
+import { Virtualizer } from 'virtua/vue';
+import {
+    normalizeProjectData,
+    type ProjectEntry,
+} from '~/utils/projects/normalizeProjectData';
+import type { Thread } from '~/db';
 
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind: 'chat' | 'doc';
-}
 interface Project {
     id: string;
     name: string;
-    data?: any;
-}
-interface Thread {
-    id: string;
-    title?: string;
-    forked?: boolean;
+    data?: ProjectEntry[];
 }
 interface DocLite {
     id: string;
@@ -83,30 +132,36 @@ interface DocLite {
     postType?: string;
 }
 
-// Row item discriminated union
+// Row item discriminated union with explicit heights
 interface SectionHeaderItem {
     type: 'sectionHeader';
     key: string;
     label: string;
+    height: 36;
 }
-interface ProjectsTreeItem {
-    type: 'projectsTree';
+interface ProjectGroupItem {
+    type: 'projectGroup';
     key: string;
+    project: Project;
+    children: ProjectEntry[];
+    height: number; // dynamic: 48 + (children.length * 40)
 }
 interface ThreadItem {
     type: 'thread';
     key: string;
     thread: Thread;
+    height: 44;
 }
 interface DocItem {
     type: 'doc';
     key: string;
     doc: DocLite;
+    height: 44;
 }
 
-type SidebarRowItem =
+type SidebarVirtualItem =
     | SectionHeaderItem
-    | ProjectsTreeItem
+    | ProjectGroupItem
     | ThreadItem
     | DocItem;
 
@@ -128,6 +183,9 @@ const props = defineProps<{
 // TODO: tighten types once integration finalized
 // eslint-disable-next-line @typescript-eslint/ban-types
 const emit = defineEmits<(e: string, ...args: any[]) => void>();
+
+// Scroll container ref for Virtualizer
+const scrollContainerRef = ref<HTMLElement | null>(null);
 
 // Lightweight docs mapping (strip heavy fields like content)
 const lightweightDocs = computed<DocLite[]>(() =>
@@ -153,39 +211,87 @@ const effectiveDocs = computed<DocLite[]>(() => {
     return lightweightDocs.value;
 });
 
-// Local mirror for v-model with tree (keep reference semantics for parent array)
-const expandedProjectsLocal = computed({
-    get: () => props.expandedProjects,
-    set: (val: string[]) => {
-        // mutate original array for parent expectations
-        props.expandedProjects.splice(0, props.expandedProjects.length, ...val);
-    },
-});
+// Expanded projects as a Set for O(1) lookup
+const expandedProjectsSet = computed(() => new Set(props.expandedProjects));
 
-const flatItems = computed<SidebarRowItem[]>(() => {
-    const out: SidebarRowItem[] = [];
-    if (props.activeSections.projects && props.projects.length) {
-        out.push({ type: 'projectsTree', key: 'projectsTree' });
+// Toggle project expansion
+function toggleProjectExpand(projectId: string) {
+    const idx = props.expandedProjects.indexOf(projectId);
+    if (idx >= 0) {
+        props.expandedProjects.splice(idx, 1);
+    } else {
+        props.expandedProjects.push(projectId);
     }
+}
+
+// Flattened items with explicit heights per type
+const flatItems = computed<SidebarVirtualItem[]>(() => {
+    const out: SidebarVirtualItem[] = [];
+
+    // Projects section (grouped: root + children in one item)
+    if (props.activeSections.projects && props.projects.length) {
+        out.push({
+            type: 'sectionHeader',
+            key: 'header:projects',
+            label: 'Projects',
+            height: 36,
+        });
+        for (const project of props.projects) {
+            const entries = normalizeProjectData(project.data);
+            const children = expandedProjectsSet.value.has(project.id)
+                ? entries
+                : [];
+            // Dynamic height: 48 (root) + children.length * 40 + spacing
+            const childrenHeight =
+                children.length > 0 ? children.length * 41 + 4 : 0; // 40px per child + 1px gap + 4px margin
+            out.push({
+                type: 'projectGroup',
+                key: `project:${project.id}`,
+                project,
+                children,
+                height: 48 + childrenHeight,
+            });
+        }
+    }
+
     // Threads section
     if (props.activeSections.threads && props.threads.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:threads', label: 'Chats' });
+        out.push({
+            type: 'sectionHeader',
+            key: 'header:threads',
+            label: 'Chats',
+            height: 36,
+        });
         for (const t of props.threads) {
-            out.push({ type: 'thread', key: `thread:${t.id}`, thread: t });
+            out.push({
+                type: 'thread',
+                key: `thread:${t.id}`,
+                thread: t,
+                height: 44,
+            });
         }
     }
+
     // Docs section
     if (props.activeSections.docs && effectiveDocs.value.length) {
-        out.push({ type: 'sectionHeader', key: 'sec:docs', label: 'Docs' });
+        out.push({
+            type: 'sectionHeader',
+            key: 'header:docs',
+            label: 'Docs',
+            height: 36,
+        });
         for (const d of effectiveDocs.value) {
-            out.push({ type: 'doc', key: `doc:${d.id}`, doc: d });
+            out.push({
+                type: 'doc',
+                key: `doc:${d.id}`,
+                doc: d,
+                height: 44,
+            });
         }
     }
+
     return out;
 });
-
-// Constant row size estimate
-const rowSize = 36;
 
 // ---- Multi-active support ----
 const activeThreadSet = computed(() => {
@@ -198,4 +304,25 @@ const activeDocumentSet = computed(() => {
         return new Set(props.activeDocuments.filter(Boolean));
     return new Set(props.activeDocument ? [props.activeDocument] : []);
 });
+
+// Check if project child is active (either a thread or doc selection)
+function isProjectChildActive(child: ProjectEntry): boolean {
+    const kind = child.kind ?? 'chat';
+    if (kind === 'chat') {
+        return activeThreadSet.value.has(child.id);
+    } else if (kind === 'doc') {
+        return activeDocumentSet.value.has(child.id);
+    }
+    return false;
+}
+
+// Handle project child selection
+function onProjectChildSelect(child: ProjectEntry) {
+    const kind = child.kind ?? 'chat';
+    if (kind === 'chat') {
+        emit('chatSelected', child.id);
+    } else if (kind === 'doc') {
+        emit('documentSelected', child.id);
+    }
+}
 </script>

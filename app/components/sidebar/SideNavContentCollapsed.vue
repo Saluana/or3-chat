@@ -73,6 +73,7 @@
 import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
+import { nowSec } from '~/db/util';
 import {
     useSidebarFooterActions,
     type SidebarFooterActionEntry,
@@ -183,7 +184,7 @@ async function saveRename() {
     if (!renameId.value) return;
     const t = await db.threads.get(renameId.value);
     if (!t) return;
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSec();
     await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
     showRenameModal.value = false;
     renameId.value = null;

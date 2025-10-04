@@ -15,7 +15,7 @@
                     <!-- Root-level quick add buttons (appear on hover) -->
                     <template v-if="level === 0">
                         <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addChat', item.value)"
                             aria-label="Add chat to project"
                         >
@@ -25,7 +25,7 @@
                             />
                         </button>
                         <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addDocument', item.value)"
                             aria-label="Add document to project"
                         >
@@ -168,17 +168,12 @@
 
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
-
-// Distinct kinds of entries that can live under a project.
-// Extend here if we introduce more entry types in the future.
-export type ProjectEntryKind = 'chat' | 'doc';
-
-// Raw project entry as stored in project.data; kind is optional (defaults to 'chat').
-interface ProjectEntry {
-    id: string;
-    name?: string;
-    kind?: ProjectEntryKind | string; // allow unknown strings; we'll coerce when building tree
-}
+import { isMobile } from '~/state/global';
+import {
+    normalizeProjectData,
+    type ProjectEntry,
+    type ProjectEntryKind,
+} from '~/utils/projects/normalizeProjectData';
 
 interface ProjectRow {
     id: string;
@@ -238,27 +233,12 @@ watch(
 );
 watch(internalExpanded, (val) => emit('update:expanded', val));
 
-function normalizeProjectData(p: ProjectRow): ProjectEntry[] {
-    const raw = p?.data;
-    if (Array.isArray(raw)) return raw as ProjectEntry[];
-    if (typeof raw === 'string') {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed as ProjectEntry[];
-        } catch {
-            // Silently ignore malformed JSON
-        }
-    }
-    return [];
-}
-
 const treeItems = computed<TreeItem[]>(() =>
     props.projects.map<TreeItem>((p) => {
-        const children: TreeItem[] = normalizeProjectData(p).map<TreeItem>(
+        const children: TreeItem[] = normalizeProjectData(p.data).map<TreeItem>(
             (entry) => {
                 // Coerce to the allowed union; fallback to 'chat' for unknown/legacy values.
-                const kind: ProjectEntryKind =
-                    entry.kind === 'doc' ? 'doc' : 'chat';
+                const kind: ProjectEntryKind = entry.kind;
                 return {
                     label: entry.name || '(untitled)',
                     value: entry.id,
@@ -287,7 +267,8 @@ const treeItems = computed<TreeItem[]>(() =>
 );
 
 const ui = {
-    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
+    // Remove internal scrolling; let the parent sidebar container handle overflow
+    root: 'pr-1',
     link: 'group/addchat text-[13px] rounded-[4px] py-1',
     item: 'cursor-pointer ',
 };
@@ -311,4 +292,10 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
 }
 </script>
 
-<style scoped></style>
+<style scoped>
+/* Ensure the tree does not introduce its own scroll area */
+:deep(ul[role='tree']) {
+    max-height: none !important;
+    overflow: visible !important;
+}
+</style>

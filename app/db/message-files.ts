@@ -1,14 +1,18 @@
 import { db } from './client';
+import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
 import { computeFileHash } from '../utils/hash';
 import { createOrRefFile, derefFile, getFileMeta } from './files';
 import { useHooks } from '../composables/useHooks';
 import { nowSec } from './util';
 
-export type AddableFile = Blob | { hash: string };
+/** Discriminated union for adding files to messages */
+export type AddableFile =
+    | { type: 'blob'; blob: Blob; name?: string }
+    | { type: 'hash'; hash: string };
 
 /** Resolve file metadata list for a message id */
-export async function filesForMessage(messageId: string) {
+export async function filesForMessage(messageId: string): Promise<FileMeta[]> {
     const msg = await db.messages.get(messageId);
     if (!msg) return [];
     const hashes = parseFileHashes(msg.file_hashes);
@@ -20,7 +24,7 @@ export async function filesForMessage(messageId: string) {
 export async function addFilesToMessage(
     messageId: string,
     files: AddableFile[]
-) {
+): Promise<void> {
     if (!files.length) return;
     const hooks = useHooks();
     await db.transaction(
@@ -34,13 +38,16 @@ export async function addFilesToMessage(
             const existing = parseFileHashes(msg.file_hashes);
             const newHashes: string[] = [];
             for (const f of files) {
-                if (f instanceof Blob) {
+                // Handle blob variant
+                if ('blob' in f && f.blob instanceof Blob) {
                     const meta = await createOrRefFile(
-                        f,
-                        (f as any).name || 'file'
+                        f.blob,
+                        f.name || 'file'
                     );
                     newHashes.push(meta.hash);
-                } else if (f && typeof f === 'object' && 'hash' in f) {
+                }
+                // Handle hash variant
+                else if ('hash' in f && typeof f.hash === 'string') {
                     // Validate meta exists
                     const meta = await getFileMeta(f.hash);
                     if (meta) newHashes.push(meta.hash);
@@ -48,11 +55,11 @@ export async function addFilesToMessage(
             }
             let combined = existing.concat(newHashes);
             // Provide hook for validation & pruning
-            combined = await hooks.applyFilters(
+            const filtered = await hooks.applyFilters(
                 'db.messages.files.validate:filter:hashes',
                 combined
             );
-            const serialized = serializeFileHashes(combined);
+            const serialized = serializeFileHashes(filtered);
             await db.messages.put({
                 ...msg,
                 file_hashes: serialized,
@@ -63,7 +70,10 @@ export async function addFilesToMessage(
 }
 
 /** Remove a single file hash from a message, adjusting ref count */
-export async function removeFileFromMessage(messageId: string, hash: string) {
+export async function removeFileFromMessage(
+    messageId: string,
+    hash: string
+): Promise<void> {
     await db.transaction('rw', db.messages, db.file_meta, async () => {
         const msg = await db.messages.get(messageId);
         if (!msg) return;

@@ -84,7 +84,7 @@ export const create = {
     project: createProject,
     post: createPost,
     document: createDocument,
-};
+} as const;
 
 export const upsert = {
     thread: upsertThread,
@@ -94,7 +94,7 @@ export const upsert = {
     project: upsertProject,
     post: upsertPost,
     document: updateDocument, // upsert alias (update only for now)
-};
+} as const;
 
 export const queries = {
     threadsByProject,
@@ -111,7 +111,7 @@ export const queries = {
     searchPosts,
     getDocument,
     listDocuments,
-};
+} as const;
 
 export const del = {
     // soft deletes
@@ -135,20 +135,20 @@ export const del = {
         post: hardDeletePost,
         document: hardDeleteDocument,
     },
-};
+} as const;
 
 export const tx = {
     appendMessage,
     moveMessage,
     copyMessage,
-};
+} as const;
 
 // Shorthand helpers for common KV flows
 export const kv = {
     get: getKvByName,
     set: setKvByName,
     delete: hardDeleteKvByName,
-};
+} as const;
 
 export type {
     Thread,

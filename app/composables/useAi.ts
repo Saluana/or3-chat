@@ -947,22 +947,61 @@ export function useChat(
                 originalAssistantId: assistant?.id,
                 triggeredBy: target.role,
             });
-            await db.transaction('rw', db.messages, async () => {
-                await db.messages.delete(userMsg.id);
-                if (assistant) await db.messages.delete(assistant.id);
-            });
-            rawMessages.value = rawMessages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
-            messages.value = messages.value.filter(
-                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
-            );
+
+            // Store original text and hashes before deletion
             const originalText = (userMsg.data as any)?.content || '';
             let hashes: string[] = [];
             if (userMsg.file_hashes) {
                 const { parseFileHashes } = await import('~/db/files-util');
                 hashes = parseFileHashes(userMsg.file_hashes);
             }
+
+            // CRITICAL: Before deleting, ensure in-memory state matches DB state
+            // This handles edge cases where messages exist in DB but not in memory
+            const { messagesByThread } = await import('~/db/messages');
+            const dbMessages =
+                (await messagesByThread(threadIdRef.value!)) || [];
+
+            // If DB has more messages than our in-memory arrays, we need to sync first
+            if (dbMessages.length > rawMessages.value.length) {
+                console.warn('[retry] Syncing messages from DB before retry', {
+                    dbCount: dbMessages.length,
+                    memoryCount: rawMessages.value.length,
+                });
+                rawMessages.value = dbMessages.map((m: any) => ({
+                    role: m.role,
+                    content: (m.data as any)?.content || '',
+                    id: m.id,
+                    stream_id: m.stream_id,
+                    file_hashes: m.file_hashes,
+                    reasoning_text: (m.data as any)?.reasoning_text || null,
+                }));
+                messages.value = dbMessages.map((m: any) =>
+                    ensureUiMessage({
+                        role: m.role,
+                        content: (m.data as any)?.content || '',
+                        id: m.id,
+                        stream_id: m.stream_id,
+                        file_hashes: m.file_hashes,
+                        reasoning_text: (m.data as any)?.reasoning_text || null,
+                    })
+                );
+            }
+
+            // Delete from database
+            await db.transaction('rw', db.messages, async () => {
+                await db.messages.delete(userMsg.id);
+                if (assistant) await db.messages.delete(assistant.id);
+            });
+
+            // Remove deleted messages from in-memory arrays
+            rawMessages.value = rawMessages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+            messages.value = messages.value.filter(
+                (m: any) => m.id !== userMsg.id && m.id !== assistant?.id
+            );
+
             await sendMessage(originalText, {
                 model: modelOverride || DEFAULT_AI_MODEL,
                 file_hashes: hashes,

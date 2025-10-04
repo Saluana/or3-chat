@@ -1,7 +1,5 @@
 import { z } from 'zod';
-import { newId } from './util';
-
-const nowSec = () => Math.floor(Date.now() / 1000);
+import { newId, nowSec } from './util';
 
 export const ProjectSchema = z.object({
     id: z.string(),

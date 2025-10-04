@@ -1,4 +1,5 @@
-import { computed, reactive } from 'vue';
+import { createRegistry } from '../_registry';
+import type { RegistryItem } from '../_registry';
 
 // Local interfaces describing the tree rows printed in the console.
 // These mirror the shape produced by SidebarProjectTree.vue for root and child items.
@@ -34,7 +35,7 @@ export interface ProjectTreeHandlerCtx {
 }
 
 /** Definition for an extendable chat message action button. */
-export interface ProjectTreeAction {
+export interface ProjectTreeAction extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
     /** Icon name (passed to UButton icon prop). */
@@ -48,42 +49,29 @@ export interface ProjectTreeAction {
     handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;
 }
 
-// Global singleton registry (survives HMR) stored on globalThis to avoid duplication.
-const g: any = globalThis as any;
-const registry: Map<string, ProjectTreeAction> =
-    g.__or3ProjectTreeActionsRegistry ||
-    (g.__or3ProjectTreeActionsRegistry = new Map());
-
-// Reactive wrapper list we maintain for computed filtering (Map itself not reactive).
-const reactiveList = reactive<{ items: ProjectTreeAction[] }>({
-    items: [],
-});
-
-function syncReactiveList() {
-    reactiveList.items = Array.from(registry.values());
-}
+// Create registry using factory with default sort behavior
+const registry = createRegistry<ProjectTreeAction>(
+    '__or3ProjectTreeActionsRegistry'
+);
 
 /** Register (or replace) a message action. */
 export function registerProjectTreeAction(action: ProjectTreeAction) {
-    registry.set(action.id, action);
-    syncReactiveList();
+    registry.register(action);
 }
 
 /** Unregister an action by id (optional utility). */
 export function unregisterProjectTreeAction(id: string) {
-    if (registry.delete(id)) syncReactiveList();
+    registry.unregister(id);
 }
 
 /** Accessor for actions applicable to a specific message. */
 export function useProjectTreeActions() {
-    return computed(() =>
-        reactiveList.items.sort((a, b) => (a.order ?? 200) - (b.order ?? 200))
-    );
+    return registry.useItems();
 }
 
 /** Convenience for plugin authors to check existing action ids. */
 export function listRegisteredProjectTreeActionIds(): string[] {
-    return Array.from(registry.keys());
+    return registry.listIds();
 }
 
 // Note: Core (built-in) actions remain hard-coded in ChatProjectTree.vue so they always appear;

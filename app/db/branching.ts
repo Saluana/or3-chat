@@ -3,14 +3,96 @@ import { db } from './client';
 import { newId, nowSec } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../composables/useHooks';
+import type {
+    BranchMode,
+    BranchForkOptions,
+    BranchForkBeforePayload,
+    MessageEntity,
+    ThreadEntity,
+} from '../utils/hook-types';
 
-export type ForkMode = 'reference' | 'copy';
+export type ForkMode = BranchMode;
 
 interface ForkThreadParams {
     sourceThreadId: string;
     anchorMessageId: string; // must be a user message in source thread
     mode?: ForkMode;
     titleOverride?: string;
+}
+
+const DEFAULT_BRANCH_MODE: BranchMode = 'reference';
+
+function normalizeBranchMode(mode?: ForkMode | BranchMode | null): BranchMode {
+    return mode === 'copy' ? 'copy' : DEFAULT_BRANCH_MODE;
+}
+
+function normalizeMessageRole(role: string): MessageEntity['role'] {
+    return role === 'assistant' || role === 'system' ? role : 'user';
+}
+
+function toMessageEntity(message: Message): MessageEntity {
+    return {
+        id: message.id,
+        thread_id: message.thread_id,
+        role: normalizeMessageRole(message.role),
+        data: message.data,
+        index: message.index,
+        created_at: message.created_at,
+        updated_at: message.updated_at,
+    };
+}
+
+function mergeMessageEntity(entity: MessageEntity, base?: Message): Message {
+    const fallback: Message =
+        base ??
+        ({
+            id: entity.id,
+            thread_id: entity.thread_id,
+            role: entity.role,
+            data: entity.data,
+            index: entity.index,
+            created_at: entity.created_at,
+            updated_at: entity.updated_at ?? entity.created_at,
+            deleted: false,
+            error: null,
+            clock: 0,
+            file_hashes: undefined,
+            stream_id: undefined,
+        } as Message);
+
+    return {
+        ...fallback,
+        id: entity.id,
+        thread_id: entity.thread_id,
+        role: entity.role,
+        data: entity.data,
+        index: entity.index,
+        created_at: entity.created_at,
+        updated_at:
+            entity.updated_at ?? fallback.updated_at ?? entity.created_at,
+    };
+}
+
+function toThreadEntity(thread: Thread): ThreadEntity {
+    return {
+        id: thread.id,
+        title: thread.title ?? null,
+        created_at: thread.created_at,
+        updated_at: thread.updated_at,
+        last_message_at: thread.last_message_at ?? null,
+        parent_thread_id: thread.parent_thread_id ?? null,
+        anchor_message_id: thread.anchor_message_id ?? null,
+        anchor_index: thread.anchor_index ?? null,
+        branch_mode:
+            thread.branch_mode === 'copy' ? 'copy' : thread.branch_mode ?? null,
+        status: thread.status,
+        deleted: thread.deleted,
+        pinned: thread.pinned,
+        clock: thread.clock,
+        forked: thread.forked,
+        project_id: thread.project_id ?? null,
+        system_prompt_id: thread.system_prompt_id ?? null,
+    };
 }
 
 /**
@@ -25,17 +107,19 @@ export async function forkThread({
     titleOverride,
 }: ForkThreadParams): Promise<{ thread: Thread; anchor: Message }> {
     const hooks = useHooks();
-    // Allow filters to mutate basic fork options (mode, title)
-    const filtered = await hooks.applyFilters('branch.fork:filter:options', {
-        sourceThreadId,
-        anchorMessageId,
-        mode,
-        titleOverride,
-    } as ForkThreadParams);
-    sourceThreadId = filtered.sourceThreadId;
-    anchorMessageId = filtered.anchorMessageId;
-    mode = filtered.mode ?? mode;
-    titleOverride = filtered.titleOverride;
+    const filteredOptions = await hooks.applyFilters(
+        'branch.fork:filter:options',
+        {
+            sourceThreadId,
+            anchorMessageId,
+            mode,
+            titleOverride,
+        } satisfies BranchForkOptions
+    );
+    sourceThreadId = filteredOptions.sourceThreadId;
+    anchorMessageId = filteredOptions.anchorMessageId;
+    const branchMode = normalizeBranchMode(filteredOptions.mode ?? mode);
+    titleOverride = filteredOptions.titleOverride;
     return db.transaction('rw', db.threads, db.messages, async () => {
         const src = await db.threads.get(sourceThreadId);
         if (!src) throw new Error('Source thread not found');
@@ -55,7 +139,7 @@ export async function forkThread({
             parent_thread_id: sourceThreadId,
             anchor_message_id: anchorMessageId,
             anchor_index: anchor.index,
-            branch_mode: mode,
+            branch_mode: branchMode,
             created_at: now,
             updated_at: now,
             last_message_at: null,
@@ -63,16 +147,17 @@ export async function forkThread({
             forked: true,
         } as Thread;
 
-        await hooks.doAction('branch.fork:action:before', {
-            source: src,
-            anchor,
-            mode,
-            options: { titleOverride },
-        });
+        const beforePayload: BranchForkBeforePayload = {
+            source: toThreadEntity(src),
+            anchor: toMessageEntity(anchor),
+            mode: branchMode,
+            ...(titleOverride ? { options: { titleOverride } } : {}),
+        };
+        await hooks.doAction('branch.fork:action:before', beforePayload);
 
         await db.threads.put(fork);
 
-        if (mode === 'copy') {
+        if (branchMode === 'copy') {
             const ancestors = await db.messages
                 .where('[thread_id+index]')
                 // includeLower=true, includeUpper=true to include anchor row
@@ -100,12 +185,7 @@ export async function forkThread({
             });
         }
 
-        await hooks.doAction('branch.fork:action:after', {
-            thread: fork,
-            anchor,
-            mode,
-            copied: mode === 'copy',
-        });
+        await hooks.doAction('branch.fork:action:after', toThreadEntity(fork));
         return { thread: fork, anchor };
     });
 }
@@ -200,19 +280,25 @@ export async function buildContext({ threadId }: BuildContextParams) {
         db.messages.where('thread_id').equals(threadId).sortBy('index'),
     ]);
 
-    let combined = [...ancestors, ...locals];
-    combined = await hooks.applyFilters(
+    const combinedMessages = [...ancestors, ...locals];
+    const branchMode = normalizeBranchMode(t.branch_mode);
+    const messageMap = new Map(combinedMessages.map((m) => [m.id, m]));
+    const combinedEntities = combinedMessages.map(toMessageEntity);
+    const filteredEntities = await hooks.applyFilters(
         'branch.context:filter:messages',
-        combined,
+        combinedEntities,
         threadId,
-        t.branch_mode
+        branchMode
+    );
+    const mergedMessages = filteredEntities.map((entity) =>
+        mergeMessageEntity(entity, messageMap.get(entity.id))
     );
     await hooks.doAction('branch.context:action:after', {
         threadId,
-        mode: t.branch_mode,
+        mode: branchMode,
         ancestorCount: ancestors.length,
         localCount: locals.length,
-        finalCount: combined.length,
+        finalCount: mergedMessages.length,
     });
-    return combined;
+    return mergedMessages;
 }

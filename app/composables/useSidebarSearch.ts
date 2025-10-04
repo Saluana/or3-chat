@@ -5,6 +5,11 @@
 // Exposed API mirrors existing pattern so integration stays minimal.
 import { ref, watch, type Ref } from 'vue';
 import type { Thread, Project, Post } from '~/db';
+import {
+    createDb,
+    buildIndex as buildOramaIndex,
+    searchWithIndex,
+} from '~/utils/search/orama';
 
 interface IndexDoc {
     id: string;
@@ -17,26 +22,6 @@ type OramaInstance = any;
 let dbInstance: OramaInstance | null = null;
 let lastQueryToken = 0;
 let warnedFallback = false;
-
-async function importOrama() {
-    try {
-        return await import('@orama/orama');
-    } catch (e) {
-        throw new Error('Failed to load Orama');
-    }
-}
-
-async function createDb() {
-    const { create } = await importOrama();
-    return create({
-        schema: {
-            id: 'string',
-            kind: 'string',
-            title: 'string',
-            updated_at: 'number',
-        },
-    });
-}
 
 function toDocs(
     threads: Thread[],
@@ -71,11 +56,15 @@ async function buildIndex(
     projects: Project[],
     documents: Post[]
 ) {
-    const { insertMultiple } = await importOrama();
-    dbInstance = await createDb();
+    dbInstance = await createDb({
+        id: 'string',
+        kind: 'string',
+        title: 'string',
+        updated_at: 'number',
+    });
     if (!dbInstance) return null;
     const docs = toDocs(threads, projects, documents);
-    if (docs.length) await insertMultiple(dbInstance, docs);
+    if (docs.length) await buildOramaIndex(dbInstance, docs);
     return dbInstance;
 }
 
@@ -181,8 +170,7 @@ export function useSidebarSearch(
         }
         const token = ++lastQueryToken;
         try {
-            const { search } = await importOrama();
-            const res = await search(dbInstance, { term: raw, limit: 500 });
+            const res = await searchWithIndex(dbInstance, raw, 500);
             if (token !== lastQueryToken) return; // stale
             const hits = Array.isArray(res?.hits) ? res.hits : [];
             const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {

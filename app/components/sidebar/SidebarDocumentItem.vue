@@ -5,7 +5,7 @@
         @click="emit('select', doc.id)"
         @mouseenter="onHoverDoc()"
     >
-        <span class="truncate flex-1 min-w-0" :title="doc.title">{{
+        <span class="truncate flex-1 text-[15px] min-w-0" :title="doc.title">{{
             doc.title
         }}</span>
         <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">

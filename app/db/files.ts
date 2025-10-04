@@ -10,6 +10,11 @@ import {
 } from './schema';
 import { computeFileHash } from '../utils/hash';
 import { reportError, err } from '../utils/errors';
+import type {
+    DbCreatePayload,
+    DbDeletePayload,
+    FileEntity,
+} from '../utils/hook-types';
 
 /**
  * File storage and deduplication layer with hook integration.
@@ -32,6 +37,53 @@ import { reportError, err } from '../utils/errors';
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB cap
 
+const FILE_TABLE = 'files';
+
+function toFileEntity(meta: FileMeta): FileEntity {
+    return {
+        hash: meta.hash,
+        name: meta.name,
+        mime: meta.mime_type,
+        size: meta.size_bytes,
+        ref_count: meta.ref_count,
+    };
+}
+
+function applyFileEntityToMeta<T extends Record<string, any>>(
+    meta: T,
+    entity: FileEntity
+): T {
+    return {
+        ...meta,
+        hash: entity.hash,
+        name: entity.name,
+        mime_type: entity.mime,
+        size_bytes: entity.size,
+        ref_count:
+            entity.ref_count ?? (meta as { ref_count?: number }).ref_count,
+    } as T;
+}
+
+function createFileDeletePayload(
+    meta: FileMeta | undefined,
+    hash: string
+): DbDeletePayload<FileEntity> {
+    const entity = meta
+        ? toFileEntity(meta)
+        : {
+              hash,
+              name: hash,
+              mime: 'application/octet-stream',
+              size: 0,
+              ref_count: 0,
+          };
+    return {
+        entity,
+        id: entity.hash,
+        tableName: FILE_TABLE,
+    };
+}
+
 /** Internal helper to change ref_count and fire hook */
 async function changeRefCount(hash: string, delta: number) {
     await db.transaction('rw', db.file_meta, async () => {
@@ -45,8 +97,8 @@ async function changeRefCount(hash: string, delta: number) {
         await db.file_meta.put(next);
         const hooks = useHooks();
         await hooks.doAction('db.files.refchange:action:after', {
-            before: meta,
-            after: next,
+            before: toFileEntity(meta),
+            after: toFileEntity(next),
             delta,
         });
     });
@@ -92,7 +144,7 @@ export async function createOrRefFile(
             height = bmp?.height;
         } catch {}
     }
-    const base: FileMetaCreate = {
+    const baseCreate = {
         hash,
         name,
         mime_type: mime,
@@ -101,36 +153,67 @@ export async function createOrRefFile(
         width,
         height,
         page_count: undefined,
-    } as any;
-    const filtered = await hooks.applyFilters(
+    };
+    const filteredEntity = await hooks.applyFilters(
         'db.files.create:filter:input',
-        base
+        {
+            hash,
+            name,
+            mime,
+            size: file.size,
+            ref_count: 1,
+        } as FileEntity
     );
-    const value = parseOrThrow(FileMetaCreateSchema, filtered);
-    const meta = parseOrThrow(FileMetaSchema, value);
+    const prepared = parseOrThrow(
+        FileMetaCreateSchema,
+        applyFileEntityToMeta(baseCreate, filteredEntity)
+    );
+    const meta = parseOrThrow(FileMetaSchema, prepared);
+
+    let actionPayload: DbCreatePayload<FileEntity> = {
+        entity: toFileEntity(meta),
+        tableName: FILE_TABLE,
+    };
+
+    let storedMeta: FileMeta | null = null;
     await db.transaction('rw', db.file_meta, db.file_blobs, async () => {
-        await hooks.doAction('db.files.create:action:before', meta);
-        await db.file_meta.put(meta);
-        await db.file_blobs.put({ hash, blob: file });
-        await hooks.doAction('db.files.create:action:after', meta);
+        await hooks.doAction('db.files.create:action:before', actionPayload);
+        const mergedMeta = parseOrThrow(
+            FileMetaSchema,
+            applyFileEntityToMeta(meta, actionPayload.entity)
+        );
+        await db.file_meta.put(mergedMeta);
+        await db.file_blobs.put({ hash: mergedMeta.hash, blob: file });
+        storedMeta = mergedMeta;
+        actionPayload = {
+            entity: toFileEntity(mergedMeta),
+            tableName: FILE_TABLE,
+        };
+        await hooks.doAction('db.files.create:action:after', actionPayload);
     });
+    const finalMeta = storedMeta ?? meta;
     if ((import.meta as any).dev) {
         // eslint-disable-next-line no-console
         console.debug('[files] created', {
-            hash: hash.slice(0, 8),
+            hash: finalMeta.hash.slice(0, 8),
             size: file.size,
             mime,
         });
     }
     if (markId && hasPerf) finalizePerf(markId, 'create', file.size);
-    return meta;
+    return finalMeta;
 }
 
 /** Get file metadata by hash */
 export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
     const hooks = useHooks();
     const meta = await db.file_meta.get(hash);
-    return hooks.applyFilters('db.files.get:filter:output', meta);
+    if (!meta) return undefined;
+    const entity = await hooks.applyFilters(
+        'db.files.get:filter:output',
+        toFileEntity(meta)
+    );
+    return parseOrThrow(FileMetaSchema, applyFileEntityToMeta(meta, entity));
 }
 
 /** Get binary Blob by hash */
@@ -145,13 +228,14 @@ export async function softDeleteFile(hash: string): Promise<void> {
     await db.transaction('rw', db.file_meta, async () => {
         const meta = await db.file_meta.get(hash);
         if (!meta) return;
-        await hooks.doAction('db.files.delete:action:soft:before', meta);
+        const payload = createFileDeletePayload(meta, hash);
+        await hooks.doAction('db.files.delete:action:soft:before', payload);
         await db.file_meta.put({
             ...meta,
             deleted: true,
             updated_at: nowSec(),
         });
-        await hooks.doAction('db.files.delete:action:soft:after', hash);
+        await hooks.doAction('db.files.delete:action:soft:after', payload);
     });
 }
 
@@ -163,16 +247,17 @@ export async function softDeleteMany(hashes: string[]): Promise<void> {
     await db.transaction('rw', db.file_meta, async () => {
         const metas = await db.file_meta.bulkGet(unique);
         for (let i = 0; i < unique.length; i++) {
-            const hash = unique[i];
+            const hash = unique[i]!;
             const meta = metas[i];
             if (!meta || meta.deleted) continue;
-            await hooks.doAction('db.files.delete:action:soft:before', meta);
+            const payload = createFileDeletePayload(meta, hash);
+            await hooks.doAction('db.files.delete:action:soft:before', payload);
             await db.file_meta.put({
                 ...meta,
                 deleted: true,
                 updated_at: nowSec(),
             });
-            await hooks.doAction('db.files.delete:action:soft:after', hash);
+            await hooks.doAction('db.files.delete:action:soft:after', payload);
         }
     });
 }
@@ -187,13 +272,20 @@ export async function restoreMany(hashes: string[]): Promise<void> {
         for (let i = 0; i < unique.length; i++) {
             const meta = metas[i];
             if (!meta || meta.deleted !== true) continue;
-            await hooks.doAction('db.files.restore:action:before', meta);
-            await db.file_meta.put({
+            await hooks.doAction(
+                'db.files.restore:action:before',
+                toFileEntity(meta)
+            );
+            const updatedMeta = {
                 ...meta,
                 deleted: false,
                 updated_at: nowSec(),
-            });
-            await hooks.doAction('db.files.restore:action:after', meta.hash);
+            } as FileMeta;
+            await db.file_meta.put(updatedMeta);
+            await hooks.doAction(
+                'db.files.restore:action:after',
+                toFileEntity(updatedMeta)
+            );
         }
     });
 }
@@ -208,13 +300,11 @@ export async function hardDeleteMany(hashes: string[]): Promise<void> {
         for (let i = 0; i < unique.length; i++) {
             const hash = unique[i]!;
             const meta = metas[i];
-            await hooks.doAction(
-                'db.files.delete:action:hard:before',
-                meta ?? hash
-            );
+            const payload = createFileDeletePayload(meta ?? undefined, hash);
+            await hooks.doAction('db.files.delete:action:hard:before', payload);
             await db.file_meta.delete(hash);
             await db.file_blobs.delete(hash);
-            await hooks.doAction('db.files.delete:action:hard:after', hash);
+            await hooks.doAction('db.files.delete:action:hard:after', payload);
         }
     });
 }

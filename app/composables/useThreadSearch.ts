@@ -1,5 +1,10 @@
 import { ref, watch, type Ref } from 'vue';
 import type { Thread } from '~/db';
+import {
+    createDb,
+    buildIndex as buildOramaIndex,
+    searchWithIndex,
+} from '~/utils/search/orama';
 
 interface ThreadDoc {
     id: string;
@@ -11,35 +16,19 @@ type OramaInstance = any;
 let dbInstance: OramaInstance | null = null;
 let lastQueryToken = 0;
 
-async function importOrama() {
-    try {
-        return await import('@orama/orama');
-    } catch {
-        throw new Error('Failed to load Orama');
-    }
-}
-
-async function createDb() {
-    const { create } = await importOrama();
-    return create({
-        schema: {
-            id: 'string',
-            title: 'string',
-            updated_at: 'number',
-        },
-    });
-}
-
 async function buildIndex(threads: Thread[]) {
-    const { insertMultiple } = await importOrama();
-    dbInstance = await createDb();
+    dbInstance = await createDb({
+        id: 'string',
+        title: 'string',
+        updated_at: 'number',
+    });
     if (!dbInstance) return null;
     const docs: ThreadDoc[] = threads.map((t) => ({
         id: t.id,
         title: t.title || 'Untitled Thread',
         updated_at: t.updated_at,
     }));
-    await insertMultiple(dbInstance, docs);
+    await buildOramaIndex(dbInstance, docs);
     return dbInstance;
 }
 
@@ -78,8 +67,7 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
         }
         const token = ++lastQueryToken;
         try {
-            const { search } = await importOrama();
-            const r = await search(dbInstance, { term: raw, limit: 200 });
+            const r = await searchWithIndex(dbInstance, raw, 200);
             if (token !== lastQueryToken) return;
             const hits = Array.isArray(r?.hits) ? r.hits : [];
             const mapped = hits

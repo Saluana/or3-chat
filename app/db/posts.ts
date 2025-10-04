@@ -8,6 +8,18 @@ import {
     type Post,
     type PostCreate,
 } from './schema';
+import type { PostEntity } from '../utils/hook-types';
+
+// Convert Post schema type to PostEntity for hooks (where applicable)
+function toPostEntity(post: Post): PostEntity {
+    return {
+        id: post.id,
+        title: post.title,
+        body: undefined, // Post schema doesn't have body
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+    };
+}
 
 // Normalize meta to stored string form (JSON) regardless of input shape
 function normalizeMeta(meta: any): string | null | undefined {
@@ -24,7 +36,7 @@ export async function createPost(input: PostCreate): Promise<Post> {
     const hooks = useHooks();
     const filtered = await hooks.applyFilters(
         'db.posts.create:filter:input',
-        input
+        input as any
     );
     // Ensure title present & trimmed early (schema will enforce non-empty)
     if (typeof (filtered as any).title === 'string') {
@@ -35,13 +47,19 @@ export async function createPost(input: PostCreate): Promise<Post> {
     }
     const prepared = parseOrThrow(PostCreateSchema, filtered);
     const value = parseOrThrow(PostSchema, prepared);
-    await hooks.doAction('db.posts.create:action:before', value);
+    await hooks.doAction('db.posts.create:action:before', {
+        entity: toPostEntity(value),
+        tableName: 'posts',
+    });
     await dbTry(
         () => db.posts.put(value),
         { op: 'write', entity: 'posts', action: 'create' },
         { rethrow: true }
     );
-    await hooks.doAction('db.posts.create:action:after', value);
+    await hooks.doAction('db.posts.create:action:after', {
+        entity: toPostEntity(value),
+        tableName: 'posts',
+    });
     return value;
 }
 
@@ -57,14 +75,20 @@ export async function upsertPost(value: Post): Promise<void> {
     if ((filtered as any).meta !== undefined) {
         (filtered as any).meta = normalizeMeta((filtered as any).meta);
     }
-    await hooks.doAction('db.posts.upsert:action:before', filtered);
-    parseOrThrow(PostSchema, filtered);
+    const validated = parseOrThrow(PostSchema, filtered);
+    await hooks.doAction('db.posts.upsert:action:before', {
+        entity: toPostEntity(validated),
+        tableName: 'posts',
+    });
     await dbTry(
-        () => db.posts.put(filtered),
+        () => db.posts.put(validated),
         { op: 'write', entity: 'posts', action: 'upsert' },
         { rethrow: true }
     );
-    await hooks.doAction('db.posts.upsert:action:after', filtered);
+    await hooks.doAction('db.posts.upsert:action:after', {
+        entity: toPostEntity(validated),
+        tableName: 'posts',
+    });
 }
 
 export function getPost(id: string) {
@@ -73,7 +97,11 @@ export function getPost(id: string) {
         op: 'read',
         entity: 'posts',
         action: 'get',
-    })?.then((res) => hooks.applyFilters('db.posts.get:filter:output', res));
+    })?.then((res) =>
+        res
+            ? hooks.applyFilters('db.posts.get:filter:output', res as any)
+            : undefined
+    );
 }
 
 export function allPosts() {
@@ -82,7 +110,9 @@ export function allPosts() {
         op: 'read',
         entity: 'posts',
         action: 'all',
-    })?.then((res) => hooks.applyFilters('db.posts.all:filter:output', res));
+    })?.then((res) =>
+        res ? hooks.applyFilters('db.posts.all:filter:output', res as any) : []
+    );
 }
 
 export function searchPosts(term: string) {
@@ -92,7 +122,11 @@ export function searchPosts(term: string) {
         () =>
             db.posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
         { op: 'read', entity: 'posts', action: 'search' }
-    )?.then((res) => hooks.applyFilters('db.posts.search:filter:output', res));
+    )?.then((res) =>
+        res
+            ? hooks.applyFilters('db.posts.search:filter:output', res as any)
+            : []
+    );
 }
 
 export async function softDeletePost(id: string): Promise<void> {
@@ -104,9 +138,17 @@ export async function softDeletePost(id: string): Promise<void> {
             action: 'get',
         });
         if (!p) return;
-        await hooks.doAction('db.posts.delete:action:soft:before', p);
+        await hooks.doAction('db.posts.delete:action:soft:before', {
+            entity: toPostEntity(p),
+            id: p.id,
+            tableName: 'posts',
+        });
         await db.posts.put({ ...p, deleted: true, updated_at: nowSec() });
-        await hooks.doAction('db.posts.delete:action:soft:after', p);
+        await hooks.doAction('db.posts.delete:action:soft:after', {
+            entity: toPostEntity(p),
+            id: p.id,
+            tableName: 'posts',
+        });
     });
 }
 
@@ -117,7 +159,15 @@ export async function hardDeletePost(id: string): Promise<void> {
         entity: 'posts',
         action: 'get',
     });
-    await hooks.doAction('db.posts.delete:action:hard:before', existing ?? id);
+    await hooks.doAction('db.posts.delete:action:hard:before', {
+        entity: toPostEntity(existing!),
+        id,
+        tableName: 'posts',
+    });
     await db.posts.delete(id);
-    await hooks.doAction('db.posts.delete:action:hard:after', id);
+    await hooks.doAction('db.posts.delete:action:hard:after', {
+        entity: toPostEntity(existing!),
+        id,
+        tableName: 'posts',
+    });
 }

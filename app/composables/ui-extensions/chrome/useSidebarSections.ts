@@ -1,9 +1,11 @@
-import { computed, reactive } from 'vue';
+import { computed } from 'vue';
 import type { Component, ComputedRef } from 'vue';
+import { createRegistry } from '../_registry';
+import type { RegistryItem } from '../_registry';
 
 export type SidebarSectionPlacement = 'top' | 'main' | 'bottom';
 
-export interface SidebarSection {
+export interface SidebarSection extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
     /** Async or synchronous component rendered inside the sidebar stack. */
@@ -31,7 +33,7 @@ export type ChromeActionColor =
     | 'inverse-primary'
     | (string & {});
 
-export interface SidebarFooterAction {
+export interface SidebarFooterAction extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
     /** Icon name rendered inside the footer button. */
@@ -54,82 +56,51 @@ export interface SidebarFooterAction {
 
 const DEFAULT_ORDER = 200;
 
-const g: any = globalThis as any;
-
-const sectionRegistry: Map<string, SidebarSection> =
-    g.__or3SidebarSectionsRegistry ||
-    (g.__or3SidebarSectionsRegistry = new Map());
-const footerRegistry: Map<string, SidebarFooterAction> =
-    g.__or3SidebarFooterActionsRegistry ||
-    (g.__or3SidebarFooterActionsRegistry = new Map());
-
-const reactiveSections = reactive<{ items: SidebarSection[] }>({ items: [] });
-const reactiveFooters = reactive<{ items: SidebarFooterAction[] }>({
-    items: [],
-});
+// Create registries using factory
+const sectionRegistry = createRegistry<SidebarSection>(
+    '__or3SidebarSectionsRegistry'
+);
+const footerRegistry = createRegistry<SidebarFooterAction>(
+    '__or3SidebarFooterActionsRegistry'
+);
 
 export interface SidebarFooterActionEntry {
     action: SidebarFooterAction;
     disabled: boolean;
 }
 
-function syncSections() {
-    reactiveSections.items = Array.from(sectionRegistry.values());
-}
-
-function syncFooters() {
-    reactiveFooters.items = Array.from(footerRegistry.values());
-}
-
 export function registerSidebarSection(section: SidebarSection) {
-    if (import.meta.dev && sectionRegistry.has(section.id)) {
-        console.warn(
-            `[useSidebarSections] Overwriting existing section: ${section.id}`
-        );
-    }
-    const frozen = Object.freeze({ ...section });
-    sectionRegistry.set(section.id, frozen);
-    syncSections();
+    sectionRegistry.register(section);
 }
 
 export function unregisterSidebarSection(id: string) {
-    if (sectionRegistry.delete(id)) {
-        syncSections();
-    }
+    sectionRegistry.unregister(id);
 }
 
 export function registerSidebarFooterAction(action: SidebarFooterAction) {
-    if (import.meta.dev && footerRegistry.has(action.id)) {
-        console.warn(
-            `[useSidebarSections] Overwriting existing footer action: ${action.id}`
-        );
-    }
-    const frozen = Object.freeze({ ...action });
-    footerRegistry.set(action.id, frozen);
-    syncFooters();
+    footerRegistry.register(action);
 }
 
 export function unregisterSidebarFooterAction(id: string) {
-    if (footerRegistry.delete(id)) {
-        syncFooters();
-    }
+    footerRegistry.unregister(id);
 }
 
 export function useSidebarSections() {
+    const items = sectionRegistry.useItems();
     return computed(() => ({
-        top: reactiveSections.items
+        top: items.value
             .filter((entry) => (entry.placement ?? 'main') === 'top')
             .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
             ),
-        main: reactiveSections.items
+        main: items.value
             .filter((entry) => (entry.placement ?? 'main') === 'main')
             .sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
             ),
-        bottom: reactiveSections.items
+        bottom: items.value
             .filter((entry) => (entry.placement ?? 'main') === 'bottom')
             .sort(
                 (a, b) =>
@@ -141,9 +112,10 @@ export function useSidebarSections() {
 export function useSidebarFooterActions(
     context: () => SidebarFooterActionContext = () => ({})
 ): ComputedRef<SidebarFooterActionEntry[]> {
+    const items = footerRegistry.useItems();
     return computed(() => {
         const ctx = context() || {};
-        return reactiveFooters.items
+        return items.value
             .filter((action) => !action.visible || action.visible(ctx))
             .sort(
                 (a, b) =>
@@ -157,9 +129,9 @@ export function useSidebarFooterActions(
 }
 
 export function listRegisteredSidebarSectionIds(): string[] {
-    return Array.from(sectionRegistry.keys());
+    return sectionRegistry.listIds();
 }
 
 export function listRegisteredSidebarFooterActionIds(): string[] {
-    return Array.from(footerRegistry.keys());
+    return footerRegistry.listIds();
 }
