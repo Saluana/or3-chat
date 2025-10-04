@@ -2,7 +2,9 @@
     <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
         <VList
             :data="flatItems"
-            :style="{ height: 'calc(100dvh - 318px)' }"
+            :style="{ height: 'calc(100dvh - 314px)' }"
+            :item-size="40"
+            :overscan="10"
             class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
             #default="{ item, index }"
         >

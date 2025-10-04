@@ -13,9 +13,9 @@
             <template #item-trailing="{ item, level }">
                 <div class="flex items-center gap-1">
                     <!-- Root-level quick add buttons (appear on hover) -->
-                    <template v-if="level === 0 && !isMobile">
+                    <template v-if="level === 0">
                         <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addChat', item.value)"
                             aria-label="Add chat to project"
                         >
@@ -25,7 +25,7 @@
                             />
                         </button>
                         <button
-                            class="cursor-pointer opacity-0 group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
                             @click.stop="emit('addDocument', item.value)"
                             aria-label="Add document to project"
                         >
@@ -168,7 +168,7 @@
 
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
-import { isMobile, state } from '~/state/global';
+import { isMobile } from '~/state/global';
 import {
     normalizeProjectData,
     type ProjectEntry,
