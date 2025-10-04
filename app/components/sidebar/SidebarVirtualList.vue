@@ -1,20 +1,21 @@
 <template>
     <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <VList
-            :data="flatItems"
-            :style="{ height: 'calc(100dvh - 314px)' }"
-            :item-size="40"
-            :overscan="10"
+        <!-- Single scroll container sized by measured height prop -->
+        <div
             class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
-            #default="{ item, index }"
+            :style="{ height: `${height}px` }"
         >
-            <div :key="item.key || index">
+            <template
+                v-for="(item, index) in flatItems"
+                :key="item.key || index"
+            >
                 <h1
                     v-if="item.type === 'sectionHeader'"
                     class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
                 >
                     {{ item.label }}
                 </h1>
+
                 <SidebarProjectTree
                     v-else-if="item.type === 'projectsTree'"
                     :projects="projects"
@@ -28,6 +29,7 @@
                     @renameEntry="emit('renameEntry', $event)"
                     @removeFromProject="emit('removeFromProject', $event)"
                 />
+
                 <div v-else-if="item.type === 'thread'" class="mr-1">
                     <SidebarThreadItem
                         :thread="item.thread"
@@ -39,6 +41,7 @@
                         @add-to-project="emit('addThreadToProject', $event)"
                     />
                 </div>
+
                 <div v-else-if="item.type === 'doc'" class="mr-1">
                     <SidebarDocumentItem
                         :doc="item.doc"
@@ -50,27 +53,22 @@
                         @add-to-project="emit('addDocumentToProject', $event)"
                     />
                 </div>
-            </div>
-        </VList>
+            </template>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { VList } from 'virtua/vue';
 import SidebarThreadItem from '~/components/sidebar/SidebarThreadItem.vue';
 import SidebarDocumentItem from '~/components/sidebar/SidebarDocumentItem.vue';
 import SidebarProjectTree from '~/components/sidebar/SidebarProjectTree.vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
+import type { Thread } from '~/db';
 interface Project {
     id: string;
     name: string;
     data?: ProjectEntry[];
-}
-interface Thread {
-    id: string;
-    title?: string;
-    forked?: boolean;
 }
 interface DocLite {
     id: string;
@@ -181,8 +179,7 @@ const flatItems = computed<SidebarRowItem[]>(() => {
     return out;
 });
 
-// Constant row size estimate
-const rowSize = 36;
+// no virtualization; keep rendering simple to avoid jank and missing items
 
 // ---- Multi-active support ----
 const activeThreadSet = computed(() => {

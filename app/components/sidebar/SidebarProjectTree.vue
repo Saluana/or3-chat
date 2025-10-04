@@ -267,7 +267,8 @@ const treeItems = computed<TreeItem[]>(() =>
 );
 
 const ui = {
-    root: 'max-h-52 overflow-auto pr-1 scrollbar-hidden ',
+    // Remove internal scrolling; let the parent sidebar container handle overflow
+    root: 'pr-1',
     link: 'group/addchat text-[13px] rounded-[4px] py-1',
     item: 'cursor-pointer ',
 };
@@ -291,4 +292,10 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
 }
 </script>
 
-<style scoped></style>
+<style scoped>
+/* Ensure the tree does not introduce its own scroll area */
+:deep(ul[role='tree']) {
+    max-height: none !important;
+    overflow: visible !important;
+}
+</style>
