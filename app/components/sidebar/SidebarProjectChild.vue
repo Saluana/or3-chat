@@ -2,8 +2,8 @@
     <div class="border-l-2! my-0.5 border-primary-500 h-[40px]">
         <button
             type="button"
-            class="relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 backdrop-blur-md hover:bg-black/5 dark:hover:bg-white/5 px-2.5 gap-1.5 text-[13px] rounded-r-[4px] py-1"
-            :class="{ 'bg-primary/25': active }"
+            class="relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 text-[13px] rounded-r-[4px] py-1"
+            :class="{ 'bg-primary/25 hover:bg-primary/25': active }"
             @click="emit('select')"
         >
             <UIcon

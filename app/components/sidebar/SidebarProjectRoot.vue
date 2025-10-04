@@ -4,7 +4,7 @@
     >
         <button
             type="button"
-            class="relative group w-full flex items-center hover:bg-black/5 dark:hover:bg-white/5 px-2.5 gap-1.5 text-[15px] rounded-[4px] h-[40px]"
+            class="relative group w-full flex items-center hover:bg-primary/10 px-2.5 gap-1.5 text-[15px] rounded-[4px] h-[40px]"
             @click="emit('toggle-expand')"
         >
             <UIcon
@@ -44,8 +44,8 @@
                             sideOffset: 6,
                         }"
                     >
-                        <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-/20"
+                        <button
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-/20 cursor-pointer"
                             @click.stop
                             aria-label="Project actions"
                         >
@@ -53,7 +53,7 @@
                                 name="pixelarticons:more-vertical"
                                 class="w-4 h-4 opacity-70"
                             />
-                        </span>
+                        </button>
                         <template #content>
                             <div class="p-1 w-48 space-y-1">
                                 <UButton
