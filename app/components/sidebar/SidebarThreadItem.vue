@@ -11,7 +11,7 @@
                 class="shrink-0"
             />
             <span
-                class="truncate flex-1 min-w-0"
+                class="truncate text-[15px] flex-1 min-w-0"
                 :title="thread.title || 'New Thread'"
                 >{{ thread.title || 'New Thread' }}</span
             >
