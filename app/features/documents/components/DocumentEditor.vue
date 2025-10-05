@@ -187,7 +187,10 @@ function emitContent() {
     setDocumentContent(props.documentId, json);
 
     // Emit hook for plugins to observe updates
-    hooks.doActionSync('editor.updated:action:after', { editor: editor.value });
+    // TypeScript assertion needed because editor.value type inference is complex
+    hooks.doActionSync('editor.updated:action:after', { 
+        editor: editor.value as Editor 
+    });
 }
 
 function makeEditor() {
@@ -260,8 +263,9 @@ function makeEditor() {
         });
 
         // Emit hook for plugins to access editor instance
+        // TypeScript assertion needed because editor.value type inference is complex
         hooks.doActionSync('editor.created:action:after', {
-            editor: editor.value,
+            editor: editor.value as Editor,
         });
     } catch (e) {
         console.error('[DocumentEditor] Failed to create editor:', e);

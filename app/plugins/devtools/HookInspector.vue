@@ -195,6 +195,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
+import { useHooks } from '@core/hooks';
 
 const hooks = useHooks();
 const toast = useToast();

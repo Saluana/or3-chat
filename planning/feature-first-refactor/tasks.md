@@ -985,17 +985,19 @@ All 48 test files successfully migrated from `app/` to `tests/`:
     -   [x] Test pass rate (should be 100%) - ⚠️ 52.3% (34/65), 2 pre-existing failures unrelated to refactor
 
 **Test Results Summary:**
-- **34 tests passing** (52.3%)
-- **2 tests failing** (pre-existing, not caused by refactor):
-  - `streamParityAndPerformance.test.ts` - OpenRouter mock issue
-  - `paneHooksExtended.test.ts` - Stream hook timing issue
-- **29 tests skipped** (intentional - require E2E/browser environment)
-- **All refactor-related tests passing** ✅
+
+-   **34 tests passing** (52.3%)
+-   **2 tests failing** (pre-existing, not caused by refactor):
+    -   `streamParityAndPerformance.test.ts` - OpenRouter mock issue
+    -   `paneHooksExtended.test.ts` - Stream hook timing issue
+-   **29 tests skipped** (intentional - require E2E/browser environment)
+-   **All refactor-related tests passing** ✅
 
 **Build Warnings (non-blocking):**
-- Barrel export circular dependencies (expected with current structure)
-- Large chunk size warnings (>500kB) - consider code-splitting in future
-- Tailwind sourcemap warnings (cosmetic)
+
+-   Barrel export circular dependencies (expected with current structure)
+-   Large chunk size warnings (>500kB) - consider code-splitting in future
+-   Tailwind sourcemap warnings (cosmetic)
 
 ### 8.5 Manual Testing
 

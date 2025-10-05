@@ -25,16 +25,14 @@ export default defineNuxtConfig({
     ],
 
     // Auto-import composables & utils from new directories
+    // NOTE: core/* modules are NOT auto-imported - they use explicit imports via @core/* alias
+    // This avoids duplicate import warnings from barrel exports (index.ts)
     imports: {
         dirs: [
             'composables', // Global bridges
             'shared/composables',
             'shared/utils',
-            'core/hooks', // Note: causes duplicate warnings but ensures test compatibility
-            'core/auth',
-            'core/theme',
-            'core/search',
-            'core/state',
+            // core/* intentionally excluded - use explicit imports: import { useHooks } from '@core/hooks'
             'features/chat/composables',
             'features/chat/utils',
             'features/documents/composables',
@@ -76,6 +74,27 @@ export default defineNuxtConfig({
             { name: 'VT323', provider: 'google' },
         ],
     },
+
+    // Vite configuration - suppress duplicate import warnings from core/* barrel exports
+    vite: {
+        build: {
+            rollupOptions: {
+                onwarn(warning, warn) {
+                    // Suppress "Duplicated imports" warnings for core/* modules
+                    if (
+                        warning.code === 'UNUSED_EXTERNAL_IMPORT' ||
+                        (warning.message &&
+                            warning.message.includes('Duplicated imports') &&
+                            warning.message.includes('/app/core/'))
+                    ) {
+                        return;
+                    }
+                    warn(warning);
+                },
+            },
+        },
+    },
+
     nitro: { prerender: { routes: ['/openrouter-callback'] } },
     // PWA configuration
     pwa: {
@@ -208,10 +227,13 @@ export default defineNuxtConfig({
         },
     },
     // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
+    // Also exclude core/* barrel exports to prevent duplicate type warnings
     ignore: [
         '**/*.test.*',
         '**/__tests__/**',
         'tests/**',
+        // Exclude barrel exports (index.ts) from core/* to prevent duplicate import warnings
+        'app/core/*/index.ts',
         // Example plugins and test pages (dev only); keep them out of production build
         ...(process.env.NODE_ENV === 'production'
             ? ['app/plugins/examples/**', 'app/pages/_test.vue']

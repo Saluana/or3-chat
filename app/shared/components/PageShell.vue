@@ -222,7 +222,7 @@
 import ResizableSidebarLayout from './ResizableSidebarLayout.vue';
 import { useMultiPane } from '@features/dashboard/composables/useMultiPane';
 import { db } from '@db';
-import { useHookEffect } from '@core/hooks';
+import { useHookEffect, useHooks } from '@core/hooks';
 import {
     flush as flushDocument,
     newDocument as createNewDoc,

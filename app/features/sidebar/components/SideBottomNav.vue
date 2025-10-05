@@ -182,6 +182,7 @@
 
 <script lang="ts" setup>
 import { state } from '~/state/global';
+import { useOpenRouterAuth } from '@core/auth';
 
 const openrouter = useOpenRouterAuth();
 const orIsConnected = computed(() => state.value.openrouterKey);
