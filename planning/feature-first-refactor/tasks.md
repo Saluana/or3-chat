@@ -1004,7 +1004,7 @@ All 48 test files successfully migrated from `app/` to `tests/`:
 **Requirements**: 3.1, 7.2
 
 -   [ ] Test all critical user workflows:
-    -   [ ] Create new chat thread and send message
+    -   [x] Create new chat thread and send message
     -   [ ] Upload file attachment to message
     -   [ ] Switch between threads in sidebar
     -   [ ] Search threads

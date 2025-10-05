@@ -25,10 +25,9 @@ export function partsToText(parts: any): string {
         if (typeof p === 'object') {
             if (p.type === 'text' && typeof p.text === 'string') out += p.text;
             else if (p.type === 'image') {
-                const src = (p as any).image || (p as any).image_url?.url;
-                if (typeof src === 'string') {
-                    out += (out ? '\n\n' : '') + `![generated image](${src})`;
-                }
+                // Don't include base64 data URLs in text - they'll be shown via attachments gallery
+                // Skip image parts entirely for user messages (attachments display separately)
+                // Assistant images should already have file-hash placeholders injected below
             }
         }
     }
