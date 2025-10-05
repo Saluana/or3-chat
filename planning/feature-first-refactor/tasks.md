@@ -948,24 +948,26 @@ All 48 test files successfully migrated from `app/` to `tests/`:
 
 **Requirements**: 5.2
 
--   [ ] Search for remaining `~/composables/` imports and update to appropriate aliases
--   [ ] Search for remaining `~/components/` imports and update to appropriate aliases
--   [ ] Search for remaining `~/db/` imports and update to `@db/*`
--   [ ] Search for remaining relative imports that should use aliases
--   [ ] Run `nuxi typecheck` to verify all imports resolve
+-   [x] Search for remaining `~/composables/` imports and update to appropriate aliases - ✅ Only `~/composables/ui-extensions/` imports remain (correct - these are barrel exports)
+-   [x] Search for remaining `~/components/` imports and update to appropriate aliases - ✅ None found
+-   [x] Search for remaining `~/db/` imports and update to `@db/*` - ✅ None found, all using `@db/*`
+-   [x] Search for remaining relative imports that should use aliases - ✅ None found in `app/features/`, `app/core/`, or `app/shared/`
+-   [x] Run `nuxi typecheck` to verify all imports resolve - ✅ 0 new errors (2 pre-existing DocumentEditor errors)
 
 ### 8.3 Create Barrel Exports for Features
 
 **Requirements**: 5.2
 
--   [ ] Create `app/features/chat/index.ts` to export public API
--   [ ] Create `app/features/documents/index.ts` to export public API
--   [ ] Create `app/features/editor/index.ts` to export public API
--   [ ] Create `app/features/dashboard/index.ts` to export public API
--   [ ] Create `app/features/sidebar/index.ts` to export public API
--   [ ] Create `app/features/images/index.ts` to export public API
--   [ ] Create `app/features/threads/index.ts` to export public API
--   [ ] Create `app/features/projects/index.ts` to export public API
+-   [x] Create `app/features/chat/index.ts` to export public API - ✅ Already exists, exports all composables
+-   [x] Create `app/features/documents/index.ts` to export public API - ✅ Already exists, exports all composables
+-   [x] Create `app/features/editor/index.ts` to export public API - ✅ Already exists (components auto-imported)
+-   [x] Create `app/features/dashboard/index.ts` to export public API - ✅ Already exists, exports all composables
+-   [x] Create `app/features/sidebar/index.ts` to export public API - ✅ Already exists, exports all composables
+-   [x] Create `app/features/images/index.ts` to export public API - ✅ Already exists (components auto-imported)
+-   [x] Create `app/features/threads/index.ts` to export public API - ✅ Already exists, exports useThreadSearch
+-   [x] Create `app/features/projects/index.ts` to export public API - ✅ Already exists, exports useProjectsCrud
+
+**Note**: All barrel exports were created in Phase 5 during feature migrations. Components are auto-imported by Nuxt. Utils are internal to features and not exported.
 
 ### 8.4 Final Build and Test Validation
 
