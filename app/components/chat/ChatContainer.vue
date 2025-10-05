@@ -342,7 +342,7 @@ function onSend(payload: any) {
         return;
     }
     const files = readyImages.map((img: any) => ({
-        type: img.file?.type || 'image/png',
+        type: img.file?.type || img.mime || 'image/png',
         url: img.url,
     }));
     const file_hashes = readyImages

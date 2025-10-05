@@ -145,6 +145,14 @@ export default defineNuxtConfig({
             ],
         },
     },
+    imports: {
+        dirs: [
+            // Scan top-level composables
+            '~/composables',
+            // Scan all composables within subdirectories
+            '~/composables/**',
+        ],
+    },
     // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
     ignore: [
         '**/*.test.*',

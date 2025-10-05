@@ -11,7 +11,7 @@ export interface UiChatMessage {
     pending?: boolean;
 }
 
-export function partsToText(parts: any): string {
+export function partsToText(parts: any, role?: string): string {
     if (!parts) return '';
     if (typeof parts === 'string') return parts;
     if (!Array.isArray(parts)) return '';
@@ -25,9 +25,14 @@ export function partsToText(parts: any): string {
         if (typeof p === 'object') {
             if (p.type === 'text' && typeof p.text === 'string') out += p.text;
             else if (p.type === 'image') {
-                const src = (p as any).image || (p as any).image_url?.url;
-                if (typeof src === 'string') {
-                    out += (out ? '\n\n' : '') + `![generated image](${src})`;
+                // Skip embedding images for user messages (they're shown via attachments gallery)
+                // Only convert assistant-generated images to markdown
+                if (role === 'assistant') {
+                    const src = (p as any).image || (p as any).image_url?.url;
+                    if (typeof src === 'string') {
+                        out +=
+                            (out ? '\n\n' : '') + `![generated image](${src})`;
+                    }
                 }
             }
         }
@@ -55,7 +60,7 @@ export function ensureUiMessage(raw: any): UiChatMessage {
     } else if (typeof raw.content === 'string') {
         text = raw.content;
     } else {
-        text = partsToText(raw.content);
+        text = partsToText(raw.content, role);
     }
     // Inject markdown placeholders for assistant file_hashes with de-duplication logic.
     // Goal: avoid showing the same logical image twice when the model already emitted

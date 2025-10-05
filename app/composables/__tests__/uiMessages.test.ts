@@ -13,15 +13,26 @@ describe('uiMessages utilities', () => {
         const out = partsToText([txt('Hello'), txt(' '), txt('World')]);
         expect(out).toBe('Hello World');
     });
-    it('partsToText inserts markdown for images with spacing', () => {
-        const out = partsToText([
-            txt('A'),
-            img('data:image/png;base64,xxx'),
-            txt('B'),
-        ]);
-        expect(out).toContain('A');
-        expect(out).toContain('![generated image](data:image/png;base64,xxx)');
-        expect(out.endsWith('B')).toBe(true);
+    it('partsToText inserts markdown for images with spacing (assistant only)', () => {
+        // Assistant role - images should be converted to markdown
+        const outAssistant = partsToText(
+            [txt('A'), img('data:image/png;base64,xxx'), txt('B')],
+            'assistant'
+        );
+        expect(outAssistant).toContain('A');
+        expect(outAssistant).toContain(
+            '![generated image](data:image/png;base64,xxx)'
+        );
+        expect(outAssistant.endsWith('B')).toBe(true);
+
+        // User role - images should be skipped (shown via attachments gallery)
+        const outUser = partsToText(
+            [txt('A'), img('data:image/png;base64,xxx'), txt('B')],
+            'user'
+        );
+        expect(outUser).toContain('A');
+        expect(outUser).not.toContain('data:image/png;base64,xxx');
+        expect(outUser).toContain('B');
     });
     it('partsToText handles empty / invalid gracefully', () => {
         expect(partsToText(null)).toBe('');
