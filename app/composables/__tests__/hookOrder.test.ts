@@ -97,15 +97,23 @@ describe('Hook System - Typed Wrapper Integration', () => {
         expect(timeline[0]?.event).toBe('first');
         expect(timeline[1]?.event).toBe('second');
         // Second should execute after first completes
-        expect(timeline[1]?.time).toBeGreaterThanOrEqual(timeline[0]?.time || 0);
+        expect(timeline[1]?.time).toBeGreaterThanOrEqual(
+            timeline[0]?.time || 0
+        );
     });
 
     it('supports removing hooks and prevents execution', async () => {
         const calls: string[] = [];
 
-        const callback1 = () => { calls.push('callback1'); };
-        const callback2 = () => { calls.push('callback2'); };
-        const callback3 = () => { calls.push('callback3'); };
+        const callback1 = () => {
+            calls.push('callback1');
+        };
+        const callback2 = () => {
+            calls.push('callback2');
+        };
+        const callback3 = () => {
+            calls.push('callback3');
+        };
 
         engine.addAction('removal.test', callback1);
         engine.addAction('removal.test', callback2);
