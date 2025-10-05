@@ -367,11 +367,6 @@ import { isMobile, state } from '~/state/global';
 import { useUserApiKey } from '~/composables/useUserApiKey';
 import { useOpenRouterAuth } from '~/composables/useOpenrouter';
 import { useToast } from '#imports';
-import { useAiSettings } from '~/composables/useAiSettings';
-import {
-    registerPaneInput,
-    unregisterPaneInput,
-} from '~/composables/useChatInputBridge';
 import {
     useComposerActions,
     type ComposerActionEntry,

@@ -27,3 +27,10 @@ export {
 export * from './ui-extensions/editor/useEditorToolbar';
 export * from './ui-extensions/editor/useEditorNodes';
 export * from './useWorkspaceBackup';
+
+// Chat composables
+export * from './chat/useActivePrompt';
+export * from './chat/useAi';
+export * from './chat/useAiSettings';
+export * from './chat/useChatInputBridge';
+export * from './chat/useDefaultPrompt';

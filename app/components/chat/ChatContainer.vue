@@ -99,7 +99,7 @@ import {
     type Ref,
     type CSSProperties,
 } from 'vue';
-import { useChat } from '~/composables/useAi';
+
 import {
     getPanePendingPrompt,
     clearPanePendingPrompt,

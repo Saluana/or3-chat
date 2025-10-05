@@ -215,7 +215,7 @@ async function makeApi(): Promise<PanePluginApi> {
                 // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
                 if (role === 'user' && stream) {
                     const { programmaticSend, hasPane } = await import(
-                        '~/composables/useChatInputBridge'
+                        '~/composables/chat/useChatInputBridge'
                     );
                     if (hasPane(p.id)) {
                         const okBridge = programmaticSend(p.id, text);

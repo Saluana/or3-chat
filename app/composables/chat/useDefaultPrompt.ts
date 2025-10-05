@@ -1,7 +1,6 @@
 import { ref, readonly } from 'vue';
 import { db } from '~/db';
 import { setKvByName } from '~/db/kv';
-import { useHooks } from './useHooks';
 
 // Singleton state (module scope) so all importers share
 const _defaultPromptId = ref<string | null>(null);
