@@ -889,7 +889,7 @@ Plugins are ready for manual functional testing.
     -   Updated `vi.mock('../util')` → `vi.mock('@db/util')`
     -   Updated `vi.mock('../dbTry')` → `vi.mock('@db/dbTry')`
     -   Updated `vi.mock('~/utils/errors')` → `vi.mock('@shared/utils/errors')`
--   [ ] Commit: `git commit -m "refactor: reorganize tests to mirror feature structure"`
+-   [x] Commit: `git commit -m "refactor: reorganize tests to mirror feature structure"` - ✅ Committed as b08e534
 
 ---
 
@@ -929,16 +929,20 @@ All 48 test files successfully migrated from `app/` to `tests/`:
 
 ### 8.1 Remove Empty Directories
 
--   [ ] Check if `app/composables/` is empty or contains only bridges
-    -   [ ] If empty, remove directory
-    -   [ ] If contains bridges, keep and document
--   [ ] Check if `app/components/` is empty or contains only global atoms
-    -   [ ] If empty, remove directory
-    -   [ ] If contains global atoms, keep and document
--   [ ] Remove `app/composables/__tests__/` if empty
--   [ ] Remove `app/components/__tests__/` if empty
--   [ ] Remove `app/composables/ui-extensions/` if empty
--   [ ] Remove any other empty directories
+-   [x] Check if `app/composables/` is empty or contains only bridges - ✅ Contains `index.ts` (barrel export) and `ui-extensions/` (feature code) - **KEPT**
+    -   [x] If empty, remove directory - N/A
+    -   [x] If contains bridges, keep and document - ✅ Contains barrel exports for ui-extensions
+-   [x] Check if `app/components/` is empty or contains only global atoms - ✅ Contains `modal/` with global modal components - **KEPT**
+    -   [x] If empty, remove directory - N/A
+    -   [x] If contains global atoms, keep and document - ✅ Contains ModelCatalog and Dashboard modals
+-   [x] Remove `app/composables/__tests__/` if empty - ✅ Removed after moving snapshots to `tests/core-hooks/__snapshots__/`
+-   [x] Remove `app/components/__tests__/` if empty - ✅ Already removed in Phase 7
+-   [x] Remove `app/composables/ui-extensions/` if empty - ✅ Not empty, contains feature code - **KEPT**
+-   [x] Remove any other empty directories - ✅ Removed:
+    -   `app/components/chat/` (empty)
+    -   `app/components/documents/` (empty)
+    -   `app/components/prompts/` (empty)
+    -   `app/components/sidebar/` (empty)
 
 ### 8.2 Update Import Paths to Use Aliases
 
