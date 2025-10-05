@@ -32,7 +32,7 @@ vi.mock('~/components/sidebar/SideNavHeader.vue', () => ({
 vi.mock('dexie', () => ({
     liveQuery: () => ({ subscribe: () => ({ unsubscribe() {} }) }),
 }));
-vi.mock('~/db', () => ({
+vi.mock('@db', () => ({
     db: {
         threads: {
             orderBy: () => ({

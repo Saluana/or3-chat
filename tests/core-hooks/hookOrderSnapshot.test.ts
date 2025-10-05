@@ -77,13 +77,13 @@ vi.mock('../../db/files-util', () => ({
         }
     },
 }));
-vi.mock('../useUserApiKey', () => ({
+vi.mock('@core/auth/useUserApiKey', () => ({
     useUserApiKey: () => ({ apiKey: { value: 'test-key' }, setKey: () => {} }),
 }));
-vi.mock('../useActivePrompt', () => ({
+vi.mock('@features/chat/composables/useActivePrompt', () => ({
     useActivePrompt: () => ({ activePromptContent: { value: null } }),
 }));
-vi.mock('../useDefaultPrompt', () => ({
+vi.mock('@features/chat/composables/useDefaultPrompt', () => ({
     getDefaultPromptId: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('../../state/global', () => ({

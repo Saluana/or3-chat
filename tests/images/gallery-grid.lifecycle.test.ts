@@ -24,17 +24,15 @@ function createErrorsMock() {
 
 vi.mock('#imports', () => ({ useToast: () => ({ add: getMocks().toastAdd }) }));
 
-vi.mock('../../db/files', createFilesMock);
 vi.mock('@db/files', createFilesMock);
 vi.mock(
     new URL('../../../db/files.ts', import.meta.url).pathname,
     createFilesMock
 );
 
-vi.mock('../../utils/errors', createErrorsMock);
-vi.mock('~/utils/errors', createErrorsMock);
+vi.mock('@shared/utils/errors', createErrorsMock);
 vi.mock(
-    new URL('../../../utils/errors.ts', import.meta.url).pathname,
+    new URL('../../../shared/utils/errors.ts', import.meta.url).pathname,
     createErrorsMock
 );
 
@@ -57,7 +55,9 @@ const makeMeta = (hash: string): FileMeta => ({
 });
 
 async function mountGrid(items: FileMeta[]) {
-    const GalleryGrid = (await import('@features/images/components/GalleryGrid.vue')).default;
+    const GalleryGrid = (
+        await import('@features/images/components/GalleryGrid.vue')
+    ).default;
     return mount(GalleryGrid, {
         props: {
             items,

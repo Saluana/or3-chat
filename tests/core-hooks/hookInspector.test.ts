@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createHookEngine } from '@core/hooks';
-import HookInspector from '../devtools/HookInspector.vue';
+import HookInspector from '~/plugins/devtools/HookInspector.vue';
 
 // Mock composables
 const mockHooks = createHookEngine();

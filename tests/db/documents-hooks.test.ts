@@ -1,17 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock errors FIRST before any other imports - mock both path variations
-vi.mock('~/utils/errors', () => ({
+// Mock errors FIRST before any other imports
+vi.mock('@shared/utils/errors', () => ({
     reportError: vi.fn(),
     err: vi.fn((_code: string, _message: string, meta: any) => meta),
 }));
 
-vi.mock('../../utils/errors', () => ({
-    reportError: vi.fn(),
-    err: vi.fn((_code: string, _message: string, meta: any) => meta),
-}));
-
-import type { DocumentRow } from '../documents';
+import type { DocumentRow } from '@db/documents';
 
 // Minimal HookEngine stub for tests to avoid importing application hook engine
 function createTestHookEngine() {
@@ -78,7 +73,7 @@ const tableState = vi.hoisted(() => {
 });
 
 // Mock DB client
-vi.mock('../client', () => {
+vi.mock('@db/client', () => {
     const state = tableState;
     const posts = {
         __rows: state.rows,
@@ -98,21 +93,21 @@ vi.mock('../client', () => {
 });
 
 // Mock dbTry to pass through
-vi.mock('../dbTry', () => ({
+vi.mock('@db/dbTry', () => ({
     dbTry: vi.fn(async (fn: () => any) => fn()),
 }));
 
 // Mock util functions
-vi.mock('../util', () => ({
+vi.mock('@db/util', () => ({
     newId: vi.fn(
         () => `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`
     ),
     nowSec: vi.fn(() => Math.floor(Date.now() / 1000)),
 }));
 
-import { createDocument, updateDocument } from '../documents';
-import { db } from '../client';
-import { newId, nowSec } from '../util';
+import { createDocument, updateDocument } from '@db/documents';
+import { db } from '@db/client';
+import { newId, nowSec } from '@db/util';
 
 const postsTable = db.posts as any;
 const newIdMock = vi.mocked(newId);

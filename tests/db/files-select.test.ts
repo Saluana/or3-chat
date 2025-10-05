@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FileMeta } from '../schema';
+import type { FileMeta } from '@db/schema';
 
 const tableState = vi.hoisted(() => {
     const rows: FileMeta[] = [];
@@ -11,7 +11,7 @@ const tableState = vi.hoisted(() => {
     };
 });
 
-vi.mock('../client', () => {
+vi.mock('@db/client', () => {
     const rows = tableState.rows;
     const table = {
         __rows: rows,
@@ -67,12 +67,12 @@ vi.mock('../client', () => {
 
 const nowSecState = vi.hoisted(() => ({ value: 0 }));
 
-vi.mock('../util', () => ({
+vi.mock('@db/util', () => ({
     nowSec: vi.fn(() => nowSecState.value),
 }));
 
-import { listImageMetasPaged, updateFileName } from '../files-select';
-import { db } from '../client';
+import { listImageMetasPaged, updateFileName } from '@db/files-select';
+import { db } from '@db/client';
 
 const table = db.file_meta as any;
 

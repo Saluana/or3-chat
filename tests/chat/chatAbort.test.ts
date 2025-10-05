@@ -13,13 +13,13 @@ vi.mock('#imports', () => ({
 vi.mock('../../state/global', () => ({
     state: { value: { openrouterKey: null } },
 }));
-vi.mock('../useUserApiKey', () => ({
+vi.mock('@core/auth/useUserApiKey', () => ({
     useUserApiKey: () => ({ apiKey: { value: 'k' }, setKey: () => {} }),
 }));
-vi.mock('../useActivePrompt', () => ({
+vi.mock('@features/chat/composables/useActivePrompt', () => ({
     useActivePrompt: () => ({ activePromptContent: { value: null } }),
 }));
-vi.mock('../useDefaultPrompt', () => ({
+vi.mock('@features/chat/composables/useDefaultPrompt', () => ({
     getDefaultPromptId: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('../../db/util', () => ({

@@ -1,10 +1,10 @@
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { dbTry } from '../dbTry';
+import { dbTry } from '@db/dbTry';
 import { reportError } from '@shared/utils/errors';
 
-vi.mock('~/utils/errors', async () => {
-    const actual = await vi.importActual<any>('~/utils/errors');
+vi.mock('@shared/utils/errors', async () => {
+    const actual = await vi.importActual<any>('@shared/utils/errors');
     return {
         ...actual,
         reportError: vi.fn(),

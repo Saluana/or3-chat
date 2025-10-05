@@ -7,13 +7,13 @@ const hookEngine = createHookEngine();
 vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
 
 // ---- Mocks ----
-vi.mock('../useUserApiKey', () => ({
+vi.mock('@core/auth/useUserApiKey', () => ({
     useUserApiKey: () => ({ apiKey: ref('test-key'), setKey: vi.fn() }),
 }));
-vi.mock('../useActivePrompt', () => ({
+vi.mock('@features/chat/composables/useActivePrompt', () => ({
     useActivePrompt: () => ({ activePromptContent: ref(null) }),
 }));
-vi.mock('../useDefaultPrompt', () => ({
+vi.mock('@features/chat/composables/useDefaultPrompt', () => ({
     getDefaultPromptId: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@db/threads', () => ({
@@ -37,7 +37,7 @@ vi.mock('@shared/composables/useStreamAccumulator', () => ({
 
 // DB layer minimal mocks
 let msgCounter = 0;
-vi.mock('~/db', () => ({
+vi.mock('@db', () => ({
     create: { thread: vi.fn().mockResolvedValue({ id: 'thread-new' }) },
     db: {
         messages: {
@@ -59,12 +59,12 @@ vi.mock('~/db', () => ({
     upsert: { message: vi.fn(async () => {}) },
 }));
 
-vi.mock('~/utils/chat/history', () => ({
+vi.mock('@features/chat/utils/history', () => ({
     ensureThreadHistoryLoaded: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Stream mock (assistant will emit two text chunks then end)
-vi.mock('~/utils/chat/openrouterStream', () => ({
+vi.mock('@features/chat/utils/openrouterStream', () => ({
     openRouterStream: () => ({
         async *[Symbol.asyncIterator]() {
             yield { type: 'text', text: 'Hello' };
@@ -82,12 +82,12 @@ vi.mock('@db/files', () => ({ createOrRefFile: vi.fn() }));
 vi.mock('@db/files-util', () => ({
     serializeFileHashes: (arr: string[]) => arr.join(','),
 }));
-vi.mock('~/utils/chat/messages', () => ({
+vi.mock('@features/chat/utils/messages', () => ({
     buildParts: (t: string) => [{ type: 'text', text: t }],
     mergeFileHashes: (a: any) => a,
     trimOrMessagesImages: () => {},
 }));
-vi.mock('~/utils/chat/uiMessages', () => ({
+vi.mock('@features/chat/utils/uiMessages', () => ({
     ensureUiMessage: (m: any) => ({
         id: m.id,
         role: m.role,

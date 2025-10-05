@@ -12,7 +12,7 @@ vi.mock('@core/hooks', () => ({
 }));
 
 // Mock DB layer pieces used in sendMessage path
-vi.mock('~/db', () => ({
+vi.mock('@db', () => ({
     tx: {
         appendMessage: async (m: any) => ({
             id: 'm_' + Math.random().toString(36).slice(2),
@@ -31,21 +31,21 @@ vi.mock('@db/util', () => ({
     nowSec: () => Math.floor(Date.now() / 1000),
     newId: () => Math.random().toString(36).slice(2),
 }));
-vi.mock('~/utils/chat/openrouterStream', () => ({
+vi.mock('@features/chat/utils/openrouterStream', () => ({
     openRouterStream: async function* () {
         yield { type: 'final', text: 'ok' };
     },
 }));
-vi.mock('~/utils/chat/messages', () => ({
+vi.mock('@features/chat/utils/messages', () => ({
     buildParts: (t: string) => [{ type: 'text', text: t }],
     mergeFileHashes: (a: any) => a,
     trimOrMessagesImages: (x: any) => x,
 }));
-vi.mock('~/utils/chat/uiMessages', () => ({
+vi.mock('@features/chat/utils/uiMessages', () => ({
     ensureUiMessage: (m: any) => ({ ...m, pending: false }),
     recordRawMessage: () => {},
 }));
-vi.mock('~/utils/chat/files', () => ({
+vi.mock('@features/chat/utils/files', () => ({
     inferMimeFromUrl: () => 'image/png',
     dataUrlToBlob: async () => new Blob(),
 }));

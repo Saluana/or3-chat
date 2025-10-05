@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHookEngine } from '@core/hooks';
 
 // Mock modules used by useAi.ts that we need minimal behavior for
-vi.mock('../../utils/chat/openrouterStream', () => {
+vi.mock('@features/chat/utils/openrouterStream', () => {
     return {
         openRouterStream: vi.fn().mockImplementation(async function* () {
             yield { type: 'text', text: 'Hello ' };
@@ -11,18 +11,18 @@ vi.mock('../../utils/chat/openrouterStream', () => {
     };
 });
 
-vi.mock('../../db/util', () => ({
+vi.mock('@db/util', () => ({
     nowSec: () => Math.floor(Date.now() / 1000),
     newId: () => 'id-' + Math.random().toString(36).slice(2, 8),
 }));
-vi.mock('../../db/threads', () => ({
+vi.mock('@db/threads', () => ({
     getThreadSystemPrompt: vi.fn().mockResolvedValue(null),
 }));
-vi.mock('../../db/prompts', () => ({ getPrompt: vi.fn() }));
-vi.mock('../../utils/prompt-utils', () => ({
+vi.mock('@db/prompts', () => ({ getPrompt: vi.fn() }));
+vi.mock('@shared/utils/prompt-utils', () => ({
     promptJsonToString: (c: any) => String(c),
 }));
-vi.mock('../../utils/chat/messages', () => ({
+vi.mock('@features/chat/utils/messages', () => ({
     buildParts: (text: string) => [{ type: 'text', text }],
     getTextFromContent: (c: any) =>
         typeof c === 'string'
@@ -35,19 +35,19 @@ vi.mock('../../utils/chat/messages', () => ({
     ],
     trimOrMessagesImages: () => {},
 }));
-vi.mock('../../utils/chat/history', () => ({
+vi.mock('@features/chat/utils/history', () => ({
     ensureThreadHistoryLoaded: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../../utils/chat/files', () => ({
+vi.mock('@features/chat/utils/files', () => ({
     dataUrlToBlob: () => null,
     inferMimeFromUrl: () => 'image/png',
 }));
-vi.mock('../../utils/openrouter-build', () => ({
+vi.mock('@core/auth/openrouter-build', () => ({
     buildOpenRouterMessages: async (msgs: any) => msgs,
 }));
 
 // DB related mocks
-vi.mock('../../db', () => ({
+vi.mock('@db', () => ({
     db: {
         messages: {
             get: vi.fn(),
@@ -66,8 +66,8 @@ vi.mock('../../db', () => ({
     },
     upsert: { message: vi.fn().mockResolvedValue(undefined) },
 }));
-vi.mock('../../db/files', () => ({ createOrRefFile: vi.fn() }));
-vi.mock('../../db/files-util', () => ({
+vi.mock('@db/files', () => ({ createOrRefFile: vi.fn() }));
+vi.mock('@db/files-util', () => ({
     serializeFileHashes: (h: string[]) => JSON.stringify(h),
     parseFileHashes: (s: string) => {
         try {
@@ -77,19 +77,19 @@ vi.mock('../../db/files-util', () => ({
         }
     },
 }));
-vi.mock('../../db/prompts', () => ({ getPrompt: vi.fn() }));
-vi.mock('../../state/global', () => ({
+vi.mock('@db/prompts', () => ({ getPrompt: vi.fn() }));
+vi.mock('~/state/global', () => ({
     state: { value: { openrouterKey: null } },
 }));
 
 // User API key composable
-vi.mock('../useUserApiKey', () => ({
+vi.mock('@core/auth/useUserApiKey', () => ({
     useUserApiKey: () => ({ apiKey: { value: 'test-key' }, setKey: () => {} }),
 }));
-vi.mock('../useActivePrompt', () => ({
+vi.mock('@features/chat/composables/useActivePrompt', () => ({
     useActivePrompt: () => ({ activePromptContent: { value: null } }),
 }));
-vi.mock('../useDefaultPrompt', () => ({
+vi.mock('@features/chat/composables/useDefaultPrompt', () => ({
     getDefaultPromptId: vi.fn().mockResolvedValue(null),
 }));
 

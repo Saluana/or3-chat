@@ -4,8 +4,8 @@ import type { FilesAttachInputPayload } from '@core/hooks';
 import {
     persistAttachment,
     type AttachmentLike,
-} from '~/components/chat/file-upload-utils';
-import { db } from '../client';
+} from '~/features/chat/utils/file-upload-utils';
+import { db } from '@db/client';
 
 describe('files.attach:filter:input hook', () => {
     let hooks: ReturnType<typeof useHooks>;

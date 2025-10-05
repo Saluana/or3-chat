@@ -13,7 +13,7 @@ vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
 let threadCounter = 0;
 let msgCounter = 0;
 vi.mock('@db/util', () => ({ nowSec: () => 123456 }));
-vi.mock('~/db', () => ({
+vi.mock('@db', () => ({
     create: { thread: vi.fn(async () => ({ id: 't' + ++threadCounter })) },
     tx: {
         appendMessage: vi.fn(async (m: any) => ({
