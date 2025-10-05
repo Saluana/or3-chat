@@ -334,11 +334,14 @@
                 </p>
             </div>
         </div>
-        <lazy-modal-model-catalog v-model:showModal="showModelCatalog" />
-        <LazyChatSystemPromptsModal hydrate-on-visible
-        v-model:showModal="showSystemPrompts" :thread-id="props.threadId" "
-        :pane-id="props.paneId" @selected="handlePromptSelected"
-        @closed="handlePromptModalClosed" />
+        <LazyModalModelCatalog v-model:showModal="showModelCatalog" />
+        <LazyChatSystemPromptsModal
+            v-model:showModal="showSystemPrompts"
+            :thread-id="props.threadId"
+            :pane-id="props.paneId"
+            @selected="handlePromptSelected"
+            @closed="handlePromptModalClosed"
+        />
     </div>
 </template>
 

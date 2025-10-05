@@ -4,7 +4,7 @@ import { useChat } from '../useAi';
 import { state } from '~/state/global';
 
 // Mock hooks to avoid Dexie / heavy deps impacting test
-vi.mock('~/composables/useHooks', () => ({
+vi.mock('@core/hooks', () => ({
     useHooks: () => ({
         applyFilters: async (_: string, v: any) => v,
         doAction: async () => {},

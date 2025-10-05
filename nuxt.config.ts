@@ -1,5 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-import { resolve } from 'pathe'
+import { resolve } from 'pathe';
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
@@ -9,21 +9,21 @@ export default defineNuxtConfig({
     srcDir: 'app',
     // Load Tailwind + theme variables globally
     css: ['~/assets/css/main.css'],
-    
+
     // Auto-register components from multiple directories
     components: [
-        { path: '~/components', pathPrefix: false },          // Global atoms
-        { path: '~/shared/components', pathPrefix: false },   // Shared components
+        { path: '~/components' }, // Global atoms - use default pathPrefix behavior
+        { path: '~/shared/components', pathPrefix: false }, // Shared components
         { path: '~/features', pathPrefix: true, extensions: ['.vue'] }, // Feature components
     ],
-    
+
     // Auto-import composables & utils from new directories
     imports: {
         dirs: [
-            'composables',                          // Global bridges
+            'composables', // Global bridges
             'shared/composables',
             'shared/utils',
-            'core/hooks',
+            'core/hooks', // Note: causes duplicate warnings but ensures test compatibility
             'core/auth',
             'core/theme',
             'core/search',
@@ -39,7 +39,7 @@ export default defineNuxtConfig({
             'features/images/composables',
         ],
     },
-    
+
     // Path aliases for clean imports
     alias: {
         '@core': resolve('./app/core'),
@@ -47,7 +47,7 @@ export default defineNuxtConfig({
         '@features': resolve('./app/features'),
         '@db': resolve('./db'),
     },
-    
+
     // TypeScript configuration
     typescript: {
         tsConfig: {
@@ -62,7 +62,7 @@ export default defineNuxtConfig({
             },
         },
     },
-    
+
     fonts: {
         families: [
             { name: 'Press Start 2P', provider: 'google' },

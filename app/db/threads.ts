@@ -1,6 +1,6 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '@core/hooks';
 import { newId, nowSec, parseOrThrow } from './util';
 import {
     ThreadCreateSchema,

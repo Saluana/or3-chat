@@ -7,7 +7,7 @@ import {
     releaseDocument,
     useDocumentState,
 } from '~/composables/useDocumentsStore';
-import { useHooks } from './useHooks';
+import { useHooks } from '@core/hooks';
 
 export interface UsePaneDocumentsOptions {
     panes: Ref<MultiPaneState[]>;

@@ -18,8 +18,8 @@ vi.mock('~/db/files', () => ({
 }));
 
 import { createOrRefFile } from '~/db/files';
-import { useHooks } from '~/composables/useHooks';
-vi.mock('~/composables/useHooks', () => ({
+import { useHooks } from '@core/hooks';
+vi.mock('@core/hooks', () => ({
     useHooks: () => ({
         applyFilters: (_: any, v: any) => v,
         doAction: vi.fn(),

@@ -1,6 +1,6 @@
 import { ref, readonly } from 'vue';
 import { getPrompt } from '~/db/prompts';
-import { useHooks } from './useHooks';
+import { useHooks } from '@core/hooks';
 
 export interface ActivePromptState {
     activePromptId: string | null;

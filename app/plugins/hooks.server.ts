@@ -1,6 +1,5 @@
 import { defineNuxtPlugin } from '#app';
-import { createHookEngine } from '../utils/hooks';
-import { createTypedHookEngine } from '../utils/typed-hooks';
+import { createHookEngine, createTypedHookEngine } from '@core/hooks';
 
 // Server: create a fresh engine per request for SSR safety
 export default defineNuxtPlugin(() => {

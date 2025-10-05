@@ -68,7 +68,7 @@ vi.mock('~/composables/useSidebarSearch', () => ({
         documentResults: ref([]),
     }),
 }));
-vi.mock('~/composables/useHooks', () => ({
+vi.mock('@core/hooks', () => ({
     useHooks: () => ({ doAction: async () => {} }),
 }));
 

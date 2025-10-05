@@ -177,10 +177,7 @@
             <div class="h-[10px] top-10"></div>
         </div>
     </div>
-    <lazy-modal-model-catalog
-        hydrate-on-visible
-        v-model:showModal="showSettingsModal"
-    />
+    <LazyModalModelCatalog v-model:showModal="showSettingsModal" />
 </template>
 
 <script lang="ts" setup>

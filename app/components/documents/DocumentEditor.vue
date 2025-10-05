@@ -129,9 +129,9 @@ import {
     listEditorNodes,
     listEditorMarks,
     listEditorExtensions,
-    useHooks,
     type EditorToolbarButton,
 } from '~/composables';
+import { useHooks } from '@core/hooks';
 
 const props = defineProps<{ documentId: string }>();
 

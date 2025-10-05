@@ -1,7 +1,7 @@
 <template>
     <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
+            <LazySidebarSideNavContent
                 ref="sideNavExpandedRef"
                 :active-thread="activeChatThreadId"
                 @new-chat="onNewChat"
@@ -12,7 +12,7 @@
             />
         </template>
         <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
+            <LazySidebarSideNavContentCollapsed
                 :active-thread="activeChatThreadId"
                 @new-chat="onNewChat"
                 @chatSelected="onSidebarSelected"
@@ -213,7 +213,7 @@
                 </div>
             </div>
         </div>
-        <lazy-modal-dashboard v-model:showModal="showDashboardModal" />
+        <LazyModalDashboard v-model:showModal="showDashboardModal" />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
@@ -222,7 +222,7 @@
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import { useMultiPane } from '~/composables/useMultiPane';
 import { db } from '~/db';
-import { useHookEffect } from '~/composables/useHookEffect';
+import { useHookEffect } from '@core/hooks';
 import {
     flush as flushDocument,
     newDocument as createNewDoc,
@@ -237,7 +237,7 @@ import type {
     DbDeletePayload,
     ThreadEntity,
     DocumentEntity,
-} from '~/utils/hook-types';
+} from '@core/hooks/hook-types';
 import { useMagicKeys, whenever } from '@vueuse/core';
 
 const props = withDefaults(

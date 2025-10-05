@@ -3,7 +3,7 @@ import { createStreamAccumulator } from './useStreamAccumulator';
 import { useToast, useAppConfig } from '#imports';
 import { nowSec, newId } from '~/db/util';
 import { useUserApiKey } from './useUserApiKey';
-import { useHooks } from './useHooks';
+import { useHooks } from '@core/hooks';
 import { useActivePrompt } from './useActivePrompt';
 import { getDefaultPromptId } from './useDefaultPrompt';
 import { create, db, tx, upsert } from '~/db';

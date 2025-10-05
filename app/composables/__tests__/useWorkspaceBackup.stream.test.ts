@@ -51,7 +51,7 @@ vi.mock('~/db/client', () => ({
     db: {} as any,
 }));
 
-vi.mock('~/composables/useHooks', () => ({
+vi.mock('@core/hooks', () => ({
     useHooks: () => ({
         doAction: vi.fn(),
     }),

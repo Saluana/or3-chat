@@ -158,7 +158,7 @@ This document provides a detailed, step-by-step implementation plan for refactor
 **Requirements**: 3.2
 
 -   [x] Run `nuxi prepare` to regenerate `.nuxt/` directory
--   [x] Run `nuxi typecheck` (should pass with no errors) - *Note: Pre-existing errors unrelated to config changes*
+-   [x] Run `nuxi typecheck` (should pass with no errors) - _Note: Pre-existing errors unrelated to config changes_
 -   [x] Run `bun run dev` (should start successfully) - ✅ Started successfully on port 3001
 -   [x] Verify no console errors in browser
 -   [x] Stop dev server
@@ -174,22 +174,33 @@ This document provides a detailed, step-by-step implementation plan for refactor
 
 **Requirements**: 1.1
 
--   [ ] Move `app/composables/useHooks.ts` → `app/core/hooks/useHooks.ts`
--   [ ] Move `app/composables/useHookEffect.ts` → `app/core/hooks/useHookEffect.ts` (if exists)
--   [ ] Move `app/core/hooks/hook-keys.ts` (if exists, or create from types)
--   [ ] Move `app/core/hooks/hook-types.ts` (if exists, or create from types)
--   [ ] Move `app/core/hooks/hooks.ts` (if exists, or create registry)
--   [ ] Move `app/core/hooks/typed-hooks.ts` (if exists)
--   [ ] Update `app/core/hooks/index.ts` to export public API:
+-   [x] Move `app/composables/useHooks.ts` → `app/core/hooks/useHooks.ts`
+-   [x] Move `app/composables/useHookEffect.ts` → `app/core/hooks/useHookEffect.ts` (if exists)
+-   [x] Move `app/core/hooks/hook-keys.ts` (if exists, or create from types)
+-   [x] Move `app/core/hooks/hook-types.ts` (if exists, or create from types)
+-   [x] Move `app/core/hooks/hooks.ts` (if exists, or create registry)
+-   [x] Move `app/core/hooks/typed-hooks.ts` (if exists)
+-   [x] Update `app/core/hooks/index.ts` to export public API:
     ```typescript
     export { useHooks } from './useHooks';
     export { useHookEffect } from './useHookEffect';
-    export type { HookKeys, HookPayloads } from './hook-types';
+    export { createHookEngine } from './hooks';
+    export { createTypedHookEngine } from './typed-hooks';
+    export type {
+        HookName,
+        HookPayloadMap,
+        ActionHookName,
+        FilterHookName,
+        FilesAttachInputPayload,
+    } from './hook-types';
+    export type { HookEngine, HookKind } from './hooks';
+    export type { TypedHookEngine } from './typed-hooks';
+    export type { HookKey, KnownHookKey } from './hook-keys';
     ```
--   [ ] Update imports within hook files to use relative paths
--   [ ] Search for all imports of `useHooks` and update to `@core/hooks`
--   [ ] Run `nuxi typecheck`
--   [ ] Run `bun run dev` and test hook functionality
+-   [x] Update imports within hook files to use relative paths
+-   [x] Search for all imports of `useHooks` and update to `@core/hooks`
+-   [x] Run `nuxi typecheck`
+-   [x] Run `bun run dev` and test hook functionality
 -   [ ] Commit: `git commit -m "refactor: migrate hook system to core/hooks"`
 
 ### 2.2 Migrate Theme System

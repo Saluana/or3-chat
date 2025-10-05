@@ -108,12 +108,8 @@ export interface TypedHookEngine {
         name: K,
         callback: InferHookCallback<K>,
         opts?: OnOptions & {
-            // infer sensible default kind when provided
-            kind?: K extends ActionHookName
-                ? 'action'
-                : K extends FilterHookName
-                ? 'filter'
-                : 'action' | 'filter';
+            // Allow kind to be specified explicitly
+            kind?: HookKind;
         }
     ): () => void;
 

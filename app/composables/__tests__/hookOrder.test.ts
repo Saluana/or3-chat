@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createHookEngine } from '../../utils/hooks';
+import { createHookEngine } from '@core/hooks';
 
 // Mock modules used by useAi.ts that we need minimal behavior for
 vi.mock('../../utils/chat/openrouterStream', () => {
@@ -60,11 +60,9 @@ vi.mock('../../db', () => ({
     },
     create: { thread: vi.fn().mockResolvedValue({ id: 'thread-1' }) },
     tx: {
-        appendMessage: vi
-            .fn()
-            .mockResolvedValue({
-                id: 'm-' + Math.random().toString(36).slice(2, 6),
-            }),
+        appendMessage: vi.fn().mockResolvedValue({
+            id: 'm-' + Math.random().toString(36).slice(2, 6),
+        }),
     },
     upsert: { message: vi.fn().mockResolvedValue(undefined) },
 }));

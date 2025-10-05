@@ -1,14 +1,13 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
+import { useHooks, type TypedHookEngine } from '@core/hooks';
 import type {
     DbCreatePayload,
     DbDeletePayload,
     DbUpdatePayload,
     DocumentEntity,
-} from '../utils/hook-types';
-import type { TypedHookEngine } from '../utils/typed-hooks';
+} from '@core/hooks/hook-types';
 
 /**
  * Internal stored row shape (reuses posts table with postType = 'doc').

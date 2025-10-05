@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useHooks } from '~/composables/useHooks';
+import { useHooks } from '@core/hooks';
+import type { FilesAttachInputPayload } from '@core/hooks';
 import {
     persistAttachment,
     type AttachmentLike,
 } from '~/components/chat/file-upload-utils';
-import type { FilesAttachInputPayload } from '~/utils/hook-keys';
 import { db } from '../client';
 
 describe('files.attach:filter:input hook', () => {
@@ -25,9 +25,13 @@ describe('files.attach:filter:input hook', () => {
 
     it('rejects file when filter returns false', async () => {
         // Register a filter that rejects all files
-        disposeHook = hooks.on('files.attach:filter:input', () => false, {
-            kind: 'filter',
-        });
+        disposeHook = hooks.on(
+            'files.attach:filter:input',
+            (payload) => false as const,
+            {
+                kind: 'filter',
+            }
+        );
 
         const mockFile = new File(['test content'], 'test.png', {
             type: 'image/png',
@@ -56,7 +60,8 @@ describe('files.attach:filter:input hook', () => {
         // Register a filter that just observes and passes through
         disposeHook = hooks.on(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
+                if (payload === false) return false;
                 filterCalled = true;
                 receivedPayload = payload;
                 return payload;
@@ -105,7 +110,8 @@ describe('files.attach:filter:input hook', () => {
         // Register a filter that renames the file
         disposeHook = hooks.on(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
+                if (payload === false) return false;
                 const transformed = {
                     ...payload,
                     name: 'renamed-' + payload.name,
@@ -145,7 +151,8 @@ describe('files.attach:filter:input hook', () => {
 
         disposeHook = hooks.on(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
+                if (payload === false) return false;
                 if (payload.size > MAX_SIZE) return false;
                 return payload;
             },
@@ -176,7 +183,8 @@ describe('files.attach:filter:input hook', () => {
 
         disposeHook = hooks.on(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
+                if (payload === false) return false;
                 if (!ALLOWED_MIMES.includes(payload.mime)) return false;
                 return payload;
             },
