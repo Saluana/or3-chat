@@ -8,7 +8,7 @@
  *  - Provide finalize() with success / error / abort semantics (idempotent)
  *  - Expose readonly reactive StreamingState for UI consumption
  */
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 
 export interface StreamingState {
     text: string;
@@ -28,17 +28,29 @@ export interface StreamAccumulatorApi {
     reset(): void; // prepare for a fresh stream
 }
 
-// Fallback rAF for SSR / test environments
-const HAS_RAF = typeof requestAnimationFrame !== 'undefined';
-const _raf:
-    | typeof requestAnimationFrame
-    | ((cb: FrameRequestCallback) => number) = HAS_RAF
-    ? requestAnimationFrame
-    : (cb: FrameRequestCallback) =>
-          setTimeout(() => cb(performance.now()), 0) as any;
-const _caf: typeof cancelAnimationFrame | ((id: number) => void) = HAS_RAF
-    ? cancelAnimationFrame
-    : (id: number) => clearTimeout(id);
+// Resolve rAF/CAF dynamically to honor test-time stubs and late availability
+function nowTs() {
+    try {
+        return (globalThis.performance?.now?.() as number) ?? Date.now();
+    } catch {
+        return Date.now();
+    }
+}
+function getRAF(): (cb: FrameRequestCallback) => number {
+    const raf = (globalThis as any).requestAnimationFrame as
+        | undefined
+        | ((cb: FrameRequestCallback) => number);
+    if (typeof raf === 'function') return raf;
+    return (cb: FrameRequestCallback) =>
+        setTimeout(() => cb(nowTs()), 0) as any;
+}
+function getCAF(): (id: number) => void {
+    const caf = (globalThis as any).cancelAnimationFrame as
+        | undefined
+        | ((id: number) => void);
+    if (typeof caf === 'function') return caf;
+    return (id: number) => clearTimeout(id);
+}
 
 export function createStreamAccumulator(): StreamAccumulatorApi {
     const state = reactive<StreamingState>({
@@ -56,11 +68,13 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     let pendingMain: string[] = [];
     let pendingReasoning: string[] = [];
     let frame: number | null = null;
+    let microtaskToken: object | null = null;
     let _finalized = false;
     let emptyAppendWarnings = 0;
 
     function flush() {
         frame = null;
+        microtaskToken = null;
         if (pendingMain.length) {
             state.text += pendingMain.join('');
             pendingMain = [];
@@ -73,13 +87,20 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     }
 
     function schedule() {
-        if (frame != null || _finalized) return;
-        if (!HAS_RAF) {
-            // In test / SSR environments without rAF, schedule a microtask-ish flush quickly
-            frame = _raf(() => flush());
+        if (frame != null || microtaskToken != null || _finalized) return;
+        // Prefer real rAF if available; otherwise, queue a microtask (cancelable via token)
+        if (typeof (globalThis as any).requestAnimationFrame === 'function') {
+            const raf = getRAF();
+            frame = raf(flush);
             return;
         }
-        frame = _raf(flush);
+        const token = {};
+        microtaskToken = token;
+        queueMicrotask(() => {
+            if (microtaskToken !== token) return; // canceled
+            microtaskToken = null;
+            flush();
+        });
     }
 
     /** Ensure stream not already finalized. Returns false if already finalized. */
@@ -112,8 +133,13 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         if (!ensureNotFinalized('finalize')) return;
         _finalized = true;
         if (frame != null) {
-            _caf(frame); // cancel pending frame then immediate flush
+            const caf = getCAF();
+            caf(frame); // cancel pending frame then immediate flush
             frame = null;
+        }
+        if (microtaskToken) {
+            // Cancel pending microtask flush
+            microtaskToken = null;
         }
         if (pendingMain.length || pendingReasoning.length) flush();
         else state.version++;
@@ -124,9 +150,11 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
 
     function reset() {
         if (frame != null) {
-            _caf(frame);
+            const caf = getCAF();
+            caf(frame);
             frame = null;
         }
+        if (microtaskToken) microtaskToken = null;
         pendingMain = [];
         pendingReasoning = [];
         _finalized = false;

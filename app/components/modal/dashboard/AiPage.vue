@@ -189,8 +189,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useAiSettings } from '~/composables/useAiSettings';
-import { useModelStore } from '~/composables/useModelStore';
+import { useAiSettings } from '~/composables/chat/useAiSettings';
+import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/composables/useModelSearch';
 
 const liveStatus = ref<HTMLElement | null>(null);

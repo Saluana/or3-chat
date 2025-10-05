@@ -57,13 +57,11 @@ vi.mock('../../db', () => ({
     },
     create: { thread: vi.fn().mockResolvedValue({ id: 'thread-ab1' }) },
     tx: {
-        appendMessage: vi
-            .fn()
-            .mockImplementation(async ({ role }: any) => ({
-                id:
-                    (role === 'user' ? 'u-' : 'a-') +
-                    Math.random().toString(36).slice(2, 6),
-            })),
+        appendMessage: vi.fn().mockImplementation(async ({ role }: any) => ({
+            id:
+                (role === 'user' ? 'u-' : 'a-') +
+                Math.random().toString(36).slice(2, 6),
+        })),
     },
     upsert: { message: vi.fn().mockResolvedValue(undefined) },
 }));
@@ -106,7 +104,7 @@ function tick(ms = 0) {
 
 describe('chat abort behavior', () => {
     it('does not show a toast when aborting with showAbortInfo=false', async () => {
-        const { useChat } = await import('../useAi');
+        const { useChat } = await import('../chat/useAi');
         const chat = useChat([]);
         const sendP = chat.sendMessage('hello world');
         await tick(10); // some chunks processed

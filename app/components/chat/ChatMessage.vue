@@ -235,7 +235,6 @@ import LoadingGenerating from './LoadingGenerating.vue';
 import { parseHashes } from '~/utils/files/attachments';
 import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
-import { useMessageEditing } from '~/composables/useMessageEditing';
 import { shallowRef } from 'vue';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown } from 'streamdown-vue';

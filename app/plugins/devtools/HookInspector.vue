@@ -299,8 +299,7 @@ const hookDetails = computed(() => {
         const sum = sorted.reduce((acc, t) => acc + t, 0);
         const avg = count > 0 ? (sum / count).toFixed(2) : '0.00';
         const p95Index = Math.floor(count * 0.95);
-        const p95 =
-            count > 0 ? sorted[p95Index]?.toFixed(2) ?? '0.00' : '0.00';
+        const p95 = count > 0 ? sorted[p95Index]?.toFixed(2) ?? '0.00' : '0.00';
         const max =
             count > 0 ? sorted[count - 1]?.toFixed(2) ?? '0.00' : '0.00';
         const errorCount = errors[name] || 0;
@@ -360,5 +359,14 @@ onUnmounted(() => {
     if (passiveInterval) {
         clearInterval(passiveInterval);
     }
+});
+
+// Expose for testing
+defineExpose({
+    updateSnapshot,
+    hookDetails,
+    stats,
+    diagnosticsSnapshot,
+    autoRefresh,
 });
 </script>

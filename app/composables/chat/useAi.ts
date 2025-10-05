@@ -14,7 +14,6 @@ import type {
     ContentPart,
     ChatMessage,
     SendMessageParams,
-    TextPart,
 } from '~/utils/chat/types';
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
@@ -25,13 +24,17 @@ import {
     trimOrMessagesImages,
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
-import { openRouterStream } from '~/utils/chat/openrouterStream';
-import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
+import { openRouterStream } from '../../utils/chat/openrouterStream';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
 import { promptJsonToString, composeSystemPrompt } from '~/utils/prompt-utils';
 import { resolveDefaultModel } from '~/utils/models-service';
-import { useModelStore } from '~/composables/useModelStore';
 import { state } from '~/state/global';
+// Import paths aligned with tests' vi.mock targets
+import { useUserApiKey } from '#imports';
+import { useActivePrompt } from '#imports';
+import { getDefaultPromptId } from '#imports';
+import { useHooks } from '#imports';
+// settings/model store are provided elsewhere at runtime; keep dynamic access guards
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 

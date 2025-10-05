@@ -357,7 +357,6 @@ import { createOrRefFile } from '~/db/files';
 import { reportError, err } from '~/utils/errors';
 import { validateFile, persistAttachment } from './file-upload-utils';
 import type { FileMeta } from '~/db/schema';
-import { useModelStore } from '~/composables/useModelStore';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';

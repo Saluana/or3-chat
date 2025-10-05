@@ -2,7 +2,6 @@
 export * from './useStreamAccumulator';
 export * from './useObservedElementSize';
 export * from './useHooks';
-export * from './ui-extensions/messages/useMessageActions';
 export * from './ui-extensions/documents/useDocumentHistoryActions';
 export * from './ui-extensions/threads/useThreadHistoryActions';
 export * from './ui-extensions/projects/useProjectTreeActions';
@@ -34,3 +33,10 @@ export * from './chat/useAi';
 export * from './chat/useAiSettings';
 export * from './chat/useChatInputBridge';
 export * from './chat/useDefaultPrompt';
+export * from './chat/useMessageEditing';
+export * from './chat/useModelStore';
+export * from './chat/useMessageActions';
+
+// Hook composables
+export * from './useHooks';
+export * from './useHookEffect';

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as Errors from '~/utils/errors';
-import { useChat } from '../useAi';
+import { useChat } from '../chat/useAi';
 import { state } from '~/state/global';
 
 // Mock hooks to avoid Dexie / heavy deps impacting test
