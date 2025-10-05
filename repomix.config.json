@@ -1,0 +1,12 @@
+{
+    "output": {
+        "style": "markdown",
+        "filePath": "or3-repo.md",
+        "removeComments": true,
+        "showLineNumbers": true,
+        "topFilesLength": 10
+    },
+    "ignore": {
+        "customPatterns": ["*.test.ts", "docs/**", "or3-repo.md"]
+    }
+}
