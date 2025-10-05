@@ -37,8 +37,8 @@
 </template>
 
 <script setup lang="ts">
-import { reportError, err } from '~/utils/errors';
-import { kv } from '~/db';
+import { reportError, err } from '@shared/utils/errors';
+import { kv } from '@db';
 import { state } from '~/state/global';
 import { exchangeOpenRouterCode } from '~/utils/openrouter-auth';
 

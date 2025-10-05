@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '~/../tests/setup';
-import { validateFile, persistAttachment } from '../file-upload-utils';
+import { validateFile, persistAttachment } from '@features/chat/utils/file-upload-utils';
 
 vi.mock('#imports', () => ({
     useToast: () => ({ add: vi.fn() }),
 }));
 
 // Mock file persistence to control failures
-vi.mock('~/db/files', () => ({
+vi.mock('@db/files', () => ({
     createOrRefFile: vi.fn(async () => ({
         hash: 'h',
         name: 'x',
@@ -17,7 +17,7 @@ vi.mock('~/db/files', () => ({
     })),
 }));
 
-import { createOrRefFile } from '~/db/files';
+import { createOrRefFile } from '@db/files';
 import { useHooks } from '@core/hooks';
 vi.mock('@core/hooks', () => ({
     useHooks: () => ({

@@ -1,2 +1,8 @@
 // Barrel export for core/search module
-// Public API will be added during migration
+export {
+    importOrama,
+    createDb,
+    buildIndex,
+    searchWithIndex,
+    createTokenCounter,
+} from './orama';

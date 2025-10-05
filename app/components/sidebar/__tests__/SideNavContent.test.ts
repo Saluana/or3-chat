@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
-import SideNavContent from '../SideNavContent.vue';
+import SideNavContent from '@features/sidebar/components/SideNavContent.vue';
 
 // Minimal stubs for child components & composables used inside (focus is resize logic wiring)
 vi.mock('~/components/sidebar/SidebarVirtualList.vue', () => ({
@@ -58,8 +58,8 @@ vi.mock('~/db', () => ({
     del: {},
     create: {},
 }));
-vi.mock('~/db/documents', () => ({ updateDocument: vi.fn() }));
-vi.mock('~/composables/useDocumentsStore', () => ({ loadDocument: vi.fn() }));
+vi.mock('@db/documents', () => ({ updateDocument: vi.fn() }));
+vi.mock('@features/documents/composables/useDocumentsStore', () => ({ loadDocument: vi.fn() }));
 vi.mock('~/composables/useSidebarSearch', () => ({
     useSidebarSearch: () => ({
         query: ref(''),

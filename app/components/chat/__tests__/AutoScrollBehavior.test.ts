@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { defineComponent, ref, nextTick } from 'vue';
-import VirtualMessageList from '../VirtualMessageList.vue';
+import VirtualMessageList from '@features/chat/components/VirtualMessageList.vue';
 
 // Polyfill rAF to run immediately in tests (for useRafFn)
 const originalRAF = globalThis.requestAnimationFrame as any;

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
-import type { FileMeta } from '~/db/schema';
+import type { FileMeta } from '@db/schema';
 
 const factory = vi.hoisted(() => {
     const toastAdd = vi.fn();
@@ -11,7 +11,7 @@ const factory = vi.hoisted(() => {
 });
 
 vi.mock('#imports', () => ({ useToast: () => ({ add: factory.toastAdd }) }));
-vi.mock('~/db/files', () => ({ getFileBlob: factory.getFileBlob }));
+vi.mock('@db/files', () => ({ getFileBlob: factory.getFileBlob }));
 vi.mock('~/utils/errors', () => ({ reportError: factory.reportError }));
 vi.mock('@vueuse/core', () => ({ onKeyStroke: vi.fn() }));
 
@@ -47,7 +47,7 @@ describe('ImageViewer error handling', () => {
 
     it('reports when viewer blob fetch fails', async () => {
         factory.getFileBlob.mockRejectedValueOnce(new Error('missing'));
-        const ImageViewer = (await import('../ImageViewer.vue')).default;
+        const ImageViewer = (await import('@features/images/components/ImageViewer.vue')).default;
         const meta = makeMeta('viewer');
         mount(ImageViewer, {
             props: { modelValue: true, meta },

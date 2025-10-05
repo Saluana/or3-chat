@@ -47,7 +47,7 @@ vi.mock('~/utils/workspace-backup-stream', async () => {
     };
 });
 
-vi.mock('~/db/client', () => ({
+vi.mock('@db/client', () => ({
     db: {} as any,
 }));
 
@@ -107,7 +107,7 @@ describe('useWorkspaceBackup stream export', () => {
         expect((streamSaverModule as any).default.createWriteStream).toBe(
             createWriteStream
         );
-        const { useWorkspaceBackup } = await import('../useWorkspaceBackup');
+        const { useWorkspaceBackup } = await import('@features/dashboard/composables/useWorkspaceBackup');
         const api = useWorkspaceBackup();
 
         await api.exportWorkspace();

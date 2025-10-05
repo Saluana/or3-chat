@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import { nextTick, ref } from 'vue';
 
 // Mock useChat BEFORE importing ChatContainer so component uses deterministic state
-vi.mock('~/composables/useAi', () => {
+vi.mock('@features/chat/composables/useAi', () => {
     const { ref } = require('vue');
     const state: any = {
         messages: ref([]),
@@ -24,8 +24,8 @@ vi.mock('~/composables/useAi', () => {
     return { useChat, __chatState: state };
 });
 
-import ChatContainer from '../ChatContainer.vue';
-import VirtualMessageList from '../VirtualMessageList.vue';
+import ChatContainer from '@features/chat/components/ChatContainer.vue';
+import VirtualMessageList from '@features/chat/components/VirtualMessageList.vue';
 
 // Stubs for heavy child components so we only test orchestration logic.
 const globalStubs = {
@@ -133,7 +133,7 @@ describe('ChatContainer virtualization position preservation (Task 6.2.2)', () =
     }
 
     it('does not shift scrollTop when user is mid-list and messages appended', async () => {
-        const mod: any = await import('~/composables/useAi');
+        const mod: any = await import('@features/chat/composables/useAi');
         const __chatState = mod.__chatState;
         __chatState.messages.value = makeMessages(40); // ensure large set
         const wrapper = mount(ChatContainer as any, {
@@ -169,7 +169,7 @@ describe('ChatContainer virtualization position preservation (Task 6.2.2)', () =
     });
 
     it('auto-scrolls when at bottom and messages appended', async () => {
-        const mod: any = await import('~/composables/useAi');
+        const mod: any = await import('@features/chat/composables/useAi');
         const __chatState = mod.__chatState;
         __chatState.messages.value = makeMessages(40);
         const wrapper = mount(ChatContainer as any, {
@@ -201,7 +201,7 @@ describe('ChatContainer virtualization position preservation (Task 6.2.2)', () =
     });
 
     it('boundary shift (virtual vs recent) does not cause jump mid-list', async () => {
-        const mod: any = await import('~/composables/useAi');
+        const mod: any = await import('@features/chat/composables/useAi');
         const __chatState = mod.__chatState;
         __chatState.messages.value = makeMessages(40);
         const wrapper = mount(ChatContainer as any, {

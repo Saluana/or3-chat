@@ -90,7 +90,7 @@ vi.mock('../../state/global', () => ({
     state: { value: { openrouterKey: null } },
 }));
 
-import { useChat } from '../useAi';
+import { useChat } from '@features/chat/composables/useAi';
 
 describe('Hook order snapshot (pre-accumulator integration)', () => {
     beforeEach(() => {

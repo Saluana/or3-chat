@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as Errors from '~/utils/errors';
-import { useChat } from '../useAi';
+import * as Errors from '@shared/utils/errors';
+import { useChat } from '@features/chat/composables/useAi';
 import { state } from '~/state/global';
 
 // Mock hooks to avoid Dexie / heavy deps impacting test
@@ -27,7 +27,7 @@ vi.mock('~/db', () => ({
     db: { messages: { get: async () => null } },
 }));
 
-vi.mock('~/db/util', () => ({
+vi.mock('@db/util', () => ({
     nowSec: () => Math.floor(Date.now() / 1000),
     newId: () => Math.random().toString(36).slice(2),
 }));
@@ -49,8 +49,8 @@ vi.mock('~/utils/chat/files', () => ({
     inferMimeFromUrl: () => 'image/png',
     dataUrlToBlob: async () => new Blob(),
 }));
-vi.mock('~/db/threads', () => ({ getThreadSystemPrompt: async () => null }));
-vi.mock('~/db/prompts', () => ({ getPrompt: async () => null }));
+vi.mock('@db/threads', () => ({ getThreadSystemPrompt: async () => null }));
+vi.mock('@db/prompts', () => ({ getPrompt: async () => null }));
 vi.mock('#imports', () => ({
     useAppConfig: () => ({ errors: { showAbortInfo: false } }),
     useToast: () => ({ add: () => {} }),

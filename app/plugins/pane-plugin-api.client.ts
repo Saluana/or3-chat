@@ -1,14 +1,14 @@
-import { nowSec } from '~/db/util';
-import { create, tx } from '~/db';
-import { reportError, err as coreErr } from '~/utils/errors';
+import { nowSec } from '@db/util';
+import { create, tx } from '@db';
+import { reportError, err as coreErr } from '@shared/utils/errors';
 import { useNuxtApp } from '#app';
 import {
     setDocumentContent,
     setDocumentTitle,
     useDocumentState,
-} from '~/composables/useDocumentsStore';
+} from '@features/documents/composables/useDocumentsStore';
 import type { Ref } from 'vue';
-import type { PaneState } from '~/composables/useMultiPane';
+import type { PaneState } from '@features/dashboard/composables/useMultiPane';
 
 /** All error codes emitted by the Pane Plugin API */
 export type PaneApiErrorCode =
@@ -215,7 +215,7 @@ async function makeApi(): Promise<PanePluginApi> {
                 // Simplest non-duplicating behavior: if role is user & stream requested, use ChatInput bridge instead of manual append.
                 if (role === 'user' && stream) {
                     const { programmaticSend, hasPane } = await import(
-                        '~/composables/useChatInputBridge'
+                        '@features/chat/composables/useChatInputBridge'
                     );
                     if (hasPane(p.id)) {
                         const okBridge = programmaticSend(p.id, text);

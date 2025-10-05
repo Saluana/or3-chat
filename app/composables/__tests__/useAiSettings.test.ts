@@ -5,7 +5,7 @@ import {
     AI_SETTINGS_STORAGE_KEY,
     useAiSettings,
     type AiSettingsV1,
-} from '../useAiSettings';
+} from '@features/chat/composables/useAiSettings';
 
 function mockLocalStorage() {
     const store: Record<string, string> = {};

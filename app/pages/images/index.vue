@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import type { FileMeta } from '../../db/schema';
+import type { FileMeta } from '@db/schema';
 import {
     listImageMetasPaged,
     listDeletedImageMetasPaged,
     updateFileName,
-} from '../../db/files-select';
+} from '@db/files-select';
 import {
     getFileBlob,
     softDeleteMany,
     fileDeleteError,
     restoreMany,
     hardDeleteMany,
-} from '../../db/files';
-import GalleryGrid from './GalleryGrid.vue';
-import ImageViewer from './ImageViewer.vue';
-import { reportError } from '../../utils/errors';
+} from '@db/files';
+import GalleryGrid from '@features/images/components/GalleryGrid.vue';
+import ImageViewer from '@features/images/components/ImageViewer.vue';
+import { reportError } from '@shared/utils/errors';
 import { useToast } from '#imports';
 
 const PAGE_SIZE = 50;

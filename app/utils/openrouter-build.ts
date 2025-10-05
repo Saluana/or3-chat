@@ -2,7 +2,7 @@
 // Focus: hydrate file_hashes into base64 data URLs, enforce limits, dedupe, and
 // produce OpenAI-compatible content arrays.
 
-import { parseFileHashes } from '~/db/files-util';
+import { parseFileHashes } from '@db/files-util';
 
 export interface BuildImageCandidate {
     hash: string;
@@ -85,7 +85,7 @@ async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
     if (inflight.has(hash)) return inflight.get(hash)!;
     const p = (async () => {
         try {
-            const { getFileBlob } = await import('~/db/files');
+            const { getFileBlob } = await import('@db/files');
             const blob = await getFileBlob(hash);
             if (!blob) throw new Error('blob-missing');
             const dataUrl = await blobToDataUrl(blob);
@@ -266,7 +266,7 @@ export async function buildOpenRouterMessages(
                 if (!/^data:|^https?:|^blob:/i.test(String(fileData))) {
                     try {
                         const { getFileBlob, getFileMeta } = await import(
-                            '~/db/files'
+                            '@db/files'
                         );
                         const blob = await getFileBlob(String(fileData));
                         if (blob) {
@@ -354,7 +354,7 @@ export async function buildOpenRouterMessages(
             let isImage = false;
             if (looksLocal) {
                 try {
-                    const { getFileMeta } = await import('~/db/files');
+                    const { getFileMeta } = await import('@db/files');
                     const meta: any = await getFileMeta(img.hash).catch(
                         () => null
                     );

@@ -1,6 +1,6 @@
 import type { Ref } from 'vue';
 import type { ChatMessage } from './types';
-import { db } from '~/db';
+import { db } from '@db';
 
 export async function ensureThreadHistoryLoaded(
     threadIdRef: Ref<string | undefined>,

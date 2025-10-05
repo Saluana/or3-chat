@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { nextTick } from 'vue';
-import ChatContainer from '../ChatContainer.vue';
+import ChatContainer from '@features/chat/components/ChatContainer.vue';
 import { shallowMount } from '@vue/test-utils';
 
 // Minimal stub composables & globals if needed can be auto-mocked by existing test setup.

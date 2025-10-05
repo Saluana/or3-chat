@@ -1,4 +1,4 @@
-import { reportError, err } from '~/utils/errors';
+import { reportError, err } from '@shared/utils/errors';
 // Lightweight, type-safe hook engine for Nuxt/Vue apps
 // - Supports actions (side-effects) and filters (value transform)
 // - Priority scheduling (lower runs earlier)

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import VirtualMessageList from '../VirtualMessageList.vue';
+import VirtualMessageList from '@features/chat/components/VirtualMessageList.vue';
 
 const factory = (messages: any[] = []) =>
     mount(VirtualMessageList, {

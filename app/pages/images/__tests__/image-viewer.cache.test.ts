@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import type { FileMeta } from '~/db/schema';
+import type { FileMeta } from '@db/schema';
 
 const factory = vi.hoisted(() => {
     const toastAdd = vi.fn();
@@ -11,7 +11,7 @@ const factory = vi.hoisted(() => {
 });
 
 vi.mock('#imports', () => ({ useToast: () => ({ add: factory.toastAdd }) }));
-vi.mock('~/db/files', () => ({ getFileBlob: factory.getFileBlob }));
+vi.mock('@db/files', () => ({ getFileBlob: factory.getFileBlob }));
 vi.mock('~/utils/errors', () => ({ reportError: factory.reportError }));
 vi.mock('@vueuse/core', () => ({ onKeyStroke: factory.onKeyStroke }));
 
@@ -38,7 +38,7 @@ describe('ImageViewer preview cache reuse', () => {
         factory.reportError.mockReset();
         factory.onKeyStroke.mockReset();
 
-        const mod = await import('~/composables/usePreviewCache');
+        const mod = await import('@shared/composables/usePreviewCache');
         mod.resetSharedPreviewCache();
         mod.useSharedPreviewCache({
             maxUrls: 1,
@@ -51,7 +51,7 @@ describe('ImageViewer preview cache reuse', () => {
     });
 
     async function mountViewer(meta: FileMeta | null, modelValue = true) {
-        const ImageViewer = (await import('../ImageViewer.vue')).default;
+        const ImageViewer = (await import('@features/images/components/ImageViewer.vue')).default;
         return mount(ImageViewer, {
             props: { modelValue, meta },
             global: {

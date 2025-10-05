@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { defineComponent, ref, nextTick } from 'vue';
-import VirtualMessageList from '../VirtualMessageList.vue';
+import VirtualMessageList from '@features/chat/components/VirtualMessageList.vue';
 
 // Utility to fake scroll metrics on the container element (jsdom has no real layout)
 function setScrollMetrics(

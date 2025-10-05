@@ -2,5 +2,5 @@
     <PageShell default-mode="chat" />
 </template>
 <script setup lang="ts">
-import PageShell from '~/components/PageShell.vue';
+import PageShell from '@shared/components/PageShell.vue';
 </script>

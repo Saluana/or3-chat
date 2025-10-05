@@ -25,7 +25,7 @@
                         >Chat about dogs</UButton
                     >
                 </div>
-                <sidebar-side-bottom-nav />
+                <SideBottomNav />
             </div>
         </template>
 
@@ -134,14 +134,14 @@
                     </div>
                 </div>
 
-                <chat-input-dropper />
+                <ChatInputDropper />
             </div>
         </div>
     </resizable-sidebar-layout>
 </template>
 
 <script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import RetroGlassBtn from '@shared/components/RetroGlassBtn.vue';
 
 const nuxtApp = useNuxtApp();
 // Theme plugin is client-only (theme.client.ts). During SSR/prerender $theme is undefined.

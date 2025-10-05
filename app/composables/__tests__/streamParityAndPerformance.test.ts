@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useChat } from '../useAi';
+import { useChat } from '@features/chat/composables/useAi';
 
 // Re‑use same mocking strategy as hookOrderSnapshot to isolate streaming logic.
 vi.mock('#imports', () => ({ useToast: () => ({ add: () => {} }) }));
@@ -114,7 +114,7 @@ describe('Streaming parity & performance', () => {
                 yield { type: 'text', text: 'World' };
             }),
         }));
-        const { useChat } = await import('../useAi');
+        const { useChat } = await import('@features/chat/composables/useAi');
         const chat = useChat([]);
         await chat.sendMessage('hi');
         await nextFrames();
@@ -142,7 +142,7 @@ describe('Streaming parity & performance', () => {
                 yield { type: 'text', text: 'Done' };
             }),
         }));
-        const { useChat } = await import('../useAi');
+        const { useChat } = await import('@features/chat/composables/useAi');
         const chat = useChat([]);
         await chat.sendMessage('q');
         await nextFrames();
@@ -180,7 +180,7 @@ describe('Streaming parity & performance', () => {
                 })();
             }),
         }));
-        const { useChat } = await import('../useAi');
+        const { useChat } = await import('@features/chat/composables/useAi');
         const chat = useChat([]);
         const p = chat.sendMessage('abort-me');
         // Abort quickly after first frame
@@ -206,7 +206,7 @@ describe('Streaming parity & performance', () => {
                 for (const c of chunks) yield c;
             }),
         }));
-        const { useChat } = await import('../useAi');
+        const { useChat } = await import('@features/chat/composables/useAi');
         const chat = useChat([]);
         await chat.sendMessage('perf');
         // Allow more frames for persistence since streaming writes intermittently

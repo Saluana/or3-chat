@@ -360,8 +360,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import {
     useWorkspaceBackup,
     type WorkspaceImportMode,
-} from '~/composables/useWorkspaceBackup';
-import { err, reportError, type AppError } from '~/utils/errors';
+} from '@features/dashboard/composables/useWorkspaceBackup';
+import { err, reportError, type AppError } from '@shared/utils/errors';
 
 const docsHref =
     'https://github.com/Saluana/or3-chat/blob/main/docs/UI/workspace-backup.md';

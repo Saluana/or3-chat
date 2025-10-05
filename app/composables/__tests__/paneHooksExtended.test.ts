@@ -16,12 +16,12 @@ vi.mock('../useActivePrompt', () => ({
 vi.mock('../useDefaultPrompt', () => ({
     getDefaultPromptId: vi.fn().mockResolvedValue(null),
 }));
-vi.mock('~/db/threads', () => ({
+vi.mock('@db/threads', () => ({
     getThreadSystemPrompt: vi.fn().mockResolvedValue(null),
 }));
-vi.mock('~/db/prompts', () => ({ getPrompt: vi.fn().mockResolvedValue(null) }));
+vi.mock('@db/prompts', () => ({ getPrompt: vi.fn().mockResolvedValue(null) }));
 vi.mock('~/state/global', () => ({ state: ref({ openrouterKey: '' }) }));
-vi.mock('../useStreamAccumulator', () => ({
+vi.mock('@shared/composables/useStreamAccumulator', () => ({
     createStreamAccumulator: () => {
         const state = ref({ finalized: false });
         return {
@@ -78,8 +78,8 @@ vi.mock('~/utils/files/attachments', () => ({
     parseHashes: () => [],
     mergeAssistantFileHashes: (_a: any, _b: any) => _b || [],
 }));
-vi.mock('~/db/files', () => ({ createOrRefFile: vi.fn() }));
-vi.mock('~/db/files-util', () => ({
+vi.mock('@db/files', () => ({ createOrRefFile: vi.fn() }));
+vi.mock('@db/files-util', () => ({
     serializeFileHashes: (arr: string[]) => arr.join(','),
 }));
 vi.mock('~/utils/chat/messages', () => ({
@@ -104,15 +104,15 @@ vi.mock('#imports', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 // Document store state mock (configurable per test via mutable map)
 const docState: Record<string, any> = {};
-vi.mock('../useDocumentsStore', () => ({
+vi.mock('@features/documents/composables/useDocumentsStore', () => ({
     releaseDocument: vi.fn(),
     useDocumentState: (id: string) => docState[id],
 }));
 
 // ---- Imports under test ----
-import { useMultiPane } from '../useMultiPane';
-import { usePaneDocuments } from '../usePaneDocuments';
-import { useChat } from '../useAi';
+import { useMultiPane } from '@features/dashboard/composables/useMultiPane';
+import { usePaneDocuments } from '@features/documents/composables/usePaneDocuments';
+import { useChat } from '@features/chat/composables/useAi';
 
 // Helper to await microtasks
 const flush = () => new Promise((r) => setTimeout(r, 0));

@@ -7,7 +7,7 @@ import {
     unregisterThreadHistoryAction,
 } from '~/composables/ui-extensions/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
-import { db } from '~/db';
+import { db } from '@db';
 
 /**
  * Example plugin: History Actions

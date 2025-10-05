@@ -61,7 +61,7 @@
  */
 
 import { computed, reactive } from 'vue';
-import type { Post } from '~/db';
+import type { Post } from '@db';
 
 /** Definition for an extendable chat message action button. */
 export interface DocumentHistoryAction {

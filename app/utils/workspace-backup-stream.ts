@@ -1,6 +1,6 @@
 import Dexie from 'dexie';
 import type { IndexableType } from 'dexie';
-import type { Or3DB } from '~/db/client';
+import type { Or3DB } from '@db/client';
 
 export const WORKSPACE_BACKUP_FORMAT = 'or3-backup-stream';
 export const WORKSPACE_BACKUP_VERSION = 1;

@@ -4,8 +4,8 @@ import { createHookEngine } from '@core/hooks';
 
 vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
 
-import { useMultiPane } from '../useMultiPane';
-import { usePaneDocuments } from '../usePaneDocuments';
+import { useMultiPane } from '@features/dashboard/composables/useMultiPane';
+import { usePaneDocuments } from '@features/documents/composables/usePaneDocuments';
 
 // Provide hook engine AFTER declaration (var hoisting)
 const hookEngine = createHookEngine();

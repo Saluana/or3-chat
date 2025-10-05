@@ -16,7 +16,7 @@ import type {
     UiPaneMsgSentPayload,
     UiPaneMsgReceivedPayload,
 } from '@core/hooks/hook-types';
-import { getMessage } from '~/db/messages';
+import { getMessage } from '@db/messages';
 
 const MAX_HOPS = 3; // prevent runaway ping-pong
 const RELAY_SOURCE = 'relay';

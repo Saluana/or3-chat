@@ -14,7 +14,14 @@ export default defineNuxtConfig({
     components: [
         { path: '~/components' }, // Global atoms - use default pathPrefix behavior
         { path: '~/shared/components', pathPrefix: false }, // Shared components
-        { path: '~/features', pathPrefix: true, extensions: ['.vue'] }, // Feature components
+        { path: '~/features/chat/components', pathPrefix: false }, // Chat components
+        { path: '~/features/documents/components', pathPrefix: false }, // Document components
+        { path: '~/features/editor/components', pathPrefix: false }, // Editor components
+        { path: '~/features/sidebar/components', pathPrefix: false }, // Sidebar components
+        { path: '~/features/dashboard/components', pathPrefix: false }, // Dashboard components
+        { path: '~/features/images/components', pathPrefix: false }, // Image components
+        { path: '~/features/threads/components', pathPrefix: false }, // Thread components
+        { path: '~/features/projects/components', pathPrefix: false }, // Project components
     ],
 
     // Auto-import composables & utils from new directories

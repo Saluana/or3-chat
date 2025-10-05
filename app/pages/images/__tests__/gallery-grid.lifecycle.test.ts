@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import type { FileMeta } from '~/db/schema';
+import type { FileMeta } from '@db/schema';
 
 const { getMocks } = vi.hoisted(() => {
     const toastAdd = vi.fn();
@@ -25,7 +25,7 @@ function createErrorsMock() {
 vi.mock('#imports', () => ({ useToast: () => ({ add: getMocks().toastAdd }) }));
 
 vi.mock('../../db/files', createFilesMock);
-vi.mock('~/db/files', createFilesMock);
+vi.mock('@db/files', createFilesMock);
 vi.mock(
     new URL('../../../db/files.ts', import.meta.url).pathname,
     createFilesMock
@@ -57,7 +57,7 @@ const makeMeta = (hash: string): FileMeta => ({
 });
 
 async function mountGrid(items: FileMeta[]) {
-    const GalleryGrid = (await import('../GalleryGrid.vue')).default;
+    const GalleryGrid = (await import('@features/images/components/GalleryGrid.vue')).default;
     return mount(GalleryGrid, {
         props: {
             items,

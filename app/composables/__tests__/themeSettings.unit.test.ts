@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { sanitize, detectModeFromHtml } from '../useThemeSettings';
-import * as ThemeDefs from '../theme-defaults';
-import type { ThemeSettings } from '../theme-types';
+import { sanitize, detectModeFromHtml } from '@core/theme';
+import * as ThemeDefs from '@core/theme';
+import type { ThemeSettings } from '@core/theme';
 
 // Helper to clone defaults
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));

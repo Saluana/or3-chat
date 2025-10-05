@@ -2,7 +2,7 @@
 // If landing on /openrouter-callback with code/state in query, persist them ASAP
 // (in both sessionStorage and localStorage) then strip them from the visible URL
 // so future reloads don't rely on SW matching query variants.
-import { reportError, err } from '~/utils/errors';
+import { reportError, err } from '@shared/utils/errors';
 
 export default defineNuxtPlugin(() => {
     if (process.server) return;

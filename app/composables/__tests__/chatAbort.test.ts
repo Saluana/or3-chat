@@ -106,7 +106,7 @@ function tick(ms = 0) {
 
 describe('chat abort behavior', () => {
     it('does not show a toast when aborting with showAbortInfo=false', async () => {
-        const { useChat } = await import('../useAi');
+        const { useChat } = await import('@features/chat/composables/useAi');
         const chat = useChat([]);
         const sendP = chat.sendMessage('hello world');
         await tick(10); // some chunks processed

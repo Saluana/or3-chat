@@ -9,7 +9,7 @@ import {
 } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick, ref } from 'vue';
-import ChatContainer from '../ChatContainer.vue';
+import ChatContainer from '@features/chat/components/ChatContainer.vue';
 
 // Use real VirtualMessageList; stub only heavy children not under test.
 const lightweightStubs = {
@@ -42,7 +42,7 @@ function makeMessages(n: number) {
 }
 
 // Mock useChat – returns mutable singleton per test so we can simulate streaming
-vi.mock('~/composables/useAi', () => {
+vi.mock('@features/chat/composables/useAi', () => {
     const state = {
         messages: ref<any[]>([]),
         loading: ref(false),
@@ -91,7 +91,7 @@ function setScrollMetrics(
 describe('ChatContainer streaming + jank integration (Task 6.2.1 & 6.2.3)', () => {
     let chatState: any;
     beforeEach(async () => {
-        const mod = await import('~/composables/useAi');
+        const mod = await import('@features/chat/composables/useAi');
         chatState = (mod as any).__chatState;
         // reset state per test
         chatState.messages.value = makeMessages(12);

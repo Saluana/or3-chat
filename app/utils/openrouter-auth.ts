@@ -1,4 +1,4 @@
-import { err, reportError } from '~/utils/errors';
+import { err, reportError } from '@shared/utils/errors';
 
 export interface ExchangeResultSuccess {
     ok: true;

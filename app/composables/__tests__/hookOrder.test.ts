@@ -106,7 +106,7 @@ const hookEngine = createHookEngine();
 vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
 
 // Import after all mocks
-import { useChat } from '../useAi';
+import { useChat } from '@features/chat/composables/useAi';
 
 describe('Hook order snapshot (pre-accumulator integration)', () => {
     beforeEach(() => {
