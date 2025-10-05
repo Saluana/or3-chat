@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import { resolve } from 'pathe';
 import vue from '@vitejs/plugin-vue';
 
 // Duplicate vite type trees (root vs vitest's bundled) cause overload mismatch.
@@ -16,6 +17,10 @@ export default defineConfig({
             '#imports': path.resolve(__dirname, 'tests/stubs/nuxt-imports.ts'),
             '~': path.resolve(__dirname, 'app'),
             '#app': path.resolve(__dirname, 'tests/stubs/nuxt-app.ts'),
+            '@core': resolve('./app/core'),
+            '@shared': resolve('./app/shared'),
+            '@features': resolve('./app/features'),
+            '@db': resolve('./db'),
         },
     },
     test: {
