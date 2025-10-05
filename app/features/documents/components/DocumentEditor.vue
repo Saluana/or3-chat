@@ -188,8 +188,8 @@ function emitContent() {
 
     // Emit hook for plugins to observe updates
     // TypeScript assertion needed because editor.value type inference is complex
-    hooks.doActionSync('editor.updated:action:after', { 
-        editor: editor.value as Editor 
+    hooks.doActionSync('editor.updated:action:after', {
+        editor: editor.value as Editor,
     });
 }
 
