@@ -229,10 +229,7 @@ import {
     useDocumentState,
 } from '~/composables/documents/useDocumentsStore';
 import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
-import {
-    useHeaderActions,
-    type HeaderActionEntry,
-} from '~/composables/ui-extensions/chrome';
+import { useHeaderActions, type HeaderActionEntry } from '#imports';
 import type {
     DbDeletePayload,
     ThreadEntity,

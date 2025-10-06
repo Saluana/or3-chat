@@ -353,7 +353,6 @@ import {
     getCurrentInstance,
 } from 'vue';
 import { MAX_FILES_PER_MESSAGE } from '../../utils/files-constants';
-import { createOrRefFile } from '~/db/files';
 import { reportError, err } from '~/utils/errors';
 import { validateFile, persistAttachment } from './file-upload-utils';
 import type { FileMeta } from '~/db/schema';
@@ -363,14 +362,12 @@ import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
 import { isMobile, state } from '~/state/global';
-import { useUserApiKey } from '~/composables/useUserApiKey';
-import { useOpenRouterAuth } from '~/composables/useOpenrouter';
-import { useToast } from '#imports';
+import { useToast, useUserApiKey, useOpenRouterAuth } from '#imports';
 import {
     useComposerActions,
     type ComposerActionEntry,
     type ComposerActionContext,
-} from '~/composables/ui-extensions/chrome';
+} from '#imports';
 const props = defineProps<{
     loading?: boolean;
     containerWidth?: number;
