@@ -23,8 +23,8 @@ export {
     type DashboardPlugin,
     type DashboardPluginPage,
 } from './ui-extensions/dashboard/useDashboardPlugins';
-export * from './ui-extensions/editor/useEditorToolbar';
-export * from './ui-extensions/editor/useEditorNodes';
+export * from './editor/useEditorToolbar';
+export * from './editor/useEditorNodes';
 export * from './useWorkspaceBackup';
 
 // Document composables

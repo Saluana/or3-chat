@@ -15,12 +15,12 @@ import {
     unregisterEditorMark,
     listRegisteredEditorNodeIds,
     listRegisteredEditorMarkIds,
-} from '../ui-extensions/editor/useEditorNodes';
+} from '../editor/useEditorNodes';
 import {
     registerEditorToolbarButton,
     unregisterEditorToolbarButton,
     listRegisteredEditorToolbarButtonIds,
-} from '../ui-extensions/editor/useEditorToolbar';
+} from '../editor/useEditorToolbar';
 import StarterKit from '@tiptap/starter-kit';
 
 describe('Editor Integration Tests', () => {
@@ -91,7 +91,7 @@ describe('Editor Integration Tests', () => {
 
         // Import dynamically to get fresh registered extensions
         const { listEditorNodes, listEditorMarks } = await import(
-            '../ui-extensions/editor/useEditorNodes'
+            '../editor/useEditorNodes'
         );
 
         const pluginNodes = listEditorNodes().map((n) => n.extension);
@@ -148,7 +148,7 @@ describe('Editor Integration Tests', () => {
         });
 
         const { useEditorToolbarButtons } = await import(
-            '../ui-extensions/editor/useEditorToolbar'
+            '../editor/useEditorToolbar'
         );
 
         const editor = new Editor({
@@ -235,7 +235,7 @@ describe('Editor Integration Tests', () => {
         }
 
         const { listEditorNodes: listNodes10, listEditorMarks: listMarks10 } =
-            await import('../ui-extensions/editor/useEditorNodes');
+            await import('../editor/useEditorNodes');
         const plugins10 = [
             ...listNodes10().map((n) => n.extension),
             ...listMarks10().map((m) => m.extension),
@@ -262,7 +262,7 @@ describe('Editor Integration Tests', () => {
         }
 
         const { listEditorNodes: listNodes30, listEditorMarks: listMarks30 } =
-            await import('../ui-extensions/editor/useEditorNodes');
+            await import('../editor/useEditorNodes');
         const plugins30 = [
             ...listNodes30().map((n) => n.extension),
             ...listMarks30().map((m) => m.extension),

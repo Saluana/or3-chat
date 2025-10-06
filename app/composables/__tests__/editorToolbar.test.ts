@@ -4,7 +4,7 @@ import {
     unregisterEditorToolbarButton,
     listRegisteredEditorToolbarButtonIds,
     useEditorToolbarButtons,
-} from '../ui-extensions/editor/useEditorToolbar';
+} from '../editor/useEditorToolbar';
 import { ref } from 'vue';
 
 describe('useEditorToolbar', () => {
