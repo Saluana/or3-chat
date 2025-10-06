@@ -1,5 +1,5 @@
 import { ref, watch, type Ref } from 'vue';
-import type { OpenRouterModel } from '~/utils/models-service';
+import type { OpenRouterModel } from '~/core/auth/models-service';
 import {
     createDb,
     buildIndex as buildOramaIndex,

@@ -181,7 +181,7 @@
 import { computed } from 'vue';
 import { VList } from 'virtua/vue';
 import { useModelSearch } from '~/composables/useModelSearch';
-import type { OpenRouterModel } from '~/utils/models-service';
+import type { OpenRouterModel } from '~/core/auth/models-service';
 
 const props = defineProps<{
     showModal: boolean;

@@ -151,6 +151,12 @@ export default defineNuxtConfig({
             '~/composables',
             // Scan all composables within subdirectories
             '~/composables/**',
+            // Scan core directory for auth and other utilities
+            '~/core',
+            '~/core/**',
+        ],
+        imports: [
+            { name: 'useOpenRouterAuth', from: '~/core/auth/useOpenrouter' },
         ],
     },
     // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)

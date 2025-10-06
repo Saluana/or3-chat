@@ -30,7 +30,7 @@ import {
     promptJsonToString,
     composeSystemPrompt,
 } from '~/utils/chat/prompt-utils';
-import { resolveDefaultModel } from '~/utils/models-service';
+import { resolveDefaultModel } from '~/core/auth/models-service';
 import { state } from '~/state/global';
 // Import paths aligned with tests' vi.mock targets
 import { useUserApiKey } from '#imports';
@@ -508,7 +508,7 @@ export function useChat(
             }
 
             const { buildOpenRouterMessages } = await import(
-                '~/utils/openrouter-build'
+                '~/core/auth/openrouter-build'
             );
 
             // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)

@@ -4,7 +4,7 @@ import { ref } from 'vue';
 import modelsService, {
     type OpenRouterModel,
     type PriceBucket,
-} from '~/utils/models-service';
+} from '~/core/auth/models-service';
 
 // Module-level in-flight promise for deduping parallel fetches across composable instances
 let inFlight: Promise<OpenRouterModel[]> | null = null;
