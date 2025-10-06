@@ -1,5 +1,5 @@
 import { db } from './client';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow } from './util';
 import { nowSec } from './util';
 import {
@@ -14,7 +14,7 @@ import type {
     DbCreatePayload,
     DbDeletePayload,
     FileEntity,
-} from '../utils/hook-types';
+} from '../core/hooks/hook-types';
 
 /**
  * File storage and deduplication layer with hook integration.

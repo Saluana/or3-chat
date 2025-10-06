@@ -1,6 +1,6 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import { nowSec, parseOrThrow } from './util';
 import {
     PostSchema,
@@ -8,7 +8,7 @@ import {
     type Post,
     type PostCreate,
 } from './schema';
-import type { PostEntity } from '../utils/hook-types';
+import type { PostEntity } from '../core/hooks/hook-types';
 
 // Convert Post schema type to PostEntity for hooks (where applicable)
 function toPostEntity(post: Post): PostEntity {

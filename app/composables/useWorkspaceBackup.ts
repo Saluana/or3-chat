@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue';
 import { db } from '~/db/client';
 import { reportError, err, asAppError } from '~/utils/errors';
-import { useHooks } from '~/composables/useHooks';
+import { useHooks } from '~/core/hooks/useHooks';
 import {
     detectWorkspaceBackupFormat,
     importWorkspaceStream,

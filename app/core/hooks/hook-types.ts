@@ -1,7 +1,7 @@
 // Hook & Plugin Type System — Core Types (non-breaking, types-only)
 // This file provides compile-time types and utilities for amazing DX.
 // Runtime behavior is unchanged: wrappers will delegate to the existing HookEngine.
-import type { PaneState as MultiPaneState } from '../composables/useMultiPane';
+import type { PaneState as MultiPaneState } from '../../composables/useMultiPane';
 /**
  * Overview
  * - Strongly-typed hook names (actions and filters)

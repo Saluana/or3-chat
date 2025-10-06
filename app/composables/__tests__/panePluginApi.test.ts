@@ -5,7 +5,7 @@ import { ref } from 'vue';
 (globalThis as any).defineNuxtPlugin = (fn: any) => fn;
 
 // Hook engine mock
-import { createHookEngine } from '../../utils/hooks';
+import { createHookEngine } from '../../core/hooks/hooks';
 const hookEngine = createHookEngine();
 vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
 

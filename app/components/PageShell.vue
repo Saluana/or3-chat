@@ -234,7 +234,7 @@ import type {
     DbDeletePayload,
     ThreadEntity,
     DocumentEntity,
-} from '~/utils/hook-types';
+} from '~/core/hooks/hook-types';
 import { useMagicKeys, whenever } from '@vueuse/core';
 
 const props = withDefaults(

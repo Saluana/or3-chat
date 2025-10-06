@@ -4,7 +4,7 @@
 import Dexie from 'dexie';
 import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { db } from '~/db';
-import { useHooks } from './useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 
 // Narrow pane message representation (always flattened string content)
 export type MultiPaneMessage = {

@@ -1,12 +1,12 @@
 import { db } from './client';
 import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import type {
     DbCreatePayload,
     DbDeletePayload,
     DbUpdatePayload,
     PromptEntity,
-} from '../utils/hook-types';
+} from '../core/hooks/hook-types';
 
 /**
  * Internal stored row shape (reuses posts table with postType = 'prompt').

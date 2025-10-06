@@ -1,6 +1,6 @@
 import { defineNuxtPlugin } from '#app';
-import { createHookEngine, type HookEngine } from '../utils/hooks';
-import { createTypedHookEngine } from '../utils/typed-hooks';
+import { createHookEngine, type HookEngine } from '../core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 
 // Client: keep a singleton across HMR to avoid duplicate engines
 export default defineNuxtPlugin(() => {

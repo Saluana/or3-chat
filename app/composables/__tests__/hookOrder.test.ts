@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createHookEngine } from '~/utils/hooks';
+import { createHookEngine } from '~/core/hooks/hooks';
 
 describe('Hook System - Execution Order', () => {
     let engine: ReturnType<typeof createHookEngine>;

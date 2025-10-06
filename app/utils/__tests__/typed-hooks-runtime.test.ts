@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createHookEngine } from '../hooks';
-import { createTypedHookEngine } from '../typed-hooks';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 
 describe('typed-hooks runtime', () => {
     const engine = createHookEngine();

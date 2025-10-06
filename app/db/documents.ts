@@ -1,13 +1,13 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
 import { newId, nowSec } from './util';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import type {
     DbCreatePayload,
     DbDeletePayload,
     DbUpdatePayload,
     DocumentEntity,
-} from '../utils/hook-types';
+} from '../core/hooks/hook-types';
 import type { TypedHookEngine } from '../utils/typed-hooks';
 
 /**

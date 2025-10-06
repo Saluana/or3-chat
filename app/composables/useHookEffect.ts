@@ -1,12 +1,12 @@
 import { onBeforeUnmount } from 'vue';
-import { useHooks } from './useHooks';
-import type { HookKind } from '../utils/hooks';
+import { useHooks } from '../core/hooks/useHooks';
+import type { HookKind } from '../core/hooks/hooks';
 import type {
     HookName,
     ActionHookName,
     FilterHookName,
     InferHookCallback,
-} from '../utils/hook-types';
+} from '../core/hooks/hook-types';
 
 interface Options<K extends HookName = HookName> {
     kind?:

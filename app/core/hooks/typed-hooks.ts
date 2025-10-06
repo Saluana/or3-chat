@@ -1,7 +1,7 @@
 // Typed Hook Engine wrapper — Types-first, zero runtime overhead.
 // Delegates to the existing HookEngine, preserving all behavior.
 
-import type { HookEngine, HookKind, OnOptions } from './hooks';
+import type { HookEngine, HookKind, OnOptions } from '~/core/hooks/hooks';
 import type {
     ActionHookName,
     FilterHookName,
@@ -9,7 +9,7 @@ import type {
     InferHookCallback,
     InferHookParams,
     InferHookReturn,
-} from './hook-types';
+} from '~/core/hooks/hook-types';
 
 // Utility: Tail of a tuple
 type Tail<T extends any[]> = T extends [any, ...infer Rest] ? Rest : [];

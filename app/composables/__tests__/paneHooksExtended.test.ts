@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
-import { createHookEngine } from '../../utils/hooks';
+import { createHookEngine } from '../../core/hooks/hooks';
 
 // Primary hook engine mock for useHooks()
 const hookEngine = createHookEngine();

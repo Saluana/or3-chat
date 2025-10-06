@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { useHooks } from '~/composables/useHooks';
+import { useHooks } from '~/core/hooks/useHooks';
 import {
     persistAttachment,
     type AttachmentLike,
 } from '~/components/chat/file-upload-utils';
-import type { FilesAttachInputPayload } from '~/utils/hook-types';
+import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 import { db } from '../client';
 
 describe('files.attach:filter:input hook', () => {

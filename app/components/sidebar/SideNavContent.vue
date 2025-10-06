@@ -446,7 +446,7 @@ import {
 } from 'vue';
 import type { Component } from 'vue';
 import { useElementSize } from '@vueuse/core';
-import { useHooks } from '~/composables/useHooks';
+import { useHooks } from '~/core/hooks/useHooks';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';

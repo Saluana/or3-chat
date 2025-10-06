@@ -1,7 +1,7 @@
 /** Barrel export for chat-related composables (Task 1.6) */
 export * from './useStreamAccumulator';
 export * from './useObservedElementSize';
-export * from './useHooks';
+export * from '../core/hooks/useHooks';
 export {
     registerDashboardPlugin,
     unregisterDashboardPlugin,
@@ -55,7 +55,7 @@ export * from './threads/useThreadHistoryActions';
 export * from './threads/useThreadSearch';
 
 // Hook composables
-export * from './useHooks';
+export * from '../core/hooks/useHooks';
 export * from './useHookEffect';
 
 // Project composables

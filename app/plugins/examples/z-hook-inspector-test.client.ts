@@ -1,4 +1,4 @@
-import type { HookEngine } from '~/utils/hooks';
+import type { HookEngine } from '~/core/hooks/hooks';
 
 export default defineNuxtPlugin(() => {
     // Access the global hooks instance (created by hooks.client.ts plugin)
