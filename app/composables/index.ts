@@ -22,16 +22,26 @@ export {
     hasAnyCapability,
     type DashboardPlugin,
     type DashboardPluginPage,
-} from './ui-extensions/dashboard/useDashboardPlugins';
+} from './dashboard/useDashboardPlugins';
 export * from './editor/useEditorToolbar';
 export * from './editor/useEditorNodes';
 export * from './useWorkspaceBackup';
+
+//Sidebar composables
+export * from './sidebar/useSidebarSections';
+export * from './sidebar/useHeaderActions';
+export * from './sidebar/useComposerActions';
+export * from './sidebar/useSidebarSearch';
 
 // Document composables
 export * from './documents/useDocumentsStore';
 export * from './documents/useDocumentsList';
 export * from './documents/useDocumentHistoryActions';
 export * from './documents/usePaneDocuments';
+
+//Editor composables
+export * from './editor/useEditorToolbar';
+export * from './editor/useEditorNodes';
 
 // Chat composables
 export * from './chat/useActivePrompt';

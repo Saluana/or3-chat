@@ -2,8 +2,8 @@ import { computed } from 'vue';
 import type { ComputedRef } from 'vue';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { ChromeActionColor } from './useSidebarSections';
-import { createRegistry } from '../_registry';
-import type { RegistryItem } from '../_registry';
+import { createRegistry } from '../ui-extensions/_registry';
+import type { RegistryItem } from '../ui-extensions/_registry';
 
 export interface HeaderActionContext {
     route?: RouteLocationNormalizedLoaded | null;

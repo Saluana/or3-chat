@@ -467,12 +467,7 @@ import {
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
-import {
-    useSidebarSections,
-    useSidebarFooterActions,
-    type SidebarSection,
-    type SidebarFooterActionEntry,
-} from '~/composables/ui-extensions/chrome';
+
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)
 
@@ -506,7 +501,11 @@ const containerRef = ref<HTMLElement | null>(null);
 // Dynamic bottom padding to avoid content hidden under absolute bottom nav
 const bottomPad = ref(140); // fallback
 const listHeight = ref(400);
-import { useSidebarSearch } from '~/composables/useSidebarSearch';
+import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
+import {
+    useSidebarSections,
+    useSidebarFooterActions,
+} from '~/composables/sidebar/useSidebarSections';
 // Documents live query (docs only) to feed search
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;

@@ -10,7 +10,7 @@ import {
     listDashboardPluginPages,
     resolveDashboardPluginPageComponent,
     useDashboardNavigation,
-} from '../ui-extensions/dashboard/useDashboardPlugins';
+} from '../dashboard/useDashboardPlugins';
 import { nextTick, h, ref } from 'vue';
 
 // Helper to flush Vue computed updates

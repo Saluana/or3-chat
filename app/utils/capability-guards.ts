@@ -1,7 +1,7 @@
 import {
     hasCapability,
     hasAnyCapability,
-} from '~/composables/ui-extensions/dashboard/useDashboardPlugins';
+} from '~/composables/dashboard/useDashboardPlugins';
 import { useToast } from '#imports';
 import { reportError, err } from './errors';
 
