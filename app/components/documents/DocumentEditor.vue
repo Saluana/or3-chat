@@ -119,7 +119,7 @@ import {
     setDocumentContent,
     setDocumentTitle,
     loadDocument,
-} from '~/composables/useDocumentsStore';
+} from '~/composables/documents/useDocumentsStore';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';

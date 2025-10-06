@@ -4,7 +4,7 @@ import {
     unregisterDocumentHistoryAction,
     listRegisteredDocumentHistoryActionIds,
     useDocumentHistoryActions,
-} from '../ui-extensions/documents/useDocumentHistoryActions';
+} from '../documents/useDocumentHistoryActions';
 
 describe('useDocumentHistoryActions', () => {
     beforeEach(() => {

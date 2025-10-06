@@ -25,7 +25,7 @@ vi.mock('~/db', () => ({
 
 // Documents store mocks (mutable map)
 const docStates: Record<string, any> = {};
-vi.mock('~/composables/useDocumentsStore', () => ({
+vi.mock('~/composables/documents/useDocumentsStore', () => ({
     setDocumentContent: vi.fn((id: string, c: any) => {
         (docStates[id] ||= {}).record = {
             ...(docStates[id]?.record || {}),

@@ -6,8 +6,8 @@ import type { MultiPaneState } from '~/composables/useMultiPane';
 import {
     releaseDocument,
     useDocumentState,
-} from '~/composables/useDocumentsStore';
-import { useHooks } from './useHooks';
+} from '~/composables/documents/useDocumentsStore';
+import { useHooks } from '../useHooks';
 
 export interface UsePaneDocumentsOptions {
     panes: Ref<MultiPaneState[]>;

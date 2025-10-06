@@ -26,7 +26,10 @@ import {
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import { openRouterStream } from '../../utils/chat/openrouterStream';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
-import { promptJsonToString, composeSystemPrompt } from '~/utils/prompt-utils';
+import {
+    promptJsonToString,
+    composeSystemPrompt,
+} from '~/utils/chat/prompt-utils';
 import { resolveDefaultModel } from '~/utils/models-service';
 import { state } from '~/state/global';
 // Import paths aligned with tests' vi.mock targets

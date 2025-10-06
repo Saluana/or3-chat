@@ -2,7 +2,7 @@
 export * from './useStreamAccumulator';
 export * from './useObservedElementSize';
 export * from './useHooks';
-export * from './ui-extensions/documents/useDocumentHistoryActions';
+export * from './documents/useDocumentHistoryActions';
 export * from './ui-extensions/threads/useThreadHistoryActions';
 export * from './ui-extensions/projects/useProjectTreeActions';
 export {
@@ -26,6 +26,12 @@ export {
 export * from './ui-extensions/editor/useEditorToolbar';
 export * from './ui-extensions/editor/useEditorNodes';
 export * from './useWorkspaceBackup';
+
+// Document composables
+export * from './documents/useDocumentsStore';
+export * from './documents/useDocumentsList';
+export * from './documents/useDocumentHistoryActions';
+export * from './documents/usePaneDocuments';
 
 // Chat composables
 export * from './chat/useActivePrompt';

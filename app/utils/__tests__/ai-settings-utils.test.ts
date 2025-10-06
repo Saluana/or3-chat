@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { composeSystemPrompt } from '~/utils/prompt-utils';
+import { composeSystemPrompt } from '~/utils/chat/prompt-utils';
 import { resolveDefaultModel } from '~/utils/models-service';
 
 describe('composeSystemPrompt', () => {

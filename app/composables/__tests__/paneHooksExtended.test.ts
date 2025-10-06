@@ -115,14 +115,14 @@ vi.mock('#imports', () => ({ useToast: () => ({ add: vi.fn() }) }));
 
 // Document store state mock (configurable per test via mutable map)
 const docState: Record<string, any> = {};
-vi.mock('../useDocumentsStore', () => ({
+vi.mock('../documents/useDocumentsStore', () => ({
     releaseDocument: vi.fn(),
     useDocumentState: (id: string) => docState[id],
 }));
 
 // ---- Imports under test ----
 import { useMultiPane } from '~/composables/useMultiPane';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
+import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
 import { useChat } from '~/composables/chat/useAi';
 
 // Helper to await microtasks

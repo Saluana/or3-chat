@@ -227,8 +227,8 @@ import {
     flush as flushDocument,
     newDocument as createNewDoc,
     useDocumentState,
-} from '~/composables/useDocumentsStore';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
+} from '~/composables/documents/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
 import {
     useHeaderActions,
     type HeaderActionEntry,

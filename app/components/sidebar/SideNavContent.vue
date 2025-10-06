@@ -460,7 +460,7 @@ import {
 } from '~/db'; // Dexie + barrel helpers
 import { nowSec, newId } from '~/db/util';
 import { updateDocument } from '~/db/documents';
-import { loadDocument } from '~/composables/useDocumentsStore';
+import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/useProjectsCrud';
 import {
     normalizeProjectData,

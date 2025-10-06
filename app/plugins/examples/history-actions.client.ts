@@ -1,7 +1,7 @@
 import {
     registerDocumentHistoryAction,
     unregisterDocumentHistoryAction,
-} from '~/composables/ui-extensions/documents/useDocumentHistoryActions';
+} from '~/composables/documents/useDocumentHistoryActions';
 import {
     registerThreadHistoryAction,
     unregisterThreadHistoryAction,

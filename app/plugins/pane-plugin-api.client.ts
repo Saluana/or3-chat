@@ -6,7 +6,7 @@ import {
     setDocumentContent,
     setDocumentTitle,
     useDocumentState,
-} from '~/composables/useDocumentsStore';
+} from '~/composables/documents/useDocumentsStore';
 import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/useMultiPane';
 
