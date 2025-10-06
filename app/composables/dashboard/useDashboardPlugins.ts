@@ -3,6 +3,9 @@ import {
     computed,
     readonly,
     shallowRef,
+    markRaw,
+    isReactive,
+    toRaw,
     type Component,
     type ShallowRef,
 } from 'vue';
@@ -200,7 +203,18 @@ export function registerDashboardPluginPage(
     }
     // Invalidate any cached component for this page id prior to replacement
     deletePageCache(pluginId, page.id);
-    const frozen = Object.freeze({ ...page });
+    let component = page.component as DashboardPluginPage['component'];
+    if (isReactive(component)) {
+        component = toRaw(component) as typeof component;
+    }
+    if (component && typeof component === 'object') {
+        component = markRaw(component) as typeof component;
+    }
+
+    const frozen = Object.freeze({
+        ...page,
+        component,
+    });
     m.set(page.id, frozen);
     syncPages(pluginId);
 }
@@ -262,6 +276,9 @@ export async function resolveDashboardPluginPageComponent(
     const page = getDashboardPluginPage(pluginId, pageId);
     if (!page) return;
     let comp: any = page.component;
+    if (isReactive(comp)) {
+        comp = toRaw(comp);
+    }
     if (
         typeof comp === 'function' &&
         !(comp as any).render &&
@@ -276,6 +293,12 @@ export async function resolveDashboardPluginPageComponent(
                 comp
             );
         }
+    }
+    if (isReactive(comp)) {
+        comp = toRaw(comp);
+    }
+    if (comp && typeof comp === 'object') {
+        comp = markRaw(comp);
     }
     pageComponentCache.set(key, comp);
     return comp;
