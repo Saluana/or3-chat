@@ -1,33 +1,27 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useHooks } from '~/composables/useHooks';
 import {
     persistAttachment,
     type AttachmentLike,
 } from '~/components/chat/file-upload-utils';
-import type { FilesAttachInputPayload } from '~/utils/hook-keys';
+import type { FilesAttachInputPayload } from '~/utils/hook-types';
 import { db } from '../client';
 
 describe('files.attach:filter:input hook', () => {
     let hooks: ReturnType<typeof useHooks>;
-    let disposeHook: (() => void) | undefined;
 
     beforeEach(() => {
         hooks = useHooks();
-        disposeHook = undefined;
     });
 
     afterEach(() => {
-        if (disposeHook) {
-            disposeHook();
-            disposeHook = undefined;
-        }
+        // Clean up all hooks
+        hooks.removeAllCallbacks();
     });
 
     it('rejects file when filter returns false', async () => {
         // Register a filter that rejects all files
-        disposeHook = hooks.on('files.attach:filter:input', () => false, {
-            kind: 'filter',
-        });
+        hooks.addFilter('files.attach:filter:input', () => false as const);
 
         const mockFile = new File(['test content'], 'test.png', {
             type: 'image/png',
@@ -54,14 +48,13 @@ describe('files.attach:filter:input hook', () => {
         let receivedPayload: FilesAttachInputPayload | false | null = null;
 
         // Register a filter that just observes and passes through
-        disposeHook = hooks.on(
+        hooks.addFilter(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
                 filterCalled = true;
                 receivedPayload = payload;
                 return payload;
-            },
-            { kind: 'filter' }
+            }
         );
 
         const mockContent = 'x'.repeat(1000);
@@ -103,17 +96,17 @@ describe('files.attach:filter:input hook', () => {
         let transformedName: string | undefined;
 
         // Register a filter that renames the file
-        disposeHook = hooks.on(
+        hooks.addFilter(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
+                if (payload === false) return false;
                 const transformed = {
                     ...payload,
                     name: 'renamed-' + payload.name,
                 };
                 transformedName = transformed.name;
                 return transformed;
-            },
-            { kind: 'filter' }
+            }
         );
 
         const mockFile = new File(['x'.repeat(1000)], 'original.png', {
@@ -143,13 +136,13 @@ describe('files.attach:filter:input hook', () => {
     it('handles filter that rejects based on file size', async () => {
         const MAX_SIZE = 1024; // 1KB limit
 
-        disposeHook = hooks.on(
+        hooks.addFilter(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
+                if (payload === false) return false;
                 if (payload.size > MAX_SIZE) return false;
                 return payload;
-            },
-            { kind: 'filter' }
+            }
         );
 
         // Create a file larger than the limit
@@ -174,13 +167,13 @@ describe('files.attach:filter:input hook', () => {
     it('handles filter that rejects based on mime type', async () => {
         const ALLOWED_MIMES = ['image/png', 'image/jpeg'];
 
-        disposeHook = hooks.on(
+        hooks.addFilter(
             'files.attach:filter:input',
-            (payload: FilesAttachInputPayload) => {
+            (payload: FilesAttachInputPayload | false) => {
+                if (payload === false) return false;
                 if (!ALLOWED_MIMES.includes(payload.mime)) return false;
                 return payload;
-            },
-            { kind: 'filter' }
+            }
         );
 
         // Try to upload a GIF
