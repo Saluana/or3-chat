@@ -1,8 +1,8 @@
 import { ref, watch, computed } from 'vue';
 import { useNuxtApp } from '#app';
-import type { ThemeSettings } from '../core/theme/theme-types';
-import * as ThemeDefs from '../core/theme/theme-defaults';
-import { applyToRoot } from '../core/theme/theme-apply';
+import type { ThemeSettings } from './theme-types';
+import * as ThemeDefs from './theme-defaults';
+import { applyToRoot } from './theme-apply';
 // Do not re-export constants/types from here to avoid Nuxt auto-import duplication warnings.
 // Import these directly from their source modules where needed.
 

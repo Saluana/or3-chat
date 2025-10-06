@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { sanitize, detectModeFromHtml } from '../useThemeSettings';
+import {
+    sanitize,
+    detectModeFromHtml,
+} from '../../core/theme/useThemeSettings';
 import * as ThemeDefs from '../../core/theme/theme-defaults';
 import type { ThemeSettings } from '../../core/theme/theme-types';
 

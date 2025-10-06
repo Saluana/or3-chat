@@ -74,10 +74,6 @@ import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { liveQuery } from 'dexie';
 import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
 import { nowSec } from '~/db/util';
-import {
-    useSidebarFooterActions,
-    type SidebarFooterActionEntry,
-} from '~/composables/ui-extensions/chrome';
 
 const props = defineProps<{
     activeThread?: string;
