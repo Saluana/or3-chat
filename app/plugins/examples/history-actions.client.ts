@@ -5,7 +5,7 @@ import {
 import {
     registerThreadHistoryAction,
     unregisterThreadHistoryAction,
-} from '~/composables/ui-extensions/threads/useThreadHistoryActions';
+} from '~/composables/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
 import { db } from '~/db';
 

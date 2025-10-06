@@ -84,7 +84,7 @@ const props = defineProps<{
 }>();
 
 const items = ref<any[]>([]);
-import { useThreadSearch } from '~/composables/useThreadSearch';
+import { useThreadSearch } from '~/composables/threads/useThreadSearch';
 const { query: threadSearchQuery, results: threadSearchResults } =
     useThreadSearch(items as any);
 const displayThreads = computed(() =>

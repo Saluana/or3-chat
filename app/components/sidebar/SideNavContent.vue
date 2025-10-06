@@ -461,7 +461,7 @@ import {
 import { nowSec, newId } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
-import { useProjectsCrud } from '~/composables/useProjectsCrud';
+import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import {
     normalizeProjectData,
     type ProjectEntry,

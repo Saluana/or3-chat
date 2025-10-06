@@ -1,5 +1,4 @@
-import { createRegistry } from '../_registry';
-import type { RegistryItem } from '../_registry';
+import { createRegistry, type RegistryItem } from '#imports';
 
 // Local interfaces describing the tree rows printed in the console.
 // These mirror the shape produced by SidebarProjectTree.vue for root and child items.

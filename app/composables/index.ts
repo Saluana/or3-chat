@@ -2,9 +2,6 @@
 export * from './useStreamAccumulator';
 export * from './useObservedElementSize';
 export * from './useHooks';
-export * from './documents/useDocumentHistoryActions';
-export * from './ui-extensions/threads/useThreadHistoryActions';
-export * from './ui-extensions/projects/useProjectTreeActions';
 export {
     registerDashboardPlugin,
     unregisterDashboardPlugin,
@@ -53,6 +50,14 @@ export * from './chat/useMessageEditing';
 export * from './chat/useModelStore';
 export * from './chat/useMessageActions';
 
+// Thread composables
+export * from './threads/useThreadHistoryActions';
+export * from './threads/useThreadSearch';
+
 // Hook composables
 export * from './useHooks';
 export * from './useHookEffect';
+
+// Project composables
+export * from './projects/useProjectTreeActions';
+export * from './projects/useProjectsCrud';
