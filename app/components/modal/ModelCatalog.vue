@@ -180,7 +180,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { VList } from 'virtua/vue';
-import { useModelSearch } from '~/composables/useModelSearch';
+import { useModelSearch } from '~/core/search/useModelSearch';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 
 const props = defineProps<{

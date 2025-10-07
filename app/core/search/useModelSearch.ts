@@ -4,7 +4,7 @@ import {
     createDb,
     buildIndex as buildOramaIndex,
     searchWithIndex,
-} from '~/utils/search/orama';
+} from '~/core/search/orama';
 
 // Simple Orama-based search composable for the model catalog.
 // Builds an index client-side and performs search across id, slug, name, description, modalities.

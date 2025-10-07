@@ -191,7 +191,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
-import { useModelSearch } from '~/composables/useModelSearch';
+import { useModelSearch } from '~/core/search/useModelSearch';
 
 const liveStatus = ref<HTMLElement | null>(null);
 const { settings: settingsRef, set, reset } = useAiSettings();

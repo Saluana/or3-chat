@@ -9,7 +9,7 @@ import {
     createDb,
     buildIndex as buildOramaIndex,
     searchWithIndex,
-} from '~/utils/search/orama';
+} from '~/core/search/orama';
 
 interface IndexDoc {
     id: string;
