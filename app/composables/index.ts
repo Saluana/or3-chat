@@ -1,24 +1,7 @@
 /** Barrel export for chat-related composables (Task 1.6) */
 export * from './useStreamAccumulator';
 export * from '../core/hooks/useHooks';
-export {
-    registerDashboardPlugin,
-    unregisterDashboardPlugin,
-    useDashboardPlugins,
-    registerDashboardPluginPage,
-    unregisterDashboardPluginPage,
-    useDashboardPluginPages,
-    listDashboardPluginPages,
-    getDashboardPluginPage,
-    resolveDashboardPluginPageComponent,
-    useDashboardNavigation,
-    hasCapability,
-    getPluginCapabilities,
-    hasAllCapabilities,
-    hasAnyCapability,
-    type DashboardPlugin,
-    type DashboardPluginPage,
-} from './dashboard/useDashboardPlugins';
+export * from './dashboard/useDashboardPlugins';
 export * from './editor/useEditorToolbar';
 export * from './editor/useEditorNodes';
 export * from './useWorkspaceBackup';
