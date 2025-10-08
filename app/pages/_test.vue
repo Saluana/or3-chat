@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import RetroGlassBtn from '~/components/ui/RetroGlassBtn.vue';
 
 const nuxtApp = useNuxtApp();
 // Theme plugin is client-only (theme.client.ts). During SSR/prerender $theme is undefined.

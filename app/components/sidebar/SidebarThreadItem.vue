@@ -72,7 +72,7 @@
     </RetroGlassBtn>
 </template>
 <script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import RetroGlassBtn from '~/components/ui/RetroGlassBtn.vue';
 import type { Thread } from '~/db';
 const props = defineProps<{ thread: Thread; active?: boolean }>();
 const emit = defineEmits<{

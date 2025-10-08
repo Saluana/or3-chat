@@ -63,7 +63,7 @@
     </RetroGlassBtn>
 </template>
 <script setup lang="ts">
-import RetroGlassBtn from '~/components/RetroGlassBtn.vue';
+import RetroGlassBtn from '~/components/ui/RetroGlassBtn.vue';
 import type { Post } from '~/db';
 import { db } from '~/db';
 import { useThrottleFn } from '@vueuse/core';

@@ -213,7 +213,7 @@
                 </div>
             </div>
         </div>
-        <lazy-modal-dashboard v-model:showModal="showDashboardModal" />
+        <lazy-dashboard v-model:showModal="showDashboardModal" />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
