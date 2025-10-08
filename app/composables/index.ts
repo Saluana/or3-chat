@@ -1,9 +1,6 @@
 /** Barrel export for chat-related composables (Task 1.6) */
 export * from './useStreamAccumulator';
-export * from '../core/hooks/useHooks';
 export * from './dashboard/useDashboardPlugins';
-export * from './editor/useEditorToolbar';
-export * from './editor/useEditorNodes';
 export * from './useWorkspaceBackup';
 
 //Sidebar composables
