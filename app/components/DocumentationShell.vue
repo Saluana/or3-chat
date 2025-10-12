@@ -50,7 +50,7 @@
                     <div class="space-y-2">
                         <!-- Categories -->
                         <div
-                            v-for="category in navigation"
+                            v-for="category in resolvedNavigation"
                             :key="category.label"
                             class="mb-6"
                         >
@@ -67,7 +67,7 @@
                                     <NuxtLink
                                         :to="item.path"
                                         class="block px-3 py-2 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
-                                        active-class="bg-[var(--md-primary)] text-white retro-shadow"
+                                        active-class="border-2 border-[var(--md-inverse-surface)] dark:text-white text-black retro-shadow bg-primary/20"
                                     >
                                         {{ item.label }}
                                     </NuxtLink>
@@ -80,7 +80,7 @@
 
             <!-- Content Area -->
             <main class="flex-1 min-w-0 overflow-y-auto scrollbars">
-                <div class="max-w-4xl mx-auto p-8">
+                <div class="max-w-[820px] mx-auto p-8">
                     <!-- Search Results -->
                     <div
                         v-if="searchQuery && searchResults.length > 0"
@@ -114,8 +114,22 @@
 
                     <!-- Page Content -->
                     <div v-else class="docs-content">
+                        <!-- Loading indicator -->
+                        <div
+                            v-if="isLoadingContent"
+                            class="flex items-center justify-center py-12"
+                        >
+                            <div
+                                class="text-[var(--md-on-surface-variant)] font-ps2 text-sm"
+                            >
+                                Loading...
+                            </div>
+                        </div>
+
+                        <!-- Content -->
                         <StreamMarkdown
-                            :content="content"
+                            v-else
+                            :content="displayContent"
                             class="prose prose-retro max-w-none"
                             :allowed-link-prefixes="[
                                 'https://',
@@ -165,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, shallowRef } from 'vue';
 import type { AnyOrama } from '@orama/orama';
 import { StreamMarkdown } from 'streamdown-vue';
 
@@ -192,6 +206,25 @@ interface SearchResult {
     path: string;
 }
 
+interface DocmapFile {
+    name: string;
+    path: string;
+    category: string;
+}
+
+interface DocmapSection {
+    title: string;
+    path: string;
+    files: DocmapFile[];
+}
+
+interface Docmap {
+    title: string;
+    description: string;
+    version: string;
+    sections: DocmapSection[];
+}
+
 const props = defineProps<{
     navigation?: NavCategory[];
     showToc?: boolean;
@@ -203,51 +236,221 @@ const searchQuery = ref('');
 const isSearching = ref(false);
 const searchResults = ref<SearchResult[]>([]);
 const searchIndex = ref<AnyOrama | null>(null);
+const docmap = ref<Docmap | null>(null);
+const currentContent = ref('');
+const isLoadingContent = ref(false);
+const contentCache = new Map<string, string>(); // Cache loaded markdown files
+const route = useRoute();
 
-// Default navigation if none provided
-const navigation = computed(
-    () =>
-        props.navigation || [
-            {
-                label: 'Getting Started',
-                items: [
-                    { label: 'Introduction', path: '/documentation' },
-                    {
-                        label: 'Installation',
-                        path: '/documentation/installation',
-                    },
-                    {
-                        label: 'Quick Start',
-                        path: '/documentation/quick-start',
-                    },
-                ],
-            },
-            {
-                label: 'Core Concepts',
-                items: [
-                    {
-                        label: 'Architecture',
-                        path: '/documentation/architecture',
-                    },
-                    { label: 'Hooks System', path: '/documentation/hooks' },
-                    { label: 'State Management', path: '/documentation/state' },
-                ],
-            },
-        ]
+// Internal navigation state (shallow to avoid deep watchers)
+const internalNavigation = shallowRef<NavCategory[]>([]);
+// Resolved navigation prefers prop override but stays stable otherwise
+const resolvedNavigation = computed<NavCategory[]>(() =>
+    props.navigation ? props.navigation : internalNavigation.value
 );
 
-// Initialize search index only on /documentation route
-const route = useRoute();
+// Load docmap on mount
+onMounted(async () => {
+    try {
+        const response = await fetch('/_documentation/docmap.json');
+        docmap.value = await response.json();
+
+        // Pre-fetch all markdown files in the background for instant navigation
+        if (docmap.value) {
+            applyDocmapNavigation(docmap.value);
+            prefetchAllDocs();
+        }
+
+        // Initialize search after docmap is loaded
+        if (isDocRoute.value) {
+            await initializeSearch();
+        }
+    } catch (error) {
+        console.error('[docs] Failed to load docmap:', error);
+    }
+
+    // Load content based on route
+    await loadContentFromRoute();
+});
+
+// Watch route changes to load new content (immediate to prevent flicker)
+watch(
+    () => route.path,
+    async (newPath, oldPath) => {
+        // Only reload if the path actually changed
+        if (newPath !== oldPath) {
+            await loadContentFromRoute();
+        }
+    },
+    { immediate: false }
+);
+
+async function loadContentFromRoute() {
+    const path = route.path;
+
+    // If on base /documentation route, show welcome page
+    if (path === '/documentation' || path === '/documentation/') {
+        isLoadingContent.value = false;
+        currentContent.value = `# OR3 Documentation
+
+Welcome to the OR3 documentation. Select a topic from the sidebar to get started.
+
+## Available Sections
+
+${
+    docmap.value?.sections
+        .map(
+            (section) =>
+                `- **${section.title}**: ${section.files.length} documents`
+        )
+        .join('\n') || ''
+}
+`;
+        return;
+    }
+
+    // Extract the doc path (e.g., /documentation/composables/useChat -> /composables/useChat)
+    const docPath = path.replace('/documentation', '');
+
+    // Find the file in docmap
+    if (docmap.value) {
+        for (const section of docmap.value.sections) {
+            const file = section.files.find((f) => f.path === docPath);
+            if (file) {
+                // Don't show loading if content is cached
+                const cacheKey = `${section.path}/${file.name}`;
+                if (!contentCache.has(cacheKey)) {
+                    isLoadingContent.value = true;
+                }
+
+                try {
+                    await loadMarkdownFile(file.name, section.path);
+                } finally {
+                    isLoadingContent.value = false;
+                }
+                return;
+            }
+        }
+
+        // If not found, show 404
+        isLoadingContent.value = false;
+        currentContent.value = `# Page Not Found
+
+The documentation page you're looking for doesn't exist.
+
+[← Back to Documentation](/documentation)
+`;
+    } else {
+        // Docmap not loaded yet
+        isLoadingContent.value = true;
+        currentContent.value = `# Loading...
+
+Please wait while the documentation loads.
+`;
+    }
+}
+
+async function loadMarkdownFile(filename: string, sectionPath: string) {
+    const cacheKey = `${sectionPath}/${filename}`;
+
+    // Check cache first for instant navigation
+    if (contentCache.has(cacheKey)) {
+        currentContent.value = contentCache.get(cacheKey)!;
+        return;
+    }
+
+    try {
+        // Fetch the markdown file from public/_documentation/{section}/{filename}
+        const response = await fetch(
+            `/_documentation${sectionPath}/${filename}`
+        );
+        if (!response.ok) throw new Error('File not found');
+        const content = await response.text();
+
+        // Cache the content for instant future access
+        contentCache.set(cacheKey, content);
+        currentContent.value = content;
+    } catch (error) {
+        console.error(`[docs] Failed to load ${filename}:`, error);
+        const errorContent = `# Error Loading Document
+
+Failed to load the requested documentation.
+
+[← Back to Documentation](/documentation)
+`;
+        currentContent.value = errorContent;
+        // Don't cache error content
+    }
+}
+
+// Pre-fetch all documentation files in the background
+async function prefetchAllDocs() {
+    if (!docmap.value) return;
+
+    // Use setTimeout to avoid blocking initial render
+    setTimeout(async () => {
+        for (const section of docmap.value!.sections) {
+            for (const file of section.files) {
+                const cacheKey = `${section.path}/${file.name}`;
+
+                // Skip if already cached
+                if (contentCache.has(cacheKey)) continue;
+
+                try {
+                    const response = await fetch(
+                        `/_documentation${section.path}/${file.name}`
+                    );
+                    if (response.ok) {
+                        const content = await response.text();
+                        contentCache.set(cacheKey, content);
+                    }
+                } catch (error) {
+                    // Silently fail for prefetch
+                    console.debug(`[docs] Prefetch failed for ${file.name}`);
+                }
+
+                // Add small delay between fetches to avoid overloading
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+        }
+        console.debug('[docs] All documentation prefetched');
+    }, 100);
+}
+
+function applyDocmapNavigation(map: Docmap) {
+    if (props.navigation) return; // respect external navigation overrides
+    if (internalNavigation.value.length) return; // already built
+
+    const sortedSections = [...map.sections].sort((a, b) =>
+        a.title.localeCompare(b.title)
+    );
+
+    internalNavigation.value = sortedSections.map((section) => {
+        const sortedFiles = [...section.files].sort((a, b) =>
+            a.name.replace('.md', '').localeCompare(b.name.replace('.md', ''))
+        );
+
+        return {
+            label: section.title,
+            items: sortedFiles.map((file) => ({
+                label: file.name
+                    .replace('.md', '')
+
+                    .trim(),
+                path: `/documentation${file.path}`,
+            })),
+        } satisfies NavCategory;
+    });
+}
+
+// Use provided content or loaded content
+const displayContent = computed(() => props.content || currentContent.value);
+
+// Initialize search index
 const isDocRoute = computed(() => route.path.startsWith('/documentation'));
 
 watch(isDocRoute, async (isDocs) => {
-    if (isDocs && !searchIndex.value) {
-        await initializeSearch();
-    }
-});
-
-onMounted(async () => {
-    if (isDocRoute.value) {
+    if (isDocs && !searchIndex.value && docmap.value) {
         await initializeSearch();
     }
 });
@@ -256,7 +459,7 @@ async function initializeSearch() {
     try {
         const { create, insert } = await import('@orama/orama');
 
-        searchIndex.value = await create({
+        searchIndex.value = create({
             schema: {
                 title: 'string',
                 content: 'string',
@@ -265,19 +468,30 @@ async function initializeSearch() {
             },
         });
 
-        // TODO: Insert actual documentation content
-        // This would typically come from your markdown files
-        const docs = [
-            {
-                title: 'Introduction',
-                content: 'Welcome to OR3 documentation',
-                path: '/documentation',
-                category: 'Getting Started',
-            },
-        ];
+        // Index all documentation from docmap
+        if (docmap.value) {
+            for (const section of docmap.value.sections) {
+                for (const file of section.files) {
+                    try {
+                        const response = await fetch(
+                            `/_documentation${section.path}/${file.name}`
+                        );
+                        const content = await response.text();
 
-        for (const doc of docs) {
-            await insert(searchIndex.value, doc);
+                        await insert(searchIndex.value, {
+                            title: file.name.replace('.md', ''),
+                            content: content.substring(0, 5000), // Index first 5000 chars
+                            path: `/documentation${file.path}`,
+                            category: section.title,
+                        });
+                    } catch (error) {
+                        console.warn(
+                            `[docs] Failed to index ${file.name}:`,
+                            error
+                        );
+                    }
+                }
+            }
         }
     } catch (error) {
         console.error('[docs] Failed to initialize search:', error);
@@ -324,9 +538,10 @@ async function performSearch(query: string) {
     }
 }
 
-function navigateToResult(result: SearchResult) {
-    navigateTo(result.path);
+async function navigateToResult(result: SearchResult) {
     searchQuery.value = '';
+    searchResults.value = [];
+    await navigateTo(result.path);
 }
 
 function focusSearch() {
@@ -360,6 +575,10 @@ function toggleTheme() {
 }
 
 .prose-retro {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue',
+        sans-serif;
+    font-size: 16px;
     color: var(--md-on-surface);
 }
 
@@ -367,7 +586,7 @@ function toggleTheme() {
 .prose-retro :deep(h2),
 .prose-retro :deep(h3),
 .prose-retro :deep(h4) {
-    font-family: var(--font-heading);
+    font-family: system-ui !important;
     color: var(--md-primary);
     margin-top: 2rem;
     margin-bottom: 1rem;
