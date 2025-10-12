@@ -360,7 +360,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import {
     useWorkspaceBackup,
     type WorkspaceImportMode,
-} from '~/composables/useWorkspaceBackup';
+} from '~/composables/core/useWorkspaceBackup';
 import { err, reportError, type AppError } from '~/utils/errors';
 
 const docsHref =

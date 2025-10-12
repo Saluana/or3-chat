@@ -3,7 +3,7 @@ import { onMounted, onBeforeUnmount, reactive, watch, ref } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { getFileBlob } from '../../db/files';
 import { reportError } from '../../utils/errors';
-import { useSharedPreviewCache } from '~/composables/usePreviewCache';
+import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 
 const props = defineProps<{
     items: FileMeta[];

@@ -107,7 +107,9 @@ describe('useWorkspaceBackup stream export', () => {
         expect((streamSaverModule as any).default.createWriteStream).toBe(
             createWriteStream
         );
-        const { useWorkspaceBackup } = await import('../useWorkspaceBackup');
+        const { useWorkspaceBackup } = await import(
+            '../core/useWorkspaceBackup'
+        );
         const api = useWorkspaceBackup();
 
         await api.exportWorkspace();

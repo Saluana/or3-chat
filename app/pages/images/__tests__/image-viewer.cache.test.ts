@@ -38,7 +38,7 @@ describe('ImageViewer preview cache reuse', () => {
         factory.reportError.mockReset();
         factory.onKeyStroke.mockReset();
 
-        const mod = await import('~/composables/usePreviewCache');
+        const mod = await import('~/composables/core/usePreviewCache');
         mod.resetSharedPreviewCache();
         mod.useSharedPreviewCache({
             maxUrls: 1,
