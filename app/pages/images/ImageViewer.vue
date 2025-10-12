@@ -4,7 +4,7 @@ import type { FileMeta } from '~/db/schema';
 import { getFileBlob } from '~/db/files';
 import { onKeyStroke } from '@vueuse/core';
 import { reportError } from '~/utils/errors';
-import { useSharedPreviewCache } from '~/composables/usePreviewCache';
+import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 
 const props = defineProps<{
     modelValue: boolean;

@@ -8,18 +8,14 @@ import {
     unregisterEditorMark,
     listEditorMarks,
     listRegisteredEditorMarkIds,
-} from '../ui-extensions/editor/useEditorNodes';
+} from '../editor/useEditorNodes';
 import { Node, Mark } from '@tiptap/core';
 
 describe('useEditorNodes', () => {
     beforeEach(() => {
         // Clear registries before each test
-        listRegisteredEditorNodeIds().forEach((id) =>
-            unregisterEditorNode(id)
-        );
-        listRegisteredEditorMarkIds().forEach((id) =>
-            unregisterEditorMark(id)
-        );
+        listRegisteredEditorNodeIds().forEach((id) => unregisterEditorNode(id));
+        listRegisteredEditorMarkIds().forEach((id) => unregisterEditorMark(id));
     });
 
     it('registers and lists nodes', () => {

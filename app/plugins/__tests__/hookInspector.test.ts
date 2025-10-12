@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import { createHookEngine } from '../../utils/hooks';
+import { createHookEngine } from '../../core/hooks/hooks';
 import HookInspector from '../devtools/HookInspector.vue';
 
 // Mock composables
@@ -49,9 +49,7 @@ describe('HookInspector', () => {
         expect(stats[1]?.text()).toContain('0'); // Total Filters
         expect(stats[2]?.text()).toContain('0'); // Total Errors
 
-        expect(wrapper.text()).toContain(
-            'No hooks have been executed yet'
-        );
+        expect(wrapper.text()).toContain('No hooks have been executed yet');
     });
 
     it('displays hook statistics after hooks are executed', async () => {
@@ -108,9 +106,9 @@ describe('HookInspector', () => {
         const hook = details.find((h: any) => h.name === 'manual.hook');
 
         expect(hook).toBeTruthy();
-        expect(hook.count).toBe(4);
-        expect(parseFloat(hook.avg)).toBeCloseTo(2.925, 2);
-        expect(parseFloat(hook.max)).toBeCloseTo(4.8, 1);
+        expect(hook!.count).toBe(4);
+        expect(parseFloat(hook!.avg)).toBeCloseTo(2.925, 2);
+        expect(parseFloat(hook!.max)).toBeCloseTo(4.8, 1);
     });
 
     it('tracks errors correctly', async () => {
@@ -143,14 +141,18 @@ describe('HookInspector', () => {
         await mockHooks.doAction('refresh.test');
 
         // Stats shouldn't update automatically (passive polling is every 2s)
-        expect(wrapper.vm.diagnosticsSnapshot.timings['refresh.test']).toBeUndefined();
+        expect(
+            wrapper.vm.diagnosticsSnapshot.timings['refresh.test']
+        ).toBeUndefined();
 
         // Click refresh button
         await wrapper.find('button').trigger('click'); // First button is refresh
         await flush();
 
         // Now it should be updated
-        expect(wrapper.vm.diagnosticsSnapshot.timings['refresh.test']).toBeTruthy();
+        expect(
+            wrapper.vm.diagnosticsSnapshot.timings['refresh.test']
+        ).toBeTruthy();
     });
 
     it('clear button resets diagnostics', async () => {
@@ -161,11 +163,13 @@ describe('HookInspector', () => {
         await wrapper.vm.updateSnapshot();
         await flush();
 
-        expect(Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length).toBeGreaterThan(0);
+        expect(
+            Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length
+        ).toBeGreaterThan(0);
 
         // Find and click the Clear button (has trash icon)
         const buttons = wrapper.findAll('button');
-        const clearButton = buttons.find(b => b.html().includes('trash'));
+        const clearButton = buttons.find((b) => b.html().includes('trash'));
         expect(clearButton).toBeTruthy();
 
         await clearButton?.trigger('click');
@@ -183,7 +187,7 @@ describe('HookInspector', () => {
 
         // Find Auto button (has checkbox icon)
         const buttons = wrapper.findAll('button');
-        const autoButton = buttons.find(b => b.html().includes('checkbox'));
+        const autoButton = buttons.find((b) => b.html().includes('checkbox'));
         expect(autoButton).toBeTruthy();
 
         await autoButton?.trigger('click');
@@ -203,7 +207,9 @@ describe('HookInspector', () => {
         const wrapper = mount(HookInspector, mountOptions);
         await flush();
 
-        expect(Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length).toBe(0);
+        expect(Object.keys(wrapper.vm.diagnosticsSnapshot.timings).length).toBe(
+            0
+        );
 
         // Add and execute a hook
         mockHooks.addAction('passive.test', () => {});
@@ -214,8 +220,12 @@ describe('HookInspector', () => {
         await flush();
 
         // Should have detected the new hook
-        expect(wrapper.vm.diagnosticsSnapshot.timings['passive.test']).toBeTruthy();
-        expect(wrapper.vm.diagnosticsSnapshot.timings['passive.test'].length).toBe(1);
+        expect(
+            wrapper.vm.diagnosticsSnapshot.timings['passive.test']
+        ).toBeTruthy();
+        expect(
+            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length
+        ).toBe(1);
 
         // Execute the hook again
         await mockHooks.doAction('passive.test');
@@ -225,7 +235,9 @@ describe('HookInspector', () => {
         await flush();
 
         // Should have detected the new invocation
-        expect(wrapper.vm.diagnosticsSnapshot.timings['passive.test'].length).toBe(2);
+        expect(
+            wrapper.vm.diagnosticsSnapshot.timings['passive.test']!.length
+        ).toBe(2);
 
         vi.useRealTimers();
     });
@@ -246,6 +258,6 @@ describe('HookInspector', () => {
         // Computed values should update
         expect(wrapper.vm.hookDetails.length).toBe(1);
         expect(wrapper.vm.stats.totalActions).toBe(5);
-        expect(wrapper.vm.hookDetails[0].name).toBe('new.hook');
+        expect(wrapper.vm.hookDetails[0]!.name).toBe('new.hook');
     });
 });

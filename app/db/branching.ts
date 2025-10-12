@@ -2,14 +2,14 @@ import Dexie from 'dexie';
 import { db } from './client';
 import { newId, nowSec } from './util';
 import type { Thread, Message } from './schema';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import type {
     BranchMode,
     BranchForkOptions,
     BranchForkBeforePayload,
     MessageEntity,
     ThreadEntity,
-} from '../utils/hook-types';
+} from '../core/hooks/hook-types';
 
 export type ForkMode = BranchMode;
 

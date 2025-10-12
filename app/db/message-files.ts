@@ -3,7 +3,7 @@ import type { FileMeta } from './schema';
 import { parseFileHashes, serializeFileHashes } from './files-util';
 import { computeFileHash } from '../utils/hash';
 import { createOrRefFile, derefFile, getFileMeta } from './files';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import { nowSec } from './util';
 
 /** Discriminated union for adding files to messages */

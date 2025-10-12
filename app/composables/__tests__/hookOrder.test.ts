@@ -1,171 +1,134 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createHookEngine } from '../../utils/hooks';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createHookEngine } from '~/core/hooks/hooks';
 
-// Mock modules used by useAi.ts that we need minimal behavior for
-vi.mock('../../utils/chat/openrouterStream', () => {
-    return {
-        openRouterStream: vi.fn().mockImplementation(async function* () {
-            yield { type: 'text', text: 'Hello ' };
-            yield { type: 'text', text: 'World' };
-        }),
-    };
-});
+describe('Hook System - Execution Order', () => {
+    let engine: ReturnType<typeof createHookEngine>;
 
-vi.mock('../../db/util', () => ({
-    nowSec: () => Math.floor(Date.now() / 1000),
-    newId: () => 'id-' + Math.random().toString(36).slice(2, 8),
-}));
-vi.mock('../../db/threads', () => ({
-    getThreadSystemPrompt: vi.fn().mockResolvedValue(null),
-}));
-vi.mock('../../db/prompts', () => ({ getPrompt: vi.fn() }));
-vi.mock('../../utils/prompt-utils', () => ({
-    promptJsonToString: (c: any) => String(c),
-}));
-vi.mock('../../utils/chat/messages', () => ({
-    buildParts: (text: string) => [{ type: 'text', text }],
-    getTextFromContent: (c: any) =>
-        typeof c === 'string'
-            ? c
-            : Array.isArray(c)
-            ? c.find((p: any) => p.type === 'text')?.text || ''
-            : '',
-    mergeFileHashes: (a: string[], b: string[]) => [
-        ...new Set([...(a || []), ...(b || [])]),
-    ],
-    trimOrMessagesImages: () => {},
-}));
-vi.mock('../../utils/chat/history', () => ({
-    ensureThreadHistoryLoaded: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock('../../utils/chat/files', () => ({
-    dataUrlToBlob: () => null,
-    inferMimeFromUrl: () => 'image/png',
-}));
-vi.mock('../../utils/openrouter-build', () => ({
-    buildOpenRouterMessages: async (msgs: any) => msgs,
-}));
-
-// DB related mocks
-vi.mock('../../db', () => ({
-    db: {
-        messages: {
-            get: vi.fn(),
-            where: () => ({
-                between: () => ({
-                    filter: () => ({ last: () => null, first: () => null }),
-                }),
-            }),
-        },
-    },
-    create: { thread: vi.fn().mockResolvedValue({ id: 'thread-1' }) },
-    tx: {
-        appendMessage: vi
-            .fn()
-            .mockResolvedValue({
-                id: 'm-' + Math.random().toString(36).slice(2, 6),
-            }),
-    },
-    upsert: { message: vi.fn().mockResolvedValue(undefined) },
-}));
-vi.mock('../../db/files', () => ({ createOrRefFile: vi.fn() }));
-vi.mock('../../db/files-util', () => ({
-    serializeFileHashes: (h: string[]) => JSON.stringify(h),
-    parseFileHashes: (s: string) => {
-        try {
-            return JSON.parse(s);
-        } catch {
-            return [];
-        }
-    },
-}));
-vi.mock('../../db/prompts', () => ({ getPrompt: vi.fn() }));
-vi.mock('../../state/global', () => ({
-    state: { value: { openrouterKey: null } },
-}));
-
-// User API key composable
-vi.mock('../useUserApiKey', () => ({
-    useUserApiKey: () => ({ apiKey: { value: 'test-key' }, setKey: () => {} }),
-}));
-vi.mock('../useActivePrompt', () => ({
-    useActivePrompt: () => ({ activePromptContent: { value: null } }),
-}));
-vi.mock('../useDefaultPrompt', () => ({
-    getDefaultPromptId: vi.fn().mockResolvedValue(null),
-}));
-
-// Mock Nuxt auto-imports (#imports) before importing useAi
-vi.mock('#imports', () => ({ useToast: () => ({ add: () => {} }) }));
-
-// Provide a Nuxt app mock for useHooks (after engine creation below)
-// We'll re-declare later once engine instantiated.
-
-// We create hook engine instance to inject
-const hookEngine = createHookEngine();
-
-// Re-mock #app now that hookEngine exists
-vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
-
-// Import after all mocks
-import { useChat } from '../useAi';
-
-describe('Hook order snapshot (pre-accumulator integration)', () => {
     beforeEach(() => {
-        // Clear engine callbacks & diagnostics
-        hookEngine.removeAllCallbacks();
+        engine = createHookEngine();
     });
 
-    it('records hook invocation order for a simple sendMessage', async () => {
+    it('executes action hooks in priority order (before/during/after pattern)', async () => {
         const calls: string[] = [];
-        const record =
-            (name: string) =>
-            (..._args: any[]) => {
-                calls.push(name);
-            };
-        // Register representative hooks used in send path
-        hookEngine.addFilter(
-            'ui.chat.message:filter:outgoing',
-            (v: string) => v
-        );
-        hookEngine.addFilter(
-            'ai.chat.model:filter:select',
-            (v: string) => v + ''
-        );
-        hookEngine.addFilter('ai.chat.messages:filter:input', (v: any) => v);
-        hookEngine.addFilter(
-            'ui.chat.message:filter:incoming',
-            (v: string) => v
-        );
-        hookEngine.addAction(
-            'ai.chat.send:action:before',
-            record('ai.chat.send:action:before')
-        );
-        hookEngine.addAction(
-            'ai.chat.stream:action:reasoning',
-            record('ai.chat.stream:action:reasoning')
-        );
-        hookEngine.addAction(
-            'ai.chat.stream:action:delta',
-            record('ai.chat.stream:action:delta')
-        );
-        hookEngine.addAction(
-            'ai.chat.send:action:after',
-            record('ai.chat.send:action:after')
-        );
-        hookEngine.addAction(
-            'ai.chat.error:action',
-            record('ai.chat.error:action')
+
+        // Register hooks with different priorities (lower number = earlier execution)
+        engine.addAction('test.action', () => calls.push('priority-10'), 10);
+        engine.addAction('test.action', () => calls.push('priority-20'), 20);
+        engine.addAction('test.action', () => calls.push('priority-5'), 5);
+        engine.addAction('test.action', () => calls.push('default')); // default is 10
+
+        await engine.doAction('test.action');
+
+        // Should execute in priority order: 5, 10 (both priority 10), 20
+        expect(calls).toEqual([
+            'priority-5',
+            'priority-10',
+            'default',
+            'priority-20',
+        ]);
+    });
+
+    it('executes filter hooks in sequence and transforms values', async () => {
+        const operations: string[] = [];
+
+        // Register filters that transform a value and track execution
+        engine.addFilter(
+            'test.filter',
+            (value: number) => {
+                operations.push('double');
+                return value * 2;
+            },
+            10
         );
 
-        const { sendMessage } = useChat([]);
-        await sendMessage('Hello world');
+        engine.addFilter(
+            'test.filter',
+            (value: number) => {
+                operations.push('add-10');
+                return value + 10;
+            },
+            20
+        );
 
-        // We only expect before, multiple deltas, after (no reasoning/error here)
-        const snapshot = calls;
-        expect(snapshot[0]).toBe('ai.chat.send:action:before');
-        expect(snapshot[snapshot.length - 1]).toBe('ai.chat.send:action:after');
-        // Persist snapshot for future comparison (manual JSON file could be added later if needed)
-        expect(snapshot).toMatchSnapshot();
+        engine.addFilter(
+            'test.filter',
+            (value: number) => {
+                operations.push('square');
+                return value * value;
+            },
+            5
+        );
+
+        const result = await engine.applyFilters('test.filter', 3);
+
+        // Priority 5 (square): 3 * 3 = 9
+        // Priority 10 (double): 9 * 2 = 18
+        // Priority 20 (add-10): 18 + 10 = 28
+        expect(result).toBe(28);
+        expect(operations).toEqual(['square', 'double', 'add-10']);
+    });
+});
+
+describe('Hook System - Typed Wrapper Integration', () => {
+    let engine: ReturnType<typeof createHookEngine>;
+
+    beforeEach(() => {
+        engine = createHookEngine();
+    });
+
+    it('handles async action hooks with proper awaiting', async () => {
+        const timeline: Array<{ event: string; time: number }> = [];
+        const start = Date.now();
+
+        engine.addAction('async.test', async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            timeline.push({ event: 'first', time: Date.now() - start });
+        });
+
+        engine.addAction('async.test', async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            timeline.push({ event: 'second', time: Date.now() - start });
+        });
+
+        await engine.doAction('async.test');
+
+        // Both should have executed
+        expect(timeline).toHaveLength(2);
+        expect(timeline[0]?.event).toBe('first');
+        expect(timeline[1]?.event).toBe('second');
+        // Second should execute after first completes
+        expect(timeline[1]?.time).toBeGreaterThanOrEqual(
+            timeline[0]?.time || 0
+        );
+    });
+
+    it('supports removing hooks and prevents execution', async () => {
+        const calls: string[] = [];
+
+        const callback1 = () => {
+            calls.push('callback1');
+        };
+        const callback2 = () => {
+            calls.push('callback2');
+        };
+        const callback3 = () => {
+            calls.push('callback3');
+        };
+
+        engine.addAction('removal.test', callback1);
+        engine.addAction('removal.test', callback2);
+        engine.addAction('removal.test', callback3);
+
+        // First execution - all should run
+        await engine.doAction('removal.test');
+        expect(calls).toEqual(['callback1', 'callback2', 'callback3']);
+
+        // Remove callback2
+        calls.length = 0;
+        engine.removeAction('removal.test', callback2);
+
+        // Second execution - only 1 and 3
+        await engine.doAction('removal.test');
+        expect(calls).toEqual(['callback1', 'callback3']);
     });
 });

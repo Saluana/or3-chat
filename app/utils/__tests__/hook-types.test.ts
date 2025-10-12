@@ -3,13 +3,13 @@ import type {
     InferHookParams,
     InferHookReturn,
     InferDbEntity,
-} from '../hook-types';
+} from '../../core/hooks/hook-types';
 import type {
     AiSendBeforePayload,
     MessageEntity,
     DocumentEntity,
     DbUpdatePayload,
-} from '../hook-types';
+} from '../../core/hooks/hook-types';
 
 describe('hook-types: inference', () => {
     it('infers action callback params (ai.chat.send:action:before)', () => {

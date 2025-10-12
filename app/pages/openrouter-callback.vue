@@ -40,7 +40,7 @@
 import { reportError, err } from '~/utils/errors';
 import { kv } from '~/db';
 import { state } from '~/state/global';
-import { exchangeOpenRouterCode } from '~/utils/openrouter-auth';
+import { exchangeOpenRouterCode } from '~/core/auth/openrouter-auth';
 
 const route = useRoute();
 const router = useRouter();

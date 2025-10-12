@@ -1,5 +1,25 @@
-import { describe, it, expect } from 'vitest';
-import { nextTick } from 'vue';
+import { describe, it, expect, vi } from 'vitest';
+import { nextTick, ref } from 'vue';
+
+// Mock useChat before importing ChatContainer
+vi.mock('~/composables/chat/useAi', () => {
+    const { ref } = require('vue');
+    return {
+        useChat: () => ({
+            messages: ref([]),
+            loading: ref(false),
+            streamId: ref(null),
+            streamState: ref({ text: '', reasoningText: '', finalized: true }),
+            tailAssistant: ref(null),
+            threadId: ref(null),
+            sendMessage: vi.fn(),
+            retryMessage: vi.fn(),
+            abort: vi.fn(),
+            clear: vi.fn(),
+        }),
+    };
+});
+
 import ChatContainer from '../ChatContainer.vue';
 import { shallowMount } from '@vue/test-utils';
 

@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { usePreviewCache } from '../usePreviewCache';
+import { usePreviewCache } from '../core/usePreviewCache';
 
 const nativeURL = globalThis.URL;
 

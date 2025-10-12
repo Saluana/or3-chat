@@ -1,5 +1,3 @@
-import type { ProjectTreeHandlerCtx } from '@/composables/ui-extensions/projects/useProjectTreeActions';
-
 export default defineNuxtPlugin(() => {
     // Test plugin to register thread history actions for development/debugging.
     // Registers two actions and logs output to console + toasts. Cleans up on app unmount.

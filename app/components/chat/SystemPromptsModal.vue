@@ -275,10 +275,10 @@ import {
     softDeletePrompt,
     type PromptRecord,
 } from '~/db/prompts';
-import { useActivePrompt } from '~/composables/useActivePrompt';
+
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 import { encode } from 'gpt-tokenizer';
-import { useDefaultPrompt } from '~/composables/useDefaultPrompt';
+
 import { isMobile } from '~/state/global';
 
 // Props & modal open bridging (like SettingsModal pattern)

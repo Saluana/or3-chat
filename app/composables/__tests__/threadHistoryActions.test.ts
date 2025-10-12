@@ -4,7 +4,7 @@ import {
     unregisterThreadHistoryAction,
     listRegisteredThreadHistoryActionIds,
     useThreadHistoryActions,
-} from '../ui-extensions/threads/useThreadHistoryActions';
+} from '../threads/useThreadHistoryActions';
 
 describe('useThreadHistoryActions', () => {
     beforeEach(() => {

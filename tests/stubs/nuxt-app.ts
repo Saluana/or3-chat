@@ -1,5 +1,5 @@
 // Minimal Nuxt app stub for Vitest
-import { createHookEngine } from '../../app/utils/hooks';
+import { createHookEngine } from '../../app/core/hooks/hooks';
 
 const engine = createHookEngine();
 // Expose globally for optional introspection

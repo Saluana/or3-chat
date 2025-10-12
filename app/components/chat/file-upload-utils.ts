@@ -1,7 +1,7 @@
 import { reportError, err } from '~/utils/errors';
 import { createOrRefFile } from '~/db/files';
-import { useHooks } from '~/composables/useHooks';
-import type { FilesAttachInputPayload } from '~/utils/hook-keys';
+import { useHooks } from '~/core/hooks/useHooks';
+import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB
 

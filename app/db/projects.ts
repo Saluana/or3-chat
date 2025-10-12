@@ -1,6 +1,6 @@
 import { db } from './client';
 import { dbTry } from './dbTry';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec } from './util';
 import { ProjectSchema, type Project } from './schema';
 

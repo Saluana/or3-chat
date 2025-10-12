@@ -1,7 +1,7 @@
 import Dexie from 'dexie';
 import { db } from './client';
 import { dbTry } from './dbTry';
-import { useHooks } from '../composables/useHooks';
+import { useHooks } from '../core/hooks/useHooks';
 import { newId, nowSec, parseOrThrow } from './util';
 import {
     MessageCreateSchema,
@@ -9,7 +9,7 @@ import {
     type Message,
     type MessageCreate,
 } from './schema';
-import type { MessageEntity } from '../utils/hook-types';
+import type { MessageEntity } from '../core/hooks/hook-types';
 import { serializeFileHashes } from './files-util';
 
 // Convert Message schema type to MessageEntity for hooks

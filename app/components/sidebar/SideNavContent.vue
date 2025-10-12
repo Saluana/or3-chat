@@ -446,7 +446,7 @@ import {
 } from 'vue';
 import type { Component } from 'vue';
 import { useElementSize } from '@vueuse/core';
-import { useHooks } from '~/composables/useHooks';
+import { useHooks } from '~/core/hooks/useHooks';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
@@ -460,19 +460,14 @@ import {
 } from '~/db'; // Dexie + barrel helpers
 import { nowSec, newId } from '~/db/util';
 import { updateDocument } from '~/db/documents';
-import { loadDocument } from '~/composables/useDocumentsStore';
-import { useProjectsCrud } from '~/composables/useProjectsCrud';
+import { loadDocument } from '~/composables/documents/useDocumentsStore';
+import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import {
     normalizeProjectData,
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
-import {
-    useSidebarSections,
-    useSidebarFooterActions,
-    type SidebarSection,
-    type SidebarFooterActionEntry,
-} from '~/composables/ui-extensions/chrome';
+
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)
 
@@ -506,7 +501,11 @@ const containerRef = ref<HTMLElement | null>(null);
 // Dynamic bottom padding to avoid content hidden under absolute bottom nav
 const bottomPad = ref(140); // fallback
 const listHeight = ref(400);
-import { useSidebarSearch } from '~/composables/useSidebarSearch';
+import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
+import {
+    useSidebarSections,
+    useSidebarFooterActions,
+} from '~/composables/sidebar/useSidebarSections';
 // Documents live query (docs only) to feed search
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;

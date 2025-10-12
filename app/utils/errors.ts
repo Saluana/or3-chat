@@ -1,7 +1,7 @@
 // Minimal centralized error utility (Task 1.1)
 // Provides: types, err(), isAppError(), asAppError(), reportError(), simpleRetry(), light scrub & duplicate suppression.
 
-import { useHooks } from '~/composables/useHooks';
+import { useHooks } from '~/core/hooks/useHooks';
 import { useToast } from '#imports';
 
 export type ErrorSeverity = 'info' | 'warn' | 'error' | 'fatal';

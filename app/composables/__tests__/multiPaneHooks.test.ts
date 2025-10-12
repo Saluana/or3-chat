@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
-import { createHookEngine } from '../../utils/hooks';
+import { createHookEngine } from '../../core/hooks/hooks';
 
 vi.mock('#app', () => ({ useNuxtApp: () => ({ $hooks: hookEngine }) }));
 
-import { useMultiPane } from '../useMultiPane';
-import { usePaneDocuments } from '../usePaneDocuments';
+import { useMultiPane } from '../core/useMultiPane';
+import { usePaneDocuments } from '../documents/usePaneDocuments';
 
 // Provide hook engine AFTER declaration (var hoisting)
 const hookEngine = createHookEngine();

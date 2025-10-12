@@ -1,11 +1,11 @@
 import {
     registerDocumentHistoryAction,
     unregisterDocumentHistoryAction,
-} from '~/composables/ui-extensions/documents/useDocumentHistoryActions';
+} from '~/composables/documents/useDocumentHistoryActions';
 import {
     registerThreadHistoryAction,
     unregisterThreadHistoryAction,
-} from '~/composables/ui-extensions/threads/useThreadHistoryActions';
+} from '~/composables/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
 import { db } from '~/db';
 

@@ -8,19 +8,19 @@ import {
     listRegisteredSidebarFooterActionIds,
     useSidebarSections,
     useSidebarFooterActions,
-} from '../ui-extensions/chrome/useSidebarSections';
+} from '../sidebar/useSidebarSections';
 import {
     registerHeaderAction,
     unregisterHeaderAction,
     listRegisteredHeaderActionIds,
     useHeaderActions,
-} from '../ui-extensions/chrome/useHeaderActions';
+} from '../sidebar/useHeaderActions';
 import {
     registerComposerAction,
     unregisterComposerAction,
     listRegisteredComposerActionIds,
     useComposerActions,
-} from '../ui-extensions/chrome/useComposerActions';
+} from '../sidebar/useComposerActions';
 
 const DummyComponent = { name: 'DummyComponent', template: '<div />' };
 

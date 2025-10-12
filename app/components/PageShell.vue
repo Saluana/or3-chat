@@ -213,31 +213,27 @@
                 </div>
             </div>
         </div>
-        <lazy-modal-dashboard v-model:showModal="showDashboardModal" />
+        <lazy-dashboard v-model:showModal="showDashboardModal" />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
+import { useMultiPane } from '~/composables/core/useMultiPane';
 import { db } from '~/db';
-import { useHookEffect } from '~/composables/useHookEffect';
+import { useHookEffect } from '~/composables/core/useHookEffect';
 import {
     flush as flushDocument,
     newDocument as createNewDoc,
-    useDocumentState,
-} from '~/composables/useDocumentsStore';
-import { usePaneDocuments } from '~/composables/usePaneDocuments';
-import {
-    useHeaderActions,
-    type HeaderActionEntry,
-} from '~/composables/ui-extensions/chrome';
+} from '~/composables/documents/useDocumentsStore';
+import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
+import { useHeaderActions, type HeaderActionEntry } from '#imports';
 import type {
     DbDeletePayload,
     ThreadEntity,
     DocumentEntity,
-} from '~/utils/hook-types';
+} from '~/core/hooks/hook-types';
 import { useMagicKeys, whenever } from '@vueuse/core';
 
 const props = withDefaults(

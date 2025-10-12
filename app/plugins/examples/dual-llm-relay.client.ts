@@ -15,7 +15,7 @@ import type { PanePluginApi } from '../pane-plugin-api.client';
 import type {
     UiPaneMsgSentPayload,
     UiPaneMsgReceivedPayload,
-} from '~/utils/hook-types';
+} from '~/core/hooks/hook-types';
 import { getMessage } from '~/db/messages';
 
 const MAX_HOPS = 3; // prevent runaway ping-pong

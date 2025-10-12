@@ -59,8 +59,10 @@ vi.mock('~/db', () => ({
     create: {},
 }));
 vi.mock('~/db/documents', () => ({ updateDocument: vi.fn() }));
-vi.mock('~/composables/useDocumentsStore', () => ({ loadDocument: vi.fn() }));
-vi.mock('~/composables/useSidebarSearch', () => ({
+vi.mock('~/composables/documents/useDocumentsStore', () => ({
+    loadDocument: vi.fn(),
+}));
+vi.mock('~/composables/sidebar/useSidebarSearch', () => ({
     useSidebarSearch: () => ({
         query: ref(''),
         threadResults: ref([]),

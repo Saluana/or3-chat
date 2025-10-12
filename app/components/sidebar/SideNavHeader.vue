@@ -346,7 +346,7 @@
 </template>
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useProjectsCrud } from '~/composables/useProjectsCrud';
+import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 
 const props = defineProps<{
     sidebarQuery: string;
