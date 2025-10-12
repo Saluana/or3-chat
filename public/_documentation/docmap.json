@@ -1,0 +1,33 @@
+{
+    "title": "OR3 Docs",
+    "description": "Documentation for the OR3 project",
+    "version": "1.0.0",
+    "sections": [
+        {
+            "title": "Composables",
+            "path": "/composables",
+            "files": [
+                {
+                    "name": "useActivePrompt.md",
+                    "path": "/composables/useActivePrompt",
+                    "category": "Chat"
+                },
+                {
+                    "name": "useChat.md",
+                    "path": "/composables/useChat",
+                    "category": "Chat"
+                }
+            ]
+        },
+        {
+            "title": "Hooks",
+            "path": "/hooks",
+            "files": []
+        },
+        {
+            "title": "Database",
+            "path": "/database",
+            "files": []
+        }
+    ]
+}
