@@ -136,6 +136,22 @@ export function useChat(
             });
         } catch {}
 
+        // Apply outgoing filter BEFORE creating thread to allow early veto
+        const outgoing = await hooks.applyFilters(
+            'ui.chat.message:filter:outgoing',
+            content
+        );
+
+        // Early veto: if filter returns false or empty string, skip everything
+        if (!outgoing || outgoing === '') {
+            useToast().add({
+                title: 'Message blocked',
+                description: 'Your message was filtered out.',
+                timeout: 3000,
+            } as any);
+            return;
+        }
+
         if (!threadIdRef.value) {
             // Resolve system prompt: pending > default
             let effectivePromptId: string | null = pendingPromptId || null;
@@ -288,21 +304,6 @@ export function useChat(
         }
         if (!model) model = DEFAULT_AI_MODEL;
         if (online === true) model = model + ':online';
-
-        const outgoing = await hooks.applyFilters(
-            'ui.chat.message:filter:outgoing',
-            content
-        );
-
-        // Early veto: if filter returns false or empty string, skip append and network
-        if (!outgoing || outgoing === '') {
-            useToast().add({
-                title: 'Message blocked',
-                description: 'Your message was filtered out.',
-                timeout: 3000,
-            } as any);
-            return;
-        }
 
         file_hashes = mergeAssistantFileHashes(assistantHashes, file_hashes);
         const userDbMsg = await tx.appendMessage({
@@ -848,6 +849,17 @@ export function useChat(
                     threadId: threadIdRef.value,
                     aborted: true,
                 });
+                // Clean up empty assistant message from DB after abort
+                if (tailAssistant.value?.id && !tailAssistant.value?.text) {
+                    try {
+                        await db.messages.delete(tailAssistant.value.id);
+                        const idx = rawMessages.value.findIndex(
+                            (m) => m.id === tailAssistant.value!.id
+                        );
+                        if (idx >= 0) rawMessages.value.splice(idx, 1);
+                    } catch {}
+                }
+                tailAssistant.value = null;
             } else {
                 const lastUser = [...messages.value]
                     .reverse()
@@ -877,10 +889,19 @@ export function useChat(
                     error: e,
                     aborted: false,
                 });
-                // Drop empty failed assistant
-                if (!tailAssistant.value?.text) tailAssistant.value = null;
-                else if (tailAssistant.value?.pending)
+                // Drop empty failed assistant from memory AND database
+                if (!tailAssistant.value?.text && tailAssistant.value?.id) {
+                    try {
+                        await db.messages.delete(tailAssistant.value.id);
+                        const idx = rawMessages.value.findIndex(
+                            (m) => m.id === tailAssistant.value!.id
+                        );
+                        if (idx >= 0) rawMessages.value.splice(idx, 1);
+                    } catch {}
+                    tailAssistant.value = null;
+                } else if (tailAssistant.value?.pending) {
                     (tailAssistant.value as any).pending = false;
+                }
             }
         } finally {
             loading.value = false;
