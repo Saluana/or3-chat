@@ -142,8 +142,12 @@ export function useChat(
             content
         );
 
-        // Early veto: if filter returns false or empty string, skip everything
-        if (!outgoing || outgoing === '') {
+        // Early veto: if filter returns false, empty string, or whitespace-only, skip everything
+        if (
+            !outgoing ||
+            typeof outgoing !== 'string' ||
+            outgoing.trim() === ''
+        ) {
             useToast().add({
                 title: 'Message blocked',
                 description: 'Your message was filtered out.',
@@ -710,13 +714,22 @@ export function useChat(
             }
 
             const fullText = current.text;
-            const incoming = await hooks.applyFilters(
-                'ui.chat.message:filter:incoming',
+            const hookName = 'ui.chat.message:filter:incoming';
+            // Track error count before filter
+            const errorsBefore = hooks._diagnostics?.errors?.[hookName] ?? 0;
+            const incoming = (await hooks.applyFilters(
+                hookName,
                 fullText,
                 threadIdRef.value
-            );
+            )) as string;
+            // Check if filter threw
+            const errorsAfter = hooks._diagnostics?.errors?.[hookName] ?? 0;
+            if (errorsAfter > errorsBefore) {
+                // Throw error to be caught by outer handler which will call finalize({ error })
+                throw new Error('Incoming filter threw an exception');
+            }
             if (current.pending) current.pending = false;
-            current.text = incoming as string;
+            current.text = incoming;
             const finalized = {
                 ...assistantDbMsg,
                 data: {

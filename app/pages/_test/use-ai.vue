@@ -118,10 +118,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useHead } from '#imports';
 import { useChat } from '~/composables/chat/useAi';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
+import type { ChatMessage } from '~/utils/chat/types';
 import { db } from '~/db';
 import { state } from '~/state/global';
 import { nowSec, newId } from '~/db/util';
 import { useHooks } from '~/core/hooks/useHooks';
+
+const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
 type FetchInput = Parameters<typeof fetch>[0];
 type FetchInit = Parameters<typeof fetch>[1];
@@ -285,7 +288,8 @@ async function resetDexie() {
             await db.posts.clear();
         }
     );
-    state.value.openrouterKey = null;
+    // Preserve openrouterKey so tests can run without re-authentication
+    // state.value.openrouterKey = null;
     try {
         localStorage.removeItem('last_selected_model');
     } catch {}
@@ -818,6 +822,1019 @@ const testDefinitions: TestDefinition[] = [
                 'Assistant file hashes should be persisted'
             );
             ctx.log('Image stream persisted metadata + UI placeholder');
+        },
+    },
+    {
+        id: 'multiple-messages',
+        label: 'Multiple message exchange maintains order',
+        description:
+            'Sends multiple user/assistant pairs and verifies message ordering and index integrity.',
+        async run(ctx) {
+            state.value.openrouterKey = 'multi-key';
+            const exchanges = [
+                { user: 'First question', assistant: 'First answer' },
+                { user: 'Second question', assistant: 'Second answer' },
+                { user: 'Third question', assistant: 'Third answer' },
+            ];
+
+            for (let i = 0; i < exchanges.length; i++) {
+                const exchange = exchanges[i];
+                if (!exchange) continue;
+                const events = [
+                    `data: {"choices":[{"delta":{"text":"${exchange.assistant}"}}]}\n\n`,
+                    'data: [DONE]\n\n',
+                ];
+                ctx.enqueueFetch((_input, init) =>
+                    Promise.resolve(
+                        makeSseResponse(events, init?.signal ?? undefined)
+                    )
+                );
+            }
+
+            const chat = useChat([]);
+            for (const exchange of exchanges) {
+                await chat.sendMessage(exchange.user);
+                await ctx.waitFor(
+                    () =>
+                        !chat.loading.value &&
+                        Boolean(
+                            chat.tailAssistant.value?.text?.includes(
+                                exchange.assistant
+                            )
+                        ),
+                    {
+                        timeout: 1500,
+                        message: `Exchange failed: ${exchange.user}`,
+                    }
+                );
+                chat.flushTailAssistant();
+            }
+
+            const records = await db.messages
+                .where('thread_id')
+                .equals(chat.threadId.value!)
+                .sortBy('index');
+
+            assert(
+                records.length === exchanges.length * 2,
+                `Expected ${exchanges.length * 2} messages, got ${
+                    records.length
+                }`
+            );
+
+            for (let i = 0; i < exchanges.length; i++) {
+                const userIdx = i * 2;
+                const assistantIdx = userIdx + 1;
+                const userRec = records[userIdx];
+                const assistantRec = records[assistantIdx];
+                assert(userRec, `User record ${userIdx} missing`);
+                assert(
+                    assistantRec,
+                    `Assistant record ${assistantIdx} missing`
+                );
+                assert(
+                    userRec.role === 'user',
+                    `Message ${userIdx} should be user`
+                );
+                assert(
+                    assistantRec.role === 'assistant',
+                    `Message ${assistantIdx} should be assistant`
+                );
+                const exchange = exchanges[i];
+                assert(exchange, `Exchange ${i} missing`);
+                assert(
+                    (userRec.data as any)?.content === exchange.user,
+                    `User message ${i} content mismatch`
+                );
+                assert(
+                    (assistantRec.data as any)?.content === exchange.assistant,
+                    `Assistant message ${i} content mismatch`
+                );
+            }
+            ctx.log('Multi-message ordering verified');
+        },
+    },
+    {
+        id: 'reasoning-persistence',
+        label: 'Reasoning text persists separately',
+        description:
+            'Validates that reasoning_details stream events persist to reasoning_text field.',
+        async run(ctx) {
+            state.value.openrouterKey = 'reasoning-key';
+            const events = [
+                'data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":"Let me think..."}]}}]}\n\n',
+                'data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":" step by step"}]}}]}\n\n',
+                'data: {"choices":[{"delta":{"text":"Final answer"}}]}\n\n',
+                'data: [DONE]\n\n',
+            ];
+
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(events, init?.signal ?? undefined)
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('complex question');
+            await ctx.waitFor(
+                () =>
+                    !chat.loading.value &&
+                    chat.tailAssistant.value?.text === 'Final answer',
+                { timeout: 1500, message: 'Assistant response missing' }
+            );
+
+            const assistant = await db.messages
+                .where('thread_id')
+                .equals(chat.threadId.value!)
+                .filter((m) => m.role === 'assistant')
+                .first();
+
+            assert(assistant, 'Assistant message not found');
+            const reasoningText = (assistant.data as any)?.reasoning_text;
+            assert(
+                reasoningText === 'Let me think... step by step',
+                `Reasoning text mismatch: ${reasoningText}`
+            );
+            ctx.log('Reasoning text persisted correctly');
+        },
+    },
+    {
+        id: 'system-prompt-injection',
+        label: 'System prompt injected into request',
+        description:
+            'Verifies system messages are prepended to conversation when system prompt is set.',
+        async run(ctx) {
+            state.value.openrouterKey = 'system-key';
+            let capturedMessages: any[] = [];
+
+            ctx.enqueueFetch(async (_input, init) => {
+                const rawBody =
+                    typeof init?.body === 'string' ? init.body : undefined;
+                if (rawBody) {
+                    const parsed = JSON.parse(rawBody);
+                    capturedMessages = parsed.messages || [];
+                }
+                return makeSseResponse(
+                    [
+                        'data: {"choices":[{"delta":{"text":"ok"}}]}\n\n',
+                        'data: [DONE]\n\n',
+                    ],
+                    init?.signal ?? undefined
+                );
+            });
+
+            // Create thread with system prompt
+            const now = nowSec();
+            const promptId = newId();
+            // Content must be TipTap JSON format
+            const tiptapContent = JSON.stringify({
+                type: 'doc',
+                content: [
+                    {
+                        type: 'paragraph',
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'You are a helpful assistant.',
+                            },
+                        ],
+                    },
+                ],
+            });
+            await db.posts.put({
+                id: promptId,
+                title: 'Test Prompt',
+                content: tiptapContent,
+                postType: 'prompt',
+                created_at: now,
+                updated_at: now,
+                deleted: false,
+                meta: '[]',
+            });
+
+            const threadId = newId();
+            await db.threads.put({
+                id: threadId,
+                title: 'Test Thread',
+                created_at: now,
+                updated_at: now,
+                last_message_at: now,
+                status: 'ready',
+                deleted: false,
+                pinned: false,
+                clock: 0,
+                forked: false,
+                system_prompt_id: promptId,
+            });
+
+            const chat = useChat([], threadId);
+            await chat.sendMessage('Hello');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Send did not complete',
+            });
+
+            assert(
+                capturedMessages.length >= 2,
+                `Expected at least 2 messages, got ${capturedMessages.length}`
+            );
+            const systemMsg = capturedMessages.find((m) => m.role === 'system');
+            assert(systemMsg, 'System message not injected');
+
+            // System content might be string or object with content field
+            let systemContent = '';
+            if (typeof systemMsg.content === 'string') {
+                systemContent = systemMsg.content;
+            } else if (
+                systemMsg.content &&
+                typeof systemMsg.content === 'object'
+            ) {
+                // Handle content parts array or nested content
+                if (Array.isArray(systemMsg.content)) {
+                    systemContent = systemMsg.content
+                        .map((part: any) => {
+                            if (typeof part === 'string') return part;
+                            if (part.type === 'text') return part.text || '';
+                            return '';
+                        })
+                        .join('');
+                } else if (systemMsg.content.text) {
+                    systemContent = systemMsg.content.text;
+                } else {
+                    systemContent = JSON.stringify(systemMsg.content);
+                }
+            }
+
+            ctx.log(`System message content: "${systemContent}"`);
+            assert(
+                systemContent.toLowerCase().includes('helpful assistant'),
+                `System prompt content missing. Got: "${systemContent}"`
+            );
+            ctx.log('System prompt injection verified');
+        },
+    },
+    {
+        id: 'file-hash-persistence',
+        label: 'User file hashes persist with message',
+        description:
+            'Sends message with file_hashes and verifies they persist alongside user message.',
+        async run(ctx) {
+            state.value.openrouterKey = 'hash-key';
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            'data: {"choices":[{"delta":{"text":"got it"}}]}\n\n',
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+
+            const chat = useChat([]);
+            const testHashes = ['abc123', 'def456', 'ghi789'];
+            await chat.sendMessage('check these files', {
+                file_hashes: testHashes,
+                files: [],
+                model: DEFAULT_AI_MODEL,
+                online: false,
+            });
+
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Send did not complete',
+            });
+
+            const userMsg = await db.messages
+                .where('thread_id')
+                .equals(chat.threadId.value!)
+                .filter((m) => m.role === 'user')
+                .first();
+
+            assert(userMsg?.file_hashes, 'User message file_hashes missing');
+            const parsed = JSON.parse(userMsg.file_hashes);
+            assert(
+                Array.isArray(parsed) && parsed.length === 3,
+                'File hashes not preserved'
+            );
+            ctx.log('User file hashes persisted correctly');
+        },
+    },
+    {
+        id: 'clear-memory',
+        label: 'Clear frees in-memory messages',
+        description:
+            'Validates that clear() removes all in-memory message refs without deleting DB records.',
+        async run(ctx) {
+            state.value.openrouterKey = 'clear-key';
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            'data: {"choices":[{"delta":{"text":"response"}}]}\n\n',
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('test clear');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Send did not complete',
+            });
+
+            chat.flushTailAssistant();
+            const preLength = chat.messages.value.length;
+            assert(preLength === 2, 'Expected 2 messages before clear');
+
+            const threadId = chat.threadId.value!;
+            chat.clear();
+
+            // Use relaxed comparison since clear() resets to empty
+            const postLength = chat.messages.value.length;
+            assert(postLength === 0, 'Messages not cleared from memory');
+            assert(
+                chat.tailAssistant.value === null,
+                'Tail assistant not cleared'
+            );
+
+            const dbRecords = await db.messages
+                .where('thread_id')
+                .equals(threadId)
+                .toArray();
+            assert(
+                dbRecords.length === 2,
+                'DB records should remain after clear()'
+            );
+            ctx.log('Clear freed memory without deleting DB records');
+        },
+    },
+    {
+        id: 'model-override',
+        label: 'Model parameter overrides default',
+        description:
+            'Ensures explicitly passed model parameter is used instead of defaults.',
+        async run(ctx) {
+            state.value.openrouterKey = 'model-key';
+            let capturedModel = '';
+
+            ctx.enqueueFetch(async (_input, init) => {
+                const rawBody =
+                    typeof init?.body === 'string' ? init.body : undefined;
+                if (rawBody) {
+                    const parsed = JSON.parse(rawBody);
+                    capturedModel = parsed.model || '';
+                }
+                return makeSseResponse(
+                    [
+                        'data: {"choices":[{"delta":{"text":"ok"}}]}\n\n',
+                        'data: [DONE]\n\n',
+                    ],
+                    init?.signal ?? undefined
+                );
+            });
+
+            const chat = useChat([]);
+            const customModel = 'anthropic/claude-3.5-sonnet';
+            await chat.sendMessage('test', {
+                model: customModel,
+                files: [],
+                file_hashes: [],
+                online: false,
+            });
+
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Send did not complete',
+            });
+
+            assert(
+                capturedModel === customModel,
+                `Expected ${customModel}, got ${capturedModel}`
+            );
+            ctx.log('Model override respected');
+        },
+    },
+    {
+        id: 'online-suffix',
+        label: 'Online mode appends :online suffix',
+        description:
+            'Validates that online:true adds :online to model ID in request.',
+        async run(ctx) {
+            state.value.openrouterKey = 'online-key';
+            let capturedModel = '';
+
+            ctx.enqueueFetch(async (_input, init) => {
+                const rawBody =
+                    typeof init?.body === 'string' ? init.body : undefined;
+                if (rawBody) {
+                    const parsed = JSON.parse(rawBody);
+                    capturedModel = parsed.model || '';
+                }
+                return makeSseResponse(
+                    [
+                        'data: {"choices":[{"delta":{"text":"ok"}}]}\n\n',
+                        'data: [DONE]\n\n',
+                    ],
+                    init?.signal ?? undefined
+                );
+            });
+
+            const chat = useChat([]);
+            await chat.sendMessage('search query', {
+                model: 'openai/gpt-4o',
+                online: true,
+                files: [],
+                file_hashes: [],
+            });
+
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 1500,
+                message: 'Send did not complete',
+            });
+
+            assert(
+                capturedModel === 'openai/gpt-4o:online',
+                `Expected openai/gpt-4o:online, got ${capturedModel}`
+            );
+            ctx.log('Online suffix appended correctly');
+        },
+    },
+    {
+        id: 'thread-reuse',
+        label: 'Existing thread ID reused across sends',
+        description:
+            'Verifies that second message uses same thread without creating new one.',
+        async run(ctx) {
+            state.value.openrouterKey = 'reuse-key';
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            'data: {"choices":[{"delta":{"text":"first"}}]}\n\n',
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            'data: {"choices":[{"delta":{"text":"second"}}]}\n\n',
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('msg 1');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 1500 });
+            const threadId1 = chat.threadId.value;
+
+            chat.flushTailAssistant();
+
+            await chat.sendMessage('msg 2');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 1500 });
+            const threadId2 = chat.threadId.value;
+
+            assert(threadId1 === threadId2, 'Thread ID changed unexpectedly');
+            const threadCount = await db.threads.count();
+            assert(
+                threadCount === 1,
+                'Multiple threads created instead of one'
+            );
+            ctx.log('Thread reused correctly across messages');
+        },
+    },
+    {
+        id: 'tail-assistant-isolation',
+        label: 'Tail assistant not in messages until flushed',
+        description:
+            'Confirms tailAssistant stays separate from messages array until explicitly flushed.',
+        async run(ctx) {
+            state.value.openrouterKey = 'tail-key';
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            'data: {"choices":[{"delta":{"text":"tail test"}}]}\n\n',
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('check tail');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 1500 });
+
+            const preFlushLength = chat.messages.value.length;
+            assert(
+                preFlushLength === 1,
+                'Only user message should be in messages array'
+            );
+            const firstMsg = chat.messages.value[0];
+            assert(firstMsg, 'First message missing');
+            assert(firstMsg.role === 'user', 'Only message should be user');
+            assert(
+                chat.tailAssistant.value?.text === 'tail test',
+                'Tail assistant missing response'
+            );
+
+            chat.flushTailAssistant();
+
+            // After flush, check we have exactly 2 messages
+            const postFlushLength = chat.messages.value.length;
+            assert(
+                postFlushLength === 2,
+                'Messages array should have 2 after flush'
+            );
+            const secondMsg = chat.messages.value[1];
+            assert(secondMsg, 'Second message missing after flush');
+            assert(
+                secondMsg.role === 'assistant',
+                'Second message should be assistant after flush'
+            );
+            assert(
+                chat.tailAssistant.value === null,
+                'Tail assistant should be null after flush'
+            );
+            ctx.log('Tail assistant isolation verified');
+        },
+    },
+    {
+        id: 'stream-state-finalization',
+        label: 'Stream state finalizes on completion',
+        description:
+            'Ensures streamState.finalized becomes true and isActive false after stream ends.',
+        async run(ctx) {
+            state.value.openrouterKey = 'state-key';
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            'data: {"choices":[{"delta":{"text":"done"}}]}\n\n',
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+
+            const chat = useChat([]);
+            assert(
+                chat.streamState.finalized === false,
+                'Stream should start unfinalized'
+            );
+
+            await chat.sendMessage('finalize test');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 1500 });
+
+            // Wait for stream to fully finalize (finalize() is called after persistence)
+            await ctx.waitFor(() => chat.streamState.finalized, {
+                timeout: 500,
+                message: 'Stream did not finalize',
+            });
+
+            // Check finalized state
+            assert(chat.streamState.finalized, 'Stream should be finalized');
+            assert(
+                chat.streamState.isActive === false,
+                'Stream should be inactive'
+            );
+            assert(
+                chat.streamState.error === null,
+                'No error should be present'
+            );
+            ctx.log('Stream state finalization verified');
+        },
+    },
+    {
+        id: 'no-api-key-noop',
+        label: 'Missing API key prevents send',
+        description:
+            'Validates that sendMessage returns early when apiKey is not set.',
+        async run(ctx) {
+            const originalKey = state.value.openrouterKey;
+            state.value.openrouterKey = null;
+
+            const chat = useChat([]);
+            await chat.sendMessage('should not send');
+
+            assert(
+                chat.messages.value.length === 0,
+                'No messages should be created'
+            );
+            assert(!chat.threadId.value, 'No thread should be created');
+            const messageCount = await db.messages.count();
+            assert(messageCount === 0, 'DB should remain empty');
+
+            state.value.openrouterKey = originalKey;
+            ctx.log('API key guard working correctly');
+        },
+    },
+    {
+        id: 'double-abort-safe',
+        label: 'Multiple abort calls are safe',
+        description:
+            'Ensures calling abort() multiple times does not throw or create issues.',
+        async run(ctx) {
+            state.value.openrouterKey = 'abort2-key';
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSlowAbortableStream(init?.signal ?? undefined)
+                )
+            );
+
+            const chat = useChat([]);
+            const sendPromise = chat.sendMessage('abort test');
+            await ctx.waitFor(() => chat.loading.value, { timeout: 500 });
+
+            chat.abort();
+            chat.abort(); // Second abort should be safe
+            chat.abort(); // Third abort should be safe
+
+            await sendPromise;
+            await delay(50);
+
+            assert(!chat.loading.value, 'Loading should be false after abort');
+            ctx.log('Multiple abort calls handled safely');
+        },
+    },
+    {
+        id: 'initial-messages-hydration',
+        label: 'Initial messages passed to useChat hydrate correctly',
+        description:
+            'Verifies that passing existing messages to useChat initializes state properly.',
+        async run(ctx) {
+            const existingMessages: ChatMessage[] = [
+                {
+                    id: newId(),
+                    role: 'user',
+                    content: 'Hello',
+                },
+                {
+                    id: newId(),
+                    role: 'assistant',
+                    content: 'Hi there',
+                },
+            ];
+
+            const chat = useChat(existingMessages);
+
+            assert(
+                chat.messages.value.length === 2,
+                'Initial messages not hydrated'
+            );
+            const msg0 = chat.messages.value[0];
+            const msg1 = chat.messages.value[1];
+            assert(msg0, 'First message missing');
+            assert(msg1, 'Second message missing');
+            assert(msg0.role === 'user', 'First message should be user');
+            assert(
+                msg1.role === 'assistant',
+                'Second message should be assistant'
+            );
+            assert(msg0.text === 'Hello', 'User text mismatch');
+            assert(msg1.text === 'Hi there', 'Assistant text mismatch');
+            ctx.log('Initial messages hydrated correctly');
+        },
+    },
+    {
+        id: 'stream-reset',
+        label: 'resetStream clears stream state',
+        description:
+            'Validates that resetStream() clears streamId and resets accumulator.',
+        async run(ctx) {
+            state.value.openrouterKey = 'reset-key';
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(
+                        [
+                            'data: {"choices":[{"delta":{"text":"test"}}]}\n\n',
+                            'data: [DONE]\n\n',
+                        ],
+                        init?.signal ?? undefined
+                    )
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('test');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 1500 });
+
+            const streamIdBefore = chat.streamId.value;
+            assert(streamIdBefore, 'Stream ID should exist after send');
+
+            chat.resetStream();
+
+            assert(
+                chat.streamId.value === undefined,
+                'Stream ID should be cleared'
+            );
+            assert(chat.streamState.text === '', 'Stream text should be empty');
+            assert(
+                chat.streamState.reasoningText === '',
+                'Reasoning text should be empty'
+            );
+            ctx.log('Stream reset completed successfully');
+        },
+    },
+    {
+        id: 'image-dedupe',
+        label: 'Duplicate images only persist once',
+        description:
+            'Sends the same data URL twice and verifies markdown placeholder is not duplicated, file_meta/file_hashes dedupe works.',
+        async run(ctx) {
+            state.value.openrouterKey = 'dedupe-key';
+            const dataUrl =
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+            const events = [
+                'data: {"choices":[{"delta":{"text":"Image 1"}}]}\n\n',
+                `data: {"choices":[{"delta":{"images":[{"image_url":{"url":"${dataUrl}"}}]}}]}\n\n`,
+                'data: {"choices":[{"delta":{"text":" and 2"}}]}\n\n',
+                `data: {"choices":[{"delta":{"images":[{"image_url":{"url":"${dataUrl}"}}]}}]}\n\n`,
+                'data: [DONE]\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(events, init?.signal ?? undefined)
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('test dedupe');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 2000 });
+            await delay(100);
+
+            const text = chat.tailAssistant.value?.text || '';
+            const placeholderCount = (text.match(/!\[generated image\]/g) || [])
+                .length;
+            // Current implementation dedupes placeholders by URL - both images have same URL
+            // so only 1 placeholder should appear (this is the actual behavior)
+            assert(
+                placeholderCount === 1,
+                `Expected 1 placeholder (deduped by URL), got ${placeholderCount}`
+            );
+
+            const fileMetaCount = await db.file_meta.count();
+            assert(
+                fileMetaCount === 1,
+                `Expected 1 file_meta (deduped), got ${fileMetaCount}`
+            );
+
+            const assistant = await db.messages
+                .where('thread_id')
+                .equals(chat.threadId.value!)
+                .filter((m) => m.role === 'assistant')
+                .first();
+            if (assistant?.file_hashes) {
+                const hashes = JSON.parse(assistant.file_hashes);
+                assert(
+                    hashes.length === 1,
+                    `Expected 1 unique hash, got ${hashes.length}`
+                );
+            }
+            ctx.log('Image deduplication verified');
+        },
+    },
+    {
+        id: 'image-limit',
+        label: 'Image limit caps at 6 hashes',
+        description:
+            'Sends >6 images and verifies only 6 hashes persist but all placeholders appear.',
+        async run(ctx) {
+            state.value.openrouterKey = 'limit-key';
+            const dataUrl =
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+            // Generate unique data URLs by appending index
+            const events: string[] = [];
+            for (let i = 0; i < 8; i++) {
+                const uniqueUrl = dataUrl + `?i=${i}`;
+                events.push(
+                    `data: {"choices":[{"delta":{"images":[{"image_url":{"url":"${uniqueUrl}"}}]}}]}\n\n`
+                );
+            }
+            events.push('data: [DONE]\n\n');
+
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(events, init?.signal ?? undefined)
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('many images');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 2500 });
+            await delay(150);
+
+            const text = chat.tailAssistant.value?.text || '';
+            const placeholderCount = (text.match(/!\[generated image\]/g) || [])
+                .length;
+            assert(
+                placeholderCount === 8,
+                `Expected 8 placeholders, got ${placeholderCount}`
+            );
+
+            const assistant = await db.messages
+                .where('thread_id')
+                .equals(chat.threadId.value!)
+                .filter((m) => m.role === 'assistant')
+                .first();
+            if (assistant?.file_hashes) {
+                const hashes = JSON.parse(assistant.file_hashes);
+                assert(
+                    hashes.length === 6,
+                    `Expected max 6 hashes, got ${hashes.length}`
+                );
+            }
+            ctx.log('Image limit cap verified');
+        },
+    },
+    {
+        id: 'image-fetch-failure',
+        label: 'Remote image fetch failure handled gracefully',
+        description:
+            'Uses non-200 URL and verifies no crash, no hash persisted, placeholder still present.',
+        async run(ctx) {
+            state.value.openrouterKey = 'fetch-fail-key';
+            const badUrl = 'https://example.com/nonexistent.png';
+            const events = [
+                'data: {"choices":[{"delta":{"text":"Failed image"}}]}\n\n',
+                `data: {"choices":[{"delta":{"images":[{"image_url":{"url":"${badUrl}"}}]}}]}\n\n`,
+                'data: [DONE]\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(events, init?.signal ?? undefined)
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('bad image url');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 2000 });
+            await delay(100);
+
+            const text = chat.tailAssistant.value?.text || '';
+            assert(
+                text.includes('![generated image]'),
+                'Placeholder should be present despite fetch failure'
+            );
+
+            const fileMetaCount = await db.file_meta.count();
+            assert(
+                fileMetaCount === 0,
+                `Expected 0 file_meta on fetch fail, got ${fileMetaCount}`
+            );
+            ctx.log('Remote image fetch failure handled');
+        },
+    },
+    {
+        id: 'outgoing-filter-whitespace',
+        label: 'Outgoing filter whitespace veto',
+        description:
+            'Returns only whitespace from outgoing filter and verifies send is blocked.',
+        async run(ctx) {
+            state.value.openrouterKey = 'whitespace-key';
+            const whitespaceFilter = () => '   \n\t  ';
+            hooks.addFilter(
+                'ui.chat.message:filter:outgoing',
+                whitespaceFilter as any
+            );
+            ctx.cleanup(() =>
+                hooks.removeFilter(
+                    'ui.chat.message:filter:outgoing',
+                    whitespaceFilter as any
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('should be trimmed and blocked');
+
+            assert(
+                chat.messages.value.length === 0,
+                'No messages should be created for whitespace-only filter result'
+            );
+            assert(!chat.threadId.value, 'No thread should be created');
+            const messageCount = await db.messages.count();
+            assert(messageCount === 0, 'DB should remain empty');
+            ctx.log('Whitespace filter veto confirmed');
+        },
+    },
+    {
+        id: 'filter-throws',
+        label: 'Filter exception handled gracefully',
+        description:
+            'Incoming filter throws and verifies error path handles it without zombie loading.',
+        async run(ctx) {
+            state.value.openrouterKey = 'throw-key';
+            const throwingFilter = () => {
+                throw new Error('Filter intentionally threw');
+            };
+            hooks.addFilter(
+                'ui.chat.message:filter:incoming',
+                throwingFilter as any
+            );
+            ctx.cleanup(() =>
+                hooks.removeFilter(
+                    'ui.chat.message:filter:incoming',
+                    throwingFilter as any
+                )
+            );
+
+            const events = [
+                'data: {"choices":[{"delta":{"text":"test"}}]}\n\n',
+                'data: [DONE]\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(events, init?.signal ?? undefined)
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('trigger filter error');
+            await ctx.waitFor(() => !chat.loading.value, {
+                timeout: 2000,
+                message: 'Loading should reset after filter error',
+            });
+
+            assert(
+                !chat.loading.value,
+                'Loading flag should be false after error'
+            );
+            assert(
+                chat.streamState.error !== null,
+                'Stream state should contain error'
+            );
+            ctx.log('Filter exception handled gracefully');
+        },
+    },
+    {
+        id: 'action-ordering',
+        label: 'Delta action ordering preserved',
+        description:
+            'Captures chunkIndex from delta actions and verifies monotonic increase.',
+        async run(ctx) {
+            state.value.openrouterKey = 'ordering-key';
+            const capturedIndexes: number[] = [];
+            const deltaAction = (_delta: string, meta?: any) => {
+                if (meta?.chunkIndex !== undefined) {
+                    capturedIndexes.push(meta.chunkIndex);
+                }
+            };
+            hooks.addAction('ai.chat.stream:action:delta', deltaAction as any);
+            ctx.cleanup(() =>
+                hooks.removeAction(
+                    'ai.chat.stream:action:delta',
+                    deltaAction as any
+                )
+            );
+
+            const events = [
+                'data: {"choices":[{"delta":{"text":"A"}}]}\n\n',
+                'data: {"choices":[{"delta":{"text":"B"}}]}\n\n',
+                'data: {"choices":[{"delta":{"text":"C"}}]}\n\n',
+                'data: {"choices":[{"delta":{"text":"D"}}]}\n\n',
+                'data: [DONE]\n\n',
+            ];
+            ctx.enqueueFetch((_input, init) =>
+                Promise.resolve(
+                    makeSseResponse(events, init?.signal ?? undefined)
+                )
+            );
+
+            const chat = useChat([]);
+            await chat.sendMessage('ordering test');
+            await ctx.waitFor(() => !chat.loading.value, { timeout: 1500 });
+            await delay(50);
+
+            assert(
+                capturedIndexes.length >= 4,
+                `Expected at least 4 delta actions, got ${capturedIndexes.length}`
+            );
+            for (let i = 1; i < capturedIndexes.length; i++) {
+                const prev = capturedIndexes[i - 1];
+                const curr = capturedIndexes[i];
+                assert(
+                    curr !== undefined && prev !== undefined && curr > prev,
+                    `chunkIndex not monotonic: ${prev} -> ${curr}`
+                );
+            }
+            ctx.log(
+                `Delta action ordering verified: [${capturedIndexes.join(
+                    ', '
+                )}]`
+            );
         },
     },
 ];
