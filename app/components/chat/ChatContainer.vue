@@ -104,7 +104,7 @@ import {
     getPanePendingPrompt,
     clearPanePendingPrompt,
     setPanePendingPrompt,
-} from '~/composables/usePanePrompt';
+} from '~/composables/core/usePanePrompt';
 import type { ChatMessage as ChatMessageType } from '~/utils/chat/types';
 import VirtualMessageList from './VirtualMessageList.vue';
 import { useElementSize } from '@vueuse/core';
