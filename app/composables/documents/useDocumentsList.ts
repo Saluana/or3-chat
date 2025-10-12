@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { listDocuments, type Document } from '~/db/documents';
 import { useToast } from '#imports';
-import { useHookEffect } from '../useHookEffect';
+import { useHookEffect } from '../core/useHookEffect';
 
 export function useDocumentsList(limit = 200) {
     const docs = ref<Document[]>([]);

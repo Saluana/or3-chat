@@ -8,7 +8,7 @@ import {
     useDocumentState,
 } from '~/composables/documents/useDocumentsStore';
 import type { Ref } from 'vue';
-import type { PaneState } from '~/composables/useMultiPane';
+import type { PaneState } from '~/composables/core/useMultiPane';
 
 /** All error codes emitted by the Pane Plugin API */
 export type PaneApiErrorCode =

@@ -220,13 +220,12 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/useMultiPane';
+import { useMultiPane } from '~/composables/core/useMultiPane';
 import { db } from '~/db';
-import { useHookEffect } from '~/composables/useHookEffect';
+import { useHookEffect } from '~/composables/core/useHookEffect';
 import {
     flush as flushDocument,
     newDocument as createNewDoc,
-    useDocumentState,
 } from '~/composables/documents/useDocumentsStore';
 import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
 import { useHeaderActions, type HeaderActionEntry } from '#imports';

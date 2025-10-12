@@ -2,7 +2,7 @@
 // Assumes panes follow the PaneState contract from useMultiPane.
 
 import type { Ref } from 'vue';
-import type { MultiPaneState } from '~/composables/useMultiPane';
+import type { MultiPaneState } from '~/composables/core/useMultiPane';
 import {
     releaseDocument,
     useDocumentState,

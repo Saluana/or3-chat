@@ -35,7 +35,7 @@ export * from './threads/useThreadSearch';
 
 // Hook composables
 export * from '../core/hooks/useHooks';
-export * from './useHookEffect';
+export * from './core/useHookEffect';
 
 // Project composables
 export * from './projects/useProjectTreeActions';

@@ -121,7 +121,7 @@ vi.mock('../documents/useDocumentsStore', () => ({
 }));
 
 // ---- Imports under test ----
-import { useMultiPane } from '~/composables/useMultiPane';
+import { useMultiPane } from '~/composables/core/useMultiPane';
 import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
 import { useChat } from '~/composables/chat/useAi';
 
