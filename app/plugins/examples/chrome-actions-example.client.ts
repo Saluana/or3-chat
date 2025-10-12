@@ -1,16 +1,3 @@
-import {
-    registerSidebarSection,
-    unregisterSidebarSection,
-    registerSidebarFooterAction,
-    unregisterSidebarFooterAction,
-    registerHeaderAction,
-    unregisterHeaderAction,
-    registerComposerAction,
-    unregisterComposerAction,
-    type SidebarFooterActionContext,
-    type ComposerActionContext,
-} from '~/composables/ui-extensions/chrome';
-
 export default defineNuxtPlugin(() => {
     const sidebarSectionId = 'example:sidebar:welcome-card';
     const sidebarFooterId = 'example:sidebar:footer-toast';

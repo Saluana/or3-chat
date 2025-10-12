@@ -1,5 +1,5 @@
 /** Barrel export for chat-related composables (Task 1.6) */
-export * from './useStreamAccumulator';
+export * from './chat/useStreamAccumulator';
 export * from './dashboard/useDashboardPlugins';
 export * from './useWorkspaceBackup';
 

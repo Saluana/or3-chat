@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createStreamAccumulator } from '../useStreamAccumulator';
+import { createStreamAccumulator } from '../chat/useStreamAccumulator';
 
 // Helper to flush queued microtasks / rAF fallback
 async function nextFrame() {
@@ -150,7 +150,7 @@ describe('createStreamAccumulator', () => {
         (global as any).cancelAnimationFrame = undefined;
         // Re-import module so HAS_RAF snapshot is false
         vi.resetModules();
-        const mod = await import('../useStreamAccumulator');
+        const mod = await import('../chat/useStreamAccumulator');
         const acc = mod.createStreamAccumulator();
         acc.append('Z', { kind: 'text' });
         await new Promise((r) => setTimeout(r, 2));

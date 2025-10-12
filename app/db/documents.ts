@@ -8,7 +8,7 @@ import type {
     DbUpdatePayload,
     DocumentEntity,
 } from '../core/hooks/hook-types';
-import type { TypedHookEngine } from '../utils/typed-hooks';
+import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 
 /**
  * Internal stored row shape (reuses posts table with postType = 'doc').
