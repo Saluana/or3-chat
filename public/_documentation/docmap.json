@@ -53,6 +53,31 @@
                     "category": "Chat"
                 },
                 {
+                    "name": "useDocumentHistoryActions.md",
+                    "path": "/composables/useDocumentHistoryActions",
+                    "category": "Documents"
+                },
+                {
+                    "name": "useDocumentsList.md",
+                    "path": "/composables/useDocumentsList",
+                    "category": "Documents"
+                },
+                {
+                    "name": "useDocumentsStore.md",
+                    "path": "/composables/useDocumentsStore",
+                    "category": "Documents"
+                },
+                {
+                    "name": "useDashboardPlugins.md",
+                    "path": "/composables/useDashboardPlugins",
+                    "category": "Dashboard"
+                },
+                {
+                    "name": "usePaneDocuments.md",
+                    "path": "/composables/usePaneDocuments",
+                    "category": "Documents"
+                },
+                {
                     "name": "useHookEffect.md",
                     "path": "/composables/useHookEffect",
                     "category": "Core"
