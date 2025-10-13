@@ -78,6 +78,16 @@
                     "category": "Editor"
                 },
                 {
+                    "name": "useComposerActions.md",
+                    "path": "/composables/useComposerActions",
+                    "category": "Sidebar"
+                },
+                {
+                    "name": "useHeaderActions.md",
+                    "path": "/composables/useHeaderActions",
+                    "category": "Sidebar"
+                },
+                {
                     "name": "useDashboardPlugins.md",
                     "path": "/composables/useDashboardPlugins",
                     "category": "Dashboard"
@@ -96,6 +106,26 @@
                     "name": "useProjectsCrud.md",
                     "path": "/composables/useProjectsCrud",
                     "category": "Projects"
+                },
+                {
+                    "name": "useSidebarSearch.md",
+                    "path": "/composables/useSidebarSearch",
+                    "category": "Sidebar"
+                },
+                {
+                    "name": "useSidebarSections.md",
+                    "path": "/composables/useSidebarSections",
+                    "category": "Sidebar"
+                },
+                {
+                    "name": "useThreadHistoryActions.md",
+                    "path": "/composables/useThreadHistoryActions",
+                    "category": "Threads"
+                },
+                {
+                    "name": "useThreadSearch.md",
+                    "path": "/composables/useThreadSearch",
+                    "category": "Threads"
                 },
                 {
                     "name": "useHookEffect.md",
