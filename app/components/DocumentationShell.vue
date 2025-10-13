@@ -52,38 +52,71 @@
                         <div
                             v-for="category in resolvedNavigation"
                             :key="category.label"
-                            class="space-y-4"
+                            class="space-y-3"
                         >
                             <h3
-                                class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 w-fit px-2 uppercase tracking-wide"
+                                class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 px-2 uppercase tracking-wide"
                             >
                                 {{ category.label }}
                             </h3>
-                            <div class="space-y-3">
+                            <div class="space-y-2">
                                 <div
                                     v-for="group in category.groups"
                                     :key="`${category.label}-${group.label}`"
-                                    class="space-y-2"
+                                    class="rounded-md bg-[var(--md-surface)]/40 border border-[var(--md-inverse-surface)]/40"
                                 >
-                                    <h4
-                                        class="font-ps2 text-xs text-[var(--md-on-surface)] px-3"
+                                    <button
+                                        type="button"
+                                        class="w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
+                                        @click="
+                                            toggleGroup(
+                                                category.label,
+                                                group.label
+                                            )
+                                        "
+                                        :aria-expanded="
+                                            isGroupExpanded(
+                                                category.label,
+                                                group.label
+                                            )
+                                        "
                                     >
-                                        {{ group.label }}
-                                    </h4>
-                                    <ul class="space-y-1">
-                                        <li
-                                            v-for="item in group.items"
-                                            :key="item.path"
+                                        <span>{{ group.label }}</span>
+                                        <span
+                                            class="i-heroicons-chevron-down-20-solid transition-transform duration-200"
+                                            :class="{
+                                                'rotate-180': isGroupExpanded(
+                                                    category.label,
+                                                    group.label
+                                                ),
+                                            }"
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                    <Transition name="collapsible">
+                                        <ul
+                                            v-if="
+                                                isGroupExpanded(
+                                                    category.label,
+                                                    group.label
+                                                )
+                                            "
+                                            class="space-y-1 py-1"
                                         >
-                                            <NuxtLink
-                                                :to="item.path"
-                                                class="flex h-[40px] items-center px-3 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
-                                                active-class="border-2 border-[var(--md-inverse-surface)] dark:text-white text-black retro-shadow bg-primary/20"
+                                            <li
+                                                v-for="item in group.items"
+                                                :key="item.path"
                                             >
-                                                {{ item.label }}
-                                            </NuxtLink>
-                                        </li>
-                                    </ul>
+                                                <NuxtLink
+                                                    :to="item.path"
+                                                    class="flex h-[40px] items-center px-3 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
+                                                    active-class="border-2 border-[var(--md-inverse-surface)] dark:text-white text-black retro-shadow bg-primary/20"
+                                                >
+                                                    {{ item.label }}
+                                                </NuxtLink>
+                                            </li>
+                                        </ul>
+                                    </Transition>
                                 </div>
                             </div>
                         </div>
@@ -267,6 +300,45 @@ const resolvedNavigation = computed<NavCategory[]>(() =>
     props.navigation ? props.navigation : internalNavigation.value
 );
 
+const expandedGroups = ref<Set<string>>(new Set());
+
+function groupKey(category: string, group: string) {
+    return `${category}::${group}`;
+}
+
+function isGroupExpanded(category: string, group: string): boolean {
+    return expandedGroups.value.has(groupKey(category, group));
+}
+
+function setGroupExpanded(category: string, group: string, expanded: boolean) {
+    const key = groupKey(category, group);
+    const has = expandedGroups.value.has(key);
+    if (expanded === has) return;
+    const next = new Set(expandedGroups.value);
+    if (expanded) {
+        next.add(key);
+    } else {
+        next.delete(key);
+    }
+    expandedGroups.value = next;
+}
+
+function toggleGroup(category: string, group: string) {
+    setGroupExpanded(category, group, !isGroupExpanded(category, group));
+}
+
+function expandGroupsForPath(path: string) {
+    if (!path.startsWith('/documentation')) return;
+    for (const category of resolvedNavigation.value) {
+        for (const group of category.groups) {
+            const matches = group.items.some((item) => item.path === path);
+            if (matches) {
+                setGroupExpanded(category.label, group.label, true);
+            }
+        }
+    }
+}
+
 // Load docmap on mount
 onMounted(async () => {
     try {
@@ -290,6 +362,22 @@ onMounted(async () => {
     // Load content based on route
     await loadContentFromRoute();
 });
+
+watch(
+    () => route.path,
+    (path) => {
+        expandGroupsForPath(path);
+    },
+    { immediate: true }
+);
+
+watch(
+    () => resolvedNavigation.value,
+    () => {
+        expandGroupsForPath(route.path);
+    },
+    { immediate: true }
+);
 
 // Watch route changes to load new content (immediate to prevent flicker)
 watch(
@@ -770,5 +858,25 @@ function toggleTheme() {
 .prose-retro :deep(th) {
     background: var(--md-surface-variant);
     font-weight: bold;
+}
+
+.collapsible-enter-active,
+.collapsible-leave-active {
+    transition: all 0.18s ease;
+    overflow: hidden;
+}
+
+.collapsible-enter-from,
+.collapsible-leave-to {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-4px);
+}
+
+.collapsible-enter-to,
+.collapsible-leave-from {
+    opacity: 1;
+    max-height: 600px;
+    transform: translateY(0);
 }
 </style>
