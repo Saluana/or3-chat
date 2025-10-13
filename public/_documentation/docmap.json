@@ -26,6 +26,31 @@
                     "name": "useChatInputBridge.md",
                     "path": "/composables/useChatInputBridge",
                     "category": "Chat"
+                },
+                {
+                    "name": "useDefaultPrompt.md",
+                    "path": "/composables/useDefaultPrompt",
+                    "category": "Chat"
+                },
+                {
+                    "name": "useMessageActions.md",
+                    "path": "/composables/useMessageActions",
+                    "category": "Chat"
+                },
+                {
+                    "name": "useMessageEditing.md",
+                    "path": "/composables/useMessageEditing",
+                    "category": "Chat"
+                },
+                {
+                    "name": "useModelStore.md",
+                    "path": "/composables/useModelStore",
+                    "category": "Chat"
+                },
+                {
+                    "name": "useStreamAccumulator.md",
+                    "path": "/composables/useStreamAccumulator",
+                    "category": "Chat"
                 }
             ]
         },
