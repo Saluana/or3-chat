@@ -157,12 +157,155 @@
         {
             "title": "Hooks",
             "path": "/hooks",
-            "files": []
+            "files": [
+                {
+                    "name": "hook-catalog.md",
+                    "path": "/hooks/hook-catalog",
+                    "category": "Reference"
+                },
+                {
+                    "name": "hooks.md",
+                    "path": "/hooks/hooks",
+                    "category": "Core"
+                },
+                {
+                    "name": "typed-hooks.md",
+                    "path": "/hooks/typed-hooks",
+                    "category": "Core"
+                },
+                {
+                    "name": "hook-types.md",
+                    "path": "/hooks/hook-types",
+                    "category": "Types"
+                },
+                {
+                    "name": "hook-keys.md",
+                    "path": "/hooks/hook-keys",
+                    "category": "Types"
+                },
+                {
+                    "name": "useHooks.md",
+                    "path": "/hooks/useHooks",
+                    "category": "Integration"
+                }
+            ]
         },
         {
             "title": "Database",
             "path": "/database",
-            "files": []
+            "files": [
+                {
+                    "name": "attachments.md",
+                    "path": "/database/attachments",
+                    "category": "Entities"
+                },
+                {
+                    "name": "branching.md",
+                    "path": "/database/branching",
+                    "category": "Threads"
+                },
+                {
+                    "name": "client.md",
+                    "path": "/database/client",
+                    "category": "Core"
+                },
+                {
+                    "name": "dbTry.md",
+                    "path": "/database/dbTry",
+                    "category": "Utilities"
+                },
+                {
+                    "name": "documents.md",
+                    "path": "/database/documents",
+                    "category": "Entities"
+                },
+                {
+                    "name": "files-select.md",
+                    "path": "/database/files-select",
+                    "category": "Utilities"
+                },
+                {
+                    "name": "files-util.md",
+                    "path": "/database/files-util",
+                    "category": "Utilities"
+                },
+                {
+                    "name": "files.md",
+                    "path": "/database/files",
+                    "category": "Entities"
+                },
+                {
+                    "name": "index.md",
+                    "path": "/database/index",
+                    "category": "Core"
+                },
+                {
+                    "name": "kv.md",
+                    "path": "/database/kv",
+                    "category": "Entities"
+                },
+                {
+                    "name": "message-files.md",
+                    "path": "/database/message-files",
+                    "category": "Messages"
+                },
+                {
+                    "name": "messages.md",
+                    "path": "/database/messages",
+                    "category": "Messages"
+                },
+                {
+                    "name": "posts.md",
+                    "path": "/database/posts",
+                    "category": "Entities"
+                },
+                {
+                    "name": "projects.md",
+                    "path": "/database/projects",
+                    "category": "Entities"
+                },
+                {
+                    "name": "prompts.md",
+                    "path": "/database/prompts",
+                    "category": "Entities"
+                },
+                {
+                    "name": "schema.md",
+                    "path": "/database/schema",
+                    "category": "Core"
+                },
+                {
+                    "name": "threads.md",
+                    "path": "/database/threads",
+                    "category": "Threads"
+                },
+                {
+                    "name": "util.md",
+                    "path": "/database/util",
+                    "category": "Utilities"
+                }
+            ]
+        },
+        {
+            "title": "Types",
+            "path": "/types",
+            "files": [
+                {
+                    "name": "hooks.md",
+                    "path": "/types/hooks",
+                    "category": "Hooks"
+                },
+                {
+                    "name": "database.md",
+                    "path": "/types/database",
+                    "category": "Database"
+                },
+                {
+                    "name": "composables.md",
+                    "path": "/types/composables",
+                    "category": "Composables"
+                }
+            ]
         }
     ]
 }
