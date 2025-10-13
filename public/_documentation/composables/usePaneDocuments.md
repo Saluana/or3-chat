@@ -20,10 +20,7 @@ Pane-aware controller that lets the dashboard create or switch documents inside 
 ```ts
 import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
 import { useMultiPane } from '~/composables/core/useMultiPane';
-import {
-    newDocument,
-    flush,
-} from '~/composables/documents/useDocumentsStore';
+import { newDocument, flush } from '~/composables/documents/useDocumentsStore';
 
 const { panes, activePaneIndex } = useMultiPane();
 
@@ -74,10 +71,10 @@ If any filter returns `false`, both helpers abort without changing the pane. Use
 
 ## What you get back
 
-| Method | Returns | Description |
-| --- | --- | --- |
+| Method                          | Returns                                | Description                                                                                  |
+| ------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `newDocumentInActive(initial?)` | `Promise<{ id: string } \| undefined>` | Creates a doc in the active pane; returns the record summary or `undefined` on failure/veto. |
-| `selectDocumentInActive(id)` | `Promise<void>` | Switches the active pane to `id`; no-op if vetoed or invalid. |
+| `selectDocumentInActive(id)`    | `Promise<void>`                        | Switches the active pane to `id`; no-op if vetoed or invalid.                                |
 
 Both methods run asynchronously and should be awaited to ensure flushes complete before continuing.
 
@@ -121,7 +118,9 @@ interface UsePaneDocumentsOptions {
 }
 
 interface UsePaneDocumentsApi {
-    newDocumentInActive(initial?: { title?: string }): Promise<{ id: string } | undefined>;
+    newDocumentInActive(initial?: {
+        title?: string;
+    }): Promise<{ id: string } | undefined>;
     selectDocumentInActive(id: string): Promise<void>;
 }
 ```

@@ -61,12 +61,12 @@ Those hooks come from the central `$hooks` engine via `useHookEffect` and ensure
 
 ## What you get back
 
-| Property | Type | Description |
-| --- | --- | --- |
-| `docs` | `Ref<Document[]>` | Array of trimmed document records (no `content`). |
-| `loading` | `Ref<boolean>` | `true` while fetching from Dexie. |
-| `error` | `Ref<unknown>` | Error value if the last fetch failed. |
-| `refresh` | `() => Promise<void>` | Reload the list manually. |
+| Property  | Type                  | Description                                       |
+| --------- | --------------------- | ------------------------------------------------- |
+| `docs`    | `Ref<Document[]>`     | Array of trimmed document records (no `content`). |
+| `loading` | `Ref<boolean>`        | `true` while fetching from Dexie.                 |
+| `error`   | `Ref<unknown>`        | Error value if the last fetch failed.             |
+| `refresh` | `() => Promise<void>` | Reload the list manually.                         |
 
 The returned `Document` objects keep `content: ''` to satisfy the type while staying lightweight.
 

@@ -70,13 +70,13 @@ Components like the document sidebar call `useDocumentHistoryActions()` to read 
 
 `useDocumentHistoryActions()` returns a computed ref sorted by `order` (default 200), so lower numbers appear first.
 
-| Property | Type | Description |
-| --- | --- | --- |
-| `id` | `string` | Unique identifier for the action. |
-| `icon` | `string` | Iconify name rendered in the menu. |
-| `label` | `string` | Button text shown in the dropdown. |
-| `order` | `number \| undefined` | Placement hint (defaults to 200). |
-| `handler` | `(ctx: { document: Post }) => void \| Promise<void>` | Click callback. |
+| Property  | Type                                                 | Description                        |
+| --------- | ---------------------------------------------------- | ---------------------------------- |
+| `id`      | `string`                                             | Unique identifier for the action.  |
+| `icon`    | `string`                                             | Iconify name rendered in the menu. |
+| `label`   | `string`                                             | Button text shown in the dropdown. |
+| `order`   | `number \| undefined`                                | Placement hint (defaults to 200).  |
+| `handler` | `(ctx: { document: Post }) => void \| Promise<void>` | Click callback.                    |
 
 ---
 

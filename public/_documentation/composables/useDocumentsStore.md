@@ -37,9 +37,12 @@ setDocumentTitle(doc.id, 'My Notes');
 setDocumentContent(doc.id, editorStateJSON);
 
 const state = useDocumentState(doc.id);
-watch(() => state.status, (status) => {
-    if (status === 'saved') console.log('Document persisted');
-});
+watch(
+    () => state.status,
+    (status) => {
+        if (status === 'saved') console.log('Document persisted');
+    }
+);
 ```
 
 ---
@@ -74,18 +77,18 @@ Call `releaseDocument(id, { flush?: boolean, deleteEntry?: boolean })` when you 
 
 ## What you get back
 
-| Helper | Description |
-| --- | --- |
-| `newDocument(initial?)` | Creates a document and primes the store; emits toast on failure. |
-| `loadDocument(id)` | Fetches from Dexie, updates cache, and returns the record or `null`. |
-| `setDocumentTitle(id, title)` | Marks a new title and schedules a save. |
-| `setDocumentContent(id, content)` | Stages TipTap JSON and schedules a save. |
-| `flush(id)` | Persists pending fields immediately. |
-| `releaseDocument(id, opts?)` | Clears timers, optionally flushes, and removes cached state. |
-| `useDocumentState(id)` | Returns the `DocState` entry for reactive inspection. |
-| `useAllDocumentsState()` | Gives you the reactive map (for debugging tooling). |
-| `__hasPendingDocumentChanges(id)` | Internal helper to check for staged edits. |
-| `__peekDocumentStatus(id)` | Internal helper to read status without touching reactivity. |
+| Helper                            | Description                                                          |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `newDocument(initial?)`           | Creates a document and primes the store; emits toast on failure.     |
+| `loadDocument(id)`                | Fetches from Dexie, updates cache, and returns the record or `null`. |
+| `setDocumentTitle(id, title)`     | Marks a new title and schedules a save.                              |
+| `setDocumentContent(id, content)` | Stages TipTap JSON and schedules a save.                             |
+| `flush(id)`                       | Persists pending fields immediately.                                 |
+| `releaseDocument(id, opts?)`      | Clears timers, optionally flushes, and removes cached state.         |
+| `useDocumentState(id)`            | Returns the `DocState` entry for reactive inspection.                |
+| `useAllDocumentsState()`          | Gives you the reactive map (for debugging tooling).                  |
+| `__hasPendingDocumentChanges(id)` | Internal helper to check for staged edits.                           |
+| `__peekDocumentStatus(id)`        | Internal helper to read status without touching reactivity.          |
 
 `DocState` looks like:
 
@@ -137,9 +140,15 @@ interface DocState {
 function useDocumentState(id: string): DocState;
 function useAllDocumentsState(): Map<string, DocState>;
 async function loadDocument(id: string): Promise<Document | null>;
-async function newDocument(initial?: { title?: string; content?: any }): Promise<Document>;
+async function newDocument(initial?: {
+    title?: string;
+    content?: any;
+}): Promise<Document>;
 function setDocumentTitle(id: string, title: string): void;
 function setDocumentContent(id: string, content: any): void;
 async function flush(id: string): Promise<void>;
-async function releaseDocument(id: string, opts?: { flush?: boolean; deleteEntry?: boolean }): Promise<void>;
+async function releaseDocument(
+    id: string,
+    opts?: { flush?: boolean; deleteEntry?: boolean }
+): Promise<void>;
 ```
