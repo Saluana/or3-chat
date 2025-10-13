@@ -13,8 +13,18 @@
                     "category": "Chat"
                 },
                 {
+                    "name": "useAiSettings.md",
+                    "path": "/composables/useAiSettings",
+                    "category": "Chat"
+                },
+                {
                     "name": "useChat.md",
                     "path": "/composables/useChat",
+                    "category": "Chat"
+                },
+                {
+                    "name": "useChatInputBridge.md",
+                    "path": "/composables/useChatInputBridge",
                     "category": "Chat"
                 }
             ]
