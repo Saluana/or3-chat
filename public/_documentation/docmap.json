@@ -51,6 +51,31 @@
                     "name": "useStreamAccumulator.md",
                     "path": "/composables/useStreamAccumulator",
                     "category": "Chat"
+                },
+                {
+                    "name": "useHookEffect.md",
+                    "path": "/composables/useHookEffect",
+                    "category": "Core"
+                },
+                {
+                    "name": "useMultiPane.md",
+                    "path": "/composables/useMultiPane",
+                    "category": "Core"
+                },
+                {
+                    "name": "usePanePrompt.md",
+                    "path": "/composables/usePanePrompt",
+                    "category": "Core"
+                },
+                {
+                    "name": "usePreviewCache.md",
+                    "path": "/composables/usePreviewCache",
+                    "category": "Core"
+                },
+                {
+                    "name": "useWorkspaceBackup.md",
+                    "path": "/composables/useWorkspaceBackup",
+                    "category": "Core"
                 }
             ]
         },
