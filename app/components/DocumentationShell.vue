@@ -55,7 +55,7 @@
                             class="space-y-4"
                         >
                             <h3
-                                class="font-ps2 text-sm text-[var(--md-on-surface-variant)] px-2 uppercase tracking-wide"
+                                class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 w-fit px-2 uppercase tracking-wide"
                             >
                                 {{ category.label }}
                             </h3>
@@ -77,7 +77,7 @@
                                         >
                                             <NuxtLink
                                                 :to="item.path"
-                                                class="block px-3 py-2 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
+                                                class="flex h-[40px] items-center px-3 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
                                                 active-class="border-2 border-[var(--md-inverse-surface)] dark:text-white text-black retro-shadow bg-primary/20"
                                             >
                                                 {{ item.label }}
