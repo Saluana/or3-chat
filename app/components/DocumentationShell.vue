@@ -47,32 +47,45 @@
                 class="docs-sidebar flex-shrink-0 w-64 bg-[var(--md-surface)] overflow-y-auto scrollbars"
             >
                 <nav class="p-4">
-                    <div class="space-y-2">
+                    <div class="space-y-6">
                         <!-- Categories -->
                         <div
                             v-for="category in resolvedNavigation"
                             :key="category.label"
-                            class="mb-6"
+                            class="space-y-4"
                         >
                             <h3
-                                class="font-ps2 text-sm text-[var(--md-on-surface-variant)] mb-2 px-2"
+                                class="font-ps2 text-sm text-[var(--md-on-surface-variant)] px-2 uppercase tracking-wide"
                             >
                                 {{ category.label }}
                             </h3>
-                            <ul class="space-y-1">
-                                <li
-                                    v-for="item in category.items"
-                                    :key="item.path"
+                            <div class="space-y-3">
+                                <div
+                                    v-for="group in category.groups"
+                                    :key="`${category.label}-${group.label}`"
+                                    class="space-y-2"
                                 >
-                                    <NuxtLink
-                                        :to="item.path"
-                                        class="block px-3 py-2 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
-                                        active-class="border-2 border-[var(--md-inverse-surface)] dark:text-white text-black retro-shadow bg-primary/20"
+                                    <h4
+                                        class="font-ps2 text-xs text-[var(--md-on-surface)] px-3"
                                     >
-                                        {{ item.label }}
-                                    </NuxtLink>
-                                </li>
-                            </ul>
+                                        {{ group.label }}
+                                    </h4>
+                                    <ul class="space-y-1">
+                                        <li
+                                            v-for="item in group.items"
+                                            :key="item.path"
+                                        >
+                                            <NuxtLink
+                                                :to="item.path"
+                                                class="block px-3 py-2 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
+                                                active-class="border-2 border-[var(--md-inverse-surface)] dark:text-white text-black retro-shadow bg-primary/20"
+                                            >
+                                                {{ item.label }}
+                                            </NuxtLink>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </nav>
@@ -188,9 +201,14 @@ interface NavItem {
     path: string;
 }
 
-interface NavCategory {
+interface NavGroup {
     label: string;
     items: NavItem[];
+}
+
+interface NavCategory {
+    label: string;
+    groups: NavGroup[];
 }
 
 interface TocItem {
@@ -426,19 +444,38 @@ function applyDocmapNavigation(map: Docmap) {
     );
 
     internalNavigation.value = sortedSections.map((section) => {
+        const groupsMap = new Map<string, NavGroup>();
         const sortedFiles = [...section.files].sort((a, b) =>
             a.name.replace('.md', '').localeCompare(b.name.replace('.md', ''))
         );
 
+        sortedFiles.forEach((file) => {
+            const groupLabel = file.category || 'General';
+            if (!groupsMap.has(groupLabel)) {
+                groupsMap.set(groupLabel, {
+                    label: groupLabel,
+                    items: [],
+                });
+            }
+            const group = groupsMap.get(groupLabel)!;
+            group.items.push({
+                label: file.name.replace('.md', '').trim(),
+                path: `/documentation${file.path}`,
+            });
+        });
+
+        const groups = Array.from(groupsMap.values())
+            .map((group) => ({
+                ...group,
+                items: [...group.items].sort((a, b) =>
+                    a.label.localeCompare(b.label)
+                ),
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+
         return {
             label: section.title,
-            items: sortedFiles.map((file) => ({
-                label: file.name
-                    .replace('.md', '')
-
-                    .trim(),
-                path: `/documentation${file.path}`,
-            })),
+            groups,
         } satisfies NavCategory;
     });
 }
