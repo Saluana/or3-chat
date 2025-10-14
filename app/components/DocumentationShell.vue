@@ -109,8 +109,8 @@
                                             >
                                                 <NuxtLink
                                                     :to="item.path"
-                                                    class="flex h-[40px] items-center px-3 rounded-[3px] text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
-                                                    active-class="border-2 border-[var(--md-inverse-surface)] dark:text-white text-black retro-shadow bg-primary/20"
+                                                    class="flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
+                                                    active-class=" dark:text-white text-black  bg-primary/20 hover:bg-primary/20"
                                                 >
                                                     {{ item.label }}
                                                 </NuxtLink>
@@ -176,7 +176,7 @@
                         <StreamMarkdown
                             v-else
                             :content="displayContent"
-                            class="prose prose-retro max-w-none"
+                            class="prose prose-pre:font-mono prose-retro max-w-none"
                             :allowed-link-prefixes="[
                                 'https://',
                                 'http://',
@@ -188,6 +188,7 @@
                                 '/',
                             ]"
                             :code-block-show-line-numbers="false"
+                            :shiki-theme="currentShikiTheme"
                         />
                     </div>
                 </div>
@@ -228,6 +229,13 @@
 import { ref, computed, watch, onMounted, shallowRef } from 'vue';
 import type { AnyOrama } from '@orama/orama';
 import { StreamMarkdown } from 'streamdown-vue';
+
+const { $theme } = useNuxtApp();
+const currentShikiTheme = computed(() => {
+    const theme =
+        ($theme as any)?.current?.value ?? ($theme as any)?.get?.() ?? 'light';
+    return String(theme).startsWith('dark') ? 'github-dark' : 'github-light';
+});
 
 interface NavItem {
     label: string;
@@ -741,28 +749,33 @@ function toggleTheme() {
 }
 
 .prose-retro :deep(code) {
-    background: var(--md-surface-variant);
-    padding: 0.25rem 0.5rem;
-    border-radius: 3px;
-    border: 1px solid var(--md-inverse-surface);
+    background: var(--md-surface-container);
+    padding: 0.1rem 0.1rem;
+    color: var(--md-on-surface);
     font-family: 'Courier New', monospace;
     font-size: 0.9em;
 }
 
+@media (prefers-color-scheme: dark) {
+    .prose-retro :deep(code) {
+        color: white !important;
+    }
+}
+
 .prose-retro :deep(pre) {
-    background: var(--md-surface-variant);
     padding: 1rem;
     border-radius: 3px;
     border: 2px solid var(--md-inverse-surface);
     overflow-x: auto;
     margin: 1rem 0;
+    font-weight: 505;
 }
 
 .prose-retro :deep(pre code) {
     background: transparent;
     padding: 0;
     border: none;
-    font-size: 0.875rem;
+    font-size: 16px;
 }
 
 /* Streamdown code blocks */
@@ -771,7 +784,16 @@ function toggleTheme() {
     border: 2px solid var(--md-inverse-surface);
     border-radius: 3px;
     overflow: hidden;
-    background: var(--md-surface-variant);
+}
+
+/* Streamdown code blocks */
+.prose-retro :deep([data-streamdown='code-body']) {
+    padding-bottom: 0 !important;
+}
+
+/* Streamdown code blocks */
+.prose-retro :deep([data-streamdown='pre']) {
+    padding-bottom: 20px !important;
 }
 
 .prose-retro :deep([data-streamdown='code-block-header']) {
@@ -779,10 +801,10 @@ function toggleTheme() {
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 1rem;
-    background: var(--md-surface);
+    background: var(--md-primary-container);
     border-bottom: 2px solid var(--md-inverse-surface);
     font-family: 'Press Start 2P', monospace;
-    font-size: 0.625rem;
+    font-size: 16px;
 }
 
 .prose-retro :deep([data-streamdown='code-lang']) {
@@ -820,8 +842,6 @@ function toggleTheme() {
 
 .prose-retro :deep([data-streamdown='table-wrapper']) {
     overflow-x: auto;
-    margin: 1rem 0;
-    border: 2px solid var(--md-inverse-surface);
     border-radius: 3px;
 }
 
@@ -853,10 +873,11 @@ function toggleTheme() {
     border: 2px solid var(--md-inverse-surface);
     padding: 0.5rem;
     text-align: left;
+    font-size: 16px;
 }
 
 .prose-retro :deep(th) {
-    background: var(--md-surface-variant);
+    background: var(--md-primary-container);
     font-weight: bold;
 }
 
