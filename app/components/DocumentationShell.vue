@@ -6,7 +6,7 @@
         <header
             class="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] z-10"
         >
-            <div class="flex items-center gap-4">
+            <div class="flex w-[250px] items-center gap-4">
                 <NuxtLink to="/" class="flex items-center gap-2">
                     <img src="/butthole-logo.webp" alt="Logo" class="h-8 w-8" />
                     <h1 class="font-ps2 text-lg text-[var(--md-primary)]">
@@ -16,10 +16,11 @@
             </div>
 
             <!-- Search -->
-            <div class="flex-1 max-w-md mx-4">
+            <div class="flex-1 w-full max-w-md mx-4">
                 <UInput
+                    class="w-full"
                     v-model="searchQuery"
-                    placeholder="Search docs... ⌘K"
+                    placeholder="Search docs..."
                     size="md"
                     :leading-icon="
                         isSearching
@@ -31,13 +32,15 @@
             </div>
 
             <!-- Theme Toggle -->
-            <UButton
-                variant="basic"
-                size="sm"
-                square
-                icon="i-heroicons-sun"
-                @click="toggleTheme"
-            />
+            <div class="flex items-center justify-end w-[250px]">
+                <UButton
+                    variant="basic"
+                    size="sm"
+                    square
+                    icon="i-heroicons-sun"
+                    @click="toggleTheme"
+                />
+            </div>
         </header>
 
         <!-- Main Layout -->
