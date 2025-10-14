@@ -7,9 +7,12 @@
             <div
                 v-show="!isExpanded"
                 @click="onExpandClick"
-                class="h-full w-full"
+                class="h-full w-full flex items-center justify-center cursor-pointer"
             >
-                click
+                <UIcon
+                    class="w-6 h-6"
+                    name="pixelarticons:message-processing"
+                />
             </div>
 
             <div v-show="isExpanded" class="w-full h-full block relative">
