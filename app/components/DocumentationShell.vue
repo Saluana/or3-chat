@@ -226,6 +226,7 @@
             </aside>
         </div>
     </div>
+    <ui-help-chat />
 </template>
 
 <script setup lang="ts">
