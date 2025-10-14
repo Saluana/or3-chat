@@ -298,7 +298,12 @@ const searchIndex = ref<AnyOrama | null>(null);
 const docmap = ref<Docmap | null>(null);
 const currentContent = ref('');
 const isLoadingContent = ref(false);
-const contentCache = new Map<string, string>(); // Cache loaded markdown files
+
+// LRU Cache for markdown files - limit to 20 most recent files
+const MAX_CACHE_SIZE = 20;
+const contentCache = new Map<string, string>();
+const cacheAccessOrder: string[] = []; // Track access order for LRU
+
 const route = useRoute();
 
 // Internal navigation state (shallow to avoid deep watchers)
@@ -353,13 +358,12 @@ onMounted(async () => {
         const response = await fetch('/_documentation/docmap.json');
         docmap.value = await response.json();
 
-        // Pre-fetch all markdown files in the background for instant navigation
+        // Build navigation from docmap
         if (docmap.value) {
             applyDocmapNavigation(docmap.value);
-            prefetchAllDocs();
         }
 
-        // Initialize search after docmap is loaded
+        // Initialize lightweight search index (metadata only)
         if (isDocRoute.value) {
             await initializeSearch();
         }
@@ -469,6 +473,8 @@ async function loadMarkdownFile(filename: string, sectionPath: string) {
 
     // Check cache first for instant navigation
     if (contentCache.has(cacheKey)) {
+        // Update LRU order
+        updateCacheAccess(cacheKey);
         currentContent.value = contentCache.get(cacheKey)!;
         return;
     }
@@ -481,8 +487,8 @@ async function loadMarkdownFile(filename: string, sectionPath: string) {
         if (!response.ok) throw new Error('File not found');
         const content = await response.text();
 
-        // Cache the content for instant future access
-        contentCache.set(cacheKey, content);
+        // Cache the content with LRU eviction
+        addToCache(cacheKey, content);
         currentContent.value = content;
     } catch (error) {
         console.error(`[docs] Failed to load ${filename}:`, error);
@@ -497,38 +503,34 @@ Failed to load the requested documentation.
     }
 }
 
-// Pre-fetch all documentation files in the background
-async function prefetchAllDocs() {
-    if (!docmap.value) return;
-
-    // Use setTimeout to avoid blocking initial render
-    setTimeout(async () => {
-        for (const section of docmap.value!.sections) {
-            for (const file of section.files) {
-                const cacheKey = `${section.path}/${file.name}`;
-
-                // Skip if already cached
-                if (contentCache.has(cacheKey)) continue;
-
-                try {
-                    const response = await fetch(
-                        `/_documentation${section.path}/${file.name}`
-                    );
-                    if (response.ok) {
-                        const content = await response.text();
-                        contentCache.set(cacheKey, content);
-                    }
-                } catch (error) {
-                    // Silently fail for prefetch
-                    console.debug(`[docs] Prefetch failed for ${file.name}`);
-                }
-
-                // Add small delay between fetches to avoid overloading
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
+// LRU Cache Management
+function addToCache(key: string, content: string) {
+    // If already exists, remove old entry to update position
+    if (contentCache.has(key)) {
+        const index = cacheAccessOrder.indexOf(key);
+        if (index > -1) {
+            cacheAccessOrder.splice(index, 1);
         }
-        console.debug('[docs] All documentation prefetched');
-    }, 100);
+    }
+
+    // Add to cache
+    contentCache.set(key, content);
+    cacheAccessOrder.push(key);
+
+    // Evict oldest if over limit
+    while (cacheAccessOrder.length > MAX_CACHE_SIZE) {
+        const oldestKey = cacheAccessOrder.shift()!;
+        contentCache.delete(oldestKey);
+    }
+}
+
+function updateCacheAccess(key: string) {
+    // Move to end (most recently used)
+    const index = cacheAccessOrder.indexOf(key);
+    if (index > -1) {
+        cacheAccessOrder.splice(index, 1);
+        cacheAccessOrder.push(key);
+    }
 }
 
 function applyDocmapNavigation(map: Docmap) {
@@ -595,36 +597,25 @@ async function initializeSearch() {
         searchIndex.value = create({
             schema: {
                 title: 'string',
-                content: 'string',
                 path: 'string',
                 category: 'string',
+                description: 'string',
             },
         });
 
-        // Index all documentation from docmap
+        // Index only metadata from docmap (no file content loading!)
         if (docmap.value) {
             for (const section of docmap.value.sections) {
                 for (const file of section.files) {
-                    try {
-                        const response = await fetch(
-                            `/_documentation${section.path}/${file.name}`
-                        );
-                        const content = await response.text();
-
-                        await insert(searchIndex.value, {
-                            title: file.name.replace('.md', ''),
-                            content: content.substring(0, 5000), // Index first 5000 chars
-                            path: `/documentation${file.path}`,
-                            category: section.title,
-                        });
-                    } catch (error) {
-                        console.warn(
-                            `[docs] Failed to index ${file.name}:`,
-                            error
-                        );
-                    }
+                    await insert(searchIndex.value, {
+                        title: file.name.replace('.md', ''),
+                        path: `/documentation${file.path}`,
+                        category: section.title,
+                        description: file.category || '', // Use category as description
+                    });
                 }
             }
+            console.debug('[docs] Search index initialized with metadata only');
         }
     } catch (error) {
         console.error('[docs] Failed to initialize search:', error);
@@ -660,7 +651,7 @@ async function performSearch(query: string) {
         searchResults.value = results.hits.map((hit: any) => ({
             id: hit.id,
             title: hit.document.title,
-            excerpt: hit.document.content.substring(0, 150) + '...',
+            excerpt: `${hit.document.category} - ${hit.document.description}`,
             path: hit.document.path,
         }));
     } catch (error) {
