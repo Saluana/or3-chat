@@ -2,7 +2,7 @@
     <div class="fixed bottom-4 right-4 z-50">
         <div
             :class="{ 'h-[75dvh] w-[420px]': isExpanded }"
-            class="w-10 h-10 border-2 border-[var(--md-inverse-surgace)] bg-[var(--md-surface)] transition-all"
+            class="w-10 h-10 border-2 border-[var(--md-inverse-surgace)] bg-[var(--md-surface)] transition-all duration-300 ease-in-out rouned-[3px] overflow-hidden"
         >
             <div
                 v-show="!isExpanded"

@@ -287,6 +287,37 @@
             ]
         },
         {
+            "title": "Auth",
+            "path": "/auth",
+            "files": [
+                {
+                    "name": "useOpenrouter.md",
+                    "path": "/auth/useOpenrouter",
+                    "category": "Authentication"
+                },
+                {
+                    "name": "useUserApiKey.md",
+                    "path": "/auth/useUserApiKey",
+                    "category": "Authentication"
+                },
+                {
+                    "name": "openrouter-auth.md",
+                    "path": "/auth/openrouter-auth",
+                    "category": "Exchange"
+                },
+                {
+                    "name": "openrouter-build.md",
+                    "path": "/auth/openrouter-build",
+                    "category": "Messages"
+                },
+                {
+                    "name": "models-service.md",
+                    "path": "/auth/models-service",
+                    "category": "Models"
+                }
+            ]
+        },
+        {
             "title": "Types",
             "path": "/types",
             "files": [
