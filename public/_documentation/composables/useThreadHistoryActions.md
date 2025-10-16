@@ -4,7 +4,7 @@ Registry for adding custom actions to the thread history sidebar dropdown. Mirro
 
 ---
 
-## What does it do?
+## Purpose
 
 `useThreadHistoryActions` exposes:
 

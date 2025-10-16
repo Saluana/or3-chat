@@ -4,7 +4,7 @@ Unified search composable that indexes threads, projects, and documents for the 
 
 ---
 
-## What does it do?
+## Purpose
 
 `useSidebarSearch(threads, projects, documents)` returns reactive state and helpers that:
 

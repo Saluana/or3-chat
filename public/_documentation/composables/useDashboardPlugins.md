@@ -4,7 +4,7 @@ Dashboard extension hub that lets first- and third-party features register launc
 
 ---
 
-## What does it do?
+## Purpose
 
 `useDashboardPlugins` and its sibling utilities give you a full plugin registry:
 

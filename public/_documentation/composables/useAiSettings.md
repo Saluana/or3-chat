@@ -4,7 +4,7 @@ Persistence layer for AI preference knobs. Keeps the chat experience consistent 
 
 ---
 
-## What it covers
+## Purpose
 
 `useAiSettings` gives you a reactive settings object and helper methods to read, update, and reset AI chat preferences. It sanitises input, survives hot-module reloads, and only touches storage in the browser.
 

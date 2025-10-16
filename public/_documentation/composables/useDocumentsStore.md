@@ -4,7 +4,7 @@ Stateful document manager that loads Dexie records, stages edits, debounces auto
 
 ---
 
-## What does it do?
+## Purpose
 
 `useDocumentsStore` exposes a suite of helpers around a shared `documentsMap` cache:
 

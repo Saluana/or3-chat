@@ -21,6 +21,11 @@ export async function* openRouterStream(params: {
         headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
+            'HTTP-Referer':
+                (typeof location !== 'undefined' && location.origin) ||
+                'https://or3.chat',
+            'X-Title': 'or3.chat',
+            Accept: 'text/event-stream',
         },
         body: JSON.stringify(body),
         signal,

@@ -4,7 +4,7 @@ Registry trio that lets plugins add TipTap nodes, marks, and extensions to the O
 
 ---
 
-## What does it do?
+## Purpose
 
 `useEditorNodes` exports helpers that manage three registries:
 

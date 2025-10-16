@@ -4,7 +4,7 @@ Lightweight registry that lets external features (pane plugins, slash commands, 
 
 ---
 
-## Why it exists
+## Purpose
 
 `useChatInputBridge` exposes a tiny, reactive directory of chat inputs keyed by `paneId`. Chat containers register their imperative API and the bridge forwards programmatic sends through the same UI pipeline a user click would trigger.
 

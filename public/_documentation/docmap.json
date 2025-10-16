@@ -10,122 +10,146 @@
                 {
                     "name": "useActivePrompt.md",
                     "path": "/composables/useActivePrompt",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "Reactive composable that manages the currently selected system prompt for chat conversations.\\n\\nThis composable provides a module-singleton selection state (id + content) so multiple components\\nand composables can read the active system prompt consistently without creating duplicate refs.\\n\\nIt integrates with the local prompt database (`~/db/prompts`) to load prompt content and emits a\\nhook event after a prompt is selected so other subsystems can react."
                 },
                 {
                     "name": "useAiSettings.md",
                     "path": "/composables/useAiSettings",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "`useAiSettings` gives you a reactive settings object and helper methods to read, update, and reset AI chat preferences. It sanitises input, survives hot-module reloads, and only touches storage in the browser.\\n\\n-   Tracks the current settings in a single global store (HMR-safe)\\n-   Loads initial values from `localStorage` once per session\\n-   Persists updates automatically\\n-   Normalises user input to avoid bad types or unknown keys"
                 },
                 {
                     "name": "useChat.md",
                     "path": "/composables/useChat",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "`useChat` is the heart of every chat conversation. When you want to:\\n\\n-   Send a message to an AI model\\n-   Display a conversation with streaming responses\\n-   Retry a failed message\\n-   Show loading states while the AI is thinking\\n-   Cancel an ongoing AI response"
                 },
                 {
                     "name": "useChatInputBridge.md",
                     "path": "/composables/useChatInputBridge",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "Lightweight registry that lets external features (pane plugins, slash commands, automation) inject chat messages into an existing chat input without duplicating business logic. `useChatInputBridge` exposes a tiny, reactive directory of chat inputs keyed by `paneId`. Chat containers register their imperative API and the bridge forwards programmatic sends through the same UI pipeline a user click would trigger.\\n\\n-   Keeps message handling inside `ChatInputDropper`\\n-   Avoids rehydrating chat state or bypassing hooks\\n-   Supports multiple panes/windows\\n-   Safe in dev (HMR-resilient)"
                 },
                 {
                     "name": "useDefaultPrompt.md",
                     "path": "/composables/useDefaultPrompt",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "`useDefaultPrompt` gives you a reactive `defaultPromptId` alongside helpers to set or clear it. It wraps the `kv` table, keeps a singleton ref of the active prompt ID, and fires hooks when the default changes so other modules can react."
                 },
                 {
                     "name": "useMessageActions.md",
                     "path": "/composables/useMessageActions",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "Extensible action registry for chat messages. Lets core UI and plugins add contextual buttons (copy, retry, favorite, etc.) in a consistent order with minimal wiring. Maintains a global list of action descriptors keyed by an id. Components register their actions once, and when rendering an individual message you can pull the filtered, sorted list for that message’s role."
                 },
                 {
                     "name": "useMessageEditing.md",
                     "path": "/composables/useMessageEditing",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "Encapsulates the UI + persistence flow for editing a chat message. Handles toggling edit mode, keeping a draft buffer, and writing the updated content back to Dexie.\\n\\n`useMessageEditing` wraps all state required for an inline message editor:\\n\\n-   Tracks whether the message is currently being edited\\n-   Keeps a draft copy of the text with undo (cancel) support\\n-   Persists the change to the `messages` table via `upsert`\\n-   Works with plain objects or `Ref`-wrapped messages (streaming tail vs finalized)"
                 },
                 {
                     "name": "useModelStore.md",
                     "path": "/composables/useModelStore",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "Shared catalog + favorites manager for OpenRouter models. Centralises fetching, caching, and filtering so every pane sees the same list without repeated network hits.\\n\\n`useModelStore` exposes reactive state for the model catalog, favorites, search query, and filters. It layers three cache tiers (memory → Dexie → network) and dedupes concurrent fetches. Consumers can refresh, invalidate, or persist favorites with a single call.\\n\\n-   Hydrates catalog from memory, Dexie (`kv` table), or network\\n-   Persists the catalog in Dexie for 48 hours by default\\n-   Dedupes in-flight fetches across callers\\n-   Manages favorites with persistence to `kv`\\n-   Exposes helper refs for search/filter UI"
                 },
                 {
                     "name": "useStreamAccumulator.md",
                     "path": "/composables/useStreamAccumulator",
-                    "category": "Chat"
+                    "category": "Chat",
+                    "summary": "Frame-batched accumulator for AI streaming tokens. It receives partial text/reasoning deltas, buffers them, and flushes at most once per animation frame so the UI stays smooth.\\n\\n`useStreamAccumulator` replaces ad-hoc refs for building assistant responses. It normalises streaming flow with a single API:\\n\\n-   `append()` collects text or reasoning deltas without immediate DOM churn\\n-   `finalize()` seals the stream and records errors/abort state\\n-   `reset()` prepares for the next stream\\n-   `state` exposes reactive fields (`text`, `reasoningText`, `isActive`, etc.) any component can watch\\n\\nThe accumulator automatically batches writes via `requestAnimationFrame` when available, falling back to microtasks in environments without rAF (tests, SSR stubs)."
                 },
                 {
                     "name": "useDocumentHistoryActions.md",
                     "path": "/composables/useDocumentHistoryActions",
-                    "category": "Documents"
+                    "category": "Documents",
+                    "summary": "Registry composable that lets plugins inject extra actions into the document history sidebar menu. Keeps a global list of action buttons, sorts them, and survives HMR so dashboard add-ons can extend the UI safely."
                 },
                 {
                     "name": "useDocumentsList.md",
                     "path": "/composables/useDocumentsList",
-                    "category": "Documents"
+                    "category": "Documents",
+                    "summary": "Lightweight fetch-and-refresh composable for the documents sidebar. Loads recent Dexie `documents` entries, trims heavy fields, and keeps the list fresh when database hooks fire."
                 },
                 {
                     "name": "useDocumentsStore.md",
                     "path": "/composables/useDocumentsStore",
-                    "category": "Documents"
+                    "category": "Documents",
+                    "summary": "Stateful document manager that loads Dexie records, stages edits, debounces autosaves, and coordinates pane-level hooks. It is the backbone for rich text documents in OR3’s multi-pane UI. `useDocumentsStore` exposes a suite of helpers around a shared `documentsMap` cache."
                 },
                 {
                     "name": "useEditorNodes.md",
                     "path": "/composables/useEditorNodes",
-                    "category": "Editor"
+                    "category": "Editor",
+                    "summary": "Registry trio that lets plugins add TipTap nodes, marks, and extensions to the OR3 editor without patching the core component. Maintains global maps, keeps ordering stable, and plays nicely with HMR. `useEditorNodes` exports helpers that manage three registries:\\n\\n-   `registerEditorNode` / `listEditorNodes` for TipTap `Node` extensions.\\n-   `registerEditorMark` / `listEditorMarks` for TipTap `Mark` extensions.\\n-   `registerEditorExtension` / `listEditorExtensions` for generic TipTap extensions.\\n\\nEach registry sorts entries by `order` (default 200) and stores them on `globalThis` so reloads don’t duplicate items.\\n"
                 },
                 {
                     "name": "useEditorToolbar.md",
                     "path": "/composables/useEditorToolbar",
-                    "category": "Editor"
+                    "category": "Editor",
+                    "summary": "Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dropdowns to the retro editor header while keeping the UI reactive and order-aware. `useEditorToolbar` exposes helpers to manage toolbar buttons:\\n\\n-   `registerEditorToolbarButton()` adds or replaces a button definition.\\n-   `useEditorToolbarButtons(editorRef)` returns a computed, filtered, and sorted array of buttons ready to render.\\n-   `unregisterEditorToolbarButton()` cleans up during teardown/HMR.\\n-   `listRegisteredEditorToolbarButtonIds()` lets authors inspect the registry.\\n\\nButtons can customise visibility, active state, icons, ordering, and click behaviour."
                 },
                 {
                     "name": "useComposerActions.md",
                     "path": "/composables/useComposerActions",
-                    "category": "Sidebar"
+                    "category": "Sidebar",
+                    "summary": "Composer action registry powering the quick-action buttons beneath the chat composer. Lets plugins add buttons that hook into the active editor, thread, or pane context with visibility and disabled logic."
                 },
                 {
                     "name": "useHeaderActions.md",
                     "path": "/composables/useHeaderActions",
-                    "category": "Sidebar"
+                    "category": "Sidebar",
+                    "summary": "Sidebar header action registry that powers the icon buttons in the chrome header (new thread, toggle layout, etc.). Lets plugins contribute actions that react to route, breakpoint, or custom context."
                 },
                 {
                     "name": "useDashboardPlugins.md",
                     "path": "/composables/useDashboardPlugins",
-                    "category": "Dashboard"
+                    "category": "Dashboard",
+                    "summary": "Dashboard extension hub that lets first- and third-party features register launcher tiles, lazy-loaded pages, and capability flags for the retro dashboard. It centralises plugin discovery, page resolution, and in-app navigation state. Useful for plugin settings, onboarding flows, or custom tools."
                 },
                 {
                     "name": "usePaneDocuments.md",
                     "path": "/composables/usePaneDocuments",
-                    "category": "Documents"
+                    "category": "Documents",
+                    "summary": "Pane-aware controller that lets the dashboard create or switch documents inside the multi-pane workspace. It glues `useDocumentsStore`, pane state, and hook events into two ergonomic methods."
                 },
                 {
                     "name": "useProjectTreeActions.md",
                     "path": "/composables/useProjectTreeActions",
-                    "category": "Projects"
+                    "category": "Projects",
+                    "summary": "Extensible action registry for the project tree sidebar. Lets plugins add context buttons to project rows or child entries (documents, chats) with ordering and visibility controls."
                 },
                 {
                     "name": "useProjectsCrud.md",
                     "path": "/composables/useProjectsCrud",
-                    "category": "Projects"
+                    "category": "Projects",
+                    "summary": "Project CRUD toolkit that wraps Dexie helpers with validation, timestamping, and data normalisation for OR3 project records."
                 },
                 {
                     "name": "useSidebarSearch.md",
                     "path": "/composables/useSidebarSearch",
-                    "category": "Sidebar"
+                    "category": "Sidebar",
+                    "summary": "Unified search composable that indexes threads, projects, and documents for the sidebar search bar. Uses Orama for fast client-side search with a substring fallback to guarantee results."
                 },
                 {
                     "name": "useSidebarSections.md",
                     "path": "/composables/useSidebarSections",
-                    "category": "Sidebar"
+                    "category": "Sidebar",
+                    "summary": "Sidebar chrome registry that lets plugins add new panels (top/main/bottom stacks) and footer actions to the OR3 sidebar. Provides ordering, placement, visibility, and disabled control."
                 },
                 {
                     "name": "useThreadHistoryActions.md",
                     "path": "/composables/useThreadHistoryActions",
-                    "category": "Threads"
+                    "category": "Threads",
+                    "summary": "Registry for adding custom actions to the thread history sidebar dropdown. Mirrors the document history registry but targets threads, letting plugins inject export, share, or workflow buttons."
                 },
                 {
                     "name": "useThreadSearch.md",
                     "path": "/composables/useThreadSearch",
-                    "category": "Threads"
+                    "category": "Threads",
+                    "summary": "Thread-specific search composable that powers the sidebar query field. Builds a small Orama index over thread titles, debounces input, and falls back to substring matching when required."
                 },
                 {
                     "name": "useHookEffect.md",

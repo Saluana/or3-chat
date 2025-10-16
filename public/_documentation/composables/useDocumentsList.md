@@ -4,7 +4,7 @@ Lightweight fetch-and-refresh composable for the documents sidebar. Loads recent
 
 ---
 
-## What does it do?
+## Purpose
 
 `useDocumentsList(limit?)` gives you:
 

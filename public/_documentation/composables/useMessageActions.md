@@ -4,7 +4,7 @@ Extensible action registry for chat messages. Lets core UI and plugins add conte
 
 ---
 
-## What it does
+## Purpose
 
 `useMessageActions` maintains a global list of action descriptors keyed by an id. Components register their actions once, and when rendering an individual message you can pull the filtered, sorted list for that message’s role.
 

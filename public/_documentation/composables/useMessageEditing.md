@@ -4,7 +4,7 @@ Encapsulates the UI + persistence flow for editing a chat message. Handles toggl
 
 ---
 
-## What it handles
+## Purpose
 
 `useMessageEditing` wraps all state required for an inline message editor:
 

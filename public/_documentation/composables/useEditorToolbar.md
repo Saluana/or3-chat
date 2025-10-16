@@ -4,7 +4,7 @@ Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dr
 
 ---
 
-## What does it do?
+## Purpose
 
 `useEditorToolbar` exposes helpers to manage toolbar buttons:
 

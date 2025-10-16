@@ -4,7 +4,7 @@ Registry composable that lets plugins inject extra actions into the document his
 
 ---
 
-## What does it do?
+## Purpose
 
 `useDocumentHistoryActions` powers the dropdown on each document history item:
 

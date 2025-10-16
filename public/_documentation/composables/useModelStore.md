@@ -4,7 +4,7 @@ Shared catalog + favorites manager for OpenRouter models. Centralises fetching, 
 
 ---
 
-## Responsibilities
+## Purpose
 
 `useModelStore` exposes reactive state for the model catalog, favorites, search query, and filters. It layers three cache tiers (memory → Dexie → network) and dedupes concurrent fetches. Consumers can refresh, invalidate, or persist favorites with a single call.
 

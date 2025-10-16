@@ -4,7 +4,7 @@ Composer action registry powering the quick-action buttons beneath the chat comp
 
 ---
 
-## What does it do?
+## Purpose
 
 `useComposerActions` manages a global list of composer actions:
 

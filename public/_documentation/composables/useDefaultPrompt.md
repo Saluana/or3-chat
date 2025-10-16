@@ -4,7 +4,7 @@ Central helper for tracking the default system prompt across chat panes. It wrap
 
 ---
 
-## Overview
+## Purpose
 
 `useDefaultPrompt` gives you a reactive `defaultPromptId` alongside helpers to set or clear it. Behind the scenes it reads from Dexie on first use, stores the value in `kv` under `default_system_prompt_id`, and triggers a hook so panes refresh their copy.
 

@@ -4,7 +4,7 @@ Extensible action registry for the project tree sidebar. Lets plugins add contex
 
 ---
 
-## What does it do?
+## Purpose
 
 `useProjectTreeActions` builds on the generic `createRegistry` utility to provide:
 
