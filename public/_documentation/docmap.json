@@ -376,6 +376,24 @@
             ]
         },
         {
+            "title": "Utils",
+            "path": "/utils",
+            "files": [
+                {
+                    "name": "openrouterStream.md",
+                    "path": "/utils/openrouterStream",
+                    "category": "Streaming",
+                    "summary": "Low-level streaming helper for OpenRouter API responses. Handles SSE (Server-Sent Events) parsing, tool calling, reasoning, images, and text chunks with proper buffering and accumulation.\n\nopenrouterStream` is an async generator that opens a streaming connection to OpenRouter's `/chat/completions` endpoint, parses incoming SSE data into structured events, handles multi-part tool calls streamed across chunks, and provides normalized event types for easy consumption."
+                },
+                {
+                    "name": "errors.md",
+                    "path": "/utils/errors",
+                    "category": "Error Handling",
+                    "summary": "Centralized error utility for OR3. Provides error types, factories, reporting, retry logic, and duplicate suppression with automatic secret scrubbing and hook integration.\n\n`errors.ts` standardizes error creation, ensures secrets never leak, and integrates with the hook system so other modules can react to failures. Features include standardized error types, error factories, centralized reporting with toast notifications, secret scrubbing, duplicate suppression, hook integration, and simple retry helpers."
+                }
+            ]
+        },
+        {
             "title": "Types",
             "path": "/types",
             "files": [

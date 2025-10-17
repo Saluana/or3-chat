@@ -82,6 +82,10 @@ export async function* openRouterStream(params: {
     // If debugging of raw packets is needed, consider adding a bounded ring buffer
     // or an opt-in flag that logs selectively.
 
+    // Track tool calls being streamed across chunks
+    // Maps tool call id -> accumulated tool call data
+    const toolCallMap = new Map<string, any>();
+
     function emitImageCandidate(
         url: string | undefined | null,
         indexRef: { v: number },
@@ -124,6 +128,56 @@ export async function* openRouterStream(params: {
                 const choices = parsed.choices || [];
                 for (const choice of choices) {
                     const delta = choice.delta || {};
+
+                    // Handle tool calls (function calling)
+                    if (Array.isArray(delta.tool_calls)) {
+                        for (const toolCallDelta of delta.tool_calls) {
+                            const toolId = toolCallDelta.id;
+                            if (toolId) {
+                                // Initialize or update tool call accumulator
+                                if (!toolCallMap.has(toolId)) {
+                                    toolCallMap.set(toolId, {
+                                        id: toolId,
+                                        type: toolCallDelta.type || 'function',
+                                        function: {
+                                            name: '',
+                                            arguments: '',
+                                        },
+                                    });
+                                }
+                                const accumulated = toolCallMap.get(toolId)!;
+
+                                // Accumulate function name
+                                if (
+                                    toolCallDelta.function?.name &&
+                                    toolCallDelta.function.name.length > 0
+                                ) {
+                                    accumulated.function.name +=
+                                        toolCallDelta.function.name;
+                                }
+
+                                // Accumulate function arguments
+                                if (
+                                    toolCallDelta.function?.arguments &&
+                                    toolCallDelta.function.arguments.length > 0
+                                ) {
+                                    accumulated.function.arguments +=
+                                        toolCallDelta.function.arguments;
+                                }
+                            }
+                        }
+
+                        // If finish_reason is 'tool_calls', emit the accumulated tool calls
+                        if (choice.finish_reason === 'tool_calls') {
+                            for (const accumulated of toolCallMap.values()) {
+                                yield {
+                                    type: 'tool_call',
+                                    tool_call: accumulated,
+                                };
+                            }
+                            toolCallMap.clear();
+                        }
+                    }
 
                     // Handle model reasoning
                     if (choice?.delta?.reasoning_details) {
