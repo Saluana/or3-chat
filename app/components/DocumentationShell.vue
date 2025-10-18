@@ -226,7 +226,7 @@
             </aside>
         </div>
     </div>
-    <ui-help-chat />
+    <ui-help-chat :documentation-map="JSON.stringify(docmap)" />
 </template>
 
 <script setup lang="ts">

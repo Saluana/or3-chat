@@ -28,13 +28,16 @@
                 class="flex-1 overflow-y-auto px-3 py-4 space-y-3 text-sm"
             >
                 <div
-                    v-for="msg in messages"
+                    v-for="msg in messages.filter(
+                        (m) =>
+                            m.role !== 'tool' || !m.content || m.content === ''
+                    )"
                     :key="msg.id"
                     :class="[
-                        'retro-shadow border-2 border-[var(--md-inverse-surface)] rounded-[3px] px-3 py-2 leading-relaxed text-sm w-fit max-w-[95%] break-words',
+                        'rounded-[3px] px-3 py-2 leading-relaxed text-sm w-fit max-w-[95%] break-words',
                         msg.role === 'user'
-                            ? 'ml-auto text-right bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)]'
-                            : 'mr-auto text-left bg-[var(--md-surface-container-high)] text-[var(--md-on-surface)]',
+                            ? ' border-2 border-[var(--md-inverse-surface)] retro-shadow  ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)]'
+                            : 'max-w-[100%] px-5',
                         msg.kind === 'error'
                             ? 'bg-[var(--md-error-container)] text-[var(--md-on-error-container)]'
                             : null,
@@ -49,7 +52,7 @@
                         >Thinking...</span
                     >
                     <StreamMarkdown
-                        v-else
+                        v-else-if="msg.content"
                         :content="msg.content"
                         :shiki-theme="currentShikiTheme"
                         class="help-chat-content prose-retro max-w-none"
@@ -113,14 +116,19 @@
 <script setup lang="ts">
 import { StreamMarkdown } from 'streamdown-vue';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
+import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
 
-type HelpChatRole = 'assistant' | 'user';
+const props = defineProps<{ documentationMap?: string }>();
+
+type HelpChatRole = 'assistant' | 'user' | 'tool';
 type HelpChatKind = 'info' | 'error' | undefined;
 
 interface HelpChatMessage {
     id: string;
     role: HelpChatRole;
     content: string;
+    reasoning_details?: any;
+    tool_call_id?: string;
     pending?: boolean;
     kind?: HelpChatKind;
 }
@@ -137,8 +145,6 @@ const currentShikiTheme = computed(() => {
 
 const isExpanded = ref(false);
 const isSending = ref(false);
-const docs = ref<string | null>(null);
-const docsLoading = ref(false);
 const message = ref('');
 const inputRef = ref<{ input?: HTMLInputElement } | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
@@ -170,9 +176,7 @@ function createMessageId() {
 
 function expand() {
     isExpanded.value = true;
-    if (!docs.value && !docsLoading.value) {
-        ensureDocs();
-    }
+
     nextTick(() => {
         focusInput();
         scrollToBottom('auto');
@@ -188,33 +192,6 @@ function focusInput() {
     if (input) {
         input.focus();
     }
-}
-
-async function ensureDocs(): Promise<string | null> {
-    if (docs.value || docsLoading.value) return docs.value;
-    if (!import.meta.client) return null;
-
-    docsLoading.value = true;
-    try {
-        const response = await fetch('/_documentation/llms.xml');
-        if (!response.ok) {
-            throw new Error('Failed to load documentation');
-        }
-        docs.value = await response.text();
-    } catch (error) {
-        console.warn('[HelpChat] Unable to load docs', error);
-        toast.add({
-            title: 'Docs unavailable',
-            description:
-                'I could not load the documentation right now. Please try again in a bit.',
-            color: 'warning',
-        });
-        docs.value = null;
-    } finally {
-        docsLoading.value = false;
-    }
-
-    return docs.value;
 }
 
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
@@ -236,8 +213,30 @@ async function pushMessage(
     scrollToBottom(behavior);
 }
 
+async function getDocumentation(path: string) {
+    try {
+        const normalized = path.startsWith('/') ? path : `/${path}`;
+        const response = await fetch(`/_documentation${normalized}.md`);
+        if (!response.ok) {
+            throw new Error('Failed to load documentation');
+        }
+        return await response.text();
+    } catch (error) {
+        console.error('[HelpChat] getDocs failed', error);
+        toast.add({
+            title: 'Docs error',
+            description:
+                error instanceof Error
+                    ? error.message
+                    : 'Something went wrong while fetching the docs.',
+            color: 'error',
+        });
+    }
+}
+
 async function sendMessage() {
     const trimmed = message.value.trim();
+
     if (!trimmed || isSending.value) return;
 
     if (!apiKey.value) {
@@ -272,105 +271,266 @@ async function sendMessage() {
 
     messages.value.push(assistantMessage);
     await nextTick();
+    const reactiveAssistantMessage = messages.value.find(
+        (m) => m.id === assistantMessage.id
+    );
     scrollToBottom('auto');
 
     try {
-        const docsText = await ensureDocs();
+        // Fetch docmap for tool context
+        let docmapJson = '';
+        if (props.documentationMap) {
+            docmapJson = props.documentationMap;
+        } else {
+            try {
+                const docmapResponse = await fetch(
+                    '/_documentation/docmap.json'
+                );
+                if (docmapResponse.ok) {
+                    const docmapData = await docmapResponse.json();
+                    docmapJson = JSON.stringify(docmapData, null, 2);
+                }
+            } catch (err) {
+                console.warn('[HelpChat] Failed to load docmap', err);
+            }
+        }
 
-        const systemPrompt = [
-            'You are the Or3 Chat in-app assistant.',
-            'Answer only questions about the Or3 Chat application using the provided documentation.',
-            'If you are unsure, reply with: "I am sorry, I do not know how to help with that."',
-            'Please link the reader to relevant documentation using the docmap.json in the documentation. Just create a link that will lead to /documentation/:path:',
-            'Please actually create the link in markdown format, like [link text](/documentation/:path).',
-        ].join(' ');
+        const systemPrompt = `You are the AI assistant for the Or3 Chat developer documentation.
 
-        const history = messages.value
-            .filter(
-                (m) =>
-                    m.id !== assistantMessage.id &&
-                    m.kind !== 'info' &&
-                    m.kind !== 'error'
-            )
-            .map((m) => ({
-                role: m.role,
-                content: m.content,
-            }));
+Or3 is an open source chat application built with Nuxt 4 and Vite, made for developers.
 
-        const orMessages = [
+## Your Task
+Help developers understand and use the Or3 Chat codebase by searching the documentation.
+
+## Important Rules
+1. **ALWAYS use the search_docs tool FIRST** when a user asks about specific features, composables, hooks, or functionality
+2. **DO NOT attempt to answer from memory** - you must search the docs to get accurate information
+3. Use the DOCMAP below to identify which documentation files to search
+4. You can call search_docs multiple times in one response if needed
+5. After retrieving documentation, provide clear explanations with code examples
+6. Always link to relevant documentation pages using markdown: [text](/documentation/path)
+
+## Example Interaction
+User: "How do I use useChat?"
+You should: Call search_docs with query "/composables/useChat" to get the documentation, then explain based on that content.
+
+User: "How do I listen for events?"
+You should: Call search_docs with query "/hooks/hooks" to understand the hook system, then explain.
+
+## Available Tool
+- search_docs(query): Fetches full documentation for a given path (e.g., "/composables/useChat")
+
+## Documentation Map
+The DOCMAP below shows all available documentation with summaries. Scan it to find relevant paths:
+
+${docmapJson}
+
+Remember: ALWAYS call search_docs before answering. Never say you don't know without searching first.`;
+
+        const toolDefs: ToolDefinition[] = [
             {
-                role: 'system',
-                content: docsText
-                    ? `<OR3_CHAT_DOCUMENTATION>${docsText}</OR3_CHAT_DOCUMENTATION>\n${systemPrompt}`
-                    : systemPrompt,
+                type: 'function',
+                function: {
+                    name: 'search_docs',
+                    description:
+                        'Fetch the full content of a specific Or3 Chat documentation file. Use this tool whenever you need detailed information about composables, hooks, utilities, or any feature. Call this multiple times if you need to reference multiple docs. The query should be a path from the DOCMAP like "/composables/useChat" or "/hooks/hooks".',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            query: {
+                                type: 'string',
+                                description:
+                                    'The documentation path to fetch. Must match a path from the DOCMAP. Examples: "/composables/useChat", "/hooks/hook-catalog", "/database/messages"',
+                            },
+                        },
+                        required: ['query'],
+                    },
+                },
             },
-            ...history,
         ];
 
-        const stream = openRouterStream({
-            apiKey: apiKey.value,
-            model: 'qwen/qwen-turbo',
-            orMessages,
-            modalities: ['text'],
-        });
+        // Main loop for handling interleaved tool calls and responses
+        let continueLoop = true;
+        let currentAssistantMessage: HelpChatMessage | null =
+            reactiveAssistantMessage ?? null;
 
-        let gotFirstToken = false;
-        for await (const event of stream) {
-            if (event.type === 'text') {
-                // Find the message in the array and update it
-                const msgIndex = messages.value.findIndex(
-                    (m) => m.id === assistantMessage.id
-                );
-                if (msgIndex !== -1) {
-                    const msg = messages.value[msgIndex];
-                    if (msg) {
-                        msg.content += event.text;
-                        if (!gotFirstToken) {
-                            gotFirstToken = true;
-                            msg.pending = false;
+        while (continueLoop) {
+            continueLoop = false;
+
+            // On first iteration, get or create the assistant message
+            // On subsequent iterations, reuse the same assistant message
+            if (!currentAssistantMessage) {
+                currentAssistantMessage = {
+                    id: createMessageId(),
+                    role: 'assistant',
+                    content: '',
+                    pending: true,
+                };
+                messages.value.push(currentAssistantMessage);
+                await nextTick();
+            } else {
+                // Reset pending flag for next iteration but keep accumulating content
+                currentAssistantMessage.pending = true;
+            }
+
+            const history = messages.value.map((m) => {
+                const body: any = {
+                    role: m.tool_call_id ? 'tool' : m.role,
+                    content: m.content,
+                };
+
+                // Preserve reasoning_details for extended thinking models
+                if (m.reasoning_details) {
+                    body.reasoning_details = m.reasoning_details;
+                }
+
+                // Include tool_call_id for tool result messages
+                if (m.tool_call_id) {
+                    body.tool_call_id = m.tool_call_id;
+                }
+
+                return body;
+            });
+
+            let orMessages = [
+                {
+                    role: 'system',
+                    content: systemPrompt,
+                },
+                ...history,
+            ];
+
+            console.log(
+                '[HelpChat] Starting API call with messages:',
+                orMessages
+            );
+
+            const controller = new AbortController();
+            const stream = openRouterStream({
+                apiKey: apiKey.value,
+                model: 'z-ai/glm-4.6',
+                orMessages,
+                modalities: ['text'],
+                tools: toolDefs,
+                signal: controller.signal,
+            });
+
+            console.log('[HelpChat] Starting to consume stream...');
+
+            let foundToolCall = false;
+
+            try {
+                for await (const ev of stream) {
+                    console.log('[HelpChat] Stream event:', ev);
+
+                    if (ev.type === 'text') {
+                        currentAssistantMessage.content += ev.text;
+                        currentAssistantMessage.pending = false;
+                        await nextTick();
+                    } else if (ev.type === 'reasoning') {
+                        currentAssistantMessage.pending = false;
+                        // Handle reasoning/thinking events - accumulate as visible content
+                        currentAssistantMessage.content += ev.text;
+                        console.log('[HelpChat] Received reasoning:', ev.text);
+                        await nextTick();
+                    } else if (ev.type === 'tool_call') {
+                        console.log(
+                            '[HelpChat] Received tool call:',
+                            ev.tool_call
+                        );
+                        foundToolCall = true;
+                        currentAssistantMessage.pending = false;
+
+                        if (ev.tool_call.function.name === 'search_docs') {
+                            const query = JSON.parse(
+                                ev.tool_call.function.arguments
+                            );
+
+                            if (!query.query) {
+                                console.warn(
+                                    '[HelpChat] search_docs called without a query'
+                                );
+                                continue;
+                            }
+
+                            console.log(
+                                `[HelpChat] Fetching docs for ${query.query}`
+                            );
+                            const docs = await getDocumentation(query.query);
+
+                            if (docs && docs.length > 0) {
+                                console.log(
+                                    `[HelpChat] Retrieved docs for ${query.query}, adding to messages`
+                                );
+
+                                // Add tool result message to the history
+                                await pushMessage(
+                                    {
+                                        id: createMessageId(),
+                                        role: 'tool',
+                                        content: `Tool (search_docs) result for \`${query.query}\`:\n\n${docs}`,
+                                        tool_call_id: ev.tool_call.id,
+                                    },
+                                    'auto'
+                                );
+
+                                // Continue the loop to get the next response
+                                continueLoop = true;
+                            }
                         }
+                    } else if (ev.type === 'done') {
+                        console.log('[HelpChat] Stream done');
+                        currentAssistantMessage.pending = false;
                     }
                 }
-            }
-        }
-
-        // Final update
-        const msgIndex = messages.value.findIndex(
-            (m) => m.id === assistantMessage.id
-        );
-        if (msgIndex !== -1) {
-            const msg = messages.value[msgIndex];
-            if (msg) {
-                msg.pending = false;
-                if (!msg.content.trim()) {
-                    msg.content =
-                        'I am sorry, I do not know how to help with that.';
+            } catch (err: any) {
+                const m = String(err?.message || err).toLowerCase();
+                const isAbort =
+                    err?.name === 'AbortError' || m.includes('abort');
+                if (isAbort) {
+                    console.log('[HelpChat] Stream aborted intentionally');
+                } else {
+                    throw err;
                 }
             }
-        }
-    } catch (error) {
-        console.error('[HelpChat] sendMessage failed', error);
-        const msgIndex = messages.value.findIndex(
-            (m) => m.id === assistantMessage.id
-        );
-        if (msgIndex !== -1) {
-            const msg = messages.value[msgIndex];
-            if (msg) {
-                msg.pending = false;
-                msg.kind = 'error';
-                msg.content =
-                    'Something went wrong while talking to OpenRouter. Please try again.';
-            }
+
+            console.log(
+                '[HelpChat] Loop iteration complete. continueLoop:',
+                continueLoop
+            );
+            console.log(
+                '[HelpChat] Current assistant message content:',
+                currentAssistantMessage.content
+            );
+            console.log(
+                '[HelpChat] Current assistant message pending:',
+                currentAssistantMessage.pending
+            );
         }
 
-        toast.add({
-            title: 'Help chat error',
-            description:
-                error instanceof Error
-                    ? error.message
-                    : 'Something went wrong with the request.',
-            color: 'error',
-        });
+        // Conversation complete
+        const lastAssistantMessage = messages.value.find(
+            (m) => m.role === 'assistant' && !m.tool_call_id
+        );
+        if (lastAssistantMessage) {
+            lastAssistantMessage.pending = false;
+        }
+        await nextTick();
+        scrollToBottom('auto');
+    } catch (error) {
+        console.error('[HelpChat] Error in sendMessage:', error);
+        const errorMsg =
+            error instanceof Error ? error.message : 'Unknown error';
+
+        await pushMessage(
+            {
+                id: createMessageId(),
+                role: 'assistant',
+                content: `Error: ${errorMsg}`,
+                kind: 'error',
+            },
+            'auto'
+        );
     } finally {
         isSending.value = false;
         await nextTick();

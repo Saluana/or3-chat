@@ -1,13 +1,15 @@
-import type { ORStreamEvent } from './types';
+import type { ORStreamEvent, ToolChoice, ToolDefinition } from './types';
 
 export async function* openRouterStream(params: {
     apiKey: string;
     model: string;
     orMessages: any[];
     modalities: string[];
+    tools?: ToolDefinition[];
     signal?: AbortSignal;
+    reasoning?: any;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
-    const { apiKey, model, orMessages, modalities, signal } = params;
+    const { apiKey, model, orMessages, modalities, tools, signal } = params;
 
     const body = {
         model,
@@ -15,6 +17,15 @@ export async function* openRouterStream(params: {
         modalities,
         stream: true,
     } as any;
+
+    if (params.reasoning) {
+        body['reasoning'] = params.reasoning;
+    }
+
+    if (tools) {
+        body['tools'] = tools;
+        body['tool_choice'] = 'auto';
+    }
 
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -129,57 +140,22 @@ export async function* openRouterStream(params: {
                 for (const choice of choices) {
                     const delta = choice.delta || {};
 
-                    // Handle tool calls (function calling)
-                    if (Array.isArray(delta.tool_calls)) {
-                        for (const toolCallDelta of delta.tool_calls) {
-                            const toolId = toolCallDelta.id;
-                            if (toolId) {
-                                // Initialize or update tool call accumulator
-                                if (!toolCallMap.has(toolId)) {
-                                    toolCallMap.set(toolId, {
-                                        id: toolId,
-                                        type: toolCallDelta.type || 'function',
-                                        function: {
-                                            name: '',
-                                            arguments: '',
-                                        },
-                                    });
-                                }
-                                const accumulated = toolCallMap.get(toolId)!;
+                    console.log(
+                        '[openRouterStream] delta chunk:',
+                        JSON.stringify(delta)
+                    );
 
-                                // Accumulate function name
-                                if (
-                                    toolCallDelta.function?.name &&
-                                    toolCallDelta.function.name.length > 0
-                                ) {
-                                    accumulated.function.name +=
-                                        toolCallDelta.function.name;
-                                }
-
-                                // Accumulate function arguments
-                                if (
-                                    toolCallDelta.function?.arguments &&
-                                    toolCallDelta.function.arguments.length > 0
-                                ) {
-                                    accumulated.function.arguments +=
-                                        toolCallDelta.function.arguments;
-                                }
-                            }
-                        }
-
-                        // If finish_reason is 'tool_calls', emit the accumulated tool calls
-                        if (choice.finish_reason === 'tool_calls') {
-                            for (const accumulated of toolCallMap.values()) {
-                                yield {
-                                    type: 'tool_call',
-                                    tool_call: accumulated,
-                                };
-                            }
-                            toolCallMap.clear();
-                        }
+                    // Handle model reasoning (from reasoning field or reasoning_details)
+                    if (
+                        typeof delta.reasoning === 'string' &&
+                        delta.reasoning
+                    ) {
+                        yield {
+                            type: 'reasoning',
+                            text: delta.reasoning,
+                        };
                     }
 
-                    // Handle model reasoning
                     if (choice?.delta?.reasoning_details) {
                         if (
                             choice?.delta?.reasoning_details[0]?.type ===
@@ -211,11 +187,17 @@ export async function* openRouterStream(params: {
                             }
                         }
                     }
-                    if (typeof delta.text === 'string') {
+                    if (typeof delta.text === 'string' && delta.text) {
                         yield { type: 'text', text: delta.text };
                     }
-                    if (typeof delta.content === 'string') {
+                    if (typeof delta.content === 'string' && delta.content) {
                         yield { type: 'text', text: delta.content };
+                    }
+
+                    if (Array.isArray(delta.tool_calls)) {
+                        for (const toolCall of delta.tool_calls) {
+                            yield { type: 'tool_call', tool_call: toolCall };
+                        }
                     }
 
                     // Streaming images (legacy / OpenAI style delta.images array)
@@ -285,7 +267,7 @@ export async function* openRouterStream(params: {
                         while (imageQueue.length) yield imageQueue.shift()!;
                     }
 
-                    // Or inside message.content array (Gemini style)
+                    // Or inside message.content array (Gemini/OpenAI final message style)
                     const finalContent = choice.message?.content;
                     if (Array.isArray(finalContent)) {
                         let fIxRef2 = { v: 0 };
