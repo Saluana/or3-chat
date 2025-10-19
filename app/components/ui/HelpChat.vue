@@ -60,7 +60,7 @@
 
                 <div
                     ref="scrollContainer"
-                    class="flex-1 overflow-y-auto px-3 py-4 space-y-3 text-sm"
+                    class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-3 text-sm"
                 >
                     <div
                         v-for="msg in messages.filter(
@@ -71,41 +71,59 @@
                         )"
                         :key="msg.id"
                         :class="[
-                            'rounded-[3px] px-3 py-2 leading-relaxed text-sm w-fit max-w-[95%] break-words',
+                            'rounded-[3px] flex flex-col px-3 py-2 leading-relaxed text-sm break-words',
                             msg.role === 'user'
-                                ? ' border-2 border-[var(--md-inverse-surface)] retro-shadow  ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)]'
-                                : 'max-w-[100%] px-5',
+                                ? 'border-2 border-[var(--md-inverse-surface)] retro-shadow ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)] w-fit max-w-[85%]'
+                                : 'w-full max-w-full px-2',
                             msg.kind === 'error'
                                 ? 'bg-[var(--md-error-container)] text-[var(--md-on-error-container)]'
                                 : null,
                             msg.kind === 'info'
-                                ? 'bg-[var(--md-surface-container-low)] text-[var(--md-on-surface)]'
+                                ? 'bg-[var(--md-surface-container-low)] text-[var(--md-on-surface)] '
                                 : null,
                         ]"
                     >
                         <div
-                            :class="{
-                                'justify-center items-center':
-                                    msg.role === 'assistant' && isFullscreen,
-                            }"
-                            class="flex flex-col"
+                            :class="[
+                                'flex flex-col w-full',
+                                msg.role === 'assistant' ? 'items-center' : '',
+                            ]"
                         >
-                            <span class="text-green-600">{{ msg }}</span>
                             <span
                                 v-if="msg.pending && !msg.content"
                                 class="text-xs uppercase tracking-wide opacity-70 animate-pulse"
                                 >Thinking...</span
                             >
+                            <div
+                                v-else-if="msg.tool_call_info"
+                                class="text-xs uppercase tracking-wide opacity-70 italic break-all"
+                            >
+                                <span v-if="!msg.tool_call_info.completed">
+                                    Searching
+                                    <code
+                                        class="px-1 bg-black/10 rounded break-all"
+                                        >{{ msg.tool_call_info.query }}</code
+                                    >...
+                                </span>
+                                <span v-else>
+                                    Searched
+                                    <code
+                                        class="px-1 bg-black/10 rounded break-all"
+                                        >{{ msg.tool_call_info.query }}</code
+                                    >
+                                </span>
+                            </div>
                             <StreamMarkdown
                                 v-else-if="msg.content"
                                 :content="msg.content"
                                 :shiki-theme="currentShikiTheme"
-                                :class="{
-                                    'max-w-[820px]!':
-                                        msg.role === 'assistant' &&
-                                        isFullscreen,
-                                }"
-                                class="prose prose-pre:font-mono prose-retro max-w-none"
+                                :class="[
+                                    'w-full',
+                                    isFullscreen && msg.role === 'assistant'
+                                        ? 'max-w-[820px]'
+                                        : 'max-w-full',
+                                ]"
+                                class="prose prose-pre:font-mono prose-retro prose-pre:max-w-full prose-pre:overflow-x-auto"
                                 :allowed-link-prefixes="[
                                     'https://',
                                     'http://',
@@ -204,6 +222,11 @@ interface HelpChatMessage {
     tool_call_id?: string;
     pending?: boolean;
     kind?: HelpChatKind;
+    tool_call_info?: {
+        name: string;
+        query: string;
+        completed?: boolean;
+    };
 }
 
 const { apiKey } = useUserApiKey();
@@ -522,7 +545,29 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                                 continue;
                             }
 
+                            // Create a tool call message showing "Searching..."
+                            const toolCallMessage: HelpChatMessage = {
+                                id: createMessageId(),
+                                role: 'assistant',
+                                content: '',
+                                tool_call_info: {
+                                    name: 'search_docs',
+                                    query: query.query,
+                                    completed: false,
+                                },
+                            };
+                            await pushMessage(toolCallMessage, 'auto');
+
                             const docs = await getDocumentation(query.query);
+
+                            // Update the tool call message to show "Searched"
+                            const toolMsg = messages.value.find(
+                                (m) => m.id === toolCallMessage.id
+                            );
+                            if (toolMsg?.tool_call_info) {
+                                toolMsg.tool_call_info.completed = true;
+                            }
+                            await nextTick();
 
                             if (docs && docs.length > 0) {
                                 // Add tool result message to the history
