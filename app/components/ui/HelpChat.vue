@@ -170,17 +170,18 @@
             leave-from-class="opacity-100 scale-100"
             leave-to-class="opacity-0 scale-95"
         >
-            <UButton
-                v-if="!isExpanded"
-                size="md"
-                icon="pixelarticons:message-processing"
-                class="retro-btn absolute bottom-0 right-0 aspect-square w-12 h-12 flex items-center justify-center"
-                :ui="{
-                    base: 'retro-btn aspect-square w-12 h-12 flex items-center justify-center',
-                }"
-                aria-label="Open help chat"
-                @click="expand"
-            />
+            <div v-if="!isExpanded">
+                <UButton
+                    size="md"
+                    icon="pixelarticons:message-processing"
+                    class="retro-btn absolute bottom-0 right-0 aspect-square w-12 h-12 flex items-center justify-center"
+                    :ui="{
+                        base: 'retro-btn aspect-square w-12 h-12 flex items-center justify-center',
+                    }"
+                    aria-label="Open help chat"
+                    @click="expand"
+                />
+            </div>
         </Transition>
     </div>
 </template>

@@ -3,7 +3,10 @@
         <!-- Register the PWA web manifest on all pages -->
         <VitePwaManifest />
         <FatalErrorBoundary>
-            <NuxtPage :transition="false" keepalive />
+            <!-- Use NuxtLayout to avoid warning when layouts/ are present -->
+            <NuxtLayout>
+                <NuxtPage :transition="false" keepalive />
+            </NuxtLayout>
         </FatalErrorBoundary>
     </UApp>
 </template>
