@@ -208,8 +208,12 @@
 import { StreamMarkdown } from 'streamdown-vue';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
+import { useThrottleFn } from '@vueuse/core';
 
 const props = defineProps<{ documentationMap?: string }>();
+
+// Maximum number of messages to keep in memory
+const MAX_MESSAGES = 50;
 
 type HelpChatRole = 'assistant' | 'user' | 'tool';
 type HelpChatKind = 'info' | 'error' | undefined;
@@ -228,6 +232,9 @@ interface HelpChatMessage {
         completed?: boolean;
     };
 }
+
+// Separate storage for tool results to avoid bloating the visible message history
+const toolResultsCache = new Map<string, string>();
 
 const { apiKey } = useUserApiKey();
 const toast = useToast();
@@ -262,6 +269,22 @@ const canSend = computed(() =>
     Boolean(message.value.trim().length && apiKey.value && !isSending.value)
 );
 
+// Throttled scroll function to prevent excessive layout recalculations during streaming
+const throttledScrollToBottom = useThrottleFn(
+    (behavior: ScrollBehavior = 'smooth') => {
+        if (!import.meta.client) return;
+        const container = scrollContainer.value;
+        if (!container) return;
+
+        requestAnimationFrame(() => {
+            container.scrollTo({ top: container.scrollHeight, behavior });
+        });
+    },
+    100, // Update scroll at most every 100ms
+    true, // Trailing edge
+    false // No leading edge
+);
+
 onMounted(() => {
     scrollToBottom('auto');
 });
@@ -283,6 +306,10 @@ function expand() {
 function collapse() {
     isExpanded.value = false;
     isFullscreen.value = false;
+
+    // Clear cache to free memory when chat is closed
+    // Keep the messages but clear the heavy documentation cache
+    toolResultsCache.clear();
 }
 
 function toggleFullscreen() {
@@ -306,13 +333,29 @@ function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
     });
 }
 
+// Trim messages to prevent memory bloat
+function trimMessages() {
+    if (messages.value.length > MAX_MESSAGES) {
+        const toRemove = messages.value.length - MAX_MESSAGES;
+        const removed = messages.value.splice(0, toRemove);
+
+        // Clean up tool result cache for removed messages
+        removed.forEach((msg) => {
+            if (msg.tool_call_id) {
+                toolResultsCache.delete(msg.tool_call_id);
+            }
+        });
+    }
+}
+
 async function pushMessage(
     msg: HelpChatMessage,
     behavior: ScrollBehavior = 'smooth'
 ) {
     messages.value.push(msg);
+    trimMessages();
     await nextTick();
-    scrollToBottom(behavior);
+    throttledScrollToBottom(behavior);
 }
 
 async function getDocumentation(path: string) {
@@ -489,6 +532,12 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                 // Include tool_call_id for tool result messages
                 if (m.tool_call_id) {
                     body.tool_call_id = m.tool_call_id;
+
+                    // Retrieve full docs from cache for API, not the summary
+                    const cachedDocs = toolResultsCache.get(m.tool_call_id);
+                    if (cachedDocs) {
+                        body.content = cachedDocs;
+                    }
                 }
 
                 return body;
@@ -515,22 +564,52 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
             let foundToolCall = false;
 
             try {
+                // Batch text updates to reduce reactivity overhead
+                let textBuffer = '';
+                let lastUpdate = Date.now();
+                const UPDATE_INTERVAL = 50; // ms - update UI at most every 50ms
+
                 for await (const ev of stream) {
                     if (ev.type === 'text') {
-                        currentAssistantMessage.content += ev.text;
-                        currentAssistantMessage.pending = false;
-                        await nextTick();
+                        textBuffer += ev.text;
+                        const now = Date.now();
+
+                        // Only update UI if enough time has passed or buffer is large
+                        if (
+                            now - lastUpdate > UPDATE_INTERVAL ||
+                            textBuffer.length > 100
+                        ) {
+                            currentAssistantMessage.content += textBuffer;
+                            textBuffer = '';
+                            lastUpdate = now;
+                            currentAssistantMessage.pending = false;
+                        }
                     } else if (ev.type === 'reasoning') {
                         currentAssistantMessage.pending = false;
-                        // Handle reasoning/thinking events - accumulate as visible content
-                        currentAssistantMessage.content += ev.text;
-                        await nextTick();
+                        // Batch reasoning updates too
+                        textBuffer += ev.text;
+                        const now = Date.now();
+
+                        if (
+                            now - lastUpdate > UPDATE_INTERVAL ||
+                            textBuffer.length > 100
+                        ) {
+                            currentAssistantMessage.content += textBuffer;
+                            textBuffer = '';
+                            lastUpdate = now;
+                        }
                     } else if (ev.type === 'tool_call') {
                         console.log(
                             '[HelpChat] Received tool call:',
                             ev.tool_call
                         );
                         foundToolCall = true;
+
+                        // Flush any pending text buffer before processing tool call
+                        if (textBuffer) {
+                            currentAssistantMessage.content += textBuffer;
+                            textBuffer = '';
+                        }
                         currentAssistantMessage.pending = false;
 
                         if (ev.tool_call.function.name === 'search_docs') {
@@ -570,12 +649,19 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                             await nextTick();
 
                             if (docs && docs.length > 0) {
-                                // Add tool result message to the history
+                                // Store full docs in cache, not in visible messages
+                                toolResultsCache.set(ev.tool_call.id, docs);
+
+                                // Add a lightweight summary message instead of full content
+                                const summary = `Documentation loaded for \`${
+                                    query.query
+                                }\` (${Math.round(docs.length / 1024)}KB)`;
+
                                 await pushMessage(
                                     {
                                         id: createMessageId(),
                                         role: 'tool',
-                                        content: `Tool (search_docs) result for \`${query.query}\`:\n\n${docs}`,
+                                        content: summary,
                                         tool_call_id: ev.tool_call.id,
                                     },
                                     'auto'
@@ -586,6 +672,11 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                             }
                         }
                     } else if (ev.type === 'done') {
+                        // Flush any remaining text buffer
+                        if (textBuffer) {
+                            currentAssistantMessage.content += textBuffer;
+                            textBuffer = '';
+                        }
                         currentAssistantMessage.pending = false;
                     }
                 }
