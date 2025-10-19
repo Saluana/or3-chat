@@ -1,12 +1,24 @@
 import { useBreakpoints } from '@vueuse/core';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 /**
  * Centralised responsive state helper to keep mobile/desktop logic consistent.
  * - Mobile: viewport width ≤ 768px
  * - Tablet: 769px – 1023px (reserved for future refinements)
+ *
+ * SSR-safe: assumes desktop during SSR to prevent hydration mismatches.
+ * The client will update to the correct state after hydration.
  */
 export function useResponsiveState() {
+    // During SSR, assume desktop (not mobile) to match what we conditionally render
+    // This prevents hydration mismatches
+    if (!import.meta.client) {
+        return {
+            isMobile: ref(false),
+            isTablet: ref(false),
+        };
+    }
+
     const breakpoints = useBreakpoints({
         mobile: 0,
         tablet: 768,

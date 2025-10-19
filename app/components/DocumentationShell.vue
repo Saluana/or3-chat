@@ -195,9 +195,8 @@
         <div class="flex flex-1 min-h-0 overflow-hidden">
             <!-- Sidebar -->
             <aside
-                v-if="!isMobile"
                 :id="sidebarId"
-                class="docs-sidebar flex-shrink-0 w-64 bg-[var(--md-surface)] overflow-y-auto scrollbars"
+                class="docs-sidebar flex-shrink-0 w-64 bg-[var(--md-surface)] overflow-y-auto scrollbars hidden md:block"
             >
                 <nav class="p-4">
                     <div class="space-y-6">
@@ -278,8 +277,12 @@
             </aside>
 
             <!-- Content Area -->
-            <main class="flex-1 min-w-0 overflow-y-auto scrollbars">
-                <div class="max-w-[820px] mx-auto p-8">
+            <main
+                class="flex-1 min-w-0 max-w-[100dvw] overflow-x-hidden overflow-y-auto scrollbars"
+            >
+                <div
+                    class="max-w-[100dvw] sm:max-w-[780px] mx-auto pt-5 pb-24 px-4 md:p-8"
+                >
                     <!-- Search Results -->
                     <div
                         v-if="searchQuery && searchResults.length > 0"
@@ -298,7 +301,7 @@
                                 @click="navigateToResult(result)"
                             >
                                 <h3
-                                    class="font-bold text-[var(--md-on-surface)]"
+                                    class="font-bold text-[14px] text-[var(--md-on-surface)]"
                                 >
                                     {{ result.title }}
                                 </h3>

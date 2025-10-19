@@ -17,7 +17,6 @@
                     >
                     <div class="flex gap-1">
                         <UButton
-                            v-if="!isMobile"
                             size="xs"
                             :square="true"
                             :icon="
@@ -25,7 +24,7 @@
                                     ? 'material-symbols:fullscreen-exit'
                                     : 'material-symbols:fullscreen'
                             "
-                            class="retro-btn aspect-square"
+                            class="retro-btn aspect-square hidden md:flex"
                             :ui="{
                                 base: 'retro-btn aspect-square flex items-center justify-center',
                             }"
@@ -292,10 +291,9 @@ const formStyle = computed(() =>
         : undefined
 );
 
-const launcherClass = computed(() =>
-    isMobile.value
-        ? 'retro-btn fixed bottom-4 right-4 aspect-square w-12 h-12 flex items-center justify-center z-[60]'
-        : 'retro-btn absolute bottom-0 right-0 aspect-square w-12 h-12 flex items-center justify-center'
+const launcherClass = computed(
+    () =>
+        'retro-btn fixed bottom-4 right-4 aspect-square w-12 h-12 flex items-center justify-center z-[60]'
 );
 
 let messageId = 0;
