@@ -1,115 +1,187 @@
 <template>
-    <div class="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3">
-        <div
-            v-if="isExpanded"
-            class="flex flex-col border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow bg-[var(--md-surface)] w-[min(40dvw)] h-[min(80dvh)] overflow-hidden"
+    <div class="fixed bottom-4 right-4 z-50">
+        <Transition
+            enter-active-class="transition-all duration-300 ease-out"
+            enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition-all duration-200 ease-in"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-95"
         >
             <div
-                class="flex h-10 items-center justify-between border-b-2 border-[var(--md-inverse-surface)] px-3"
-            >
-                <span class="text-sm font-medium uppercase tracking-wide"
-                    >Help Chat</span
-                >
-                <UButton
-                    size="xs"
-                    :square="true"
-                    icon="pixelarticons:close"
-                    class="retro-btn aspect-square"
-                    :ui="{
-                        base: 'retro-btn aspect-square flex items-center justify-center',
-                    }"
-                    aria-label="Close help chat"
-                    @click="collapse"
-                />
-            </div>
-
-            <div
-                ref="scrollContainer"
-                class="flex-1 overflow-y-auto px-3 py-4 space-y-3 text-sm"
+                v-if="isExpanded"
+                :class="[
+                    'absolute bottom-0 right-0 flex flex-col border-2 border-[var(--md-inverse-surface)] rounded-[3px] transition-all duration-300 ease-in-out retro-shadow bg-[var(--md-surface)]',
+                    isFullscreen && isExpanded
+                        ? 'w-[96dvw] h-[96dvh]'
+                        : 'h-[85dvh] w-[min(40dvw)]',
+                    'overflow-hidden',
+                ]"
             >
                 <div
-                    v-for="msg in messages.filter(
-                        (m) =>
-                            m.role !== 'tool' || !m.content || m.content === ''
-                    )"
-                    :key="msg.id"
-                    :class="[
-                        'rounded-[3px] px-3 py-2 leading-relaxed text-sm w-fit max-w-[95%] break-words',
-                        msg.role === 'user'
-                            ? ' border-2 border-[var(--md-inverse-surface)] retro-shadow  ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)]'
-                            : 'max-w-[100%] px-5',
-                        msg.kind === 'error'
-                            ? 'bg-[var(--md-error-container)] text-[var(--md-on-error-container)]'
-                            : null,
-                        msg.kind === 'info'
-                            ? 'bg-[var(--md-surface-container-low)] text-[var(--md-on-surface)]'
-                            : null,
-                    ]"
+                    class="flex h-10 items-center justify-between border-b-2 border-[var(--md-inverse-surface)] px-3"
                 >
-                    <span
-                        v-if="msg.pending && !msg.content"
-                        class="text-xs uppercase tracking-wide opacity-70 animate-pulse"
-                        >Thinking...</span
+                    <span class="text-sm font-medium uppercase tracking-wide"
+                        >Help Chat</span
                     >
-                    <StreamMarkdown
-                        v-else-if="msg.content"
-                        :content="msg.content"
-                        :shiki-theme="currentShikiTheme"
-                        class="help-chat-content prose-retro max-w-none"
-                        :allowed-link-prefixes="['https://', 'http://', '/']"
-                        :allowed-image-prefixes="['https://', 'http://', '/']"
-                        :code-block-show-line-numbers="false"
-                    ></StreamMarkdown>
+                    <div class="flex gap-1">
+                        <UButton
+                            size="xs"
+                            :square="true"
+                            :icon="
+                                isFullscreen
+                                    ? 'material-symbols:fullscreen-exit'
+                                    : 'material-symbols:fullscreen'
+                            "
+                            class="retro-btn aspect-square"
+                            :ui="{
+                                base: 'retro-btn aspect-square flex items-center justify-center',
+                            }"
+                            :aria-label="
+                                isFullscreen
+                                    ? 'Exit fullscreen'
+                                    : 'Enter fullscreen'
+                            "
+                            @click="toggleFullscreen"
+                        />
+                        <UButton
+                            size="xs"
+                            :square="true"
+                            icon="pixelarticons:close"
+                            class="retro-btn aspect-square"
+                            :ui="{
+                                base: 'retro-btn aspect-square flex items-center justify-center',
+                            }"
+                            aria-label="Close help chat"
+                            @click="collapse"
+                        />
+                    </div>
                 </div>
+
+                <div
+                    ref="scrollContainer"
+                    class="flex-1 overflow-y-auto px-3 py-4 space-y-3 text-sm"
+                >
+                    <div
+                        v-for="msg in messages.filter(
+                            (m) =>
+                                m.role !== 'tool' ||
+                                !m.content ||
+                                m.content === ''
+                        )"
+                        :key="msg.id"
+                        :class="[
+                            'rounded-[3px] px-3 py-2 leading-relaxed text-sm w-fit max-w-[95%] break-words',
+                            msg.role === 'user'
+                                ? ' border-2 border-[var(--md-inverse-surface)] retro-shadow  ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)]'
+                                : 'max-w-[100%] px-5',
+                            msg.kind === 'error'
+                                ? 'bg-[var(--md-error-container)] text-[var(--md-on-error-container)]'
+                                : null,
+                            msg.kind === 'info'
+                                ? 'bg-[var(--md-surface-container-low)] text-[var(--md-on-surface)]'
+                                : null,
+                        ]"
+                    >
+                        <div
+                            :class="{
+                                'justify-center items-center':
+                                    msg.role === 'assistant' && isFullscreen,
+                            }"
+                            class="flex flex-col"
+                        >
+                            <span class="text-green-600">{{ msg }}</span>
+                            <span
+                                v-if="msg.pending && !msg.content"
+                                class="text-xs uppercase tracking-wide opacity-70 animate-pulse"
+                                >Thinking...</span
+                            >
+                            <StreamMarkdown
+                                v-else-if="msg.content"
+                                :content="msg.content"
+                                :shiki-theme="currentShikiTheme"
+                                :class="{
+                                    'max-w-[820px]!':
+                                        msg.role === 'assistant' &&
+                                        isFullscreen,
+                                }"
+                                class="help-chat-content prose-retro max-w-none"
+                                :allowed-link-prefixes="[
+                                    'https://',
+                                    'http://',
+                                    '/',
+                                ]"
+                                :allowed-image-prefixes="[
+                                    'https://',
+                                    'http://',
+                                    '/',
+                                ]"
+                                :code-block-show-line-numbers="false"
+                            ></StreamMarkdown>
+                        </div>
+                    </div>
+                </div>
+
+                <form
+                    class="border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] px-3 py-3"
+                    @submit.prevent="sendMessage"
+                >
+                    <div class="flex items-end gap-2">
+                        <UInput
+                            ref="inputRef"
+                            v-model="message"
+                            placeholder="Ask about Or3 Chat..."
+                            size="md"
+                            class="flex-1"
+                            :disabled="isSending"
+                        />
+                        <UButton
+                            type="submit"
+                            size="md"
+                            class="retro-btn px-4"
+                            :ui="{
+                                base: 'retro-btn px-4 flex items-center gap-2 font-medium',
+                            }"
+                            :loading="isSending"
+                            :disabled="!canSend"
+                        >
+                            <UIcon
+                                name="pixelarticons:arrow-up"
+                                class="h-4 w-4"
+                            />
+                            <span>Send</span>
+                        </UButton>
+                    </div>
+                    <p
+                        v-if="!apiKey"
+                        class="mt-2 text-xs text-[var(--md-on-surface-variant)]"
+                    >
+                        Add your OpenRouter key in Settings to enable replies.
+                    </p>
+                </form>
             </div>
+        </Transition>
 
-            <form
-                class="border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] px-3 py-3"
-                @submit.prevent="sendMessage"
-            >
-                <div class="flex items-end gap-2">
-                    <UInput
-                        ref="inputRef"
-                        v-model="message"
-                        placeholder="Ask about Or3 Chat..."
-                        size="md"
-                        class="flex-1"
-                        :disabled="isSending"
-                    />
-                    <UButton
-                        type="submit"
-                        size="md"
-                        class="retro-btn px-4"
-                        :ui="{
-                            base: 'retro-btn px-4 flex items-center gap-2 font-medium',
-                        }"
-                        :loading="isSending"
-                        :disabled="!canSend"
-                    >
-                        <UIcon name="pixelarticons:arrow-up" class="h-4 w-4" />
-                        <span>Send</span>
-                    </UButton>
-                </div>
-                <p
-                    v-if="!apiKey"
-                    class="mt-2 text-xs text-[var(--md-on-surface-variant)]"
-                >
-                    Add your OpenRouter key in Settings to enable replies.
-                </p>
-            </form>
-        </div>
-
-        <UButton
-            v-else
-            size="md"
-            icon="pixelarticons:message-processing"
-            class="retro-btn aspect-square w-12 h-12 flex items-center justify-center"
-            :ui="{
-                base: 'retro-btn aspect-square w-12 h-12 flex items-center justify-center',
-            }"
-            aria-label="Open help chat"
-            @click="expand"
-        />
+        <Transition
+            enter-active-class="transition-all duration-300 ease-out"
+            enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition-all duration-150 ease-in"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-95"
+        >
+            <UButton
+                v-if="!isExpanded"
+                size="md"
+                icon="pixelarticons:message-processing"
+                class="retro-btn absolute bottom-0 right-0 aspect-square w-12 h-12 flex items-center justify-center"
+                :ui="{
+                    base: 'retro-btn aspect-square w-12 h-12 flex items-center justify-center',
+                }"
+                aria-label="Open help chat"
+                @click="expand"
+            />
+        </Transition>
     </div>
 </template>
 
@@ -144,6 +216,7 @@ const currentShikiTheme = computed(() => {
 });
 
 const isExpanded = ref(false);
+const isFullscreen = ref(false);
 const isSending = ref(false);
 const message = ref('');
 const inputRef = ref<{ input?: HTMLInputElement } | null>(null);
@@ -185,6 +258,11 @@ function expand() {
 
 function collapse() {
     isExpanded.value = false;
+    isFullscreen.value = false;
+}
+
+function toggleFullscreen() {
+    isFullscreen.value = !isFullscreen.value;
 }
 
 function focusInput() {
