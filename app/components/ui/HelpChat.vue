@@ -174,7 +174,8 @@
                         v-if="!apiKey"
                         class="mt-2 text-xs text-[var(--md-on-surface-variant)]"
                     >
-                        Add your OpenRouter key in Settings to enable replies.
+                        Connect your Openrouter account at or3.chat to enable
+                        replies.
                     </p>
                 </form>
             </div>

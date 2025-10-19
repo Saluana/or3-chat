@@ -14,7 +14,11 @@ export default defineNuxtConfig({
             { name: 'VT323', provider: 'google' },
         ],
     },
-    nitro: { prerender: { routes: ['/openrouter-callback'] } },
+    nitro: {
+        prerender: {
+            routes: ['/openrouter-callback', '/documentation'],
+        },
+    },
     // PWA configuration
     pwa: {
         // Auto update SW when new content is available
@@ -28,7 +32,7 @@ export default defineNuxtConfig({
         client: {
             installPrompt: true,
             registerPlugin: true,
-            periodicSyncForUpdates: 12 * 60 * 60, // Check every 12 hours
+            periodicSyncForUpdates: 60 * 60, // Check every 1 hour (reduced from 12 hours for faster updates)
         },
         // Basic offline support; let Workbox handle common assets
         workbox: {
@@ -42,6 +46,7 @@ export default defineNuxtConfig({
                 /\/openrouter-callback$/,
                 /\/openrouter-callback\?.*$/,
                 /\/streamsaver(?:\/.*)?$/,
+                /\/documentation(?:\/.*)?$/, // Don't fallback for documentation routes
             ],
             navigateFallback: '/index.html',
             manifestTransforms: [
@@ -58,6 +63,19 @@ export default defineNuxtConfig({
             globIgnores: ['streamsaver/**'],
             importScripts: ['/sw-bypass-streamsaver.js'],
             runtimeCaching: [
+                // HTML navigation - always try network first for fresh content
+                {
+                    urlPattern: ({ request }) => request.mode === 'navigate',
+                    handler: 'NetworkFirst',
+                    options: {
+                        cacheName: 'pages-cache',
+                        expiration: {
+                            maxEntries: 50,
+                            maxAgeSeconds: 24 * 60 * 60, // 1 day
+                        },
+                        networkTimeoutSeconds: 3, // Fast timeout, then fallback to cache
+                    },
+                },
                 // Auth callback: prefer fresh network, but fall back to cached prerender if offline
                 {
                     urlPattern: /\/openrouter-callback(\?.*)?$/,
