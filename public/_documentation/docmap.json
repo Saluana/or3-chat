@@ -18,6 +18,12 @@
                     "path": "/start/plugin-quickstart",
                     "category": "Tutorial",
                     "summary": "Hands-on tutorial showing how to create plugins for OR3. Covers dashboard pages, chat message actions, and sidebar extensions with complete working examples and best practices."
+                },
+                {
+                    "name": "development-setup.md",
+                    "path": "/start/development-setup",
+                    "category": "Tutorial",
+                    "summary": "Step-by-step guide to setting up a local development environment for OR3. Covers cloning the repo, installing dependencies, running the dev server, and debugging tips."
                 }
             ]
         },

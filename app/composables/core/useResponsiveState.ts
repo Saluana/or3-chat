@@ -12,7 +12,7 @@ import { computed, ref } from 'vue';
 export function useResponsiveState() {
     // During SSR, assume desktop (not mobile) to match what we conditionally render
     // This prevents hydration mismatches
-    if (!import.meta.client) {
+    if (typeof window === 'undefined') {
         return {
             isMobile: ref(false),
             isTablet: ref(false),
