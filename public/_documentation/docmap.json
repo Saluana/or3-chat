@@ -4,6 +4,18 @@
     "version": "1.0.0",
     "sections": [
         {
+            "title": "Getting Started",
+            "path": "/overview",
+            "files": [
+                {
+                    "name": "overview.md",
+                    "path": "/overview/overview",
+                    "category": "Introduction",
+                    "summary": "Covers what OR3 is, its core features, and how it fits into the AI landscape. Provides a simple understanding of the project's goals and capabilities."
+                }
+            ]
+        },
+        {
             "title": "Composables",
             "path": "/composables",
             "files": [
