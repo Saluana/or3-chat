@@ -5,13 +5,19 @@
     "sections": [
         {
             "title": "Getting Started",
-            "path": "/overview",
+            "path": "/start",
             "files": [
                 {
                     "name": "overview.md",
-                    "path": "/overview/overview",
+                    "path": "/start/overview",
                     "category": "Introduction",
-                    "summary": "Covers what OR3 is, its core features, and how it fits into the AI landscape. Provides a simple understanding of the project's goals and capabilities."
+                    "summary": "Covers what OR3 is, its core features. Quick refresher: Or3.chat is an open source, fast, extendable, and privacy-focused AI chat interface that lets developers build customized chat experiences.\n\nPhilosophy: Or3 prioritizes being a lean, polished foundation rather than adding bloat. Users can extend it themselves, request features, or build plugins using tools like Cursor or Claude Code.\n\nPrivacy First: Or3 doesn't provide LLM access or tokens. Instead, users connect their OpenRouter account via OAuth PKCE and pay for their own tokens. API keys are stored locally in indexedDB—never on external servers. The plugin system allows optional encryption, giving developers full control over security according to their threat model."
+                },
+                {
+                    "name": "plugin-quickstart.md",
+                    "path": "/start/plugin-quickstart",
+                    "category": "Tutorial",
+                    "summary": "Hands-on tutorial showing how to create plugins for OR3. Covers dashboard pages, chat message actions, and sidebar extensions with complete working examples and best practices."
                 }
             ]
         },

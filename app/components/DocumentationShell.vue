@@ -541,9 +541,16 @@ function applyDocmapNavigation(map: Docmap) {
     if (props.navigation) return; // respect external navigation overrides
     if (internalNavigation.value.length) return; // already built
 
-    const sortedSections = [...map.sections].sort((a, b) =>
-        a.title.localeCompare(b.title)
-    );
+    // Sort sections alphabetically, but always put "Getting Started" first
+    const sortedSections = [...map.sections].sort((a, b) => {
+        const aIsGettingStarted = a.title.toLowerCase() === 'getting started';
+        const bIsGettingStarted = b.title.toLowerCase() === 'getting started';
+
+        if (aIsGettingStarted) return -1;
+        if (bIsGettingStarted) return 1;
+
+        return a.title.localeCompare(b.title);
+    });
 
     internalNavigation.value = sortedSections.map((section) => {
         const groupsMap = new Map<string, NavGroup>();

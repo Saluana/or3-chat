@@ -13,6 +13,7 @@ Or3.chat is an open source, fast, extendable, and privacy-focused AI chat interf
 -   Plugin marketplace
 -   Theme editor
 -   Multi-provider AI integration
+-   Support SSR for improved performance, SEO and security
 
 ## Features
 
@@ -46,3 +47,10 @@ Central hub for settings and mini apps:
 -   **Images**: Gallery for uploaded/generated images with browse, delete, copy, download
 -   **Workspace Backup**: Export/import JSON backups via indexedDB to preserve projects across sessions or devices
 -   **Custom Pages**: Developers can register plugin preference pages
+
+### Important Notes
+
+-   Or3 is client side only; no server component is provided.
+-   Or3 is not affiliated with OpenRouter but is designed to work seamlessly with their platform.
+-   Users are responsible for their own OpenRouter accounts and associated costs.
+-   Or3 emphasizes user privacy and security, allowing developers to implement their own measures as needed.
