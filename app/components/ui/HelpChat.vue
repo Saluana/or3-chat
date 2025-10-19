@@ -105,7 +105,7 @@
                                         msg.role === 'assistant' &&
                                         isFullscreen,
                                 }"
-                                class="help-chat-content prose-retro max-w-none"
+                                class="prose prose-pre:font-mono prose-retro max-w-none"
                                 :allowed-link-prefixes="[
                                     'https://',
                                     'http://',
@@ -352,7 +352,6 @@ async function sendMessage() {
     const reactiveAssistantMessage = messages.value.find(
         (m) => m.id === assistantMessage.id
     );
-    scrollToBottom('auto');
 
     try {
         // Fetch docmap for tool context
@@ -387,6 +386,7 @@ Help developers understand and use the Or3 Chat codebase by searching the docume
 4. You can call search_docs multiple times in one response if needed
 5. After retrieving documentation, provide clear explanations with code examples
 6. Always link to relevant documentation pages using markdown: [text](/documentation/path)
+7. If linking to a spot in the documentation always use /documentation/{path} the /documentation/ prefix is required before any path.
 
 ## Example Interaction
 User: "How do I use useChat?"
@@ -593,8 +593,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
         if (lastAssistantMessage) {
             lastAssistantMessage.pending = false;
         }
-        await nextTick();
-        scrollToBottom('auto');
     } catch (error) {
         console.error('[HelpChat] Error in sendMessage:', error);
         const errorMsg =
@@ -611,8 +609,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
         );
     } finally {
         isSending.value = false;
-        await nextTick();
-        scrollToBottom('auto');
     }
 }
 </script>
