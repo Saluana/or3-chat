@@ -4,19 +4,43 @@
     >
         <!-- Header -->
         <header
-            class="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] z-10"
+            class="flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
         >
-            <div class="flex w-[250px] items-center gap-4">
+            <div class="flex w-full items-center gap-3 md:w-[250px]">
+                <UButton
+                    v-if="isMobile"
+                    icon="i-heroicons-bars-3"
+                    size="sm"
+                    variant="basic"
+                    square
+                    class="md:hidden"
+                    :aria-controls="sidebarId"
+                    :aria-expanded="sidebarOpen"
+                    :aria-label="
+                        sidebarOpen ? 'Close navigation' : 'Open navigation'
+                    "
+                    @click="toggleSidebar"
+                />
                 <NuxtLink to="/" class="flex items-center gap-2">
                     <img src="/butthole-logo.webp" alt="Logo" class="h-8 w-8" />
                     <h1 class="font-ps2 text-lg text-[var(--md-primary)]">
                         OR3 Docs
                     </h1>
                 </NuxtLink>
+                <div class="ml-auto md:hidden">
+                    <UButton
+                        variant="basic"
+                        size="sm"
+                        square
+                        icon="i-heroicons-sun"
+                        :aria-label="'Toggle theme'"
+                        @click="toggleTheme"
+                    />
+                </div>
             </div>
 
             <!-- Search -->
-            <div class="flex-1 w-full max-w-md mx-4">
+            <div class="w-full md:mx-4 md:flex-1 md:max-w-md">
                 <UInput
                     class="w-full"
                     v-model="searchQuery"
@@ -32,7 +56,9 @@
             </div>
 
             <!-- Theme Toggle -->
-            <div class="flex items-center justify-end w-[250px]">
+            <div
+                class="hidden w-full items-center justify-end md:flex md:w-[250px]"
+            >
                 <UButton
                     variant="basic"
                     size="sm"
@@ -43,10 +69,135 @@
             </div>
         </header>
 
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition-opacity duration-150 ease-out"
+                leave-active-class="transition-opacity duration-150 ease-in"
+                enter-from-class="opacity-0"
+                leave-to-class="opacity-0"
+            >
+                <div
+                    v-if="isMobile && sidebarOpen"
+                    class="fixed inset-0 z-[60] flex"
+                    role="dialog"
+                    aria-modal="true"
+                    :aria-labelledby="sidebarLabelId"
+                >
+                    <div
+                        class="absolute inset-0 bg-black/50"
+                        aria-hidden="true"
+                        @click="() => closeSidebar()"
+                    ></div>
+                    <Transition
+                        enter-active-class="transition-transform duration-200 ease-out"
+                        leave-active-class="transition-transform duration-200 ease-in"
+                        enter-from-class="-translate-x-full"
+                        leave-to-class="-translate-x-full"
+                    >
+                        <aside
+                            v-if="sidebarOpen"
+                            ref="mobileSidebarRef"
+                            :id="sidebarId"
+                            class="relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-2 border-[var(--md-inverse-surface)] shadow-lg overflow-y-auto scrollbars"
+                            @keydown="onSidebarKeydown"
+                        >
+                            <h2 :id="sidebarLabelId" class="sr-only">
+                                Documentation navigation
+                            </h2>
+                            <nav class="p-4">
+                                <div class="space-y-6">
+                                    <div
+                                        v-for="category in resolvedNavigation"
+                                        :key="category.label"
+                                        class="space-y-3"
+                                    >
+                                        <h3
+                                            class="font-ps2 text-sm text-[var(--md-on-surface-variant)] border-b-4 border-b-primary pb-2 px-2 uppercase tracking-wide"
+                                        >
+                                            {{ category.label }}
+                                        </h3>
+                                        <div class="space-y-2">
+                                            <div
+                                                v-for="group in category.groups"
+                                                :key="`${category.label}-${group.label}`"
+                                                class="rounded-md bg-[var(--md-surface)]/40 border border-[var(--md-inverse-surface)]/40"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    class="w-full flex items-center justify-between px-3 py-2 text-left font-ps2 text-xs text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
+                                                    @click="
+                                                        toggleGroup(
+                                                            category.label,
+                                                            group.label
+                                                        )
+                                                    "
+                                                    :aria-expanded="
+                                                        isGroupExpanded(
+                                                            category.label,
+                                                            group.label
+                                                        )
+                                                    "
+                                                >
+                                                    <span>{{
+                                                        group.label
+                                                    }}</span>
+                                                    <span
+                                                        class="i-heroicons-chevron-down-20-solid transition-transform duration-200"
+                                                        :class="{
+                                                            'rotate-180':
+                                                                isGroupExpanded(
+                                                                    category.label,
+                                                                    group.label
+                                                                ),
+                                                        }"
+                                                        aria-hidden="true"
+                                                    />
+                                                </button>
+                                                <Transition name="collapsible">
+                                                    <ul
+                                                        v-if="
+                                                            isGroupExpanded(
+                                                                category.label,
+                                                                group.label
+                                                            )
+                                                        "
+                                                        class="space-y-1 py-1"
+                                                    >
+                                                        <li
+                                                            v-for="item in group.items"
+                                                            :key="item.path"
+                                                        >
+                                                            <NuxtLink
+                                                                :to="item.path"
+                                                                class="flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
+                                                                active-class=" dark:text-white text-black  bg-primary/20 hover:bg-primary/20"
+                                                                @click="
+                                                                    () =>
+                                                                        closeSidebar()
+                                                                "
+                                                            >
+                                                                {{ item.label }}
+                                                            </NuxtLink>
+                                                        </li>
+                                                    </ul>
+                                                </Transition>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </nav>
+                        </aside>
+                    </Transition>
+                </div>
+            </Transition>
+        </Teleport>
+
         <!-- Main Layout -->
         <div class="flex flex-1 min-h-0 overflow-hidden">
             <!-- Sidebar -->
             <aside
+                v-if="!isMobile"
+                :id="sidebarId"
                 class="docs-sidebar flex-shrink-0 w-64 bg-[var(--md-surface)] overflow-y-auto scrollbars"
             >
                 <nav class="p-4">
@@ -230,9 +381,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, shallowRef } from 'vue';
+import {
+    ref,
+    computed,
+    watch,
+    onMounted,
+    shallowRef,
+    nextTick,
+    onBeforeUnmount,
+} from 'vue';
 import type { AnyOrama } from '@orama/orama';
 import { StreamMarkdown } from 'streamdown-vue';
+import { useResponsiveState } from '~/composables/core/useResponsiveState';
 
 const { $theme } = useNuxtApp();
 const currentShikiTheme = computed(() => {
@@ -310,6 +470,16 @@ const cacheAccessOrder: string[] = []; // Track access order for LRU
 
 const route = useRoute();
 
+const { isMobile } = useResponsiveState();
+const sidebarOpen = ref(false);
+const mobileSidebarRef = ref<HTMLElement | null>(null);
+const sidebarId = 'docs-sidebar';
+const sidebarLabelId = 'docs-sidebar-heading';
+
+let lastFocusedElement: HTMLElement | null = null;
+let previousBodyOverflow: string | null = null;
+let shouldRestoreFocus = true;
+
 // Internal navigation state (shallow to avoid deep watchers)
 const internalNavigation = shallowRef<NavCategory[]>([]);
 // Resolved navigation prefers prop override but stays stable otherwise
@@ -356,6 +526,83 @@ function expandGroupsForPath(path: string) {
     }
 }
 
+function toggleSidebar() {
+    if (!isMobile.value) return;
+    shouldRestoreFocus = true;
+    sidebarOpen.value = !sidebarOpen.value;
+}
+
+function closeSidebar(options: { restoreFocus?: boolean } = {}) {
+    if (!sidebarOpen.value) return;
+    shouldRestoreFocus = options.restoreFocus ?? true;
+    sidebarOpen.value = false;
+}
+
+function focusFirstSidebarItem() {
+    const [firstFocusable] = getSidebarFocusableElements();
+    firstFocusable?.focus({ preventScroll: true });
+}
+
+function getSidebarFocusableElements(): HTMLElement[] {
+    if (!mobileSidebarRef.value) return [];
+    const selector =
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(
+        mobileSidebarRef.value.querySelectorAll<HTMLElement>(selector)
+    ).filter(
+        (el) =>
+            !el.hasAttribute('disabled') &&
+            el.tabIndex !== -1 &&
+            !el.getAttribute('aria-hidden')
+    );
+}
+
+function onSidebarKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        closeSidebar();
+        return;
+    }
+
+    if (event.key !== 'Tab') return;
+
+    const focusable = getSidebarFocusableElements();
+    if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+    }
+
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    const active = document.activeElement as HTMLElement | null;
+
+    if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+    } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+    }
+}
+
+function lockBodyScroll() {
+    if (!import.meta.client) return;
+    const body = document.body;
+    if (previousBodyOverflow === null) {
+        previousBodyOverflow = body.style.overflow || '';
+    }
+    body.style.overflow = 'hidden';
+}
+
+function unlockBodyScroll() {
+    if (!import.meta.client) return;
+    const body = document.body;
+    if (previousBodyOverflow !== null) {
+        body.style.overflow = previousBodyOverflow;
+        previousBodyOverflow = null;
+    }
+}
+
 // Load docmap on mount
 onMounted(async () => {
     try {
@@ -395,6 +642,40 @@ watch(
     { immediate: true }
 );
 
+watch(isMobile, (mobile) => {
+    if (!mobile && sidebarOpen.value) {
+        closeSidebar({ restoreFocus: false });
+    }
+});
+
+watch(
+    () => route.path,
+    () => {
+        if (isMobile.value && sidebarOpen.value) {
+            closeSidebar({ restoreFocus: false });
+        }
+    }
+);
+
+watch(sidebarOpen, async (open) => {
+    if (!import.meta.client) return;
+
+    if (open) {
+        lastFocusedElement = document.activeElement as HTMLElement | null;
+        lockBodyScroll();
+        await nextTick();
+        focusFirstSidebarItem();
+    } else {
+        unlockBodyScroll();
+        await nextTick();
+        if (shouldRestoreFocus && lastFocusedElement) {
+            lastFocusedElement.focus({ preventScroll: true });
+        }
+        lastFocusedElement = null;
+        shouldRestoreFocus = true;
+    }
+});
+
 // Watch route changes to load new content (immediate to prevent flicker)
 watch(
     () => route.path,
@@ -427,6 +708,12 @@ ${
         )
         .join('\n') || ''
 }
+
+onBeforeUnmount(() => {
+    if (sidebarOpen.value) {
+        unlockBodyScroll();
+    }
+});
 `;
         return;
     }
@@ -729,5 +1016,17 @@ function toggleTheme() {
     opacity: 1;
     max-height: 600px;
     transform: translateY(0);
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 </style>
