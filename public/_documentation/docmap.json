@@ -176,6 +176,18 @@
                     "summary": "Typed helper for subscribing to hook events with automatic lifecycle cleanup. Registers callbacks on component mount and safely deregisters on unmount or HMR, preventing listener leaks.\\n\\n`useHookEffect` wraps the hook engine with Vue lifecycle awareness:\\n\\n-   Supports every hook name with full TypeScript inference\\n-   Auto-detaches on `onBeforeUnmount` and HMR resets\\n-   Lets you override hook kind (action/filter) and priority\\n-   Returns a disposer for manual cleanup if needed"
                 },
                 {
+                    "name": "useResponsiveState.md",
+                    "path": "/composables/useResponsiveState",
+                    "category": "Core",
+                    "summary": "Centralised responsive state helper that tracks viewport size and provides consistent mobile/desktop detection across your app. Enables SSR-safe responsive rendering without hydration mismatches.\\n\\n`useResponsiveState` solves the hydration mismatch problem:\\n\\n-   Detect if viewport is mobile (≤768px) or desktop (>768px)\\n-   SSR-safe: assumes desktop during SSR to prevent hydration issues\\n-   Reactive state that updates on resize\\n-   Consistent breakpoints across your entire app"
+                },
+                {
+                    "name": "useScrollLock.md",
+                    "path": "/composables/useScrollLock",
+                    "category": "Core",
+                    "summary": "Utility composable that locks and unlocks body (or any element) scroll, essential for mobile overlays and modals. Manages `overflow` CSS property with automatic cleanup and optional reactive control.\\n\\n`useScrollLock` solves mobile UX problems:\\n\\n-   Lock scroll when showing overlays/modals\\n-   Automatic cleanup on component unmount\\n-   Optional reactive control via ref\\n-   Preserves existing overflow values"
+                },
+                {
                     "name": "useMultiPane.md",
                     "path": "/composables/useMultiPane",
                     "category": "Core",
