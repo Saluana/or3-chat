@@ -1,0 +1,439 @@
+{
+    "title": "OR3 Docs",
+    "description": "Documentation for the OR3 project",
+    "version": "1.0.0",
+    "sections": [
+        {
+            "title": "Getting Started",
+            "path": "/start",
+            "files": [
+                {
+                    "name": "overview.md",
+                    "path": "/start/overview",
+                    "category": "Introduction",
+                    "summary": "Covers what OR3 is, its core features. Quick refresher: Or3.chat is an open source, fast, extendable, and privacy-focused AI chat interface that lets developers build customized chat experiences.\n\nPhilosophy: Or3 prioritizes being a lean, polished foundation rather than adding bloat. Users can extend it themselves, request features, or build plugins using tools like Cursor or Claude Code.\n\nPrivacy First: Or3 doesn't provide LLM access or tokens. Instead, users connect their OpenRouter account via OAuth PKCE and pay for their own tokens. API keys are stored locally in indexedDB—never on external servers. The plugin system allows optional encryption, giving developers full control over security according to their threat model."
+                },
+                {
+                    "name": "plugin-quickstart.md",
+                    "path": "/start/plugin-quickstart",
+                    "category": "Tutorial",
+                    "summary": "Hands-on tutorial showing how to create plugins for OR3. Covers dashboard pages, chat message actions, and sidebar extensions with complete working examples and best practices."
+                }
+            ]
+        },
+        {
+            "title": "Composables",
+            "path": "/composables",
+            "files": [
+                {
+                    "name": "useActivePrompt.md",
+                    "path": "/composables/useActivePrompt",
+                    "category": "Chat",
+                    "summary": "Reactive composable that manages the currently selected system prompt for chat conversations.\\n\\nThis composable provides a module-singleton selection state (id + content) so multiple components\\nand composables can read the active system prompt consistently without creating duplicate refs.\\n\\nIt integrates with the local prompt database (`~/db/prompts`) to load prompt content and emits a\\nhook event after a prompt is selected so other subsystems can react."
+                },
+                {
+                    "name": "useAiSettings.md",
+                    "path": "/composables/useAiSettings",
+                    "category": "Chat",
+                    "summary": "`useAiSettings` gives you a reactive settings object and helper methods to read, update, and reset AI chat preferences. It sanitises input, survives hot-module reloads, and only touches storage in the browser.\\n\\n-   Tracks the current settings in a single global store (HMR-safe)\\n-   Loads initial values from `localStorage` once per session\\n-   Persists updates automatically\\n-   Normalises user input to avoid bad types or unknown keys"
+                },
+                {
+                    "name": "useChat.md",
+                    "path": "/composables/useChat",
+                    "category": "Chat",
+                    "summary": "`useChat` is the heart of every chat conversation. When you want to:\\n\\n-   Send a message to an AI model\\n-   Display a conversation with streaming responses\\n-   Retry a failed message\\n-   Show loading states while the AI is thinking\\n-   Cancel an ongoing AI response"
+                },
+                {
+                    "name": "useChatInputBridge.md",
+                    "path": "/composables/useChatInputBridge",
+                    "category": "Chat",
+                    "summary": "Lightweight registry that lets external features (pane plugins, slash commands, automation) inject chat messages into an existing chat input without duplicating business logic. `useChatInputBridge` exposes a tiny, reactive directory of chat inputs keyed by `paneId`. Chat containers register their imperative API and the bridge forwards programmatic sends through the same UI pipeline a user click would trigger.\\n\\n-   Keeps message handling inside `ChatInputDropper`\\n-   Avoids rehydrating chat state or bypassing hooks\\n-   Supports multiple panes/windows\\n-   Safe in dev (HMR-resilient)"
+                },
+                {
+                    "name": "useDefaultPrompt.md",
+                    "path": "/composables/useDefaultPrompt",
+                    "category": "Chat",
+                    "summary": "`useDefaultPrompt` gives you a reactive `defaultPromptId` alongside helpers to set or clear it. It wraps the `kv` table, keeps a singleton ref of the active prompt ID, and fires hooks when the default changes so other modules can react."
+                },
+                {
+                    "name": "useMessageActions.md",
+                    "path": "/composables/useMessageActions",
+                    "category": "Chat",
+                    "summary": "Extensible action registry for chat messages. Lets core UI and plugins add contextual buttons (copy, retry, favorite, etc.) in a consistent order with minimal wiring. Maintains a global list of action descriptors keyed by an id. Components register their actions once, and when rendering an individual message you can pull the filtered, sorted list for that message’s role."
+                },
+                {
+                    "name": "useMessageEditing.md",
+                    "path": "/composables/useMessageEditing",
+                    "category": "Chat",
+                    "summary": "Encapsulates the UI + persistence flow for editing a chat message. Handles toggling edit mode, keeping a draft buffer, and writing the updated content back to Dexie.\\n\\n`useMessageEditing` wraps all state required for an inline message editor:\\n\\n-   Tracks whether the message is currently being edited\\n-   Keeps a draft copy of the text with undo (cancel) support\\n-   Persists the change to the `messages` table via `upsert`\\n-   Works with plain objects or `Ref`-wrapped messages (streaming tail vs finalized)"
+                },
+                {
+                    "name": "useModelStore.md",
+                    "path": "/composables/useModelStore",
+                    "category": "Chat",
+                    "summary": "Shared catalog + favorites manager for OpenRouter models. Centralises fetching, caching, and filtering so every pane sees the same list without repeated network hits.\\n\\n`useModelStore` exposes reactive state for the model catalog, favorites, search query, and filters. It layers three cache tiers (memory → Dexie → network) and dedupes concurrent fetches. Consumers can refresh, invalidate, or persist favorites with a single call.\\n\\n-   Hydrates catalog from memory, Dexie (`kv` table), or network\\n-   Persists the catalog in Dexie for 48 hours by default\\n-   Dedupes in-flight fetches across callers\\n-   Manages favorites with persistence to `kv`\\n-   Exposes helper refs for search/filter UI"
+                },
+                {
+                    "name": "useStreamAccumulator.md",
+                    "path": "/composables/useStreamAccumulator",
+                    "category": "Chat",
+                    "summary": "Frame-batched accumulator for AI streaming tokens. It receives partial text/reasoning deltas, buffers them, and flushes at most once per animation frame so the UI stays smooth.\\n\\n`useStreamAccumulator` replaces ad-hoc refs for building assistant responses. It normalises streaming flow with a single API:\\n\\n-   `append()` collects text or reasoning deltas without immediate DOM churn\\n-   `finalize()` seals the stream and records errors/abort state\\n-   `reset()` prepares for the next stream\\n-   `state` exposes reactive fields (`text`, `reasoningText`, `isActive`, etc.) any component can watch\\n\\nThe accumulator automatically batches writes via `requestAnimationFrame` when available, falling back to microtasks in environments without rAF (tests, SSR stubs)."
+                },
+                {
+                    "name": "useDocumentHistoryActions.md",
+                    "path": "/composables/useDocumentHistoryActions",
+                    "category": "Documents",
+                    "summary": "Registry composable that lets plugins inject extra actions into the document history sidebar menu. Keeps a global list of action buttons, sorts them, and survives HMR so dashboard add-ons can extend the UI safely."
+                },
+                {
+                    "name": "useDocumentsList.md",
+                    "path": "/composables/useDocumentsList",
+                    "category": "Documents",
+                    "summary": "Lightweight fetch-and-refresh composable for the documents sidebar. Loads recent Dexie `documents` entries, trims heavy fields, and keeps the list fresh when database hooks fire."
+                },
+                {
+                    "name": "useDocumentsStore.md",
+                    "path": "/composables/useDocumentsStore",
+                    "category": "Documents",
+                    "summary": "Stateful document manager that loads Dexie records, stages edits, debounces autosaves, and coordinates pane-level hooks. It is the backbone for rich text documents in OR3’s multi-pane UI. `useDocumentsStore` exposes a suite of helpers around a shared `documentsMap` cache."
+                },
+                {
+                    "name": "useEditorNodes.md",
+                    "path": "/composables/useEditorNodes",
+                    "category": "Editor",
+                    "summary": "Registry trio that lets plugins add TipTap nodes, marks, and extensions to the OR3 editor without patching the core component. Maintains global maps, keeps ordering stable, and plays nicely with HMR. `useEditorNodes` exports helpers that manage three registries:\\n\\n-   `registerEditorNode` / `listEditorNodes` for TipTap `Node` extensions.\\n-   `registerEditorMark` / `listEditorMarks` for TipTap `Mark` extensions.\\n-   `registerEditorExtension` / `listEditorExtensions` for generic TipTap extensions.\\n\\nEach registry sorts entries by `order` (default 200) and stores them on `globalThis` so reloads don’t duplicate items.\\n"
+                },
+                {
+                    "name": "useEditorToolbar.md",
+                    "path": "/composables/useEditorToolbar",
+                    "category": "Editor",
+                    "summary": "Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dropdowns to the retro editor header while keeping the UI reactive and order-aware. `useEditorToolbar` exposes helpers to manage toolbar buttons:\\n\\n-   `registerEditorToolbarButton()` adds or replaces a button definition.\\n-   `useEditorToolbarButtons(editorRef)` returns a computed, filtered, and sorted array of buttons ready to render.\\n-   `unregisterEditorToolbarButton()` cleans up during teardown/HMR.\\n-   `listRegisteredEditorToolbarButtonIds()` lets authors inspect the registry.\\n\\nButtons can customise visibility, active state, icons, ordering, and click behaviour."
+                },
+                {
+                    "name": "useComposerActions.md",
+                    "path": "/composables/useComposerActions",
+                    "category": "Sidebar",
+                    "summary": "Composer action registry powering the quick-action buttons beneath the chat composer. Lets plugins add buttons that hook into the active editor, thread, or pane context with visibility and disabled logic."
+                },
+                {
+                    "name": "useHeaderActions.md",
+                    "path": "/composables/useHeaderActions",
+                    "category": "Sidebar",
+                    "summary": "Sidebar header action registry that powers the icon buttons in the chrome header (new thread, toggle layout, etc.). Lets plugins contribute actions that react to route, breakpoint, or custom context."
+                },
+                {
+                    "name": "useDashboardPlugins.md",
+                    "path": "/composables/useDashboardPlugins",
+                    "category": "Dashboard",
+                    "summary": "Dashboard extension hub that lets first- and third-party features register launcher tiles, lazy-loaded pages, and capability flags for the retro dashboard. It centralises plugin discovery, page resolution, and in-app navigation state. Useful for plugin settings, onboarding flows, or custom tools."
+                },
+                {
+                    "name": "usePaneDocuments.md",
+                    "path": "/composables/usePaneDocuments",
+                    "category": "Documents",
+                    "summary": "Pane-aware controller that lets the dashboard create or switch documents inside the multi-pane workspace. It glues `useDocumentsStore`, pane state, and hook events into two ergonomic methods."
+                },
+                {
+                    "name": "useProjectTreeActions.md",
+                    "path": "/composables/useProjectTreeActions",
+                    "category": "Projects",
+                    "summary": "Extensible action registry for the project tree sidebar. Lets plugins add context buttons to project rows or child entries (documents, chats) with ordering and visibility controls."
+                },
+                {
+                    "name": "useProjectsCrud.md",
+                    "path": "/composables/useProjectsCrud",
+                    "category": "Projects",
+                    "summary": "Project CRUD toolkit that wraps Dexie helpers with validation, timestamping, and data normalisation for OR3 project records."
+                },
+                {
+                    "name": "useSidebarSearch.md",
+                    "path": "/composables/useSidebarSearch",
+                    "category": "Sidebar",
+                    "summary": "Unified search composable that indexes threads, projects, and documents for the sidebar search bar. Uses Orama for fast client-side search with a substring fallback to guarantee results."
+                },
+                {
+                    "name": "useSidebarSections.md",
+                    "path": "/composables/useSidebarSections",
+                    "category": "Sidebar",
+                    "summary": "Sidebar chrome registry that lets plugins add new panels (top/main/bottom stacks) and footer actions to the OR3 sidebar. Provides ordering, placement, visibility, and disabled control."
+                },
+                {
+                    "name": "useThreadHistoryActions.md",
+                    "path": "/composables/useThreadHistoryActions",
+                    "category": "Threads",
+                    "summary": "Registry for adding custom actions to the thread history sidebar dropdown. Mirrors the document history registry but targets threads, letting plugins inject export, share, or workflow buttons."
+                },
+                {
+                    "name": "useThreadSearch.md",
+                    "path": "/composables/useThreadSearch",
+                    "category": "Threads",
+                    "summary": "Thread-specific search composable that powers the sidebar query field. Builds a small Orama index over thread titles, debounces input, and falls back to substring matching when required."
+                },
+                {
+                    "name": "useHookEffect.md",
+                    "path": "/composables/useHookEffect",
+                    "category": "Core",
+                    "summary": "Typed helper for subscribing to hook events with automatic lifecycle cleanup. Registers callbacks on component mount and safely deregisters on unmount or HMR, preventing listener leaks.\\n\\n`useHookEffect` wraps the hook engine with Vue lifecycle awareness:\\n\\n-   Supports every hook name with full TypeScript inference\\n-   Auto-detaches on `onBeforeUnmount` and HMR resets\\n-   Lets you override hook kind (action/filter) and priority\\n-   Returns a disposer for manual cleanup if needed"
+                },
+                {
+                    "name": "useMultiPane.md",
+                    "path": "/composables/useMultiPane",
+                    "category": "Core",
+                    "summary": "Multi-pane workspace manager that powers OR3's split-view chat and document editing. Tracks active panes, loads message history, enforces pane limits, and fires lifecycle hooks so plugins stay in sync.\\n\\n`useMultiPane` centralizes all window management logic:\\n\\n-   Creates, focuses, and closes panes with fallback enforcement\\n-   Loads chat messages on demand (Dexie-backed)\\n-   Prevents UI focus bugs with index tracking\\n-   Emits hook events for pane open/close/switch lifecycle\\n-   Supports configurable pane caps and custom loaders"
+                },
+                {
+                    "name": "usePanePrompt.md",
+                    "path": "/composables/usePanePrompt",
+                    "category": "Core",
+                    "summary": "Simple per-pane prompt staging utility that lets users pick a system prompt before creating a thread. Stores pending prompt IDs in a reactive map, so the next thread creation uses the selected prompt.\\n\\n`usePanePrompt` backs the prompt selector UI:\\n\\n-   `setPanePendingPrompt(paneId, promptId)` to stage a prompt\\n-   `getPanePendingPrompt(paneId)` to read it before thread creation\\n-   `clearPanePendingPrompt(paneId)` to forget it once applied\\n-   Reactive map survives HMR and integrates with devtools"
+                },
+                {
+                    "name": "usePreviewCache.md",
+                    "path": "/composables/usePreviewCache",
+                    "category": "Core",
+                    "summary": "LRU-style in-memory cache for preview assets (images, PDFs, etc.) with blob URL creation, byte tracking, and smart eviction. Pin entries to keep them while in view, and track hit/miss metrics for telemetry.\\n\\n`usePreviewCache` manages preview rendering:\\n\\n-   `ensure(key, loader, pin?)` to fetch or reuse cached URLs\\n-   Tracks hits, misses, and evictions for instrumentation\\n-   Supports pinning entries to prevent eviction\\n-   Exposes `useSharedPreviewCache()` for app-wide singleton\\n-   Normalises options and handles blob URL lifecycle safely"
+                },
+                {
+                    "name": "useWorkspaceBackup.md",
+                    "path": "/composables/useWorkspaceBackup",
+                    "category": "Core",
+                    "summary": "Full-featured workspace export/import controller that coordinates Dexie backups, progress tracking, and hook events. Streams backups to File System API or StreamSaver, peeks backup metadata before import, and supports replace/append modes.\\n\\n`useWorkspaceBackup` manages data persistence workflows:\\n\\n-   `exportWorkspace()` to stream entire database to file\\n-   `peekBackup(file)` to show metadata before import\\n-   `importWorkspace(file, mode)` with replace or append strategies\\n-   Reactive `state` for real-time UI binding (loading, progress, errors)\\n-   Dispatches hooks for extension telemetry"
+                }
+            ]
+        },
+        {
+            "title": "Hooks",
+            "path": "/hooks",
+            "files": [
+                {
+                    "name": "hook-catalog.md",
+                    "path": "/hooks/hook-catalog",
+                    "category": "Reference",
+                    "summary": "Authoritative reference table of all available hooks with their argument shapes and return values. Derived from hook keys and payload types so developers can quickly see what each hook expects and what it should return."
+                },
+                {
+                    "name": "hooks.md",
+                    "path": "/hooks/hooks",
+                    "category": "Core",
+                    "summary": "Lightweight hook engine powering OR3's action/filter system with priority scheduling, async support, and diagnostics. Register side-effect listeners (actions) or value transformers (filters), match with wildcards, and track execution timing."
+                },
+                {
+                    "name": "typed-hooks.md",
+                    "path": "/hooks/typed-hooks",
+                    "category": "Core",
+                    "summary": "TypeScript wrapper around the hook engine that preserves runtime behavior while delivering full type inference. Callback signatures are inferred from hook names, and kind (`action`/`filter`) is picked automatically from the hook name."
+                },
+                {
+                    "name": "hook-types.md",
+                    "path": "/hooks/hook-types",
+                    "category": "Types",
+                    "summary": "TypeScript toolkit defining hook names, payload interfaces, and inference helpers. Exposes structured payload types for AI, UI panes, branching, and DB entities, plus utility types for plugins to validate hook names and callback signatures."
+                },
+                {
+                    "name": "hook-keys.md",
+                    "path": "/hooks/hook-keys",
+                    "category": "Types",
+                    "summary": "Catalog of well-known hook keys with typed helpers for ergonomic registration. Defines string literal unions for UI/AI/DB hooks, exposes the `typedOn(hooks)` wrapper for auto-completing hook names in your editor, and maps payloads to argument tuples."
+                },
+                {
+                    "name": "useHooks.md",
+                    "path": "/hooks/useHooks",
+                    "category": "Integration",
+                    "summary": "Nuxt composable returning the app-wide typed hook engine, with fallback creation for tests and SSR environments. Wraps the injected `$hooks` instance and caches the typed wrapper so listeners persist across calls."
+                }
+            ]
+        },
+        {
+            "title": "Database",
+            "path": "/database",
+            "files": [
+                {
+                    "name": "attachments.md",
+                    "path": "/database/attachments",
+                    "category": "Entities",
+                    "summary": "Attachment table helpers for creating, updating, and deleting upload metadata with full hook coverage. Validates payloads, emits before/after hooks, supports soft and hard delete, and tracks revision clocks."
+                },
+                {
+                    "name": "branching.md",
+                    "path": "/database/branching",
+                    "category": "Threads",
+                    "summary": "Utilities for forking threads, retry-branching assistant replies, and building merged conversation contexts across Dexie tables. Handles branch modes (reference vs copy), clones messages when needed, and keeps indexes dense."
+                },
+                {
+                    "name": "client.md",
+                    "path": "/database/client",
+                    "category": "Core",
+                    "summary": "Dexie database client that defines the `Or3DB` schema and typed table instances for every entity. Establishes the `or3-db` IndexedDB database with version 5, collapses historical migrations, and keeps existing installs compatible."
+                },
+                {
+                    "name": "dbTry.md",
+                    "path": "/database/dbTry",
+                    "category": "Utilities",
+                    "summary": "Error-handling wrapper around Dexie calls that traps quota exceptions and standardizes error metadata. Emits toast-friendly `ERR_DB_QUOTA_EXCEEDED` errors, tags other failures as read/write errors, and optionally rethrows after logging."
+                },
+                {
+                    "name": "documents.md",
+                    "path": "/database/documents",
+                    "category": "Entities",
+                    "summary": "Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration. Serializes rich-text documents without a new Dexie store, provides soft/hard delete paths, and normalizes titles."
+                },
+                {
+                    "name": "files-select.md",
+                    "path": "/database/files-select",
+                    "category": "Utilities",
+                    "summary": "Read-only helpers for paging `file_meta` rows when browsing uploads or the recycle bin. Filters image-like files by MIME type or kind, applies simple pagination over `updated_at` index, and provides rename helpers."
+                },
+                {
+                    "name": "files-util.md",
+                    "path": "/database/files-util",
+                    "category": "Utilities",
+                    "summary": "Utility helpers for enforcing message file limits and serializing file hash arrays. Resolves max files per message from env variables, safely parses and dedupes hashes, and preserves insertion order when serializing."
+                },
+                {
+                    "name": "files.md",
+                    "path": "/database/files",
+                    "category": "Entities",
+                    "summary": "File storage layer that deduplicates blobs by hash, keeps metadata in Dexie, and exposes hook-friendly lifecycle helpers. Stores binary blobs separately from metadata, emits numerous hooks for validation/tracking, and supports ref counting."
+                },
+                {
+                    "name": "index.md",
+                    "path": "/database/index",
+                    "category": "Core",
+                    "summary": "Barrel exports for the database layer, re-exporting Dexie client, CRUD helpers, and common type aliases. Groups helpers into semantic objects (create, upsert, queries, del, tx, kv) so callers can import cleanly."
+                },
+                {
+                    "name": "kv.md",
+                    "path": "/database/kv",
+                    "category": "Entities",
+                    "summary": "Key-value helpers for storing small preference or credential blobs in the Dexie `kv` table. Validates payloads, wraps reads/writes in error handling, and integrates with the hook system for before/after actions."
+                },
+                {
+                    "name": "message-files.md",
+                    "path": "/database/message-files",
+                    "category": "Messages",
+                    "summary": "Helpers for attaching and detaching files to chat messages while maintaining ref counts and serialized hash lists. Resolves file metadata from message hashes, uploads or references new files, and atomically updates messages inside Dexie transactions."
+                },
+                {
+                    "name": "messages.md",
+                    "path": "/database/messages",
+                    "category": "Messages",
+                    "summary": "Thread message CRUD utilities with hook integration, sparse indexing, and attachment support. Manages sparse indexes to support fast insertion, exposes transactional helpers for append/move/copy/insert, and provides normalization tools."
+                },
+                {
+                    "name": "posts.md",
+                    "path": "/database/posts",
+                    "category": "Entities",
+                    "summary": "Generic post storage built on the `posts` Dexie table; used for lightweight CMS data like release notes or docs. Validates posts, normalizes meta payloads to JSON, and exposes CRUD helpers plus simple search utilities."
+                },
+                {
+                    "name": "projects.md",
+                    "path": "/database/projects",
+                    "category": "Entities",
+                    "summary": "CRUD helpers for project metadata stored in the `projects` Dexie table. Validates incoming project objects, wraps persistence in error handling, and emits hook actions/filters for every operation."
+                },
+                {
+                    "name": "prompts.md",
+                    "path": "/database/prompts",
+                    "category": "Entities",
+                    "summary": "Prompt library built on the shared `posts` table (`postType: 'prompt'`) with TipTap JSON payloads. Normalizes titles, serializes content, reuses hook conventions, and supports soft/hard delete flows."
+                },
+                {
+                    "name": "schema.md",
+                    "path": "/database/schema",
+                    "category": "Core",
+                    "summary": "Central Zod schemas and generated TypeScript types for all Dexie tables. Defines runtime validation for every entity, supplies create-specific schemas that auto-populate IDs/timestamps, and exports inferred types for strong typing."
+                },
+                {
+                    "name": "threads.md",
+                    "path": "/database/threads",
+                    "category": "Threads",
+                    "summary": "Thread CRUD and query helpers with hook integration, branching support, and system prompt utilities. Creates/upserts threads, handles soft/hard delete, searches by title, supports child-thread queries, and stores prompt references."
+                },
+                {
+                    "name": "util.md",
+                    "path": "/database/util",
+                    "category": "Utilities",
+                    "summary": "Shared helpers for parsing with Zod, generating IDs, and producing Unix timestamps. Wraps `schema.safeParse` to throw readable errors, provides `nowSec()` for consistent timestamps, and offers `newId()` with fallback ID generation."
+                }
+            ]
+        },
+        {
+            "title": "Auth",
+            "path": "/auth",
+            "files": [
+                {
+                    "name": "useOpenrouter.md",
+                    "path": "/auth/useOpenrouter",
+                    "category": "Authentication",
+                    "summary": "Authentication composable for OpenRouter PKCE login flow. Manages the OAuth-like authentication process, handles PKCE code challenge/verifier generation, redirects with security parameters, and logs out users."
+                },
+                {
+                    "name": "useUserApiKey.md",
+                    "path": "/auth/useUserApiKey",
+                    "category": "Authentication",
+                    "summary": "Composable for managing the OpenRouter API key in shared application state. Provides reactive access to the stored API key with sync between global state and Dexie database."
+                },
+                {
+                    "name": "openrouter-auth.md",
+                    "path": "/auth/openrouter-auth",
+                    "category": "Exchange",
+                    "summary": "Server-safe function that exchanges an OpenRouter authorization code for an API key. Handles PKCE code verification and retrieves the user's API key after successful authentication."
+                },
+                {
+                    "name": "openrouter-build.md",
+                    "path": "/auth/openrouter-build",
+                    "category": "Messages",
+                    "summary": "Utility for building OpenAI-compatible message arrays with hydrated images and files. Converts internal message format to OpenRouter API format with support for image deduplication, limits, and historical inclusion policies."
+                },
+                {
+                    "name": "models-service.md",
+                    "path": "/auth/models-service",
+                    "category": "Models",
+                    "summary": "Service for fetching, caching, and filtering OpenRouter's model catalog. Provides utilities to query available models by text, modalities, context length, parameters, and pricing tier with 1-hour cache TTL."
+                }
+            ]
+        },
+        {
+            "title": "Utils",
+            "path": "/utils",
+            "files": [
+                {
+                    "name": "openrouterStream.md",
+                    "path": "/utils/openrouterStream",
+                    "category": "Streaming",
+                    "summary": "Low-level streaming helper for OpenRouter API responses. Handles SSE (Server-Sent Events) parsing, tool calling, reasoning, images, and text chunks with proper buffering and accumulation.\n\nopenrouterStream` is an async generator that opens a streaming connection to OpenRouter's `/chat/completions` endpoint, parses incoming SSE data into structured events, handles multi-part tool calls streamed across chunks, and provides normalized event types for easy consumption."
+                },
+                {
+                    "name": "errors.md",
+                    "path": "/utils/errors",
+                    "category": "Error Handling",
+                    "summary": "Centralized error utility for OR3. Provides error types, factories, reporting, retry logic, and duplicate suppression with automatic secret scrubbing and hook integration.\n\n`errors.ts` standardizes error creation, ensures secrets never leak, and integrates with the hook system so other modules can react to failures. Features include standardized error types, error factories, centralized reporting with toast notifications, secret scrubbing, duplicate suppression, hook integration, and simple retry helpers."
+                }
+            ]
+        },
+        {
+            "title": "Types",
+            "path": "/types",
+            "files": [
+                {
+                    "name": "hooks.md",
+                    "path": "/types/hooks",
+                    "category": "Hooks",
+                    "summary": "Canonical reference for every exported TypeScript type and interface that powers the hook engine. Groups primitives (HookKind, RegisterOptions, HookEngine), typed wrappers, and payload generics so you can build type-safe plugins."
+                },
+                {
+                    "name": "database.md",
+                    "path": "/types/database",
+                    "category": "Database",
+                    "summary": "Reference for every exported type and interface defined under `app/db`. Describes schema-derived entities (Project, Thread, Message, etc.), helper payloads, and Dexie table contracts so you can strongly type database operations."
+                },
+                {
+                    "name": "composables.md",
+                    "path": "/types/composables",
+                    "category": "Composables",
+                    "summary": "Canonical reference for every exported TypeScript type and interface defined under `app/composables`. Covers shared registry contracts, workspace state shapes, streaming accumulators, and plugin extension point signatures."
+                }
+            ]
+        }
+    ]
+}

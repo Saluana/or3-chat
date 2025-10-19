@@ -1,0 +1,173 @@
+.prose-retro {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue',
+        sans-serif;
+    font-size: 16px;
+    color: var(--md-on-surface);
+}
+
+.prose-retro :deep(h1),
+.prose-retro :deep(h2),
+.prose-retro :deep(h3),
+.prose-retro :deep(h4) {
+    font-family: system-ui !important;
+    color: var(--md-primary);
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+.prose-retro :deep(h1) {
+    font-size: 2rem;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    padding-bottom: 0.5rem;
+}
+
+.prose-retro :deep(h2) {
+    font-size: 1.5rem;
+}
+
+.prose-retro :deep(h3) {
+    font-size: 1.25rem;
+}
+
+.prose-retro :deep(a) {
+    color: var(--md-primary);
+    text-decoration: underline;
+}
+
+.prose-retro :deep(a:hover) {
+    color: var(--md-primary-variant);
+}
+
+.prose-retro :deep(code) {
+    background: var(--md-surface-container);
+    padding: 0.1rem 0.1rem;
+    color: var(--md-on-surface);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+@media (prefers-color-scheme: dark) {
+    .prose-retro :deep(code) {
+        color: white !important;
+    }
+}
+
+.prose-retro :deep(pre) {
+    padding: 1rem;
+    border-radius: 3px;
+    border: 2px solid var(--md-inverse-surface);
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-weight: 505;
+}
+
+.prose-retro :deep(pre code) {
+    background: transparent;
+    padding: 0;
+    border: none;
+    font-size: 16px;
+}
+
+/* Streamdown code blocks */
+.prose-retro :deep([data-streamdown='code-block']) {
+    margin: 1rem 0;
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+/* Streamdown code blocks */
+.prose-retro :deep([data-streamdown='code-body']) {
+    padding-bottom: 0 !important;
+}
+
+/* Streamdown code blocks */
+.prose-retro :deep([data-streamdown='pre']) {
+    padding-bottom: 20px !important;
+}
+
+.prose-retro :deep([data-streamdown='code-block-header']) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    background: var(--md-primary-container);
+    border-bottom: 2px solid var(--md-inverse-surface);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+}
+
+.prose-retro :deep([data-streamdown='code-lang']) {
+    text-transform: uppercase;
+    color: var(--md-primary);
+    letter-spacing: 0.5px;
+}
+
+.prose-retro :deep([data-streamdown='code-body']) {
+    padding: 1rem;
+    overflow-x: auto;
+}
+
+.prose-retro :deep([data-streamdown='code-body'] pre) {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.prose-retro :deep([data-streamdown='copy-button']) {
+    padding: 0.25rem 0.5rem;
+    background: var(--md-primary);
+    color: white;
+    border: 1px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.2s;
+}
+
+.prose-retro :deep([data-streamdown='copy-button']:hover) {
+    background: var(--md-primary-variant);
+}
+
+.prose-retro :deep([data-streamdown='table-wrapper']) {
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+.prose-retro :deep(blockquote) {
+    border-left: 4px solid var(--md-primary);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    font-style: italic;
+}
+
+.prose-retro :deep(ul),
+.prose-retro :deep(ol) {
+    margin: 1rem 0;
+    padding-left: 2rem;
+}
+
+.prose-retro :deep(li) {
+    margin: 0.5rem 0;
+}
+
+.prose-retro :deep(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.prose-retro :deep(th),
+.prose-retro :deep(td) {
+    border: 2px solid var(--md-inverse-surface);
+    padding: 0.5rem;
+    text-align: left;
+    font-size: 16px;
+}
+
+.prose-retro :deep(th) {
+    background: var(--md-primary-container);
+    font-weight: bold;
+}

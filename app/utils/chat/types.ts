@@ -32,8 +32,41 @@ export interface SendMessageParams {
     online: boolean;
 }
 
+export interface ToolCall {
+    id: string;
+    type: 'function';
+    function: {
+        name: string;
+        arguments: string; // JSON string, parsed by consumer
+    };
+}
+
+export interface ToolDefinition {
+    type: 'function';
+    function: {
+        name: string;
+        description: string;
+        parameters: {
+            type: 'object';
+            properties: Record<string, any>;
+            required?: string[];
+        };
+    };
+}
+
+export type ToolChoice =
+    | 'auto'
+    | 'none'
+    | {
+          type: 'function';
+          function: {
+              name: string;
+          };
+      };
+
 export type ORStreamEvent =
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }
     | { type: 'reasoning'; text: string }
+    | { type: 'tool_call'; tool_call: ToolCall }
     | { type: 'done' };

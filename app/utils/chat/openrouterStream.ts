@@ -1,13 +1,15 @@
-import type { ORStreamEvent } from './types';
+import type { ORStreamEvent, ToolChoice, ToolDefinition } from './types';
 
 export async function* openRouterStream(params: {
     apiKey: string;
     model: string;
     orMessages: any[];
     modalities: string[];
+    tools?: ToolDefinition[];
     signal?: AbortSignal;
+    reasoning?: any;
 }): AsyncGenerator<ORStreamEvent, void, unknown> {
-    const { apiKey, model, orMessages, modalities, signal } = params;
+    const { apiKey, model, orMessages, modalities, tools, signal } = params;
 
     const body = {
         model,
@@ -16,11 +18,25 @@ export async function* openRouterStream(params: {
         stream: true,
     } as any;
 
+    if (params.reasoning) {
+        body['reasoning'] = params.reasoning;
+    }
+
+    if (tools) {
+        body['tools'] = tools;
+        body['tool_choice'] = 'auto';
+    }
+
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
+            'HTTP-Referer':
+                (typeof location !== 'undefined' && location.origin) ||
+                'https://or3.chat',
+            'X-Title': 'or3.chat',
+            Accept: 'text/event-stream',
         },
         body: JSON.stringify(body),
         signal,
@@ -77,6 +93,10 @@ export async function* openRouterStream(params: {
     // If debugging of raw packets is needed, consider adding a bounded ring buffer
     // or an opt-in flag that logs selectively.
 
+    // Track tool calls being streamed across chunks
+    // Maps tool call id -> accumulated tool call data
+    const toolCallMap = new Map<string, any>();
+
     function emitImageCandidate(
         url: string | undefined | null,
         indexRef: { v: number },
@@ -120,7 +140,17 @@ export async function* openRouterStream(params: {
                 for (const choice of choices) {
                     const delta = choice.delta || {};
 
-                    // Handle model reasoning
+                    // Handle model reasoning (from reasoning field or reasoning_details)
+                    if (
+                        typeof delta.reasoning === 'string' &&
+                        delta.reasoning
+                    ) {
+                        yield {
+                            type: 'reasoning',
+                            text: delta.reasoning,
+                        };
+                    }
+
                     if (choice?.delta?.reasoning_details) {
                         if (
                             choice?.delta?.reasoning_details[0]?.type ===
@@ -152,11 +182,17 @@ export async function* openRouterStream(params: {
                             }
                         }
                     }
-                    if (typeof delta.text === 'string') {
+                    if (typeof delta.text === 'string' && delta.text) {
                         yield { type: 'text', text: delta.text };
                     }
-                    if (typeof delta.content === 'string') {
+                    if (typeof delta.content === 'string' && delta.content) {
                         yield { type: 'text', text: delta.content };
+                    }
+
+                    if (Array.isArray(delta.tool_calls)) {
+                        for (const toolCall of delta.tool_calls) {
+                            yield { type: 'tool_call', tool_call: toolCall };
+                        }
                     }
 
                     // Streaming images (legacy / OpenAI style delta.images array)
@@ -226,7 +262,7 @@ export async function* openRouterStream(params: {
                         while (imageQueue.length) yield imageQueue.shift()!;
                     }
 
-                    // Or inside message.content array (Gemini style)
+                    // Or inside message.content array (Gemini/OpenAI final message style)
                     const finalContent = choice.message?.content;
                     if (Array.isArray(finalContent)) {
                         let fIxRef2 = { v: 0 };
