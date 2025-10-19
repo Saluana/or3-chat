@@ -108,6 +108,7 @@
                     :class="streamMdClasses"
                     :allowed-image-prefixes="['data:image/']"
                     code-block-show-line-numbers
+                    class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
                 />
                 <!-- legacy rendered html path removed -->
             </div>
@@ -731,9 +732,10 @@ async function runExtraAction(action: ChatMessageAction) {
 
 // Classes applied to <StreamMarkdown> (joined string for TS friendliness)
 const streamMdClasses = [
-    'w-full min-w-0',
+    'w-full min-w-full prose prose-pre:font-mono prose-retro prose-pre:max-w-full prose-pre:overflow-x-auto',
     'prose-table:!w-auto prose-table:table-auto',
     'sm:prose-table:!min-w-max',
+    /*
     'max-[639px]:prose-table:min-w-[560px]',
     'prose-table:break-normal prose-td:whitespace-nowrap prose-th:whitespace-nowrap',
     "[&_[data-streamdown='table']_td:nth-child(2)]:whitespace-normal",
@@ -743,82 +745,12 @@ const streamMdClasses = [
     "[&_div[data-streamdown='table-wrapper']]:overflow-x-auto",
     "[&_div[data-streamdown='table-wrapper']]:w-full",
     "[&_div[data-streamdown='table-wrapper']]:min-w-0",
-    "[&_div[data-streamdown='table-wrapper']]:shrink",
+    "[&_div[data-streamdown='table-wrapper']]:shrink",*/
 ].join(' ');
 </script>
 
 <style scoped>
-/* Large code block/layout guard */
-.message-body pre {
-    max-height: 380px;
-    overflow: auto;
-
-    padding: 0.75rem 0.85rem;
-    line-height: 1.3;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        'Liberation Mono', 'Courier New', monospace;
-}
-.message-body {
-    /* Allow long unbroken words (e.g., headers like "considerations") to wrap and avoid horizontal scroll */
-    overflow-wrap: anywhere;
-    word-break: break-word;
-    max-width: 100%;
-}
-.message-body h1,
-.message-body h2,
-.message-body h3,
-.message-body h4,
-.message-body h5,
-.message-body h6 {
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-/* Prevent accidental horizontal scroll on message container */
-:host,
-.message-body {
-    overflow-x: visible;
-}
-.message-body pre code {
-    white-space: pre;
-    word-break: normal;
-    font-size: 0.78rem;
-    tab-size: 4;
-}
-.message-body pre::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-.message-body pre::-webkit-scrollbar-thumb {
-    background: var(--md-inverse-surface);
-    border-radius: 0;
-}
-.message-body pre::-webkit-scrollbar-track {
-    background: transparent;
-}
-.message-body :not(pre) > code {
-    white-space: pre-wrap;
-    word-break: break-word;
-    font-size: 0.78rem;
-    padding: 2px 4px;
-    border: 1px solid var(--md-inverse-surface);
-    border-radius: 3px;
-    background: var(--md-surface-container-lowest);
-}
-.message-body pre::after {
-    content: '';
-    position: sticky;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 14px;
-    background: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0),
-        rgba(0, 0, 0, 0.45)
-    );
-    display: block;
-    pointer-events: none;
-}
+@import '~/assets/css/prose-retro.css';
 
 .retro-shadow {
     box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
@@ -830,15 +762,6 @@ const streamMdClasses = [
     line-clamp: 6; /* standard property for compatibility */
     -webkit-box-orient: vertical;
     overflow: hidden;
-}
-@media (prefers-color-scheme: light) {
-    .message-body pre::after {
-        background: linear-gradient(
-            to bottom,
-            rgba(255, 255, 255, 0),
-            rgba(255, 255, 255, 0.85)
-        );
-    }
 }
 /* PDF compact thumb */
 .pdf-thumb {
@@ -981,45 +904,6 @@ const streamMdClasses = [
     background: var(--md-surface-container-high);
 }
 
-.message-body :deep([data-streamdown='code-block']) {
-    padding: 0;
-    margin-top: 32px;
-    margin-bottom: 32px;
-    border: none;
-    border-radius: 3px;
-    height: fit-content;
-    overflow-y: hidden;
-    overflow-x: auto;
-    white-space: nowrap;
-    background: var(--md-surface-container-lowest);
-    border: 2px solid var(--md-inverse-surface);
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-.message-body :deep([data-streamdown='code-block-header']) {
-    border-bottom: 2px solid var(--md-inverse-surface);
-    padding-left: 15px;
-    padding-right: 15px;
-}
-
-.message-body :deep([data-streamdown='code-body']) {
-    padding: 0;
-    padding-left: 0px;
-    padding-right: 15px;
-    margin: 0;
-    border: none;
-}
-
-.message-body :deep([data-streamdown='code-body']) pre {
-    border: none;
-    margin-bottom: 0;
-    margin-top: 0px;
-    padding-top: 15px;
-    padding-bottom: 15px;
-    background: var(--md-surface-container-lowest) !important;
-}
-.message-body :deep([data-streamdown='code-lang']) {
-    font: inherit;
-}
 .message-body :deep([data-streamdown='code-line-number']) {
     margin-right: 12px;
     padding: 20px;

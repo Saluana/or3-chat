@@ -64,7 +64,7 @@
                             :square="true"
                             :disabled="!canAddPane"
                             :class="
-                                'retro-btn pointer-events-auto mr-2 ' +
+                                'retro-btn backdrop-blur pointer-events-auto mr-2 ' +
                                 (!canAddPane
                                     ? 'opacity-50 cursor-not-allowed'
                                     : '')
@@ -88,7 +88,7 @@
                             color="neutral"
                             variant="ghost"
                             :square="true"
-                            :class="'retro-btn pointer-events-auto '"
+                            :class="'retro-btn pointer-events-auto backdrop-blur'"
                             :ui="{ base: 'retro-btn' }"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"

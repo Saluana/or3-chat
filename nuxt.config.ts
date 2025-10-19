@@ -12,6 +12,11 @@ export default defineNuxtConfig({
         families: [
             { name: 'Press Start 2P', provider: 'google' },
             { name: 'VT323', provider: 'google' },
+            {
+                name: 'IBM Plex Sans',
+                provider: 'google',
+                weights: ['400', '500', '600', '700'],
+            },
         ],
     },
     nitro: {
