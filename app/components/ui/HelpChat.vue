@@ -17,6 +17,7 @@
                     >
                     <div class="flex gap-1">
                         <UButton
+                            v-if="!isMobile"
                             size="xs"
                             :square="true"
                             :icon="
@@ -245,6 +246,15 @@ const inputRef = ref<{ input?: HTMLInputElement } | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 
 const { isMobile } = useResponsiveState();
+
+// Debug: watch isMobile changes
+watch(
+    isMobile,
+    (val) => {
+        console.log('[HelpChat] isMobile changed to:', val);
+    },
+    { immediate: true }
+);
 
 const containerClass = computed(() =>
     isMobile.value && isExpanded.value

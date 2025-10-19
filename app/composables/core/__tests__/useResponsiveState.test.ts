@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useResponsiveState } from '../useResponsiveState';
 
+// We need to access and reset the internal cache between tests
+// This is a bit of a hack, but necessary since we cache the shared state globally
+let clearSharedState: (() => void) | null = null;
+
 function mockViewport(width: number) {
     Object.defineProperty(window, 'innerWidth', {
         writable: true,
@@ -38,39 +42,53 @@ function mockViewport(width: number) {
 }
 
 describe('useResponsiveState', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         mockViewport(1024);
+        // Reset the composable cache before each test by reloading the module
+        vi.resetModules();
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('returns isMobile = false when viewport > 768px', () => {
+    it('returns isMobile = false when viewport > 768px', async () => {
         mockViewport(1024);
 
-        const { isMobile } = useResponsiveState();
+        const { useResponsiveState: useResponsiveState1 } = await import(
+            '../useResponsiveState'
+        );
+        const { isMobile } = useResponsiveState1();
         expect(isMobile.value).toBe(false);
     });
 
-    it('returns isMobile = true when viewport ≤ 768px', () => {
+    it('returns isMobile = true when viewport ≤ 768px', async () => {
         mockViewport(768);
 
-        const { isMobile } = useResponsiveState();
+        const { useResponsiveState: useResponsiveState2 } = await import(
+            '../useResponsiveState'
+        );
+        const { isMobile } = useResponsiveState2();
         expect(isMobile.value).toBe(true);
     });
 
-    it('returns isMobile = true when viewport < 768px (small mobile)', () => {
+    it('returns isMobile = true when viewport < 768px (small mobile)', async () => {
         mockViewport(375);
 
-        const { isMobile } = useResponsiveState();
+        const { useResponsiveState: useResponsiveState3 } = await import(
+            '../useResponsiveState'
+        );
+        const { isMobile } = useResponsiveState3();
         expect(isMobile.value).toBe(true);
     });
 
-    it('keeps isMobile = false when viewport exceeds 768px threshold', () => {
+    it('keeps isMobile = false when viewport exceeds 768px threshold', async () => {
         mockViewport(769);
 
-        const { isMobile } = useResponsiveState();
+        const { useResponsiveState: useResponsiveState4 } = await import(
+            '../useResponsiveState'
+        );
+        const { isMobile } = useResponsiveState4();
         expect(isMobile.value).toBe(false);
     });
 });

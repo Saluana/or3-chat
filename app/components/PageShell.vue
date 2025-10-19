@@ -562,7 +562,11 @@ const themeAriaLabel = computed(() =>
 );
 
 // --------------- Mobile + layout ---------------
-import { isMobile } from '~/state/global';
+import { useResponsiveState } from '~/composables/core/useResponsiveState';
+
+// Call the shared composable to get the synced mobile state.
+// All components use this same instance, and it auto-syncs to global isMobile for backward compatibility.
+const { isMobile } = useResponsiveState();
 
 const headerActions = useHeaderActions(() => ({
     route,
@@ -582,18 +586,6 @@ async function handleHeaderAction(entry: HeaderActionEntry) {
             error
         );
     }
-}
-// Mobile breakpoint watcher (flattened to avoid build transform issues in nested blocks)
-if (process.client) {
-    const mq = window.matchMedia('(max-width: 640px)');
-    const apply = () => (isMobile.value = mq.matches);
-    onMounted(() => {
-        apply();
-        mq.addEventListener('change', apply);
-    });
-    const dispose = () => mq.removeEventListener('change', apply);
-    onUnmounted(dispose);
-    if (import.meta.hot) import.meta.hot.dispose(dispose);
 }
 const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
 function openMobileSidebar() {

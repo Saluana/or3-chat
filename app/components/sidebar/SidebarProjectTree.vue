@@ -168,7 +168,6 @@
 
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
-import { isMobile } from '~/state/global';
 import {
     normalizeProjectData,
     type ProjectEntry,
