@@ -17,15 +17,15 @@ artifact_id: 30c0f83b-4d5b-4c21-96a3-8a5f0bf8997f
 
 ## 3. Scroll Lock & Focus Management
 
--   [ ] Implement `useScrollLock` utility with cleanup on unmount (Requirements: 2, 5)
--   [ ] Integrate scroll lock into sidebar controller lifecycle (mobile execution only) (Requirements: 2, 5, 6)
+-   [x] Implement `useScrollLock` utility with cleanup on unmount (Requirements: 2, 5)
+-   [x] Integrate scroll lock into sidebar controller lifecycle (mobile execution only) (Requirements: 2, 5, 6)
 
 ## 4. Help Chat Fullscreen Mobile Mode
 
--   [ ] Add responsive layout controller in `app/components/ui/HelpChat.vue` to switch to `fixed inset-0` fullscreen on mobile expand while keeping desktop sizing intact (Requirements: 3, 6)
--   [ ] Adjust chat body and input container styling for mobile readability (Requirements: 4)
--   [ ] Ensure launcher button positions correctly without overlapping critical UI (Requirements: 3)
--   [ ] Confirm desktop chat launcher/panel dimensions remain unchanged (Requirements: 6)
+-   [x] Add responsive layout controller in `app/components/ui/HelpChat.vue` to switch to `fixed inset-0` fullscreen on mobile expand while keeping desktop sizing intact (Requirements: 3, 6)
+-   [x] Adjust chat body and input container styling for mobile readability (Requirements: 4)
+-   [x] Ensure launcher button positions correctly without overlapping critical UI (Requirements: 3)
+-   [x] Confirm desktop chat launcher/panel dimensions remain unchanged (Requirements: 6)
 
 ## 5. Testing & QA
 

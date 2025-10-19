@@ -1,5 +1,5 @@
 <template>
-    <div class="fixed bottom-4 right-4 z-50">
+    <div :class="containerClass">
         <Transition
             enter-active-class="transition-all duration-300 ease-out"
             enter-from-class="opacity-0 scale-95"
@@ -8,16 +8,7 @@
             leave-from-class="opacity-100 scale-100"
             leave-to-class="opacity-0 scale-95"
         >
-            <div
-                v-if="isExpanded"
-                :class="[
-                    'absolute bottom-0 right-0 flex flex-col border-2 border-[var(--md-inverse-surface)] rounded-[3px] transition-all duration-300 ease-in-out retro-shadow bg-[var(--md-surface)]',
-                    isFullscreen && isExpanded
-                        ? 'w-[96dvw] h-[96dvh]'
-                        : 'h-[85dvh] w-[min(40dvw)]',
-                    'overflow-hidden',
-                ]"
-            >
+            <div v-if="isExpanded" :class="panelClass">
                 <div
                     class="flex h-10 items-center justify-between border-b-2 border-[var(--md-inverse-surface)] px-3"
                 >
@@ -26,6 +17,7 @@
                     >
                     <div class="flex gap-1">
                         <UButton
+                            v-if="!isMobile"
                             size="xs"
                             :square="true"
                             :icon="
@@ -58,10 +50,7 @@
                     </div>
                 </div>
 
-                <div
-                    ref="scrollContainer"
-                    class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-3 text-sm"
-                >
+                <div ref="scrollContainer" :class="chatBodyClass">
                     <div
                         v-for="msg in messages.filter(
                             (m) =>
@@ -141,7 +130,8 @@
                 </div>
 
                 <form
-                    class="border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] px-3 py-3"
+                    :class="formClass"
+                    :style="formStyle"
                     @submit.prevent="sendMessage"
                 >
                     <div class="flex items-end gap-2">
@@ -193,7 +183,7 @@
                 <UButton
                     size="md"
                     icon="pixelarticons:message-processing"
-                    class="retro-btn absolute bottom-0 right-0 aspect-square w-12 h-12 flex items-center justify-center"
+                    :class="launcherClass"
                     :ui="{
                         base: 'retro-btn aspect-square w-12 h-12 flex items-center justify-center',
                     }"
@@ -210,6 +200,7 @@ import { StreamMarkdown } from 'streamdown-vue';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { useThrottleFn } from '@vueuse/core';
+import { useResponsiveState } from '~/composables/core/useResponsiveState';
 
 const props = defineProps<{ documentationMap?: string }>();
 
@@ -253,6 +244,59 @@ const isSending = ref(false);
 const message = ref('');
 const inputRef = ref<{ input?: HTMLInputElement } | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
+
+const { isMobile } = useResponsiveState();
+
+const containerClass = computed(() =>
+    isMobile.value && isExpanded.value
+        ? 'fixed inset-0 z-50'
+        : 'fixed bottom-4 right-4 z-50'
+);
+
+const panelClass = computed(() => {
+    const base = [
+        'flex flex-col min-h-0 transition-all duration-300 ease-in-out retro-shadow bg-[var(--md-surface)] overflow-hidden',
+    ];
+
+    if (isMobile.value) {
+        base.push('fixed inset-0 z-50 h-full w-full border-0 rounded-none');
+    } else {
+        base.push(
+            'absolute bottom-0 right-0 border-2 border-[var(--md-inverse-surface)] rounded-[3px]'
+        );
+        base.push(
+            isFullscreen.value
+                ? 'w-[96dvw] h-[96dvh]'
+                : 'h-[85dvh] w-[min(40dvw)]'
+        );
+    }
+
+    return base;
+});
+
+const chatBodyClass = computed(() => [
+    'flex-1 overflow-y-auto overflow-x-hidden space-y-3 text-sm',
+    isMobile.value ? 'px-4 py-4' : 'px-3 py-4',
+]);
+
+const formClass = computed(() => [
+    'border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)]',
+    isMobile.value ? 'px-4 pt-3' : 'px-3 py-3',
+]);
+
+const formStyle = computed(() =>
+    isMobile.value
+        ? {
+              paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
+          }
+        : undefined
+);
+
+const launcherClass = computed(() =>
+    isMobile.value
+        ? 'retro-btn fixed bottom-4 right-4 aspect-square w-12 h-12 flex items-center justify-center z-[60]'
+        : 'retro-btn absolute bottom-0 right-0 aspect-square w-12 h-12 flex items-center justify-center'
+);
 
 let messageId = 0;
 
@@ -314,6 +358,11 @@ function collapse() {
 }
 
 function toggleFullscreen() {
+    if (isMobile.value) {
+        isFullscreen.value = false;
+        return;
+    }
+
     isFullscreen.value = !isFullscreen.value;
 }
 
@@ -718,6 +767,12 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
         isSending.value = false;
     }
 }
+
+watch(isMobile, (mobile) => {
+    if (mobile) {
+        isFullscreen.value = false;
+    }
+});
 </script>
 
 <style scoped>

@@ -37,6 +37,7 @@ export * from './threads/useThreadSearch';
 export * from '../core/hooks/useHooks';
 export * from './core/useHookEffect';
 export * from './core/useResponsiveState';
+export * from './core/useScrollLock';
 
 // Project composables
 export * from './projects/useProjectTreeActions';

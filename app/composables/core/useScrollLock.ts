@@ -1,64 +1,78 @@
-import { watch, ref, Ref, onBeforeUnmount } from 'vue';
+import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue';
 
-/**
- * Composable for locking/unlocking body scroll.
- * Useful for overlays, modals, and other fixed-position elements.
- *
- * @param isLocked - Ref<boolean> that controls lock state
- * @param target - Optional DOM element to lock (default: document.body)
- * @returns {ScrollLockHandle} Object with manual lock/unlock methods
- */
-export function useScrollLock(isLocked?: Ref<boolean>, target?: HTMLElement) {
-  if (!import.meta.client) {
-    return {
-      lock: () => {},
-      unlock: () => {},
-    };
-  }
+type TargetResolver = () => HTMLElement | null | undefined;
 
-  const lockedElement = target || (typeof document !== 'undefined' ? document.body : null);
-  const previousOverflow = ref<string | null>(null);
+interface UseScrollLockOptions {
+    target?: TargetResolver;
+    controlledState?: Ref<boolean>;
+}
 
-  function lock() {
-    if (!lockedElement) return;
-    previousOverflow.value = lockedElement.style.overflow;
-    lockedElement.style.overflow = 'hidden';
-  }
+export function useScrollLock(options: UseScrollLockOptions = {}) {
+    const internalLocked = ref(false);
+    let previousOverflow: string | null = null;
+    let lockedElement: HTMLElement | null = null;
 
-  function unlock() {
-    if (!lockedElement) return;
-    if (previousOverflow.value !== null) {
-      lockedElement.style.overflow = previousOverflow.value;
-    } else {
-      lockedElement.style.overflow = '';
-    }
-    previousOverflow.value = null;
-  }
-
-  // If isLocked ref is provided, watch it and auto-lock/unlock
-  if (isLocked) {
-    watch(
-      isLocked,
-      (locked) => {
-        if (locked) {
-          lock();
-        } else {
-          unlock();
+    function resolveTarget(): HTMLElement | null {
+        if (typeof window === 'undefined') return null;
+        if (options.target) {
+            return options.target() ?? null;
         }
-      },
-      { immediate: true }
-    );
-  }
+        return document.body;
+    }
 
-  // Cleanup on unmount
-  onBeforeUnmount(() => {
-    unlock();
-  });
+    function performLock() {
+        if (internalLocked.value) return;
+        const target = resolveTarget();
+        if (!target) return;
 
-  return {
-    lock,
-    unlock,
-  };
+        lockedElement = target;
+        previousOverflow = target.style.overflow || '';
+        target.style.overflow = 'hidden';
+        internalLocked.value = true;
+    }
+
+    function performUnlock() {
+        if (!internalLocked.value) return;
+        const target = lockedElement ?? resolveTarget();
+        if (target) {
+            target.style.overflow = previousOverflow ?? '';
+        }
+        lockedElement = null;
+        previousOverflow = null;
+        internalLocked.value = false;
+    }
+
+    function lock() {
+        performLock();
+    }
+
+    function unlock() {
+        performUnlock();
+    }
+
+    if (options.controlledState) {
+        watch(
+            options.controlledState,
+            (next) => {
+                if (next) {
+                    performLock();
+                } else {
+                    performUnlock();
+                }
+            },
+            { immediate: true }
+        );
+    }
+
+    onBeforeUnmount(() => {
+        performUnlock();
+    });
+
+    return {
+        lock,
+        unlock,
+        isLocked: computed(() => internalLocked.value),
+    };
 }
 
 export type ScrollLockHandle = ReturnType<typeof useScrollLock>;

@@ -86,7 +86,7 @@
                     <div
                         class="absolute inset-0 bg-black/50"
                         aria-hidden="true"
-                        @click="() => closeSidebar()"
+                        @click="closeSidebar"
                     ></div>
                     <Transition
                         enter-active-class="transition-transform duration-200 ease-out"
@@ -172,8 +172,7 @@
                                                                 class="flex h-[40px] items-center px-3 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 transition-colors"
                                                                 active-class=" dark:text-white text-black  bg-primary/20 hover:bg-primary/20"
                                                                 @click="
-                                                                    () =>
-                                                                        closeSidebar()
+                                                                    closeSidebar
                                                                 "
                                                             >
                                                                 {{ item.label }}
@@ -381,18 +380,11 @@
 </template>
 
 <script setup lang="ts">
-import {
-    ref,
-    computed,
-    watch,
-    onMounted,
-    shallowRef,
-    nextTick,
-    onBeforeUnmount,
-} from 'vue';
+import { ref, computed, watch, onMounted, shallowRef, nextTick } from 'vue';
 import type { AnyOrama } from '@orama/orama';
 import { StreamMarkdown } from 'streamdown-vue';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
+import { useScrollLock } from '~/composables/core/useScrollLock';
 
 const { $theme } = useNuxtApp();
 const currentShikiTheme = computed(() => {
@@ -477,8 +469,9 @@ const sidebarId = 'docs-sidebar';
 const sidebarLabelId = 'docs-sidebar-heading';
 
 let lastFocusedElement: HTMLElement | null = null;
-let previousBodyOverflow: string | null = null;
 let shouldRestoreFocus = true;
+
+const { lock: lockScroll, unlock: unlockScroll } = useScrollLock();
 
 // Internal navigation state (shallow to avoid deep watchers)
 const internalNavigation = shallowRef<NavCategory[]>([]);
@@ -532,7 +525,13 @@ function toggleSidebar() {
     sidebarOpen.value = !sidebarOpen.value;
 }
 
-function closeSidebar(options: { restoreFocus?: boolean } = {}) {
+function closeSidebar(eventOrOptions: Event | { restoreFocus?: boolean } = {}) {
+    const options = eventOrOptions instanceof Event ? {} : eventOrOptions;
+
+    if (eventOrOptions instanceof Event) {
+        eventOrOptions.preventDefault();
+    }
+
     if (!sidebarOpen.value) return;
     shouldRestoreFocus = options.restoreFocus ?? true;
     sidebarOpen.value = false;
@@ -582,24 +581,6 @@ function onSidebarKeydown(event: KeyboardEvent) {
     } else if (event.shiftKey && active === first) {
         event.preventDefault();
         last.focus({ preventScroll: true });
-    }
-}
-
-function lockBodyScroll() {
-    if (!import.meta.client) return;
-    const body = document.body;
-    if (previousBodyOverflow === null) {
-        previousBodyOverflow = body.style.overflow || '';
-    }
-    body.style.overflow = 'hidden';
-}
-
-function unlockBodyScroll() {
-    if (!import.meta.client) return;
-    const body = document.body;
-    if (previousBodyOverflow !== null) {
-        body.style.overflow = previousBodyOverflow;
-        previousBodyOverflow = null;
     }
 }
 
@@ -660,13 +641,13 @@ watch(
 watch(sidebarOpen, async (open) => {
     if (!import.meta.client) return;
 
-    if (open) {
+    if (open && isMobile.value) {
         lastFocusedElement = document.activeElement as HTMLElement | null;
-        lockBodyScroll();
+        lockScroll();
         await nextTick();
         focusFirstSidebarItem();
     } else {
-        unlockBodyScroll();
+        unlockScroll();
         await nextTick();
         if (shouldRestoreFocus && lastFocusedElement) {
             lastFocusedElement.focus({ preventScroll: true });
@@ -707,14 +688,7 @@ ${
                 `- **${section.title}**: ${section.files.length} documents`
         )
         .join('\n') || ''
-}
-
-onBeforeUnmount(() => {
-    if (sidebarOpen.value) {
-        unlockBodyScroll();
-    }
-});
-`;
+}`;
         return;
     }
 
