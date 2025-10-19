@@ -52,6 +52,10 @@ describe('useResponsiveState', () => {
         vi.restoreAllMocks();
     });
 
+    // Helper to wait for requestAnimationFrame
+    const waitForFrame = () =>
+        new Promise((resolve) => requestAnimationFrame(resolve));
+
     it('returns isMobile = false when viewport > 768px', async () => {
         mockViewport(1024);
 
@@ -59,6 +63,10 @@ describe('useResponsiveState', () => {
             '../useResponsiveState'
         );
         const { isMobile } = useResponsiveState1();
+
+        // Wait for requestAnimationFrame to update the value
+        await waitForFrame();
+
         expect(isMobile.value).toBe(false);
     });
 
@@ -69,6 +77,10 @@ describe('useResponsiveState', () => {
             '../useResponsiveState'
         );
         const { isMobile } = useResponsiveState2();
+
+        // Wait for requestAnimationFrame to update the value
+        await waitForFrame();
+
         expect(isMobile.value).toBe(true);
     });
 
@@ -79,6 +91,10 @@ describe('useResponsiveState', () => {
             '../useResponsiveState'
         );
         const { isMobile } = useResponsiveState3();
+
+        // Wait for requestAnimationFrame to update the value
+        await waitForFrame();
+
         expect(isMobile.value).toBe(true);
     });
 
@@ -89,6 +105,10 @@ describe('useResponsiveState', () => {
             '../useResponsiveState'
         );
         const { isMobile } = useResponsiveState4();
+
+        // Wait for requestAnimationFrame to update the value
+        await waitForFrame();
+
         expect(isMobile.value).toBe(false);
     });
 });

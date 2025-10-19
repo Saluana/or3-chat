@@ -247,15 +247,6 @@ const scrollContainer = ref<HTMLElement | null>(null);
 
 const { isMobile } = useResponsiveState();
 
-// Debug: watch isMobile changes
-watch(
-    isMobile,
-    (val) => {
-        console.log('[HelpChat] isMobile changed to:', val);
-    },
-    { immediate: true }
-);
-
 const containerClass = computed(() =>
     isMobile.value && isExpanded.value
         ? 'fixed inset-0 z-50'

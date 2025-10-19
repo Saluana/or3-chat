@@ -8,12 +8,11 @@
         >
             <div class="flex w-full items-center gap-3 md:w-[250px]">
                 <UButton
-                    v-if="isMobile"
                     icon="i-heroicons-bars-3"
                     size="sm"
                     variant="basic"
                     square
-                    class="md:hidden"
+                    class="sm:hidden!"
                     :aria-controls="sidebarId"
                     :aria-expanded="sidebarOpen"
                     :aria-label="

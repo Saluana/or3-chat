@@ -30,8 +30,8 @@
                 class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
             >
                 <div
-                    v-if="isMobile"
-                    class="h-full flex items-center justify-center px-4 pointer-events-auto"
+                    class="h-full items-center justify-center px-4 pointer-events-auto md:hidden"
+                    :class="{ flex: isMobile, hidden: !isMobile }"
                 >
                     <UTooltip :delay-duration="0" text="Open sidebar">
                         <UButton

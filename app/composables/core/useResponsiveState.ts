@@ -10,10 +10,11 @@ let sharedState: ReturnType<typeof createResponsiveState> | null = null;
  * Only called once per app; result is cached and reused.
  */
 function createResponsiveState() {
-    // Simple reactive ref for mobile state
+    // Simple reactive ref for mobile state - starts false to match SSR
     const isMobile = ref(false);
     const isTablet = ref(false);
     const isDesktop = ref(false);
+    const hydrated = ref(false);
 
     // Set up matchMedia listeners for different breakpoints
     const mobileQuery = window.matchMedia('(max-width: 768px)');
@@ -29,25 +30,26 @@ function createResponsiveState() {
 
         // Sync to global ref for backward compatibility
         globalIsMobile.value = mobile;
-
-        console.log('[useResponsiveState] breakpoint update:', {
-            isMobile: mobile,
-            isTablet: !mobile && !desktop,
-            isDesktop: desktop,
-            width: window.innerWidth,
-        });
     };
-
-    // Initial update
-    updateBreakpoints();
 
     // Listen for changes
     mobileQuery.addEventListener('change', updateBreakpoints);
     desktopQuery.addEventListener('change', updateBreakpoints);
 
+    // Delay initial update until after Vue hydration to prevent mismatch
+    // Use nextTick + requestAnimationFrame to ensure DOM is fully hydrated
+    if (typeof window !== 'undefined') {
+        // Schedule update after current render cycle
+        requestAnimationFrame(() => {
+            updateBreakpoints();
+            hydrated.value = true;
+        });
+    }
+
     return {
         isMobile,
         isTablet,
+        hydrated,
     };
 }
 

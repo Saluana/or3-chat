@@ -17,6 +17,8 @@ Think of `useResponsiveState` as your single source of truth for breakpoint dete
 
 ...this composable ensures consistent behavior on both server and client.
 
+**Hydration-Safe Design**: The composable starts with `isMobile = false` on both server and client, then updates to the correct viewport state after hydration completes (via `requestAnimationFrame`). This prevents the "flash of incorrect layout" and hydration warnings that occur when server HTML doesn't match initial client render.
+
 ---
 
 ## Basic Example
@@ -153,37 +155,46 @@ This composable is **SSR-safe** by default:
     - `isTablet` returns `false`
     - Renders desktop layout on server
 
-2. **During hydration** (client-side):
+2. **Initial client render** (hydration phase):
 
-    - VueUse `useBreakpoints` activates
-    - Detects actual viewport size
+    - `isMobile` **still** returns `false` (matches SSR)
+    - No hydration mismatch occurs
+    - HTML from server matches initial client DOM
+
+3. **After hydration** (via `requestAnimationFrame`):
+
+    - `window.matchMedia` listeners detect actual viewport
     - Updates to correct state (`isMobile: true` on mobile devices)
+    - Vue's reactivity updates the DOM smoothly
 
-3. **Result**:
-    - No hydration mismatches
-    - Smooth transition from SSR to client
-    - Desktop layout renders consistently during SSR
+4. **Result**:
+    - Zero hydration mismatch warnings
+    - Smooth transition from SSR → client
+    - Desktop layout renders consistently until hydration completes
 
 ### Why this prevents hydration issues
 
-Most responsive libraries fail on SSR because:
+Most responsive libraries fail on SSR because they immediately check viewport size on the client:
 
 ```ts
-// ❌ WRONG: SSR renders desktop, client renders mobile
-// This causes "Hydration mismatch" warnings
+// ❌ WRONG: SSR renders false, client immediately renders true
+// This causes "Hydration node mismatch" warnings
 const media = window.matchMedia('(max-width: 768px)');
-const isMobile = ref(media.matches); // undefined on SSR!
+const isMobile = ref(media.matches); // Server: false, Client: immediately true!
 ```
 
-Our approach:
+Our approach delays the viewport check until after hydration:
 
 ```ts
-// ✅ RIGHT: Both server and client start with desktop layout
-// CSS classes handle the responsive behavior
+// ✅ RIGHT: Both server and initial client render start with false
+// Update happens after hydration via requestAnimationFrame
 const { isMobile } = useResponsiveState();
 // SSR: isMobile = false
-// Client: isMobile updates reactively to true if viewport ≤ 768px
+// Client initial render: isMobile = false (matches SSR!)
+// Client after hydration: isMobile updates to true if mobile
 ```
+
+**Key insight**: By delaying the viewport detection by one frame, we ensure the initial client render produces the exact same HTML as the server, preventing hydration mismatches.
 
 ---
 
@@ -262,14 +273,15 @@ const containerClass = computed(() =>
 
 ## Performance notes
 
-### Lazy breakpoint detection
+### Efficient breakpoint detection
 
-`useBreakpoints` from VueUse uses `window.matchMedia`:
+`useResponsiveState` uses `window.matchMedia` directly:
 
 -   Low overhead
 -   Native browser API
 -   No polling or resize listeners
--   Automatically batched updates
+-   Event-driven updates only when breakpoints cross
+-   Shared state across all components (single listener set)
 
 ### SSR performance
 
@@ -305,17 +317,24 @@ watch(isMobile, async () => {
 
 **Problem**: "Hydration mismatch: rendered on server... expected on client"
 
+**Cause**: Using `v-if="isMobile"` creates different DOM structures between SSR (desktop) and client (mobile).
+
 **Solution**: Always render both desktop and mobile versions, use CSS to hide:
 
 ```vue
-<!-- ✅ GOOD: No mismatch -->
+<!-- ✅ GOOD: No mismatch - CSS hides appropriately -->
 <div class="hidden md:flex">Desktop</div>
 <div class="md:hidden">Mobile</div>
 
-<!-- ❌ BAD: Causes mismatch -->
+<!-- ✅ GOOD: Always rendered, visibility controlled by class -->
+<button :class="isMobile ? 'md:hidden' : 'hidden md:block'">Menu</button>
+
+<!-- ❌ BAD: Causes mismatch - different DOM on SSR vs client -->
 <div v-if="!isMobile">Desktop</div>
 <div v-else>Mobile</div>
 ```
+
+**Why this works**: The composable returns consistent `false` during SSR. On the client, it updates immediately but the DOM structure stays the same—only CSS classes change.
 
 ### Breakpoint stuck on false
 
@@ -347,7 +366,7 @@ watch(isMobile, async () => {
 
 -   `useScrollLock` — lock body scroll on mobile overlays
 -   Tailwind's `md:` breakpoint — styling breakpoint-aware UIs
--   VueUse `useBreakpoints` — underlying detection library
+-   MDN `window.matchMedia` — underlying browser API
 
 ---
 
