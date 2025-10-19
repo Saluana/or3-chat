@@ -140,11 +140,6 @@ export async function* openRouterStream(params: {
                 for (const choice of choices) {
                     const delta = choice.delta || {};
 
-                    console.log(
-                        '[openRouterStream] delta chunk:',
-                        JSON.stringify(delta)
-                    );
-
                     // Handle model reasoning (from reasoning field or reasoning_details)
                     if (
                         typeof delta.reasoning === 'string' &&

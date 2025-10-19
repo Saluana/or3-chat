@@ -479,11 +479,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                 ...history,
             ];
 
-            console.log(
-                '[HelpChat] Starting API call with messages:',
-                orMessages
-            );
-
             const controller = new AbortController();
             const stream = openRouterStream({
                 apiKey: apiKey.value,
@@ -494,14 +489,10 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                 signal: controller.signal,
             });
 
-            console.log('[HelpChat] Starting to consume stream...');
-
             let foundToolCall = false;
 
             try {
                 for await (const ev of stream) {
-                    console.log('[HelpChat] Stream event:', ev);
-
                     if (ev.type === 'text') {
                         currentAssistantMessage.content += ev.text;
                         currentAssistantMessage.pending = false;
@@ -510,7 +501,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                         currentAssistantMessage.pending = false;
                         // Handle reasoning/thinking events - accumulate as visible content
                         currentAssistantMessage.content += ev.text;
-                        console.log('[HelpChat] Received reasoning:', ev.text);
                         await nextTick();
                     } else if (ev.type === 'tool_call') {
                         console.log(
@@ -532,16 +522,9 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                                 continue;
                             }
 
-                            console.log(
-                                `[HelpChat] Fetching docs for ${query.query}`
-                            );
                             const docs = await getDocumentation(query.query);
 
                             if (docs && docs.length > 0) {
-                                console.log(
-                                    `[HelpChat] Retrieved docs for ${query.query}, adding to messages`
-                                );
-
                                 // Add tool result message to the history
                                 await pushMessage(
                                     {
@@ -558,7 +541,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                             }
                         }
                     } else if (ev.type === 'done') {
-                        console.log('[HelpChat] Stream done');
                         currentAssistantMessage.pending = false;
                     }
                 }
@@ -572,19 +554,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                     throw err;
                 }
             }
-
-            console.log(
-                '[HelpChat] Loop iteration complete. continueLoop:',
-                continueLoop
-            );
-            console.log(
-                '[HelpChat] Current assistant message content:',
-                currentAssistantMessage.content
-            );
-            console.log(
-                '[HelpChat] Current assistant message pending:',
-                currentAssistantMessage.pending
-            );
         }
 
         // Conversation complete
