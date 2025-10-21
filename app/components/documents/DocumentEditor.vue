@@ -370,8 +370,16 @@ const statusText = computed(() => {
 </script>
 
 <style scoped>
-.prose :where(h1, h2) {
-    font-family: 'Press Start 2P', monospace;
+.prose {
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont,
+        'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--md-on-surface);
+}
+
+.prose :where(h1, h2, h3, h4, h5, h6) {
+    font-family: 'IBM Plex Sans', system-ui !important;
 }
 
 /* ProseMirror (TipTap) base styles */
