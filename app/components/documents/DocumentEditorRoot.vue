@@ -132,6 +132,7 @@ import {
     useHooks,
     type EditorToolbarButton,
 } from '~/composables';
+import { loadEditorExtensions } from '~/composables/editor/useEditorExtensionLoader';
 
 const props = defineProps<{ documentId: string }>();
 
@@ -190,55 +191,17 @@ function emitContent() {
     hooks.doActionSync('editor.updated:action:after', { editor: editor.value });
 }
 
-function makeEditor() {
-    // Collect plugin-registered extensions with defensive error handling
-    const pluginNodes = listEditorNodes()
-        .map((n) => {
-            try {
-                return n.extension;
-            } catch (e) {
-                if (import.meta.dev) {
-                    console.error(
-                        `[DocumentEditor] Failed to load node extension ${n.id}:`,
-                        e
-                    );
-                }
-                return null;
-            }
-        })
-        .filter((ext): ext is NonNullable<typeof ext> => ext !== null);
-
-    const pluginMarks = listEditorMarks()
-        .map((m) => {
-            try {
-                return m.extension;
-            } catch (e) {
-                if (import.meta.dev) {
-                    console.error(
-                        `[DocumentEditor] Failed to load mark extension ${m.id}:`,
-                        e
-                    );
-                }
-                return null;
-            }
-        })
-        .filter((ext): ext is NonNullable<typeof ext> => ext !== null);
-
-    const pluginExtensions = listEditorExtensions()
-        .map((ext) => {
-            try {
-                return ext.extension;
-            } catch (e) {
-                if (import.meta.dev) {
-                    console.error(
-                        `[DocumentEditor] Failed to load generic extension ${ext.id}:`,
-                        e
-                    );
-                }
-                return null;
-            }
-        })
-        .filter((ext): ext is NonNullable<typeof ext> => ext !== null);
+async function makeEditor() {
+    // Load all editor extensions (both eager and lazy)
+    const {
+        nodes: pluginNodes,
+        marks: pluginMarks,
+        extensions: pluginExtensions,
+    } = await loadEditorExtensions(
+        listEditorNodes(),
+        listEditorMarks(),
+        listEditorExtensions()
+    );
 
     try {
         editor.value = new Editor({
@@ -275,7 +238,7 @@ onMounted(async () => {
     // Ensure title reflects loaded record (refresh / deep link case)
     titleDraft.value = state.value.record?.title || titleDraft.value || '';
     // Ensure initial state ref matches (in case of rapid prop change before mount)
-    makeEditor();
+    await makeEditor();
 });
 
 onBeforeUnmount(() => {

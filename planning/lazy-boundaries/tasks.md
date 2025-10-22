@@ -15,9 +15,9 @@ artifact_id: 2158f59e-1f39-4a8d-917e-ef6934400325
 
 ## 3. Lazy TipTap Extension Loading
 
--   [ ] Extend plugin APIs to accept dynamic extension factories and update registries to await them (Requirements: 2)
--   [ ] Update built-in extensions to register via lazy factories and ensure failure skips are logged (Requirements: 2)
--   [ ] Write unit tests validating extension loader behavior for success, partial failure, and caching (Requirements: 2)
+-   [x] Extend plugin APIs to accept dynamic extension factories and update registries to await them (Requirements: 2)
+-   [x] Update built-in extensions to register via lazy factories and ensure failure skips are logged (Requirements: 2)
+-   [x] Write unit tests validating extension loader behavior for success, partial failure, and caching (Requirements: 2)
 
 ## 4. Lazy Documentation Search Panel
 
