@@ -4,14 +4,14 @@ artifact_id: 2158f59e-1f39-4a8d-917e-ef6934400325
 
 ## 1. Establish Lazy Boundary Infrastructure
 
--   [ ] Implement `useLazyBoundaries` composable with state tracking, memoized loaders, and telemetry emission (Requirements: 1, 2, 3, 4, 5, 6)
--   [ ] Add unit tests covering success, failure, and reset flows for the composable (Requirements: 6)
+-   [x] Implement `useLazyBoundaries` composable with state tracking, memoized loaders, and telemetry emission (Requirements: 1, 2, 3, 4, 5, 6)
+-   [x] Add unit tests covering success, failure, and reset flows for the composable (Requirements: 6)
 
 ## 2. Lazy Document Editor Host
 
--   [ ] Create `<LazyEditorHost>` component using `defineAsyncComponent` with skeleton and retry UI (Requirements: 1)
--   [ ] Extract core editor implementation to `DocumentEditorRoot` (or similar) returns factory for Lazy host (Requirements: 1)
--   [ ] Update document routes to swap direct `<DocumentEditor>` usage with `<LazyEditorHost>` (Requirements: 1)
+-   [x] Create `<LazyEditorHost>` component using `defineAsyncComponent` with skeleton and retry UI (Requirements: 1)
+-   [x] Extract core editor implementation to `DocumentEditorRoot` (or similar) returns factory for Lazy host (Requirements: 1)
+-   [x] Update document routes to swap direct `<DocumentEditor>` usage with `<LazyEditorHost>` (Requirements: 1)
 
 ## 3. Lazy TipTap Extension Loading
 
@@ -42,4 +42,3 @@ artifact_id: 2158f59e-1f39-4a8d-917e-ef6934400325
 
 -   [ ] Update component/E2E test suites to cover lazy boundaries for editor, search, and backup flows (Requirements: 1, 3, 5)
 -   [ ] Run manual regression plan ensuring autosave, search indexing, and backup operations remain functional (Requirements: 1, 3, 5)
-
