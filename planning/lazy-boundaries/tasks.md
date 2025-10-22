@@ -21,16 +21,16 @@ artifact_id: 2158f59e-1f39-4a8d-917e-ef6934400325
 
 ## 4. Lazy Documentation Search Panel
 
--   [ ] Implement `<LazySearchPanel>` that loads UI and Orama runtime on focus/expand (Requirements: 3)
+-   [x] Implement `<LazySearchPanel>` that loads UI and Orama runtime on focus/expand (Requirements: 3)
 -   [ ] Add worker loader that conditionally imports Orama worker and falls back on failure (Requirements: 4)
--   [ ] Ensure existing search index state migrates cleanly and cached results persist across panel reopens (Requirements: 3, 4)
--   [ ] Update documentation shell to trigger lazy load only when user interacts (Requirements: 3)
+-   [x] Ensure existing search index state migrates cleanly and cached results persist across panel reopens (Requirements: 3, 4)
+-   [x] Update documentation shell to trigger lazy load only when user interacts (Requirements: 3)
 
 ## 5. Lazy Export/Import Toolchains
 
--   [ ] Refactor export/import click handlers to call shared lazy loaders for `streamsaver`, `dexie-export-import`, and `turndown` (Requirements: 5)
--   [ ] Add loading affordance if dependency resolution exceeds 150 ms and implement fallback paths (Requirements: 5)
--   [ ] Write integration tests covering export/import flows with mocked dynamic imports (Requirements: 5)
+-   [x] Refactor export/import click handlers to call shared lazy loaders for `streamsaver`, `dexie-export-import`, and `turndown` (Requirements: 5)
+-   [x] Add loading affordance if dependency resolution exceeds 150 ms and implement fallback paths (Requirements: 5)
+-   [x] Write integration tests covering export/import flows with mocked dynamic imports (Requirements: 5)
 
 ## 6. Telemetry & Performance Validation
 

@@ -2,6 +2,7 @@ import { ref, type Ref } from 'vue';
 import { db } from '~/db/client';
 import { reportError, err, asAppError } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
+import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
 import {
     detectWorkspaceBackupFormat,
     importWorkspaceStream,
@@ -53,12 +54,7 @@ export interface WorkspaceBackupApi {
 const STREAM_CHUNK_SIZE = 500;
 const DEFAULT_KILOBYTES_PER_CHUNK = 1024;
 
-let dexieExportImportPromise: Promise<
-    typeof import('dexie-export-import')
-> | null = null;
-
-let streamSaverPromise: Promise<typeof import('streamsaver')> | null = null;
-
+// Lazy loaders for workspace backup dependencies
 function loadDexieExportImport() {
     if (typeof window === 'undefined') {
         throw err(
@@ -67,24 +63,31 @@ function loadDexieExportImport() {
             { tags: { domain: 'db', action: 'ssr' } }
         );
     }
-    if (!dexieExportImportPromise) {
-        dexieExportImportPromise = import('dexie-export-import');
-    }
-    return dexieExportImportPromise;
+
+    const lazyBoundaries = useLazyBoundaries();
+    return lazyBoundaries.load({
+        key: 'workspace-import',
+        loader: () => import('dexie-export-import'),
+    });
 }
 
 async function loadStreamSaver() {
     if (typeof window === 'undefined') {
         return null;
     }
+
     try {
-        if (!streamSaverPromise) {
-            streamSaverPromise = import('streamsaver');
-        }
-        return await streamSaverPromise;
+        const lazyBoundaries = useLazyBoundaries();
+        const module = await lazyBoundaries.load({
+            key: 'workspace-export',
+            loader: () => import('streamsaver'),
+        });
+        return module;
     } catch (error) {
-        streamSaverPromise = null;
         console.warn('[workspace-backup] Failed to load StreamSaver', error);
+        // Reset the boundary so retry is possible
+        const lazyBoundaries = useLazyBoundaries();
+        lazyBoundaries.reset('workspace-export');
         return null;
     }
 }
