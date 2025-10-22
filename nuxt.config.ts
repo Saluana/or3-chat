@@ -2,7 +2,13 @@
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
-    devtools: { enabled: true },
+    devtools: {
+      enabled: true,
+
+      timeline: {
+        enabled: true,
+      },
+    },
     modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
@@ -181,6 +187,22 @@ export default defineNuxtConfig({
         imports: [
             { name: 'useOpenRouterAuth', from: '~/core/auth/useOpenrouter' },
         ],
+    },
+    vite: {
+        worker: {
+            format: 'es',
+        },
+        build: {
+            rollupOptions: {
+                output: {
+                    manualChunks(id) {
+                        if (id.includes('/node_modules/gpt-tokenizer/')) {
+                            return 'gpt-tokenizer';
+                        }
+                    },
+                },
+            },
+        },
     },
     // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
     ignore: [

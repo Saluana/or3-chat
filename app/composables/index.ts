@@ -38,6 +38,7 @@ export * from '../core/hooks/useHooks';
 export * from './core/useHookEffect';
 export * from './core/useResponsiveState';
 export * from './core/useScrollLock';
+export * from './core/useTokenizer';
 
 // Project composables
 export * from './projects/useProjectTreeActions';
