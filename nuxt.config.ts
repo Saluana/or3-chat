@@ -2,12 +2,24 @@
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
+    experimental: {
+        defaults: {
+            nuxtLink: {
+                // Nuxt type defs currently expect booleans, but runtime accepts the string literal
+                // to force interaction-only prefetching.
+                prefetchOn: 'interaction' as unknown as {
+                    visibility?: boolean;
+                    interaction?: boolean;
+                },
+            },
+        },
+    },
     devtools: {
-      enabled: true,
-
-      timeline: {
         enabled: true,
-      },
+
+        timeline: {
+            enabled: true,
+        },
     },
     modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
