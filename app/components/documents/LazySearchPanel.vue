@@ -8,13 +8,6 @@
                 <UButton size="sm" @click="retry">Retry</UButton>
             </div>
         </slot>
-        <slot v-else-if="!loaded" name="loading">
-            <div class="p-4 text-center">
-                <div class="text-sm text-[var(--md-on-surface-variant)]">
-                    Loading search...
-                </div>
-            </div>
-        </slot>
         <Suspense v-else>
             <SearchPanelRoot
                 v-bind="$attrs"
@@ -25,7 +18,7 @@
             <template #fallback>
                 <div class="p-4 text-center">
                     <div class="text-sm text-[var(--md-on-surface-variant)]">
-                        Initializing...
+                        Loading search...
                     </div>
                 </div>
             </template>
@@ -34,8 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineAsyncComponent } from 'vue';
-import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
+import { ref, defineAsyncComponent, onErrorCaptured } from 'vue';
 
 interface Props {
     docmap: any;
@@ -47,32 +39,35 @@ defineEmits<{
     navigate: [path: string];
 }>();
 
-const lazyBoundaries = useLazyBoundaries();
-const loaded = ref(false);
 const error = ref(false);
+const retryKey = ref(0);
 
 // Lazy load the search panel implementation
-const SearchPanelRoot = defineAsyncComponent(async () => {
-    try {
-        error.value = false;
-        const module = await lazyBoundaries.load({
-            key: 'docs-search-panel',
-            loader: () => import('./SearchPanelRoot.vue'),
-        });
-        loaded.value = true;
-        return module;
-    } catch (err) {
-        console.error('[LazySearchPanel] Failed to load:', err);
-        error.value = true;
-        throw err;
-    }
+const SearchPanelRoot = defineAsyncComponent({
+    loader: async () => {
+        try {
+            error.value = false;
+            const module = await import(
+                '~/components/documents/SearchPanelRoot.vue'
+            );
+            return module.default || module;
+        } catch (err) {
+            console.error('[LazySearchPanel] Failed to load:', err);
+            error.value = true;
+            throw err;
+        }
+    },
+});
+
+// Capture async errors from Suspense
+onErrorCaptured((err) => {
+    console.error('[LazySearchPanel] Component error:', err);
+    error.value = true;
+    return false;
 });
 
 function retry() {
     error.value = false;
-    loaded.value = false;
-    lazyBoundaries.reset('docs-search-panel');
-    // Force re-evaluation
-    SearchPanelRoot.value;
+    retryKey.value++;
 }
 </script>

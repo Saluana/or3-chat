@@ -182,6 +182,12 @@
                     "summary": "Typed helper for subscribing to hook events with automatic lifecycle cleanup. Registers callbacks on component mount and safely deregisters on unmount or HMR, preventing listener leaks.\\n\\n`useHookEffect` wraps the hook engine with Vue lifecycle awareness:\\n\\n-   Supports every hook name with full TypeScript inference\\n-   Auto-detaches on `onBeforeUnmount` and HMR resets\\n-   Lets you override hook kind (action/filter) and priority\\n-   Returns a disposer for manual cleanup if needed"
                 },
                 {
+                    "name": "useLazyBoundaries.md",
+                    "path": "/composables/useLazyBoundaries",
+                    "category": "Core",
+                    "summary": "Singleton lazy boundary manager for code-splitting heavy features in OR3. Handles dynamic imports, loading state, module caching, and telemetry for performance-critical boundaries.\\n\\n`useLazyBoundaries` ensures heavy modules (TipTap editor, Orama search, workspace export) load on-demand:\\n\\n-   Loads modules only once with promise caching\\n-   Tracks reactive state for each boundary (idle/loading/ready/error)\\n-   Emits telemetry events for performance monitoring\\n-   Supports retry with automatic cache clearing on errors\\n-   Provides optional callbacks after successful resolution"
+                },
+                {
                     "name": "useResponsiveState.md",
                     "path": "/composables/useResponsiveState",
                     "category": "Core",
@@ -192,6 +198,12 @@
                     "path": "/composables/useScrollLock",
                     "category": "Core",
                     "summary": "Utility composable that locks and unlocks body (or any element) scroll, essential for mobile overlays and modals. Manages `overflow` CSS property with automatic cleanup and optional reactive control.\\n\\n`useScrollLock` solves mobile UX problems:\\n\\n-   Lock scroll when showing overlays/modals\\n-   Automatic cleanup on component unmount\\n-   Optional reactive control via ref\\n-   Preserves existing overflow values"
+                },
+                {
+                    "name": "useTokenizer.md",
+                    "path": "/composables/useTokenizer",
+                    "category": "Core",
+                    "summary": "Composable for GPT tokenization with automatic Web Worker optimization. Counts tokens using a dedicated worker thread when available, falling back to direct encoding for SSR or when workers fail.\\n\\n`useTokenizer` keeps the UI responsive while counting tokens:\\n\\n-   Count tokens in single messages or batches\\n-   Uses Web Worker to avoid blocking main thread\\n-   Automatic fallback when workers unavailable\\n-   Shared worker instance across all components\\n-   SSR-safe with client-side hydration"
                 },
                 {
                     "name": "useMultiPane.md",
