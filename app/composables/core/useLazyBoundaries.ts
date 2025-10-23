@@ -1,11 +1,37 @@
-import { reactive, readonly, type Ref } from 'vue';
-import type {
-    LazyBoundaryKey,
-    LazyBoundaryState,
-    LazyBoundaryDescriptor,
-    LazyBoundaryController,
-    LazyTelemetryPayload,
-} from '~/types/lazy-boundaries';
+import { reactive, readonly } from 'vue';
+
+// Local type definitions to avoid TS path resolution issues for d.ts imports.
+export type LazyBoundaryKey =
+    | 'editor-host'
+    | 'editor-extensions'
+    | 'docs-search-panel'
+    | 'docs-search-worker'
+    | 'workspace-export'
+    | 'workspace-import';
+
+export type LazyBoundaryState = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface LazyBoundaryDescriptor<T> {
+    key: LazyBoundaryKey;
+    loader: () => Promise<T>;
+    onResolve?: (payload: T) => void;
+}
+
+export interface LazyBoundaryController {
+    // State is exposed as readonly at runtime via Vue's readonly(),
+    // but kept mutable in the type to allow tests to simulate state changes.
+    state: Record<LazyBoundaryKey, LazyBoundaryState>;
+    load<T>(descriptor: LazyBoundaryDescriptor<T>): Promise<T>;
+    reset(key: LazyBoundaryKey): void;
+    getState(key: LazyBoundaryKey): LazyBoundaryState;
+}
+
+export interface LazyTelemetryPayload {
+    key: LazyBoundaryKey;
+    ms: number;
+    outcome: 'success' | 'failure';
+    error?: unknown;
+}
 
 /**
  * Singleton lazy boundary manager.
@@ -17,10 +43,7 @@ let lazyBoundariesInstance: LazyBoundaryController | null = null;
  * Module-level cache for resolved boundaries.
  * Keyed by LazyBoundaryKey; stores the resolved module promise.
  */
-const moduleCache = new Map<
-    LazyBoundaryKey,
-    Promise<any> | undefined
->();
+const moduleCache = new Map<LazyBoundaryKey, Promise<any> | undefined>();
 
 /**
  * Telemetry listeners registered by consumers.
@@ -60,9 +83,7 @@ function createLazyBoundaryController(): LazyBoundaryController {
     return {
         state: readonly(boundaryStates),
 
-        async load<T>(
-            descriptor: LazyBoundaryDescriptor<T>
-        ): Promise<T> {
+        async load<T>(descriptor: LazyBoundaryDescriptor<T>): Promise<T> {
             const { key, loader, onResolve } = descriptor;
             const startMs = performance.now();
 
