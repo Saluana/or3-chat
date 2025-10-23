@@ -199,7 +199,6 @@ const emit = defineEmits(['toggleDashboard']);
 
 function onConnectButtonClick() {
     if (orIsConnected.value) {
-        if (import.meta.dev) console.debug(orIsConnected);
         // Logic to disconnect
         state.value.openrouterKey = null;
         openrouter.logoutOpenRouter();

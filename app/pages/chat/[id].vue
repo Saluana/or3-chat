@@ -22,8 +22,4 @@ onMounted(async () => {
         await navigateTo('/chat', { replace: true });
     }
 });
-
-if (import.meta.dev) {
-    console.log('[chat/[id].vue] mounted with routeId:', routeId.value);
-}
 </script>

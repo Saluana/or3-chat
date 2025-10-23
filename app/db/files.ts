@@ -354,15 +354,7 @@ function finalizePerf(id: string, kind: 'create' | 'ref', bytes: number) {
         const entry = performance
             .getEntriesByName(`file:${kind}:bytes=${bytes}`)
             .slice(-1)[0];
-        if (entry) {
-            // eslint-disable-next-line no-console
-            console.debug(
-                '[perf] file store',
-                kind,
-                `${(bytes / 1024).toFixed(1)}KB`,
-                `${entry.duration.toFixed(1)}ms`
-            );
-        }
+        // Intentionally omit console logging to keep production console clean.
     } catch (e) {
         // Perf metric finalize is best-effort only
         reportError(err('ERR_INTERNAL', 'file perf finalize failed'), {

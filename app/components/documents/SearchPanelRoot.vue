@@ -81,7 +81,6 @@ async function initializeSearch() {
                     });
                 }
             }
-            console.debug('[SearchPanelRoot] Index initialized');
         }
     } catch (error) {
         console.error('[SearchPanelRoot] Failed to initialize:', error);
@@ -90,20 +89,23 @@ async function initializeSearch() {
 
 // Debounced search
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-watch(() => props.searchQuery, async (query) => {
-    searchQuery.value = query || '';
-    
-    if (searchTimeout) clearTimeout(searchTimeout);
+watch(
+    () => props.searchQuery,
+    async (query) => {
+        searchQuery.value = query || '';
 
-    if (!query || query.length < 2) {
-        searchResults.value = [];
-        return;
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        if (!query || query.length < 2) {
+            searchResults.value = [];
+            return;
+        }
+
+        searchTimeout = setTimeout(async () => {
+            await performSearch(query);
+        }, 120);
     }
-
-    searchTimeout = setTimeout(async () => {
-        await performSearch(query);
-    }, 120);
-});
+);
 
 async function performSearch(query: string) {
     if (!searchIndex.value) return;
@@ -122,7 +124,7 @@ async function performSearch(query: string) {
             excerpt: `${hit.document.category} - ${hit.document.description}`,
             path: hit.document.path,
         }));
-        
+
         emit('search', query);
     } catch (error) {
         console.error('[SearchPanelRoot] Search failed:', error);
