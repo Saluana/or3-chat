@@ -45,11 +45,7 @@
                     v-model="searchQuery"
                     placeholder="Search docs..."
                     size="md"
-                    :leading-icon="
-                        isSearching
-                            ? 'i-heroicons-arrow-path'
-                            : 'i-heroicons-magnifying-glass'
-                    "
+                    leading-icon="i-heroicons-magnifying-glass"
                     @keydown.meta.k.prevent="focusSearch"
                 />
             </div>
@@ -283,34 +279,18 @@
                     class="max-w-[100dvw] sm:max-w-[780px] mx-auto pt-5 pb-24 px-4 md:p-8"
                 >
                     <!-- Search Results -->
-                    <div
-                        v-if="searchQuery && searchResults.length > 0"
-                        class="mb-8"
-                    >
+                    <div v-if="searchQuery && searchTrigger" class="mb-8">
                         <h2
                             class="font-ps2 text-xl mb-4 text-[var(--md-on-surface)]"
                         >
                             Search Results
                         </h2>
-                        <div class="space-y-2">
-                            <UCard
-                                v-for="result in searchResults"
-                                :key="result.id"
-                                class="cursor-pointer hover:border-[var(--md-primary)] transition-colors"
-                                @click="navigateToResult(result)"
-                            >
-                                <h3
-                                    class="font-bold text-[14px] text-[var(--md-on-surface)]"
-                                >
-                                    {{ result.title }}
-                                </h3>
-                                <p
-                                    class="text-sm text-[var(--md-on-surface-variant)] mt-1"
-                                >
-                                    {{ result.excerpt }}
-                                </p>
-                            </UCard>
-                        </div>
+                        <LazySearchPanel
+                            v-if="docmap"
+                            :docmap="docmap"
+                            :search-query="searchQuery"
+                            @navigate="navigateToResult"
+                        />
                     </div>
 
                     <!-- Page Content -->
@@ -383,12 +363,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, shallowRef, nextTick } from 'vue';
-import type { AnyOrama } from '@orama/orama';
-import { StreamMarkdown } from 'streamdown-vue';
+import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
+import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
 
 const { $theme } = useNuxtApp();
+
 const currentShikiTheme = computed(() => {
     const theme =
         ($theme as any)?.current?.value ?? ($theme as any)?.get?.() ?? 'light';
@@ -414,13 +395,6 @@ interface TocItem {
     id: string;
     text: string;
     level: number;
-}
-
-interface SearchResult {
-    id: string;
-    title: string;
-    excerpt: string;
-    path: string;
 }
 
 interface DocmapFile {
@@ -450,9 +424,7 @@ const props = defineProps<{
 }>();
 
 const searchQuery = ref('');
-const isSearching = ref(false);
-const searchResults = ref<SearchResult[]>([]);
-const searchIndex = ref<AnyOrama | null>(null);
+const searchTrigger = ref(false);
 const docmap = ref<Docmap | null>(null);
 const currentContent = ref('');
 const isLoadingContent = ref(false);
@@ -588,6 +560,8 @@ function onSidebarKeydown(event: KeyboardEvent) {
 
 // Load docmap on mount
 onMounted(async () => {
+    useShikiHighlighter();
+
     try {
         const response = await fetch('/_documentation/docmap.json');
         docmap.value = await response.json();
@@ -595,11 +569,6 @@ onMounted(async () => {
         // Build navigation from docmap
         if (docmap.value) {
             applyDocmapNavigation(docmap.value);
-        }
-
-        // Initialize lightweight search index (metadata only)
-        if (isDocRoute.value) {
-            await initializeSearch();
         }
     } catch (error) {
         console.error('[docs] Failed to load docmap:', error);
@@ -855,91 +824,19 @@ function applyDocmapNavigation(map: Docmap) {
 // Use provided content or loaded content
 const displayContent = computed(() => props.content || currentContent.value);
 
-// Initialize search index
-const isDocRoute = computed(() => route.path.startsWith('/documentation'));
-
-watch(isDocRoute, async (isDocs) => {
-    if (isDocs && !searchIndex.value && docmap.value) {
-        await initializeSearch();
+// Trigger lazy search panel load when user types
+watch(searchQuery, (query) => {
+    if (query && query.length >= 2) {
+        searchTrigger.value = true;
+    } else {
+        searchTrigger.value = false;
     }
 });
 
-async function initializeSearch() {
-    try {
-        const { create, insert } = await import('@orama/orama');
-
-        searchIndex.value = create({
-            schema: {
-                title: 'string',
-                path: 'string',
-                category: 'string',
-                description: 'string',
-            },
-        });
-
-        // Index only metadata from docmap (no file content loading!)
-        if (docmap.value) {
-            for (const section of docmap.value.sections) {
-                for (const file of section.files) {
-                    await insert(searchIndex.value, {
-                        title: file.name.replace('.md', ''),
-                        path: `/documentation${file.path}`,
-                        category: section.title,
-                        description: file.category || '', // Use category as description
-                    });
-                }
-            }
-            console.debug('[docs] Search index initialized with metadata only');
-        }
-    } catch (error) {
-        console.error('[docs] Failed to initialize search:', error);
-    }
-}
-
-// Debounced search
-let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-watch(searchQuery, async (query) => {
-    if (searchTimeout) clearTimeout(searchTimeout);
-
-    if (!query || query.length < 2) {
-        searchResults.value = [];
-        return;
-    }
-
-    searchTimeout = setTimeout(async () => {
-        await performSearch(query);
-    }, 120);
-});
-
-async function performSearch(query: string) {
-    if (!searchIndex.value) return;
-
-    isSearching.value = true;
-    try {
-        const { search } = await import('@orama/orama');
-        const results = await search(searchIndex.value, {
-            term: query,
-            limit: 10,
-        });
-
-        searchResults.value = results.hits.map((hit: any) => ({
-            id: hit.id,
-            title: hit.document.title,
-            excerpt: `${hit.document.category} - ${hit.document.description}`,
-            path: hit.document.path,
-        }));
-    } catch (error) {
-        console.error('[docs] Search failed:', error);
-        searchResults.value = [];
-    } finally {
-        isSearching.value = false;
-    }
-}
-
-async function navigateToResult(result: SearchResult) {
+async function navigateToResult(path: string) {
     searchQuery.value = '';
-    searchResults.value = [];
-    await navigateTo(result.path);
+    searchTrigger.value = false;
+    await navigateTo(path);
 }
 
 function focusSearch() {

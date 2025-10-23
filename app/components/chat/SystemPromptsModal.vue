@@ -277,7 +277,6 @@ import {
 } from '~/db/prompts';
 
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
-import { encode } from 'gpt-tokenizer';
 
 import { isMobile } from '~/state/global';
 
@@ -379,20 +378,46 @@ function contentToText(content: any): string {
     return '';
 }
 
-// Cached token counts per prompt id (recomputed when prompts list changes)
-const tokenCounts = computed<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    for (const p of prompts.value) {
-        try {
-            const text = contentToText(p.content);
-            map[p.id] = text ? encode(text).length : 0;
-        } catch (e) {
-            console.warn('[SystemPromptsModal] token encode failed', e);
-            map[p.id] = 0;
+// Worker-based tokenizer
+const { countTokensBatch } = useTokenizer();
+
+// Token counts per prompt id (updated asynchronously via worker)
+const tokenCounts = ref<Record<string, number>>({});
+let tokenCountRequestId = 0;
+
+// Update token counts when prompts change
+watch(
+    prompts,
+    async (newPrompts) => {
+        const currentRequest = ++tokenCountRequestId;
+
+        if (!newPrompts.length) {
+            if (currentRequest === tokenCountRequestId) {
+                tokenCounts.value = {};
+            }
+            return;
         }
-    }
-    return map;
-});
+
+        try {
+            const items = newPrompts.map((p) => ({
+                key: p.id,
+                text: contentToText(p.content),
+            }));
+
+            const counts = await countTokensBatch(items);
+            if (currentRequest === tokenCountRequestId) {
+                tokenCounts.value = counts;
+            }
+        } catch (e) {
+            console.warn('[SystemPromptsModal] token counting failed', e);
+            // Fallback to empty counts
+            if (currentRequest === tokenCountRequestId) {
+                tokenCounts.value = {};
+            }
+        }
+    },
+    { immediate: false, deep: false }
+);
 
 // Totals derived from cached counts
 const totalTokens = computed(() =>

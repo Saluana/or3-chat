@@ -30,7 +30,7 @@
                             :data-msg-id="message.id"
                             :data-stream-id="message.stream_id"
                         >
-                            <ChatMessage
+                            <LazyChatMessage
                                 :message="message"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
@@ -50,7 +50,7 @@
                             style="overflow-anchor: none"
                             ref="tailWrapper"
                         >
-                            <ChatMessage
+                            <LazyChatMessage
                                 :message="streamingMessage as any"
                                 :thread-id="props.threadId"
                                 @retry="onRetry"
@@ -68,8 +68,8 @@
         <!-- Input area overlay -->
         <div :class="inputWrapperClass" :style="inputWrapperStyle">
             <div :class="innerInputContainerClass">
-                <chat-input-dropper
-                    ref="chatInputEl"
+                <lazy-chat-input-dropper
+                    hydrate-on-idle
                     :loading="loading"
                     :streaming="loading"
                     :container-width="containerWidth"
@@ -90,7 +90,6 @@
 <script setup lang="ts">
 // Refactored ChatContainer (Task 4) – orchestration only.
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
-import ChatMessage from './ChatMessage.vue';
 import {
     shallowRef,
     computed,
@@ -120,14 +119,10 @@ const pendingPromptId = ref<string | null>(null);
 // Resize (Req 3.4): useElementSize -> reactive width
 const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
-// Dynamic chat input height to compute scroll padding
-const chatInputEl: Ref<HTMLElement | null> = ref(null);
-const { height: chatInputHeight } = useElementSize(chatInputEl);
 // Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
 const emittedInputHeight = ref<number | null>(null);
-const effectiveInputHeight = computed(
-    () => emittedInputHeight.value || chatInputHeight.value || 140
-);
+// Rely on emitted height; fallback to a conservative default when unavailable
+const effectiveInputHeight = computed(() => emittedInputHeight.value ?? 140);
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
 const bottomPad = computed(() => {
     const base = Math.round(effectiveInputHeight.value + 16); // Add 16px buffer

@@ -2,7 +2,25 @@
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
-    devtools: { enabled: true },
+    experimental: {
+        defaults: {
+            nuxtLink: {
+                // Nuxt type defs currently expect booleans, but runtime accepts the string literal
+                // to force interaction-only prefetching.
+                prefetchOn: 'interaction' as unknown as {
+                    visibility?: boolean;
+                    interaction?: boolean;
+                },
+            },
+        },
+    },
+    devtools: {
+        enabled: true,
+
+        timeline: {
+            enabled: true,
+        },
+    },
     modules: ['@nuxt/ui', '@nuxt/fonts', '@vite-pwa/nuxt'],
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
@@ -56,11 +74,20 @@ export default defineNuxtConfig({
             navigateFallback: '/index.html',
             manifestTransforms: [
                 (entries) => ({
-                    manifest: entries.filter(
-                        (entry) =>
-                            entry.url !== 'streamsaver' &&
-                            entry.url !== 'streamsaver/index.html'
-                    ),
+                    manifest: entries.filter((entry) => {
+                        // Remove streamsaver app shell from precache
+                        if (
+                            entry.url === 'streamsaver' ||
+                            entry.url === 'streamsaver/index.html'
+                        )
+                            return false;
+                        // Exclude heavy KaTeX assets from precache (loaded lazily when Markdown with math is viewed)
+                        // This avoids large install-time caches without affecting runtime loading
+                        if (/^_nuxt\/KaTeX_/i.test(entry.url)) return false;
+                        if (/^_nuxt\/katex\..*\.css$/i.test(entry.url))
+                            return false;
+                        return true;
+                    }),
                     warnings: [],
                 }),
             ],
@@ -181,6 +208,22 @@ export default defineNuxtConfig({
         imports: [
             { name: 'useOpenRouterAuth', from: '~/core/auth/useOpenrouter' },
         ],
+    },
+    vite: {
+        worker: {
+            format: 'es',
+        },
+        build: {
+            rollupOptions: {
+                output: {
+                    manualChunks(id) {
+                        if (id.includes('/node_modules/gpt-tokenizer/')) {
+                            return 'gpt-tokenizer';
+                        }
+                    },
+                },
+            },
+        },
     },
     // Exclude test artifacts & example plugins from scanning and server bundle (saves build time & size)
     ignore: [

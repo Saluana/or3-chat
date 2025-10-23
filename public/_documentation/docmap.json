@@ -107,7 +107,19 @@
                     "name": "useEditorNodes.md",
                     "path": "/composables/useEditorNodes",
                     "category": "Editor",
-                    "summary": "Registry trio that lets plugins add TipTap nodes, marks, and extensions to the OR3 editor without patching the core component. Maintains global maps, keeps ordering stable, and plays nicely with HMR. `useEditorNodes` exports helpers that manage three registries:\\n\\n-   `registerEditorNode` / `listEditorNodes` for TipTap `Node` extensions.\\n-   `registerEditorMark` / `listEditorMarks` for TipTap `Mark` extensions.\\n-   `registerEditorExtension` / `listEditorExtensions` for generic TipTap extensions.\\n\\nEach registry sorts entries by `order` (default 200) and stores them on `globalThis` so reloads don’t duplicate items.\\n"
+                    "summary": "Registry trio that lets plugins add TipTap nodes, marks, and extensions to the OR3 editor without patching the core component. Maintains global maps, keeps ordering stable, and plays nicely with HMR. `useEditorNodes` exports helpers that manage three registries:\\n\\n-   `registerEditorNode` / `listEditorNodes` for TipTap `Node` extensions.\\n-   `registerEditorMark` / `listEditorMarks` for TipTap `Mark` extensions.\\n-   `registerEditorExtension` / `listEditorExtensions` for generic TipTap extensions.\\n\\nEach registry sorts entries by `order` (default 200) and stores them on `globalThis` so reloads don't duplicate items.\\n"
+                },
+                {
+                    "name": "useEditorExtensionLoader.md",
+                    "path": "/composables/useEditorExtensionLoader",
+                    "category": "Editor",
+                    "summary": "Factory and loader for lazy-loading TipTap editor extensions (nodes, marks, extensions). Resolves factories to actual extension instances while gracefully handling failures and skipping unavailable extensions.\\n\\n`useEditorExtensionLoader` bridges registration and initialization:\\n\\n-   Load TipTap nodes, marks, and extensions on-demand\\n-   Mix eager (already-imported) and lazy (dynamic import) extensions\\n-   Handle failures without crashing the editor\\n-   Support plugins providing lazy extension factories\\n-   Three helper functions for clean factory creation"
+                },
+                {
+                    "name": "useEditorToolbar.md",
+                    "path": "/composables/useEditorToolbar",
+                    "category": "Editor",
+                    "summary": "Toolbar registry for the TipTap editor. Lets plugins add buttons, toggles, or dropdowns to the retro editor header while keeping the UI reactive and order-aware. `useEditorToolbar` exposes helpers to manage toolbar buttons:\\n\\n-   `registerEditorToolbarButton()` adds or replaces a button definition.\\n-   `useEditorToolbarButtons(editorRef)` returns a computed, filtered, and sorted array of buttons ready to render.\\n-   `unregisterEditorToolbarButton()` cleans up during teardown/HMR.\\n-   `listRegisteredEditorToolbarButtonIds()` lets authors inspect the registry.\\n\\nButtons can customise visibility, active state, icons, ordering, and click behaviour."
                 },
                 {
                     "name": "useEditorToolbar.md",
@@ -182,6 +194,12 @@
                     "summary": "Typed helper for subscribing to hook events with automatic lifecycle cleanup. Registers callbacks on component mount and safely deregisters on unmount or HMR, preventing listener leaks.\\n\\n`useHookEffect` wraps the hook engine with Vue lifecycle awareness:\\n\\n-   Supports every hook name with full TypeScript inference\\n-   Auto-detaches on `onBeforeUnmount` and HMR resets\\n-   Lets you override hook kind (action/filter) and priority\\n-   Returns a disposer for manual cleanup if needed"
                 },
                 {
+                    "name": "useLazyBoundaries.md",
+                    "path": "/composables/useLazyBoundaries",
+                    "category": "Core",
+                    "summary": "Singleton lazy boundary manager for code-splitting heavy features in OR3. Handles dynamic imports, loading state, module caching, and telemetry for performance-critical boundaries.\\n\\n`useLazyBoundaries` ensures heavy modules (TipTap editor, Orama search, workspace export) load on-demand:\\n\\n-   Loads modules only once with promise caching\\n-   Tracks reactive state for each boundary (idle/loading/ready/error)\\n-   Emits telemetry events for performance monitoring\\n-   Supports retry with automatic cache clearing on errors\\n-   Provides optional callbacks after successful resolution"
+                },
+                {
                     "name": "useResponsiveState.md",
                     "path": "/composables/useResponsiveState",
                     "category": "Core",
@@ -192,6 +210,12 @@
                     "path": "/composables/useScrollLock",
                     "category": "Core",
                     "summary": "Utility composable that locks and unlocks body (or any element) scroll, essential for mobile overlays and modals. Manages `overflow` CSS property with automatic cleanup and optional reactive control.\\n\\n`useScrollLock` solves mobile UX problems:\\n\\n-   Lock scroll when showing overlays/modals\\n-   Automatic cleanup on component unmount\\n-   Optional reactive control via ref\\n-   Preserves existing overflow values"
+                },
+                {
+                    "name": "useTokenizer.md",
+                    "path": "/composables/useTokenizer",
+                    "category": "Core",
+                    "summary": "Composable for GPT tokenization with automatic Web Worker optimization. Counts tokens using a dedicated worker thread when available, falling back to direct encoding for SSR or when workers fail.\\n\\n`useTokenizer` keeps the UI responsive while counting tokens:\\n\\n-   Count tokens in single messages or batches\\n-   Uses Web Worker to avoid blocking main thread\\n-   Automatic fallback when workers unavailable\\n-   Shared worker instance across all components\\n-   SSR-safe with client-side hydration"
                 },
                 {
                     "name": "useMultiPane.md",

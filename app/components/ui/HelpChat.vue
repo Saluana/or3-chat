@@ -198,7 +198,7 @@
 <script setup lang="ts">
 import { StreamMarkdown } from 'streamdown-vue';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
-import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
+import type { ToolDefinition } from '~/utils/chat/types';
 import { useThrottleFn } from '@vueuse/core';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 
@@ -648,10 +648,6 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                             lastUpdate = now;
                         }
                     } else if (ev.type === 'tool_call') {
-                        console.log(
-                            '[HelpChat] Received tool call:',
-                            ev.tool_call
-                        );
                         foundToolCall = true;
 
                         // Flush any pending text buffer before processing tool call
@@ -733,9 +729,7 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                 const m = String(err?.message || err).toLowerCase();
                 const isAbort =
                     err?.name === 'AbortError' || m.includes('abort');
-                if (isAbort) {
-                    console.log('[HelpChat] Stream aborted intentionally');
-                } else {
+                if (!isAbort) {
                     throw err;
                 }
             }

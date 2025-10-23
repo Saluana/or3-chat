@@ -1,7 +1,4 @@
-import 'katex/dist/katex.min.css';
-import { useShikiHighlighter } from 'streamdown-vue';
 import { ref } from 'vue';
-useShikiHighlighter();
 
 export default defineNuxtPlugin((nuxtApp) => {
     const THEME_CLASSES = [

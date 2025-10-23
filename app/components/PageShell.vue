@@ -253,6 +253,7 @@ const route = useRoute();
 const layoutRef = ref<InstanceType<typeof ResizableSidebarLayout> | null>(null);
 const sideNavExpandedRef = ref<any | null>(null);
 const showDashboardModal = ref(false);
+const hasSyncedInitial = ref(false);
 
 // ---------------- Multi-pane ----------------
 const {
@@ -323,9 +324,11 @@ const activeChatThreadId = computed(() =>
 );
 
 // --------------- Initializers ---------------
+type ValidationStatus = 'found' | 'missing' | 'deleted';
+
 let validateToken = 0;
 
-async function validateThread(id: string): Promise<boolean> {
+async function validateThread(id: string): Promise<ValidationStatus> {
     try {
         if (!db.isOpen()) await db.open();
     } catch {}
@@ -333,14 +336,14 @@ async function validateThread(id: string): Promise<boolean> {
     for (let a = 0; a < ATTEMPTS; a++) {
         try {
             const t = await db.threads.get(id);
-            if (t && !t.deleted) return true;
+            if (t) return t.deleted ? 'deleted' : 'found';
         } catch {}
         if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
     }
-    return false;
+    return 'missing';
 }
 
-async function validateDocument(id: string): Promise<boolean> {
+async function validateDocument(id: string): Promise<ValidationStatus> {
     try {
         if (!db.isOpen()) await db.open();
     } catch {}
@@ -348,42 +351,60 @@ async function validateDocument(id: string): Promise<boolean> {
     for (let a = 0; a < ATTEMPTS; a++) {
         try {
             const row = await db.posts.get(id);
-            if (row && (row as any).postType === 'doc' && !(row as any).deleted)
-                return true;
+            if (row && (row as any).postType === 'doc')
+                return (row as any).deleted ? 'deleted' : 'found';
         } catch {}
         if (a < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 50));
     }
-    return false;
+    return 'missing';
 }
 
 async function initInitial() {
-    if (!process.client) return;
+    if (!process.client) {
+        hasSyncedInitial.value = true;
+        return;
+    }
     const pane = panes.value[0];
-    if (!pane) return;
+    if (!pane) {
+        hasSyncedInitial.value = true;
+        return;
+    }
     if (props.initialThreadId) {
         if (props.validateInitial) {
             pane.validating = true;
             const token = ++validateToken;
-            const ok = await validateThread(props.initialThreadId);
-            if (token !== validateToken) return;
-            if (!ok) {
+            const result = await validateThread(props.initialThreadId);
+            if (token !== validateToken) {
+                pane.validating = false;
+                return;
+            }
+            if (result === 'deleted') {
+                pane.validating = false;
                 redirectNotFound('chat');
                 return;
             }
         }
-        await setPaneThread(0, props.initialThreadId);
+        try {
+            await setPaneThread(0, props.initialThreadId);
+        } finally {
+            pane.validating = false;
+        }
         pane.mode = 'chat';
-        pane.validating = false;
-        updateUrl();
+        hasSyncedInitial.value = true;
+        updateUrl(true);
         return;
     }
     if (props.initialDocumentId) {
         if (props.validateInitial) {
             pane.validating = true;
             const token = ++validateToken;
-            const ok = await validateDocument(props.initialDocumentId);
-            if (token !== validateToken) return;
-            if (!ok) {
+            const result = await validateDocument(props.initialDocumentId);
+            if (token !== validateToken) {
+                pane.validating = false;
+                return;
+            }
+            if (result === 'deleted') {
+                pane.validating = false;
                 redirectNotFound('doc');
                 return;
             }
@@ -392,7 +413,8 @@ async function initInitial() {
         pane.documentId = props.initialDocumentId;
         pane.threadId = '';
         pane.validating = false;
-        updateUrl();
+        hasSyncedInitial.value = true;
+        updateUrl(true);
         return;
     }
     // No ids: set default mode
@@ -403,10 +425,12 @@ async function initInitial() {
     } else {
         pane.mode = 'chat';
     }
-    updateUrl();
+    hasSyncedInitial.value = true;
+    updateUrl(true);
 }
 
 function redirectNotFound(kind: 'chat' | 'doc') {
+    hasSyncedInitial.value = true;
     if (kind === 'chat') router.replace('/chat');
     else router.replace('/docs');
     toast.add({
@@ -420,8 +444,9 @@ function redirectNotFound(kind: 'chat' | 'doc') {
 }
 
 // --------------- URL Sync ---------------
-function updateUrl() {
+function updateUrl(force = false) {
     if (!process.client || !props.routeSync) return;
+    if (!force && !hasSyncedInitial.value) return;
     // Prevent route sync from clobbering the OAuth callback path while the
     // OpenRouter token exchange page is mounting. The callback component
     // itself will redirect after finishing, so we should not rewrite here.
