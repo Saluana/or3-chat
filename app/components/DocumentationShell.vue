@@ -363,12 +363,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, shallowRef, nextTick } from 'vue';
-import type { AnyOrama } from '@orama/orama';
-import { StreamMarkdown } from 'streamdown-vue';
+import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
+import LazySearchPanel from '~/components/documents/LazySearchPanel.vue';
 
 const { $theme } = useNuxtApp();
+
 const currentShikiTheme = computed(() => {
     const theme =
         ($theme as any)?.current?.value ?? ($theme as any)?.get?.() ?? 'light';
@@ -559,6 +560,8 @@ function onSidebarKeydown(event: KeyboardEvent) {
 
 // Load docmap on mount
 onMounted(async () => {
+    useShikiHighlighter();
+
     try {
         const response = await fetch('/_documentation/docmap.json');
         docmap.value = await response.json();

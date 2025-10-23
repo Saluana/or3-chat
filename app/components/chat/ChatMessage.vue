@@ -238,7 +238,7 @@ import { getFileMeta } from '~/db/files';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
 import { shallowRef } from 'vue';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import { StreamMarkdown } from 'streamdown-vue';
+import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafFn } from '@vueuse/core';
 
@@ -625,8 +625,58 @@ watchEffect(() => {
     rafHydrate.resume();
 });
 
+// Detect if message has math or code content
+const hasMathContent = computed(() => {
+    const text = props.message.text || '';
+    return /\$\$[\s\S]*?\$\$|\$[^\$\n]+\$/.test(text);
+});
+const hasCodeContent = computed(() => {
+    const text = props.message.text || '';
+    return /```[\s\S]*?```|`[^`\n]+`/.test(text);
+});
+
+// Load KaTeX CSS during idle time only if message has math
+const loadKaTeXOnIdle = () => {
+    if (!hasMathContent.value) return; // Skip if no math
+    const idleLoader = (callback: () => void) => {
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(callback, { timeout: 2000 }); // Fallback after 2s
+        } else {
+            setTimeout(callback, 0); // Polyfill for older browsers
+        }
+    };
+    idleLoader(() => {
+        import('katex/dist/katex.min.css').catch((e) => {
+            if (import.meta.dev)
+                console.warn('[ChatMessage] KaTeX CSS load error:', e);
+        });
+    });
+};
+
+// Load Shiki highlighter during idle time only if message has code
+const loadShikiOnIdle = () => {
+    if (props.message.role !== 'assistant' || !hasCodeContent.value) return;
+    const idleLoader = (callback: () => void) => {
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(callback, { timeout: 2000 });
+        } else {
+            setTimeout(callback, 0);
+        }
+    };
+    idleLoader(() => {
+        try {
+            useShikiHighlighter();
+        } catch (e) {
+            if (import.meta.dev)
+                console.warn('[ChatMessage] Shiki load error:', e);
+        }
+    });
+};
+
 onMounted(() => {
     rafHydrate.resume();
+    loadKaTeXOnIdle();
+    loadShikiOnIdle();
 });
 onMounted(() => {
     if (import.meta.dev) {
@@ -639,6 +689,8 @@ onMounted(() => {
             hasFileHashMarkdown: hashes.some((h) =>
                 (props.message.text || '').includes(`file-hash:${h}`)
             ),
+            hasMath: hasMathContent.value,
+            hasCode: hasCodeContent.value,
             textPreview: (props.message.text || '').slice(0, 140),
         });
     }

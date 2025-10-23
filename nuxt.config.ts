@@ -74,11 +74,20 @@ export default defineNuxtConfig({
             navigateFallback: '/index.html',
             manifestTransforms: [
                 (entries) => ({
-                    manifest: entries.filter(
-                        (entry) =>
-                            entry.url !== 'streamsaver' &&
-                            entry.url !== 'streamsaver/index.html'
-                    ),
+                    manifest: entries.filter((entry) => {
+                        // Remove streamsaver app shell from precache
+                        if (
+                            entry.url === 'streamsaver' ||
+                            entry.url === 'streamsaver/index.html'
+                        )
+                            return false;
+                        // Exclude heavy KaTeX assets from precache (loaded lazily when Markdown with math is viewed)
+                        // This avoids large install-time caches without affecting runtime loading
+                        if (/^_nuxt\/KaTeX_/i.test(entry.url)) return false;
+                        if (/^_nuxt\/katex\..*\.css$/i.test(entry.url))
+                            return false;
+                        return true;
+                    }),
                     warnings: [],
                 }),
             ],

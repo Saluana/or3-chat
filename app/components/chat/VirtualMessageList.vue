@@ -5,7 +5,7 @@
             :data="messages"
             :itemSize="effectiveItemSize || undefined"
             :overscan="overscan"
-            :scrollRef="scrollParent || undefined"
+            :scrollRef="scrollParentRef || undefined"
             @scroll="onScroll"
             @scroll-end="onScrollEnd"
             v-slot="{ item, index }"

@@ -360,11 +360,27 @@ async function initInitial() {
     if (!process.client) return;
     const pane = panes.value[0];
     if (!pane) return;
+    if (import.meta.dev) {
+        console.log('[PageShell.initInitial]', {
+            initialThreadId: props.initialThreadId,
+            initialDocumentId: props.initialDocumentId,
+            validateInitial: props.validateInitial,
+            defaultMode: props.defaultMode,
+        });
+    }
     if (props.initialThreadId) {
         if (props.validateInitial) {
             pane.validating = true;
             const token = ++validateToken;
             const ok = await validateThread(props.initialThreadId);
+            if (import.meta.dev) {
+                console.log('[PageShell.initInitial] validate result:', {
+                    id: props.initialThreadId,
+                    ok,
+                    token,
+                    currentToken: validateToken,
+                });
+            }
             if (token !== validateToken) return;
             if (!ok) {
                 redirectNotFound('chat');

@@ -439,7 +439,9 @@ import {
     onMounted,
     onUnmounted,
     ref,
+    reactive,
     watch,
+    watchEffect,
     computed,
     nextTick,
     defineAsyncComponent,
@@ -665,11 +667,41 @@ let subProjects: { unsubscribe: () => void } | null = null;
 // Virtualization removed — always render the simple list for chats.
 
 // Observe container + bottom nav heights (ResizeObserver via VueUse) and recompute list height.
-// NOTE: TS plugin was over-narrowing DOM element types; cast refs to any to satisfy MaybeElementRef.
-const _containerSize = useElementSize(containerRef as any);
-const _bottomSize = useElementSize(bottomNavRef as any);
-const containerHeight = _containerSize.height;
-const bottomNavHeight = _bottomSize.height;
+// Use reactive objects updated via watch to avoid observing null refs during navigation
+const containerSize = reactive({ width: 0, height: 0 });
+const bottomSize = reactive({ width: 0, height: 0 });
+
+// Only observe when elements exist
+watch(
+    containerRef,
+    (el) => {
+        if (el) {
+            const { width, height } = useElementSize(el);
+            watchEffect(() => {
+                containerSize.width = width.value;
+                containerSize.height = height.value;
+            });
+        }
+    },
+    { immediate: true }
+);
+
+watch(
+    bottomNavRef,
+    (el) => {
+        if (el) {
+            const { width, height } = useElementSize(el);
+            watchEffect(() => {
+                bottomSize.width = width.value;
+                bottomSize.height = height.value;
+            });
+        }
+    },
+    { immediate: true }
+);
+
+const containerHeight = computed(() => containerSize.height);
+const bottomNavHeight = computed(() => bottomSize.height);
 
 function recomputeListHeight() {
     const container = containerRef.value; // full sidebar container

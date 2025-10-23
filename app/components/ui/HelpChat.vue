@@ -198,7 +198,7 @@
 <script setup lang="ts">
 import { StreamMarkdown } from 'streamdown-vue';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
-import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
+import type { ToolDefinition } from '~/utils/chat/types';
 import { useThrottleFn } from '@vueuse/core';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 

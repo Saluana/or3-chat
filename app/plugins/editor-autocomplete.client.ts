@@ -5,8 +5,8 @@ import {
 } from '~/composables';
 import type { Editor } from '@tiptap/vue-3';
 import AutocompleteState from './EditorAutocomplete/state';
-import { AutocompleteExtension } from './EditorAutocomplete/TiptapExtension';
 import { computed } from 'vue';
+import type { EditorExtension } from '~/composables/editor/useEditorNodes';
 
 export default defineNuxtPlugin(() => {
     try {
@@ -15,12 +15,17 @@ export default defineNuxtPlugin(() => {
         // internally to determine if it should be active.
 
         if (import.meta.client) {
-            // Register the TipTap extension
+            // Register the TipTap extension lazily to keep TipTap/ProseMirror out of entry
             registerEditorExtension({
                 id: 'editor-autocomplete:extension',
-                extension: AutocompleteExtension,
                 order: 100, // Load before most plugins but after core
-            });
+                factory: async () => {
+                    const mod = await import(
+                        /* @vite-ignore */ './EditorAutocomplete/TiptapExtension'
+                    );
+                    return (mod as any).AutocompleteExtension as any;
+                },
+            } as EditorExtension);
 
             // Register toolbar button to toggle autocomplete
             registerEditorToolbarButton({

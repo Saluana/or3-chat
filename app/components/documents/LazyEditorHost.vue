@@ -1,61 +1,74 @@
 <template>
-    <Suspense>
-        <template #default>
-            <DocumentEditorRoot :document-id="documentId" />
-        </template>
-        <template #fallback>
-            <div
-                class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
-            >
-                <!-- Skeleton Header -->
+    <div class="flex flex-col h-full w-full min-h-0">
+        <Suspense>
+            <template #default>
+                <DocumentEditorRoot :document-id="documentId" />
+            </template>
+            <template #fallback>
                 <div
-                    class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2 gap-2"
+                    class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
                 >
+                    <!-- Skeleton Header -->
                     <div
-                        class="flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
-                    ></div>
-                    <div class="w-16 h-6 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"></div>
-                </div>
-
-                <!-- Skeleton Toolbar -->
-                <div class="flex gap-2 px-3 py-2 border-b border-neutral-200/20 dark:border-neutral-800/20">
-                    <div
-                        v-for="i in 8"
-                        :key="i"
-                        class="w-8 h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded-sm animate-pulse"
-                    ></div>
-                </div>
-
-                <!-- Skeleton Content -->
-                <div class="flex-1 overflow-hidden px-8 py-4">
-                    <div class="space-y-3 max-w-[820px] mx-auto">
+                        class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2 gap-2"
+                    >
                         <div
-                            v-for="i in 5"
-                            :key="`line-${i}`"
-                            class="h-4 bg-neutral-300/30 dark:bg-neutral-700/30 rounded"
-                            :style="{ width: `${85 + Math.random() * 15}%` }"
+                            class="flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
+                        ></div>
+                        <div
+                            class="w-16 h-6 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
                         ></div>
                     </div>
-                </div>
 
-                <!-- Error & Retry (shown after timeout) -->
-                <div v-if="showError" class="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <div class="bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-md text-center">
-                        <p class="text-red-600 dark:text-red-400 mb-4">
-                            Failed to load editor. Please try again.
-                        </p>
-                        <UButton
-                            size="md"
-                            @click="retryLoad"
-                            class="retro-btn"
+                    <!-- Skeleton Toolbar -->
+                    <div
+                        class="flex gap-2 px-3 py-2 border-b border-neutral-200/20 dark:border-neutral-800/20"
+                    >
+                        <div
+                            v-for="i in 8"
+                            :key="i"
+                            class="w-8 h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded-sm animate-pulse"
+                        ></div>
+                    </div>
+
+                    <!-- Skeleton Content -->
+                    <div class="flex-1 overflow-hidden px-8 py-4">
+                        <div class="space-y-3 max-w-[820px] mx-auto">
+                            <div
+                                v-for="i in 5"
+                                :key="`line-${i}`"
+                                class="h-4 bg-neutral-300/30 dark:bg-neutral-700/30 rounded"
+                                :style="{
+                                    width: `${85 + Math.random() * 15}%`,
+                                }"
+                            ></div>
+                        </div>
+                    </div>
+
+                    <!-- Error & Retry (shown after timeout) -->
+                    <div
+                        v-if="showError"
+                        class="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                    >
+                        <div
+                            class="bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-md text-center"
                         >
-                            Retry
-                        </UButton>
+                            <p class="text-red-600 dark:text-red-400 mb-4">
+                                Failed to load editor. Please try again.
+                            </p>
+                            <UButton
+                                size="md"
+                                @click="retryLoad"
+                                class="retro-btn"
+                            >
+                                Retry
+                            </UButton>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </template>
-    </Suspense>
+            </template>
+        </Suspense>
+    </div>
 </template>
 
 <script setup lang="ts">

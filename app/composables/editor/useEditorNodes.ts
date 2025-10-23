@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import type { Node, Mark, Extension } from '@tiptap/core';
+import type { LazyEditorExtensionFactory } from './useEditorExtensionLoader';
 
 /** Definition for an extendable editor node extension. */
 export interface EditorNode {
@@ -26,7 +27,9 @@ export interface EditorExtension {
     /** Unique id (stable across reloads). */
     id: string;
     /** TipTap Extension instance. */
-    extension: Extension;
+    extension?: Extension;
+    /** Optional lazy factory to create the extension without pulling TipTap into entry. */
+    factory?: LazyEditorExtensionFactory;
     /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */
     order?: number;
 }
