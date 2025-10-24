@@ -522,10 +522,9 @@ const tocList = computed<TocItem[]>(
             ? props.toc
             : localToc.value) as TocItem[]
 );
-const allowToc = computed(() => (props.showToc ?? true) !== false);
 const computedShowToc = computed(
     () =>
-        allowToc.value &&
+        props.showToc &&
         tocList.value.length > 0 &&
         !isLoadingContent.value &&
         !(searchQuery.value && searchTrigger.value)
@@ -686,19 +685,18 @@ onMounted(async () => {
 
 watch(
     () => route.path,
-    (path) => {
+    async (path, oldPath) => {
         mobileTocOpen.value = false;
         headingOffsets.value = {};
         expandGroupsForPath(path);
-        nextTick(computeHeadingOffsets);
-    },
-    { immediate: true }
-);
-
-watch(
-    () => resolvedNavigation.value,
-    () => {
-        expandGroupsForPath(route.path);
+        if (isMobile.value && sidebarOpen.value) {
+            closeSidebar({ restoreFocus: false });
+        }
+        await nextTick();
+        computeHeadingOffsets();
+        if (oldPath !== undefined && path !== oldPath) {
+            await loadContentFromRoute();
+        }
     },
     { immediate: true }
 );
@@ -717,15 +715,6 @@ watch(isMobile, (mobile) => {
         closeSidebar({ restoreFocus: false });
     }
 });
-
-watch(
-    () => route.path,
-    () => {
-        if (isMobile.value && sidebarOpen.value) {
-            closeSidebar({ restoreFocus: false });
-        }
-    }
-);
 
 watch(sidebarOpen, async (open) => {
     if (!import.meta.client) return;
@@ -938,6 +927,8 @@ function applyDocmapNavigation(map: Docmap) {
             groups,
         } satisfies NavCategory;
     });
+
+    expandGroupsForPath(route.path);
 }
 
 // Use provided content or loaded content
