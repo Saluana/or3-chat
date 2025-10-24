@@ -309,6 +309,58 @@
 
                         <!-- Content -->
                         <div v-else ref="contentRoot">
+                            <!-- Mobile TOC (collapsible) -->
+                            <div
+                                v-if="computedShowToc && tocList.length > 0"
+                                class="lg:hidden mb-6 border-2 border-[var(--md-inverse-surface)] rounded-[3px] bg-[var(--md-surface)]/40"
+                            >
+                                <button
+                                    type="button"
+                                    class="w-full flex items-center justify-between px-4 py-3 text-left font-ps2 text-sm text-[var(--md-on-surface)] uppercase tracking-wide transition-colors hover:bg-[var(--md-primary)]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]"
+                                    @click="mobileTocOpen = !mobileTocOpen"
+                                    :aria-expanded="mobileTocOpen"
+                                >
+                                    <span>On this page</span>
+                                    <span
+                                        class="i-heroicons-chevron-down-20-solid transition-transform duration-200"
+                                        :class="{ 'rotate-180': mobileTocOpen }"
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                                <Transition name="collapsible">
+                                    <div
+                                        v-if="mobileTocOpen"
+                                        class="px-4 py-3 border-t-2 border-[var(--md-inverse-surface)]"
+                                    >
+                                        <ul class="space-y-2 text-sm">
+                                            <li
+                                                v-for="heading in tocList"
+                                                :key="heading.id"
+                                            >
+                                                <a
+                                                    :href="`#${heading.id}`"
+                                                    class="block py-1 px-2 text-[var(--md-on-surface)] hover:text-[var(--md-primary)] transition-colors rounded-[3px] hover:bg-[var(--md-primary)]/5"
+                                                    :class="{
+                                                        'pl-4':
+                                                            heading.level === 3,
+                                                        'pl-6':
+                                                            heading.level === 4,
+                                                    }"
+                                                    @click.prevent="
+                                                        scrollToHeading(
+                                                            heading.id
+                                                        );
+                                                        mobileTocOpen = false;
+                                                    "
+                                                >
+                                                    {{ heading.text }}
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </Transition>
+                            </div>
+
                             <StreamMarkdown
                                 :content="displayContent"
                                 class="prose prose-pre:font-mono prose-retro max-w-none"
@@ -502,6 +554,7 @@ const resolvedNavigation = computed<NavCategory[]>(() =>
 );
 
 const expandedGroups = ref<Set<string>>(new Set());
+const mobileTocOpen = ref(false);
 
 function groupKey(category: string, group: string) {
     return `${category}::${group}`;
