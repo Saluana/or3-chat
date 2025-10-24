@@ -52,6 +52,13 @@ export interface ToolDefinition {
             required?: string[];
         };
     };
+    ui?: {
+        label?: string;
+        icon?: string;
+        descriptionHint?: string;
+        defaultEnabled?: boolean;
+        category?: string;
+    };
 }
 
 export type ToolChoice =

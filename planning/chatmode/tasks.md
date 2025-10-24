@@ -4,14 +4,14 @@ artifact_id: 4c95e3db-4198-44fb-b4b3-1f25f50b42d4
 
 1. Tool Registry Core
 
-    - [ ] Create `app/utils/chat/tool-registry.ts` with singleton store, `registerTool`, `unregisterTool`, `listTools`, and `setEnabled` APIs. Requirements: 1, 2, 3, 8, 10
-    - [ ] Implement handler timeout and argument validation helpers within the registry module. Requirements: 5, 6, 9
-    - [ ] Persist enabled states to localStorage (`or3.tools.enabled`) and hydrate on first use. Requirements: 3, 7, 8
+    - [x] Create `app/utils/chat/tool-registry.ts` with singleton store, `registerTool`, `unregisterTool`, `listTools`, and `setEnabled` APIs. Requirements: 1, 2, 3, 8, 10
+    - [x] Implement handler timeout and argument validation helpers within the registry module. Requirements: 5, 6, 9
+    - [x] Persist enabled states to localStorage (`or3.tools.enabled`) and hydrate on first use. Requirements: 3, 7, 8
 
 2. Shared Types & Developer API
 
-    - [ ] Extend `ToolDefinition` in `app/utils/chat/types.ts` with optional UI metadata and export `ToolHandler` / `ExtendedToolDefinition` types. Requirements: 1, 2, 10
-    - [ ] Add a plugin-friendly re-export (e.g., `app/utils/chat/index.ts`) exposing `registerTool` and `unregisterTool`. Requirements: 1, 10
+    - [x] Extend `ToolDefinition` in `app/utils/chat/types.ts` with optional UI metadata and export `ToolHandler` / `ExtendedToolDefinition` types. Requirements: 1, 2, 10
+    - [x] Add a plugin-friendly re-export (e.g., `app/utils/chat/tools-public.ts`) exposing `registerTool` and `unregisterTool`. Requirements: 1, 10
 
 3. Chat Engine Integration
 
