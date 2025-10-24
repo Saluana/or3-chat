@@ -332,31 +332,10 @@
                                         v-if="mobileTocOpen"
                                         class="px-4 py-3 border-t-2 border-[var(--md-inverse-surface)]"
                                     >
-                                        <ul class="space-y-2 text-sm">
-                                            <li
-                                                v-for="heading in tocList"
-                                                :key="heading.id"
-                                            >
-                                                <a
-                                                    :href="`#${heading.id}`"
-                                                    class="block py-1 px-2 text-[var(--md-on-surface)] hover:text-[var(--md-primary)] transition-colors rounded-[3px] hover:bg-[var(--md-primary)]/5"
-                                                    :class="{
-                                                        'pl-4':
-                                                            heading.level === 3,
-                                                        'pl-6':
-                                                            heading.level === 4,
-                                                    }"
-                                                    @click.prevent="
-                                                        scrollToHeading(
-                                                            heading.id
-                                                        );
-                                                        mobileTocOpen = false;
-                                                    "
-                                                >
-                                                    {{ heading.text }}
-                                                </a>
-                                            </li>
-                                        </ul>
+                                        <TocListView
+                                            :toc="tocList"
+                                            @select="onMobileTocSelect"
+                                        />
                                     </div>
                                 </Transition>
                             </div>
@@ -393,21 +372,7 @@
                     >
                         On this page
                     </h3>
-                    <ul class="space-y-2 text-sm">
-                        <li v-for="heading in tocList" :key="heading.id">
-                            <a
-                                :href="`#${heading.id}`"
-                                class="block py-1 px-2 text-[var(--md-on-surface)] hover:text-[var(--md-primary)] transition-colors rounded-[3px] hover:bg-[var(--md-primary)]/5"
-                                :class="{
-                                    'pl-4': heading.level === 3,
-                                    'pl-6': heading.level === 4,
-                                }"
-                                @click.prevent="scrollToHeading(heading.id)"
-                            >
-                                {{ heading.text }}
-                            </a>
-                        </li>
-                    </ul>
+                    <TocListView :toc="tocList" @select="scrollToHeading" />
                 </nav>
             </aside>
         </div>
@@ -424,7 +389,10 @@ import {
     shallowRef,
     nextTick,
     onBeforeUnmount,
+    defineComponent,
+    h,
 } from 'vue';
+import type { PropType } from 'vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
@@ -478,21 +446,63 @@ interface Docmap {
     sections: DocmapSection[];
 }
 
-const props = defineProps<{
-    navigation?: NavCategory[];
-    showToc?: boolean;
-    toc?: TocItem[];
-    content?: string;
-}>();
+const TocListView = defineComponent({
+    name: 'DocumentationTocList',
+    props: {
+        toc: {
+            type: Array as PropType<TocItem[]>,
+            required: true,
+        },
+    },
+    emits: ['select'],
+    setup(props, { emit }) {
+        const handleSelect = (id: string, event: MouseEvent) => {
+            event.preventDefault();
+            emit('select', id);
+        };
 
-if (import.meta.client) {
-    console.debug('[docs:toc] props received:', {
-        showToc: props.showToc,
-        hasToc: !!props.toc,
-        hasNav: !!props.navigation,
-        hasContent: !!props.content,
-    });
-}
+        return () =>
+            h(
+                'ul',
+                { class: 'space-y-2 text-sm' },
+                props.toc.map((heading) =>
+                    h(
+                        'li',
+                        { key: heading.id },
+                        h(
+                            'a',
+                            {
+                                href: `#${heading.id}`,
+                                class: [
+                                    'block py-1 px-2 text-[var(--md-on-surface)] transition-colors rounded-[3px] hover:text-[var(--md-primary)] hover:bg-[var(--md-primary)]/5',
+                                    heading.level === 3
+                                        ? 'pl-4'
+                                        : heading.level === 4
+                                        ? 'pl-6'
+                                        : undefined,
+                                ],
+                                onClick: (event: MouseEvent) =>
+                                    handleSelect(heading.id, event),
+                            },
+                            heading.text
+                        )
+                    )
+                )
+            );
+    },
+});
+
+const props = withDefaults(
+    defineProps<{
+        navigation?: NavCategory[];
+        showToc?: boolean;
+        toc?: TocItem[];
+        content?: string;
+    }>(),
+    {
+        showToc: true,
+    }
+);
 
 const searchQuery = ref('');
 const searchTrigger = ref(false);
@@ -502,6 +512,7 @@ const isLoadingContent = ref(false);
 // Root element that contains rendered markdown to extract headings from
 const contentRoot = ref<HTMLElement | null>(null);
 let tocObserver: MutationObserver | null = null;
+const headingOffsets = ref<Record<string, number>>({});
 
 // Local TOC derived from DOM when not provided via props
 const localToc = ref<TocItem[]>([]);
@@ -511,22 +522,14 @@ const tocList = computed<TocItem[]>(
             ? props.toc
             : localToc.value) as TocItem[]
 );
-const computedShowToc = computed(() => {
-    // Always show TOC when we have headings (ignore props.showToc for now)
-    const inSearch = !!searchQuery.value && !!searchTrigger.value;
-    const result =
-        !inSearch && tocList.value.length > 0 && !isLoadingContent.value;
-    if (import.meta.client) {
-        console.debug('[docs:toc] computedShowToc calc:', {
-            propsShowToc: props.showToc,
-            inSearch,
-            tocListLen: tocList.value.length,
-            isLoading: isLoadingContent.value,
-            result,
-        });
-    }
-    return result;
-});
+const allowToc = computed(() => (props.showToc ?? true) !== false);
+const computedShowToc = computed(
+    () =>
+        allowToc.value &&
+        tocList.value.length > 0 &&
+        !isLoadingContent.value &&
+        !(searchQuery.value && searchTrigger.value)
+);
 
 // LRU Cache for markdown files - limit to 20 most recent files
 const MAX_CACHE_SIZE = 20;
@@ -665,9 +668,6 @@ onMounted(async () => {
     try {
         const response = await fetch('/_documentation/docmap.json');
         docmap.value = await response.json();
-        if (import.meta.client)
-            console.debug('[docs] docmap loaded?', !!docmap.value);
-
         // Build navigation from docmap
         if (docmap.value) {
             applyDocmapNavigation(docmap.value);
@@ -678,13 +678,19 @@ onMounted(async () => {
 
     // Load content based on route
     await loadContentFromRoute();
+
+    if (import.meta.client) {
+        window.addEventListener('resize', computeHeadingOffsets);
+    }
 });
 
 watch(
     () => route.path,
     (path) => {
-        if (import.meta.client) console.debug('[docs] route changed to', path);
+        mobileTocOpen.value = false;
+        headingOffsets.value = {};
         expandGroupsForPath(path);
+        nextTick(computeHeadingOffsets);
     },
     { immediate: true }
 );
@@ -693,6 +699,15 @@ watch(
     () => resolvedNavigation.value,
     () => {
         expandGroupsForPath(route.path);
+    },
+    { immediate: true }
+);
+
+watch(
+    tocList,
+    () => {
+        headingOffsets.value = {};
+        nextTick(computeHeadingOffsets);
     },
     { immediate: true }
 );
@@ -745,6 +760,7 @@ watch(
 
 async function loadContentFromRoute() {
     const path = route.path;
+    headingOffsets.value = {};
 
     // If on base /documentation route, show welcome page
     if (path === '/documentation' || path === '/documentation/') {
@@ -947,12 +963,6 @@ function buildTocFromDom() {
               )
           )
         : [];
-    console.debug(
-        '[docs:toc] contentRoot present:',
-        !!contentRoot.value,
-        'domHeadings:',
-        headings.length
-    );
 
     const used = new Set<string>();
     const items: TocItem[] = [];
@@ -977,13 +987,12 @@ function buildTocFromDom() {
     // If DOM headings found, use them
     if (items.length > 0) {
         localToc.value = items;
-        console.debug('[docs:toc] built from DOM:', items.length);
+        nextTick(computeHeadingOffsets);
         return;
     }
 
     // Fallback: parse headings from markdown string (SSR-safe)
     const md = displayContent.value || '';
-    console.debug('[docs:toc] fallback markdown length:', md.length);
     if (!md) {
         localToc.value = [];
         return;
@@ -1007,7 +1016,7 @@ function buildTocFromDom() {
         mdItems.push({ id, text, level });
     }
     localToc.value = mdItems;
-    console.debug('[docs:toc] built from markdown:', mdItems.length);
+    nextTick(computeHeadingOffsets);
 }
 
 function observeTocUntilReady() {
@@ -1044,14 +1053,26 @@ function observeTocUntilReady() {
     });
 }
 
+function computeHeadingOffsets() {
+    if (!import.meta.client) return;
+    const container = document.querySelector('main.flex-1');
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+    const offsets: Record<string, number> = {};
+
+    for (const item of tocList.value) {
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        offsets[item.id] = container.scrollTop + (rect.top - containerRect.top);
+    }
+
+    headingOffsets.value = offsets;
+}
+
 // Recompute TOC after content loads/renders
 watch([displayContent, isLoadingContent], async ([content, loading]) => {
     if (!import.meta.client) return;
-    console.debug('[docs:toc] watcher', {
-        hasContent: !!content,
-        loading,
-        contentLen: content?.length || 0,
-    });
     if (!loading && content) {
         await nextTick();
         // Build now and also observe in case streaming/async render continues
@@ -1060,24 +1081,13 @@ watch([displayContent, isLoadingContent], async ([content, loading]) => {
     }
 });
 
-// Debug: log toc size and visibility state changes
-watch(tocList, (list) => {
-    if (!import.meta.client) return;
-    console.debug('[docs:toc] tocList size ->', list.length);
-});
-watch(
-    () => computedShowToc.value,
-    (val) => {
-        if (!import.meta.client) return;
-        console.debug('[docs:toc] computedShowToc ->', val);
-    },
-    { immediate: true }
-);
-
 onBeforeUnmount(() => {
     if (tocObserver) {
         tocObserver.disconnect();
         tocObserver = null;
+    }
+    if (import.meta.client) {
+        window.removeEventListener('resize', computeHeadingOffsets);
     }
 });
 
@@ -1111,17 +1121,26 @@ function toggleTheme() {
 }
 
 function scrollToHeading(id: string) {
-    const el = document.getElementById(id);
-    if (!el) return;
-
-    // Find the scrollable main element
     const main = document.querySelector('main.flex-1');
-    if (main) {
-        const mainRect = main.getBoundingClientRect();
-        const elRect = el.getBoundingClientRect();
-        const scrollTop = main.scrollTop + (elRect.top - mainRect.top) - 20; // 20px offset from top
-        main.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    if (!main) return;
+
+    if (!(id in headingOffsets.value)) {
+        computeHeadingOffsets();
     }
+
+    const target = headingOffsets.value[id];
+    if (typeof target !== 'number') return;
+
+    const offset = isMobile.value ? 24 : 32;
+    main.scrollTo({
+        top: Math.max(0, target - offset),
+        behavior: 'smooth',
+    });
+}
+
+function onMobileTocSelect(id: string) {
+    scrollToHeading(id);
+    mobileTocOpen.value = false;
 }
 </script>
 

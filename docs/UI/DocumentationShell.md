@@ -91,7 +91,7 @@ const markdown = ref('# Your documentation content...');
 | ------------ | --------------- | --------------------- | --------------------------------------- |
 | `content`    | `string`        | `undefined`           | Markdown content to render              |
 | `navigation` | `NavCategory[]` | Default nav structure | Sidebar navigation items                |
-| `showToc`    | `boolean`       | `false`               | Show table of contents in right sidebar |
+| `showToc`    | `boolean`       | `true`                | Show table of contents in right sidebar |
 | `toc`        | `TocItem[]`     | `[]`                  | Table of contents entries               |
 
 ### Type Definitions
