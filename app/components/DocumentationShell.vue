@@ -276,7 +276,7 @@
                 class="flex-1 min-w-0 max-w-[100dvw] overflow-x-hidden overflow-y-auto scrollbars"
             >
                 <div
-                    class="max-w-[100dvw] sm:max-w-[780px] mx-auto pt-5 pb-24 px-4 md:p-8"
+                    class="max-w-[100dvw] sm:max-w-[680px] lg:max-w-[720px] mx-auto pt-5 pb-24 px-4 md:p-8"
                 >
                     <!-- Search Results -->
                     <div v-if="searchQuery && searchTrigger" class="mb-8">
@@ -308,31 +308,32 @@
                         </div>
 
                         <!-- Content -->
-                        <StreamMarkdown
-                            v-else
-                            :content="displayContent"
-                            class="prose prose-pre:font-mono prose-retro max-w-none"
-                            :allowed-link-prefixes="[
-                                'https://',
-                                'http://',
-                                '/',
-                            ]"
-                            :allowed-image-prefixes="[
-                                'https://',
-                                'http://',
-                                '/',
-                            ]"
-                            :code-block-show-line-numbers="false"
-                            :shiki-theme="currentShikiTheme"
-                        />
+                        <div v-else ref="contentRoot">
+                            <StreamMarkdown
+                                :content="displayContent"
+                                class="prose prose-pre:font-mono prose-retro max-w-none"
+                                :allowed-link-prefixes="[
+                                    'https://',
+                                    'http://',
+                                    '/',
+                                ]"
+                                :allowed-image-prefixes="[
+                                    'https://',
+                                    'http://',
+                                    '/',
+                                ]"
+                                :code-block-show-line-numbers="false"
+                                :shiki-theme="currentShikiTheme"
+                            />
+                        </div>
                     </div>
                 </div>
             </main>
 
             <!-- Table of Contents (Right Sidebar) -->
             <aside
-                v-if="showToc && toc && toc.length > 0"
-                class="flex-shrink-0 w-64 border-l-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden xl:block"
+                v-if="computedShowToc && tocList.length > 0"
+                class="flex-shrink-0 w-64 border-l-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
             >
                 <nav class="p-4 sticky top-0">
                     <h3
@@ -341,7 +342,7 @@
                         On this page
                     </h3>
                     <ul class="space-y-2 text-sm">
-                        <li v-for="heading in toc" :key="heading.id">
+                        <li v-for="heading in tocList" :key="heading.id">
                             <a
                                 :href="`#${heading.id}`"
                                 class="block py-1 px-2 text-[var(--md-on-surface)] hover:text-[var(--md-primary)] transition-colors rounded-[3px] hover:bg-[var(--md-primary)]/5"
@@ -349,6 +350,7 @@
                                     'pl-4': heading.level === 3,
                                     'pl-6': heading.level === 4,
                                 }"
+                                @click.prevent="scrollToHeading(heading.id)"
                             >
                                 {{ heading.text }}
                             </a>
@@ -362,7 +364,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, shallowRef, nextTick } from 'vue';
+import {
+    ref,
+    computed,
+    watch,
+    onMounted,
+    shallowRef,
+    nextTick,
+    onBeforeUnmount,
+} from 'vue';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import { useScrollLock } from '~/composables/core/useScrollLock';
@@ -423,11 +433,48 @@ const props = defineProps<{
     content?: string;
 }>();
 
+if (import.meta.client) {
+    console.debug('[docs:toc] props received:', {
+        showToc: props.showToc,
+        hasToc: !!props.toc,
+        hasNav: !!props.navigation,
+        hasContent: !!props.content,
+    });
+}
+
 const searchQuery = ref('');
 const searchTrigger = ref(false);
 const docmap = ref<Docmap | null>(null);
 const currentContent = ref('');
 const isLoadingContent = ref(false);
+// Root element that contains rendered markdown to extract headings from
+const contentRoot = ref<HTMLElement | null>(null);
+let tocObserver: MutationObserver | null = null;
+
+// Local TOC derived from DOM when not provided via props
+const localToc = ref<TocItem[]>([]);
+const tocList = computed<TocItem[]>(
+    () =>
+        (props.toc && props.toc.length
+            ? props.toc
+            : localToc.value) as TocItem[]
+);
+const computedShowToc = computed(() => {
+    // Always show TOC when we have headings (ignore props.showToc for now)
+    const inSearch = !!searchQuery.value && !!searchTrigger.value;
+    const result =
+        !inSearch && tocList.value.length > 0 && !isLoadingContent.value;
+    if (import.meta.client) {
+        console.debug('[docs:toc] computedShowToc calc:', {
+            propsShowToc: props.showToc,
+            inSearch,
+            tocListLen: tocList.value.length,
+            isLoading: isLoadingContent.value,
+            result,
+        });
+    }
+    return result;
+});
 
 // LRU Cache for markdown files - limit to 20 most recent files
 const MAX_CACHE_SIZE = 20;
@@ -565,6 +612,8 @@ onMounted(async () => {
     try {
         const response = await fetch('/_documentation/docmap.json');
         docmap.value = await response.json();
+        if (import.meta.client)
+            console.debug('[docs] docmap loaded?', !!docmap.value);
 
         // Build navigation from docmap
         if (docmap.value) {
@@ -581,6 +630,7 @@ onMounted(async () => {
 watch(
     () => route.path,
     (path) => {
+        if (import.meta.client) console.debug('[docs] route changed to', path);
         expandGroupsForPath(path);
     },
     { immediate: true }
@@ -824,6 +874,160 @@ function applyDocmapNavigation(map: Docmap) {
 // Use provided content or loaded content
 const displayContent = computed(() => props.content || currentContent.value);
 
+// Build TOC from rendered markdown in the DOM
+function slugify(text: string): string {
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+}
+
+function buildTocFromDom() {
+    if (!import.meta.client) return;
+
+    const headings = contentRoot.value
+        ? Array.from(
+              contentRoot.value.querySelectorAll<HTMLHeadingElement>(
+                  'h2, h3, h4'
+              )
+          )
+        : [];
+    console.debug(
+        '[docs:toc] contentRoot present:',
+        !!contentRoot.value,
+        'domHeadings:',
+        headings.length
+    );
+
+    const used = new Set<string>();
+    const items: TocItem[] = [];
+
+    for (const el of headings) {
+        const level = Number(el.tagName.substring(1));
+        const text = (el.textContent || '').trim();
+        if (!text) continue;
+
+        let id = el.id || slugify(text);
+        if (used.has(id)) {
+            let n = 2;
+            while (used.has(`${id}-${n}`)) n++;
+            id = `${id}-${n}`;
+        }
+        used.add(id);
+        if (!el.id) el.id = id;
+
+        items.push({ id, text, level });
+    }
+
+    // If DOM headings found, use them
+    if (items.length > 0) {
+        localToc.value = items;
+        console.debug('[docs:toc] built from DOM:', items.length);
+        return;
+    }
+
+    // Fallback: parse headings from markdown string (SSR-safe)
+    const md = displayContent.value || '';
+    console.debug('[docs:toc] fallback markdown length:', md.length);
+    if (!md) {
+        localToc.value = [];
+        return;
+    }
+
+    const mdItems: TocItem[] = [];
+    let inCode = false;
+    for (const rawLine of md.split('\n')) {
+        const line = rawLine.trim();
+        if (line.startsWith('```')) {
+            inCode = !inCode;
+            continue;
+        }
+        if (inCode) continue;
+        const m = /^\s*(#{2,4})\s+(.+)$/.exec(line);
+        if (!m) continue;
+        const level = m[1]!.length; // 2..4
+        const text = m[2]!.replace(/[#`*_~<>\[\]\(\)]/g, '').trim();
+        if (!text) continue;
+        const id = slugify(text);
+        mdItems.push({ id, text, level });
+    }
+    localToc.value = mdItems;
+    console.debug('[docs:toc] built from markdown:', mdItems.length);
+}
+
+function observeTocUntilReady() {
+    if (!import.meta.client) return;
+    if (!contentRoot.value) return;
+
+    // If headings already present, build immediately
+    const hasHeadings = contentRoot.value.querySelector('h2, h3, h4');
+    if (hasHeadings) {
+        buildTocFromDom();
+        return;
+    }
+
+    // Disconnect any previous observer
+    if (tocObserver) {
+        tocObserver.disconnect();
+        tocObserver = null;
+    }
+
+    tocObserver = new MutationObserver(() => {
+        if (!contentRoot.value) return;
+        const found = contentRoot.value.querySelector('h2, h3, h4');
+        if (found) {
+            buildTocFromDom();
+            tocObserver?.disconnect();
+            tocObserver = null;
+        }
+    });
+
+    tocObserver.observe(contentRoot.value, {
+        childList: true,
+        subtree: true,
+        characterData: false,
+    });
+}
+
+// Recompute TOC after content loads/renders
+watch([displayContent, isLoadingContent], async ([content, loading]) => {
+    if (!import.meta.client) return;
+    console.debug('[docs:toc] watcher', {
+        hasContent: !!content,
+        loading,
+        contentLen: content?.length || 0,
+    });
+    if (!loading && content) {
+        await nextTick();
+        // Build now and also observe in case streaming/async render continues
+        buildTocFromDom();
+        observeTocUntilReady();
+    }
+});
+
+// Debug: log toc size and visibility state changes
+watch(tocList, (list) => {
+    if (!import.meta.client) return;
+    console.debug('[docs:toc] tocList size ->', list.length);
+});
+watch(
+    () => computedShowToc.value,
+    (val) => {
+        if (!import.meta.client) return;
+        console.debug('[docs:toc] computedShowToc ->', val);
+    },
+    { immediate: true }
+);
+
+onBeforeUnmount(() => {
+    if (tocObserver) {
+        tocObserver.disconnect();
+        tocObserver = null;
+    }
+});
+
 // Trigger lazy search panel load when user types
 watch(searchQuery, (query) => {
     if (query && query.length >= 2) {
@@ -851,6 +1055,20 @@ function toggleTheme() {
     const nuxtApp = useNuxtApp();
     const theme = nuxtApp.$theme as { toggle?: () => void } | undefined;
     theme?.toggle?.();
+}
+
+function scrollToHeading(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // Find the scrollable main element
+    const main = document.querySelector('main.flex-1');
+    if (main) {
+        const mainRect = main.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const scrollTop = main.scrollTop + (elRect.top - mainRect.top) - 20; // 20px offset from top
+        main.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    }
 }
 </script>
 
