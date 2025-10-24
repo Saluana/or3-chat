@@ -15,9 +15,9 @@ artifact_id: 4c95e3db-4198-44fb-b4b3-1f25f50b42d4
 
 3. Chat Engine Integration
 
-    - [ ] Update `useChat.sendMessage` to collect enabled tool definitions before calling `openRouterStream`. Requirements: 4
-    - [ ] Refactor the streaming loop to detect `tool_call`, execute the mapped handler, push `tool` role messages, and restart streaming as needed. Requirements: 5, 6, 9
-    - [ ] Cache large tool outputs for LLM history while rendering concise UI summaries. Requirements: 5, 6
+    - [x] Update `useChat.sendMessage` to collect enabled tool definitions before calling `openRouterStream`. Requirements: 4
+    - [x] Refactor the streaming loop to detect `tool_call`, execute the mapped handler, push `tool` role messages, and restart streaming as needed. Requirements: 5, 6, 9
+    - [x] Cache large tool outputs for LLM history while rendering concise UI summaries. Requirements: 5, 6
 
 4. UI Controls
 

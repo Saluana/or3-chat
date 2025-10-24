@@ -14,6 +14,7 @@ import type {
     ContentPart,
     ChatMessage,
     SendMessageParams,
+    ToolCall,
 } from '~/utils/chat/types';
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
@@ -25,6 +26,7 @@ import {
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import { openRouterStream } from '../../utils/chat/openrouterStream';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
 import {
     promptJsonToString,
@@ -569,150 +571,339 @@ export function useChat(
                     : undefined,
             });
 
-            aborted.value = false;
-            abortController.value = new AbortController();
-            const stream = openRouterStream({
-                apiKey: apiKey.value!,
-                model: modelId,
-                orMessages,
-                modalities,
-                signal: abortController.value.signal,
-            });
+            // Get enabled tool definitions from registry
+            const toolRegistry = useToolRegistry();
+            const enabledToolDefs = toolRegistry.getEnabledDefinitions();
 
-            const rawAssistant: ChatMessage = {
-                role: 'assistant',
-                content: '',
-                id: (assistantDbMsg as any).id,
-                stream_id: newStreamId,
-                reasoning_text: null,
-            } as any;
-            recordRawMessage(rawAssistant);
-            rawMessages.value.push(rawAssistant);
-            const uiAssistant = ensureUiMessage(rawAssistant);
-            uiAssistant.pending = true;
-            tailAssistant.value = uiAssistant; // keep out of main messages until next user send
-            const current = uiAssistant;
-            let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 500;
-            let lastPersistAt = 0;
+            // Tool output cache for large results (scoped to this session)
+            const toolOutputCache = new Map<string, string>();
+
+            // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
 
-            for await (const ev of stream) {
-                if (ev.type === 'reasoning') {
-                    if (current.reasoning_text === null)
-                        current.reasoning_text = ev.text;
-                    else current.reasoning_text += ev.text;
-                    streamAcc.append(ev.text, { kind: 'reasoning' });
-                    try {
-                        await hooks.doAction(
-                            'ai.chat.stream:action:reasoning',
-                            ev.text,
-                            {
-                                threadId: threadIdRef.value,
-                                assistantId: assistantDbMsg.id,
-                                streamId: newStreamId,
-                                reasoningLength:
-                                    current.reasoning_text?.length || 0,
-                            }
-                        );
-                    } catch {}
-                } else if (ev.type === 'text') {
-                    if (current.pending) current.pending = false;
-                    const delta = ev.text;
-                    streamAcc.append(delta, { kind: 'text' });
-                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                        threadId: threadIdRef.value,
-                        assistantId: assistantDbMsg.id,
-                        streamId: newStreamId,
-                        deltaLength: String(delta ?? '').length,
-                        totalLength:
-                            current.text.length + String(delta ?? '').length,
-                        chunkIndex: chunkIndex++,
+            aborted.value = false;
+            abortController.value = new AbortController();
+
+            // Tool calling loop: restart streaming after each tool execution
+            let continueLoop = true;
+            let loopIteration = 0;
+            const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
+
+            while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
+                continueLoop = false;
+                loopIteration++;
+
+                if (import.meta.dev && loopIteration > 1) {
+                    console.debug('[useChat] tool-loop iteration', {
+                        iteration: loopIteration,
+                        historyLength: orMessages.length,
+                        toolsEnabled: enabledToolDefs.length,
                     });
-                    current.text += delta;
-                } else if (ev.type === 'image') {
-                    if (current.pending) current.pending = false;
-                    // Append markdown placeholder exactly once per image URL
-                    const placeholder = `![generated image](${ev.url})`;
-                    const already = current.text.includes(placeholder);
-                    if (!already) {
-                        current.text +=
-                            (current.text ? '\n\n' : '') + placeholder;
-                    }
-                    if (import.meta.dev) {
-                        console.debug('[stream:image:event]', {
-                            url: ev.url?.slice(0, 80),
-                            placeholderInserted: !already,
-                            currentLength: current.text.length,
-                            fileHashes: assistantFileHashes.slice(),
-                        });
-                    }
-                    if (assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/'))
-                            blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            try {
-                                const r = await fetch(ev.url);
-                                if (r.ok) blob = await r.blob();
-                            } catch {}
-                        }
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(
-                                    blob,
-                                    'gen-image'
-                                );
-                                assistantFileHashes.push(meta.hash);
-                                const serialized =
-                                    serializeFileHashes(assistantFileHashes);
-                                const updatedMsg = {
-                                    ...assistantDbMsg,
-                                    data: {
-                                        ...((assistantDbMsg as any).data || {}),
-                                        reasoning_text:
-                                            current.reasoning_text ?? null,
-                                    },
-                                    file_hashes: serialized,
-                                    updated_at: nowSec(),
-                                } as any;
-                                await upsert.message(updatedMsg);
-                                (current as any).file_hashes = serialized;
-                                if (import.meta.dev) {
-                                    console.debug('[stream:image:persist]', {
-                                        hash: meta.hash,
-                                        total: assistantFileHashes.length,
-                                        serialized,
-                                    });
-                                }
-                            } catch {}
-                        }
-                    }
                 }
 
-                const now = Date.now();
-                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent = current.text;
-                    const updated = {
-                        ...assistantDbMsg,
-                        data: {
-                            ...((assistantDbMsg as any).data || {}),
-                            content: textContent,
-                            reasoning_text: current.reasoning_text ?? null,
-                        },
-                        file_hashes: assistantFileHashes.length
-                            ? serializeFileHashes(assistantFileHashes)
-                            : (assistantDbMsg as any).file_hashes,
-                        updated_at: nowSec(),
-                    } as any;
-                    await upsert.message(updated);
-                    if (assistantFileHashes.length)
-                        (current as any).file_hashes =
-                            serializeFileHashes(assistantFileHashes);
-                    lastPersistAt = now;
+                const stream = openRouterStream({
+                    apiKey: apiKey.value!,
+                    model: modelId,
+                    orMessages,
+                    modalities,
+                    tools:
+                        enabledToolDefs.length > 0
+                            ? enabledToolDefs
+                            : undefined,
+                    signal: abortController.value.signal,
+                });
+
+                const rawAssistant: ChatMessage = {
+                    role: 'assistant',
+                    content: '',
+                    id: (assistantDbMsg as any).id,
+                    stream_id: newStreamId,
+                    reasoning_text: null,
+                } as any;
+
+                // Only record and push on first iteration
+                if (loopIteration === 1) {
+                    recordRawMessage(rawAssistant);
+                    rawMessages.value.push(rawAssistant);
+                    const uiAssistant = ensureUiMessage(rawAssistant);
+                    uiAssistant.pending = true;
+                    tailAssistant.value = uiAssistant;
+                }
+
+                const current =
+                    tailAssistant.value || ensureUiMessage(rawAssistant);
+                let chunkIndex = 0;
+                const WRITE_INTERVAL_MS = 500;
+                let lastPersistAt = 0;
+
+                try {
+                    for await (const ev of stream) {
+                        if (ev.type === 'tool_call') {
+                            // Tool call detected - execute handler and continue loop
+                            if (current.pending) current.pending = false;
+
+                            const toolCall = ev.tool_call;
+                            if (import.meta.dev) {
+                                console.debug('[useChat] tool_call detected', {
+                                    name: toolCall.function.name,
+                                    id: toolCall.id,
+                                    args: toolCall.function.arguments.slice(
+                                        0,
+                                        100
+                                    ),
+                                });
+                            }
+
+                            // Persist current assistant state (function call request)
+                            const textContent = current.text;
+                            await upsert.message({
+                                ...assistantDbMsg,
+                                data: {
+                                    ...((assistantDbMsg as any).data || {}),
+                                    content: textContent,
+                                    reasoning_text:
+                                        current.reasoning_text ?? null,
+                                },
+                                file_hashes: assistantFileHashes.length
+                                    ? serializeFileHashes(assistantFileHashes)
+                                    : (assistantDbMsg as any).file_hashes,
+                                updated_at: nowSec(),
+                            } as any);
+
+                            // Execute the tool
+                            const execution = await toolRegistry.executeTool(
+                                toolCall.function.name,
+                                toolCall.function.arguments
+                            );
+
+                            let toolResultText: string;
+                            if (execution.error) {
+                                toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
+                                console.warn('[useChat] tool execution error', {
+                                    tool: toolCall.function.name,
+                                    error: execution.error,
+                                    timedOut: execution.timedOut,
+                                });
+                            } else {
+                                toolResultText = execution.result || '';
+                            }
+
+                            // Cache full output
+                            toolOutputCache.set(toolCall.id, toolResultText);
+
+                            // Create concise summary for UI if result is large
+                            const SUMMARY_THRESHOLD = 500;
+                            let uiSummary = toolResultText;
+                            if (toolResultText.length > SUMMARY_THRESHOLD) {
+                                uiSummary = `Tool result (${Math.round(
+                                    toolResultText.length / 1024
+                                )}KB): ${toolResultText.slice(
+                                    0,
+                                    200
+                                )}... [truncated for display]`;
+                            }
+
+                            // Append tool result message to DB
+                            const toolDbMsg = await tx.appendMessage({
+                                thread_id: threadIdRef.value!,
+                                role: 'tool' as any,
+                                data: {
+                                    content: uiSummary,
+                                    tool_call_id: toolCall.id,
+                                    tool_name: toolCall.function.name,
+                                },
+                            });
+
+                            // Add to raw messages for history
+                            const rawToolMsg: ChatMessage = {
+                                role: 'assistant' as any, // Store as assistant in our schema
+                                content: uiSummary,
+                                id: toolDbMsg.id,
+                            };
+                            recordRawMessage(rawToolMsg);
+                            rawMessages.value.push(rawToolMsg);
+
+                            // Update OR messages for next iteration with full output
+                            // Add assistant message with tool_calls
+                            orMessages.push({
+                                role: 'assistant',
+                                content: [
+                                    {
+                                        type: 'text' as const,
+                                        text: current.text || '',
+                                    },
+                                ],
+                                tool_calls: [
+                                    {
+                                        id: toolCall.id,
+                                        type: 'function',
+                                        function: {
+                                            name: toolCall.function.name,
+                                            arguments:
+                                                toolCall.function.arguments,
+                                        },
+                                    },
+                                ],
+                            } as any);
+
+                            // Add tool result message
+                            orMessages.push({
+                                role: 'tool' as any,
+                                content: [
+                                    {
+                                        type: 'text' as const,
+                                        text: toolResultText,
+                                    },
+                                ],
+                                tool_call_id: toolCall.id,
+                            } as any);
+
+                            // Set flag to continue the loop
+                            continueLoop = true;
+                            break; // Exit stream loop to restart
+                        } else if (ev.type === 'reasoning') {
+                            if (current.reasoning_text === null)
+                                current.reasoning_text = ev.text;
+                            else current.reasoning_text += ev.text;
+                            streamAcc.append(ev.text, { kind: 'reasoning' });
+                            try {
+                                await hooks.doAction(
+                                    'ai.chat.stream:action:reasoning',
+                                    ev.text,
+                                    {
+                                        threadId: threadIdRef.value,
+                                        assistantId: assistantDbMsg.id,
+                                        streamId: newStreamId,
+                                        reasoningLength:
+                                            current.reasoning_text?.length || 0,
+                                    }
+                                );
+                            } catch {}
+                        } else if (ev.type === 'text') {
+                            if (current.pending) current.pending = false;
+                            const delta = ev.text;
+                            streamAcc.append(delta, { kind: 'text' });
+                            await hooks.doAction(
+                                'ai.chat.stream:action:delta',
+                                delta,
+                                {
+                                    threadId: threadIdRef.value,
+                                    assistantId: assistantDbMsg.id,
+                                    streamId: newStreamId,
+                                    deltaLength: String(delta ?? '').length,
+                                    totalLength:
+                                        current.text.length +
+                                        String(delta ?? '').length,
+                                    chunkIndex: chunkIndex++,
+                                }
+                            );
+                            current.text += delta;
+                        } else if (ev.type === 'image') {
+                            if (current.pending) current.pending = false;
+                            // Append markdown placeholder exactly once per image URL
+                            const placeholder = `![generated image](${ev.url})`;
+                            const already = current.text.includes(placeholder);
+                            if (!already) {
+                                current.text +=
+                                    (current.text ? '\n\n' : '') + placeholder;
+                            }
+                            if (import.meta.dev) {
+                                console.debug('[stream:image:event]', {
+                                    url: ev.url?.slice(0, 80),
+                                    placeholderInserted: !already,
+                                    currentLength: current.text.length,
+                                    fileHashes: assistantFileHashes.slice(),
+                                });
+                            }
+                            if (assistantFileHashes.length < 6) {
+                                let blob: Blob | null = null;
+                                if (ev.url.startsWith('data:image/'))
+                                    blob = dataUrlToBlob(ev.url);
+                                else if (/^https?:/.test(ev.url)) {
+                                    try {
+                                        const r = await fetch(ev.url);
+                                        if (r.ok) blob = await r.blob();
+                                    } catch {}
+                                }
+                                if (blob) {
+                                    try {
+                                        const meta = await createOrRefFile(
+                                            blob,
+                                            'gen-image'
+                                        );
+                                        assistantFileHashes.push(meta.hash);
+                                        const serialized =
+                                            serializeFileHashes(
+                                                assistantFileHashes
+                                            );
+                                        const updatedMsg = {
+                                            ...assistantDbMsg,
+                                            data: {
+                                                ...((assistantDbMsg as any)
+                                                    .data || {}),
+                                                reasoning_text:
+                                                    current.reasoning_text ??
+                                                    null,
+                                            },
+                                            file_hashes: serialized,
+                                            updated_at: nowSec(),
+                                        } as any;
+                                        await upsert.message(updatedMsg);
+                                        (current as any).file_hashes =
+                                            serialized;
+                                        if (import.meta.dev) {
+                                            console.debug(
+                                                '[stream:image:persist]',
+                                                {
+                                                    hash: meta.hash,
+                                                    total: assistantFileHashes.length,
+                                                    serialized,
+                                                }
+                                            );
+                                        }
+                                    } catch {}
+                                }
+                            }
+                        }
+
+                        const now = Date.now();
+                        if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                            const textContent = current.text;
+                            const updated = {
+                                ...assistantDbMsg,
+                                data: {
+                                    ...((assistantDbMsg as any).data || {}),
+                                    content: textContent,
+                                    reasoning_text:
+                                        current.reasoning_text ?? null,
+                                },
+                                file_hashes: assistantFileHashes.length
+                                    ? serializeFileHashes(assistantFileHashes)
+                                    : (assistantDbMsg as any).file_hashes,
+                                updated_at: nowSec(),
+                            } as any;
+                            await upsert.message(updated);
+                            if (assistantFileHashes.length)
+                                (current as any).file_hashes =
+                                    serializeFileHashes(assistantFileHashes);
+                            lastPersistAt = now;
+                        }
+                    }
+                } catch (streamError) {
+                    // If stream error and we're in a tool loop, stop looping
+                    if (loopIteration > 1) {
+                        console.warn(
+                            '[useChat] Stream error during tool loop',
+                            streamError
+                        );
+                        continueLoop = false;
+                    }
+                    throw streamError;
                 }
             }
 
+            // After loop completes (no more tool calls), finalize the assistant message
+            const current = tailAssistant.value!;
             const fullText = current.text;
             const hookName = 'ui.chat.message:filter:incoming';
             // Track error count before filter
