@@ -43,7 +43,10 @@
         </div>
 
         <!-- Results List -->
-        <div class="flex-1 overflow-y-auto" v-if="flatItems.length">
+        <div
+            class="flex-1 overflow-y-auto overflow-x-hidden"
+            v-if="flatItems.length"
+        >
             <template v-for="section in sections" :key="section.key">
                 <div
                     v-if="section.items.length"
@@ -72,22 +75,33 @@
                         size="sm"
                         block
                         :ui="{
-                            base: 'border-none!',
+                            base: 'border-none! transition-none!',
                         }"
                         class="justify-start text-left px-3 py-2"
                         @click="selectItem(flatIndex(section, idx))"
                     >
-                        <div class="flex flex-col gap-0.5 min-w-0 flex-1">
-                            <div
-                                class="text-sm font-medium text-[var(--md-on-surface)] truncate"
-                            >
-                                {{ item.label }}
-                            </div>
-                            <div
-                                v-if="item.subtitle"
-                                class="text-xs text-[var(--md-on-surface-variant)] truncate"
-                            >
-                                {{ item.subtitle }}
+                        <div class="flex items-center gap-2 w-full">
+                            <UIcon
+                                v-if="section.key === 'recommended'"
+                                :name="
+                                    item.source === 'document'
+                                        ? 'pixelarticons:notes'
+                                        : 'pixelarticons:message-text'
+                                "
+                                class="w-4 h-4 text-[var(--md-on-surface-variant)]"
+                            />
+                            <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                                <div
+                                    class="text-sm font-medium text-[var(--md-on-surface)] truncate"
+                                >
+                                    {{ item.label }}
+                                </div>
+                                <div
+                                    v-if="item.subtitle"
+                                    class="text-xs text-[var(--md-on-surface-variant)] truncate"
+                                >
+                                    {{ item.subtitle }}
+                                </div>
                             </div>
                         </div>
                     </UButton>
@@ -132,6 +146,7 @@ const showChats = ref(true);
 const selectedIndex = ref(0);
 
 const normalizedSearch = computed(() => searchTerm.value.trim().toLowerCase());
+const isSearching = computed(() => normalizedSearch.value.length > 0);
 
 const filteredBySource = computed(() =>
     props.items.filter((item) => {
@@ -149,40 +164,22 @@ const filteredItems = computed(() => {
 });
 
 const recommendedItems = computed(() => {
+    if (!isSearching.value) return [];
     const scored = filteredItems.value.filter(
         (item) => typeof item.score === 'number'
     );
     if (!scored.length) return [];
     return [...scored]
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, 3);
+        .slice(0, 5);
 });
 
-const recommendedKeySet = computed(
-    () =>
-        new Set(
-            recommendedItems.value.map((item) => `${item.source}:${item.id}`)
-        )
-);
-
 const documentItems = computed(() =>
-    filteredItems.value
-        .filter(
-            (i) =>
-                i.source === 'document' &&
-                !recommendedKeySet.value.has(`${i.source}:${i.id}`)
-        )
-        .slice(0, 5)
+    filteredItems.value.filter((i) => i.source === 'document').slice(0, 5)
 );
 
 const chatItems = computed(() =>
-    filteredItems.value
-        .filter(
-            (i) =>
-                i.source === 'chat' &&
-                !recommendedKeySet.value.has(`${i.source}:${i.id}`)
-        )
-        .slice(0, 5)
+    filteredItems.value.filter((i) => i.source === 'chat').slice(0, 5)
 );
 
 type SectionBucket = {
@@ -197,12 +194,12 @@ const sections = computed<SectionBucket[]>(() => {
     if (recommendedItems.value.length) {
         list.push({
             key: 'recommended',
-            title: 'Recommended',
-            icon: '⭐',
+            title: 'Search Results',
+            icon: '🔎',
             items: recommendedItems.value,
         });
     }
-    if (documentItems.value.length) {
+    if (!isSearching.value && documentItems.value.length) {
         list.push({
             key: 'documents',
             title: 'Documents',
@@ -210,7 +207,7 @@ const sections = computed<SectionBucket[]>(() => {
             items: documentItems.value,
         });
     }
-    if (chatItems.value.length) {
+    if (!isSearching.value && chatItems.value.length) {
         list.push({
             key: 'chats',
             title: 'Chats',
