@@ -213,9 +213,10 @@ watch(
             return;
         }
         // Prefer to update the internal messages array directly to avoid remount flicker
-        chat.value!.messages.value = (mh || []).map((m: any) =>
-            ensureUiMessage(m)
-        );
+        // Filter out tool messages before updating
+        chat.value!.messages.value = (mh || [])
+            .filter((m: any) => m.role !== 'tool')
+            .map((m: any) => ensureUiMessage(m));
     }
 );
 
