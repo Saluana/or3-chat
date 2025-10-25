@@ -22,6 +22,9 @@ export interface ChatMessage {
     stream_id?: string;
     file_hashes?: string | null;
     reasoning_text?: string | null;
+    data?: Record<string, any> | null;
+    index?: number | null;
+    created_at?: number | null;
 }
 
 export interface SendMessageParams {

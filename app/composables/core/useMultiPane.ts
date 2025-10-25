@@ -8,11 +8,15 @@ import { useHooks } from '../../core/hooks/useHooks';
 
 // Narrow pane message representation (always flattened string content)
 export type MultiPaneMessage = {
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: string;
     file_hashes?: string | null;
     id?: string;
     stream_id?: string;
+    data?: Record<string, any> | null;
+    reasoning_text?: string | null;
+    index?: number | null;
+    created_at?: number | null;
 };
 
 export interface PaneState {
@@ -84,12 +88,16 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
                     ? String((data as any).content ?? '')
                     : String((msg.content as any) ?? '');
             return {
-                role: msg.role as 'user' | 'assistant',
+                role: msg.role as 'user' | 'assistant' | 'system' | 'tool',
                 content,
                 file_hashes: msg.file_hashes,
                 id: msg.id,
                 stream_id: msg.stream_id,
+                data,
                 reasoning_text: data?.reasoning_text || null,
+                index: typeof msg.index === 'number' ? msg.index : null,
+                created_at:
+                    typeof msg.created_at === 'number' ? msg.created_at : null,
             } as MultiPaneMessage;
         });
     } catch (e) {

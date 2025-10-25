@@ -1,7 +1,6 @@
 import type { Ref } from 'vue';
 import type { ChatMessage } from './types';
 import { db } from '~/db';
-
 export async function ensureThreadHistoryLoaded(
     threadIdRef: Ref<string | undefined>,
     historyLoadedFor: Ref<string | null>,
@@ -23,24 +22,31 @@ export async function ensureThreadHistoryLoaded(
 
         all.sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
 
-        // Build a map of existing messages by ID to preserve object references
-        const existingById = new Map(messages.value.map((m) => [m.id, m]));
-
-        // Rebuild the array in correct sorted order from DB
-        // Use existing objects where available, create new ones for missing messages
-        messages.value = all.map((dbMsg) => {
-            const existing = existingById.get(dbMsg.id);
-            if (existing) {
-                return existing;
-            }
-            return {
-                role: dbMsg.role,
-                content: (dbMsg as any)?.data?.content || '',
-                id: dbMsg.id,
-                stream_id: (dbMsg as any).stream_id,
-                file_hashes: (dbMsg as any).file_hashes,
-            } as any;
-        });
+        messages.value = all.map((dbMsg: any) => ({
+            role: dbMsg.role,
+            content:
+                typeof dbMsg?.data?.content === 'string'
+                    ? dbMsg.data.content
+                    : (dbMsg as any)?.content || '',
+            id: dbMsg.id,
+            stream_id: dbMsg.stream_id,
+            file_hashes: dbMsg.file_hashes,
+            reasoning_text:
+                typeof dbMsg?.data?.reasoning_text === 'string'
+                    ? dbMsg.data.reasoning_text
+                    : null,
+            data: dbMsg.data || null,
+            index:
+                typeof dbMsg.index === 'number'
+                    ? dbMsg.index
+                    : typeof dbMsg.index === 'string'
+                      ? Number(dbMsg.index) || null
+                      : null,
+            created_at:
+                typeof dbMsg.created_at === 'number'
+                    ? dbMsg.created_at
+                    : null,
+        }));
 
         historyLoadedFor.value = threadIdRef.value;
     } catch (e) {

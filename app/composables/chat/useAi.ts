@@ -976,7 +976,7 @@ export function useChat(
                     reasoning_text: current.reasoning_text ?? null,
                     tool_calls: current.toolCalls
                         ? JSON.parse(JSON.stringify(current.toolCalls))
-                        : undefined,
+                        : ((assistantDbMsg as any).data?.tool_calls || null),
                 },
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)
@@ -1245,11 +1245,28 @@ export function useChat(
                 });
                 rawMessages.value = dbMessages.map((m: any) => ({
                     role: m.role,
-                    content: (m.data as any)?.content || '',
+                    content:
+                        typeof m.data?.content === 'string'
+                            ? m.data.content
+                            : (m as any).content || '',
                     id: m.id,
                     stream_id: m.stream_id,
                     file_hashes: m.file_hashes,
-                    reasoning_text: (m.data as any)?.reasoning_text || null,
+                    reasoning_text:
+                        typeof m.data?.reasoning_text === 'string'
+                            ? m.data.reasoning_text
+                            : null,
+                    data: m.data || null,
+                    index:
+                        typeof m.index === 'number'
+                            ? m.index
+                            : typeof m.index === 'string'
+                              ? Number(m.index) || null
+                              : null,
+                    created_at:
+                        typeof m.created_at === 'number'
+                            ? m.created_at
+                            : null,
                 }));
                 const uiMessages = dbMessages.filter(
                     (m: any) => m.role !== 'tool'
@@ -1257,12 +1274,28 @@ export function useChat(
                 messages.value = uiMessages.map((m: any) =>
                     ensureUiMessage({
                         role: m.role,
-                        content: (m.data as any)?.content || '',
+                        content:
+                            typeof m.data?.content === 'string'
+                                ? m.data.content
+                                : (m as any).content || '',
                         id: m.id,
                         stream_id: m.stream_id,
                         file_hashes: m.file_hashes,
-                        reasoning_text: (m.data as any)?.reasoning_text || null,
+                        reasoning_text:
+                            typeof m.data?.reasoning_text === 'string'
+                                ? m.data.reasoning_text
+                                : null,
                         data: m.data,
+                        index:
+                            typeof m.index === 'number'
+                                ? m.index
+                                : typeof m.index === 'string'
+                                  ? Number(m.index) || null
+                                  : null,
+                        created_at:
+                            typeof m.created_at === 'number'
+                                ? m.created_at
+                                : null,
                     })
                 );
             }
