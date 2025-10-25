@@ -1,5 +1,18 @@
 import type { ORStreamEvent, ToolChoice, ToolDefinition } from './types';
 
+function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
+    const { ui: _ignored, ...rest } = tool as ToolDefinition & {
+        ui?: Record<string, unknown>;
+    };
+    return {
+        ...rest,
+        function: {
+            ...tool.function,
+            parameters: { ...tool.function.parameters },
+        },
+    };
+}
+
 export async function* openRouterStream(params: {
     apiKey: string;
     model: string;
@@ -23,7 +36,7 @@ export async function* openRouterStream(params: {
     }
 
     if (tools) {
-        body['tools'] = tools;
+        body['tools'] = tools.map(stripUiMetadata);
         body['tool_choice'] = 'auto';
     }
 

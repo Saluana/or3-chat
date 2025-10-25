@@ -533,9 +533,9 @@ export function useChat(
                     rawMessages
                 );
                 // Sync UI messages after loading history
-                messages.value = rawMessages.value.map((m) =>
-                    ensureUiMessage(m)
-                );
+                messages.value = rawMessages.value
+                    .filter((m) => m.role !== 'tool')
+                    .map((m) => ensureUiMessage(m));
             }
 
             const modelInputMessages: any[] = (
@@ -594,9 +594,6 @@ export function useChat(
             const toolRegistry = useToolRegistry();
             const enabledToolDefs = toolRegistry.getEnabledDefinitions();
 
-            // Tool output cache for large results (scoped to this session)
-            const toolOutputCache = new Map<string, string>();
-
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
 
@@ -622,8 +619,6 @@ export function useChat(
                         toolsEnabled: enabledToolDefs.length,
                     });
                 }
-
-                console.log('ORMESSAGES', orMessages);
 
                 const stream = openRouterStream({
                     apiKey: apiKey.value!,
@@ -659,11 +654,12 @@ export function useChat(
                 let chunkIndex = 0;
                 const WRITE_INTERVAL_MS = 500;
                 let lastPersistAt = 0;
+                const pendingToolCalls: ToolCall[] = [];
 
                 try {
                     for await (const ev of stream) {
                         if (ev.type === 'tool_call') {
-                            // Tool call detected - execute handler and continue loop
+                            // Tool call detected - enqueue for execution after stream closes
                             if (current.pending) current.pending = false;
 
                             const toolCall = ev.tool_call;
@@ -712,103 +708,8 @@ export function useChat(
                                 updated_at: nowSec(),
                             } as any);
 
-                            // Execute the tool
-                            const execution = await toolRegistry.executeTool(
-                                toolCall.function.name,
-                                toolCall.function.arguments
-                            );
-
-                            let toolResultText: string;
-                            let toolStatus: 'complete' | 'error' = 'complete';
-                            if (execution.error) {
-                                toolStatus = 'error';
-                                toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
-                                console.warn('[useChat] tool execution error', {
-                                    tool: toolCall.function.name,
-                                    error: execution.error,
-                                    timedOut: execution.timedOut,
-                                });
-                            } else {
-                                toolResultText = execution.result || '';
-                            }
-
-                            // Update tool call status
-                            activeToolCalls.set(toolCall.id, {
-                                id: toolCall.id,
-                                name: toolCall.function.name,
-                                status: toolStatus,
-                                args: toolCall.function.arguments,
-                                result:
-                                    toolStatus === 'complete'
-                                        ? toolResultText
-                                        : undefined,
-                                error:
-                                    toolStatus === 'error'
-                                        ? execution.error
-                                        : undefined,
-                            });
-                            current.toolCalls = Array.from(
-                                activeToolCalls.values()
-                            );
-
-                            // Cache full output
-                            toolOutputCache.set(toolCall.id, toolResultText);
-
-                            // Create concise summary for UI if result is large
-                            const SUMMARY_THRESHOLD = 500;
-                            let uiSummary = toolResultText;
-                            if (toolResultText.length > SUMMARY_THRESHOLD) {
-                                uiSummary = `Tool result (${Math.round(
-                                    toolResultText.length / 1024
-                                )}KB): ${toolResultText.slice(
-                                    0,
-                                    200
-                                )}... [truncated for display]`;
-                            }
-
-                            // Append tool result message to DB
-                            const toolDbMsg = await tx.appendMessage({
-                                thread_id: threadIdRef.value!,
-                                role: 'tool' as any,
-                                data: {
-                                    content: uiSummary,
-                                    tool_call_id: toolCall.id,
-                                    tool_name: toolCall.function.name,
-                                },
-                            });
-
-                            // Don't add tool messages to UI (they're internal implementation details)
-                            // Tool results are already shown in the assistant message's toolCalls array
-
-                            // Update OR messages for next iteration with full output
-                            // Add assistant message with tool_calls (content must be null or empty string per OpenRouter spec)
-                            orMessages.push({
-                                role: 'assistant',
-                                content: current.text || null,
-                                tool_calls: [
-                                    {
-                                        id: toolCall.id,
-                                        type: 'function',
-                                        function: {
-                                            name: toolCall.function.name,
-                                            arguments:
-                                                toolCall.function.arguments,
-                                        },
-                                    },
-                                ],
-                            } as any);
-
-                            // Add tool result message (content must be string per OpenRouter spec)
-                            orMessages.push({
-                                role: 'tool',
-                                tool_call_id: toolCall.id,
-                                name: toolCall.function.name,
-                                content: toolResultText,
-                            } as any);
-
-                            // Set flag to continue the loop
-                            continueLoop = true;
-                            break; // Exit stream loop to restart
+                            pendingToolCalls.push(toolCall);
+                            continue;
                         } else if (ev.type === 'reasoning') {
                             if (current.reasoning_text === null)
                                 current.reasoning_text = ev.text;
@@ -936,6 +837,104 @@ export function useChat(
                                     serializeFileHashes(assistantFileHashes);
                             lastPersistAt = now;
                         }
+                    }
+
+                    if (pendingToolCalls.length > 0) {
+                        const toolResultsForNextLoop: Array<{
+                            call: ToolCall;
+                            result: string;
+                        }> = [];
+
+                        for (const toolCall of pendingToolCalls) {
+                            const execution = await toolRegistry.executeTool(
+                                toolCall.function.name,
+                                toolCall.function.arguments
+                            );
+
+                            let toolResultText: string;
+                            let toolStatus: 'complete' | 'error' = 'complete';
+                            if (execution.error) {
+                                toolStatus = 'error';
+                                toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
+                                console.warn('[useChat] tool execution error', {
+                                    tool: toolCall.function.name,
+                                    error: execution.error,
+                                    timedOut: execution.timedOut,
+                                });
+                            } else {
+                                toolResultText = execution.result || '';
+                            }
+
+                            activeToolCalls.set(toolCall.id, {
+                                id: toolCall.id,
+                                name: toolCall.function.name,
+                                status: toolStatus,
+                                args: toolCall.function.arguments,
+                                result:
+                                    toolStatus === 'complete'
+                                        ? toolResultText
+                                        : undefined,
+                                error:
+                                    toolStatus === 'error'
+                                        ? execution.error
+                                        : undefined,
+                            });
+                            current.toolCalls = Array.from(
+                                activeToolCalls.values()
+                            );
+
+                            const SUMMARY_THRESHOLD = 500;
+                            let uiSummary = toolResultText;
+                            if (toolResultText.length > SUMMARY_THRESHOLD) {
+                                uiSummary = `Tool result (${Math.round(
+                                    toolResultText.length / 1024
+                                )}KB): ${toolResultText.slice(
+                                    0,
+                                    200
+                                )}... [truncated for display]`;
+                            }
+
+                            await tx.appendMessage({
+                                thread_id: threadIdRef.value!,
+                                role: 'tool' as any,
+                                data: {
+                                    content: uiSummary,
+                                    tool_call_id: toolCall.id,
+                                    tool_name: toolCall.function.name,
+                                },
+                            });
+
+                            toolResultsForNextLoop.push({
+                                call: toolCall,
+                                result: toolResultText,
+                            });
+                        }
+
+                        orMessages.push({
+                            role: 'assistant',
+                            content: current.text || null,
+                            tool_calls: pendingToolCalls.map((toolCall) => ({
+                                id: toolCall.id,
+                                type: 'function',
+                                function: {
+                                    name: toolCall.function.name,
+                                    arguments: toolCall.function.arguments,
+                                },
+                            })),
+                        } as any);
+
+                        for (const payload of toolResultsForNextLoop) {
+                            orMessages.push({
+                                role: 'tool',
+                                tool_call_id: payload.call.id,
+                                name: payload.call.function.name,
+                                content: payload.result,
+                            } as any);
+                        }
+
+                        pendingToolCalls.length = 0;
+                        continueLoop = true;
+                        continue; // restart outer while-loop with new tool outputs
                     }
                 } catch (streamError) {
                     // If stream error and we're in a tool loop, stop looping
@@ -1244,11 +1243,7 @@ export function useChat(
                     dbCount: dbMessages.length,
                     memoryCount: rawMessages.value.length,
                 });
-                // Filter out tool messages when syncing from DB
-                const visibleMessages = dbMessages.filter(
-                    (m: any) => m.role !== 'tool'
-                );
-                rawMessages.value = visibleMessages.map((m: any) => ({
+                rawMessages.value = dbMessages.map((m: any) => ({
                     role: m.role,
                     content: (m.data as any)?.content || '',
                     id: m.id,
@@ -1256,7 +1251,10 @@ export function useChat(
                     file_hashes: m.file_hashes,
                     reasoning_text: (m.data as any)?.reasoning_text || null,
                 }));
-                messages.value = visibleMessages.map((m: any) =>
+                const uiMessages = dbMessages.filter(
+                    (m: any) => m.role !== 'tool'
+                );
+                messages.value = uiMessages.map((m: any) =>
                     ensureUiMessage({
                         role: m.role,
                         content: (m.data as any)?.content || '',

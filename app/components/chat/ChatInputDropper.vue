@@ -145,8 +145,6 @@
                                                         tool.enabledValue
                                                     "
                                                     @update:model-value="(val: boolean) => {
-                                                        console.log(`[ChatInputDropper] Toggle update for ${tool.name}:`, val);
-                                                        console.log(`[ChatInputDropper] typeof val:`, typeof val);
                                                         toolRegistry.setEnabled(tool.name, val);
                                                     }"
                                                     :disabled="
@@ -452,35 +450,13 @@ const props = defineProps<{
 
 // Tool Registry
 const toolRegistry = useToolRegistry();
-const registeredTools = computed(() => {
-    console.log('[ChatInputDropper] Computing registeredTools...');
-    console.log(
-        '[ChatInputDropper] listTools.value:',
-        toolRegistry.listTools.value
-    );
-
-    const result = toolRegistry.listTools.value.map((tool, index) => {
-        console.log(`[ChatInputDropper] Processing tool ${index}:`, tool);
-        console.log(`[ChatInputDropper] tool.enabled:`, tool.enabled);
-        console.log(
-            `[ChatInputDropper] typeof tool.enabled:`,
-            typeof tool.enabled
-        );
-        console.log(
-            `[ChatInputDropper] tool.enabled.value:`,
-            tool.enabled?.value
-        );
-
-        return {
-            definition: tool.definition,
-            enabledValue: tool.enabled.value,
-            name: tool.definition.function.name,
-        };
-    });
-
-    console.log('[ChatInputDropper] Final registeredTools:', result);
-    return result;
-});
+const registeredTools = computed(() =>
+    toolRegistry.listTools.value.map((tool) => ({
+        definition: tool.definition,
+        enabledValue: tool.enabled.value,
+        name: tool.definition.function.name,
+    }))
+);
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
 const { settings: aiSettings } = useAiSettings();

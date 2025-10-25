@@ -22,19 +22,26 @@ export async function ensureThreadHistoryLoaded(
             .toArray();
 
         all.sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
-        const existingIds = new Set(messages.value.map((m) => m.id));
-        for (const m of all) {
-            if (existingIds.has(m.id)) continue;
-            // Skip tool messages (they're internal implementation details)
-            if (m.role === 'tool') continue;
-            messages.value.push({
-                role: m.role,
-                content: (m as any)?.data?.content || '',
-                id: m.id,
-                stream_id: (m as any).stream_id,
-                file_hashes: (m as any).file_hashes,
-            } as any);
-        }
+
+        // Build a map of existing messages by ID to preserve object references
+        const existingById = new Map(messages.value.map((m) => [m.id, m]));
+
+        // Rebuild the array in correct sorted order from DB
+        // Use existing objects where available, create new ones for missing messages
+        messages.value = all.map((dbMsg) => {
+            const existing = existingById.get(dbMsg.id);
+            if (existing) {
+                return existing;
+            }
+            return {
+                role: dbMsg.role,
+                content: (dbMsg as any)?.data?.content || '',
+                id: dbMsg.id,
+                stream_id: (dbMsg as any).stream_id,
+                file_hashes: (dbMsg as any).file_hashes,
+            } as any;
+        });
+
         historyLoadedFor.value = threadIdRef.value;
     } catch (e) {
         console.warn('[useChat.ensureThreadHistoryLoaded] failed', e);

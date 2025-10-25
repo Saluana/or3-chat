@@ -65,8 +65,6 @@ export default defineNuxtPlugin(() => {
     registerTool(
         calculatorTool,
         async (args: { operation: string; a: number; b: number }) => {
-            console.log('[Calculator Tool] Executing:', args);
-
             const { operation, a, b } = args;
 
             let result: number;
@@ -91,21 +89,15 @@ export default defineNuxtPlugin(() => {
                     throw new Error(`Unknown operation: ${operation}`);
             }
 
-            const response = `Calculation complete: ${a} ${operation} ${b} = ${result}`;
-            console.log('[Calculator Tool] Result:', response);
-
-            return response;
+            return `Calculation complete: ${a} ${operation} ${b} = ${result}`;
         },
         {
             enabled: true, // Start enabled for testing
         }
     );
 
-    console.log('[Demo Plugin] Calculator tool registered successfully');
-
     // Clean up when plugin is unmounted (e.g., during HMR)
     onScopeDispose(() => {
-        console.log('[Demo Plugin] Cleaning up calculator tool');
         unregisterTool('calculate');
     });
 });
