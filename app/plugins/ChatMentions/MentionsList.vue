@@ -1,37 +1,112 @@
 <template>
-    <div class="mentions-dropdown">
-        <template v-if="items.length">
-            <!-- Documents Group -->
-            <template v-if="documentItems.length">
-                <div class="mentions-group-title">📄 Documents</div>
-                <button
-                    v-for="(item, index) in documentItems"
-                    :key="`doc-${item.id}`"
-                    :class="{ 'is-selected': index === selectedIndex }"
-                    class="mentions-item"
-                    @click="selectItem(index)"
-                >
-                    <div class="mentions-item-label">{{ item.label }}</div>
-                </button>
-            </template>
+    <div
+        class="w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow"
+    >
+        <!-- Search & Filters Header -->
+        <div
+            class="sticky top-0 bg-[var(--md-surface)] border-b-2 border-[var(--md-outline)] p-3 z-10"
+        >
+            <UInput
+                v-model="searchTerm"
+                icon="pixelarticons:search"
+                placeholder="Search documents or chats..."
+                class="w-full"
+                @keydown="handleSearchKeydown"
+            />
 
-            <!-- Chats Group -->
-            <template v-if="chatItems.length">
-                <div class="mentions-group-title" :class="{ 'with-border': documentItems.length }">
-                    💬 Chats
-                </div>
-                <button
-                    v-for="(item, index) in chatItems"
-                    :key="`chat-${item.id}`"
-                    :class="{ 'is-selected': documentItems.length + index === selectedIndex }"
-                    class="mentions-item"
-                    @click="selectItem(documentItems.length + index)"
+            <div class="flex gap-2 mt-2">
+                <UButton
+                    :color="showDocuments ? 'primary' : 'neutral'"
+                    :variant="showDocuments ? 'solid' : 'soft'"
+                    size="sm"
+                    @click="toggleSource('document')"
+                    class="flex-1"
                 >
-                    <div class="mentions-item-label">{{ item.label }}</div>
-                </button>
+                    <template #leading>
+                        <UIcon name="pixelarticons:notes" />
+                    </template>
+                    Docs
+                </UButton>
+                <UButton
+                    :color="showChats ? 'primary' : 'neutral'"
+                    :variant="showChats ? 'solid' : 'soft'"
+                    size="sm"
+                    @click="toggleSource('chat')"
+                    class="flex-1"
+                >
+                    <template #leading>
+                        <UIcon name="pixelarticons:message-text" />
+                    </template>
+                    Chats
+                </UButton>
+            </div>
+        </div>
+
+        <!-- Results List -->
+        <div class="flex-1 overflow-y-auto" v-if="flatItems.length">
+            <template v-for="section in sections" :key="section.key">
+                <div
+                    v-if="section.items.length"
+                    class="py-2"
+                    :class="{
+                        'border-t-2 border-[var(--md-outline)] mt-2':
+                            section.key !== sections[0]?.key,
+                    }"
+                >
+                    <!-- Section Header -->
+                    <div class="flex items-center gap-2 px-3 pb-2">
+                        <span>{{ section.icon }}</span>
+                        <span
+                            class="text-xs font-semibold text-[var(--md-on-surface-variant)] uppercase tracking-wider"
+                        >
+                            {{ section.title }}
+                        </span>
+                    </div>
+
+                    <!-- Section Items -->
+                    <UButton
+                        v-for="(item, idx) in section.items"
+                        :key="`${section.key}-${item.id}`"
+                        :variant="'basic'"
+                        color="neutral"
+                        size="sm"
+                        block
+                        :ui="{
+                            base: 'border-none!',
+                        }"
+                        class="justify-start text-left px-3 py-2"
+                        @click="selectItem(flatIndex(section, idx))"
+                    >
+                        <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <div
+                                class="text-sm font-medium text-[var(--md-on-surface)] truncate"
+                            >
+                                {{ item.label }}
+                            </div>
+                            <div
+                                v-if="item.subtitle"
+                                class="text-xs text-[var(--md-on-surface-variant)] truncate"
+                            >
+                                {{ item.subtitle }}
+                            </div>
+                        </div>
+                    </UButton>
+                </div>
             </template>
-        </template>
-        <div v-else class="mentions-empty">No results</div>
+        </div>
+
+        <!-- Empty State -->
+        <div
+            v-else
+            class="flex-1 flex flex-col items-center justify-center p-6 text-center"
+        >
+            <div class="text-[var(--md-on-surface-variant)] text-sm">
+                No results
+                <template v-if="!showDocuments || !showChats">
+                    <br />Try enabling another source.
+                </template>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -43,6 +118,7 @@ interface MentionItem {
     source: 'document' | 'chat';
     label: string;
     subtitle?: string;
+    score?: number;
 }
 
 const props = defineProps<{
@@ -50,24 +126,158 @@ const props = defineProps<{
     command: (item: MentionItem) => void;
 }>();
 
+const searchTerm = ref('');
+const showDocuments = ref(true);
+const showChats = ref(true);
 const selectedIndex = ref(0);
 
+const normalizedSearch = computed(() => searchTerm.value.trim().toLowerCase());
+
+const filteredBySource = computed(() =>
+    props.items.filter((item) => {
+        if (item.source === 'document' && !showDocuments.value) return false;
+        if (item.source === 'chat' && !showChats.value) return false;
+        return true;
+    })
+);
+
+const filteredItems = computed(() => {
+    if (!normalizedSearch.value) return filteredBySource.value;
+    return filteredBySource.value.filter((item) =>
+        item.label.toLowerCase().includes(normalizedSearch.value)
+    );
+});
+
+const recommendedItems = computed(() => {
+    const scored = filteredItems.value.filter(
+        (item) => typeof item.score === 'number'
+    );
+    if (!scored.length) return [];
+    return [...scored]
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 3);
+});
+
+const recommendedKeySet = computed(
+    () =>
+        new Set(
+            recommendedItems.value.map((item) => `${item.source}:${item.id}`)
+        )
+);
+
 const documentItems = computed(() =>
-    props.items.filter((i) => i.source === 'document').slice(0, 5)
+    filteredItems.value
+        .filter(
+            (i) =>
+                i.source === 'document' &&
+                !recommendedKeySet.value.has(`${i.source}:${i.id}`)
+        )
+        .slice(0, 5)
 );
 
 const chatItems = computed(() =>
-    props.items.filter((i) => i.source === 'chat').slice(0, 5)
+    filteredItems.value
+        .filter(
+            (i) =>
+                i.source === 'chat' &&
+                !recommendedKeySet.value.has(`${i.source}:${i.id}`)
+        )
+        .slice(0, 5)
+);
+
+type SectionBucket = {
+    key: string;
+    title: string;
+    icon: string;
+    items: MentionItem[];
+};
+
+const sections = computed<SectionBucket[]>(() => {
+    const list: SectionBucket[] = [];
+    if (recommendedItems.value.length) {
+        list.push({
+            key: 'recommended',
+            title: 'Recommended',
+            icon: '⭐',
+            items: recommendedItems.value,
+        });
+    }
+    if (documentItems.value.length) {
+        list.push({
+            key: 'documents',
+            title: 'Documents',
+            icon: '📄',
+            items: documentItems.value,
+        });
+    }
+    if (chatItems.value.length) {
+        list.push({
+            key: 'chats',
+            title: 'Chats',
+            icon: '💬',
+            items: chatItems.value,
+        });
+    }
+    return list;
+});
+
+const flatItems = computed(() =>
+    sections.value.flatMap((section) => section.items)
 );
 
 watch(
-    () => props.items,
-    () => {
-        selectedIndex.value = 0;
-    }
+    flatItems,
+    (items) => {
+        selectedIndex.value = items.length ? 0 : -1;
+    },
+    { immediate: true }
 );
 
+function formatScore(score: number) {
+    const percentage = Math.round(Math.min(1, Math.max(0, score || 0)) * 100);
+    return percentage;
+}
+
+function toggleSource(source: 'document' | 'chat') {
+    if (source === 'document') {
+        if (showDocuments.value && !showChats.value) return;
+        showDocuments.value = !showDocuments.value;
+        return;
+    }
+    if (showChats.value && !showDocuments.value) return;
+    showChats.value = !showChats.value;
+}
+
+function flatIndex(section: SectionBucket, idx: number) {
+    let count = 0;
+    for (const s of sections.value) {
+        if (s === section) {
+            return count + idx;
+        }
+        count += s.items.length;
+    }
+    return idx;
+}
+
+function handleSearchKeydown(event: KeyboardEvent) {
+    if (!flatItems.value.length) {
+        return;
+    }
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        downHandler();
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        upHandler();
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        enterHandler();
+    }
+}
+
 function onKeyDown({ event }: { event: KeyboardEvent }) {
+    if (!flatItems.value.length) return false;
+
     if (event.key === 'ArrowUp') {
         upHandler();
         return true;
@@ -87,12 +297,15 @@ function onKeyDown({ event }: { event: KeyboardEvent }) {
 }
 
 function upHandler() {
-    selectedIndex.value =
-        (selectedIndex.value + props.items.length - 1) % props.items.length;
+    const total = flatItems.value.length;
+    if (!total) return;
+    selectedIndex.value = (selectedIndex.value + total - 1) % total;
 }
 
 function downHandler() {
-    selectedIndex.value = (selectedIndex.value + 1) % props.items.length;
+    const total = flatItems.value.length;
+    if (!total) return;
+    selectedIndex.value = (selectedIndex.value + 1) % total;
 }
 
 function enterHandler() {
@@ -100,7 +313,7 @@ function enterHandler() {
 }
 
 function selectItem(index: number) {
-    const item = props.items[index];
+    const item = flatItems.value[index];
     if (item) {
         props.command(item);
     }
@@ -111,62 +324,4 @@ defineExpose({
 });
 </script>
 
-<style scoped>
-.mentions-dropdown {
-    background: white;
-    border: 2px solid #e5e7eb;
-    border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
-    max-height: 300px;
-    overflow-y: auto;
-    min-width: 280px;
-    padding: 0.5rem 0;
-}
-
-.mentions-group-title {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.mentions-group-title.with-border {
-    border-top: 1px solid #e5e7eb;
-    padding-top: 0.875rem;
-    margin-top: 0.5rem;
-}
-
-.mentions-item {
-    width: 100%;
-    text-align: left;
-    padding: 0.5rem 0.75rem;
-    cursor: pointer;
-    background: transparent;
-    border: none;
-    transition: background 0.15s ease;
-    display: block;
-}
-
-.mentions-item:hover {
-    background: #f3f4f6;
-}
-
-.mentions-item.is-selected {
-    background: #f3f4f6;
-}
-
-.mentions-item-label {
-    font-size: 0.875rem;
-    color: #111827;
-    font-weight: 500;
-}
-
-.mentions-empty {
-    padding: 1rem 0.75rem;
-    text-align: center;
-    color: #9ca3af;
-    font-size: 0.875rem;
-}
-</style>
+<style scoped></style>

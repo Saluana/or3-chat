@@ -157,6 +157,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     }
                 );
 
+                hooks.on(
+                    'db.threads.upsert:action:after',
+                    mentionsModule.upsertThread,
+                    {
+                        kind: 'action',
+                    }
+                );
+
                 console.log('[mentions] Fully initialized');
             } catch (error) {
                 console.error('[mentions] Failed to load module:', error);

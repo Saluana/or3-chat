@@ -8,6 +8,7 @@ export interface MentionItem {
     source: 'document' | 'chat';
     label: string;
     subtitle?: string;
+    score?: number;
 }
 
 interface IndexRecord {
@@ -47,7 +48,8 @@ export async function initMentionsIndex() {
             .equals('doc')
             .and((p: any) => !p.deleted)
             .toArray();
-        const threads = await db.threads.where('deleted').equals(0).toArray();
+        // Some existing rows use numeric flags; fall back to filtering to avoid Dexie key errors
+        const threads = await db.threads.filter((t: any) => !t.deleted).toArray();
 
         console.log(
             `[mentions] Found ${docs.length} documents and ${threads.length} threads`
@@ -80,15 +82,18 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
     if (!indexReady || !mentionsDb) return [];
 
     try {
-        const results = await searchWithIndex(mentionsDb, query, 10);
-        return results.hits
-            .map((hit: any) => ({
-                id: hit.document.id,
-                source: hit.document.source,
-                label: hit.document.title,
-                subtitle: hit.document.snippet || undefined,
-            }))
-            .slice(0, MAX_PER_GROUP * 2);
+        // Fetch a larger pool, then fairly cap per-group to ensure threads appear
+        const results = await searchWithIndex(mentionsDb, query, 50);
+        const items: MentionItem[] = results.hits.map((hit: any) => ({
+            id: hit.document.id,
+            source: hit.document.source,
+            label: hit.document.title,
+            subtitle: hit.document.snippet || undefined,
+            score: hit.score,
+        }));
+        const docs = items.filter((i) => i.source === 'document').slice(0, MAX_PER_GROUP);
+        const chats = items.filter((i) => i.source === 'chat').slice(0, MAX_PER_GROUP);
+        return [...docs, ...chats];
     } catch (error) {
         console.error('[mentions] Search failed:', error);
         return [];
