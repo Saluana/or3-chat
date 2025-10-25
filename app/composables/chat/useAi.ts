@@ -976,7 +976,7 @@ export function useChat(
                     reasoning_text: current.reasoning_text ?? null,
                     tool_calls: current.toolCalls
                         ? JSON.parse(JSON.stringify(current.toolCalls))
-                        : ((assistantDbMsg as any).data?.tool_calls || null),
+                        : (assistantDbMsg as any).data?.tool_calls || null,
                 },
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)
@@ -1261,12 +1261,10 @@ export function useChat(
                         typeof m.index === 'number'
                             ? m.index
                             : typeof m.index === 'string'
-                              ? Number(m.index) || null
-                              : null,
-                    created_at:
-                        typeof m.created_at === 'number'
-                            ? m.created_at
+                            ? Number(m.index) || null
                             : null,
+                    created_at:
+                        typeof m.created_at === 'number' ? m.created_at : null,
                 }));
                 const uiMessages = dbMessages.filter(
                     (m: any) => m.role !== 'tool'
@@ -1290,8 +1288,8 @@ export function useChat(
                             typeof m.index === 'number'
                                 ? m.index
                                 : typeof m.index === 'string'
-                                  ? Number(m.index) || null
-                                  : null,
+                                ? Number(m.index) || null
+                                : null,
                         created_at:
                             typeof m.created_at === 'number'
                                 ? m.created_at

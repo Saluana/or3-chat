@@ -40,12 +40,10 @@ export async function ensureThreadHistoryLoaded(
                 typeof dbMsg.index === 'number'
                     ? dbMsg.index
                     : typeof dbMsg.index === 'string'
-                      ? Number(dbMsg.index) || null
-                      : null,
-            created_at:
-                typeof dbMsg.created_at === 'number'
-                    ? dbMsg.created_at
+                    ? Number(dbMsg.index) || null
                     : null,
+            created_at:
+                typeof dbMsg.created_at === 'number' ? dbMsg.created_at : null,
         }));
 
         historyLoadedFor.value = threadIdRef.value;

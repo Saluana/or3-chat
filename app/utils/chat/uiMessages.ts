@@ -65,11 +65,11 @@ export function ensureUiMessage(raw: any): UiChatMessage {
     }
     // Extract reasoning_text from data field (if present) or top level
     const reasoning_text =
-        (raw.data && typeof raw.data.reasoning_text === 'string')
+        raw.data && typeof raw.data.reasoning_text === 'string'
             ? raw.data.reasoning_text
             : typeof raw.reasoning_text === 'string'
-              ? raw.reasoning_text
-              : null;
+            ? raw.reasoning_text
+            : null;
 
     // Extract tool calls from data field
     let toolCalls: ToolCallInfo[] | undefined;
