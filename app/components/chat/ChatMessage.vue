@@ -679,7 +679,6 @@ onMounted(() => {
     loadKaTeXOnIdle();
     loadShikiOnIdle();
 });
-onMounted(() => {});
 
 // Thumbnail status watcher removed (covered by consolidated watchEffect)
 import { useToast } from '#imports';
