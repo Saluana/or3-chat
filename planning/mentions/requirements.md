@@ -16,8 +16,9 @@ Scope:
 
 Assumptions:
 
--   Tech stack: Nuxt 3/4, TypeScript, TipTap v2 with `@tiptap/extension-mention` + `@tiptap/suggestion` + `tippy.js`, Dexie-based local DB in `app/db/*`, Orama for local search.
+-   Tech stack: Nuxt 3/4, TypeScript, TipTap v2 with `@tiptap/extension-mention` + `@tiptap/suggestion`, Dexie-based local DB in `app/db/*`, existing `app/core/search/orama.ts` helpers. Dropdown rendering uses a lightweight absolute-positioned panel with Nuxt UI classes.
 -   Hooks per `docs/core-hook-map.md` are available on the client.
+-   Implementation SHALL be a single file (~250 lines) to minimize complexity.
 
 ## Requirements
 
@@ -31,7 +32,7 @@ Acceptance Criteria:
 1.3 WHEN results are shown THEN the plugin SHALL display up to 5 results per group with label and subtle subtitle (e.g., thread message snippet or path) and keyboard navigation support.
 1.4 WHEN the user selects a result THEN the plugin SHALL insert a non-editable mention node with attributes `{ id, source: 'document'|'chat', label }` and a distinct `.mention` style.
 1.5 WHEN backspace is pressed at the right edge of a mention THEN the plugin SHALL delete the entire mention token.
-1.6 The implementation SHALL use the official TipTap Mention extension with Suggestion and tippy.js (no custom ProseMirror mention implementation).
+1.6 The implementation SHALL use the official TipTap Mention extension with Suggestion (no custom ProseMirror mention implementation). The dropdown SHALL be rendered with Nuxt UI (preferred) or `tippy.js` as a fallback.
 
 ### 2. Mention Node Structure
 
@@ -47,10 +48,10 @@ Acceptance Criteria:
 User Story: As a user, I want search to be fast and private, so that mentions are responsive and offline-friendly.
 
 Acceptance Criteria:
-3.1 The plugin SHALL create a local Orama index with schemas for documents and chats on client init.
-3.2 The index SHALL include fields: documents → `{ id, title, tags? }`; chats → `{ id, title, snippet? }` and be searchable with fuzzy matching.
-3.3 The index SHALL update on relevant DB events (create/update/delete) for `documents` and `threads` with delay < 300ms from mutation to index availability.
-3.4 IF Orama is not yet ready THEN the plugin SHALL render a loading state and fallback to empty results without errors.
+3.1 The plugin SHALL reuse `app/core/search/orama.ts` helpers (`createDb`, `buildIndex`, `searchWithIndex`) to create a single unified index on client init.
+3.2 The index SHALL use a unified schema: `{ id: string, title: string, source: 'document'|'chat', snippet: string }` searchable with fuzzy matching.
+3.3 The index SHALL update on relevant DB hooks (`db.documents.*`, `db.threads.*`) with incremental insert/update/remove operations.
+3.4 IF Orama is not yet ready THEN the plugin SHALL fallback to empty results without errors (non-blocking).
 
 ### 4. Context Resolution and Injection
 
@@ -67,12 +68,12 @@ Acceptance Criteria:
 
 ### 5. Plugin Lifecycle and Registration
 
-User Story: As a maintainer, I want a contained, optional plugin that integrates via hooks without forking core code, so that maintenance and upgrades are simple.
+User Story: As a maintainer, I want a minimal, self-contained plugin that integrates via hooks without forking core code.
 
 Acceptance Criteria:
-5.1 The plugin SHALL be registered in the root of `app/plugins` (e.g., `mentions.client.ts`) so Nuxt picks it up; all logic SHALL live under `app/plugins/Mentions/*`.
-5.2 The plugin SHALL register/unregister all hooks and UI registries cleanly on HMR dispose.
-5.3 The plugin SHALL not mutate core state directly; it SHALL use hooks listed in `docs/core-hook-map.md` (notably `ai.chat.messages:filter:input`, `ui.chat.message:filter:outgoing` optionally, and DB hooks for index maintenance).
+5.1 The plugin SHALL be a single file `app/plugins/mentions.client.ts` (~250 lines) implementing all functionality inline.
+5.2 The plugin SHALL register/unregister all hooks cleanly on HMR dispose.
+5.3 The plugin SHALL not mutate core state directly; it SHALL use hooks listed in `docs/core-hook-map.md` and reuse `app/core/search/orama.ts` helpers.
 
 ### 6. UI and Accessibility
 
@@ -106,5 +107,5 @@ Acceptance Criteria:
 
 -   Privacy: All search and resolution happen locally.
 -   Compatibility: Works with TipTap v2 and existing editor setup. No SSR requirement; client-only plugin is acceptable.
--   Maintainability: Encapsulated in `app/plugins/Mentions/*` with root registration file.
--   Testability: Unit tests for parsing and resolution; integration tests using the hooks engine; performance checks on search latency.
+-   Maintainability: Single-file implementation (~250 lines) in `app/plugins/mentions.client.ts`.
+-   Testability: Unit tests for mention collection and truncation; integration test for hook transform; manual E2E.

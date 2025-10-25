@@ -492,7 +492,7 @@ onMounted(async () => {
     }
 });
 
-onMounted(() => {
+onMounted(async () => {
     if (!process.client) return;
     try {
         // Minimal shortcut: Enter sends, Shift+Enter = newline
@@ -513,28 +513,49 @@ onMounted(() => {
                 };
             },
         });
+
+        // Collect extensions, including mentions plugin if available
+        const extensions = [
+            enterToSend,
+            Placeholder.configure({
+                // Use a placeholder:
+                placeholder: 'Write something …',
+            }),
+            StarterKit.configure({
+                bold: false,
+                italic: false,
+                strike: false,
+                code: false,
+                blockquote: false,
+                heading: false,
+                bulletList: false,
+                orderedList: false,
+                codeBlock: false,
+                horizontalRule: false,
+                dropcursor: false,
+                gapcursor: false,
+            }),
+        ];
+
+        // Request mentions extension (lazy loads if plugin is installed)
+        const hooks = useHooks();
+        console.log('[ChatInputDropper] Requesting editor extensions...');
+        await hooks.doAction('editor:request-extensions');
+
+        // Add mentions extension if plugin loaded it
+        if ((window as any).__MENTIONS_EXTENSION__) {
+            console.log(
+                '[ChatInputDropper] Adding mentions extension to editor'
+            );
+            extensions.push((window as any).__MENTIONS_EXTENSION__);
+        } else {
+            console.warn(
+                '[ChatInputDropper] Mentions extension not found on window'
+            );
+        }
+
         editor.value = new Editor({
-            extensions: [
-                enterToSend,
-                Placeholder.configure({
-                    // Use a placeholder:
-                    placeholder: 'Write something …',
-                }),
-                StarterKit.configure({
-                    bold: false,
-                    italic: false,
-                    strike: false,
-                    code: false,
-                    blockquote: false,
-                    heading: false,
-                    bulletList: false,
-                    orderedList: false,
-                    codeBlock: false,
-                    horizontalRule: false,
-                    dropcursor: false,
-                    gapcursor: false,
-                }),
-            ],
+            extensions,
             onUpdate: ({ editor: ed }) => {
                 promptText.value = ed.getText();
                 autoResize();

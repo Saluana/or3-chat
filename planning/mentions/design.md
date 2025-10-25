@@ -3,7 +3,9 @@ content_type: text/markdown
 
 # design.md
 
-## Overview
+> **⚠️ SUPERSEDED:** This design has been simplified. See `design-simplified.md` and `SUMMARY.md` for the streamlined single-file approach (~250 lines vs. original ~600+ lines).
+
+## Overview (Original - Not Implemented)
 
 Mentions in ChatInputDropper is a client-only Nuxt plugin that adds @-mentions for documents and chat threads inside the chat editor. It integrates a TipTap mention extension for autocomplete, a local Orama index for low-latency search, and a send-time context resolver wired into the chat pipeline via hooks.
 
@@ -62,10 +64,10 @@ flowchart TD
 
 3. TipTap Mention Extension (off‑the‑shelf) (`app/plugins/Mentions/TipTapMentionExtension.ts`)
 
--   Use the official `@tiptap/extension-mention` with `@tiptap/suggestion` and `tippy.js` for the dropdown UI (no custom ProseMirror plugin).
+-   Use the official `@tiptap/extension-mention` with `@tiptap/suggestion` for the dropdown UI hooks (no custom ProseMirror plugin).
 -   Configure `Mention.configure({ suggestion: { char: '@', items: async ({ query }) => { /* Orama search */ }, render, allowSpaces: false } })`.
 -   Insert non-editable inline nodes with `attrs: { id, source: 'document'|'chat', label }` and style via `.mention` class and icon.
--   Implement grouped results (Documents/Chats) inside the `render` function using a lightweight list with max 5 per group.
+-   Implement grouped results (Documents/Chats) inside the `render` function using either a Nuxt UI floating panel (preferred) or a simple absolutely positioned panel;
 
 4. Context Resolver (`app/plugins/Mentions/resolveMentions.ts`)
 
@@ -84,7 +86,6 @@ flowchart TD
 
 -   `@tiptap/extension-mention`
 -   `@tiptap/suggestion`
--   `tippy.js`
 -   `@orama/orama`
 
 ## Key Interfaces (TypeScript)
@@ -210,7 +211,7 @@ Mention.configure({
                     .map((r) => map(r, 'chat')),
             ];
         },
-        render: suggestionRendererGroupedWithTippy,
+        render: suggestionRendererGrouped, // uses clientRect() + floating panel with Nuxt UI styles
     },
     renderText({ options, node }) {
         return `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`;

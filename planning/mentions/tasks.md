@@ -7,132 +7,140 @@ content_type: text/markdown
 
 -   Scope: Optional client-only plugin; no core code changes required.
 -   Target hooks: `ai.chat.messages:filter:input`, DB hooks for `documents` and `threads`.
--   Dependencies: `@orama/orama`, TipTap v2, `@tiptap/extension-mention`, `@tiptap/suggestion`, `tippy.js`.
+-   Dependencies: `@orama/orama`, TipTap v2, `@tiptap/extension-mention`, `@tiptap/suggestion`.
 
--   [ ] 0.1 Add dependencies to the project and lockfile.
-    -   `bun add @tiptap/extension-mention @tiptap/suggestion tippy.js @orama/orama`
+-   [x] 0.1 Add dependencies to the project and lockfile.
+    -   `bun add @tiptap/extension-mention @tiptap/suggestion @orama/orama`
     -   Requirements: 1.1, 3.1
 
-## 1. Create plugin scaffolding
+## 1. Implement single-file plugin
 
--   [ ] 1.1 Create root plugin `app/plugins/mentions.client.ts` that:
+-   [x] 1.1 Create `app/plugins/mentions.client.ts` with all functionality inline (~250 lines total):
 
-    -   Initializes Orama index on `app.init:action:after`.
-    -   Registers TipTap extension and resolver hook.
-    -   Handles HMR dispose to unregister.
-    -   Requirements: 5.1, 5.2, 5.3
+    -   Config constants (debounce, limits)
+    -   Orama index setup using `app/core/search/orama.ts` helpers
+    -   Inline suggestion renderer (floating panel + grouped list)
+    -   Mention extension config with `@tiptap/extension-mention`
+    -   Context resolver: collect mentions, resolve via DB, inject via `ai.chat.messages:filter:input`
+    -   DB hooks for incremental index updates
+    -   HMR cleanup
+    -   Requirements: 1.x, 2.x, 3.x, 4.x, 5.x
 
--   [ ] 1.2 Add module files under `app/plugins/Mentions/`:
-    -   `index.ts` with registration helpers.
-    -   `OramaIndex.ts` for search index.
-    -   `TipTapMentionExtension.ts` for editor behavior.
-    -   `resolveMentions.ts` for send-time injection.
-    -   Requirements: 5.1, 3.1
+-   [x] 1.2 Add minimal CSS for `.mention` token styles (~20 lines)
+    -   Added `app/assets/css/mentions.css` and imported in main.css
+    -   Requirements: 6.1
 
-## 2. Implement Orama index
+## 2. Index setup (inline in main file)
 
--   [ ] 2.1 Implement `createOramaMentionIndex()` with schemas for docs and chats.
+-   [ ] 2.1 Use `createDb()` from `app/core/search/orama.ts` with unified schema: `{ id, title, source, snippet }`.
 
     -   Requirements: 3.1, 3.2
 
--   [ ] 2.2 Implement search API with fuzzy matching and result caps (per group 5; configurable).
+-   [ ] 2.2 On init, bulk load all documents and threads; map to unified records and `buildIndex()`.
 
-    -   Requirements: 1.2, 6.3, 8.1
+    -   Requirements: 3.1, 3.2
 
--   [ ] 2.3 Wire DB hooks to keep the index fresh:
-    -   Subscribe to `db.documents.create|upsert|delete:*` to upsert/remove.
-    -   Subscribe to `db.threads.create|upsert|delete:*` to upsert/remove threads and maintain a `snippet` (first user message or title fallback).
-    -   Requirements: 3.3, 3.4
+-   [ ] 2.3 Wire DB hooks for incremental updates: upsert on create/update, remove on delete.
+    -   Requirements: 3.3
 
-## 3. TipTap mention extension (official)
+## 3. Mention extension and renderer (inline)
 
--   [ ] 3.1 Configure `@tiptap/extension-mention` with `@tiptap/suggestion` and `tippy.js` to detect `@` and show a grouped dropdown.
+-   [ ] 3.1 Configure `Mention.configure()` with `items` callback using `searchWithIndex()` and inline `render` function.
 
-    -   Requirements: 1.1, 1.3, 6.2, 6.3
+    -   Requirements: 1.1, 1.2, 1.3, 1.6
 
--   [ ] 3.2 Ensure inserted nodes have attrs `{ id, source, label }`; ensure proper spacing and deletion semantics; enable `deleteTriggerWithBackspace` as needed.
+-   [ ] 3.2 Inline renderer: floating panel positioned via `clientRect()`, grouped list with Nuxt UI classes, keyboard nav.
 
-    -   Requirements: 1.4, 1.5, 2.1, 2.2
+    -   Requirements: 1.3, 6.2, 6.3
 
--   [ ] 3.3 Plaintext/Markdown export renders label form (e.g., `@ProjectPlan.docx`).
+-   [ ] 3.3 Set `renderText` to output `@${label}` for plain text export.
+
     -   Requirements: 2.3
 
-## 4. Context resolver and injection
+-   [ ] 3.4 Ensure mention node attrs `{ id, source, label }` and `deleteTriggerWithBackspace`.
+    -   Requirements: 1.4, 1.5, 2.1, 2.2
 
--   [ ] 4.1 Implement `collectMentionsFromTipTapJSON(doc)` to find mention nodes in-order with dedupe.
+## 4. Context resolver and injection (inline)
+
+-   [ ] 4.1 Implement `collectMentions()`: recursive walk of TipTap JSON to find mention nodes, dedupe by `${source}:${id}`.
 
     -   Requirements: 4.1, 4.6
 
--   [ ] 4.2 Implement document resolution: `db.documents.get(id)` and TipTap JSON to plaintext conversion or cached plaintext field.
+-   [ ] 4.2 Implement document resolution: `db.documents.get(id)` → extract plain text from TipTap JSON content.
 
     -   Requirements: 4.2
 
--   [ ] 4.3 Implement chat resolution: `db.messages.byThread(id)` to transcript string (role:message lines).
+-   [ ] 4.3 Implement thread resolution: `db.messages.byThread(id)` → format as transcript.
 
     -   Requirements: 4.3
 
--   [ ] 4.4 Truncation by bytes (UTF-8) with suffix and header note; limits configurable.
+-   [ ] 4.4 Implement `truncate()`: UTF-8 byte truncation with suffix and header note.
 
     -   Requirements: 4.5, 8.1
 
--   [ ] 4.5 Hook into `ai.chat.messages:filter:input` to prepend context messages with headers and return transformed array.
+-   [ ] 4.5 Hook `ai.chat.messages:filter:input`: collect, resolve, truncate, prepend system messages.
 
     -   Requirements: 4.4, 5.3
 
--   [ ] 4.6 Handle resolution failures with warnings in injected context; never block send.
+-   [ ] 4.6 Handle resolution failures: skip missing refs, log warning (non-blocking).
     -   Requirements: 4.7, 7.4
 
-## 5. Styling and UX polish
+## 5. Styling and config
 
--   [ ] 5.1 `.mention` styles with subtle background, icon, and hover delete button; ARIA labels for tokens and listbox.
+-   [ ] 5.1 Add `.mention` CSS with subtle background, icon, hover state; ARIA labels.
 
-    -   Requirements: 6.1, 6.2
+    -   Requirements: 6.1
 
--   [ ] 5.2 Keyboard nav: ESC to close, Enter to commit; ensure focus management and backspace behavior.
+-   [ ] 5.2 Verify keyboard nav and focus management (handled by Suggestion API).
+
     -   Requirements: 1.5, 6.2
 
-## 6. Config and feature flag
-
--   [ ] 6.1 Provide minimal config (debounce, max results per group, truncation size) with sensible defaults.
-
+-   [ ] 5.3 Expose config constants at top of file (debounce, max per group, truncation size).
     -   Requirements: 8.1
 
--   [ ] 6.2 Global enable/disable flag; if disabled, skip registering extension and hooks.
-    -   Requirements: 8.2
+## 6. Tests (minimal)
 
-## 7. Tests
+-   [ ] 6.1 Unit test: `collectMentions()` with nested/duplicate nodes.
 
--   [ ] 7.1 Unit tests: mention traversal, dedupe, ordering; truncation; Orama search ranking.
+    -   Requirements: 2.x, 4.1, 4.6
 
-    -   Requirements: 2.x, 3.x, 4.6, 4.5
+-   [ ] 6.2 Unit test: `truncate()` by UTF-8 bytes with Unicode edge cases.
 
--   [ ] 7.2 Integration tests: hook transforms `ai.chat.messages:filter:input` given a sample TipTap JSON with mentions.
+    -   Requirements: 4.5
+
+-   [ ] 6.3 Integration test: hook transform `ai.chat.messages:filter:input` with sample TipTap JSON.
 
     -   Requirements: 4.4, 5.3, 7.4
 
--   [ ] 7.3 Performance checks: search latency p95 < 50ms on 5k items; resolution overhead p95 < 120ms for small contexts.
-    -   Requirements: 7.1, 7.3
+-   [ ] 6.4 Manual E2E: type `@`, search, select, send, verify injected context.
+    -   Requirements: all acceptance criteria
 
-## 8. Documentation and examples
+## 7. Documentation (optional)
 
--   [ ] 8.1 Add a short README in `app/plugins/Mentions/` describing setup and configuration.
--   [ ] 8.2 Add a minimal example under `app/plugins/examples/` to showcase the mention token and dropdown (optional).
+-   [ ] 7.1 Add inline comments in `app/plugins/mentions.client.ts` describing each section.
+-   [ ] 7.2 Optional: brief README in `planning/mentions/` if needed for future maintainers.
 
-## 9. Registration and cleanup
+## 8. HMR and cleanup
 
--   [ ] 9.1 Ensure root file `app/plugins/mentions.client.ts` exists and exports a default Nuxt plugin that registers/unregisters all parts.
--   [ ] 9.2 Verify HMR cleanup via `import.meta.hot.dispose`.
+-   [ ] 8.1 Implement `import.meta.hot.dispose()` to unregister hooks and destroy index.
+    -   Requirements: 5.2
 
-## 10. Acceptance validation
+## 9. Acceptance validation
 
--   [ ] 10.1 Manual E2E: type `@`, select a doc/chat, send, verify injected system messages.
--   [ ] 10.2 Error paths: resolve missing IDs, large content truncation, Orama not ready behavior.
--   [ ] 10.3 Accessibility pass on dropdown and token.
+-   [ ] 9.1 Manual E2E: type `@`, select doc/chat, send, verify injected system messages in LLM request.
+-   [ ] 9.2 Error paths: missing IDs, large content truncation, Orama not ready.
+-   [ ] 9.3 Accessibility: screen reader labels, keyboard nav.
 
 ---
 
 Implementation notes:
 
--   Map to hooks in `docs/core-hook-map.md`; avoid core mutations.
--   Keep all logic in `app/plugins/Mentions/*` with a small root registrar file to satisfy Nuxt plugin discovery.
--   Prefer simplicity: truncate large content instead of summarizing for v1.
+-   Single file keeps everything simple and auditable.
+-   Reuse `app/core/search/orama.ts` → no new abstractions.
+-   Unified index schema → simpler than separate docs/chats DBs.
+-   Inline renderer → no separate Vue component file.
+-   Target: ~250 lines total (vs. original ~600+ across multiple files).
+
+---
+
+TODO: Create a proper registry for the chatInput similar to how we do for the editor so that devs can develope plugins for the chatINPUT easily and have them lazy loaded and auto rendered.
