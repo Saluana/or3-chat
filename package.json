@@ -33,7 +33,6 @@
         "spark-md5": "^3.0.2",
         "streamdown-vue": "^1.0.21",
         "streamsaver": "^2.0.6",
-        "tippy.js": "^6.3.7",
         "tiptap-markdown": "^0.8.10",
         "turndown": "^7.2.1",
         "typescript": "^5.6.3",

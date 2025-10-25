@@ -1,6 +1,5 @@
 import { VueRenderer } from '@tiptap/vue-3';
-import tippy, { type Instance as TippyInstance } from 'tippy.js';
-import MentionsList from './MentionsList.vue';
+import MentionsPopover from './MentionsPopover.vue';
 
 interface MentionItem {
     id: string;
@@ -20,60 +19,53 @@ export function createMentionSuggestion(searchFn: (query: string) => Promise<Men
         },
         render: () => {
             let component: VueRenderer;
-            let popup: TippyInstance[];
 
             return {
                 onStart: (props: any) => {
                     console.log('[mentions] onStart called with items:', props.items);
 
-                    component = new VueRenderer(MentionsList, {
-                        props,
+                    // Mount a Popover wrapper that uses Nuxt UI instead of tippy
+                    component = new VueRenderer(MentionsPopover, {
                         editor: props.editor,
+                        props: {
+                            items: props.items,
+                            command: props.command,
+                            getReferenceClientRect: props.clientRect,
+                            open: true,
+                        },
                     });
 
-                    if (!props.clientRect) {
-                        return;
+                    if (component.element) {
+                        document.body.appendChild(component.element);
                     }
-
-                    popup = tippy('body', {
-                        getReferenceClientRect: props.clientRect,
-                        appendTo: () => document.body,
-                        content: component.element,
-                        showOnCreate: true,
-                        interactive: true,
-                        trigger: 'manual',
-                        placement: 'bottom-start',
-                        theme: 'mentions',
-                    });
-
-                    console.log('[mentions] Popup created');
+                    console.log('[mentions] Popover mounted');
                 },
 
                 onUpdate(props: any) {
                     console.log('[mentions] onUpdate called');
-                    component.updateProps(props);
-
-                    if (!props.clientRect) {
-                        return;
-                    }
-
-                    popup[0].setProps({
+                    component.updateProps({
+                        items: props.items,
+                        command: props.command,
                         getReferenceClientRect: props.clientRect,
+                        open: true,
                     });
                 },
 
                 onKeyDown(props: any) {
                     if (props.event.key === 'Escape') {
-                        popup[0].hide();
+                        // Keep API parity; Popover closes when TipTap calls onExit
+                        component.ref?.hide?.();
                         return true;
                     }
 
-                    return component.ref?.onKeyDown(props);
+                    return component.ref?.onKeyDown?.(props);
                 },
 
                 onExit() {
                     console.log('[mentions] onExit called');
-                    popup[0].destroy();
+                    if (component?.element?.parentNode) {
+                        component.element.parentNode.removeChild(component.element);
+                    }
                     component.destroy();
                 },
             };

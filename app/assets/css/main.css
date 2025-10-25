@@ -5,8 +5,7 @@
 /* Nuxt UI base styles (load first so we can override its tokens below) */
 @import "@nuxt/ui";
 
-/* Tippy.js tooltips (used for mentions dropdown) */
-@import "tippy.js/dist/tippy.css";
+/* Removed tippy.js; mentions dropdown now uses Nuxt UI Popover */
 
 /* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
 	so classes used in Nuxt UI theme overrides are generated. */
