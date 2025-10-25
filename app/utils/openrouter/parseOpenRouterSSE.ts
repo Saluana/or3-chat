@@ -1,7 +1,7 @@
 /**
  * Isomorphic OpenRouter SSE parser.
  * Used by both server route and client fallback to normalize upstream SSE into ORStreamEvent.
- *
+ * 
  * Note: ORStreamEvent type is also defined in app/utils/chat/types.ts.
  * They are kept in sync manually; both are the source of truth for their respective modules.
  * This avoids complex path resolution issues across shared/server/client boundaries.
@@ -11,14 +11,7 @@ export type ORStreamEvent =
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }
     | { type: 'reasoning'; text: string }
-    | {
-          type: 'tool_call';
-          tool_call: {
-              id: string;
-              type: 'function';
-              function: { name: string; arguments: string };
-          };
-      }
+    | { type: 'tool_call'; tool_call: { id: string; type: 'function'; function: { name: string; arguments: string } } }
     | { type: 'done' };
 
 /**
@@ -83,8 +76,7 @@ export async function* parseOpenRouterSSE(
                                 if (choice?.delta?.reasoning_details[0]?.text) {
                                     yield {
                                         type: 'reasoning',
-                                        text: choice.delta.reasoning_details[0]
-                                            .text,
+                                        text: choice.delta.reasoning_details[0].text,
                                     };
                                     reasoningYielded = true;
                                 }
@@ -94,8 +86,7 @@ export async function* parseOpenRouterSSE(
                             ) {
                                 yield {
                                     type: 'reasoning',
-                                    text: choice.delta.reasoning_details[0]
-                                        .summary,
+                                    text: choice.delta.reasoning_details[0].summary,
                                 };
                                 reasoningYielded = true;
                             }
@@ -124,10 +115,7 @@ export async function* parseOpenRouterSSE(
                         if (typeof delta.text === 'string' && delta.text) {
                             yield { type: 'text', text: delta.text };
                         }
-                        if (
-                            typeof delta.content === 'string' &&
-                            delta.content
-                        ) {
+                        if (typeof delta.content === 'string' && delta.content) {
                             yield { type: 'text', text: delta.content };
                         }
 
@@ -160,8 +148,7 @@ export async function* parseOpenRouterSSE(
 
                                 // Accumulate function name
                                 if (toolCallDelta.function?.name) {
-                                    accumulated.function.name +=
-                                        toolCallDelta.function.name;
+                                    accumulated.function.name += toolCallDelta.function.name;
                                 }
 
                                 // Accumulate function arguments (streamed incrementally)
@@ -192,8 +179,7 @@ export async function* parseOpenRouterSSE(
                                             type: 'function',
                                             function: {
                                                 name: toolCall.function.name,
-                                                arguments:
-                                                    toolCall.function.arguments,
+                                                arguments: toolCall.function.arguments,
                                             },
                                         },
                                     };
@@ -207,11 +193,7 @@ export async function* parseOpenRouterSSE(
                             let ixRef = { v: 0 };
                             for (const img of delta.images) {
                                 const url = img?.image_url?.url || img?.url;
-                                const evt = emitImageCandidate(
-                                    url,
-                                    ixRef,
-                                    false
-                                );
+                                const evt = emitImageCandidate(url, ixRef, false);
                                 if (evt) yield evt;
                             }
                         }
@@ -229,15 +211,10 @@ export async function* parseOpenRouterSSE(
                                             (typeof part.image_url === 'string'
                                                 ? part.image_url
                                                 : part.image_url?.url)) ||
-                                        (part.type === 'media' &&
-                                            part.media?.url) ||
+                                        (part.type === 'media' && part.media?.url) ||
                                         (part.type === 'image' &&
                                             part.inline_data?.url);
-                                    const evt = emitImageCandidate(
-                                        url,
-                                        ixRef,
-                                        false
-                                    );
+                                    const evt = emitImageCandidate(url, ixRef, false);
                                     if (evt) yield evt;
                                 }
                             }
@@ -249,11 +226,7 @@ export async function* parseOpenRouterSSE(
                             let fIxRef = { v: 0 };
                             for (const img of finalImages) {
                                 const url = img?.image_url?.url || img?.url;
-                                const evt = emitImageCandidate(
-                                    url,
-                                    fIxRef,
-                                    true
-                                );
+                                const evt = emitImageCandidate(url, fIxRef, true);
                                 if (evt) yield evt;
                             }
                         }
@@ -272,15 +245,10 @@ export async function* parseOpenRouterSSE(
                                             (typeof part.image_url === 'string'
                                                 ? part.image_url
                                                 : part.image_url?.url)) ||
-                                        (part.type === 'media' &&
-                                            part.media?.url) ||
+                                        (part.type === 'media' && part.media?.url) ||
                                         (part.type === 'image' &&
                                             part.inline_data?.url);
-                                    const evt = emitImageCandidate(
-                                        url,
-                                        fIxRef2,
-                                        true
-                                    );
+                                    const evt = emitImageCandidate(url, fIxRef2, true);
                                     if (evt) yield evt;
                                 }
                             }

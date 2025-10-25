@@ -1,31 +1,53 @@
 import type { ORStreamEvent, ToolDefinition } from './types';
-import { parseOpenRouterSSE } from '../../../shared/openrouter/parseOpenRouterSSE';
+import { parseOpenRouterSSE } from '../openrouter/parseOpenRouterSSE';
 
 // Cache key for detecting static build (no server routes)
 const SERVER_ROUTE_AVAILABLE_CACHE_KEY = 'or3:server-route-available';
+const SERVER_ROUTE_AVAILABLE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
  * Check if server routes are available (not a static build).
  * Uses localStorage to cache the result to avoid repeated 404 attempts.
+ * Includes a TTL so transient failures are periodically retried.
  */
 function isServerRouteAvailable(): boolean {
     if (typeof localStorage === 'undefined') return false;
 
     const cached = localStorage.getItem(SERVER_ROUTE_AVAILABLE_CACHE_KEY);
-    if (cached !== null) {
-        return cached === 'true';
+    if (cached === null) {
+        // First time; assume available
+        return true;
     }
 
-    // First time; assume available, will be set to false if it fails
-    return true;
+    try {
+        const { available, timestamp } = JSON.parse(cached);
+        const now = Date.now();
+        const isExpired = now - timestamp > SERVER_ROUTE_AVAILABLE_TTL_MS;
+
+        if (isExpired) {
+            // TTL expired; retry the server route
+            return true;
+        }
+
+        return available;
+    } catch {
+        // Invalid cache; assume available
+        return true;
+    }
 }
 
 /**
- * Mark server routes as available or unavailable.
+ * Mark server routes as available or unavailable with TTL.
  */
 function setServerRouteAvailable(available: boolean): void {
     if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(SERVER_ROUTE_AVAILABLE_CACHE_KEY, String(available));
+    localStorage.setItem(
+        SERVER_ROUTE_AVAILABLE_CACHE_KEY,
+        JSON.stringify({
+            available,
+            timestamp: Date.now(),
+        })
+    );
 }
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
