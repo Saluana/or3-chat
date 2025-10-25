@@ -440,6 +440,24 @@
             "path": "/utils",
             "files": [
                 {
+                    "name": "tool-registry.md",
+                    "path": "/utils/tool-registry",
+                    "category": "Tools",
+                    "summary": "Lightweight singleton registry for managing LLM function-calling tools in OR3 Chat. Lets plugins register OpenRouter-compatible tools with handlers, metadata, and toggle persistence. Provides centralized tool management with reactive state, persistent preferences, type safety, lifecycle management, and built-in error handling with timeouts."
+                },
+                {
+                    "name": "tools-public.md",
+                    "path": "/utils/tools-public",
+                    "category": "Tools",
+                    "summary": "Simplified plugin API for tool registration. Re-exports registry functions and provides a helper for better TypeScript inference when defining tools. Recommended import path for plugins registering tools — keeps plugin code clean and isolated from internal implementation details. Exports useToolRegistry, defineTool helper, and all tool-related type definitions."
+                },
+                {
+                    "name": "uiMessages.md",
+                    "path": "/utils/uiMessages",
+                    "category": "Chat",
+                    "summary": "Type definitions and utilities for chat messages in the OR3 UI layer. Extends database message types with display properties like attachments, tool calls, and pending states. Bridges raw database records and rendered chat UI with enriched messages, tool call tracking, attachment mapping, and streaming indicators."
+                },
+                {
                     "name": "openrouterStream.md",
                     "path": "/utils/openrouterStream",
                     "category": "Streaming",
@@ -457,6 +475,12 @@
             "title": "Types",
             "path": "/types",
             "files": [
+                {
+                    "name": "chat-types.md",
+                    "path": "/types/chat-types",
+                    "category": "Chat",
+                    "summary": "TypeScript type definitions for OR3 chat messages, tool calling, and streaming. Defines ChatMessage, ContentPart variants (text/image/file), ToolDefinition with optional UI metadata, ToolCall for function invocations, ORStreamEvent for streaming, and SendMessageParams. The ToolDefinition.ui field provides display names, icons, and default states for the tool registry."
+                },
                 {
                     "name": "hooks.md",
                     "path": "/types/hooks",

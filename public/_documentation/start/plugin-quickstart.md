@@ -349,13 +349,318 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
+## 4. Registering AI Tools
+
+Plugins can register functions that the AI can call during chat conversations. These "tools" allow the AI to fetch data, perform calculations, or interact with external services.
+
+### Basic Tool Registration
+
+```typescript
+// app/plugins/my-calculator-tool.client.ts
+import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
+
+export default defineNuxtPlugin(() => {
+    const registry = useToolRegistry();
+
+    const calculatorTool = defineTool<{
+        operation: 'add' | 'subtract' | 'multiply' | 'divide';
+        a: number;
+        b: number;
+    }>({
+        name: 'calculate',
+        description: 'Perform basic math operations',
+        parameters: {
+            type: 'object',
+            properties: {
+                operation: {
+                    type: 'string',
+                    enum: ['add', 'subtract', 'multiply', 'divide'],
+                    description: 'The math operation to perform',
+                },
+                a: { type: 'number', description: 'First number' },
+                b: { type: 'number', description: 'Second number' },
+            },
+            required: ['operation', 'a', 'b'],
+        },
+        ui: {
+            label: 'Calculator',
+            icon: 'pixelarticons:calculator',
+            descriptionHint: 'Basic arithmetic operations',
+        },
+    });
+
+    const unregister = registry.register(
+        calculatorTool,
+        async ({ operation, a, b }) => {
+            switch (operation) {
+                case 'add':
+                    return a + b;
+                case 'subtract':
+                    return a - b;
+                case 'multiply':
+                    return a * b;
+                case 'divide':
+                    if (b === 0) throw new Error('Cannot divide by zero');
+                    return a / b;
+                default:
+                    throw new Error(`Unknown operation: ${operation}`);
+            }
+        }
+    );
+
+    // Cleanup on HMR or unmount
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            console.log('[Calculator] Cleaning up tool');
+            unregister();
+        });
+    }
+});
+```
+
+**Key concepts**:
+
+-   `defineTool<T>()`: Helper for TypeScript type inference on handler arguments
+-   `name`: Unique tool identifier (sent to AI)
+-   `description`: Tells the AI when to use this tool
+-   `parameters`: JSON Schema defining the tool's arguments
+-   `ui`: Optional display metadata (label, icon, etc.)
+-   `handler`: Async function that executes the tool
+
+### Tool with API Integration
+
+```typescript
+// app/plugins/weather-tool.client.ts
+import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
+
+export default defineNuxtPlugin(() => {
+    const registry = useToolRegistry();
+
+    const weatherTool = defineTool<{
+        city: string;
+        units?: 'celsius' | 'fahrenheit';
+    }>({
+        name: 'get_weather',
+        description: 'Get current weather conditions for a city',
+        parameters: {
+            type: 'object',
+            properties: {
+                city: {
+                    type: 'string',
+                    description: 'City name (e.g., "San Francisco")',
+                },
+                units: {
+                    type: 'string',
+                    enum: ['celsius', 'fahrenheit'],
+                    description: 'Temperature units',
+                },
+            },
+            required: ['city'],
+        },
+        ui: {
+            label: 'Weather Lookup',
+            icon: 'pixelarticons:cloud',
+            category: 'data',
+        },
+    });
+
+    const unregister = registry.register(
+        weatherTool,
+        async ({ city, units = 'celsius' }) => {
+            try {
+                const response = await fetch(
+                    `/api/weather?city=${encodeURIComponent(
+                        city
+                    )}&units=${units}`
+                );
+                if (!response.ok) {
+                    throw new Error(
+                        `Weather API error: ${response.statusText}`
+                    );
+                }
+                const data = await response.json();
+                return {
+                    temperature: data.temp,
+                    conditions: data.conditions,
+                    humidity: data.humidity,
+                };
+            } catch (error) {
+                console.error('[Weather Tool] Error:', error);
+                throw new Error(`Failed to fetch weather for ${city}`);
+            }
+        }
+    );
+
+    if (import.meta.hot) {
+        import.meta.hot.dispose(unregister);
+    }
+});
+```
+
+### Tool Lifecycle During Chat
+
+1. **Registration**: Plugin registers tool during app initialization
+2. **Discovery**: AI receives tool definition when chat starts
+3. **Invocation**: AI decides to use tool and sends arguments
+4. **Execution**: Your handler function runs with parsed arguments
+5. **Display**: Result shown in chat via `ToolCallIndicator` component
+
+**During streaming**:
+
+-   Tool status starts as `'loading'`
+-   UI shows spinner and arguments
+-   On success: status → `'complete'`, result displayed
+-   On error: status → `'error'`, error message shown
+
+### Multiple Tools in One Plugin
+
+```typescript
+// app/plugins/data-tools.client.ts
+import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
+
+export default defineNuxtPlugin(() => {
+    const registry = useToolRegistry();
+    const cleanups: Array<() => void> = [];
+
+    // Tool 1: Search documents
+    const searchTool = defineTool({
+        /* ... */
+    });
+    cleanups.push(
+        registry.register(searchTool, async (args) => {
+            // Search implementation
+        })
+    );
+
+    // Tool 2: Create document
+    const createTool = defineTool({
+        /* ... */
+    });
+    cleanups.push(
+        registry.register(createTool, async (args) => {
+            // Create implementation
+        })
+    );
+
+    // Cleanup all
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            cleanups.forEach((fn) => fn());
+        });
+    }
+});
+```
+
+### Best Practices for Tools
+
+**1. Write clear descriptions**
+
+```typescript
+// Good - AI understands when to use it
+description: 'Get current weather conditions for any city worldwide';
+
+// Bad - vague, AI won't know when to use
+description: 'Weather function';
+```
+
+**2. Validate arguments**
+
+```typescript
+handler: async ({ city }) => {
+    if (!city || city.trim().length === 0) {
+        throw new Error('City name is required');
+    }
+    // ... proceed
+};
+```
+
+**3. Return structured data**
+
+```typescript
+// Good - structured, easy to display
+return {
+    result: 42,
+    unit: 'meters',
+    timestamp: new Date().toISOString(),
+};
+
+// Avoid - hard to parse
+return 'The result is 42 meters at 2024-01-15';
+```
+
+**4. Handle errors clearly**
+
+```typescript
+try {
+    const data = await fetchData();
+    return data;
+} catch (error) {
+    // Provide actionable error message
+    throw new Error(`Failed to fetch data: ${error.message}`);
+}
+```
+
+**5. Use UI metadata for better UX**
+
+```typescript
+ui: {
+    label: 'Weather Lookup',          // Friendly name
+    icon: 'pixelarticons:cloud',      // Visual indicator
+    descriptionHint: 'Real-time data', // Extra context
+    category: 'data',                 // Grouping
+}
+```
+
+### Testing Your Tool
+
+**In the chat**:
+
+1. Open a chat thread
+2. Type: "Calculate 15 + 27"
+3. AI should call your `calculate` tool
+4. Result appears inline with status indicator
+
+**Console debugging**:
+
+```typescript
+registry.register(tool, async (args) => {
+    console.log('[My Tool] Called with:', args);
+    const result = await doWork(args);
+    console.log('[My Tool] Returning:', result);
+    return result;
+});
+```
+
+**Check registered tools**:
+
+```typescript
+const registry = useToolRegistry();
+console.log('Registered tools:', registry.listTools());
+```
+
+### Reference Implementation
+
+See `app/plugins/demo-calculator-tool.client.ts` for a complete working example with:
+
+-   Four operations (add, subtract, multiply, divide)
+-   Error handling (division by zero)
+-   Proper TypeScript types
+-   HMR cleanup
+-   UI metadata
+
+---
+
 ## Complete Multi-Feature Plugin Example
 
 Here's a full example combining multiple extension points:
 
 ```typescript
 // app/plugins/my-complete-plugin.client.ts
+import { useToolRegistry, defineTool } from '~/utils/chat/tools-public';
+
 export default defineNuxtPlugin(() => {
+    const cleanups: Array<() => void> = [];
+
     // 1. Dashboard tile with pages
     registerDashboardPlugin({
         id: 'my-plugin:main',
@@ -414,6 +719,31 @@ export default defineNuxtPlugin(() => {
         },
     });
 
+    // 5. AI Tool
+    const registry = useToolRegistry();
+    const myTool = defineTool<{ query: string }>({
+        name: 'search_plugin_data',
+        description: 'Search within plugin data',
+        parameters: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'Search query' },
+            },
+            required: ['query'],
+        },
+        ui: {
+            label: 'Plugin Search',
+            icon: 'pixelarticons:search',
+        },
+    });
+
+    cleanups.push(
+        registry.register(myTool, async ({ query }) => {
+            // Search implementation
+            return { results: [], query };
+        })
+    );
+
     // HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
@@ -421,6 +751,7 @@ export default defineNuxtPlugin(() => {
             unregisterMessageAction?.('my-plugin:analyze');
             unregisterSidebarSection?.('my-plugin:info');
             unregisterSidebarFooterAction?.('my-plugin:action');
+            cleanups.forEach((fn) => fn());
         });
     }
 });
