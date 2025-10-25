@@ -12,6 +12,7 @@ Think of `useChat` as your chat conversation manager — it keeps track of all m
 
 -   Send a message to an AI model
 -   Display a conversation with streaming responses
+-   Execute LLM tool calls during streaming
 -   Retry a failed message
 -   Show loading states while the AI is thinking
 -   Cancel an ongoing AI response
@@ -172,12 +173,13 @@ This is what you see in `messages.value` and `tailAssistant.value`:
 ```ts
 interface UiChatMessage {
     id: string; // unique message ID
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     text: string; // the actual message text
     file_hashes?: string[]; // attached file references
     reasoning_text?: string; // AI's reasoning (if model supports it)
     stream_id?: string; // for tracking streaming messages
     pending?: boolean; // true while streaming
+    toolCalls?: ToolCallInfo[]; // active tool calls (loading/complete/error)
 }
 ```
 
@@ -208,12 +210,16 @@ Here's what happens when you send a message:
 5. **Add user message**: Saves your message to the database and updates `messages.value`
 6. **Prepare AI request**:
     - Builds conversation history
+    - Loads enabled tools from the tool registry
     - Removes empty assistant messages (API requirement)
     - Converts to OpenRouter format
     - Applies image limit (5 images max to avoid rate limits)
-7. **Start streaming**: Opens a stream to OpenRouter API
+7. **Start streaming loop**: Opens a stream to OpenRouter API
 8. **Process chunks**: As AI responds:
     - Text chunks update `tailAssistant.value.text`
+    - Tool calls trigger execution via the tool registry
+    - Tool results are added to conversation history
+    - Loop continues until AI completes without requesting more tools
     - Generated images get saved and attached
     - Reasoning text (if supported) goes into `reasoning_text`
     - Progress saved to DB every 500ms
@@ -281,6 +287,26 @@ await chat.sendMessage('What is this?', {
 });
 ```
 
+### Using tools
+
+Tools are automatically included if enabled in the tool registry:
+
+```ts
+// Tools are executed automatically during streaming
+await chat.sendMessage('Calculate 25 * 4');
+// If a calculator tool is enabled, it will be called
+// and the result fed back to the AI
+
+// Check tool execution status
+if (chat.tailAssistant.value?.toolCalls) {
+    for (const call of chat.tailAssistant.value.toolCalls) {
+        console.log(call.name, call.status); // loading/complete/error
+    }
+}
+```
+
+See the Tool Registry documentation for registering and managing tools.
+
 ---
 
 ## Important notes
@@ -321,10 +347,33 @@ The composable emits several hook events you can listen to:
 -   `ai.chat.send:action:after` — after completion/abort
 -   `ai.chat.stream:action:complete` — stream finished
 -   `ai.chat.stream:action:error` — stream error
+-   `ai.chat.stream:action:delta` — each text chunk received
+-   `ai.chat.stream:action:reasoning` — reasoning text chunk
 -   `ai.chat.retry:action:before` — before retry
 -   `ai.chat.retry:action:after` — after retry
 -   `ui.pane.msg:action:sent` — multi-pane message sent
 -   `ui.pane.msg:action:received` — multi-pane message received
+
+### Tool calling
+
+When the AI requests a tool call:
+
+1. Tool registry executes the handler with parsed arguments
+2. Tool status tracked in `tailAssistant.value.toolCalls` (loading → complete/error)
+3. Result appended to conversation as a `tool` role message
+4. Streaming loop continues with updated history
+5. AI receives tool result and can request more tools or complete
+
+The loop continues up to 10 iterations to prevent infinite tool calling.
+
+### Tool messages
+
+Tool messages (`role: 'tool'`) are:
+
+-   Stored in the database for conversation history
+-   Filtered from UI display (not rendered in chat)
+-   Included in conversation history for AI context
+-   Tracked via `toolCalls` property on assistant messages
 
 ### Image handling
 
@@ -377,14 +426,24 @@ Call `clear()` or create a new chat instance for fresh conversation.
 -   User images: Check `file_hashes` are valid
 -   AI images: Must use vision-capable model
 
+### Tools not executing
+
+-   Check tools are enabled in ChatInputDropper settings
+-   Verify tool is registered via `useToolRegistry`
+-   Look for errors in tool's `lastError` ref
+-   Check model supports function calling
+
 ---
 
 ## Related
 
+-   `useToolRegistry` — register and manage LLM tools
 -   `useActivePrompt` — manage system prompts
 -   `useUserApiKey` — OpenRouter API key management
 -   `useAiSettings` — model preferences and master system prompt
 -   `useModelStore` — available models catalog
+-   `~/utils/chat/tool-registry` — tool calling system
+-   `~/utils/chat/uiMessages` — UI message types with tool call support
 -   `~/db/messages` — direct database access
 -   `~/db/threads` — thread management
 
@@ -410,7 +469,7 @@ function useChat(
         error: Ref<Error | null>;
         aborted: Ref<boolean>;
     };
-    tailAssistant: Ref<UiChatMessage | null>;
+    tailAssistant: Ref<UiChatMessage | null>; // includes toolCalls during execution
     sendMessage: (content: string, params?: SendMessageParams) => Promise<void>;
     retryMessage: (messageId: string, modelOverride?: string) => Promise<void>;
     abort: () => void;
@@ -456,6 +515,27 @@ function useChat(
                     <span v-if="chat.tailAssistant.value.pending" class="cursor"
                         >▋</span
                     >
+                </div>
+
+                <!-- Tool calls -->
+                <div
+                    v-if="chat.tailAssistant.value.toolCalls?.length"
+                    class="tool-calls"
+                >
+                    <div
+                        v-for="call in chat.tailAssistant.value.toolCalls"
+                        :key="call.id"
+                    >
+                        <span v-if="call.status === 'loading'"
+                            >⏳ {{ call.name }}...</span
+                        >
+                        <span v-else-if="call.status === 'complete'"
+                            >✓ {{ call.name }}</span
+                        >
+                        <span v-else-if="call.status === 'error'"
+                            >⚠️ {{ call.name }}: {{ call.error }}</span
+                        >
+                    </div>
                 </div>
             </div>
         </div>
@@ -581,6 +661,18 @@ button:disabled {
     margin-top: 0.5rem;
     font-size: 0.875rem;
     background: #757575;
+}
+
+.tool-calls {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.tool-calls > div {
+    margin: 0.25rem 0;
 }
 </style>
 ```

@@ -14,6 +14,7 @@ import type {
     ContentPart,
     ChatMessage,
     SendMessageParams,
+    ToolCall,
 } from '~/utils/chat/types';
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
@@ -25,6 +26,7 @@ import {
 } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import { openRouterStream } from '../../utils/chat/openrouterStream';
+import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { dataUrlToBlob, inferMimeFromUrl } from '~/utils/chat/files';
 import {
     promptJsonToString,
@@ -61,6 +63,7 @@ export function useChat(
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
+    const historyLoadedFor = ref<string | null>(null);
 
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey) {
@@ -117,24 +120,6 @@ export function useChat(
         }
     ) {
         if (!apiKey.value) return;
-
-        // --- DEBUG ENTRY (pane/mpApi snapshot) ---
-        try {
-            const mpApiDbg: any = (globalThis as any).__or3MultiPaneApi;
-            console.debug('[useChat] sendMessage:entry', {
-                threadIdRef: threadIdRef.value,
-                hasMpApi: !!mpApiDbg,
-                panesLen: mpApiDbg?.panes?.value?.length,
-                activePaneIndex: mpApiDbg?.activePaneIndex?.value,
-                paneThreadIds: Array.isArray(mpApiDbg?.panes?.value)
-                    ? mpApiDbg.panes.value.map((p: any, i: number) => ({
-                          i,
-                          mode: p.mode,
-                          threadId: p.threadId,
-                      }))
-                    : null,
-            });
-        } catch {}
 
         // Apply outgoing filter BEFORE creating thread to allow early veto
         const outgoing = await hooks.applyFilters(
@@ -242,24 +227,7 @@ export function useChat(
                         } else {
                             pane.threadId = newThread.id;
                         }
-                        try {
-                            console.debug('[useChat] thread-bound-to-pane', {
-                                newThreadId: newThread.id,
-                                activePaneIndex: mpApi.activePaneIndex?.value,
-                                paneId: pane?.id,
-                                paneThreadId: pane?.threadId,
-                            });
-                        } catch {}
                     }
-                } else {
-                    try {
-                        console.debug(
-                            '[useChat] thread-bound: no panes present',
-                            {
-                                newThreadId: newThread.id,
-                            }
-                        );
-                    } catch {}
                 }
             } catch {}
         } // END create-new-thread block
@@ -338,34 +306,11 @@ export function useChat(
         try {
             const mpApi: any = (globalThis as any).__or3MultiPaneApi;
             if (mpApi && mpApi.panes?.value) {
-                try {
-                    console.debug('[useChat] pane-search:sent', {
-                        threadId: threadIdRef.value,
-                        paneThreads: mpApi.panes.value.map(
-                            (p: any, i: number) => ({
-                                i,
-                                mode: p.mode,
-                                threadId: p.threadId,
-                            })
-                        ),
-                    });
-                } catch {}
                 const pane = mpApi.panes.value.find(
                     (p: any) =>
                         p.mode === 'chat' && p.threadId === threadIdRef.value
                 );
                 if (pane) {
-                    if (import.meta.dev) {
-                        try {
-                            console.debug('[useChat] pane msg:sent', {
-                                paneIndex: mpApi.panes.value.indexOf(pane),
-                                threadId: threadIdRef.value,
-                                msgId: userDbMsg.id,
-                                length: outgoing.length,
-                                fileHashes: userDbMsg.file_hashes || null,
-                            });
-                        } catch {}
-                    }
                     const paneIndex = mpApi.panes.value.indexOf(pane);
                     hooks.doAction('ui.pane.msg:action:sent', {
                         pane,
@@ -377,40 +322,7 @@ export function useChat(
                             fileHashes: userDbMsg.file_hashes || null,
                         },
                     });
-                } else if (import.meta.dev) {
-                    try {
-                        console.debug(
-                            '[useChat] pane msg:sent (no pane found)',
-                            {
-                                threadId: threadIdRef.value,
-                                msgId: userDbMsg.id,
-                                panes: Array.isArray(mpApi.panes.value)
-                                    ? mpApi.panes.value.map(
-                                          (p: any, i: number) => ({
-                                              i,
-                                              mode: p.mode,
-                                              threadId: p.threadId,
-                                          })
-                                      )
-                                    : null,
-                                activePaneIndex: mpApi.activePaneIndex?.value,
-                                reason: !mpApi.panes.value.length
-                                    ? 'no-panes'
-                                    : 'thread-mismatch',
-                            }
-                        );
-                    } catch {}
                 }
-            } else {
-                try {
-                    console.debug(
-                        '[useChat] pane-search:sent mpApi missing or no panes',
-                        {
-                            threadId: threadIdRef.value,
-                            hasMpApi: !!mpApi,
-                        }
-                    );
-                } catch {}
             }
         } catch {}
 
@@ -488,35 +400,30 @@ export function useChat(
                 }
                 return true; // unknown shape: keep defensively
             });
-            if (
-                sanitizedEffectiveMessages.length !==
-                (effectiveMessages as any[]).length
-            ) {
-                try {
-                    console.debug(
-                        '[useChat] removed empty assistant placeholders:',
-                        (effectiveMessages as any[])
-                            .filter((m: any) => m.role === 'assistant')
-                            .map((m: any) => ({
-                                id: m.id,
-                                kept: sanitizedEffectiveMessages.includes(m),
-                                contentPreview:
-                                    typeof m.content === 'string'
-                                        ? m.content.slice(0, 30)
-                                        : JSON.stringify(m.content).slice(
-                                              0,
-                                              60
-                                          ),
-                            }))
-                    );
-                } catch {}
-            }
 
             const { buildOpenRouterMessages } = await import(
                 '~/core/auth/openrouter-build'
             );
 
-            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
+            // Load thread history if not already loaded
+            if (
+                threadIdRef.value &&
+                historyLoadedFor.value !== threadIdRef.value
+            ) {
+                const { ensureThreadHistoryLoaded } = await import(
+                    '~/utils/chat/history'
+                );
+                await ensureThreadHistoryLoaded(
+                    threadIdRef,
+                    historyLoadedFor,
+                    rawMessages
+                );
+                // Sync UI messages after loading history
+                messages.value = rawMessages.value
+                    .filter((m) => m.role !== 'tool')
+                    .map((m) => ensureUiMessage(m));
+            }
+
             const modelInputMessages: any[] = (
                 sanitizedEffectiveMessages as any[]
             ).map((m: any) => ({ ...m }));
@@ -569,150 +476,331 @@ export function useChat(
                     : undefined,
             });
 
-            aborted.value = false;
-            abortController.value = new AbortController();
-            const stream = openRouterStream({
-                apiKey: apiKey.value!,
-                model: modelId,
-                orMessages,
-                modalities,
-                signal: abortController.value.signal,
-            });
+            // Get enabled tool definitions from registry
+            const toolRegistry = useToolRegistry();
+            const enabledToolDefs = toolRegistry.getEnabledDefinitions();
 
-            const rawAssistant: ChatMessage = {
-                role: 'assistant',
-                content: '',
-                id: (assistantDbMsg as any).id,
-                stream_id: newStreamId,
-                reasoning_text: null,
-            } as any;
-            recordRawMessage(rawAssistant);
-            rawMessages.value.push(rawAssistant);
-            const uiAssistant = ensureUiMessage(rawAssistant);
-            uiAssistant.pending = true;
-            tailAssistant.value = uiAssistant; // keep out of main messages until next user send
-            const current = uiAssistant;
-            let chunkIndex = 0;
-            const WRITE_INTERVAL_MS = 500;
-            let lastPersistAt = 0;
+            // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
 
-            for await (const ev of stream) {
-                if (ev.type === 'reasoning') {
-                    if (current.reasoning_text === null)
-                        current.reasoning_text = ev.text;
-                    else current.reasoning_text += ev.text;
-                    streamAcc.append(ev.text, { kind: 'reasoning' });
-                    try {
-                        await hooks.doAction(
-                            'ai.chat.stream:action:reasoning',
-                            ev.text,
-                            {
-                                threadId: threadIdRef.value,
-                                assistantId: assistantDbMsg.id,
-                                streamId: newStreamId,
-                                reasoningLength:
-                                    current.reasoning_text?.length || 0,
-                            }
-                        );
-                    } catch {}
-                } else if (ev.type === 'text') {
-                    if (current.pending) current.pending = false;
-                    const delta = ev.text;
-                    streamAcc.append(delta, { kind: 'text' });
-                    await hooks.doAction('ai.chat.stream:action:delta', delta, {
-                        threadId: threadIdRef.value,
-                        assistantId: assistantDbMsg.id,
-                        streamId: newStreamId,
-                        deltaLength: String(delta ?? '').length,
-                        totalLength:
-                            current.text.length + String(delta ?? '').length,
-                        chunkIndex: chunkIndex++,
-                    });
-                    current.text += delta;
-                } else if (ev.type === 'image') {
-                    if (current.pending) current.pending = false;
-                    // Append markdown placeholder exactly once per image URL
-                    const placeholder = `![generated image](${ev.url})`;
-                    const already = current.text.includes(placeholder);
-                    if (!already) {
-                        current.text +=
-                            (current.text ? '\n\n' : '') + placeholder;
-                    }
-                    if (import.meta.dev) {
-                        console.debug('[stream:image:event]', {
-                            url: ev.url?.slice(0, 80),
-                            placeholderInserted: !already,
-                            currentLength: current.text.length,
-                            fileHashes: assistantFileHashes.slice(),
-                        });
-                    }
-                    if (assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/'))
-                            blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            try {
-                                const r = await fetch(ev.url);
-                                if (r.ok) blob = await r.blob();
-                            } catch {}
-                        }
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(
-                                    blob,
-                                    'gen-image'
-                                );
-                                assistantFileHashes.push(meta.hash);
-                                const serialized =
-                                    serializeFileHashes(assistantFileHashes);
-                                const updatedMsg = {
-                                    ...assistantDbMsg,
-                                    data: {
-                                        ...((assistantDbMsg as any).data || {}),
-                                        reasoning_text:
-                                            current.reasoning_text ?? null,
-                                    },
-                                    file_hashes: serialized,
-                                    updated_at: nowSec(),
-                                } as any;
-                                await upsert.message(updatedMsg);
-                                (current as any).file_hashes = serialized;
-                                if (import.meta.dev) {
-                                    console.debug('[stream:image:persist]', {
-                                        hash: meta.hash,
-                                        total: assistantFileHashes.length,
-                                        serialized,
-                                    });
-                                }
-                            } catch {}
-                        }
-                    }
+            // Track tool calls across all loop iterations (persists state)
+            const activeToolCalls = new Map<string, any>();
+
+            aborted.value = false;
+            abortController.value = new AbortController();
+
+            // Tool calling loop: restart streaming after each tool execution
+            let continueLoop = true;
+            let loopIteration = 0;
+            const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
+
+            while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
+                continueLoop = false;
+                loopIteration++;
+
+                const stream = openRouterStream({
+                    apiKey: apiKey.value!,
+                    model: modelId,
+                    orMessages,
+                    modalities,
+                    tools:
+                        enabledToolDefs.length > 0
+                            ? enabledToolDefs
+                            : undefined,
+                    signal: abortController.value.signal,
+                });
+
+                const rawAssistant: ChatMessage = {
+                    role: 'assistant',
+                    content: '',
+                    id: (assistantDbMsg as any).id,
+                    stream_id: newStreamId,
+                    reasoning_text: null,
+                } as any;
+
+                // Only record and push on first iteration
+                if (loopIteration === 1) {
+                    recordRawMessage(rawAssistant);
+                    rawMessages.value.push(rawAssistant);
+                    const uiAssistant = ensureUiMessage(rawAssistant);
+                    uiAssistant.pending = true;
+                    tailAssistant.value = uiAssistant;
                 }
 
-                const now = Date.now();
-                if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                    const textContent = current.text;
-                    const updated = {
-                        ...assistantDbMsg,
-                        data: {
-                            ...((assistantDbMsg as any).data || {}),
-                            content: textContent,
-                            reasoning_text: current.reasoning_text ?? null,
-                        },
-                        file_hashes: assistantFileHashes.length
-                            ? serializeFileHashes(assistantFileHashes)
-                            : (assistantDbMsg as any).file_hashes,
-                        updated_at: nowSec(),
-                    } as any;
-                    await upsert.message(updated);
-                    if (assistantFileHashes.length)
-                        (current as any).file_hashes =
-                            serializeFileHashes(assistantFileHashes);
-                    lastPersistAt = now;
+                const current =
+                    tailAssistant.value || ensureUiMessage(rawAssistant);
+                let chunkIndex = 0;
+                const WRITE_INTERVAL_MS = 500;
+                let lastPersistAt = 0;
+                const pendingToolCalls: ToolCall[] = [];
+
+                try {
+                    for await (const ev of stream) {
+                        if (ev.type === 'tool_call') {
+                            // Tool call detected - enqueue for execution after stream closes
+                            if (current.pending) current.pending = false;
+
+                            const toolCall = ev.tool_call;
+
+                            // Add tool call to tracking with loading status
+                            activeToolCalls.set(toolCall.id, {
+                                id: toolCall.id,
+                                name: toolCall.function.name,
+                                status: 'loading',
+                                args: toolCall.function.arguments,
+                            });
+
+                            // Update UI with loading state
+                            current.toolCalls = Array.from(
+                                activeToolCalls.values()
+                            );
+
+                            // Persist current assistant state (function call request) with tool call info
+                            const textContent = current.text;
+                            await upsert.message({
+                                ...assistantDbMsg,
+                                data: {
+                                    ...((assistantDbMsg as any).data || {}),
+                                    content: textContent,
+                                    reasoning_text:
+                                        current.reasoning_text ?? null,
+                                    tool_calls: current.toolCalls
+                                        ? JSON.parse(
+                                              JSON.stringify(current.toolCalls)
+                                          )
+                                        : undefined,
+                                },
+                                file_hashes: assistantFileHashes.length
+                                    ? serializeFileHashes(assistantFileHashes)
+                                    : (assistantDbMsg as any).file_hashes,
+                                updated_at: nowSec(),
+                            } as any);
+
+                            pendingToolCalls.push(toolCall);
+                            continue;
+                        } else if (ev.type === 'reasoning') {
+                            if (current.reasoning_text === null)
+                                current.reasoning_text = ev.text;
+                            else current.reasoning_text += ev.text;
+                            streamAcc.append(ev.text, { kind: 'reasoning' });
+                            try {
+                                await hooks.doAction(
+                                    'ai.chat.stream:action:reasoning',
+                                    ev.text,
+                                    {
+                                        threadId: threadIdRef.value,
+                                        assistantId: assistantDbMsg.id,
+                                        streamId: newStreamId,
+                                        reasoningLength:
+                                            current.reasoning_text?.length || 0,
+                                    }
+                                );
+                            } catch {}
+                        } else if (ev.type === 'text') {
+                            if (current.pending) current.pending = false;
+                            const delta = ev.text;
+                            streamAcc.append(delta, { kind: 'text' });
+                            await hooks.doAction(
+                                'ai.chat.stream:action:delta',
+                                delta,
+                                {
+                                    threadId: threadIdRef.value,
+                                    assistantId: assistantDbMsg.id,
+                                    streamId: newStreamId,
+                                    deltaLength: String(delta ?? '').length,
+                                    totalLength:
+                                        current.text.length +
+                                        String(delta ?? '').length,
+                                    chunkIndex: chunkIndex++,
+                                }
+                            );
+                            current.text += delta;
+                        } else if (ev.type === 'image') {
+                            if (current.pending) current.pending = false;
+                            // Append markdown placeholder exactly once per image URL
+                            const placeholder = `![generated image](${ev.url})`;
+                            const already = current.text.includes(placeholder);
+                            if (!already) {
+                                current.text +=
+                                    (current.text ? '\n\n' : '') + placeholder;
+                            }
+                            if (assistantFileHashes.length < 6) {
+                                let blob: Blob | null = null;
+                                if (ev.url.startsWith('data:image/'))
+                                    blob = dataUrlToBlob(ev.url);
+                                else if (/^https?:/.test(ev.url)) {
+                                    try {
+                                        const r = await fetch(ev.url);
+                                        if (r.ok) blob = await r.blob();
+                                    } catch {}
+                                }
+                                if (blob) {
+                                    try {
+                                        const meta = await createOrRefFile(
+                                            blob,
+                                            'gen-image'
+                                        );
+                                        assistantFileHashes.push(meta.hash);
+                                        const serialized =
+                                            serializeFileHashes(
+                                                assistantFileHashes
+                                            );
+                                        const updatedMsg = {
+                                            ...assistantDbMsg,
+                                            data: {
+                                                ...((assistantDbMsg as any)
+                                                    .data || {}),
+                                                reasoning_text:
+                                                    current.reasoning_text ??
+                                                    null,
+                                            },
+                                            file_hashes: serialized,
+                                            updated_at: nowSec(),
+                                        } as any;
+                                        await upsert.message(updatedMsg);
+                                        (current as any).file_hashes =
+                                            serialized;
+                                    } catch {}
+                                }
+                            }
+                        }
+
+                        const now = Date.now();
+                        if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                            const textContent = current.text;
+                            const updated = {
+                                ...assistantDbMsg,
+                                data: {
+                                    ...((assistantDbMsg as any).data || {}),
+                                    content: textContent,
+                                    reasoning_text:
+                                        current.reasoning_text ?? null,
+                                },
+                                file_hashes: assistantFileHashes.length
+                                    ? serializeFileHashes(assistantFileHashes)
+                                    : (assistantDbMsg as any).file_hashes,
+                                updated_at: nowSec(),
+                            } as any;
+                            await upsert.message(updated);
+                            if (assistantFileHashes.length)
+                                (current as any).file_hashes =
+                                    serializeFileHashes(assistantFileHashes);
+                            lastPersistAt = now;
+                        }
+                    }
+
+                    if (pendingToolCalls.length > 0) {
+                        const toolResultsForNextLoop: Array<{
+                            call: ToolCall;
+                            result: string;
+                        }> = [];
+
+                        for (const toolCall of pendingToolCalls) {
+                            const execution = await toolRegistry.executeTool(
+                                toolCall.function.name,
+                                toolCall.function.arguments
+                            );
+
+                            let toolResultText: string;
+                            let toolStatus: 'complete' | 'error' = 'complete';
+                            if (execution.error) {
+                                toolStatus = 'error';
+                                toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
+                                console.warn('[useChat] tool execution error', {
+                                    tool: toolCall.function.name,
+                                    error: execution.error,
+                                    timedOut: execution.timedOut,
+                                });
+                            } else {
+                                toolResultText = execution.result || '';
+                            }
+
+                            activeToolCalls.set(toolCall.id, {
+                                id: toolCall.id,
+                                name: toolCall.function.name,
+                                status: toolStatus,
+                                args: toolCall.function.arguments,
+                                result:
+                                    toolStatus === 'complete'
+                                        ? toolResultText
+                                        : undefined,
+                                error:
+                                    toolStatus === 'error'
+                                        ? execution.error
+                                        : undefined,
+                            });
+                            current.toolCalls = Array.from(
+                                activeToolCalls.values()
+                            );
+
+                            const SUMMARY_THRESHOLD = 500;
+                            let uiSummary = toolResultText;
+                            if (toolResultText.length > SUMMARY_THRESHOLD) {
+                                uiSummary = `Tool result (${Math.round(
+                                    toolResultText.length / 1024
+                                )}KB): ${toolResultText.slice(
+                                    0,
+                                    200
+                                )}... [truncated for display]`;
+                            }
+
+                            await tx.appendMessage({
+                                thread_id: threadIdRef.value!,
+                                role: 'tool' as any,
+                                data: {
+                                    content: uiSummary,
+                                    tool_call_id: toolCall.id,
+                                    tool_name: toolCall.function.name,
+                                },
+                            });
+
+                            toolResultsForNextLoop.push({
+                                call: toolCall,
+                                result: toolResultText,
+                            });
+                        }
+
+                        orMessages.push({
+                            role: 'assistant',
+                            content: current.text || null,
+                            tool_calls: pendingToolCalls.map((toolCall) => ({
+                                id: toolCall.id,
+                                type: 'function',
+                                function: {
+                                    name: toolCall.function.name,
+                                    arguments: toolCall.function.arguments,
+                                },
+                            })),
+                        } as any);
+
+                        for (const payload of toolResultsForNextLoop) {
+                            orMessages.push({
+                                role: 'tool',
+                                tool_call_id: payload.call.id,
+                                name: payload.call.function.name,
+                                content: payload.result,
+                            } as any);
+                        }
+
+                        pendingToolCalls.length = 0;
+                        continueLoop = true;
+                        continue; // restart outer while-loop with new tool outputs
+                    }
+                } catch (streamError) {
+                    // If stream error and we're in a tool loop, stop looping
+                    if (loopIteration > 1) {
+                        console.warn(
+                            '[useChat] Stream error during tool loop',
+                            streamError
+                        );
+                        continueLoop = false;
+                    }
+                    throw streamError;
                 }
             }
 
+            // After loop completes (no more tool calls), finalize the assistant message
+            const current = tailAssistant.value!;
             const fullText = current.text;
             const hookName = 'ui.chat.message:filter:incoming';
             // Track error count before filter
@@ -736,6 +824,9 @@ export function useChat(
                     ...((assistantDbMsg as any).data || {}),
                     content: incoming,
                     reasoning_text: current.reasoning_text ?? null,
+                    tool_calls: current.toolCalls
+                        ? JSON.parse(JSON.stringify(current.toolCalls))
+                        : (assistantDbMsg as any).data?.tool_calls || null,
                 },
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)
@@ -755,38 +846,12 @@ export function useChat(
             try {
                 const mpApi: any = (globalThis as any).__or3MultiPaneApi;
                 if (mpApi && mpApi.panes?.value) {
-                    try {
-                        console.debug('[useChat] pane-search:received', {
-                            threadId: threadIdRef.value,
-                            paneThreads: mpApi.panes.value.map(
-                                (p: any, i: number) => ({
-                                    i,
-                                    mode: p.mode,
-                                    threadId: p.threadId,
-                                })
-                            ),
-                        });
-                    } catch {}
                     const pane = mpApi.panes.value.find(
                         (p: any) =>
                             p.mode === 'chat' &&
                             p.threadId === threadIdRef.value
                     );
                     if (pane) {
-                        if (import.meta.dev) {
-                            try {
-                                console.debug('[useChat] pane msg:received', {
-                                    paneIndex: mpApi.panes.value.indexOf(pane),
-                                    threadId: threadIdRef.value,
-                                    msgId: finalized.id,
-                                    length: (incoming as string).length,
-                                    reasoningLength: (
-                                        current.reasoning_text || ''
-                                    ).length,
-                                    fileHashes: finalized.file_hashes || null,
-                                });
-                            } catch {}
-                        }
                         const paneIndex = mpApi.panes.value.indexOf(pane);
                         hooks.doAction('ui.pane.msg:action:received', {
                             pane,
@@ -800,42 +865,7 @@ export function useChat(
                                     .length,
                             },
                         });
-                    } else if (import.meta.dev) {
-                        try {
-                            console.debug(
-                                '[useChat] pane msg:received (no pane found)',
-                                {
-                                    threadId: threadIdRef.value,
-                                    msgId: finalized.id,
-                                    length: (incoming as string).length,
-                                    panes: Array.isArray(mpApi.panes.value)
-                                        ? mpApi.panes.value.map(
-                                              (p: any, i: number) => ({
-                                                  i,
-                                                  mode: p.mode,
-                                                  threadId: p.threadId,
-                                              })
-                                          )
-                                        : null,
-                                    activePaneIndex:
-                                        mpApi.activePaneIndex?.value,
-                                    reason: !mpApi.panes.value.length
-                                        ? 'no-panes'
-                                        : 'thread-mismatch',
-                                }
-                            );
-                        } catch {}
                     }
-                } else {
-                    try {
-                        console.debug(
-                            '[useChat] pane-search:received mpApi missing or no panes',
-                            {
-                                threadId: threadIdRef.value,
-                                hasMpApi: !!mpApi,
-                            }
-                        );
-                    } catch {}
                 }
             } catch {}
             const endedAt = Date.now();
@@ -1004,20 +1034,55 @@ export function useChat(
                 });
                 rawMessages.value = dbMessages.map((m: any) => ({
                     role: m.role,
-                    content: (m.data as any)?.content || '',
+                    content:
+                        typeof m.data?.content === 'string'
+                            ? m.data.content
+                            : (m as any).content || '',
                     id: m.id,
                     stream_id: m.stream_id,
                     file_hashes: m.file_hashes,
-                    reasoning_text: (m.data as any)?.reasoning_text || null,
+                    reasoning_text:
+                        typeof m.data?.reasoning_text === 'string'
+                            ? m.data.reasoning_text
+                            : null,
+                    data: m.data || null,
+                    index:
+                        typeof m.index === 'number'
+                            ? m.index
+                            : typeof m.index === 'string'
+                            ? Number(m.index) || null
+                            : null,
+                    created_at:
+                        typeof m.created_at === 'number' ? m.created_at : null,
                 }));
-                messages.value = dbMessages.map((m: any) =>
+                const uiMessages = dbMessages.filter(
+                    (m: any) => m.role !== 'tool'
+                );
+                messages.value = uiMessages.map((m: any) =>
                     ensureUiMessage({
                         role: m.role,
-                        content: (m.data as any)?.content || '',
+                        content:
+                            typeof m.data?.content === 'string'
+                                ? m.data.content
+                                : (m as any).content || '',
                         id: m.id,
                         stream_id: m.stream_id,
                         file_hashes: m.file_hashes,
-                        reasoning_text: (m.data as any)?.reasoning_text || null,
+                        reasoning_text:
+                            typeof m.data?.reasoning_text === 'string'
+                                ? m.data.reasoning_text
+                                : null,
+                        data: m.data,
+                        index:
+                            typeof m.index === 'number'
+                                ? m.index
+                                : typeof m.index === 'string'
+                                ? Number(m.index) || null
+                                : null,
+                        created_at:
+                            typeof m.created_at === 'number'
+                                ? m.created_at
+                                : null,
                     })
                 );
             }

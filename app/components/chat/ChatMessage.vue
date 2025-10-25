@@ -76,6 +76,17 @@
                     :pending="(props.message as any).pending"
                 />
             </div>
+
+            <!-- Tool Call Indicators -->
+            <ChatToolCallIndicator
+                v-if="
+                    props.message.role === 'assistant' &&
+                    props.message.toolCalls &&
+                    props.message.toolCalls.length > 0
+                "
+                :tool-calls="props.message.toolCalls"
+            />
+
             <div
                 v-if="hasContent"
                 class="message-body min-w-0 max-w-full overflow-x-hidden"
@@ -487,14 +498,11 @@ function toggleExpanded() {
 async function ensureThumb(h: string) {
     // If we already know it's a PDF just ensure meta exists.
     if (pdfMeta[h]) {
-        if (import.meta.dev) console.debug('[thumb] pdf meta cached', h);
         return;
     }
     if (thumbnails[h] && thumbnails[h].status === 'ready') return;
     const cached = thumbCache.get(h);
     if (cached) {
-        if (import.meta.dev)
-            console.debug('[thumb] cache hit', h, cached.status);
         thumbnails[h] = cached;
         return;
     }
@@ -515,28 +523,22 @@ async function ensureThumb(h: string) {
                 pdfMeta[h] = { name: meta.name, kind: meta.kind };
                 // Remove the temporary loading state since we won't have an image thumb
                 delete thumbnails[h];
-                if (import.meta.dev)
-                    console.debug('[thumb] pdf meta loaded', h);
                 return;
             }
             if (!blob) throw new Error('missing');
             if (blob.type === 'application/pdf') {
                 pdfMeta[h] = { name: meta?.name, kind: 'pdf' };
                 delete thumbnails[h];
-                if (import.meta.dev) console.debug('[thumb] blob is pdf', h);
                 return;
             }
             const url = URL.createObjectURL(blob);
             const ready: ThumbState = { status: 'ready', url };
             thumbCache.set(h, ready);
             thumbnails[h] = ready;
-            if (import.meta.dev)
-                console.debug('[thumb] ready', h, url.slice(0, 40));
         } catch {
             const err: ThumbState = { status: 'error' };
             thumbCache.set(h, err);
             thumbnails[h] = err;
-            if (import.meta.dev) console.debug('[thumb] error', h);
         } finally {
             thumbLoadPromises.delete(h);
         }
@@ -601,7 +603,6 @@ async function hydrateInlineImages() {
             img.alt = 'generated image';
             img.className = span.className.replace('opacity-60', '');
             span.replaceWith(img);
-            if (import.meta.dev) console.debug('[hydrate] span->img', hash);
         }
     });
 }
@@ -677,23 +678,6 @@ onMounted(() => {
     rafHydrate.resume();
     loadKaTeXOnIdle();
     loadShikiOnIdle();
-});
-onMounted(() => {
-    if (import.meta.dev) {
-        const hashes = hashList.value;
-        console.debug('[ChatMessage.mounted]', {
-            id: (props.message as any).id,
-            role: props.message.role,
-            hashCount: hashes.length,
-            firstHash: hashes[0],
-            hasFileHashMarkdown: hashes.some((h) =>
-                (props.message.text || '').includes(`file-hash:${h}`)
-            ),
-            hasMath: hasMathContent.value,
-            hasCode: hasCodeContent.value,
-            textPreview: (props.message.text || '').slice(0, 140),
-        });
-    }
 });
 
 // Thumbnail status watcher removed (covered by consolidated watchEffect)

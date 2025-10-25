@@ -213,9 +213,10 @@ watch(
             return;
         }
         // Prefer to update the internal messages array directly to avoid remount flicker
-        chat.value!.messages.value = (mh || []).map((m: any) =>
-            ensureUiMessage(m)
-        );
+        // Filter out tool messages before updating
+        chat.value!.messages.value = (mh || [])
+            .filter((m: any) => m.role !== 'tool')
+            .map((m: any) => ensureUiMessage(m));
     }
 );
 
@@ -234,7 +235,10 @@ watch(
 
 // Render messages with content narrowed to string for ChatMessage.vue
 // messages already normalized to UiChatMessage with .text in useChat composable
-const messages = computed(() => chat.value?.messages?.value || []);
+// Filter out tool messages (internal implementation details shown inline in assistant messages)
+const messages = computed(() =>
+    (chat.value?.messages?.value || []).filter((m: any) => m.role !== 'tool')
+);
 
 const loading = computed(() => chat.value?.loading?.value || false);
 

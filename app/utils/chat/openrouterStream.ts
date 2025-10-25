@@ -1,5 +1,18 @@
 import type { ORStreamEvent, ToolChoice, ToolDefinition } from './types';
 
+function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
+    const { ui: _ignored, ...rest } = tool as ToolDefinition & {
+        ui?: Record<string, unknown>;
+    };
+    return {
+        ...rest,
+        function: {
+            ...tool.function,
+            parameters: { ...tool.function.parameters },
+        },
+    };
+}
+
 export async function* openRouterStream(params: {
     apiKey: string;
     model: string;
@@ -23,7 +36,7 @@ export async function* openRouterStream(params: {
     }
 
     if (tools) {
-        body['tools'] = tools;
+        body['tools'] = tools.map(stripUiMetadata);
         body['tool_choice'] = 'auto';
     }
 
@@ -141,15 +154,9 @@ export async function* openRouterStream(params: {
                     const delta = choice.delta || {};
 
                     // Handle model reasoning (from reasoning field or reasoning_details)
-                    if (
-                        typeof delta.reasoning === 'string' &&
-                        delta.reasoning
-                    ) {
-                        yield {
-                            type: 'reasoning',
-                            text: delta.reasoning,
-                        };
-                    }
+                    // Some models (DeepSeek-R1) provide the same content in both delta.reasoning
+                    // and delta.reasoning_details, so we prioritize reasoning_details to avoid duplicates
+                    let reasoningYielded = false;
 
                     if (choice?.delta?.reasoning_details) {
                         if (
@@ -162,6 +169,7 @@ export async function* openRouterStream(params: {
                                     text: choice.delta.reasoning_details[0]
                                         .text,
                                 };
+                                reasoningYielded = true;
                             }
                         } else if (
                             choice?.delta?.reasoning_details[0]?.type ===
@@ -171,7 +179,20 @@ export async function* openRouterStream(params: {
                                 type: 'reasoning',
                                 text: choice.delta.reasoning_details[0].summary,
                             };
+                            reasoningYielded = true;
                         }
+                    }
+
+                    // Only yield delta.reasoning if we haven't already yielded from reasoning_details
+                    if (
+                        !reasoningYielded &&
+                        typeof delta.reasoning === 'string' &&
+                        delta.reasoning
+                    ) {
+                        yield {
+                            type: 'reasoning',
+                            text: delta.reasoning,
+                        };
                     }
 
                     // Text variants
@@ -189,9 +210,166 @@ export async function* openRouterStream(params: {
                         yield { type: 'text', text: delta.content };
                     }
 
+                    // Accumulate tool calls across streaming chunks
                     if (Array.isArray(delta.tool_calls)) {
-                        for (const toolCall of delta.tool_calls) {
-                            yield { type: 'tool_call', tool_call: toolCall };
+                        if (import.meta.dev) {
+                            console.log(
+                                '[openrouterStream] Received tool_calls delta:',
+                                delta.tool_calls
+                            );
+                        }
+
+                        for (const toolCallDelta of delta.tool_calls) {
+                            const index = toolCallDelta.index ?? 0;
+
+                            // Use index as the primary key since id may be undefined in subsequent chunks
+                            const mapKey = `idx_${index}`;
+                            const id = toolCallDelta.id;
+
+                            // Initialize or retrieve existing tool call
+                            if (!toolCallMap.has(mapKey)) {
+                                if (import.meta.dev) {
+                                    console.log(
+                                        `[openrouterStream] Initializing new tool call at index ${index}, id: ${id}`
+                                    );
+                                }
+                                toolCallMap.set(mapKey, {
+                                    id: id || null, // May be set later
+                                    type: toolCallDelta.type || 'function',
+                                    function: {
+                                        name: '',
+                                        arguments: '',
+                                    },
+                                    _yielded: false,
+                                });
+                            }
+
+                            const accumulated = toolCallMap.get(mapKey)!;
+
+                            // Set id if it wasn't set before and is now available
+                            if (id && !accumulated.id) {
+                                if (import.meta.dev) {
+                                    console.log(
+                                        `[openrouterStream] Setting id for index ${index}: ${id}`
+                                    );
+                                }
+                                accumulated.id = id;
+                            }
+
+                            // Accumulate function name
+                            if (toolCallDelta.function?.name) {
+                                if (import.meta.dev) {
+                                    console.log(
+                                        `[openrouterStream] Setting function name at index ${index}: ${toolCallDelta.function.name}`
+                                    );
+                                }
+                                accumulated.function.name =
+                                    toolCallDelta.function.name;
+                            }
+
+                            // Accumulate function arguments (streamed incrementally)
+                            if (toolCallDelta.function?.arguments) {
+                                if (import.meta.dev) {
+                                    console.log(
+                                        `[openrouterStream] Appending arguments chunk (${toolCallDelta.function.arguments.length} chars) at index ${index}`
+                                    );
+                                }
+                                accumulated.function.arguments +=
+                                    toolCallDelta.function.arguments;
+                            }
+
+                            if (import.meta.dev) {
+                                console.log(
+                                    `[openrouterStream] Tool call state at index ${index}:`,
+                                    {
+                                        id: accumulated.id,
+                                        name: accumulated.function.name,
+                                        argsLength:
+                                            accumulated.function.arguments
+                                                .length,
+                                        argsPreview:
+                                            accumulated.function.arguments.slice(
+                                                0,
+                                                100
+                                            ),
+                                    }
+                                );
+                            }
+                        }
+                    }
+
+                    // Log finish_reason for debugging
+                    if (choice.finish_reason && import.meta.dev) {
+                        console.log(
+                            `[openrouterStream] finish_reason: ${choice.finish_reason}`,
+                            {
+                                toolCallMapSize: toolCallMap.size,
+                                toolCallKeys: Array.from(toolCallMap.keys()),
+                                toolCalls: Array.from(toolCallMap.values()).map(
+                                    (tc) => ({
+                                        id: tc.id,
+                                        name: tc.function.name,
+                                        argsLength:
+                                            tc.function.arguments.length,
+                                    })
+                                ),
+                            }
+                        );
+                    }
+
+                    // Yield tool calls as soon as we receive finish_reason (streaming complete)
+                    if (
+                        choice.finish_reason === 'tool_calls' &&
+                        toolCallMap.size > 0
+                    ) {
+                        if (import.meta.dev) {
+                            console.log(
+                                '[openrouterStream] finish_reason is "tool_calls", yielding accumulated tool calls...'
+                            );
+                        }
+
+                        for (const toolCall of toolCallMap.values()) {
+                            // Only yield if we have id, name, and arguments, and haven't yielded yet
+                            if (
+                                toolCall.id &&
+                                toolCall.function.name &&
+                                toolCall.function.arguments &&
+                                !toolCall._yielded
+                            ) {
+                                const { _yielded, ...cleanToolCall } = toolCall;
+
+                                if (import.meta.dev) {
+                                    console.log(
+                                        '[openrouterStream] Yielding tool_call:',
+                                        {
+                                            id: cleanToolCall.id,
+                                            name: cleanToolCall.function.name,
+                                            argsLength:
+                                                cleanToolCall.function.arguments
+                                                    .length,
+                                            args: cleanToolCall.function
+                                                .arguments,
+                                        }
+                                    );
+                                }
+
+                                yield {
+                                    type: 'tool_call',
+                                    tool_call: cleanToolCall,
+                                };
+                                toolCall._yielded = true;
+                            } else if (import.meta.dev) {
+                                console.warn(
+                                    '[openrouterStream] Skipping incomplete tool call:',
+                                    {
+                                        id: toolCall.id,
+                                        hasId: !!toolCall.id,
+                                        hasName: !!toolCall.function.name,
+                                        hasArgs: !!toolCall.function.arguments,
+                                        alreadyYielded: toolCall._yielded,
+                                    }
+                                );
+                            }
                         }
                     }
 

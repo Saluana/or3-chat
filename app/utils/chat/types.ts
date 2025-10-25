@@ -16,12 +16,15 @@ export type FilePart = {
 export type ContentPart = TextPart | ImagePart | FilePart;
 
 export interface ChatMessage {
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool';
     content: string | ContentPart[];
     id?: string;
     stream_id?: string;
     file_hashes?: string | null;
     reasoning_text?: string | null;
+    data?: Record<string, any> | null;
+    index?: number | null;
+    created_at?: number | null;
 }
 
 export interface SendMessageParams {
@@ -51,6 +54,13 @@ export interface ToolDefinition {
             properties: Record<string, any>;
             required?: string[];
         };
+    };
+    ui?: {
+        label?: string;
+        icon?: string;
+        descriptionHint?: string;
+        defaultEnabled?: boolean;
+        category?: string;
     };
 }
 
