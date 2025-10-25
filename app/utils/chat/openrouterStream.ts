@@ -1,4 +1,32 @@
-import type { ORStreamEvent, ToolChoice, ToolDefinition } from './types';
+import type { ORStreamEvent, ToolDefinition } from './types';
+import { parseOpenRouterSSE } from '../../../shared/openrouter/parseOpenRouterSSE';
+
+// Cache key for detecting static build (no server routes)
+const SERVER_ROUTE_AVAILABLE_CACHE_KEY = 'or3:server-route-available';
+
+/**
+ * Check if server routes are available (not a static build).
+ * Uses localStorage to cache the result to avoid repeated 404 attempts.
+ */
+function isServerRouteAvailable(): boolean {
+    if (typeof localStorage === 'undefined') return false;
+
+    const cached = localStorage.getItem(SERVER_ROUTE_AVAILABLE_CACHE_KEY);
+    if (cached !== null) {
+        return cached === 'true';
+    }
+
+    // First time; assume available, will be set to false if it fails
+    return true;
+}
+
+/**
+ * Mark server routes as available or unavailable.
+ */
+function setServerRouteAvailable(available: boolean): void {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(SERVER_ROUTE_AVAILABLE_CACHE_KEY, String(available));
+}
 
 function stripUiMetadata(tool: ToolDefinition): ToolDefinition {
     const { ui: _ignored, ...rest } = tool as ToolDefinition & {
@@ -40,6 +68,37 @@ export async function* openRouterStream(params: {
         body['tool_choice'] = 'auto';
     }
 
+    // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available
+    // Skip if we've already determined it's not available (static build or server down)
+    if (isServerRouteAvailable()) {
+        try {
+            const serverResp = await fetch('/api/openrouter/stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${apiKey}`, // Req 1, 3: Send API key in header; server uses only if env key missing
+                },
+                body: JSON.stringify(body),
+                signal,
+            });
+
+            if (serverResp.ok && serverResp.body) {
+                // Server route available; use shared parser on response
+                for await (const evt of parseOpenRouterSSE(serverResp.body)) {
+                    yield evt;
+                }
+                return; // Success; don't fall back
+            }
+
+            // Server route not OK; mark as unavailable and fall through
+            setServerRouteAvailable(false);
+        } catch (e: any) {
+            // Server route unavailable (404, network error, etc.); mark as unavailable and fall back
+            setServerRouteAvailable(false);
+        }
+    }
+
+    // Fallback: direct OpenRouter (legacy path)
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -98,388 +157,8 @@ export async function* openRouterStream(params: {
         );
     }
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const emittedImages = new Set<string>();
-    // Removed rawPackets accumulation to avoid unbounded memory growth on long streams.
-    // If debugging of raw packets is needed, consider adding a bounded ring buffer
-    // or an opt-in flag that logs selectively.
-
-    // Track tool calls being streamed across chunks
-    // Maps tool call id -> accumulated tool call data
-    const toolCallMap = new Map<string, any>();
-
-    function emitImageCandidate(
-        url: string | undefined | null,
-        indexRef: { v: number },
-        final = false
-    ) {
-        if (!url) return;
-        if (emittedImages.has(url)) return;
-        emittedImages.add(url);
-        const idx = indexRef.v++;
-        // Yield image event
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        (async () => {
-            /* placeholder for async transforms if needed */
-        })();
-        imageQueue.push({ type: 'image', url, final, index: idx });
+    // Req 6: Use shared parser on fallback (direct) path to ensure identical behavior
+    for await (const evt of parseOpenRouterSSE(resp.body)) {
+        yield evt;
     }
-
-    // Queue to preserve ordering between text and image parts inside a single chunk
-    const imageQueue: ORStreamEvent[] = [];
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const raw of lines) {
-            const line = raw.trim();
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            if (!data) continue;
-            if (data === '[DONE]') {
-                yield { type: 'done' };
-                continue;
-            }
-            try {
-                const parsed = JSON.parse(data);
-                const choices = parsed.choices || [];
-                for (const choice of choices) {
-                    const delta = choice.delta || {};
-
-                    // Handle model reasoning (from reasoning field or reasoning_details)
-                    // Some models (DeepSeek-R1) provide the same content in both delta.reasoning
-                    // and delta.reasoning_details, so we prioritize reasoning_details to avoid duplicates
-                    let reasoningYielded = false;
-
-                    if (choice?.delta?.reasoning_details) {
-                        if (
-                            choice?.delta?.reasoning_details[0]?.type ===
-                            'reasoning.text'
-                        ) {
-                            if (choice?.delta?.reasoning_details[0]?.text) {
-                                yield {
-                                    type: 'reasoning',
-                                    text: choice.delta.reasoning_details[0]
-                                        .text,
-                                };
-                                reasoningYielded = true;
-                            }
-                        } else if (
-                            choice?.delta?.reasoning_details[0]?.type ===
-                            'reasoning.summary'
-                        ) {
-                            yield {
-                                type: 'reasoning',
-                                text: choice.delta.reasoning_details[0].summary,
-                            };
-                            reasoningYielded = true;
-                        }
-                    }
-
-                    // Only yield delta.reasoning if we haven't already yielded from reasoning_details
-                    if (
-                        !reasoningYielded &&
-                        typeof delta.reasoning === 'string' &&
-                        delta.reasoning
-                    ) {
-                        yield {
-                            type: 'reasoning',
-                            text: delta.reasoning,
-                        };
-                    }
-
-                    // Text variants
-                    if (Array.isArray(delta.content)) {
-                        for (const part of delta.content) {
-                            if (part?.type === 'text' && part.text) {
-                                yield { type: 'text', text: part.text };
-                            }
-                        }
-                    }
-                    if (typeof delta.text === 'string' && delta.text) {
-                        yield { type: 'text', text: delta.text };
-                    }
-                    if (typeof delta.content === 'string' && delta.content) {
-                        yield { type: 'text', text: delta.content };
-                    }
-
-                    // Accumulate tool calls across streaming chunks
-                    if (Array.isArray(delta.tool_calls)) {
-                        if (import.meta.dev) {
-                            console.log(
-                                '[openrouterStream] Received tool_calls delta:',
-                                delta.tool_calls
-                            );
-                        }
-
-                        for (const toolCallDelta of delta.tool_calls) {
-                            const index = toolCallDelta.index ?? 0;
-
-                            // Use index as the primary key since id may be undefined in subsequent chunks
-                            const mapKey = `idx_${index}`;
-                            const id = toolCallDelta.id;
-
-                            // Initialize or retrieve existing tool call
-                            if (!toolCallMap.has(mapKey)) {
-                                if (import.meta.dev) {
-                                    console.log(
-                                        `[openrouterStream] Initializing new tool call at index ${index}, id: ${id}`
-                                    );
-                                }
-                                toolCallMap.set(mapKey, {
-                                    id: id || null, // May be set later
-                                    type: toolCallDelta.type || 'function',
-                                    function: {
-                                        name: '',
-                                        arguments: '',
-                                    },
-                                    _yielded: false,
-                                });
-                            }
-
-                            const accumulated = toolCallMap.get(mapKey)!;
-
-                            // Set id if it wasn't set before and is now available
-                            if (id && !accumulated.id) {
-                                if (import.meta.dev) {
-                                    console.log(
-                                        `[openrouterStream] Setting id for index ${index}: ${id}`
-                                    );
-                                }
-                                accumulated.id = id;
-                            }
-
-                            // Accumulate function name
-                            if (toolCallDelta.function?.name) {
-                                if (import.meta.dev) {
-                                    console.log(
-                                        `[openrouterStream] Setting function name at index ${index}: ${toolCallDelta.function.name}`
-                                    );
-                                }
-                                accumulated.function.name =
-                                    toolCallDelta.function.name;
-                            }
-
-                            // Accumulate function arguments (streamed incrementally)
-                            if (toolCallDelta.function?.arguments) {
-                                if (import.meta.dev) {
-                                    console.log(
-                                        `[openrouterStream] Appending arguments chunk (${toolCallDelta.function.arguments.length} chars) at index ${index}`
-                                    );
-                                }
-                                accumulated.function.arguments +=
-                                    toolCallDelta.function.arguments;
-                            }
-
-                            if (import.meta.dev) {
-                                console.log(
-                                    `[openrouterStream] Tool call state at index ${index}:`,
-                                    {
-                                        id: accumulated.id,
-                                        name: accumulated.function.name,
-                                        argsLength:
-                                            accumulated.function.arguments
-                                                .length,
-                                        argsPreview:
-                                            accumulated.function.arguments.slice(
-                                                0,
-                                                100
-                                            ),
-                                    }
-                                );
-                            }
-                        }
-                    }
-
-                    // Log finish_reason for debugging
-                    if (choice.finish_reason && import.meta.dev) {
-                        console.log(
-                            `[openrouterStream] finish_reason: ${choice.finish_reason}`,
-                            {
-                                toolCallMapSize: toolCallMap.size,
-                                toolCallKeys: Array.from(toolCallMap.keys()),
-                                toolCalls: Array.from(toolCallMap.values()).map(
-                                    (tc) => ({
-                                        id: tc.id,
-                                        name: tc.function.name,
-                                        argsLength:
-                                            tc.function.arguments.length,
-                                    })
-                                ),
-                            }
-                        );
-                    }
-
-                    // Yield tool calls as soon as we receive finish_reason (streaming complete)
-                    if (
-                        choice.finish_reason === 'tool_calls' &&
-                        toolCallMap.size > 0
-                    ) {
-                        if (import.meta.dev) {
-                            console.log(
-                                '[openrouterStream] finish_reason is "tool_calls", yielding accumulated tool calls...'
-                            );
-                        }
-
-                        for (const toolCall of toolCallMap.values()) {
-                            // Only yield if we have id, name, and arguments, and haven't yielded yet
-                            if (
-                                toolCall.id &&
-                                toolCall.function.name &&
-                                toolCall.function.arguments &&
-                                !toolCall._yielded
-                            ) {
-                                const { _yielded, ...cleanToolCall } = toolCall;
-
-                                if (import.meta.dev) {
-                                    console.log(
-                                        '[openrouterStream] Yielding tool_call:',
-                                        {
-                                            id: cleanToolCall.id,
-                                            name: cleanToolCall.function.name,
-                                            argsLength:
-                                                cleanToolCall.function.arguments
-                                                    .length,
-                                            args: cleanToolCall.function
-                                                .arguments,
-                                        }
-                                    );
-                                }
-
-                                yield {
-                                    type: 'tool_call',
-                                    tool_call: cleanToolCall,
-                                };
-                                toolCall._yielded = true;
-                            } else if (import.meta.dev) {
-                                console.warn(
-                                    '[openrouterStream] Skipping incomplete tool call:',
-                                    {
-                                        id: toolCall.id,
-                                        hasId: !!toolCall.id,
-                                        hasName: !!toolCall.function.name,
-                                        hasArgs: !!toolCall.function.arguments,
-                                        alreadyYielded: toolCall._yielded,
-                                    }
-                                );
-                            }
-                        }
-                    }
-
-                    // Streaming images (legacy / OpenAI style delta.images array)
-                    if (Array.isArray(delta.images)) {
-                        let ixRef = { v: 0 };
-                        for (const img of delta.images) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, ixRef, false);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Provider-specific: images may appear inside delta.content array parts with type 'image', 'image_url', 'media', or have inline_data
-                    if (Array.isArray(delta.content)) {
-                        let ixRef = { v: 0 };
-                        for (const part of delta.content) {
-                            if (part && typeof part === 'object') {
-                                if (
-                                    part.type === 'image' &&
-                                    (part.url || part.image)
-                                ) {
-                                    emitImageCandidate(
-                                        part.url || part.image,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'image_url' &&
-                                    part.image_url?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.image_url.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (
-                                    part.type === 'media' &&
-                                    part.media?.url
-                                ) {
-                                    emitImageCandidate(
-                                        part.media.url,
-                                        ixRef,
-                                        false
-                                    );
-                                } else if (part.inline_data?.data) {
-                                    // Gemini style inline base64 data
-                                    const mime =
-                                        part.inline_data.mimeType ||
-                                        'image/png';
-                                    const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                    emitImageCandidate(dataUrl, ixRef, false);
-                                }
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Final message images
-                    // Final images may be in message.images array
-                    const finalImages = choice.message?.images;
-                    if (Array.isArray(finalImages)) {
-                        let fIxRef = { v: 0 };
-                        for (const img of finalImages) {
-                            const url = img?.image_url?.url || img?.url;
-                            emitImageCandidate(url, fIxRef, true);
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-
-                    // Or inside message.content array (Gemini/OpenAI final message style)
-                    const finalContent = choice.message?.content;
-                    if (Array.isArray(finalContent)) {
-                        let fIxRef2 = { v: 0 };
-                        for (const part of finalContent) {
-                            if (
-                                part?.type === 'image' &&
-                                (part.url || part.image)
-                            ) {
-                                emitImageCandidate(
-                                    part.url || part.image,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (
-                                part?.type === 'image_url' &&
-                                part.image_url?.url
-                            ) {
-                                emitImageCandidate(
-                                    part.image_url.url,
-                                    fIxRef2,
-                                    true
-                                );
-                            } else if (part?.inline_data?.data) {
-                                const mime =
-                                    part.inline_data.mimeType || 'image/png';
-                                const dataUrl = `data:${mime};base64,${part.inline_data.data}`;
-                                emitImageCandidate(dataUrl, fIxRef2, true);
-                            }
-                        }
-                        while (imageQueue.length) yield imageQueue.shift()!;
-                    }
-                }
-            } catch {
-                // ignore invalid json segments
-            }
-        }
-    }
-
-    // Removed verbose final packet dump to prevent large memory retention.
-
-    yield { type: 'done' };
 }
