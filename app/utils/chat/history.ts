@@ -25,6 +25,8 @@ export async function ensureThreadHistoryLoaded(
         const existingIds = new Set(messages.value.map((m) => m.id));
         for (const m of all) {
             if (existingIds.has(m.id)) continue;
+            // Skip tool messages (they're internal implementation details)
+            if (m.role === 'tool') continue;
             messages.value.push({
                 role: m.role,
                 content: (m as any)?.data?.content || '',

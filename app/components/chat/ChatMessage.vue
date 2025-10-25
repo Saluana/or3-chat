@@ -76,6 +76,17 @@
                     :pending="(props.message as any).pending"
                 />
             </div>
+
+            <!-- Tool Call Indicators -->
+            <ChatToolCallIndicator
+                v-if="
+                    props.message.role === 'assistant' &&
+                    props.message.toolCalls &&
+                    props.message.toolCalls.length > 0
+                "
+                :tool-calls="props.message.toolCalls"
+            />
+
             <div
                 v-if="hasContent"
                 class="message-body min-w-0 max-w-full overflow-x-hidden"

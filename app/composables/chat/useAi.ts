@@ -63,6 +63,7 @@ export function useChat(
     const hooks = useHooks();
     const { activePromptContent } = useActivePrompt();
     const threadIdRef = ref<string | undefined>(initialThreadId);
+    const historyLoadedFor = ref<string | null>(null);
 
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey) {
@@ -518,7 +519,25 @@ export function useChat(
                 '~/core/auth/openrouter-build'
             );
 
-            // Duplicate ensureThreadHistoryLoaded removed (already loaded earlier in this sendMessage invocation)
+            // Load thread history if not already loaded
+            if (
+                threadIdRef.value &&
+                historyLoadedFor.value !== threadIdRef.value
+            ) {
+                const { ensureThreadHistoryLoaded } = await import(
+                    '~/utils/chat/history'
+                );
+                await ensureThreadHistoryLoaded(
+                    threadIdRef,
+                    historyLoadedFor,
+                    rawMessages
+                );
+                // Sync UI messages after loading history
+                messages.value = rawMessages.value.map((m) =>
+                    ensureUiMessage(m)
+                );
+            }
+
             const modelInputMessages: any[] = (
                 sanitizedEffectiveMessages as any[]
             ).map((m: any) => ({ ...m }));
@@ -581,6 +600,9 @@ export function useChat(
             // Track file hashes across loop iterations
             const assistantFileHashes: string[] = [];
 
+            // Track tool calls across all loop iterations (persists state)
+            const activeToolCalls = new Map<string, any>();
+
             aborted.value = false;
             abortController.value = new AbortController();
 
@@ -600,6 +622,8 @@ export function useChat(
                         toolsEnabled: enabledToolDefs.length,
                     });
                 }
+
+                console.log('ORMESSAGES', orMessages);
 
                 const stream = openRouterStream({
                     apiKey: apiKey.value!,
@@ -654,7 +678,20 @@ export function useChat(
                                 });
                             }
 
-                            // Persist current assistant state (function call request)
+                            // Add tool call to tracking with loading status
+                            activeToolCalls.set(toolCall.id, {
+                                id: toolCall.id,
+                                name: toolCall.function.name,
+                                status: 'loading',
+                                args: toolCall.function.arguments,
+                            });
+
+                            // Update UI with loading state
+                            current.toolCalls = Array.from(
+                                activeToolCalls.values()
+                            );
+
+                            // Persist current assistant state (function call request) with tool call info
                             const textContent = current.text;
                             await upsert.message({
                                 ...assistantDbMsg,
@@ -663,6 +700,11 @@ export function useChat(
                                     content: textContent,
                                     reasoning_text:
                                         current.reasoning_text ?? null,
+                                    tool_calls: current.toolCalls
+                                        ? JSON.parse(
+                                              JSON.stringify(current.toolCalls)
+                                          )
+                                        : undefined,
                                 },
                                 file_hashes: assistantFileHashes.length
                                     ? serializeFileHashes(assistantFileHashes)
@@ -677,7 +719,9 @@ export function useChat(
                             );
 
                             let toolResultText: string;
+                            let toolStatus: 'complete' | 'error' = 'complete';
                             if (execution.error) {
+                                toolStatus = 'error';
                                 toolResultText = `Error executing tool "${toolCall.function.name}": ${execution.error}`;
                                 console.warn('[useChat] tool execution error', {
                                     tool: toolCall.function.name,
@@ -687,6 +731,25 @@ export function useChat(
                             } else {
                                 toolResultText = execution.result || '';
                             }
+
+                            // Update tool call status
+                            activeToolCalls.set(toolCall.id, {
+                                id: toolCall.id,
+                                name: toolCall.function.name,
+                                status: toolStatus,
+                                args: toolCall.function.arguments,
+                                result:
+                                    toolStatus === 'complete'
+                                        ? toolResultText
+                                        : undefined,
+                                error:
+                                    toolStatus === 'error'
+                                        ? execution.error
+                                        : undefined,
+                            });
+                            current.toolCalls = Array.from(
+                                activeToolCalls.values()
+                            );
 
                             // Cache full output
                             toolOutputCache.set(toolCall.id, toolResultText);
@@ -714,14 +777,8 @@ export function useChat(
                                 },
                             });
 
-                            // Add to raw messages for history
-                            const rawToolMsg: ChatMessage = {
-                                role: 'assistant' as any, // Store as assistant in our schema
-                                content: uiSummary,
-                                id: toolDbMsg.id,
-                            };
-                            recordRawMessage(rawToolMsg);
-                            rawMessages.value.push(rawToolMsg);
+                            // Don't add tool messages to UI (they're internal implementation details)
+                            // Tool results are already shown in the assistant message's toolCalls array
 
                             // Update OR messages for next iteration with full output
                             // Add assistant message with tool_calls (content must be null or empty string per OpenRouter spec)
@@ -918,6 +975,9 @@ export function useChat(
                     ...((assistantDbMsg as any).data || {}),
                     content: incoming,
                     reasoning_text: current.reasoning_text ?? null,
+                    tool_calls: current.toolCalls
+                        ? JSON.parse(JSON.stringify(current.toolCalls))
+                        : undefined,
                 },
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)
@@ -1184,7 +1244,11 @@ export function useChat(
                     dbCount: dbMessages.length,
                     memoryCount: rawMessages.value.length,
                 });
-                rawMessages.value = dbMessages.map((m: any) => ({
+                // Filter out tool messages when syncing from DB
+                const visibleMessages = dbMessages.filter(
+                    (m: any) => m.role !== 'tool'
+                );
+                rawMessages.value = visibleMessages.map((m: any) => ({
                     role: m.role,
                     content: (m.data as any)?.content || '',
                     id: m.id,
@@ -1192,7 +1256,7 @@ export function useChat(
                     file_hashes: m.file_hashes,
                     reasoning_text: (m.data as any)?.reasoning_text || null,
                 }));
-                messages.value = dbMessages.map((m: any) =>
+                messages.value = visibleMessages.map((m: any) =>
                     ensureUiMessage({
                         role: m.role,
                         content: (m.data as any)?.content || '',
@@ -1200,6 +1264,7 @@ export function useChat(
                         stream_id: m.stream_id,
                         file_hashes: m.file_hashes,
                         reasoning_text: (m.data as any)?.reasoning_text || null,
+                        data: m.data,
                     })
                 );
             }

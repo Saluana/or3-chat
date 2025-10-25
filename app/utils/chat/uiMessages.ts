@@ -1,6 +1,16 @@
 // Canonical UI message utilities (content part type no longer needed directly)
 import { parseHashes } from '~/utils/files/attachments';
 
+export interface ToolCallInfo {
+    id?: string;
+    name: string;
+    label?: string;
+    status: 'loading' | 'complete' | 'error' | 'pending';
+    args?: string;
+    result?: string;
+    error?: string;
+}
+
 export interface UiChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
@@ -9,6 +19,7 @@ export interface UiChatMessage {
     reasoning_text?: string | null;
     stream_id?: string;
     pending?: boolean;
+    toolCalls?: ToolCallInfo[];
 }
 
 export function partsToText(parts: any, role?: string): string {
@@ -54,6 +65,13 @@ export function ensureUiMessage(raw: any): UiChatMessage {
     }
     const reasoning_text =
         typeof raw.reasoning_text === 'string' ? raw.reasoning_text : null;
+
+    // Extract tool calls from data field
+    let toolCalls: ToolCallInfo[] | undefined;
+    if (raw.data && Array.isArray(raw.data.tool_calls)) {
+        toolCalls = raw.data.tool_calls;
+    }
+
     let text: string;
     if (typeof raw.text === 'string' && !Array.isArray(raw.text)) {
         text = raw.text;
@@ -115,7 +133,8 @@ export function ensureUiMessage(raw: any): UiChatMessage {
         file_hashes,
         reasoning_text,
         stream_id: raw.stream_id,
-        pending: raw.pending,
+        pending: !!raw.pending,
+        toolCalls,
     };
 }
 
