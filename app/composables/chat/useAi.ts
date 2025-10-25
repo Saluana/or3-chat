@@ -121,24 +121,6 @@ export function useChat(
     ) {
         if (!apiKey.value) return;
 
-        // --- DEBUG ENTRY (pane/mpApi snapshot) ---
-        try {
-            const mpApiDbg: any = (globalThis as any).__or3MultiPaneApi;
-            console.debug('[useChat] sendMessage:entry', {
-                threadIdRef: threadIdRef.value,
-                hasMpApi: !!mpApiDbg,
-                panesLen: mpApiDbg?.panes?.value?.length,
-                activePaneIndex: mpApiDbg?.activePaneIndex?.value,
-                paneThreadIds: Array.isArray(mpApiDbg?.panes?.value)
-                    ? mpApiDbg.panes.value.map((p: any, i: number) => ({
-                          i,
-                          mode: p.mode,
-                          threadId: p.threadId,
-                      }))
-                    : null,
-            });
-        } catch {}
-
         // Apply outgoing filter BEFORE creating thread to allow early veto
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
@@ -245,24 +227,7 @@ export function useChat(
                         } else {
                             pane.threadId = newThread.id;
                         }
-                        try {
-                            console.debug('[useChat] thread-bound-to-pane', {
-                                newThreadId: newThread.id,
-                                activePaneIndex: mpApi.activePaneIndex?.value,
-                                paneId: pane?.id,
-                                paneThreadId: pane?.threadId,
-                            });
-                        } catch {}
                     }
-                } else {
-                    try {
-                        console.debug(
-                            '[useChat] thread-bound: no panes present',
-                            {
-                                newThreadId: newThread.id,
-                            }
-                        );
-                    } catch {}
                 }
             } catch {}
         } // END create-new-thread block
@@ -341,34 +306,11 @@ export function useChat(
         try {
             const mpApi: any = (globalThis as any).__or3MultiPaneApi;
             if (mpApi && mpApi.panes?.value) {
-                try {
-                    console.debug('[useChat] pane-search:sent', {
-                        threadId: threadIdRef.value,
-                        paneThreads: mpApi.panes.value.map(
-                            (p: any, i: number) => ({
-                                i,
-                                mode: p.mode,
-                                threadId: p.threadId,
-                            })
-                        ),
-                    });
-                } catch {}
                 const pane = mpApi.panes.value.find(
                     (p: any) =>
                         p.mode === 'chat' && p.threadId === threadIdRef.value
                 );
                 if (pane) {
-                    if (import.meta.dev) {
-                        try {
-                            console.debug('[useChat] pane msg:sent', {
-                                paneIndex: mpApi.panes.value.indexOf(pane),
-                                threadId: threadIdRef.value,
-                                msgId: userDbMsg.id,
-                                length: outgoing.length,
-                                fileHashes: userDbMsg.file_hashes || null,
-                            });
-                        } catch {}
-                    }
                     const paneIndex = mpApi.panes.value.indexOf(pane);
                     hooks.doAction('ui.pane.msg:action:sent', {
                         pane,
@@ -380,40 +322,7 @@ export function useChat(
                             fileHashes: userDbMsg.file_hashes || null,
                         },
                     });
-                } else if (import.meta.dev) {
-                    try {
-                        console.debug(
-                            '[useChat] pane msg:sent (no pane found)',
-                            {
-                                threadId: threadIdRef.value,
-                                msgId: userDbMsg.id,
-                                panes: Array.isArray(mpApi.panes.value)
-                                    ? mpApi.panes.value.map(
-                                          (p: any, i: number) => ({
-                                              i,
-                                              mode: p.mode,
-                                              threadId: p.threadId,
-                                          })
-                                      )
-                                    : null,
-                                activePaneIndex: mpApi.activePaneIndex?.value,
-                                reason: !mpApi.panes.value.length
-                                    ? 'no-panes'
-                                    : 'thread-mismatch',
-                            }
-                        );
-                    } catch {}
                 }
-            } else {
-                try {
-                    console.debug(
-                        '[useChat] pane-search:sent mpApi missing or no panes',
-                        {
-                            threadId: threadIdRef.value,
-                            hasMpApi: !!mpApi,
-                        }
-                    );
-                } catch {}
             }
         } catch {}
 
@@ -491,29 +400,6 @@ export function useChat(
                 }
                 return true; // unknown shape: keep defensively
             });
-            if (
-                sanitizedEffectiveMessages.length !==
-                (effectiveMessages as any[]).length
-            ) {
-                try {
-                    console.debug(
-                        '[useChat] removed empty assistant placeholders:',
-                        (effectiveMessages as any[])
-                            .filter((m: any) => m.role === 'assistant')
-                            .map((m: any) => ({
-                                id: m.id,
-                                kept: sanitizedEffectiveMessages.includes(m),
-                                contentPreview:
-                                    typeof m.content === 'string'
-                                        ? m.content.slice(0, 30)
-                                        : JSON.stringify(m.content).slice(
-                                              0,
-                                              60
-                                          ),
-                            }))
-                    );
-                } catch {}
-            }
 
             const { buildOpenRouterMessages } = await import(
                 '~/core/auth/openrouter-build'
@@ -612,14 +498,6 @@ export function useChat(
                 continueLoop = false;
                 loopIteration++;
 
-                if (import.meta.dev && loopIteration > 1) {
-                    console.debug('[useChat] tool-loop iteration', {
-                        iteration: loopIteration,
-                        historyLength: orMessages.length,
-                        toolsEnabled: enabledToolDefs.length,
-                    });
-                }
-
                 const stream = openRouterStream({
                     apiKey: apiKey.value!,
                     model: modelId,
@@ -663,16 +541,6 @@ export function useChat(
                             if (current.pending) current.pending = false;
 
                             const toolCall = ev.tool_call;
-                            if (import.meta.dev) {
-                                console.debug('[useChat] tool_call detected', {
-                                    name: toolCall.function.name,
-                                    id: toolCall.id,
-                                    args: toolCall.function.arguments.slice(
-                                        0,
-                                        100
-                                    ),
-                                });
-                            }
 
                             // Add tool call to tracking with loading status
                             activeToolCalls.set(toolCall.id, {
@@ -756,14 +624,6 @@ export function useChat(
                                 current.text +=
                                     (current.text ? '\n\n' : '') + placeholder;
                             }
-                            if (import.meta.dev) {
-                                console.debug('[stream:image:event]', {
-                                    url: ev.url?.slice(0, 80),
-                                    placeholderInserted: !already,
-                                    currentLength: current.text.length,
-                                    fileHashes: assistantFileHashes.slice(),
-                                });
-                            }
                             if (assistantFileHashes.length < 6) {
                                 let blob: Blob | null = null;
                                 if (ev.url.startsWith('data:image/'))
@@ -800,16 +660,6 @@ export function useChat(
                                         await upsert.message(updatedMsg);
                                         (current as any).file_hashes =
                                             serialized;
-                                        if (import.meta.dev) {
-                                            console.debug(
-                                                '[stream:image:persist]',
-                                                {
-                                                    hash: meta.hash,
-                                                    total: assistantFileHashes.length,
-                                                    serialized,
-                                                }
-                                            );
-                                        }
                                     } catch {}
                                 }
                             }
@@ -996,38 +846,12 @@ export function useChat(
             try {
                 const mpApi: any = (globalThis as any).__or3MultiPaneApi;
                 if (mpApi && mpApi.panes?.value) {
-                    try {
-                        console.debug('[useChat] pane-search:received', {
-                            threadId: threadIdRef.value,
-                            paneThreads: mpApi.panes.value.map(
-                                (p: any, i: number) => ({
-                                    i,
-                                    mode: p.mode,
-                                    threadId: p.threadId,
-                                })
-                            ),
-                        });
-                    } catch {}
                     const pane = mpApi.panes.value.find(
                         (p: any) =>
                             p.mode === 'chat' &&
                             p.threadId === threadIdRef.value
                     );
                     if (pane) {
-                        if (import.meta.dev) {
-                            try {
-                                console.debug('[useChat] pane msg:received', {
-                                    paneIndex: mpApi.panes.value.indexOf(pane),
-                                    threadId: threadIdRef.value,
-                                    msgId: finalized.id,
-                                    length: (incoming as string).length,
-                                    reasoningLength: (
-                                        current.reasoning_text || ''
-                                    ).length,
-                                    fileHashes: finalized.file_hashes || null,
-                                });
-                            } catch {}
-                        }
                         const paneIndex = mpApi.panes.value.indexOf(pane);
                         hooks.doAction('ui.pane.msg:action:received', {
                             pane,
@@ -1041,42 +865,7 @@ export function useChat(
                                     .length,
                             },
                         });
-                    } else if (import.meta.dev) {
-                        try {
-                            console.debug(
-                                '[useChat] pane msg:received (no pane found)',
-                                {
-                                    threadId: threadIdRef.value,
-                                    msgId: finalized.id,
-                                    length: (incoming as string).length,
-                                    panes: Array.isArray(mpApi.panes.value)
-                                        ? mpApi.panes.value.map(
-                                              (p: any, i: number) => ({
-                                                  i,
-                                                  mode: p.mode,
-                                                  threadId: p.threadId,
-                                              })
-                                          )
-                                        : null,
-                                    activePaneIndex:
-                                        mpApi.activePaneIndex?.value,
-                                    reason: !mpApi.panes.value.length
-                                        ? 'no-panes'
-                                        : 'thread-mismatch',
-                                }
-                            );
-                        } catch {}
                     }
-                } else {
-                    try {
-                        console.debug(
-                            '[useChat] pane-search:received mpApi missing or no panes',
-                            {
-                                threadId: threadIdRef.value,
-                                hasMpApi: !!mpApi,
-                            }
-                        );
-                    } catch {}
                 }
             } catch {}
             const endedAt = Date.now();
