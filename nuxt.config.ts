@@ -2,6 +2,10 @@
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
+    runtimeConfig: {
+        // Server-only env variables
+        openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
+    },
     experimental: {
         defaults: {
             nuxtLink: {
