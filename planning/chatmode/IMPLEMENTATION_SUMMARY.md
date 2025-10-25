@@ -116,12 +116,13 @@ Wrapped the existing streaming section in a `while (continueLoop)` loop (max 10 
 
 ## Files Modified/Created
 
-| File                              | Type     | Changes                                    |
-| --------------------------------- | -------- | ------------------------------------------ |
-| `app/utils/chat/tool-registry.ts` | Created  | 400+ lines of registry logic               |
-| `app/utils/chat/tools-public.ts`  | Created  | 30 lines of public API                     |
-| `app/utils/chat/types.ts`         | Modified | Added `ui` metadata + `ToolCall` import    |
-| `app/composables/chat/useAi.ts`   | Modified | ~200 lines added for tool loop integration |
+| File                                       | Type     | Changes                                                       |
+| ------------------------------------------ | -------- | ------------------------------------------------------------- |
+| `app/utils/chat/tool-registry.ts`          | Created  | 400+ lines of registry logic                                  |
+| `app/utils/chat/tools-public.ts`           | Created  | 30 lines of public API                                        |
+| `app/utils/chat/types.ts`                  | Modified | Added `ui` metadata + `ToolCall` import                       |
+| `app/composables/chat/useAi.ts`            | Modified | ~200 lines added for tool loop integration                    |
+| `app/components/chat/ChatInputDropper.vue` | Modified | Added tool registry import and UI toggles section (~50 lines) |
 
 ## Verification
 
@@ -159,11 +160,61 @@ Finalize and persist
 
 ## Ready for Next Phase
 
-Task 3 complete! The chat engine now fully supports tool calling. Next steps:
+Tasks 1-4 complete! The system now has a complete tool calling infrastructure with UI. Next steps:
 
--   **Task 4**: Add UI toggles in `ChatInputDropper` settings
 -   **Task 5**: Documentation & sample plugin
 -   **Task 6**: Unit/integration/component tests
+
+## Task 4: UI Controls ✅
+
+**File**: `app/components/chat/ChatInputDropper.vue` (modified)
+
+### What Was Added
+
+Integrated tool toggles into the existing settings popover in `ChatInputDropper`:
+
+#### UI Integration
+
+-   **Tool List Rendering**: Added dynamic section that displays all registered tools from `toolRegistry.listTools`
+-   **Conditional Display**: Tool section only renders when `registeredTools.length > 0` to avoid empty UI
+-   **Positioned After Switches**: Tool toggles appear after "Enable thinking" and before "System prompts" button
+
+#### Toggle Features
+
+-   **Two-Way Binding**: Each toggle uses `v-model="tool.enabled.value"` for reactive sync with registry state
+-   **Custom Labels**: Displays `tool.definition.ui?.label` with fallback to `tool.definition.function.name`
+-   **Icon Support**: Shows custom icon from `tool.definition.ui?.icon` or defaults to `pixelarticons:wrench`
+-   **Description Text**: Renders `ui.descriptionHint` or `function.description` as muted helper text below toggle
+
+#### Accessibility
+
+-   **ARIA Labeling**: Each switch is linked to its description via `aria-describedby` attribute
+-   **Keyboard Navigation**: Inherits USwitch accessibility for keyboard users
+-   **Screen Reader Support**: Description text provides context for assistive technology
+
+#### Streaming Safety
+
+-   **Disabled During Operations**: Toggles are disabled when `loading || props.streaming` is true
+-   **State Preservation**: Registry maintains toggle state even when disabled, preventing accidental changes mid-conversation
+
+#### Visual Design
+
+-   **Retro Consistency**: Follows existing popover styling with border-b separators
+-   **Compact Layout**: Uses py-1 px-2 spacing matching other settings items
+-   **Flex Layout**: Icon and toggle align properly with justify-between
+
+### Code Changes
+
+-   **Import Added**: `import { useToolRegistry } from '~/utils/chat/tools-public'`
+-   **Composable Init**: `const toolRegistry = useToolRegistry(); const registeredTools = computed(() => toolRegistry.listTools.value);`
+-   **Template Section**: ~50 lines of new template code for tool toggles with v-for loop
+
+### Behavior
+
+-   When plugins register tools, they **automatically appear** in the settings popover
+-   Toggle changes **immediately persist** to localStorage via registry's debounced watcher
+-   UI state **stays in sync** with registry because we bind directly to `tool.enabled.value` refs
+-   No additional component state needed—registry is single source of truth
 
 ## Developer Experience
 

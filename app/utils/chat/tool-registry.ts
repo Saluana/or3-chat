@@ -1,4 +1,12 @@
-import { markRaw, reactive, ref, watch, computed, type Ref } from 'vue';
+import {
+    markRaw,
+    reactive,
+    shallowReactive,
+    ref,
+    watch,
+    computed,
+    type Ref,
+} from 'vue';
 import type { ToolDefinition } from './types';
 
 /**
@@ -51,7 +59,7 @@ interface ToolRegistryState {
 const g = globalThis as any;
 if (!g.__or3ToolRegistry) {
     g.__or3ToolRegistry = {
-        tools: reactive(new Map<string, RegisteredTool>()),
+        tools: shallowReactive(new Map<string, RegisteredTool>()),
         storageHydrated: false,
         persistDebounceTimer: null,
     };
@@ -240,6 +248,11 @@ export function useToolRegistry() {
             definition.defaultEnabled ??
             true;
 
+        console.log(
+            `[ToolRegistry] Registering tool ${name} with initialEnabled:`,
+            initialEnabled
+        );
+
         const tool: RegisteredTool = {
             definition,
             handler: markRaw(handler), // Prevent Vue from proxying the handler
@@ -247,7 +260,21 @@ export function useToolRegistry() {
             lastError: ref(null),
         };
 
+        console.log(`[ToolRegistry] Created tool object:`, tool);
+        console.log(`[ToolRegistry] tool.enabled:`, tool.enabled);
+        console.log(`[ToolRegistry] typeof tool.enabled:`, typeof tool.enabled);
+        console.log(`[ToolRegistry] tool.enabled.value:`, tool.enabled.value);
+
         registryState.tools.set(name, tool);
+
+        console.log(`[ToolRegistry] After set, retrieving from map...`);
+        const retrieved = registryState.tools.get(name);
+        console.log(`[ToolRegistry] Retrieved:`, retrieved);
+        console.log(`[ToolRegistry] Retrieved.enabled:`, retrieved?.enabled);
+        console.log(
+            `[ToolRegistry] typeof Retrieved.enabled:`,
+            typeof retrieved?.enabled
+        );
 
         // Watch for enablement changes and persist
         watch(
@@ -270,7 +297,21 @@ export function useToolRegistry() {
     /**
      * List all registered tools as a reactive computed array.
      */
-    const listTools = computed(() => Array.from(registryState.tools.values()));
+    const listTools = computed(() => {
+        console.log('[ToolRegistry] Computing listTools...');
+        console.log('[ToolRegistry] registryState.tools:', registryState.tools);
+        const values = Array.from(registryState.tools.values());
+        console.log('[ToolRegistry] Array.from values:', values);
+        values.forEach((tool, index) => {
+            console.log(`[ToolRegistry] Tool ${index}:`, tool);
+            console.log(`[ToolRegistry] Tool ${index} enabled:`, tool.enabled);
+            console.log(
+                `[ToolRegistry] Tool ${index} enabled type:`,
+                typeof tool.enabled
+            );
+        });
+        return values;
+    });
 
     /**
      * Get a tool by name (for handler lookup).
@@ -280,13 +321,21 @@ export function useToolRegistry() {
     }
 
     /**
-     * Set enabled state for a tool.
+     * Toggle or set enabled state for a tool.
      */
     function setEnabled(name: string, enabled: boolean): void {
+        console.log(
+            `[ToolRegistry] setEnabled called for ${name} with value:`,
+            enabled
+        );
         const tool = registryState.tools.get(name);
-        if (tool) {
-            tool.enabled.value = enabled;
-        }
+        console.log(`[ToolRegistry] Found tool:`, tool);
+        if (!tool) return;
+        console.log(`[ToolRegistry] tool.enabled before:`, tool.enabled);
+        console.log(`[ToolRegistry] typeof tool.enabled:`, typeof tool.enabled);
+        tool.enabled.value = enabled;
+        console.log(`[ToolRegistry] tool.enabled after:`, tool.enabled);
+        persistEnabledStates();
     }
 
     /**

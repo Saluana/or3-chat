@@ -724,15 +724,10 @@ export function useChat(
                             rawMessages.value.push(rawToolMsg);
 
                             // Update OR messages for next iteration with full output
-                            // Add assistant message with tool_calls
+                            // Add assistant message with tool_calls (content must be null or empty string per OpenRouter spec)
                             orMessages.push({
                                 role: 'assistant',
-                                content: [
-                                    {
-                                        type: 'text' as const,
-                                        text: current.text || '',
-                                    },
-                                ],
+                                content: current.text || null,
                                 tool_calls: [
                                     {
                                         id: toolCall.id,
@@ -746,16 +741,12 @@ export function useChat(
                                 ],
                             } as any);
 
-                            // Add tool result message
+                            // Add tool result message (content must be string per OpenRouter spec)
                             orMessages.push({
-                                role: 'tool' as any,
-                                content: [
-                                    {
-                                        type: 'text' as const,
-                                        text: toolResultText,
-                                    },
-                                ],
+                                role: 'tool',
                                 tool_call_id: toolCall.id,
+                                name: toolCall.function.name,
+                                content: toolResultText,
                             } as any);
 
                             // Set flag to continue the loop

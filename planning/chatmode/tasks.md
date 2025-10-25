@@ -21,8 +21,8 @@ artifact_id: 4c95e3db-4198-44fb-b4b3-1f25f50b42d4
 
 4. UI Controls
 
-    - [ ] Inject registry-driven tool toggles into `ChatInputDropper` settings popover with icon + label support. Requirements: 2, 3, 7
-    - [ ] Ensure toggles stay in sync with registry state and disable controls while chat is streaming. Requirements: 3, 7
+    - [x] Inject registry-driven tool toggles into `ChatInputDropper` settings popover with icon + label support. Requirements: 2, 3, 7
+    - [x] Ensure toggles stay in sync with registry state and disable controls while chat is streaming. Requirements: 3, 7
 
 5. Documentation & Examples
 
