@@ -154,15 +154,9 @@ export async function* openRouterStream(params: {
                     const delta = choice.delta || {};
 
                     // Handle model reasoning (from reasoning field or reasoning_details)
-                    if (
-                        typeof delta.reasoning === 'string' &&
-                        delta.reasoning
-                    ) {
-                        yield {
-                            type: 'reasoning',
-                            text: delta.reasoning,
-                        };
-                    }
+                    // Some models (DeepSeek-R1) provide the same content in both delta.reasoning
+                    // and delta.reasoning_details, so we prioritize reasoning_details to avoid duplicates
+                    let reasoningYielded = false;
 
                     if (choice?.delta?.reasoning_details) {
                         if (
@@ -175,6 +169,7 @@ export async function* openRouterStream(params: {
                                     text: choice.delta.reasoning_details[0]
                                         .text,
                                 };
+                                reasoningYielded = true;
                             }
                         } else if (
                             choice?.delta?.reasoning_details[0]?.type ===
@@ -184,7 +179,20 @@ export async function* openRouterStream(params: {
                                 type: 'reasoning',
                                 text: choice.delta.reasoning_details[0].summary,
                             };
+                            reasoningYielded = true;
                         }
+                    }
+
+                    // Only yield delta.reasoning if we haven't already yielded from reasoning_details
+                    if (
+                        !reasoningYielded &&
+                        typeof delta.reasoning === 'string' &&
+                        delta.reasoning
+                    ) {
+                        yield {
+                            type: 'reasoning',
+                            text: delta.reasoning,
+                        };
                     }
 
                     // Text variants
