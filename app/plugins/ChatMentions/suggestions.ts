@@ -19,6 +19,7 @@ export function createMentionSuggestion(
         },
         render: () => {
             let component: VueRenderer;
+            let closeHandler: (() => void) | null = null;
 
             return {
                 onStart: (props: any) => {
@@ -30,6 +31,20 @@ export function createMentionSuggestion(
                             command: props.command,
                             getReferenceClientRect: props.clientRect,
                             open: true,
+                            onClose: () => {
+                                console.log(
+                                    '[suggestions] Close event from popover'
+                                );
+                                // Delete the @ trigger and query to exit suggestion mode
+                                props.editor
+                                    ?.chain()
+                                    .focus()
+                                    .deleteRange({
+                                        from: props.range.from,
+                                        to: props.range.to,
+                                    })
+                                    .run();
+                            },
                         },
                     });
 
@@ -52,6 +67,20 @@ export function createMentionSuggestion(
                         command: props.command,
                         getReferenceClientRect: props.clientRect,
                         open: true,
+                        onClose: () => {
+                            console.log(
+                                '[suggestions] Close event from popover'
+                            );
+                            // Delete the @ trigger and query to exit suggestion mode
+                            props.editor
+                                ?.chain()
+                                .focus()
+                                .deleteRange({
+                                    from: props.range.from,
+                                    to: props.range.to,
+                                })
+                                .run();
+                        },
                     });
 
                     // Keep focus with editor during updates as well
@@ -63,12 +92,8 @@ export function createMentionSuggestion(
                 },
 
                 onKeyDown(props: any) {
-                    if (props.event.key === 'Escape') {
-                        // Keep API parity; Popover closes when TipTap calls onExit
-                        component.ref?.hide?.();
-                        return true;
-                    }
-
+                    // VueUse onKeyStroke in MentionsPopover handles Escape now
+                    // Just forward other keys to the list component
                     return component.ref?.onKeyDown?.(props);
                 },
 
