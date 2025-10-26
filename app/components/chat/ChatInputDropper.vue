@@ -1092,4 +1092,23 @@ textarea::-webkit-scrollbar-thumb:hover {
     opacity: 0.85; /* increase for dark background readability */
     font-weight: normal;
 }
+
+/* Mention token styling inside the TipTap editor */
+.prosemirror-host :deep(.mention) {
+    background: var(--ui-bg-muted, #f3f4f6);
+    color: var(--ui-text-highlighted, #1e40af);
+    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+.prosemirror-host :deep(.mention:hover) {
+    background: var(--ui-bg-muted-hover, #e5e7eb);
+}
+.prosemirror-host :deep(.mention::before) {
+    content: '📎';
+    margin-right: 0.25rem;
+    font-size: 0.875em;
+}
 </style>

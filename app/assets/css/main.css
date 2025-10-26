@@ -18,7 +18,7 @@
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
 @import "./retro.css"; /* shared retro utility classes */
-@import "./mentions.css"; /* mentions plugin styles */
+/* mentions.css removed: .mention styles live in ChatInputDropper.vue */
 
 /* Font setup: body uses VT323, headings use Press Start 2P */
 :root {
