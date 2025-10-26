@@ -709,8 +709,14 @@ if (process.client) {
 }
 </script>
 <style scoped>
-body {
+:global(html) {
+    height: 100%;
+}
+
+:global(body) {
+    height: 100%;
     overflow-y: hidden;
+    overscroll-behavior: none;
 }
 .pane-active {
     position: relative;
