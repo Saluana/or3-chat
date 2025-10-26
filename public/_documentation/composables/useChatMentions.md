@@ -123,21 +123,24 @@ When you type after `@`:
 
 When you send a message with mentions:
 
-1. The mentions plugin scans the editor content for mention nodes
-2. For each mentioned item, it resolves the full content:
-   - **Documents**: Loads the full markdown/editor content
-   - **Chats**: Loads the complete message transcript
+1. The mentions plugin captures the TipTap JSON just before send via `ui.chat.editor:action:before_send`.
+2. It scans for mention nodes and resolves each item’s full content:
+    - **Documents**: Loads the full markdown/editor content
+    - **Chats**: Loads the complete message transcript
 3. Truncates each to 50KB (UTF-8 safe) to manage token usage
-4. Injects resolved content as `system` role messages before your user message
+4. Injects resolved content as XML-wrapped `system` messages using the pre-send filter `ai.chat.messages:filter:before_send`.
+    - Contract: input `{ messages: OpenRouterMessage[] }` → return `{ messages: OpenRouterMessage[] }`
+    - Injection happens before the user’s message so the model sees context first
 5. AI receives the context and can reference it
 
-Example system message:
+Example system message (XML-wrapped context):
 
 ```
-(Referenced Document: My Project Report)
+<context source="document" id="abc123" label="My Project Report">
 # Project Overview
 The project aims to...
-[full document content]
+...
+</context>
 ```
 
 ### 4. Index updates
@@ -194,13 +197,13 @@ Selected: "My Project Plan"
 
 **User sends message:**
 
-System prepares conversation:
+System prepares conversation (simplified):
 
 ```
 [
   {
     "role": "system",
-    "content": "(Referenced Document: My Project Plan)\n# Project Overview\n..."
+        "content": "<context source=\"document\" id=\"doc-123\" label=\"My Project Plan\">\n# Project Overview\n...\n</context>"
   },
   {
     "role": "user",
@@ -226,12 +229,12 @@ System prepares conversation:
 
 ```vue
 <template>
-  <UInput
-    v-model="searchTerm"
-    icon="pixelarticons:search"
-    placeholder="Search documents or chats..."
-    @keydown="handleSearchKeydown"
-  />
+    <UInput
+        v-model="searchTerm"
+        icon="pixelarticons:search"
+        placeholder="Search documents or chats..."
+        @keydown="handleSearchKeydown"
+    />
 </template>
 ```
 
@@ -243,20 +246,20 @@ System prepares conversation:
 
 ```vue
 <template>
-  <div class="flex gap-2">
-    <UButton
-      :color="showDocuments ? 'primary' : 'neutral'"
-      @click="toggleSource('document')"
-    >
-      Docs
-    </UButton>
-    <UButton
-      :color="showChats ? 'primary' : 'neutral'"
-      @click="toggleSource('chat')"
-    >
-      Chats
-    </UButton>
-  </div>
+    <div class="flex gap-2">
+        <UButton
+            :color="showDocuments ? 'primary' : 'neutral'"
+            @click="toggleSource('document')"
+        >
+            Docs
+        </UButton>
+        <UButton
+            :color="showChats ? 'primary' : 'neutral'"
+            @click="toggleSource('chat')"
+        >
+            Chats
+        </UButton>
+    </div>
 </template>
 ```
 
@@ -277,12 +280,12 @@ Max 5 items per section to keep dropdown manageable.
 
 ### Keyboard shortcuts
 
-| Key | Action |
-| --- | --- |
-| `Arrow Up` | Previous item |
-| `Arrow Down` | Next item |
-| `Enter` | Select current item |
-| `Escape` | Close dropdown |
+| Key          | Action              |
+| ------------ | ------------------- |
+| `Arrow Up`   | Previous item       |
+| `Arrow Down` | Next item           |
+| `Enter`      | Select current item |
+| `Escape`     | Close dropdown      |
 
 ### Selection interception
 
@@ -293,15 +296,15 @@ You can add custom logic when mentions are selected (advanced):
 function handleCommand(item: MentionItem) {
     // Pre-insertion logic
     console.log('[MentionsPopover] Selected item:', item);
-    
+
     // Examples:
     // - Track analytics: analytics.event('mention_selected', item);
     // - Update state: selectedMention.value = item;
     // - Show notification: toast.info(`Added ${item.label}`);
-    
+
     // Insert the mention (required)
     props.command(item);
-    
+
     // Post-insertion logic (popup closes immediately after)
 }
 ```
@@ -310,11 +313,11 @@ The `MentionItem` object contains:
 
 ```ts
 interface MentionItem {
-    id: string;              // UUID of document or thread
+    id: string; // UUID of document or thread
     source: 'document' | 'chat';
-    label: string;           // Display name
-    subtitle?: string;       // Optional description
-    score?: number;          // Relevance score (0-1)
+    label: string; // Display name
+    subtitle?: string; // Optional description
+    score?: number; // Relevance score (0-1)
 }
 ```
 
@@ -358,12 +361,12 @@ When a document mention is resolved:
 2. Checks it's a document (`postType='doc'`) and not deleted
 3. Extracts text content from editor structure
 4. Truncates to 50KB with UTF-8 safe splitting
-5. Prepends `(Referenced Document: Title)` label
+5. Wraps the content in an XML `<context>` block with metadata attributes (`source="document"`, `id`, `label`)
 
-Example resolved context:
+Example resolved context (system message content):
 
 ```
-(Referenced Document: Q4 Planning)
+<context source="document" id="doc-abc" label="Q4 Planning">
 # Executive Summary
 Q4 focuses on...
 
@@ -376,6 +379,7 @@ Q4 focuses on...
 - Oct: Planning
 - Nov: Development
 - Dec: Testing
+</context>
 ```
 
 ### Chat context
@@ -386,17 +390,18 @@ When a chat mention is resolved:
 2. Sorts by index (chronological)
 3. Formats as `[ROLE]: [CONTENT]` transcript
 4. Truncates to 50KB with UTF-8 safe splitting
-5. Prepends `(Referenced Chat: Title)` label
+5. Wraps the transcript in an XML `<context>` block with metadata attributes (`source="chat"`, `id`, `label`)
 
-Example resolved context:
+Example resolved context (system message content):
 
 ```
-(Referenced Chat: Project Kickoff)
+<context source="chat" id="thread-xyz" label="Project Kickoff">
 [2024-10-20]
 user: What's our timeline?
 assistant: We're targeting Q1 launch...
 user: What are the risks?
 assistant: Main risks are...
+</context>
 ```
 
 ### Truncation
@@ -439,9 +444,8 @@ ChatInputDropper.vue
 
 ### Tech stack
 
--   **TipTap v3.8.0** — Editor and mention extension
--   **VueRenderer** — Mount Vue components in editor suggestions
--   **tippy.js** — Popover positioning relative to caret
+-   **TipTap v3** — Editor and Mention extension
+-   **VueRenderer + Nuxt UI UPopover** — Popover rendering without stealing editor focus
 -   **Orama** — Fuzzy search indexing
 -   **Nuxt UI** — Dropdown, buttons, input components
 -   **OR3 Hooks** — Integration with app events
@@ -452,7 +456,7 @@ The mentions module loads on-demand:
 
 1. User types `@` in chat input
 2. Editor emits `editor:request-extensions` hook
-3. Mentions plugin loads TipTap extension + Vue components
+3. Mentions plugin lazy-loads its TipTap Mention extension and exposes it via `ui.chat.editor:filter:extensions`
 4. Orama index built from database (~70KB)
 5. Ready for search
 
@@ -475,13 +479,13 @@ The mentions module loads on-demand:
 Edit `app/plugins/ChatMentions/index.ts`:
 
 ```ts
-const MAX_PER_GROUP = 5;  // Change to 10 for more results
+const MAX_PER_GROUP = 5; // Change to 10 for more results
 ```
 
 ### Adjust context truncation
 
 ```ts
-const MAX_CONTEXT_BYTES = 50_000;  // 50KB, change for larger contexts
+const MAX_CONTEXT_BYTES = 50_000; // 50KB, change for larger contexts
 ```
 
 ### Change dropdown width
@@ -513,7 +517,7 @@ const sections = computed<SectionBucket[]>(() => {
     list.push({
         key: 'recommended',
         title: 'Search Results',
-        icon: '🔎',  // Change icon here
+        icon: '🔎', // Change icon here
         items: recommendedItems.value,
     });
     // ...
@@ -533,14 +537,9 @@ const sections = computed<SectionBucket[]>(() => {
 
 **Solution:**
 
-```ts
-// Force reload mentions module
-if (import.meta.hot) {
-    import.meta.hot.dispose(() => {
-        delete (window as any).__MENTIONS_EXTENSION__;
-    });
-}
-```
+-   Do a hard refresh to reset HMR state
+-   Ensure your mentions plugin file `app/plugins/mentions.client.ts` was loaded (check Network/Modules)
+-   Temporarily add a console log inside the plugin registration to verify execution
 
 ### Search results empty
 
@@ -551,15 +550,18 @@ if (import.meta.hot) {
 
 **Debug:**
 
+Enable a temporary log in your plugin hook:
+
 ```ts
-// In browser console
-window.__MENTIONS_EXTENSION__  // Should not be undefined
+hooks.on('editor:request-extensions', () => {
+    console.log('[mentions] editor:request-extensions fired');
+});
 ```
 
 ### Mentions not injecting context
 
 1. Verify mention was properly inserted (shows `@Name` in editor)
-2. Check `ai.chat.messages:filter:input` hook is registered
+2. Check `ai.chat.messages:filter:before_send` hook is registered and returns `{ messages }`
 3. Inspect network request to see if context appears in system messages
 4. Check document/chat isn't marked as deleted
 
@@ -567,9 +569,14 @@ window.__MENTIONS_EXTENSION__  // Should not be undefined
 
 ```ts
 // Add logging to mentions.client.ts
-hooks.on('ai.chat.messages:filter:input', async (messages) => {
-    console.log('[mentions] Injecting context into', messages.length, 'messages');
-    // ...
+hooks.on('ai.chat.messages:filter:before_send', async (payload) => {
+    console.log(
+        '[mentions] Injecting context into',
+        payload.messages.length,
+        'messages'
+    );
+    // ... perform injection, then return { messages }
+    return payload;
 });
 ```
 
@@ -589,34 +596,33 @@ hooks.on('ai.chat.messages:filter:input', async (messages) => {
 
 ## Advanced: Programmatic mentions
 
-### Insert mention via API (internal)
+### Insert mention via API (recommended path)
+
+There’s no public global for inserting mentions. If you need to insert one programmatically:
+
+-   Create a composer action plugin and use the editor instance from the action context, or
+-   Register a custom TipTap command in your own extension and call it from your plugin.
+
+Example (composer action concept):
 
 ```ts
-// From a plugin or component
-const mentionItem = {
-    id: 'doc-123',
-    source: 'document' as const,
-    label: 'My Document'
-};
-
-// Directly call command (if extension is registered)
-const ext = (window as any).__MENTIONS_EXTENSION__;
-if (ext && ext.suggestion?.command) {
-    ext.suggestion.command(mentionItem);
+// inside a composer action handler
+const ed = ctx.editor; // Editor | null
+if (ed) {
+    // Insert a mention-like node or plain text fallback
+    ed.commands.insertContent({
+        type: 'mention',
+        attrs: { id: 'doc-123', source: 'document', label: 'My Document' },
+    });
 }
 ```
 
 ### Listen for mention events
 
-```ts
-const hooks = useHooks();
+There is no built-in global hook fired on mention selection at the moment. If you need analytics or side effects:
 
-// When a mention is selected
-hooks.on('ui.editor.mention:selected', (item: MentionItem) => {
-    console.log('Mention selected:', item);
-    // Your logic here
-});
-```
+-   Add logic in your own popover component or command handler before calling the insert command, or
+-   Propose/implement a new hook in your plugin and consume it locally.
 
 ### Batch insert mentions
 
@@ -661,7 +667,17 @@ hooks.on('ui.editor.mention:selected', (item: MentionItem) => {
         <div class="input-area">
             <ChatInputDropper
                 ref="inputRef"
-                @send="(content) => chat.sendMessage(content)"
+                @send="
+                    (payload) =>
+                        chat.sendMessage(payload.text, {
+                            files: (payload.attachments || []).map((a) => ({
+                                type: a.mime,
+                                url: a.url,
+                            })),
+                            model: payload.model,
+                            online: payload.webSearchEnabled,
+                        })
+                "
                 :disabled="chat.loading.value"
             />
             <button
@@ -685,8 +701,8 @@ const inputRef = ref();
 
 // Mentions are automatically handled by ChatInputDropper
 // When user sends a message with mentions:
-// 1. Mentions plugin collects mention nodes from editor
-// 2. ai.chat.messages:filter:input hook injects context
+// 1. Mentions plugin collects TipTap JSON via 'ui.chat.editor:action:before_send'
+// 2. 'ai.chat.messages:filter:before_send' injects XML-wrapped system context (returns { messages })
 // 3. Chat sends to AI with full context included
 </script>
 
@@ -746,18 +762,17 @@ const inputRef = ref();
 
 ## Keyboard reference
 
-| Context | Key | Action |
-| --- | --- | --- |
-| Search input | `Arrow Down` | Move to first result |
-| Search input | `Arrow Up` | Move to last result |
-| Search input | `Enter` | Select current item |
-| Dropdown | `Arrow Up/Down` | Navigate items |
-| Dropdown | `Enter` | Select item |
-| Dropdown | `Escape` | Close dropdown |
-| Filter button | Click | Toggle Docs/Chats |
-| Item | Click | Select |
+| Context       | Key             | Action               |
+| ------------- | --------------- | -------------------- |
+| Search input  | `Arrow Down`    | Move to first result |
+| Search input  | `Arrow Up`      | Move to last result  |
+| Search input  | `Enter`         | Select current item  |
+| Dropdown      | `Arrow Up/Down` | Navigate items       |
+| Dropdown      | `Enter`         | Select item          |
+| Dropdown      | `Escape`        | Close dropdown       |
+| Filter button | Click           | Toggle Docs/Chats    |
+| Item          | Click           | Select               |
 
 ---
 
 Document generated from `app/plugins/ChatMentions/` implementation.
-

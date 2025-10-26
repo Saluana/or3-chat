@@ -5,8 +5,6 @@
 import { defineNuxtPlugin } from '#app';
 
 export default defineNuxtPlugin(async () => {
-    console.log('[mentions] Plugin registering hooks...');
-
     const hooks = useHooks();
     let indexInitialized = false;
     let mentionsModule: any = null;
@@ -18,24 +16,6 @@ export default defineNuxtPlugin(async () => {
         (editorJson: any) => {
             try {
                 lastEditorContent = editorJson || null;
-                const summary = lastEditorContent
-                    ? {
-                          type: typeof lastEditorContent,
-                          rootType: (lastEditorContent as any)?.type,
-                          hasContent: Array.isArray(
-                              (lastEditorContent as any)?.content
-                          ),
-                          contentLen: Array.isArray(
-                              (lastEditorContent as any)?.content
-                          )
-                              ? (lastEditorContent as any).content.length
-                              : 0,
-                      }
-                    : { type: 'null' };
-                console.log(
-                    '[mentions] Captured editor JSON before_send',
-                    summary
-                );
             } catch {
                 lastEditorContent = null;
             }
@@ -47,8 +27,6 @@ export default defineNuxtPlugin(async () => {
     hooks.on(
         'editor:request-extensions',
         async () => {
-            console.log('[mentions] Lazy loading mentions module...');
-
             try {
                 const [
                     MentionModule,
@@ -72,14 +50,6 @@ export default defineNuxtPlugin(async () => {
                     resetIndex,
                 } = mentionsIndexModule.default;
 
-                console.log('[mentions] Checking exports:', {
-                    hasMention: !!Mention,
-                    hasInit: typeof initMentionsIndex === 'function',
-                    hasSearch: typeof searchMentions === 'function',
-                    hasSuggestion:
-                        typeof createMentionSuggestion === 'function',
-                });
-
                 mentionsModule = {
                     Mention,
                     initMentionsIndex,
@@ -92,8 +62,6 @@ export default defineNuxtPlugin(async () => {
                     resetIndex,
                     createMentionSuggestion,
                 };
-
-                console.log('[mentions] Module loaded, creating extension...');
 
                 // Extend Mention to persist source/id/label
                 const MentionWithAttrs = Mention.extend({
@@ -114,32 +82,25 @@ export default defineNuxtPlugin(async () => {
                     suggestion: createMentionSuggestion(searchMentions),
                 });
 
-                // Register extension globally for editor pickup
-                if (typeof window !== 'undefined') {
-                    (window as any).__MENTIONS_EXTENSION__ = MentionExtension;
-                    console.log(
-                        '[mentions] Extension registered on window.__MENTIONS_EXTENSION__'
-                    );
-                }
-
                 // Initialize index once
                 if (!indexInitialized) {
-                    console.log('[mentions] Initializing search index...');
                     await initMentionsIndex();
                     indexInitialized = true;
                 }
+
+                // Provide the Mention extension via extensions filter
+                hooks.on(
+                    'ui.chat.editor:filter:extensions',
+                    (existing: any[]) => {
+                        const list = Array.isArray(existing) ? existing : [];
+                        return [...list, MentionExtension];
+                    }
+                );
 
                 // 3) Inject context via filter before send
                 hooks.on(
                     'ai.chat.messages:filter:before_send',
                     async (payload: any) => {
-                        console.log(
-                            '[mentions] ai.chat.messages:filter:before_send triggered with payload type:',
-                            Array.isArray(payload) ? 'array' : typeof payload,
-                            Array.isArray(payload?.messages)
-                                ? 'object-with-messages'
-                                : 'object-no-messages'
-                        );
                         if (!mentionsModule) return payload;
 
                         const isArray = Array.isArray(payload);
@@ -149,11 +110,6 @@ export default defineNuxtPlugin(async () => {
                             ? (payload.messages as any[])
                             : [];
 
-                        console.log(
-                            '[mentions] Extracted messages length:',
-                            originalMessages.length
-                        );
-
                         if (!originalMessages.length) {
                             return { messages: originalMessages };
                         }
@@ -161,41 +117,16 @@ export default defineNuxtPlugin(async () => {
                         const lastUser = [...originalMessages]
                             .reverse()
                             .find((m: any) => m.role === 'user');
-                        console.log('[mentions] Found last user message:', {
-                            hasLastUser: !!lastUser,
-                            hasEditorContent: !!lastUser?.editorContent,
-                            contentType: typeof lastUser?.content,
-                        });
 
                         const editorContent =
                             lastUser?.editorContent ?? lastEditorContent;
                         if (!editorContent) {
-                            console.warn(
-                                '[mentions] No editorContent available on user message or captured state.'
-                            );
                             return { messages: originalMessages };
                         }
 
-                        console.log('[mentions] Using editorContent summary:', {
-                            type: typeof editorContent,
-                            rootType: (editorContent as any)?.type,
-                            hasContent: Array.isArray(
-                                (editorContent as any)?.content
-                            ),
-                            contentLen: Array.isArray(
-                                (editorContent as any)?.content
-                            )
-                                ? (editorContent as any).content.length
-                                : 0,
-                        });
-
                         const mentions =
                             mentionsModule.collectMentions(editorContent);
-                        console.log('[mentions] Collected mentions:', mentions);
                         if (mentions.length === 0) {
-                            console.log(
-                                '[mentions] No mentions found in editorContent.'
-                            );
                             return { messages: originalMessages };
                         }
 
@@ -205,15 +136,8 @@ export default defineNuxtPlugin(async () => {
                         const contextBlocks = resolved.filter(
                             (c): c is string => c !== null
                         );
-                        console.log(
-                            '[mentions] Resolved mentions to context blocks count:',
-                            contextBlocks.length
-                        );
 
                         if (contextBlocks.length === 0) {
-                            console.warn(
-                                '[mentions] Mention resolution returned no context strings.'
-                            );
                             return { messages: originalMessages };
                         }
 
@@ -250,10 +174,6 @@ export default defineNuxtPlugin(async () => {
                             ...contextMessages,
                             ...originalMessages,
                         ];
-                        console.log(
-                            '[mentions] Injecting context messages, final messages length:',
-                            merged.length
-                        );
 
                         return { messages: merged };
                     }
@@ -283,8 +203,6 @@ export default defineNuxtPlugin(async () => {
                     mentionsModule.upsertThread,
                     { kind: 'action' }
                 );
-
-                console.log('[mentions] Fully initialized');
             } catch (error) {
                 console.error('[mentions] Failed to load module:', error);
             }

@@ -514,8 +514,8 @@ onMounted(async () => {
             },
         });
 
-        // Collect extensions, including mentions plugin if available
-        const extensions = [
+        // Collect extensions (plugins can augment via hooks)
+        let extensions = [
             enterToSend,
             Placeholder.configure({
                 // Use a placeholder:
@@ -539,20 +539,16 @@ onMounted(async () => {
 
         // Request mentions extension (lazy loads if plugin is installed)
         const hooks = useHooks();
-        console.log('[ChatInputDropper] Requesting editor extensions...');
         await hooks.doAction('editor:request-extensions');
 
-        // Add mentions extension if plugin loaded it
-        if ((window as any).__MENTIONS_EXTENSION__) {
-            console.log(
-                '[ChatInputDropper] Adding mentions extension to editor'
+        // Allow plugins to add editor extensions via filter
+        try {
+            const filtered = await hooks.applyFilters(
+                'ui.chat.editor:filter:extensions',
+                extensions
             );
-            extensions.push((window as any).__MENTIONS_EXTENSION__);
-        } else {
-            console.warn(
-                '[ChatInputDropper] Mentions extension not found on window'
-            );
-        }
+            if (Array.isArray(filtered)) extensions = filtered as any;
+        } catch {}
 
         editor.value = new Editor({
             extensions,
@@ -943,22 +939,8 @@ const handleSend = async () => {
         try {
             const hooks = useHooks();
             const json = editor.value?.getJSON?.();
-            const debugSummary = json
-                ? {
-                      type: typeof json,
-                      hasType: !!(json as any)?.type,
-                      hasContent: Array.isArray((json as any)?.content),
-                      contentLen: Array.isArray((json as any)?.content)
-                          ? (json as any).content.length
-                          : 0,
-                  }
-                : { type: 'undefined' };
-            console.log('[ChatInputDropper] Emitting editor JSON before send', {
-                debugSummary,
-            });
             // Fire as an action to avoid transforming data; listeners can stash it
             await hooks.doAction('ui.chat.editor:action:before_send', json);
-            console.log('[ChatInputDropper] Hook dispatched successfully');
         } catch (e) {
             console.warn(
                 '[ChatInputDropper] Failed to dispatch editor JSON before_send',

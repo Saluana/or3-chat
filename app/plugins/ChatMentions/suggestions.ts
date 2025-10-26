@@ -14,9 +14,7 @@ export function createMentionSuggestion(
     return {
         char: '@',
         items: async ({ query }: { query: string }) => {
-            console.log('[mentions] Searching for:', query);
             const results = await searchFn(query);
-            console.log('[mentions] Search results:', results);
             return results;
         },
         render: () => {
@@ -24,11 +22,6 @@ export function createMentionSuggestion(
 
             return {
                 onStart: (props: any) => {
-                    console.log(
-                        '[mentions] onStart called with items:',
-                        props.items
-                    );
-
                     // Mount a Popover wrapper that uses Nuxt UI instead of tippy
                     component = new VueRenderer(MentionsPopover, {
                         editor: props.editor,
@@ -43,7 +36,6 @@ export function createMentionSuggestion(
                     if (component.element) {
                         document.body.appendChild(component.element);
                     }
-                    console.log('[mentions] Popover mounted');
 
                     // Ensure the TipTap editor retains focus so typing continues there
                     try {
@@ -55,7 +47,6 @@ export function createMentionSuggestion(
                 },
 
                 onUpdate(props: any) {
-                    console.log('[mentions] onUpdate called');
                     component.updateProps({
                         items: props.items,
                         command: props.command,
@@ -82,7 +73,6 @@ export function createMentionSuggestion(
                 },
 
                 onExit() {
-                    console.log('[mentions] onExit called');
                     if (component?.element?.parentNode) {
                         component.element.parentNode.removeChild(
                             component.element

@@ -16,20 +16,21 @@ See also: `hooks.md` for engine API, `hook-keys.md` and `hook-types.md` for deta
 
 ## Chat and AI
 
-| Key                               | Kind   | Args (tuple)                                     | Returns                            |
-| --------------------------------- | ------ | ------------------------------------------------ | ---------------------------------- |
-| `ui.chat.message:filter:outgoing` | filter | `[text: string]`                                 | `string \| false` (veto to cancel) |
-| `ui.chat.message:filter:incoming` | filter | `[text: string, threadId?: string]`              | `string`                           |
-| `ai.chat.model:filter:select`     | filter | `[modelId: string]`                              | `string` (new model id)            |
-| `ai.chat.messages:filter:input`   | filter | `[messages: any[]]`                              | `any[]`                            |
-| `ai.chat.send:action:before`      | action | `[payload: AiSendBeforePayload]`                 | —                                  |
-| `ai.chat.send:action:after`       | action | `[payload: AiSendAfterPayload]`                  | —                                  |
-| `ai.chat.stream:action:delta`     | action | `[chunk: string, ctx: AiStreamDeltaPayload]`     | —                                  |
-| `ai.chat.stream:action:reasoning` | action | `[chunk: string, ctx: AiStreamReasoningPayload]` | —                                  |
-| `ai.chat.stream:action:complete`  | action | `[ctx: AiStreamCompletePayload]`                 | —                                  |
-| `ai.chat.stream:action:error`     | action | `[ctx: AiStreamErrorPayload]`                    | —                                  |
-| `ai.chat.retry:action:before`     | action | `[payload: AiRetryBeforePayload]`                | —                                  |
-| `ai.chat.retry:action:after`      | action | `[payload: AiRetryAfterPayload]`                 | —                                  |
+| Key                                   | Kind   | Args (tuple)                                     | Returns                            |
+| ------------------------------------- | ------ | ------------------------------------------------ | ---------------------------------- |
+| `ui.chat.message:filter:outgoing`     | filter | `[text: string]`                                 | `string \| false` (veto to cancel) |
+| `ui.chat.message:filter:incoming`     | filter | `[text: string, threadId?: string]`              | `string`                           |
+| `ai.chat.model:filter:select`         | filter | `[modelId: string]`                              | `string` (new model id)            |
+| `ai.chat.messages:filter:input`       | filter | `[messages: any[]]`                              | `any[]`                            |
+| `ai.chat.messages:filter:before_send` | filter | `[payload: { messages: any[] }]`                 | `{ messages: any[] }`              |
+| `ai.chat.send:action:before`          | action | `[payload: AiSendBeforePayload]`                 | —                                  |
+| `ai.chat.send:action:after`           | action | `[payload: AiSendAfterPayload]`                  | —                                  |
+| `ai.chat.stream:action:delta`         | action | `[chunk: string, ctx: AiStreamDeltaPayload]`     | —                                  |
+| `ai.chat.stream:action:reasoning`     | action | `[chunk: string, ctx: AiStreamReasoningPayload]` | —                                  |
+| `ai.chat.stream:action:complete`      | action | `[ctx: AiStreamCompletePayload]`                 | —                                  |
+| `ai.chat.stream:action:error`         | action | `[ctx: AiStreamErrorPayload]`                    | —                                  |
+| `ai.chat.retry:action:before`         | action | `[payload: AiRetryBeforePayload]`                | —                                  |
+| `ai.chat.retry:action:after`          | action | `[payload: AiRetryAfterPayload]`                 | —                                  |
 
 ---
 

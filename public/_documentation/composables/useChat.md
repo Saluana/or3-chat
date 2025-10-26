@@ -213,6 +213,7 @@ Here's what happens when you send a message:
     - Loads enabled tools from the tool registry
     - Removes empty assistant messages (API requirement)
     - Converts to OpenRouter format
+    - Runs pre-send filter `ai.chat.messages:filter:before_send` with an object payload `{ messages }` and expects `{ messages }` in return — this is the final place to inject or transform context (e.g., @-mentions)
     - Applies image limit (5 images max to avoid rate limits)
 7. **Start streaming loop**: Opens a stream to OpenRouter API
 8. **Process chunks**: As AI responds:
@@ -343,6 +344,7 @@ The composable emits several hook events you can listen to:
 -   `ui.chat.message:filter:incoming` — after receiving (can transform)
 -   `ai.chat.model:filter:select` — choose/override model
 -   `ai.chat.messages:filter:input` — modify conversation history
+-   `ai.chat.messages:filter:before_send` — final mutation point over OpenRouter-formatted messages; receives `{ messages }` and must return `{ messages }` (useful for injecting system context like mentions)
 -   `ai.chat.send:action:before` — before AI call
 -   `ai.chat.send:action:after` — after completion/abort
 -   `ai.chat.stream:action:complete` — stream finished

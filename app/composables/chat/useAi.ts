@@ -503,8 +503,6 @@ export function useChat(
                 orMessages = (filteredMessages as any).messages;
             }
 
-            console.log('[useAI.ts] Final OR messages:', orMessages);
-
             while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
                 continueLoop = false;
                 loopIteration++;

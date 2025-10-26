@@ -284,6 +284,12 @@
                     "summary": "Catalog of well-known hook keys with typed helpers for ergonomic registration. Defines string literal unions for UI/AI/DB hooks, exposes the `typedOn(hooks)` wrapper for auto-completing hook names in your editor, and maps payloads to argument tuples."
                 },
                 {
+                    "name": "chat-editor-extensions.md",
+                    "path": "/hooks/chat-editor-extensions",
+                    "category": "Integration",
+                    "summary": "How to add TipTap extensions to the chat composer without touching the component. Explains the two hook points `editor:request-extensions` (action) and `ui.chat.editor:filter:extensions` (filter), shows a minimal plugin that lazy-loads an extension and appends it to the editor's extension list, and covers ordering, SSR guards, and failure safety."
+                },
+                {
                     "name": "useHooks.md",
                     "path": "/hooks/useHooks",
                     "category": "Integration",
