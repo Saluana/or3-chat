@@ -31,7 +31,7 @@ export default defineNuxtPlugin(async () => {
                 { createMentionSuggestion },
             ] = await Promise.all([
                 import('@tiptap/extension-mention'),
-                import('./ChatMentions/index'),
+                import('./ChatMentions/useChatMentions'),
                 import('./ChatMentions/suggestions'),
             ]);
 
