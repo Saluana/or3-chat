@@ -45,6 +45,10 @@
         <!-- Results List -->
         <div
             class="flex-1 overflow-y-auto overflow-x-hidden"
+            role="listbox"
+            :aria-activedescendant="
+                flatItems.length ? `mention-item-${selectedIndex}` : undefined
+            "
             v-if="flatItems.length"
         >
             <template v-for="section in sections" :key="section.key">
@@ -70,6 +74,7 @@
                     <UButton
                         v-for="(item, idx) in section.items"
                         :key="`${section.key}-${item.id}`"
+                        :id="`mention-item-${flatIndex(section, idx)}`"
                         :variant="'basic'"
                         color="neutral"
                         size="sm"
@@ -77,7 +82,17 @@
                         :ui="{
                             base: 'border-none! transition-none!',
                         }"
-                        class="justify-start text-left px-3 py-2"
+                        :class="[
+                            'justify-start text-left px-3 py-2',
+                            {
+                                'bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]':
+                                    flatIndex(section, idx) === selectedIndex,
+                            },
+                        ]"
+                        :aria-selected="
+                            flatIndex(section, idx) === selectedIndex
+                        "
+                        role="option"
                         @click="selectItem(flatIndex(section, idx))"
                     >
                         <div class="flex items-center gap-2 w-full">
@@ -297,12 +312,27 @@ function upHandler() {
     const total = flatItems.value.length;
     if (!total) return;
     selectedIndex.value = (selectedIndex.value + total - 1) % total;
+    scrollToSelected();
 }
 
 function downHandler() {
     const total = flatItems.value.length;
     if (!total) return;
     selectedIndex.value = (selectedIndex.value + 1) % total;
+    scrollToSelected();
+}
+
+function scrollToSelected() {
+    // Scroll the selected item into view
+    const element = document.getElementById(
+        `mention-item-${selectedIndex.value}`
+    );
+    if (element) {
+        element.scrollIntoView({
+            block: 'nearest',
+            behavior: 'smooth',
+        });
+    }
 }
 
 function enterHandler() {
