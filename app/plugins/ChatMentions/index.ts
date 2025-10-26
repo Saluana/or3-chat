@@ -49,7 +49,9 @@ export async function initMentionsIndex() {
             .and((p: any) => !p.deleted)
             .toArray();
         // Some existing rows use numeric flags; fall back to filtering to avoid Dexie key errors
-        const threads = await db.threads.filter((t: any) => !t.deleted).toArray();
+        const threads = await db.threads
+            .filter((t: any) => !t.deleted)
+            .toArray();
 
         console.log(
             `[mentions] Found ${docs.length} documents and ${threads.length} threads`
@@ -91,8 +93,12 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
             subtitle: hit.document.snippet || undefined,
             score: hit.score,
         }));
-        const docs = items.filter((i) => i.source === 'document').slice(0, MAX_PER_GROUP);
-        const chats = items.filter((i) => i.source === 'chat').slice(0, MAX_PER_GROUP);
+        const docs = items
+            .filter((i) => i.source === 'document')
+            .slice(0, MAX_PER_GROUP);
+        const chats = items
+            .filter((i) => i.source === 'chat')
+            .slice(0, MAX_PER_GROUP);
         return [...docs, ...chats];
     } catch (error) {
         console.error('[mentions] Search failed:', error);
@@ -107,6 +113,15 @@ export function collectMentions(doc: any): MentionItem[] {
     const mentions: MentionItem[] = [];
     const seen = new Set<string>();
 
+    try {
+        console.log('[mentions:index] collectMentions input summary:', {
+            type: typeof doc,
+            rootType: doc?.type,
+            hasContent: Array.isArray(doc?.content),
+            contentLen: Array.isArray(doc?.content) ? doc.content.length : 0,
+        });
+    } catch {}
+
     function walk(node: any) {
         if (node.type === 'mention' && node.attrs) {
             const key = `${node.attrs.source}:${node.attrs.id}`;
@@ -117,6 +132,13 @@ export function collectMentions(doc: any): MentionItem[] {
                     source: node.attrs.source,
                     label: node.attrs.label,
                 });
+                if (mentions.length <= 10) {
+                    console.log('[mentions:index] Found mention node:', {
+                        id: node.attrs.id,
+                        source: node.attrs.source,
+                        label: node.attrs.label,
+                    });
+                }
             }
         }
         if (node.content) {
@@ -125,6 +147,7 @@ export function collectMentions(doc: any): MentionItem[] {
     }
 
     walk(doc);
+    console.log('[mentions:index] Total mentions collected:', mentions.length);
     return mentions;
 }
 
@@ -142,11 +165,18 @@ export async function resolveMention(
     mention: MentionItem
 ): Promise<string | null> {
     try {
+        console.log('[mentions:index] Resolving mention:', mention);
         const { db } = await import('~/db');
 
         if (mention.source === 'document') {
             const doc = await db.posts.get(mention.id);
             if (!doc || doc.postType !== 'doc' || doc.deleted) return null;
+
+            console.log('[mentions:index] Loaded document for mention:', {
+                id: doc.id,
+                title: doc.title,
+                postType: doc.postType,
+            });
 
             let content;
             try {
@@ -165,6 +195,7 @@ export async function resolveMention(
             };
 
             const text = getText(content);
+            console.log('[mentions:index] Document text length:', text.length);
             return `(Referenced Document: ${mention.label})\n${truncateBytes(
                 text,
                 MAX_CONTEXT_BYTES
@@ -177,6 +208,11 @@ export async function resolveMention(
 
             if (!messages.length) return null;
 
+            console.log(
+                '[mentions:index] Loaded thread messages count:',
+                messages.length
+            );
+
             const transcript = messages
                 .map((m: any) => {
                     const content =
@@ -187,6 +223,10 @@ export async function resolveMention(
                 })
                 .join('\n');
 
+            console.log(
+                '[mentions:index] Transcript length:',
+                transcript.length
+            );
             return `(Referenced Chat: ${mention.label})\n${truncateBytes(
                 transcript,
                 MAX_CONTEXT_BYTES

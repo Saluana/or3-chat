@@ -8,7 +8,9 @@ interface MentionItem {
     subtitle?: string;
 }
 
-export function createMentionSuggestion(searchFn: (query: string) => Promise<MentionItem[]>) {
+export function createMentionSuggestion(
+    searchFn: (query: string) => Promise<MentionItem[]>
+) {
     return {
         char: '@',
         items: async ({ query }: { query: string }) => {
@@ -22,7 +24,10 @@ export function createMentionSuggestion(searchFn: (query: string) => Promise<Men
 
             return {
                 onStart: (props: any) => {
-                    console.log('[mentions] onStart called with items:', props.items);
+                    console.log(
+                        '[mentions] onStart called with items:',
+                        props.items
+                    );
 
                     // Mount a Popover wrapper that uses Nuxt UI instead of tippy
                     component = new VueRenderer(MentionsPopover, {
@@ -39,6 +44,14 @@ export function createMentionSuggestion(searchFn: (query: string) => Promise<Men
                         document.body.appendChild(component.element);
                     }
                     console.log('[mentions] Popover mounted');
+
+                    // Ensure the TipTap editor retains focus so typing continues there
+                    try {
+                        // Slight delay to run after popover's own focus handling
+                        setTimeout(() => {
+                            props.editor?.commands?.focus?.();
+                        }, 0);
+                    } catch {}
                 },
 
                 onUpdate(props: any) {
@@ -49,6 +62,13 @@ export function createMentionSuggestion(searchFn: (query: string) => Promise<Men
                         getReferenceClientRect: props.clientRect,
                         open: true,
                     });
+
+                    // Keep focus with editor during updates as well
+                    try {
+                        setTimeout(() => {
+                            props.editor?.commands?.focus?.();
+                        }, 0);
+                    } catch {}
                 },
 
                 onKeyDown(props: any) {
@@ -64,7 +84,9 @@ export function createMentionSuggestion(searchFn: (query: string) => Promise<Men
                 onExit() {
                     console.log('[mentions] onExit called');
                     if (component?.element?.parentNode) {
-                        component.element.parentNode.removeChild(component.element);
+                        component.element.parentNode.removeChild(
+                            component.element
+                        );
                     }
                     component.destroy();
                 },

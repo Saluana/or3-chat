@@ -895,7 +895,7 @@ const removeTextBlock = (index: number) => {
     largeTextBlocks.value.splice(index, 1);
 };
 
-const handleSend = () => {
+const handleSend = async () => {
     if (props.loading) return;
     // Require OpenRouter connection (api key) before sending
     const { apiKey } = useUserApiKey();
@@ -938,6 +938,34 @@ const handleSend = () => {
         uploadedImages.value.length > 0 ||
         largeTextBlocks.value.length > 0
     ) {
+        // Provide the current editor JSON to hooks so downstream filters (mentions)
+        // can extract structured mentions before the text is flattened.
+        try {
+            const hooks = useHooks();
+            const json = editor.value?.getJSON?.();
+            const debugSummary = json
+                ? {
+                      type: typeof json,
+                      hasType: !!(json as any)?.type,
+                      hasContent: Array.isArray((json as any)?.content),
+                      contentLen: Array.isArray((json as any)?.content)
+                          ? (json as any).content.length
+                          : 0,
+                  }
+                : { type: 'undefined' };
+            console.log('[ChatInputDropper] Emitting editor JSON before send', {
+                debugSummary,
+            });
+            // Fire as an action to avoid transforming data; listeners can stash it
+            await hooks.doAction('ui.chat.editor:action:before_send', json);
+            console.log('[ChatInputDropper] Hook dispatched successfully');
+        } catch (e) {
+            console.warn(
+                '[ChatInputDropper] Failed to dispatch editor JSON before_send',
+                e
+            );
+        }
+
         emit('send', {
             text: promptText.value,
             images: attachments.value, // backward compatibility

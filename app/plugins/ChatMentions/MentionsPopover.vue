@@ -10,7 +10,11 @@
         :ui="{ content: 'p-0 bg-transparent border-none shadow-none' }"
     >
         <template #content>
-            <MentionsList ref="listRef" :items="items" :command="command" />
+            <MentionsList
+                ref="listRef"
+                :items="items"
+                :command="handleCommand"
+            />
         </template>
     </UPopover>
 </template>
@@ -37,6 +41,24 @@ const props = defineProps<{
 
 const listRef = ref<InstanceType<typeof MentionsList> | null>(null);
 
+// Wrap the command to add custom logic before/after insertion
+function handleCommand(item: MentionItem) {
+    // Do something before inserting the mention
+    console.log('[MentionsPopover] Selected item:', item);
+
+    // You can perform any action here:
+    // - Log analytics
+    // - Update state
+    // - Show a notification
+    // - etc.
+
+    // Call the original command to insert the mention
+    props.command(item);
+
+    // Do something after inserting (if needed)
+    // Note: the popup will close immediately after command() executes
+}
+
 // Create a virtual reference object compatible with Floating UI via Reka/Popover
 const virtualReference = {
     getBoundingClientRect: () => {
@@ -56,6 +78,10 @@ const popoverContentProps = computed(() => ({
     sideOffset: 6,
     updatePositionStrategy: 'always' as const,
     reference: virtualReference as any,
+    // Hint to Popover implementation not to steal focus on open
+    trapFocus: false as any,
+    openAutoFocus: false as any,
+    closeAutoFocus: false as any,
 }));
 
 function onKeyDown(payload: any) {
