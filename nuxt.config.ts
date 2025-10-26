@@ -209,9 +209,6 @@ export default defineNuxtConfig({
             '~/core',
             '~/core/**',
         ],
-        imports: [
-            { name: 'useOpenRouterAuth', from: '~/core/auth/useOpenrouter' },
-        ],
     },
     vite: {
         worker: {
