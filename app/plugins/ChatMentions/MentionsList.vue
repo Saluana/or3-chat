@@ -1,10 +1,10 @@
 <template>
     <div
-        class="w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow"
+        class="w-[85dvw] sm:w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col rounded-[3px] border-2 border-[var(--md-inverse-surface)] retro-shadow"
     >
         <!-- Search & Filters Header -->
         <div
-            class="sticky top-0 bg-[var(--md-surface)] border-b-2 border-[var(--md-outline)] p-3 z-10"
+            class="sticky top-0 bg-[var(--md-surface)] border-b-2 border-[var(--md-inverse-surface)] p-3 z-10"
         >
             <UInput
                 v-model="searchTerm"
@@ -56,13 +56,16 @@
                     v-if="section.items.length"
                     class="py-2"
                     :class="{
-                        'border-t-2 border-[var(--md-outline)] mt-2':
+                        'border-t-2 border-[var(--md-inverse-surface)] mt-2':
                             section.key !== sections[0]?.key,
                     }"
                 >
                     <!-- Section Header -->
                     <div class="flex items-center gap-2 px-3 pb-2">
-                        <span>{{ section.icon }}</span>
+                        <UIcon
+                            :name="section.icon"
+                            class="w-4 h-4 text-[var(--md-on-surface-variant)]"
+                        />
                         <span
                             class="text-xs font-semibold text-[var(--md-on-surface-variant)] uppercase tracking-wider"
                         >
@@ -210,7 +213,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'recommended',
             title: 'Search Results',
-            icon: '🔎',
+            icon: 'pixelarticons:search',
             items: recommendedItems.value,
         });
     }
@@ -218,7 +221,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'documents',
             title: 'Documents',
-            icon: '📄',
+            icon: 'pixelarticons:notes-multiple',
             items: documentItems.value,
         });
     }
@@ -226,7 +229,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'chats',
             title: 'Chats',
-            icon: '💬',
+            icon: 'pixelarticons:message-processing',
             items: chatItems.value,
         });
     }
