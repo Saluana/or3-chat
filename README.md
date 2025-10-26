@@ -1,4 +1,4 @@
-![OR3.chat logo](public/butthole-logo.webp)
+![OR3.chat logo](public/logos/logo-192.png)
 
 # OR3.chat — Local-first OpenRouter Companion
 
