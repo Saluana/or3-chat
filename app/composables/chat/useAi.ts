@@ -433,7 +433,7 @@ export function useChat(
                 );
                 if (target) target.file_hashes = null;
             }
-            const orMessages = await buildOpenRouterMessages(
+            let orMessages = await buildOpenRouterMessages(
                 modelInputMessages as any,
                 {
                     maxImageInputs: 16,
@@ -493,6 +493,15 @@ export function useChat(
             let continueLoop = true;
             let loopIteration = 0;
             const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
+
+            const filteredMessages = await hooks.applyFilters(
+                'ai.chat.messages:filter:before_send',
+                { messages: orMessages }
+            );
+
+            if (filteredMessages && (filteredMessages as any).messages) {
+                orMessages = (filteredMessages as any).messages;
+            }
 
             while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
                 continueLoop = false;

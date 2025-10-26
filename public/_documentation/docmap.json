@@ -56,6 +56,12 @@
                     "summary": "Lightweight registry that lets external features (pane plugins, slash commands, automation) inject chat messages into an existing chat input without duplicating business logic. `useChatInputBridge` exposes a tiny, reactive directory of chat inputs keyed by `paneId`. Chat containers register their imperative API and the bridge forwards programmatic sends through the same UI pipeline a user click would trigger.\\n\\n-   Keeps message handling inside `ChatInputDropper`\\n-   Avoids rehydrating chat state or bypassing hooks\\n-   Supports multiple panes/windows\\n-   Safe in dev (HMR-resilient)"
                 },
                 {
+                    "name": "useChatMentions.md",
+                    "path": "/composables/useChatMentions",
+                    "category": "Chat",
+                    "summary": "Enable @-mentions of documents and chats in your conversations. The mentions system provides fast search with Orama, lazy-loaded Vue components, and automatic context injection into AI requests.\\n\\n-   Type `@` in chat input to trigger mention dropdown\\n-   Search documents and chats with live filtering\\n-   Keyboard navigation (Arrow Up/Down, Enter) or mouse click\\n-   Automatically injects full content as system messages\\n-   Fuzzy matching with relevance scoring\\n-   Truncates to 50KB per mention to manage tokens"
+                },
+                {
                     "name": "useDefaultPrompt.md",
                     "path": "/composables/useDefaultPrompt",
                     "category": "Chat",
@@ -276,6 +282,12 @@
                     "path": "/hooks/hook-keys",
                     "category": "Types",
                     "summary": "Catalog of well-known hook keys with typed helpers for ergonomic registration. Defines string literal unions for UI/AI/DB hooks, exposes the `typedOn(hooks)` wrapper for auto-completing hook names in your editor, and maps payloads to argument tuples."
+                },
+                {
+                    "name": "chat-editor-extensions.md",
+                    "path": "/hooks/chat-editor-extensions",
+                    "category": "Integration",
+                    "summary": "How to add TipTap extensions to the chat composer without touching the component. Explains the two hook points `editor:request-extensions` (action) and `ui.chat.editor:filter:extensions` (filter), shows a minimal plugin that lazy-loads an extension and appends it to the editor's extension list, and covers ordering, SSR guards, and failure safety."
                 },
                 {
                     "name": "useHooks.md",

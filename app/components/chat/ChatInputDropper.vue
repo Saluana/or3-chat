@@ -492,7 +492,7 @@ onMounted(async () => {
     }
 });
 
-onMounted(() => {
+onMounted(async () => {
     if (!process.client) return;
     try {
         // Minimal shortcut: Enter sends, Shift+Enter = newline
@@ -513,28 +513,45 @@ onMounted(() => {
                 };
             },
         });
+
+        // Collect extensions (plugins can augment via hooks)
+        let extensions = [
+            enterToSend,
+            Placeholder.configure({
+                // Use a placeholder:
+                placeholder: 'Write something …',
+            }),
+            StarterKit.configure({
+                bold: false,
+                italic: false,
+                strike: false,
+                code: false,
+                blockquote: false,
+                heading: false,
+                bulletList: false,
+                orderedList: false,
+                codeBlock: false,
+                horizontalRule: false,
+                dropcursor: false,
+                gapcursor: false,
+            }),
+        ];
+
+        // Request mentions extension (lazy loads if plugin is installed)
+        const hooks = useHooks();
+        await hooks.doAction('editor:request-extensions');
+
+        // Allow plugins to add editor extensions via filter
+        try {
+            const filtered = await hooks.applyFilters(
+                'ui.chat.editor:filter:extensions',
+                extensions
+            );
+            if (Array.isArray(filtered)) extensions = filtered as any;
+        } catch {}
+
         editor.value = new Editor({
-            extensions: [
-                enterToSend,
-                Placeholder.configure({
-                    // Use a placeholder:
-                    placeholder: 'Write something …',
-                }),
-                StarterKit.configure({
-                    bold: false,
-                    italic: false,
-                    strike: false,
-                    code: false,
-                    blockquote: false,
-                    heading: false,
-                    bulletList: false,
-                    orderedList: false,
-                    codeBlock: false,
-                    horizontalRule: false,
-                    dropcursor: false,
-                    gapcursor: false,
-                }),
-            ],
+            extensions,
             onUpdate: ({ editor: ed }) => {
                 promptText.value = ed.getText();
                 autoResize();
@@ -874,7 +891,7 @@ const removeTextBlock = (index: number) => {
     largeTextBlocks.value.splice(index, 1);
 };
 
-const handleSend = () => {
+const handleSend = async () => {
     if (props.loading) return;
     // Require OpenRouter connection (api key) before sending
     const { apiKey } = useUserApiKey();
@@ -917,6 +934,20 @@ const handleSend = () => {
         uploadedImages.value.length > 0 ||
         largeTextBlocks.value.length > 0
     ) {
+        // Provide the current editor JSON to hooks so downstream filters (mentions)
+        // can extract structured mentions before the text is flattened.
+        try {
+            const hooks = useHooks();
+            const json = editor.value?.getJSON?.();
+            // Fire as an action to avoid transforming data; listeners can stash it
+            await hooks.doAction('ui.chat.editor:action:before_send', json);
+        } catch (e) {
+            console.warn(
+                '[ChatInputDropper] Failed to dispatch editor JSON before_send',
+                e
+            );
+        }
+
         emit('send', {
             text: promptText.value,
             images: attachments.value, // backward compatibility
@@ -1060,5 +1091,24 @@ textarea::-webkit-scrollbar-thumb:hover {
     pointer-events: none;
     opacity: 0.85; /* increase for dark background readability */
     font-weight: normal;
+}
+
+/* Mention token styling inside the TipTap editor */
+.prosemirror-host :deep(.mention) {
+    background: var(--ui-bg-muted, #f3f4f6);
+    color: var(--ui-text-highlighted, #1e40af);
+    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+.prosemirror-host :deep(.mention:hover) {
+    background: var(--ui-bg-muted-hover, #e5e7eb);
+}
+.prosemirror-host :deep(.mention::before) {
+    content: '📎';
+    margin-right: 0.25rem;
+    font-size: 0.875em;
 }
 </style>

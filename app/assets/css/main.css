@@ -5,6 +5,8 @@
 /* Nuxt UI base styles (load first so we can override its tokens below) */
 @import "@nuxt/ui";
 
+/* Removed tippy.js; mentions dropdown now uses Nuxt UI Popover */
+
 /* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
 	so classes used in Nuxt UI theme overrides are generated. */
 @source "../../../app.config.ts";
@@ -16,6 +18,7 @@
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
 @import "./retro.css"; /* shared retro utility classes */
+/* mentions.css removed: .mention styles live in ChatInputDropper.vue */
 
 /* Font setup: body uses VT323, headings use Press Start 2P */
 :root {
