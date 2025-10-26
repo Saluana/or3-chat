@@ -1,6 +1,10 @@
+![OR3.chat logo](public/butthole-logo.webp)
+
 # OR3.chat — Local-first OpenRouter Companion
 
 OR3.chat is an open-source, privacy-first Nuxt application that turns your browser into a full OpenRouter command center. Authenticate with OpenRouter once, stream tokens in real time, manage chats and documents side-by-side, and keep everything—API keys, conversations, files—stored locally via Dexie.
+
+![Chat workspace](public/screenshots/chat-screenshot.png)
 
 ## What You Get
 
@@ -9,6 +13,8 @@ OR3.chat is an open-source, privacy-first Nuxt application that turns your brows
 -   **Extensible core:** WordPress-style action/filter hooks plus UI action registries so you can customize chat behavior, storage rules, or interface affordances without forking.
 -   **Productive layout:** Virtualized lists, a multi-pane layout, Nuxt UI v4/Tailwind styling, and a dashboard for models, themes, images, and workspace backups.
 -   **Local-first control:** Dexie-backed storage for threads, messages, posts, files, and key/value settings with optional encryption hooks to match your security model.
+
+![Documents editor](public/screenshots/editor-screenshot.png)
 
 ## Install & Launch
 
