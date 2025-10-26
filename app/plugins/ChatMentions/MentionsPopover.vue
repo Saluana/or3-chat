@@ -59,22 +59,9 @@ onKeyStroke(
     { target: typeof window !== 'undefined' ? window : undefined }
 );
 
-// Wrap the command to add custom logic before/after insertion
+// Wrap the command to forward to the original TipTap command
 function handleCommand(item: MentionItem) {
-    // Do something before inserting the mention
-    console.log('[MentionsPopover] Selected item:', item);
-
-    // You can perform any action here:
-    // - Log analytics
-    // - Update state
-    // - Show a notification
-    // - etc.
-
-    // Call the original command to insert the mention
     props.command(item);
-
-    // Do something after inserting (if needed)
-    // Note: the popup will close immediately after command() executes
 }
 
 // Create a virtual reference object compatible with Floating UI via Reka/Popover

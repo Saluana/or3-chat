@@ -245,11 +245,6 @@ watch(
     { immediate: true }
 );
 
-function formatScore(score: number) {
-    const percentage = Math.round(Math.min(1, Math.max(0, score || 0)) * 100);
-    return percentage;
-}
-
 function toggleSource(source: 'document' | 'chat') {
     if (source === 'document') {
         if (showDocuments.value && !showChats.value) return;
