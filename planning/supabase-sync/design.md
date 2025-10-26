@@ -5,229 +5,240 @@ content_type: text/markdown
 
 ## Overview
 
-The Supabase sync engine ships as a single Nuxt plugin that wires into the existing hook bus to keep local stores and the remote Supabase database aligned. Instead of building new orchestration surfaces, it leans on the app’s existing composables and hook events, which keeps the footprint small and makes the feature easy to reason about. The engine stays invisible to end users, reacting to hook-based mutations, realtime changes, and connectivity updates in the background.
+The Dexie ⇄ Supabase sync engine runs as a Nuxt client plugin that bootstraps once per authenticated session, wires into the existing hook bus, and coordinates three loops:
 
-Two guiding principles shaped the design:
+1. **Capture loop** — intercept local mutations, persist them in a Dexie outbox, and broadcast optimistic UI updates.  
+2. **Push loop** — batch pending ops, enforce ordering/idempotency, and push via a provider abstraction (Supabase-first, but Firebase-ready).  
+3. **Pull loop** — maintain per-table cursors, stream realtime deltas, and periodically reconcile via cursor-based pulls/backfills.
 
--   **Configuration over code** — feature teams describe their datasets through small adapter objects; no bespoke sync logic lives inside pages or stores.
--   **Pluggable transport** — transport responsibilities live behind a provider interface so swapping Supabase for Firebase, SQLite, or MongoDB requires only a different provider factory. The core engine never learns about HTTP verbs, WebSockets, or vendor-specific payloads.
+The second draft deepens the plan around conflicts, causality, partial sync, observability, and payload limits. The architecture must be deterministic, debuggable, and future-proof enough to swap remote transports with only provider changes.
 
-This approach keeps the initial Supabase implementation straightforward while giving us an exit hatch if priorities or infrastructure change later.
-
-## Architecture
-
-The plugin instantiates a `SupabaseSyncEngine` with three helpers: subscription manager, outbound queue, and hook bridge. All work happens client-side.
+## System Topology
 
 ```mermaid
 graph TD
   NuxtApp((Nuxt App)) -->|registers| SyncPlugin
   SyncPlugin --> HookBridge
-  HookBridge --> SyncEngine
-  SyncEngine -->|listen| SupabaseRealtime[(Supabase Realtime)]
-  SyncEngine -->|apply| LocalStores[(Local Stores)]
-  SyncEngine -->|flush| OutboxQueue[(IndexedDB Outbox)]
-  HookBridge -->|emit stats/errors| HookBus((Hook Bus))
+  HookBridge -->|db:* hooks| OutboxManager
+  OutboxManager --> DexieOutbox[(Dexie pending_ops)]
+  SyncPlugin --> CursorStore[(Dexie sync_state)]
+  SyncPlugin --> Tombstones[(Dexie tombstones)]
+  SyncPlugin --> ProviderProxy{{SyncProvider}}
+  ProviderProxy --> SupabaseRealtime[(Realtime Channels)]
+  ProviderProxy --> SupabaseRPC[(RPC / REST / Functions)]
+  ProviderProxy --> Storage[(Supabase Storage/S3)]
+  SyncPlugin --> LocalStores[(Pinia/Composable Stores)]
+  SyncPlugin --> HookBus((Hook Bus))
 ```
 
-### Core Flow
+Key contracts:
 
--   Plugin factory acquires Supabase client (`useSupabaseClient`) and hook registry (`useHookBus`). Pulling dependencies from composables keeps the plugin tree-shakeable and avoids hard imports.
--   Engine loads `topics` config describing tables and per-table transformers. Topics capture the minimal metadata needed to sync a data model; adding a table is a config change, not new engine code.
--   Subscription manager invokes the provider to register realtime observers per topic and forwards payloads to the engine. Delegating to the provider makes realtime semantics provider-specific without leaking into the core.
--   Engine hands payloads to the adapter to upsert/delete in the local store. Adapters own knowledge of local schema and let different tables normalize data however they need.
--   Hook bridge listens to local `db:*` mutation hooks and enqueues outbound deltas. Reusing existing change events prevents duplicate observers and ensures we mirror the same lifecycle other features use.
--   Outbound queue batches writes and hands them to the provider for transport-specific persistence. Batching is configurable but defaults to 250ms, striking a balance between responsiveness and network efficiency.
--   Connectivity monitor toggles queue flushing based on `navigator.onLine` and Supabase status events. This keeps the user unaware of outages while guaranteeing we never drop local mutations silently.
+-   **Topic adapters** own schema transforms and conflict policies.  
+-   **SyncProvider** hides transport details (channel wiring, REST endpoints, Firebase vs Supabase).  
+-   **Dexie stores** persist pending ops, tombstones, cursors, sync run telemetry.  
+-   **Hook bus** delivers instrumentation (`sync:*` events) and captures outbound mutations.
 
-## Components and Interfaces
+## Core Modules
+
+### 1. Plugin Bootstrap (`app/plugins/supabase-sync.client.ts`)
+
+-   Resolves Supabase client + hook bus + Dexie handles via composables.  
+-   Observes auth session (Supabase `onAuthStateChange`). Starts engine when session exists; stops & flushes on sign-out.  
+-   Handles HMR disposal by calling `engine.stop()` to avoid duplicate subscriptions.
+
+### 2. Engine (`SupabaseSyncEngine`)
+
+Responsibilities split into dedicated helpers:
+
+| Helper | Purpose |
+| --- | --- |
+| `HookBridge` | Subscribes to `db:*:mutated` hooks, filters noise, enriches with ChangeStamp, writes to outbox. |
+| `OutboxManager` | Persists `PendingOp`, coalesces diffs, enforces queue byte limit, schedules batch flushes, tracks retries. |
+| `SubscriptionManager` | Registers realtime listeners per topic, handles backpressure/coalescing, remaps provider payloads into adapters. |
+| `CursorManager` | Persists `SyncState` per table, drives pull pagination, triggers rescan/backfill flows. |
+| `ConflictResolver` | Applies per-topic policies (LWW / merge / CRDT), emits conflicts when human intervention is needed. |
+| `RecoveryOrchestrator` | Runs rescan, rebase, and kill-switch scenarios; coordinates with HookBridge to re-apply pending ops atop fresh snapshots. |
+
+### 3. Provider Abstraction
 
 ```ts
-type SyncDirection = 'inbound' | 'outbound';
-
-interface SyncAdapter<TLocal, TRemote = Record<string, unknown>> {
-    table: string; // declares which table the adapter owns
-    selectColumns?: string[]; // narrows payload size when providers support projection
-    toLocal(remote: TRemote, ctx: SyncContext): Promise<TLocal> | TLocal; // normalize remote payloads
-    toRemote(delta: TLocal, ctx: SyncContext): Promise<TRemote> | TRemote; // expand local diffs to provider format
-    applyLocal(change: SyncChange<TLocal>): Promise<void>; // writes into local stores
-    deleteLocal(id: string): Promise<void>;
-    hookFilter?: (event: HookEvent) => boolean; // optional guard when local hooks are noisy
-}
-
-interface SyncTopicConfig {
-    adapter: SyncAdapter<unknown>;
-    realtimeFilter?: {
-        schema?: string;
-        channel?: string; // defaults to table
-    };
-}
-
-interface SyncProviderHandlers {
-    onChange(change: SyncChange<unknown>): void; // called by provider when a remote event arrives
-    onError(error: Error, rawPayload?: unknown): void; // lets providers surface failures without throwing
+interface SyncProviderFactory {
+    (ctx: ProviderContext): SyncProvider;
 }
 
 interface SyncProvider {
-    start(
-        topic: SyncTopicConfig,
-        handlers: SyncProviderHandlers
-    ): Promise<void>; // register realtime observers
-    stop(topic: SyncTopicConfig): Promise<void>; // unregister observers
-    pushBatch(
-        topic: SyncTopicConfig,
-        changes: SyncChange<unknown>[]
-    ): Promise<void>; // flush local mutations
-    dispose(): Promise<void>; // teardown when the session ends
-}
-
-type SyncProviderFactory = (ctx: SyncContext) => SyncProvider;
-
-interface SyncPluginOptions {
-    topics: SyncTopicConfig[];
-    batchWindowMs?: number; // default 250
-    retryDelaysMs?: number[]; // default [250, 1000, 3000]
-    maxQueueBytes?: number; // default 5 * 1024 * 1024
-    provider?: SyncProviderFactory; // defaults to Supabase provider
-}
-
-interface SyncContext {
-    supabase: SupabaseClient;
-    emit: (event: SyncHookEvent) => void;
-    now: () => number; // injected clock for deterministic testing
-}
-
-interface SyncChange<T> {
-    type: 'insert' | 'update' | 'delete';
-    id: string;
-    payload?: T;
-}
-
-type SyncHookEvent =
-    | { type: 'sync:stats'; pending: number; lastFlushAt: number | null }
-    | {
-          type: 'sync:error';
-          direction: SyncDirection;
-          message: string;
-          data?: unknown;
-      }
-    | { type: 'sync:retry'; table: string; attempt: number; error: string }
-    | { type: 'sync:queue:overflow'; dropped: number };
-
-class SupabaseSyncEngine {
-    constructor(
-        private readonly options: SyncPluginOptions,
-        private readonly ctx: SyncContext
-    ) {}
-    start(): Promise<void> {
-        /* subscribe + bridge hooks */ return Promise.resolve();
-    }
-    stop(): Promise<void> {
-        /* unsubscribe + flush */ return Promise.resolve();
-    }
+    subscribe(topic: SyncTopicConfig, cb: ProviderChangeHandler): Promise<void>;
+    unsubscribe(topic: SyncTopicConfig): Promise<void>;
+    pull(request: PullRequest): Promise<PullResponse>;
+    push(batch: PushBatch): Promise<PushResult>;
+    uploadAttachment?(payload: AttachmentPayload): Promise<AttachmentResult>;
+    dispose(): Promise<void>;
 }
 ```
 
-Supporting utilities stay tiny: `createSubscriptionManager`, `createOutboxQueue`, and `createHookBridge` each yield an object with `start()`/`stop()` methods so they can be activated or disposed with the session lifecycle.
+-   `ProviderContext` contains the Supabase client (for default provider), session token, scoped fetch helper, and event emitter.  
+-   Providers emit raw change + metadata; engine translates to `SyncChange`.  
+-   Alternate providers (Firebase) implement the same surface; only plugin options change.
 
-### Provider Abstraction
-
--   `createSupabaseProvider(ctx)` implements `SyncProvider` using Supabase Realtime and REST APIs. It converts table names into channel subscriptions and RPC calls.
--   Alternate providers implement only the interface: e.g., `createFirestoreProvider`, `createSqliteProvider`. Each stays focused on translating a `SyncChange` into the provider’s API call.
--   The engine receives a provider instance via options; swapping backends means changing the factory passed into the plugin. No other module needs editing because adapters speak in neutral payloads.
--   Provider-specific setup (API keys, connection strings) stays within the provider factory and does not leak into adapters or engine internals. This lets deployment teams configure secrets without touching sync logic.
--   Providers share the same handler callbacks, so instrumentation (`sync:error`, `sync:stats`) works uniformly regardless of backend.
-
-## Data Models
-
-### Topic Configuration
-
-The plugin expects a constant `syncTopics` defined in `app/config/sync-topics.ts`:
+### 4. Topic Configuration & Adapters
 
 ```ts
-export const syncTopics: SyncTopicConfig[] = [
-    {
-        adapter: projectAdapter, // wraps local project store helpers
-    },
-    {
-        adapter: threadAdapter,
-        realtimeFilter: { schema: 'public', channel: 'threads' },
-    },
-    // additional topics share the same structure
-];
-```
-
-### IndexedDB Outbox
-
-Outbound buffering reuses the existing Dexie database (if present) or a minimal store created under `app/db/sync-outbox.ts`:
-
-```ts
-interface OutboxRecord {
-    id: string; // uuid
-    table: string;
-    op: 'insert' | 'update' | 'delete';
-    payload: Record<string, unknown> | null;
-    createdAt: number;
-}
-
-export const syncOutbox = db.table<OutboxRecord>('sync_outbox');
-```
-
-No upstream schema changes are required; Supabase tables already exist, and the engine simply mirrors them.
-
-### Provider Configuration
-
-Provider factories accept their own option objects without modifying engine code:
-
-```ts
-export const supabaseSyncPlugin = defineSupabaseSyncPlugin({
-    topics: syncTopics,
-    provider: (ctx) => createSupabaseProvider(ctx, { schema: 'public' }),
-});
-
-// Swapping to Firebase later only replaces the factory:
-export const firebaseSyncPlugin = defineSupabaseSyncPlugin({
-    topics: syncTopics,
-    provider: (ctx) => createFirestoreProvider(ctx, { projectId: '...' }),
-});
-```
-
-The example highlights the only change point when switching transports: inject an alternate provider factory. Adapters and hook wiring remain untouched, so QA can reuse existing regression suites.
-
-## Error Handling
-
-Errors are normalized through a light `ServiceResult` helper:
-
-```ts
-type ServiceResult<T> = { ok: true; value: T } | { ok: false; error: Error };
-
-function wrap<T>(promise: Promise<T>): Promise<ServiceResult<T>> {
-    return promise.then(
-        (value) => ({ ok: true, value }),
-        (error) => ({
-            ok: false,
-            error: error instanceof Error ? error : new Error(String(error)),
-        })
-    );
+interface SyncTopicConfig<TLocal = unknown, TRemote = unknown> {
+    adapter: SyncAdapter<TLocal, TRemote>;
+    policy: ConflictPolicy;
+    scope: SyncScopeDescriptor; // tenant/workspace filters
+    attachments?: AttachmentDescriptor[];
+    realtime?: RealtimeFilter;
 }
 ```
 
--   Realtime payload parsing failures emit `sync:error` and skip the change.
--   Outbound writes retry with `retryDelaysMs`; the final failure emits `sync:error` with direction `outbound`.
--   Queue overflow emits `sync:queue:overflow` and prunes oldest entries before enqueuing the new one.
--   Hook bridge guards against re-entrant loops by tagging outbound events and ignoring mirrored inbound payloads for the same revision.
+-   `SyncScopeDescriptor` expresses tenant → workspace → project boundaries so both provider queries and hook filters stay scoped.  
+-   Adapters encapsulate `toLocal`, `toRemote`, `applyLocal`, `deleteLocal`, `mergeFields`, `fieldsRequiringLww`.  
+-   Each adapter must supply `estimateSize()` so queue byte accounting is accurate.
 
-## Design Rationale & Benefits
+## Data Flows
 
--   **Hook-first integration** keeps the plugin agnostic of UI layers and reduces bundle size. It also means every feature consuming the hook bus automatically benefits from sync instrumentation.
--   **Adapters encapsulate table knowledge**, preventing the engine from assuming column shape or local store mechanics. Teams can evolve individual stores without refactoring the core engine.
--   **Provider interface isolates vendor logic**, letting us iterate on backend choices, run A/B tests, or operate in hybrid environments (e.g., local SQLite in desktop apps, Supabase in web) with the same engine.
--   **Outbox + batching** ensure outbound writes remain efficient while preserving ordering—key for multi-tab collaboration scenarios.
--   **Explicit error surfaces** (`sync:error`, `sync:retry`) give observability without leaking provider-specific exceptions into unrelated parts of the app.
--   **Config-driven topics** accelerate onboarding: adding a new dataset is an adapter + config entry, with no risk of touching synchronization plumbing.
+### Capture & Push Sequence
+
+```mermaid
+sequenceDiagram
+    participant Hook as HookBridge
+    participant Dexie as Dexie.pending_ops
+    participant Queue as OutboxManager
+    participant Provider as SyncProvider
+    participant Remote as Supabase
+    Hook->>Dexie: tx(write store + pending_ops)
+    Dexie->>Queue: enqueue(PendingOp)
+    Queue-->>Queue: coalesce & batch by table
+    Queue->>Provider: push(batch, idempotency keys)
+    Provider->>Remote: RPC / REST writes
+    Remote-->>Provider: per-op results + serverVersion
+    Provider->>Queue: acknowledge successes
+    Queue->>Dexie: delete acknowledged ops
+    Queue->>Hook: emit sync:stats, sync:retry on failures
+```
+
+Guarantees:
+
+-   Pending ops persist durably before local UI updates commit.  
+-   Engine tags each op with `ChangeStamp`. Provider echoes back `serverVersion` so queue can advance per-table checkpoints.  
+-   Partial failure returns per-op status; queue only deletes successes.
+
+### Pull & Reconcile Sequence
+
+```mermaid
+sequenceDiagram
+    participant Cursor as CursorManager
+    participant Provider as SyncProvider
+    participant Resolver as ConflictResolver
+    participant Adapter as SyncAdapter
+    participant Local as LocalStores
+    Cursor->>Provider: pull({cursor, scope, limit})
+    Provider->>Cursor: {changes[], nextCursor}
+    loop change
+        Cursor->>Resolver: apply(change)
+        alt delete
+            Resolver->>Adapter: deleteLocal(id)
+        else update/insert
+            Resolver->>Adapter: applyLocal({type, payload})
+        end
+    end
+    Cursor->>Cursor: persist nextCursor
+    Cursor->>Hook: emit sync:stats
+```
+
+Realtime events flow through the same resolver path but skip `pull`.
+
+### Rescan / Rebase
+
+1. Engine detects lost cursor or user triggers manual resync.  
+2. `RecoveryOrchestrator` pauses outbound push, snapshots pending ops, clears local table copy, pulls full snapshot (paged).  
+3. After baseline applied, orchestrator replays pending ops in timestamp order and resumes normal loops.  
+4. Stats + progress events keep UI informed (`sync:rescan:progress`).
+
+## Conflict Handling
+
+-   **LWW**: Compare `serverVersion` (preferred) or HLC; greater wins.  
+-   **Merge**: Merge map derived from adapter, e.g., `tags = union`, `participants = mergeById`, `title = remoteIfNewer`.  
+-   **CRDT**: When adapter declares `policy: 'crdt'`, engine forwards payloads to adapter’s CRDT merge routine (e.g., Yjs doc).  
+-   Each applied change records `lastWriter` (deviceId + opId). When inbound change matches local `lastWriter`, engine skips to prevent echo loops.  
+-   Conflicts emit `sync:conflict` with `{ table, id, local, remote, policy }`.
+
+## Partial Sync & Cursors
+
+-   `SyncState` Dexie table stores per-topic `{ lastServerVersion, lastCursor, lastFullRescanAt }`.  
+-   Provider `pull()` accepts `scope` (tenant/workspace) and `cursor`.  
+-   Cursor format for Supabase: `serverVersion::uuid` where `serverVersion` is a monotonic bigint from Postgres sequence; fallback to `(hlc, id)` tuple.  
+-   On cold start, engine requests `/sync/bootstrap?scope=...&limit=...` endpoint that streams deterministic pages.  
+-   Cursor drift detection: if server responds with `410 Gone` / `cursor_expired`, engine enqueues rescan.
+
+## Offline & Queue Management
+
+-   Outbox persists in Dexie with `maxQueueBytes` (default 5 MB). When limit exceeded, oldest ops drop and `sync:queue:overflow` fires with count + affected tables.  
+-   Connectivity monitor listens to `navigator.onLine`, Supabase realtime connection state, and fetch errors. Offline mode pauses pushes but continues capturing ops.  
+-   Upon reconnect, queue flushes in FIFO order. For large backlogs, queue splits into pages to avoid exceeding payload size.  
+-   Visibility integration: when tab hidden, timers slow to 1s tick except when flush is in-flight, honoring battery constraints.
+
+## Tombstones & History
+
+-   Deletes never remove local rows immediately; they set `deletedAt` and push tombstones.  
+-   Tombstones stored in Dexie (`db.tombstones`). Purge job runs during idle windows, checking `SyncState.lastServerVersion` across all known devices (persisted via device registry). Only after every device version > tombstone version can we purge.  
+-   Full resync honors tombstones first to avoid resurrecting data.
+
+## Large Payloads & Attachments
+
+-   Attachment descriptors tell the engine which fields represent blobs. On outbound writes, engine uploads attachments first (`provider.uploadAttachment`) and swaps fields for `{ url, hash, size }`.  
+-   Text fields >256 KB chunked using content-defined chunking to minimize duplicates; reassembled before `applyLocal`.  
+-   Provider push enforces 8 MB body limit. If batch exceeds, queue splits and retries sequentially.  
+-   Compression toggled via `Accept-Encoding` header when backend supports gzipped JSON.
+
+## Observability & Recovery
+
+-   `sync_runs` Dexie table captures metrics per push/pull cycle.  
+-   `HookBridge` emits: `sync:stats`, `sync:retry`, `sync:conflict`, `sync:queue:overflow`, `sync:auth:blocked`, `sync:rescan:progress`.  
+-   Debug overlay (dev only) can subscribe to these events and render counts without shipping UI components to production.  
+-   Recovery orchestrator exposes commands:
+    -   `triggerRescan(table?)`
+    -   `triggerRebase()`
+    -   `pausePush()` / `resumePush()`
+    -   `clearQueue()`
+
+## Supabase Provider Notes
+
+-   **Realtime**: use channel per table (`supabase.channel('public:table')`). Apply row-level filters for tenant scope.  
+-   **Pull**: expose RPC `sync_pull(scope jsonb, cursor bigint, limit int)` that reads from `change_log` table ordered by `server_version`.  
+-   **Push**: call edge function `sync_push` that dedupes by `op_id`, applies mutations in transaction, updates `server_version`, and returns per-op status.  
+-   **Change Log**: Postgres trigger writes to `change_log(table, pk, op, payload, server_version, hlc, tenant_id)`. Pull endpoint streams from this log.  
+-   **Attachments**: use Supabase Storage bucket per tenant; provider ensures signed URLs expire and are refreshed via hook if stale.
+
+## Firebase / Future Providers
+
+To replace Supabase:
+
+1. Implement `createFirestoreProvider` translating `subscribe/push/pull` into Firestore listeners and batched writes.  
+2. Provide serverVersion equivalent via synthetic counter (Cloud Function, monotonic ID).  
+3. Reuse adapters unchanged—the only difference is provider factory injected into plugin options.  
+4. Ensure security rules enforce tenant scope; adapter scopes stay identical.
 
 ## Testing Strategy
 
--   **Unit**: mock adapters to verify toLocal/toRemote conversions, queue size enforcement, retry delay sequencing, and that hook filters short-circuit correctly.
--   **Integration**: run the plugin with a mocked Supabase client that simulates realtime and RPC responses; assert that hooks are registered/unregistered and local stores receive updates.
--   **End-to-end**: Cypress/Vitest-driven browser test that performs concurrent edits across two tabs, validating that both converge without manual refresh.
--   **Performance**: script 1k payload bursts to confirm batch window keeps network calls under configured limits and CPU stays below the 5% budget.
+-   **Unit**:  
+    -   Conflict policy matrix (LWW vs merge vs CRDT).  
+    -   Queue overflow, retry backoff, ChangeStamp generation.  
+    -   Tombstone purge gating logic.
+-   **Integration**:  
+    -   Mock provider to simulate realtime bursts, partial failures, attachment uploads.  
+    -   Verify cursors update correctly when provider returns `nextCursor`.  
+    -   Ensure pending ops survive reload (Dexie open/close).  
+    -   Simulate auth expiry to confirm `sync:auth:blocked`.
+-   **E2E**:  
+    -   Multi-tab editing scenario verifying conflict surfacing.  
+    -   Offline flight mode test: edit while offline, reconnect, ensure pushes flush in order.  
+    -   Backfill scenario loading 50k rows verifying progress events and memory usage.
+
+## Open Questions / Follow-ups
+
+-   Device registry: best storage for cross-device checkpoint status (Supabase table vs edge function).  
+-   CRDT scope: do we need Yjs documents for long-form notes at launch or is LWW acceptable initially?  
+-   Attachment hashing: pick Murmur3 vs SHA-256 given browser performance.  
+-   Should kill switch gating pushes be remote-configurable (feature flag) or purely client-side?
