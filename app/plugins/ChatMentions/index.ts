@@ -19,10 +19,19 @@ interface IndexRecord {
 }
 
 // ============================================================================
-// Constants
+// Constants (initialized from runtime config)
 // ============================================================================
-const MAX_PER_GROUP = 5;
-const MAX_CONTEXT_BYTES = 50_000;
+let MAX_PER_GROUP = 5;
+let MAX_CONTEXT_BYTES = 50_000;
+
+export function setMentionsConfig(config: {
+    maxPerGroup?: number;
+    maxContextBytes?: number;
+}) {
+    if (config.maxPerGroup !== undefined) MAX_PER_GROUP = config.maxPerGroup;
+    if (config.maxContextBytes !== undefined)
+        MAX_CONTEXT_BYTES = config.maxContextBytes;
+}
 
 // ============================================================================
 // Orama Index
@@ -245,6 +254,44 @@ export async function upsertThread(thread: any) {
     }
 }
 
+export async function updateThread(thread: any) {
+    if (!mentionsDb || !indexReady) return;
+    try {
+        const { update } = await import('@orama/orama');
+        await update(mentionsDb, thread.id, {
+            title: thread.title || 'Untitled Chat',
+        });
+    } catch (e) {
+        // Ignore if thread doesn't exist yet
+    }
+}
+
+export async function removeDocument(payload: any) {
+    if (!mentionsDb || !indexReady) return;
+    try {
+        const { remove } = await import('@orama/orama');
+        const docId = payload.id || payload.entity?.id;
+        if (docId) {
+            await remove(mentionsDb, docId);
+        }
+    } catch (e) {
+        console.warn('[mentions] Failed to remove document from index:', e);
+    }
+}
+
+export async function removeThread(payload: any) {
+    if (!mentionsDb || !indexReady) return;
+    try {
+        const { remove } = await import('@orama/orama');
+        const threadId = payload.id || payload.entity?.id;
+        if (threadId) {
+            await remove(mentionsDb, threadId);
+        }
+    } catch (e) {
+        console.warn('[mentions] Failed to remove thread from index:', e);
+    }
+}
+
 export function resetIndex() {
     mentionsDb = null;
     indexReady = false;
@@ -259,5 +306,9 @@ export default {
     upsertDocument,
     updateDocument,
     upsertThread,
+    updateThread,
+    removeDocument,
+    removeThread,
     resetIndex,
+    setMentionsConfig,
 };

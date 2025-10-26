@@ -1,4 +1,5 @@
 import { VueRenderer } from '@tiptap/vue-3';
+import { useDebounceFn } from '@vueuse/core';
 import MentionsPopover from './MentionsPopover.vue';
 
 interface MentionItem {
@@ -9,13 +10,17 @@ interface MentionItem {
 }
 
 export function createMentionSuggestion(
-    searchFn: (query: string) => Promise<MentionItem[]>
+    searchFn: (query: string) => Promise<MentionItem[]>,
+    debounceMs = 100
 ) {
+    // Create debounced search function
+    const debouncedSearch = useDebounceFn(searchFn, debounceMs);
+
     return {
         char: '@',
         items: async ({ query }: { query: string }) => {
-            const results = await searchFn(query);
-            return results;
+            const results = await debouncedSearch(query);
+            return results || [];
         },
         render: () => {
             let component: VueRenderer;

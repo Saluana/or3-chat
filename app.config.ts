@@ -30,4 +30,10 @@ export default defineAppConfig({
             },
         },
     },
+    mentions: {
+        enabled: true,
+        debounceMs: 100,
+        maxPerGroup: 5,
+        maxContextBytes: 50_000,
+    },
 });

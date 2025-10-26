@@ -5,6 +5,15 @@
 import { defineNuxtPlugin } from '#app';
 
 export default defineNuxtPlugin(async () => {
+    const appConfig = useAppConfig();
+    const mentionsConfig = (appConfig as any)?.mentions || {};
+
+    // Check feature flag (requirement 8.2)
+    if (mentionsConfig.enabled === false) {
+        console.log('[mentions] Plugin disabled via feature flag');
+        return;
+    }
+
     const hooks = useHooks();
     let indexInitialized = false;
     let mentionsModule: any = null;
@@ -47,8 +56,18 @@ export default defineNuxtPlugin(async () => {
                     upsertDocument,
                     updateDocument,
                     upsertThread,
+                    updateThread,
+                    removeDocument,
+                    removeThread,
                     resetIndex,
+                    setMentionsConfig,
                 } = mentionsIndexModule.default;
+
+                // Apply runtime configuration (requirement 8.1)
+                setMentionsConfig({
+                    maxPerGroup: mentionsConfig.maxPerGroup || 5,
+                    maxContextBytes: mentionsConfig.maxContextBytes || 50_000,
+                });
 
                 mentionsModule = {
                     Mention,
@@ -59,6 +78,9 @@ export default defineNuxtPlugin(async () => {
                     upsertDocument,
                     updateDocument,
                     upsertThread,
+                    updateThread,
+                    removeDocument,
+                    removeThread,
                     resetIndex,
                     createMentionSuggestion,
                 };
@@ -79,7 +101,10 @@ export default defineNuxtPlugin(async () => {
                     renderText({ node }) {
                         return `@${node.attrs.label || node.attrs.id}`;
                     },
-                    suggestion: createMentionSuggestion(searchMentions),
+                    suggestion: createMentionSuggestion(
+                        searchMentions,
+                        mentionsConfig.debounceMs || 120
+                    ),
                 });
 
                 // Initialize index once
@@ -180,27 +205,57 @@ export default defineNuxtPlugin(async () => {
                 );
 
                 // Wire DB hooks for incremental index updates
+                // Documents
                 hooks.on(
                     'db.documents.create:action:after',
-                    mentionsModule.upsertDocument,
+                    (payload: any) =>
+                        mentionsModule.upsertDocument(payload.entity),
                     { kind: 'action' }
                 );
 
                 hooks.on(
-                    'db.documents.upsert:action:after',
-                    mentionsModule.updateDocument,
+                    'db.documents.update:action:after',
+                    (payload: any) =>
+                        mentionsModule.updateDocument(payload.updated),
                     { kind: 'action' }
                 );
 
+                hooks.on(
+                    'db.documents.delete:action:soft:after',
+                    mentionsModule.removeDocument,
+                    { kind: 'action' }
+                );
+
+                hooks.on(
+                    'db.documents.delete:action:hard:after',
+                    mentionsModule.removeDocument,
+                    { kind: 'action' }
+                );
+
+                // Threads
                 hooks.on(
                     'db.threads.create:action:after',
-                    mentionsModule.upsertThread,
+                    (payload: any) =>
+                        mentionsModule.upsertThread(payload.entity),
                     { kind: 'action' }
                 );
 
                 hooks.on(
                     'db.threads.upsert:action:after',
-                    mentionsModule.upsertThread,
+                    (payload: any) =>
+                        mentionsModule.updateThread(payload.entity),
+                    { kind: 'action' }
+                );
+
+                hooks.on(
+                    'db.threads.delete:action:soft:after',
+                    mentionsModule.removeThread,
+                    { kind: 'action' }
+                );
+
+                hooks.on(
+                    'db.threads.delete:action:hard:after',
+                    mentionsModule.removeThread,
                     { kind: 'action' }
                 );
             } catch (error) {
