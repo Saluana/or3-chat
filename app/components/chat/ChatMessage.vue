@@ -770,18 +770,6 @@ async function runExtraAction(action: ChatMessageAction) {
 const streamMdClasses = [
     'w-full min-w-full prose prose-pre:font-mono prose-retro prose-pre:max-w-full prose-pre:overflow-x-auto',
     'prose-table:!w-auto prose-table:table-auto',
-    'sm:prose-table:!min-w-max',
-    /*
-    'max-[639px]:prose-table:min-w-[560px]',
-    'prose-table:break-normal prose-td:whitespace-nowrap prose-th:whitespace-nowrap',
-    "[&_[data-streamdown='table']_td:nth-child(2)]:whitespace-normal",
-    "[&_[data-streamdown='table']_td:nth-child(2)]:max-w-[32rem]",
-    "[&_div[data-streamdown='table-wrapper']]:block",
-    "[&_div[data-streamdown='table-wrapper']]:max-w-full",
-    "[&_div[data-streamdown='table-wrapper']]:overflow-x-auto",
-    "[&_div[data-streamdown='table-wrapper']]:w-full",
-    "[&_div[data-streamdown='table-wrapper']]:min-w-0",
-    "[&_div[data-streamdown='table-wrapper']]:shrink",*/
 ].join(' ');
 </script>
 
@@ -876,6 +864,10 @@ const streamMdClasses = [
     box-shadow: 2px 2px 0 var(--md-inverse-surface);
     margin-top: 32px !important;
     margin-bottom: 32px;
+    margin-right: 4px; /* Space for shadow */
+    overflow-x: auto;
+    width: fit-content;
+    max-width: calc(100% - 4px); /* Account for shadow space */
 }
 
 .message-body :deep([data-streamdown='table']) {
@@ -884,6 +876,8 @@ const streamMdClasses = [
     border-bottom: 2px solid var(--md-inverse-surface);
     border-left: none;
     border-right: none;
+    width: auto;
+    min-width: min-content;
 }
 
 .message-body :deep([data-streamdown='th']) {

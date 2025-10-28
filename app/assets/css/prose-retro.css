@@ -185,7 +185,9 @@ font-family: "VT323", monospace !important;
 }
 
 .prose-retro :deep(table) {
-    width: 100%;
+    width: auto;
+    min-width: min-content;
+    max-width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
 }
@@ -193,9 +195,10 @@ font-family: "VT323", monospace !important;
 .prose-retro :deep(th),
 .prose-retro :deep(td) {
     border: 2px solid var(--md-inverse-surface);
-    padding: 0.5rem;
+    padding: 0.5rem 0.75rem;
     text-align: left;
     font-size: 16px;
+    white-space: nowrap;
 }
 
 .prose-retro :deep(th) {
