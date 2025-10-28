@@ -193,16 +193,26 @@ const statusText = computed(() => {
 .prosemirror-host :deep(.ProseMirror) {
     outline: none;
     white-space: pre-wrap;
+    min-height: 100%;
 }
 .prosemirror-host :deep(.ProseMirror p) {
     margin: 0;
 }
+.prosemirror-host {
+    display: block;
+    min-height: 320px;
+    width: 100%;
+}
+.prosemirror-host :deep(p.is-editor-empty:first-child) {
+    position: relative;
+}
 .prosemirror-host :deep(p.is-editor-empty:first-child::before) {
     color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
     content: attr(data-placeholder);
-    float: left;
-    height: 0;
     pointer-events: none;
     opacity: 0.85;
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0;
 }
 </style>

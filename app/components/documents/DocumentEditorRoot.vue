@@ -102,17 +102,17 @@
                 class="w-full max-w-[820px] mx-auto p-8 pb-24"
                 @mousedown="handleContainerClick"
             >
-                <EditorContent
-                    :editor="editor as Editor"
+                <div
+                    ref="editorMountEl"
                     class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
-                ></EditorContent>
+                ></div>
             </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import {
     useDocumentState,
@@ -120,7 +120,7 @@ import {
     setDocumentTitle,
     loadDocument,
 } from '~/composables/documents/useDocumentsStore';
-import { Editor, EditorContent } from '@tiptap/vue-3';
+import { Editor } from '@tiptap/vue-3';
 import type { JSONContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
@@ -158,6 +158,7 @@ watch(
 );
 
 const editor = ref<Editor | null>(null);
+const editorMountEl = ref<HTMLElement | null>(null);
 
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
@@ -204,7 +205,17 @@ async function makeEditor() {
     );
 
     try {
+        let mountTarget = editorMountEl.value;
+        if (!mountTarget) {
+            await nextTick();
+            mountTarget = editorMountEl.value;
+        }
+        if (!mountTarget) {
+            throw new Error('Editor mount element missing');
+        }
+        mountTarget.innerHTML = '';
         editor.value = new Editor({
+            element: mountTarget,
             extensions: [
                 StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
                 Placeholder.configure({
@@ -347,20 +358,31 @@ const statusText = computed(() => {
 
 /* ProseMirror (TipTap) base styles */
 /* TipTap base */
+.prosemirror-host {
+    display: block;
+    min-height: 320px;
+    width: 100%;
+}
 .prosemirror-host :deep(.ProseMirror) {
     outline: none;
     white-space: pre-wrap;
+    min-height: 100%;
 }
-.prosemmirror-host :deep(.ProseMirror p) {
+.prosemirror-host :deep(.ProseMirror p) {
     margin: 0;
 }
 
 /* Placeholder (needs :deep due to scoped styles) */
+.prosemirror-host :deep(p.is-editor-empty:first-child) {
+    position: relative;
+}
 .prosemirror-host :deep(p.is-editor-empty:first-child::before) {
     /* Use design tokens; ensure sufficient contrast in dark mode */
     color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
     content: attr(data-placeholder);
-    float: left;
     pointer-events: none;
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0;
 }
 </style>
