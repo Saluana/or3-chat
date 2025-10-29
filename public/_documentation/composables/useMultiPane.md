@@ -101,13 +101,15 @@ const multiPane = useMultiPane(options?: UseMultiPaneOptions);
 ```ts
 interface PaneState {
     id: string;
-    mode: 'chat' | 'doc';
+    mode: 'chat' | 'doc' | string; // Custom pane apps can extend mode with their own identifiers
     threadId: string;
     documentId?: string;
     messages: MultiPaneMessage[];
     validating: boolean;
 }
 ```
+
+> **Note:** The `mode` field accepts `'chat'` and `'doc'` for built-in pane types. Custom pane apps can register with arbitrary mode identifiers; see the [Custom Pane Apps](../../custom-pane-apps.md) guide for details.
 
 ---
 

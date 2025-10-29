@@ -5,14 +5,14 @@ content_type: text/markdown
 
 1. Types & Plumbing
 
--   [ ] Introduce `PaneMode` type in `useMultiPane.ts` and update `PaneState` / exports; adjust `hook-types.ts`, public docs, and any unions referencing `'chat' | 'doc'`.
--   [ ] Verify existing tests/fixtures compile with widened type (update stubs where necessary).
+-   [x] Introduce `PaneMode` type in `useMultiPane.ts` and update `PaneState` / exports; adjust `hook-types.ts`, public docs, and any unions referencing `'chat' | 'doc'`.
+-   [x] Verify existing tests/fixtures compile with widened type (update stubs where necessary).
 
 2. Pane App Registry
 
--   [ ] Create `app/composables/core/usePaneApps.ts` with register/get/list helpers, global Map storage, and order-aware computed list.
--   [ ] Expose types (`PaneAppDef`, `RegisteredPaneApp`) via barrel `app/composables/core/index.ts` if one exists.
--   [ ] Add Vitest coverage for registry behaviour (register, overwrite, list sorting).
+-   [x] Create `app/composables/core/usePaneApps.ts` with register/get/list helpers, global Map storage, and order-aware computed list.
+-   [x] Expose types (`PaneAppDef`, `RegisteredPaneApp`) via barrel `app/composables/core/index.ts` if one exists.
+-   [x] Add Vitest coverage for registry behaviour (register, overwrite, list sorting).
 
 3. Multi-pane Enhancements
 

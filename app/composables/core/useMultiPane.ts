@@ -6,6 +6,9 @@ import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
 
+// Pane mode: allow built-in modes with full autocomplete, but accept arbitrary strings for custom pane apps
+export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });
+
 // Narrow pane message representation (always flattened string content)
 export type MultiPaneMessage = {
     role: 'user' | 'assistant' | 'system' | 'tool';
@@ -21,7 +24,7 @@ export type MultiPaneMessage = {
 
 export interface PaneState {
     id: string;
-    mode: 'chat' | 'doc';
+    mode: PaneMode;
     threadId: string; // '' indicates unsaved/new chat
     documentId?: string;
     messages: MultiPaneMessage[];
