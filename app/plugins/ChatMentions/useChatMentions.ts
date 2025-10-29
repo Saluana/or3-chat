@@ -43,8 +43,9 @@ export async function initMentionsIndex() {
     try {
         const { db } = await import('~/db');
 
+        // IMPORTANT: Do not include 'id' in the schema to avoid clashes with Orama's identity field.
+        // We'll still pass our own IDs to Orama (so hit.id === our id), but we won't index/store it as a document field.
         mentionsDb = await createDb({
-            id: 'string',
             title: 'string',
             source: 'string',
             snippet: 'string',
@@ -83,24 +84,84 @@ export async function initMentionsIndex() {
 }
 
 export async function searchMentions(query: string): Promise<MentionItem[]> {
-    if (!indexReady || !mentionsDb) return [];
+    if (!indexReady || !mentionsDb) {
+        return [];
+    }
 
     try {
         // Fetch a larger pool, then fairly cap per-group to ensure threads appear
         const results = await searchWithIndex(mentionsDb, query, 50);
-        const items: MentionItem[] = results.hits.map((hit: any) => ({
-            id: hit.document.id,
-            source: hit.document.source,
-            label: hit.document.title,
-            subtitle: hit.document.snippet || undefined,
-            score: hit.score,
-        }));
+
+        // Some Orama versions don't project all fields on hits' document.
+        // Use hit.id for identity and enrich missing fields via getByID when needed.
+        const { getByID } = await import('@orama/orama');
+
+        const enriched = await Promise.all(
+            results.hits.map(async (hit: any) => {
+                let id: string | null = hit?.id ?? hit?.document?.id ?? null;
+                let source: 'document' | 'chat' | null =
+                    hit?.document?.source ?? null;
+                let title: string = hit?.document?.title ?? '';
+                let subtitle: string | undefined =
+                    hit?.document?.snippet || undefined;
+
+                if (!id || !source || !title) {
+                    try {
+                        const stored = await getByID(mentionsDb, hit?.id ?? id);
+                        if (stored) {
+                            id = id ?? stored.id ?? hit?.id ?? null;
+                            source = (source ?? stored.source ?? null) as any;
+                            title = title || stored.title || '';
+                            subtitle =
+                                subtitle ?? (stored.snippet || undefined);
+                        }
+                    } catch {
+                        // Best effort enrichment; ignore failures
+                    }
+                }
+
+                // Fallback: if still missing id or source, try resolving via our Dexie DB by title
+                if ((!id || !source) && title) {
+                    try {
+                        const { db } = await import('~/db');
+                        const row = await db.posts
+                            .where('postType')
+                            .equals('doc')
+                            .and(
+                                (r: any) =>
+                                    !r.deleted && (r.title || '') === title
+                            )
+                            .first();
+                        if (row) {
+                            id = id ?? row.id;
+                            source = (source ?? 'document') as any;
+                        }
+                    } catch {}
+                }
+
+                return {
+                    id,
+                    source,
+                    label: title,
+                    subtitle,
+                    score: hit.score,
+                } as Partial<MentionItem> & { score?: number };
+            })
+        );
+
+        // Normalize and group
+        const items: MentionItem[] = enriched.filter(
+            (i): i is MentionItem =>
+                !!i.id && (i.source === 'document' || i.source === 'chat')
+        );
+
         const docs = items
             .filter((i) => i.source === 'document')
             .slice(0, MAX_PER_GROUP);
         const chats = items
             .filter((i) => i.source === 'chat')
             .slice(0, MAX_PER_GROUP);
+
         return [...docs, ...chats];
     } catch (error) {
         console.error('[mentions] Search failed:', error);
@@ -215,13 +276,35 @@ export async function resolveMention(
 export async function upsertDocument(doc: any) {
     if (!mentionsDb || !indexReady) return;
     try {
-        const { insert } = await import('@orama/orama');
-        await insert(mentionsDb, {
+        const { insert, update } = await import('@orama/orama');
+        const record = {
             id: doc.id,
             title: doc.title || 'Untitled',
             source: 'document',
             snippet: '',
-        });
+        };
+
+        try {
+            // Try insert first - note: Orama uses the id field from the record
+            await insert(mentionsDb, record);
+        } catch (insertError: any) {
+            // If insert fails (duplicate ID), try update
+            if (
+                insertError?.message?.includes('already exists') ||
+                insertError?.message?.includes('duplicate')
+            ) {
+                try {
+                    await update(mentionsDb, doc.id, record);
+                } catch (updateError) {
+                    console.warn(
+                        '[mentions] Failed to update document:',
+                        updateError
+                    );
+                }
+            } else {
+                throw insertError;
+            }
+        }
     } catch (e) {
         console.warn('[mentions] Failed to index document:', e);
     }
@@ -242,13 +325,34 @@ export async function updateDocument(doc: any) {
 export async function upsertThread(thread: any) {
     if (!mentionsDb || !indexReady) return;
     try {
-        const { insert } = await import('@orama/orama');
-        await insert(mentionsDb, {
+        const { insert, update } = await import('@orama/orama');
+        const record = {
             id: thread.id,
             title: thread.title || 'Untitled Chat',
             source: 'chat',
             snippet: '',
-        });
+        };
+        try {
+            // Try insert first
+            await insert(mentionsDb, record);
+        } catch (insertError: any) {
+            // If insert fails (duplicate ID), try update
+            if (
+                insertError?.message?.includes('already exists') ||
+                insertError?.message?.includes('duplicate')
+            ) {
+                try {
+                    await update(mentionsDb, thread.id, record);
+                } catch (updateError) {
+                    console.warn(
+                        '[mentions] Failed to update thread:',
+                        updateError
+                    );
+                }
+            } else {
+                throw insertError;
+            }
+        }
     } catch (e) {
         console.warn('[mentions] Failed to index thread:', e);
     }

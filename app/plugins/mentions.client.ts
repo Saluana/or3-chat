@@ -230,7 +230,6 @@ export default defineNuxtPlugin(async () => {
         },
         { kind: 'action' }
     );
-
     hooks.on(
         'db.documents.delete:action:soft:after',
         async (payload: any) => {

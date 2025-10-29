@@ -81,7 +81,12 @@ export async function searchWithIndex(
     limit = 100
 ): Promise<{ hits: any[] }> {
     const { search } = await importOrama();
-    const result = await search(db, { term, limit });
+    const result = await search(db, {
+        term,
+        limit,
+        // Return all document fields in search results, not just searchable ones
+        returning: ['id', 'title', 'source', 'snippet'],
+    });
     return result || { hits: [] };
 }
 
