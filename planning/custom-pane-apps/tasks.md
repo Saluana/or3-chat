@@ -16,9 +16,9 @@ content_type: text/markdown
 
 3. Multi-pane Enhancements
 
--   [ ] Extend `useMultiPane` return value with `newPaneForApp`; wire into global `__or3MultiPaneApi`.
--   [ ] Implement `newPaneForApp` flow: guard `canAddPane`, resolve def, call optional `createInitialRecord`, assign `documentId`, push pane, set active, emit existing hooks.
--   [ ] Add unit tests covering success, missing app, pane limit, and failed `createInitialRecord`.
+-   [x] Extend `useMultiPane` return value with `newPaneForApp`; wire into global `__or3MultiPaneApi`.
+-   [x] Implement `newPaneForApp` flow: guard `canAddPane`, resolve def, call optional `createInitialRecord`, assign `documentId`, push pane, set active, emit existing hooks.
+-   [x] Add unit tests covering success, missing app, pane limit, and failed `createInitialRecord`.
 
 4. PageShell Rendering
 
