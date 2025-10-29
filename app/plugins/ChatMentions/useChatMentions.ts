@@ -90,7 +90,9 @@ export async function searchMentions(query: string): Promise<MentionItem[]> {
 
     try {
         // Fetch a larger pool, then fairly cap per-group to ensure threads appear
-        const results = await searchWithIndex(mentionsDb, query, 50);
+        const results = await searchWithIndex(mentionsDb, query, 50, {
+            returning: ['id', 'title', 'source', 'snippet'],
+        });
 
         // Some Orama versions don't project all fields on hits' document.
         // Use hit.id for identity and enrich missing fields via getByID when needed.

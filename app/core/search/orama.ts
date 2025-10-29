@@ -78,15 +78,18 @@ export async function buildIndex<T = any>(
 export async function searchWithIndex(
     db: OramaInstance,
     term: string,
-    limit = 100
+    limit = 100,
+    options?: { returning?: string[]; where?: Record<string, any> }
 ): Promise<{ hits: any[] }> {
     const { search } = await importOrama();
-    const result = await search(db, {
-        term,
-        limit,
-        // Return all document fields in search results, not just searchable ones
-        returning: ['id', 'title', 'source', 'snippet'],
-    });
+    const query: any = { term, limit };
+    if (options?.returning && Array.isArray(options.returning)) {
+        query.returning = options.returning;
+    }
+    if (options?.where) {
+        query.where = options.where;
+    }
+    const result = await search(db, query);
     return result || { hits: [] };
 }
 
