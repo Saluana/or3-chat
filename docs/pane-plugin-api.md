@@ -19,6 +19,13 @@ interface PanePluginApi {
     setDocumentTitle(opts: SetDocumentTitleOptions): Result;
     getActivePaneData(): Result<ActivePaneInfo>;
     getPanes(): Result<{ panes: PaneDescriptor[]; activeIndex: number }>;
+    posts: {
+        create(opts: CreatePostOptions): Promise<Result<{ id: string }>>;
+        update(opts: UpdatePostOptions): Promise<Result>;
+        listByType(
+            opts: ListPostsByTypeOptions
+        ): Promise<Result<{ posts: PostData[] }>>;
+    };
 }
 ```
 
@@ -70,20 +77,24 @@ Check `ok` first.
 
 ## Error Codes
 
-| Code             | Meaning                                                          |
-| ---------------- | ---------------------------------------------------------------- |
-| `missing_source` | `source` field omitted                                           |
-| `missing_pane`   | No `paneId` provided                                             |
-| `invalid_text`   | Empty / whitespace chat message                                  |
-| `not_found`      | Pane ID not found in current layout                              |
-| `pane_not_chat`  | Tried to send chat message to a non-chat pane                    |
-| `pane_not_doc`   | Tried a doc operation on a non-doc pane                          |
-| `no_thread`      | Chat pane has no thread and `createIfMissing` not set            |
-| `no_thread_bind` | Internal inability to bind a new thread (multi-pane API missing) |
-| `append_failed`  | DB append failed (Dexie / storage error)                         |
-| `no_document`    | Doc operation requested but pane has no `documentId`             |
-| `no_active_pane` | Active pane not resolvable                                       |
-| `no_panes`       | Multi-pane system not ready / empty                              |
+| Code                 | Meaning                                                          |
+| -------------------- | ---------------------------------------------------------------- |
+| `missing_source`     | `source` field omitted                                           |
+| `missing_pane`       | No `paneId` provided                                             |
+| `invalid_text`       | Empty / whitespace chat message                                  |
+| `not_found`          | Pane ID not found in current layout                              |
+| `pane_not_chat`      | Tried to send chat message to a non-chat pane                    |
+| `pane_not_doc`       | Tried a doc operation on a non-doc pane                          |
+| `no_thread`          | Chat pane has no thread and `createIfMissing` not set            |
+| `no_thread_bind`     | Internal inability to bind a new thread (multi-pane API missing) |
+| `append_failed`      | DB append failed (Dexie / storage error)                         |
+| `no_document`        | Doc operation requested but pane has no `documentId`             |
+| `no_active_pane`     | Active pane not resolvable                                       |
+| `no_panes`           | Multi-pane system not ready / empty                              |
+| `invalid_post_type`  | Post type missing or invalid                                     |
+| `post_not_found`     | Post with specified ID not found                                 |
+| `post_create_failed` | Post creation failed (DB error)                                  |
+| `post_update_failed` | Post update failed (DB error)                                    |
 
 ---
 
@@ -158,9 +169,37 @@ api.setDocumentTitle({
 
 ### getActivePaneData
 
+Returns current active pane lightweight metadata. For a doc pane includes a deep-cloned `contentSnapshot` (shallow JSON clone of `record.content`). For custom panes includes `recordId` (alias of `documentId`).
+
+```js
+const r = api.getActivePaneData();
+if (r.ok) {
+    console.log('Active pane:', r.paneId, r.mode, r.threadId || r.documentId);
+    if (r.contentSnapshot) console.log('Doc snapshot', r.contentSnapshot);
+    if (r.recordId) console.log('Record ID (custom pane):', r.recordId);
+} else {
+    console.warn('No active pane', r.code);
+}
+```
+
+**Returns:**
+
+```ts
+interface ActivePaneInfo {
+    paneId: string;
+    mode: string; // 'chat' | 'doc' | custom mode
+    threadId?: string; // Present for chat panes
+    documentId?: string; // Present for doc panes
+    recordId?: string; // Alias for documentId, present for all panes with backing record
+    contentSnapshot?: unknown; // Doc content (only for doc panes)
+}
+```
+
+---
+
 ### getPanes
 
-Enumerate all current panes + active index.
+Enumerate all current panes + active index. Each pane descriptor includes `recordId` (alias of `documentId`) for custom pane apps.
 
 ```js
 const r = api.getPanes();
@@ -171,13 +210,197 @@ if (r.ok) {
             mode: p.mode,
             thread: p.threadId,
             doc: p.documentId,
+            record: p.recordId,
         }))
     );
     console.log('Active index', r.activeIndex);
 }
 ```
 
+**Returns:**
+
+```ts
+interface PaneDescriptor {
+    paneId: string;
+    mode: string; // 'chat' | 'doc' | custom mode
+    threadId?: string; // Present for chat panes
+    documentId?: string; // Present for doc panes
+    recordId?: string; // Alias for documentId (for custom pane apps)
+}
+```
+
 Use this to dynamically discover pane IDs instead of hardcoding.
+
+---
+
+## Posts API
+
+---
+
+The `posts` namespace provides CRUD helpers for custom pane apps that persist data in the `posts` table. Each post has a `postType` field that plugins can use to namespace their data.
+
+### posts.create
+
+Create a new post with specified type and data.
+
+```js
+const result = await api.posts.create({
+    postType: 'todo',
+    title: 'Buy groceries',
+    content: 'Milk, eggs, bread',
+    meta: { priority: 'high', tags: ['shopping'] },
+    source: 'ext:todo-app',
+});
+
+if (result.ok) {
+    console.log('Created post:', result.id);
+} else {
+    console.error('Failed:', result.message);
+}
+```
+
+**Options:**
+
+-   `postType` (required): String identifier for the type of post
+-   `title` (required): Non-empty title string
+-   `content` (optional): String content, defaults to empty string
+-   `meta` (optional): Any JSON-serializable data (object, array, string)
+-   `source` (required): Plugin identifier for auditing
+
+**Returns:** `{ ok: true, id: string }` or error result
+
+**Notes:**
+
+-   `meta` is automatically JSON-stringified for storage and parsed back when reading
+-   Empty titles are rejected with `invalid_text` error
+-   Fires `db.posts.create:action:before` and `db.posts.create:action:after` hooks
+
+### posts.update
+
+Update an existing post by ID with partial changes.
+
+```js
+const result = await api.posts.update({
+    id: 'post-123',
+    patch: {
+        title: 'Updated title',
+        meta: { completed: true },
+    },
+    source: 'ext:todo-app',
+});
+
+if (result.ok) {
+    console.log('Post updated successfully');
+}
+```
+
+**Options:**
+
+-   `id` (required): Post ID to update
+-   `patch` (required): Partial object with fields to update
+    -   `title` (optional): New title string
+    -   `content` (optional): New content string
+    -   `postType` (optional): Change post type
+    -   `meta` (optional): New meta data (replaces existing)
+-   `source` (required): Plugin identifier for auditing
+
+**Returns:** `{ ok: true }` or error result
+
+**Notes:**
+
+-   Only provided fields are updated; others remain unchanged
+-   `updated_at` timestamp is automatically set
+-   Returns `post_not_found` if post doesn't exist
+-   Fires `db.posts.upsert:action:before` and `db.posts.upsert:action:after` hooks
+
+### posts.listByType
+
+List all non-deleted posts of a given type, sorted by `updated_at` descending.
+
+```js
+const result = await api.posts.listByType({
+    postType: 'todo',
+    limit: 50, // optional
+});
+
+if (result.ok) {
+    result.posts.forEach((post) => {
+        console.log(post.id, post.title, post.meta);
+    });
+}
+```
+
+**Options:**
+
+-   `postType` (required): Filter by this post type
+-   `limit` (optional): Maximum number of results
+
+**Returns:** `{ ok: true, posts: PostData[] }` or error result
+
+**PostData shape:**
+
+```ts
+interface PostData {
+    id: string;
+    title: string;
+    content: string;
+    postType: string;
+    created_at: number; // Unix timestamp
+    updated_at: number; // Unix timestamp
+    deleted: boolean; // Always false (soft-deleted filtered out)
+    meta?: unknown; // Parsed from JSON string if present
+    file_hashes?: string | null;
+}
+```
+
+**Notes:**
+
+-   Soft-deleted posts (`deleted: true`) are automatically filtered out
+-   Results are sorted by `updated_at` descending (most recent first)
+-   `meta` field is automatically parsed from JSON string to object/array
+-   Non-JSON `meta` strings are returned as-is
+
+### Usage Example: Todo App
+
+```js
+const api = window.__or3PanePluginApi;
+
+// Create a new todo
+const created = await api.posts.create({
+    postType: 'todo',
+    title: 'Implement feature X',
+    content: 'Full description here',
+    meta: { status: 'pending', priority: 2 },
+    source: 'ext:todo',
+});
+
+if (!created.ok) {
+    console.error('Failed to create:', created.message);
+    return;
+}
+
+const todoId = created.id;
+
+// Update todo status
+await api.posts.update({
+    id: todoId,
+    patch: {
+        meta: { status: 'completed', completedAt: Date.now() },
+    },
+    source: 'ext:todo',
+});
+
+// List all todos
+const list = await api.posts.listByType({
+    postType: 'todo',
+    limit: 100,
+});
+
+if (list.ok) {
+    const pending = list.posts.filter((p) => p.meta?.status === 'pending');
+    console.log(`${pending.length} pending todos`);
+}
+```
 
 ---
 
@@ -278,11 +501,13 @@ If you do not see logs:
 
 ## Changelog
 
-| Date       | Change                                                      |
-| ---------- | ----------------------------------------------------------- |
-| 2025-09-06 | Initial public documentation                                |
-| 2025-09-07 | Added getPanes + exported type aliases                      |
-| 2025-09-07 | Integrated streaming bridge for user messages (sendMessage) |
+| Date       | Change                                                             |
+| ---------- | ------------------------------------------------------------------ |
+| 2025-09-06 | Initial public documentation                                       |
+| 2025-09-07 | Added getPanes + exported type aliases                             |
+| 2025-09-07 | Integrated streaming bridge for user messages (sendMessage)        |
+| 2025-10-29 | Added posts API (create/update/listByType) for custom pane apps    |
+| 2025-10-29 | Added recordId field to getActivePaneData and getPanes descriptors |
 
 ---
 

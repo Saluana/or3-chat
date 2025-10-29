@@ -44,6 +44,9 @@ export * from './core/useTokenizer';
 export * from './core/useMultiPane';
 export * from './core/usePaneApps';
 
+// Posts composables
+export * from './posts/usePostsList';
+
 // Project composables
 export * from './projects/useProjectTreeActions';
 export * from './projects/useProjectsCrud';

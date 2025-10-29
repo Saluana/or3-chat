@@ -186,30 +186,16 @@
                         </UTooltip>
                     </div>
 
-                    <template v-if="pane.mode === 'chat'">
-                        <ChatContainer
-                            class="flex-1 min-h-0"
-                            :message-history="pane.messages"
-                            :thread-id="pane.threadId"
-                            :pane-id="pane.id"
-                            @thread-selected="
-                                (id: string) => onInternalThreadCreated(id, i)
-                            "
-                        />
-                    </template>
-                    <template v-else-if="pane.mode === 'doc'">
-                        <LazyDocumentsDocumentEditor
-                            v-if="pane.documentId"
-                            :document-id="pane.documentId"
-                            class="flex-1 min-h-0"
-                        ></LazyDocumentsDocumentEditor>
-                        <div
-                            v-else
-                            class="flex-1 flex items-center justify-center text-sm opacity-70"
-                        >
-                            No document.
-                        </div>
-                    </template>
+                    <component
+                        :is="resolvePaneComponent(pane)"
+                        v-bind="buildPaneProps(pane, i)"
+                        class="flex-1 min-h-0"
+                        @thread-selected="
+                            pane.mode === 'chat'
+                                ? (id: string) => onInternalThreadCreated(id, i)
+                                : undefined
+                        "
+                    />
                 </div>
             </div>
         </div>
@@ -220,7 +206,8 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/core/useMultiPane';
+import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
+import { usePaneApps } from '~/composables/core/usePaneApps';
 import { db } from '~/db';
 import { useHookEffect } from '~/composables/core/useHookEffect';
 import {
@@ -235,6 +222,9 @@ import type {
     DocumentEntity,
 } from '~/core/hooks/hook-types';
 import { useMagicKeys, whenever } from '@vueuse/core';
+import { type Component, shallowRef, markRaw } from 'vue';
+import ChatContainer from '~/components/chat/ChatContainer.vue';
+import PaneUnknown from '~/components/PaneUnknown.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -317,6 +307,68 @@ whenever(shiftRight, () => {
 
     focusNext(activePaneIndex.value);
 });
+
+// ---------------- Pane Component Resolution ----------------
+const { getPaneApp } = usePaneApps();
+
+/**
+ * Resolve the component to render for a pane based on its mode.
+ * Returns the appropriate component for built-in modes or registered custom apps.
+ */
+function resolvePaneComponent(pane: PaneState): Component {
+    // Built-in: chat
+    if (pane.mode === 'chat') {
+        return ChatContainer;
+    }
+
+    // Built-in: doc (lazy loaded)
+    if (pane.mode === 'doc') {
+        return defineAsyncComponent(
+            () => import('~/components/documents/DocumentEditor.vue')
+        );
+    }
+
+    // Custom pane app
+    const app = getPaneApp(pane.mode);
+    if (app?.component) {
+        return app.component as Component;
+    }
+
+    // Fallback for unknown modes
+    return PaneUnknown;
+}
+
+/**
+ * Build props object for the pane component.
+ * Built-in panes get their specific props, custom panes get a generic contract.
+ */
+function buildPaneProps(
+    pane: PaneState,
+    paneIndex: number
+): Record<string, any> {
+    // Built-in: chat
+    if (pane.mode === 'chat') {
+        return {
+            messageHistory: pane.messages,
+            threadId: pane.threadId,
+            paneId: pane.id,
+        };
+    }
+
+    // Built-in: doc
+    if (pane.mode === 'doc') {
+        return pane.documentId ? { documentId: pane.documentId } : {};
+    }
+
+    // Custom pane app - provide generic contract
+    const app = getPaneApp(pane.mode);
+    return {
+        paneId: pane.id,
+        recordId: pane.documentId ?? null,
+        postType: app?.postType ?? pane.mode,
+        // Note: postApi would be added here in task 5
+    };
+}
 
 // Active thread convenience (first pane for sidebar highlight)
 const activeChatThreadId = computed(() =>
@@ -455,6 +507,10 @@ function updateUrl(force = false) {
     if (currentPath.startsWith('/openrouter-callback')) return;
     const pane = panes.value[activePaneIndex.value];
     if (!pane) return;
+
+    // Skip route sync for custom pane apps (only sync chat/doc modes)
+    if (pane.mode !== 'chat' && pane.mode !== 'doc') return;
+
     const base = pane.mode === 'doc' ? '/docs' : '/chat';
     const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
     const newPath = id ? `${base}/${id}` : base;

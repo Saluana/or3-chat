@@ -22,20 +22,20 @@ content_type: text/markdown
 
 4. PageShell Rendering
 
--   [ ] Replace template branching with resolver-based `<component>` call; ensure built-in panes receive identical props.
--   [ ] Implement fallback stub component for unknown modes; include light styling consistent with existing panes.
--   [ ] Update route-sync logic (if any) to skip custom modes gracefully.
+-   [x] Replace template branching with resolver-based `<component>` call; ensure built-in panes receive identical props.
+-   [x] Implement fallback stub component for unknown modes; include light styling consistent with existing panes.
+-   [x] Update route-sync logic (if any) to skip custom modes gracefully.
 
 5. Pane Plugin API
 
--   [ ] Extend `pane-plugin-api.client.ts` to expose `posts.create/update/listByType`, reusing `create.post` / `upsert.post` and parsing `meta`.
--   [ ] Include `recordId` for non-doc panes in `getActivePaneData` and `getPanes` descriptors (alias current `documentId`).
--   [ ] Document new namespace in `docs/pane-plugin-api.md` with short usage snippets.
+-   [x] Extend `pane-plugin-api.client.ts` to expose `posts.create/update/listByType`, reusing `create.post` / `upsert.post` and parsing `meta`.
+-   [x] Include `recordId` for non-doc panes in `getActivePaneData` and `getPanes` descriptors (alias current `documentId`).
+-   [x] Document new namespace in `docs/pane-plugin-api.md` with short usage snippets.
 
 6. Posts Utilities
 
--   [ ] Implement `usePostsList(postType, opts?)` composable with Dexie `liveQuery` subscription, soft-delete filtering, and updated-order sorting.
--   [ ] Write unit tests with mocked Dexie to ensure filtering/sorting correctness.
+-   [x] Implement `usePostsList(postType, opts?)` composable with Dexie `liveQuery` subscription, soft-delete filtering, and updated-order sorting.
+-   [x] Write unit tests with mocked Dexie to ensure filtering/sorting correctness.
 
 7. Sidebar DX Helper
 
