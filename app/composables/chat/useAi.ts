@@ -19,11 +19,7 @@ import type {
 import { ensureUiMessage, recordRawMessage } from '~/utils/chat/uiMessages';
 import { reportError, err } from '~/utils/errors';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
-import {
-    buildParts,
-    mergeFileHashes,
-    trimOrMessagesImages,
-} from '~/utils/chat/messages';
+import { buildParts, trimOrMessagesImages } from '~/utils/chat/messages';
 // getTextFromContent removed for UI messages; raw messages maintain original parts if needed
 import { openRouterStream } from '../../utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -43,8 +39,7 @@ import { useHooks } from '#imports';
 
 const DEFAULT_AI_MODEL = 'openai/gpt-oss-120b';
 
-// NOTE: Previous global tail map removed; we keep per-instance tail state so
-// each chat composable manages its own streaming tail.
+// Per-instance streaming tail state
 
 export function useChat(
     msgs: ChatMessage[] = [],
@@ -52,9 +47,7 @@ export function useChat(
     pendingPromptId?: string
 ) {
     // Messages and basic state
-    // UI-facing normalized messages
     const messages = ref<UiChatMessage[]>(msgs.map((m) => ensureUiMessage(m)));
-    // Raw legacy messages (content parts / strings) used for history & hooks
     const rawMessages = ref<ChatMessage[]>([...msgs]);
     const loading = ref(false);
     const abortController = ref<AbortController | null>(null);
@@ -71,7 +64,6 @@ export function useChat(
         }
     }
 
-    // Unified streaming accumulator only (legacy removed)
     const streamAcc = createStreamAccumulator();
     const streamState = streamAcc.state;
     const streamId = ref<string | undefined>(undefined);
@@ -96,11 +88,118 @@ export function useChat(
             : null;
     }
 
-    // Tail assistant UI message (not added to messages[] until next user send)
+    // Helpers to reduce duplication and improve clarity/perf
+    function getActivePaneContext() {
+        try {
+            const mpApi: any = (globalThis as any).__or3MultiPaneApi;
+            if (!mpApi?.panes?.value) return null;
+            const pane = mpApi.panes.value.find(
+                (p: any) =>
+                    p.mode === 'chat' && p.threadId === threadIdRef.value
+            );
+            if (!pane) return null;
+            const paneIndex = mpApi.panes.value.indexOf(pane);
+            return { mpApi, pane, paneIndex };
+        } catch {
+            return null;
+        }
+    }
+
+    function makeAssistantPersister(
+        assistantDbMsg: any,
+        assistantFileHashes: string[]
+    ) {
+        // Cache last serialized file hashes to avoid recomputing on each write
+        let lastSerialized: string | null =
+            (assistantDbMsg as any).file_hashes || null;
+        return async function persist({
+            content,
+            reasoning,
+            toolCalls,
+        }: {
+            content?: string;
+            reasoning?: string | null;
+            toolCalls?: any[] | null;
+        }) {
+            const serialized = assistantFileHashes.length
+                ? serializeFileHashes(assistantFileHashes)
+                : lastSerialized;
+            if (
+                serialized !== lastSerialized ||
+                content != null ||
+                reasoning != null ||
+                toolCalls != null
+            ) {
+                const payload = {
+                    ...assistantDbMsg,
+                    data: {
+                        ...((assistantDbMsg as any).data || {}),
+                        content:
+                            content ??
+                            (assistantDbMsg as any).data?.content ??
+                            '',
+                        reasoning_text:
+                            reasoning ??
+                            (assistantDbMsg as any).data?.reasoning_text ??
+                            null,
+                        ...(toolCalls
+                            ? {
+                                  tool_calls: JSON.parse(
+                                      JSON.stringify(toolCalls)
+                                  ),
+                              }
+                            : {}),
+                    },
+                    file_hashes: serialized,
+                    updated_at: nowSec(),
+                } as any;
+                await upsert.message(payload);
+                lastSerialized = serialized ?? null;
+            }
+            return lastSerialized;
+        };
+    }
+
+    function shouldKeepAssistantMessage(m: any) {
+        if (m.role !== 'assistant') return true;
+        const c = m.content;
+        if (c == null) return false;
+        if (typeof c === 'string') return c.trim().length > 0;
+        if (Array.isArray(c)) {
+            return c.some((p) => {
+                if (!p) return false;
+                if (typeof p === 'string') return p.trim().length > 0;
+                if (p.type === 'text' && typeof p.text === 'string')
+                    return p.text.trim().length > 0;
+                if (
+                    p.type === 'image' ||
+                    p.type === 'image_url' ||
+                    (p.mediaType && /image\//.test(p.mediaType))
+                )
+                    return true;
+                return false;
+            });
+        }
+        return true;
+    }
+
+    async function ensureHistorySynced() {
+        if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
+            const { ensureThreadHistoryLoaded } = await import(
+                '~/utils/chat/history'
+            );
+            await ensureThreadHistoryLoaded(
+                threadIdRef,
+                historyLoadedFor,
+                rawMessages
+            );
+            messages.value = rawMessages.value
+                .filter((m) => m.role !== 'tool')
+                .map((m) => ensureUiMessage(m));
+        }
+    }
+
     const tailAssistant = ref<UiChatMessage | null>(null);
-    // When retrying we may intentionally remove the previous tail assistant (finalized answer)
-    // and must ensure the next send() does NOT flush it into history. We keep the removed id
-    // here and skip a single automatic flush if it matches.
     let lastSuppressedAssistantId: string | null = null;
     function flushTailAssistant() {
         if (!tailAssistant.value) return;
@@ -121,13 +220,11 @@ export function useChat(
     ) {
         if (!apiKey.value) return;
 
-        // Apply outgoing filter BEFORE creating thread to allow early veto
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
             content
         );
 
-        // Early veto: if filter returns false, empty string, or whitespace-only, skip everything
         if (
             !outgoing ||
             typeof outgoing !== 'string' ||
@@ -142,19 +239,16 @@ export function useChat(
         }
 
         if (!threadIdRef.value) {
-            // Resolve system prompt: pending > default
             let effectivePromptId: string | null = pendingPromptId || null;
             if (!effectivePromptId) {
                 try {
                     effectivePromptId = await getDefaultPromptId();
                 } catch {}
             }
-            // Resolve default model based on settings (lastSelected vs fixed)
             try {
                 const { settings } = useAiSettings();
                 const set = (settings && (settings as any).value) || null;
                 const { catalog } = useModelStore();
-                // last selected model from localStorage (component writes under LAST_MODEL_KEY)
                 let lastSelected: string | null = null;
                 try {
                     if (typeof window !== 'undefined')
@@ -162,8 +256,6 @@ export function useChat(
                             'last_selected_model'
                         );
                 } catch {}
-                // We don't have a centralized catalog availability here; optimistically accept provided model
-                // and fallback to DEFAULT_AI_MODEL if not provided.
                 const chosen = resolveDefaultModel(
                     {
                         defaultModelMode:
@@ -179,11 +271,9 @@ export function useChat(
                         recommendedDefault: () => DEFAULT_AI_MODEL,
                     }
                 );
-                // If caller didn't specify a model or specified an empty string, apply chosen.id
                 if (!sendMessagesParams.model) {
                     (sendMessagesParams as any).model = chosen.id;
                 }
-                // Surface info toast when we didn't honor a fixed model (i.e., reason !== 'fixed')
                 if (
                     set?.defaultModelMode === 'fixed' &&
                     chosen.reason !== 'fixed'
@@ -232,15 +322,11 @@ export function useChat(
             } catch {}
         } // END create-new-thread block
 
-        // Promote previous tail assistant (completed prior answer) into history unless
-        // we intentionally suppressed it during a retry (duplicate would appear before
-        // the re-sent user message otherwise).
         if (
             tailAssistant.value &&
             lastSuppressedAssistantId &&
             tailAssistant.value.id === lastSuppressedAssistantId
         ) {
-            // Drop without flushing
             tailAssistant.value = null;
             lastSuppressedAssistantId = null;
         } else {
@@ -248,7 +334,6 @@ export function useChat(
             lastSuppressedAssistantId = null; // clear in normal path too
         }
 
-        // Prior assistant hashes for image carry-over
         const prevAssistantRaw = [...rawMessages.value]
             .reverse()
             .find((m) => m.role === 'assistant');
@@ -259,9 +344,7 @@ export function useChat(
             ? parseHashes(prevAssistantRaw.file_hashes)
             : [];
 
-        // Prepare accumulator
         streamAcc.reset();
-        // Normalize params
         let { files, model, file_hashes, extraTextParts, online } =
             sendMessagesParams as any;
         if (
@@ -302,27 +385,19 @@ export function useChat(
         rawMessages.value.push(rawUser);
         messages.value.push(ensureUiMessage(rawUser));
 
-        // Pane-scoped message sent hook (after append)
         try {
-            const mpApi: any = (globalThis as any).__or3MultiPaneApi;
-            if (mpApi && mpApi.panes?.value) {
-                const pane = mpApi.panes.value.find(
-                    (p: any) =>
-                        p.mode === 'chat' && p.threadId === threadIdRef.value
-                );
-                if (pane) {
-                    const paneIndex = mpApi.panes.value.indexOf(pane);
-                    hooks.doAction('ui.pane.msg:action:sent', {
-                        pane,
-                        paneIndex,
-                        message: {
-                            id: userDbMsg.id,
-                            threadId: threadIdRef.value,
-                            length: outgoing.length,
-                            fileHashes: userDbMsg.file_hashes || null,
-                        },
-                    });
-                }
+            const ctx = getActivePaneContext();
+            if (ctx) {
+                hooks.doAction('ui.pane.msg:action:sent', {
+                    pane: ctx.pane,
+                    paneIndex: ctx.paneIndex,
+                    message: {
+                        id: userDbMsg.id,
+                        threadId: threadIdRef.value,
+                        length: outgoing.length,
+                        fileHashes: userDbMsg.file_hashes || null,
+                    },
+                });
             }
         } catch {}
 
@@ -338,10 +413,8 @@ export function useChat(
             );
             currentModelId = modelId;
 
-            // Inject system message
             let messagesWithSystemRaw = [...rawMessages.value];
             const threadSystemText = await getSystemPromptContent();
-            // Compose with global master system prompt
             let finalSystem: string | null = null;
             try {
                 const { settings } = useAiSettings();
@@ -367,62 +440,17 @@ export function useChat(
                 messagesWithSystemRaw
             );
 
-            // --- Sanitization: remove prior empty assistant placeholder messages ---
-            // Root cause investigation: Anthropic (via OpenRouter) rejects a conversation
-            // when an earlier assistant message has empty content, emitting:
-            //   "messages.1: all messages must have non-empty content except for the optional final assistant message"
-            // This occurs if a previous streamed assistant was aborted / failed before
-            // any delta arrived, leaving an empty assistant entry in rawMessages.
-            // We exclude such empty assistant messages from the request payload.
+            // Remove prior empty assistant placeholder messages
             const sanitizedEffectiveMessages = (
                 effectiveMessages as any[]
-            ).filter((m) => {
-                if (m.role !== 'assistant') return true;
-                const c = m.content;
-                if (c == null) return false;
-                if (typeof c === 'string') return c.trim().length > 0;
-                if (Array.isArray(c)) {
-                    // Content parts: keep if any part has non-empty text OR is an image / media part
-                    return c.some((p) => {
-                        if (!p) return false;
-                        if (typeof p === 'string') return p.trim().length > 0;
-                        if (p.type === 'text' && typeof p.text === 'string')
-                            return p.text.trim().length > 0;
-                        // Treat image / media parts as content-bearing
-                        if (
-                            p.type === 'image' ||
-                            p.type === 'image_url' ||
-                            (p.mediaType && /image\//.test(p.mediaType))
-                        )
-                            return true;
-                        return false;
-                    });
-                }
-                return true; // unknown shape: keep defensively
-            });
+            ).filter(shouldKeepAssistantMessage);
 
             const { buildOpenRouterMessages } = await import(
                 '~/core/auth/openrouter-build'
             );
 
             // Load thread history if not already loaded
-            if (
-                threadIdRef.value &&
-                historyLoadedFor.value !== threadIdRef.value
-            ) {
-                const { ensureThreadHistoryLoaded } = await import(
-                    '~/utils/chat/history'
-                );
-                await ensureThreadHistoryLoaded(
-                    threadIdRef,
-                    historyLoadedFor,
-                    rawMessages
-                );
-                // Sync UI messages after loading history
-                messages.value = rawMessages.value
-                    .filter((m) => m.role !== 'tool')
-                    .map((m) => ensureUiMessage(m));
-            }
+            await ensureHistorySynced();
 
             const modelInputMessages: any[] = (
                 sanitizedEffectiveMessages as any[]
@@ -465,6 +493,12 @@ export function useChat(
                 stream_id: newStreamId,
                 data: { content: '', attachments: [], reasoning_text: null },
             });
+            // Track file hashes across loop iterations
+            const assistantFileHashes: string[] = [];
+            const persistAssistant = makeAssistantPersister(
+                assistantDbMsg,
+                assistantFileHashes
+            );
 
             await hooks.doAction('ai.chat.send:action:before', {
                 threadId: threadIdRef.value,
@@ -476,12 +510,8 @@ export function useChat(
                     : undefined,
             });
 
-            // Get enabled tool definitions from registry
             const toolRegistry = useToolRegistry();
             const enabledToolDefs = toolRegistry.getEnabledDefinitions();
-
-            // Track file hashes across loop iterations
-            const assistantFileHashes: string[] = [];
 
             // Track tool calls across all loop iterations (persists state)
             const activeToolCalls = new Map<string, any>();
@@ -489,7 +519,6 @@ export function useChat(
             aborted.value = false;
             abortController.value = new AbortController();
 
-            // Tool calling loop: restart streaming after each tool execution
             let continueLoop = true;
             let loopIteration = 0;
             const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
@@ -527,7 +556,6 @@ export function useChat(
                     reasoning_text: null,
                 } as any;
 
-                // Only record and push on first iteration
                 if (loopIteration === 1) {
                     recordRawMessage(rawAssistant);
                     rawMessages.value.push(rawAssistant);
@@ -564,26 +592,12 @@ export function useChat(
                                 activeToolCalls.values()
                             );
 
-                            // Persist current assistant state (function call request) with tool call info
-                            const textContent = current.text;
-                            await upsert.message({
-                                ...assistantDbMsg,
-                                data: {
-                                    ...((assistantDbMsg as any).data || {}),
-                                    content: textContent,
-                                    reasoning_text:
-                                        current.reasoning_text ?? null,
-                                    tool_calls: current.toolCalls
-                                        ? JSON.parse(
-                                              JSON.stringify(current.toolCalls)
-                                          )
-                                        : undefined,
-                                },
-                                file_hashes: assistantFileHashes.length
-                                    ? serializeFileHashes(assistantFileHashes)
-                                    : (assistantDbMsg as any).file_hashes,
-                                updated_at: nowSec(),
-                            } as any);
+                            // Persist current assistant state (function call request)
+                            await persistAssistant({
+                                content: current.text,
+                                reasoning: current.reasoning_text ?? null,
+                                toolCalls: current.toolCalls ?? undefined,
+                            });
 
                             pendingToolCalls.push(toolCall);
                             continue;
@@ -626,7 +640,6 @@ export function useChat(
                             current.text += delta;
                         } else if (ev.type === 'image') {
                             if (current.pending) current.pending = false;
-                            // Append markdown placeholder exactly once per image URL
                             const placeholder = `![generated image](${ev.url})`;
                             const already = current.text.includes(placeholder);
                             if (!already) {
@@ -651,22 +664,11 @@ export function useChat(
                                         );
                                         assistantFileHashes.push(meta.hash);
                                         const serialized =
-                                            serializeFileHashes(
-                                                assistantFileHashes
-                                            );
-                                        const updatedMsg = {
-                                            ...assistantDbMsg,
-                                            data: {
-                                                ...((assistantDbMsg as any)
-                                                    .data || {}),
-                                                reasoning_text:
+                                            await persistAssistant({
+                                                reasoning:
                                                     current.reasoning_text ??
                                                     null,
-                                            },
-                                            file_hashes: serialized,
-                                            updated_at: nowSec(),
-                                        } as any;
-                                        await upsert.message(updatedMsg);
+                                            });
                                         (current as any).file_hashes =
                                             serialized;
                                     } catch {}
@@ -676,24 +678,14 @@ export function useChat(
 
                         const now = Date.now();
                         if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
-                            const textContent = current.text;
-                            const updated = {
-                                ...assistantDbMsg,
-                                data: {
-                                    ...((assistantDbMsg as any).data || {}),
-                                    content: textContent,
-                                    reasoning_text:
-                                        current.reasoning_text ?? null,
-                                },
-                                file_hashes: assistantFileHashes.length
-                                    ? serializeFileHashes(assistantFileHashes)
-                                    : (assistantDbMsg as any).file_hashes,
-                                updated_at: nowSec(),
-                            } as any;
-                            await upsert.message(updated);
-                            if (assistantFileHashes.length)
+                            await persistAssistant({
+                                content: current.text,
+                                reasoning: current.reasoning_text ?? null,
+                            });
+                            if (assistantFileHashes.length) {
                                 (current as any).file_hashes =
                                     serializeFileHashes(assistantFileHashes);
+                            }
                             lastPersistAt = now;
                         }
                     }
@@ -793,10 +785,9 @@ export function useChat(
 
                         pendingToolCalls.length = 0;
                         continueLoop = true;
-                        continue; // restart outer while-loop with new tool outputs
+                        continue;
                     }
                 } catch (streamError) {
-                    // If stream error and we're in a tool loop, stop looping
                     if (loopIteration > 1) {
                         console.warn(
                             '[useChat] Stream error during tool loop',
@@ -808,41 +799,32 @@ export function useChat(
                 }
             }
 
-            // After loop completes (no more tool calls), finalize the assistant message
             const current = tailAssistant.value!;
             const fullText = current.text;
             const hookName = 'ui.chat.message:filter:incoming';
-            // Track error count before filter
             const errorsBefore = hooks._diagnostics?.errors?.[hookName] ?? 0;
             const incoming = (await hooks.applyFilters(
                 hookName,
                 fullText,
                 threadIdRef.value
             )) as string;
-            // Check if filter threw
             const errorsAfter = hooks._diagnostics?.errors?.[hookName] ?? 0;
             if (errorsAfter > errorsBefore) {
-                // Throw error to be caught by outer handler which will call finalize({ error })
                 throw new Error('Incoming filter threw an exception');
             }
             if (current.pending) current.pending = false;
             current.text = incoming;
+            await persistAssistant({
+                content: incoming as string,
+                reasoning: current.reasoning_text ?? null,
+                toolCalls: current.toolCalls ?? null,
+            });
             const finalized = {
                 ...assistantDbMsg,
-                data: {
-                    ...((assistantDbMsg as any).data || {}),
-                    content: incoming,
-                    reasoning_text: current.reasoning_text ?? null,
-                    tool_calls: current.toolCalls
-                        ? JSON.parse(JSON.stringify(current.toolCalls))
-                        : (assistantDbMsg as any).data?.tool_calls || null,
-                },
                 file_hashes: assistantFileHashes.length
                     ? serializeFileHashes(assistantFileHashes)
                     : (assistantDbMsg as any).file_hashes,
-                updated_at: nowSec(),
             } as any;
-            await upsert.message(finalized);
             await hooks.doAction('ai.chat.stream:action:complete', {
                 threadId: threadIdRef.value,
                 assistantId: assistantDbMsg.id,
@@ -851,30 +833,21 @@ export function useChat(
                 reasoningLength: (current.reasoning_text || '').length,
                 fileHashes: finalized.file_hashes || null,
             });
-            // Pane-scoped assistant received hook
             try {
-                const mpApi: any = (globalThis as any).__or3MultiPaneApi;
-                if (mpApi && mpApi.panes?.value) {
-                    const pane = mpApi.panes.value.find(
-                        (p: any) =>
-                            p.mode === 'chat' &&
-                            p.threadId === threadIdRef.value
-                    );
-                    if (pane) {
-                        const paneIndex = mpApi.panes.value.indexOf(pane);
-                        hooks.doAction('ui.pane.msg:action:received', {
-                            pane,
-                            paneIndex,
-                            message: {
-                                id: finalized.id,
-                                threadId: threadIdRef.value,
-                                length: (incoming as string).length,
-                                fileHashes: finalized.file_hashes || null,
-                                reasoningLength: (current.reasoning_text || '')
-                                    .length,
-                            },
-                        });
-                    }
+                const ctx = getActivePaneContext();
+                if (ctx) {
+                    hooks.doAction('ui.pane.msg:action:received', {
+                        pane: ctx.pane,
+                        paneIndex: ctx.paneIndex,
+                        message: {
+                            id: finalized.id,
+                            threadId: threadIdRef.value,
+                            length: (incoming as string).length,
+                            fileHashes: finalized.file_hashes || null,
+                            reasoningLength: (current.reasoning_text || '')
+                                .length,
+                        },
+                    });
                 }
             } catch {}
             const endedAt = Date.now();
@@ -901,7 +874,6 @@ export function useChat(
                     threadId: threadIdRef.value,
                     aborted: true,
                 });
-                // Clean up empty assistant message from DB after abort
                 if (tailAssistant.value?.id && !tailAssistant.value?.text) {
                     try {
                         await db.messages.delete(tailAssistant.value.id);
@@ -941,7 +913,6 @@ export function useChat(
                     error: e,
                     aborted: false,
                 });
-                // Drop empty failed assistant from memory AND database
                 if (!tailAssistant.value?.text && tailAssistant.value?.id) {
                     try {
                         await db.messages.delete(tailAssistant.value.id);
@@ -1141,7 +1112,6 @@ export function useChat(
         }
     }
 
-    /** Free all in-memory message arrays (UI + raw) and abort any active stream. */
     function clear() {
         try {
             if (abortController.value) {
@@ -1155,7 +1125,6 @@ export function useChat(
         } catch {}
         rawMessages.value = [];
         messages.value = [];
-        // Defensive: if any lingering refs still hold many messages, let GC reclaim by slicing to empty
         if (
             (rawMessages as any)._value &&
             (rawMessages as any)._value.length > 1000
