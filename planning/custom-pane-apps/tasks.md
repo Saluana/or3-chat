@@ -39,14 +39,14 @@ content_type: text/markdown
 
 7. Sidebar DX Helper
 
--   [ ] Add `registerSidebarPostList` helper that builds an inline Vue component (lazy) wrapping `usePostsList` and `registerSidebarSection`.
--   [ ] Ensure click handler opens panes via `newPaneForApp`; consider reusing active pane when same record already open.
--   [ ] Provide optional params (placement/order/icon/emptyState) and add documentation entry under sidebar plugin docs.
+-   [x] Add `registerSidebarPostList` helper that builds an inline Vue component (lazy) wrapping `usePostsList` and `registerSidebarSection`.
+-   [x] Ensure click handler opens panes via `newPaneForApp`; consider reusing active pane when same record already open.
+-   [x] Provide optional params (placement/order/icon/emptyState) and add documentation entry under sidebar plugin docs.
 
 8. Dev Story & Examples
 
--   [ ] Create an example plugin under `examples/` or update existing sample to register a simple pane app + sidebar list using new APIs.
--   [ ] Add short README snippet referencing required plugin boilerplate (Nuxt plugin auto-registration).
+-   [x] Create an example plugin under `examples/` or update existing sample to register a simple pane app + sidebar list using new APIs.
+-   [x] Add short README snippet referencing required plugin boilerplate (Nuxt plugin auto-registration).
 
 9. Tests & QA
 
