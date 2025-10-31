@@ -1,6 +1,30 @@
 <template>
     <resizable-sidebar-layout ref="layoutRef">
         <template #sidebar-expanded>
+            <SidenavSideBar
+                ref="sideNavExpandedRef"
+                :active-thread="activeChatThreadId"
+                @chat-selected="onSidebarSelected"
+                @new-chat="onNewChat"
+                @new-document="onNewDocument"
+                @document-selected="onDocumentSelected"
+                @toggle-dashboard="showDashboardModal = !showDashboardModal"
+            />
+        </template>
+        <template #sidebar-collapsed>
+            <lazy-sidebar-side-nav-content-collapsed
+                class="w-[60px]!"
+                :active-thread="activeChatThreadId"
+                @new-chat="onNewChat"
+                @new-document="onNewDocument"
+                @new-project="() => {}"
+                @chatSelected="onSidebarSelected"
+                @focusSearch="focusSidebarSearch"
+                @toggle-dashboard="showDashboardModal = !showDashboardModal"
+            />
+        </template>
+        <!--
+        <template #sidebar-expanded>
             <lazy-sidebar-side-nav-content
                 ref="sideNavExpandedRef"
                 :active-thread="activeChatThreadId"
@@ -20,6 +44,7 @@
                 @toggle-dashboard="showDashboardModal = !showDashboardModal"
             />
         </template>
+        -->
         <div class="flex-1 h-[100dvh] w-full relative">
             <div
                 id="top-nav"

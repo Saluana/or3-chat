@@ -1,5 +1,6 @@
 <template>
     <div
+        id="bottom-nav-root"
         class="hud bottomnav-root absolute bottom-0 w-full border-t-2 border-[var(--md-inverse-surface)]"
     >
         <!-- Removed previously added extra div; using pseudo-element for top pattern -->

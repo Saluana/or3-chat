@@ -69,7 +69,7 @@
                 </SidebarHeader>
 
                 <!-- Sidebar content -->
-                <div class="flex-1 overflow-auto">
+                <div class="flex-1 overflow-auto min-w-fit">
                     <div v-show="!collapsed" class="flex-1 h-full">
                         <slot name="sidebar-expanded">
                             <div class="p-3 space-y-2 text-sm opacity-80">
