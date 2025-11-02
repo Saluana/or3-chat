@@ -75,6 +75,24 @@
                     @click="emit('new-project')"
                 />
             </UTooltip>
+
+            <div v-if="orderedPages.length" class="pt-2 flex flex-col space-y-2">
+                <UTooltip
+                    v-for="page in orderedPages"
+                    :key="`sidebar-page-btn-${page.id}`"
+                    :delay-duration="0"
+                    :text="page.label"
+                >
+                    <UButton
+                        size="md"
+                        class="flex item-center justify-center"
+                        :icon="page.icon || 'pixelarticons:view-grid'"
+                        :aria-pressed="activePageId === page.id"
+                        :ui="pageButtonUi(activePageId === page.id)"
+                        @click="() => handlePageSelect(page.id)"
+                    />
+                </UTooltip>
+            </div>
         </div>
         <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
             <UButton
@@ -129,11 +147,35 @@ import {
     useSidebarFooterActions,
     type SidebarFooterActionEntry,
 } from '~/composables/sidebar/useSidebarSections';
+import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
+import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import SideBottomNav from './SideBottomNav.vue';
 
 const props = defineProps<{
     activeThread?: string;
 }>();
+
+const DEFAULT_PAGE_ID = 'sidebar-home';
+
+const { listSidebarPages } = useSidebarPages();
+const { activePageId, setActivePage } = useActiveSidebarPage();
+
+const orderedPages = computed(() => {
+    const pages = listSidebarPages.value.slice();
+    if (!pages.length) return [];
+
+    const sorted = pages.sort(
+        (a, b) => (a.order ?? 200) - (b.order ?? 200)
+    );
+
+    const homeIndex = sorted.findIndex((page) => page.id === DEFAULT_PAGE_ID);
+    const home = homeIndex >= 0 ? sorted.splice(homeIndex, 1)[0] : null;
+    const others = sorted;
+
+    if (!home) return others;
+    if (!others.length) return [];
+    return [home, ...others];
+});
 
 const activeDocumentIds = computed<string[]>(() => {
     const api: any = (globalThis as any).__or3MultiPaneApi;
@@ -175,6 +217,22 @@ async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
             error
         );
     }
+}
+
+async function handlePageSelect(pageId: string) {
+    if (pageId === activePageId.value) return;
+    const ok = await setActivePage(pageId);
+    if (!ok && import.meta.dev) {
+        console.warn(`[SidebarCollapsed] unable to activate sidebar page "${pageId}"`);
+    }
+}
+
+function pageButtonUi(isActive: boolean) {
+    const base = 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]';
+    if (!isActive) return { base };
+    return {
+        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
+    };
 }
 
 const emit = defineEmits<{

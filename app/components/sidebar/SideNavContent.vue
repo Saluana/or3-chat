@@ -3,7 +3,9 @@
         ref="containerRef"
         class="flex flex-col w-full h-full relative overflow-hidden"
     >
+        <!-- Header only shown for pages that use default header -->
         <SideNavHeader
+            v-if="activePageDef?.usesDefaultHeader"
             ref="sideNavHeaderRef"
             :sidebar-query="sidebarQuery"
             :active-sections="activeSections"
@@ -18,65 +20,40 @@
             @add-document-to-project="emit('add-document-to-project', $event)"
         />
 
-        <!-- Scrollable content area -->
-        <div
-            ref="scrollAreaRef"
-            class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
-        >
-            <component
-                v-for="section in resolvedSidebarSections.top"
-                :key="`sidebar-section-top-${section.id}`"
-                :is="section.component"
-            />
-            <component
-                v-for="section in resolvedSidebarSections.main"
-                :key="`sidebar-section-main-${section.id}`"
-                :is="section.component"
-            />
-            <SidebarVirtualList
-                class="flex-1"
-                :height="listHeight"
-                :projects="displayProjects"
-                :threads="displayThreads"
-                :documents="docs"
-                :display-documents="displayDocuments"
-                :expanded-projects="expandedProjects"
-                :active-sections="{
-                    projects: activeSections.projects,
-                    threads: activeSections.chats,
-                    docs: activeSections.docs,
-                }"
-                :active-thread="props.activeThread"
-                :active-document="activeDocumentIds[0]"
-                :active-threads="activeThreadIds"
-                :active-documents="activeDocumentIds"
-                @addChat="emit('add-chat-to-project', $event)"
-                @addDocument="emit('add-document-to-project', $event)"
-                @renameProject="emit('rename-project', $event)"
-                @deleteProject="emit('delete-project', $event)"
-                @renameEntry="emit('rename-entry', $event)"
-                @removeFromProject="emit('remove-from-project', $event)"
-                @chatSelected="emit('chat-selected-from-project', $event)"
-                @documentSelected="
-                    emit('document-selected-from-project', $event)
-                "
-                @selectThread="emit('select-thread', $event)"
-                @renameThread="emit('rename-thread', $event)"
-                @deleteThread="emit('delete-thread', $event)"
-                @addThreadToProject="emit('add-thread-to-project', $event)"
-                @selectDocument="emit('select-document', $event)"
-                @renameDocument="emit('rename-document', $event)"
-                @deleteDocument="emit('delete-document', $event)"
-                @addDocumentToProject="
-                    emit('add-document-to-project-from-list', $event)
-                "
-            />
-            <component
-                v-for="section in resolvedSidebarSections.bottom"
-                :key="`sidebar-section-bottom-${section.id}`"
-                :is="section.component"
-            />
+        <!-- Dynamic page content with suspense and keepalive -->
+        <div ref="scrollAreaRef" class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden">
+            <!-- Dynamic page renderer -->
+            <Suspense>
+                <template #default>
+                    <KeepAlive>
+                        <component
+                            v-if="activePageDef?.keepAlive"
+                            :is="activePageComponent"
+                            :key="`keepalive-${activePageId}`"
+                            v-bind="activePageProps"
+                            @vue:mounted="onPageMounted"
+                            @vue:unmounted="onPageUnmounted"
+                            v-on="forwardedEvents"
+                        />
+                        <component
+                            v-else
+                            :is="activePageComponent"
+                            :key="`no-keepalive-${activePageId}`"
+                            v-bind="activePageProps"
+                            @vue:mounted="onPageMounted"
+                            @vue:unmounted="onPageUnmounted"
+                            v-on="forwardedEvents"
+                        />
+                    </KeepAlive>
+                </template>
+                <template #fallback>
+                    <div class="flex-1 flex items-center justify-center">
+                        <div class="text-sm opacity-70">Loading page...</div>
+                    </div>
+                </template>
+            </Suspense>
         </div>
+        
         <div ref="bottomNavRef" class="shrink-0 flex flex-col gap-2">
             <div
                 v-if="sidebarFooterActions.length"
@@ -112,15 +89,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import type { Component } from 'vue';
-import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
+import { ref, computed, type Component } from 'vue';
+import { useMultiPane } from '~/composables/core/useMultiPane';
+import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import { 
+    provideSidebarEnvironment, 
+    createSidebarMultiPaneApi,
+    type SidebarEnvironment,
+    type SidebarPageControls,
+    provideSidebarPageControls
+} from '~/composables/sidebar/useSidebarEnvironment';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
+import SidebarHomePage from '~/components/sidebar/SidebarHomePage.vue';
 import type { Post, Project } from '~/db';
-import type {
-    ProjectEntry,
-    ProjectEntryKind,
-} from '~/utils/projects/normalizeProjectData';
+import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 
@@ -153,6 +135,9 @@ const props = defineProps<{
 const emit = defineEmits([
     'update:sidebar-query',
     'update:active-sections',
+    'update:expanded-projects',
+    'update:active-thread-ids',
+    'update:active-document-ids',
     'new-chat',
     'new-document',
     'open-rename',
@@ -177,6 +162,131 @@ const emit = defineEmits([
     'sidebar-footer-action',
 ]);
 
+// Get multi-pane API and create sidebar adapter
+const multiPaneApi = useMultiPane();
+const sidebarMultiPaneApi = createSidebarMultiPaneApi(multiPaneApi);
+
+// Get active page state
+const { activePageId, activePageDef, setActivePage, resetToDefault } = useActiveSidebarPage();
+
+const projectsRef = computed(() => props.projects);
+const threadsRef = computed(() => props.displayThreads);
+const documentsRef = computed(() => props.docs);
+const sectionsRef = computed(() => props.resolvedSidebarSections);
+const sidebarQueryRef = computed(() => props.sidebarQuery);
+const activeSectionsRef = computed(() => props.activeSections);
+const expandedProjectsRef = computed(() => props.expandedProjects);
+const activeThreadIdsRef = computed(() => props.activeThreadIds);
+const activeDocumentIdsRef = computed(() => props.activeDocumentIds);
+const footerActionsRef = computed(() => props.sidebarFooterActions);
+
+// Create environment for child components
+const environment: SidebarEnvironment = {
+    getMultiPane: () => sidebarMultiPaneApi,
+    getPanePluginApi: () => (globalThis as any).__or3PanePluginApi || null,
+    getProjects: () => projectsRef,
+    getThreads: () => threadsRef,
+    getDocuments: () => documentsRef,
+    getSections: () => sectionsRef,
+    getSidebarQuery: () => sidebarQueryRef,
+    setSidebarQuery: (value: string) => emit('update:sidebar-query', value),
+    getActiveSections: () => activeSectionsRef,
+    setActiveSections: (sections) => emit('update:active-sections', sections),
+    getExpandedProjects: () => expandedProjectsRef,
+    setExpandedProjects: (projects) => emit('update:expanded-projects', projects),
+    getActiveThreadIds: () => activeThreadIdsRef,
+    setActiveThreadIds: (ids) => emit('update:active-thread-ids', ids),
+    getActiveDocumentIds: () => activeDocumentIdsRef,
+    setActiveDocumentIds: (ids) => emit('update:active-document-ids', ids),
+    getSidebarFooterActions: () => footerActionsRef,
+};
+
+// Provide environment and page controls to child components
+provideSidebarEnvironment(environment);
+
+const injectedPageControls: SidebarPageControls = {
+    get pageId() {
+        return activePageId.value;
+    },
+    get isActive() {
+        return activePageDef.value?.id === activePageId.value;
+    },
+    setActivePage,
+    resetToDefault,
+};
+
+provideSidebarPageControls(injectedPageControls);
+
+// Computed properties for dynamic rendering
+const activePageComponent = computed(() => {
+    return activePageDef.value?.component || SidebarHomePage;
+});
+
+// Props to pass to active page
+const activePageProps = computed(() => {
+    const pageControlProps = {
+        pageId: activePageId.value,
+        isActive: true,
+        setActivePage,
+        resetToDefault,
+    };
+
+    // For the home page, pass all the existing props
+    if (activePageId.value === 'sidebar-home') {
+        return {
+            ...props,
+            ...pageControlProps,
+        };
+    }
+
+    // For other pages, pass minimal props + page controls
+    return {
+        ...pageControlProps,
+    };
+});
+
+// Forward events from active page to parent
+const forwardedEvents = computed(() => {
+    const events: Record<string, (payload: any) => void> = {};
+    
+    // Forward all existing events
+    const eventNames = [
+        'add-chat-to-project',
+        'add-document-to-project',
+        'rename-project',
+        'delete-project',
+        'rename-entry',
+        'remove-from-project',
+        'chat-selected-from-project',
+        'document-selected-from-project',
+        'select-thread',
+        'rename-thread',
+        'delete-thread',
+        'add-thread-to-project',
+        'select-document',
+        'rename-document',
+        'delete-document',
+        'add-document-to-project-from-list',
+        'sidebar-footer-action',
+    ];
+
+    eventNames.forEach(eventName => {
+        events[eventName] = (payload: any) => emit(eventName as any, payload);
+    });
+
+    return events;
+});
+
+// Page lifecycle handlers
+function onPageMounted(vnode: any) {
+    // Could be used for analytics or cleanup
+}
+
+function onPageUnmounted(vnode: any) {
+    // Could be used for cleanup
+}
+
+// Refs for parent component access
 const sideNavHeaderRef = ref<InstanceType<typeof SideNavHeader> | null>(null);
 const containerRef = ref<HTMLElement | null>(null);
 const scrollAreaRef = ref<HTMLElement | null>(null);
@@ -187,5 +297,9 @@ function focusSearchInput() {
     return sideNavHeaderRef.value?.focusSearchInput?.() ?? false;
 }
 
-defineExpose({ focusSearchInput });
+defineExpose({ 
+    focusSearchInput,
+    setActivePage,
+    resetToDefault,
+});
 </script>

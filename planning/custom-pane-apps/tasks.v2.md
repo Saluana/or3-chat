@@ -14,16 +14,16 @@
 
 3. Sidebar Environment Layer
 
-- [ ] Implement `provideSidebarEnvironment` in `SideNavContent.vue` and export `SidebarEnvironmentKey`.
-- [ ] Create helper composables (`useSidebarProjects`, `useSidebarThreads`, `useSidebarDocuments`, `useSidebarSections`, `useSidebarMultiPane`, `useSidebarPostsApi`, `useSidebarPageControls`) with focused unit tests.
-- [ ] Build the trimmed `SidebarMultiPaneApi` adapter that delegates to `useMultiPane` but exposes only `{ openApp, openChat, openDoc, closePane, panes, activePaneId }`.
+- [x] Implement `provideSidebarEnvironment` in `SideNavContent.vue` and export `SidebarEnvironmentKey`.
+- [x] Create helper composables (`useSidebarProjects`, `useSidebarThreads`, `useSidebarDocuments`, `useSidebarSections`, `useSidebarMultiPane`, `useSidebarPostsApi`, `useSidebarPageControls`) with focused unit tests.
+- [x] Build the trimmed `SidebarMultiPaneApi` adapter that delegates to `useMultiPane` but exposes only `{ openApp, openChat, openDoc, closePane, panes, activePaneId }`.
 
 4. `SideNavContent.vue` Refactor
 
-- [ ] Replace inline `SidebarVirtualList` usage with dynamic page renderer + suspense/keepAlive support.
-- [ ] Wire header visibility to `usesDefaultHeader`; forward events to active page via inline emits while the environment handles data access.
-- [ ] Emit analytics hook (`ui.sidebar.page:action:open`) when active page changes.
-- [ ] Add regression test or snapshot for default page render.
+- [x] Replace inline `SidebarVirtualList` usage with dynamic page renderer + suspense/keepAlive support.
+- [x] Wire header visibility to `usesDefaultHeader`; forward events to active page via inline emits while the environment handles data access.
+- [x] Emit analytics hook (`ui.sidebar.page:action:open`) when active page changes.
+- [x] Add regression test or snapshot for default page render.
 
 5. Collapsed Navigation
 

@@ -1,8 +1,17 @@
-import { provide, inject, reactive, computed, type Ref, type InjectionKey } from 'vue';
-import type { RegisteredSidebarPage } from './useSidebarPages';
+import { provide, inject, computed, type Ref, type InjectionKey } from 'vue';
+import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
+
+export interface SidebarMultiPaneApi {
+    openApp: (appId: string, opts?: { initialRecordId?: string }) => Promise<void>;
+    openChat: (threadId?: string) => Promise<void>;
+    openDoc: (documentId?: string) => Promise<void>;
+    closePane: (index: number) => Promise<void> | void;
+    panes: Ref<any[]>;
+    activePaneId: Ref<string | null>;
+}
 
 export interface SidebarEnvironment {
-    getMultiPane(): any; // Will be typed when we create the adapter
+    getMultiPane(): SidebarMultiPaneApi;
     getPanePluginApi(): any; // Will be typed when we create the adapter
     getProjects(): Ref<any[]>;
     getThreads(): Ref<any[]>;
@@ -30,6 +39,36 @@ export interface SidebarEnvironment {
 }
 
 export const SidebarEnvironmentKey: InjectionKey<SidebarEnvironment> = Symbol('SidebarEnvironment');
+export const SidebarPageControlsKey: InjectionKey<SidebarPageControls> = Symbol('SidebarPageControls');
+
+/**
+ * Create a trimmed SidebarMultiPaneApi adapter from the full UseMultiPaneApi
+ */
+export function createSidebarMultiPaneApi(multiPaneApi: UseMultiPaneApi): SidebarMultiPaneApi {
+    return {
+        openApp: multiPaneApi.newPaneForApp,
+        openChat: async (threadId?: string) => {
+            const index = multiPaneApi.panes.value.length;
+            multiPaneApi.addPane();
+            if (threadId) {
+                await multiPaneApi.setPaneThread(index, threadId);
+            }
+        },
+        openDoc: async (_documentId?: string) => {
+            // Current multi-pane API does not expose direct document helpers.
+            // Adding a new pane maintains parity with the legacy behaviour
+            // (actual document selection handled elsewhere).
+            multiPaneApi.addPane();
+        },
+        closePane: multiPaneApi.closePane,
+        panes: multiPaneApi.panes,
+        activePaneId: computed(() => {
+            const activeIndex = multiPaneApi.activePaneIndex.value;
+            const pane = multiPaneApi.panes.value[activeIndex];
+            return pane?.id || null;
+        }),
+    };
+}
 
 /**
  * Provide sidebar environment to child components
@@ -178,18 +217,21 @@ export function useSidebarPostsApi() {
 /**
  * Helper composable for page controls
  */
-export function useSidebarPageControls() {
-    const { pageId, isActive, setActivePage, resetToDefault } = defineProps<{
-        pageId: string;
-        isActive: boolean;
-        setActivePage: (id: string) => Promise<void>;
-        resetToDefault: () => Promise<void>;
-    }>();
-    
-    return {
-        pageId,
-        isActive,
-        setActivePage,
-        resetToDefault,
-    };
+export interface SidebarPageControls {
+    pageId: string;
+    isActive: boolean;
+    setActivePage: (id: string) => Promise<boolean>;
+    resetToDefault: () => Promise<boolean>;
+}
+
+export function useSidebarPageControls(): SidebarPageControls {
+    const controls = inject(SidebarPageControlsKey);
+    if (!controls) {
+        throw new Error('useSidebarPageControls must be used within a component that provides SidebarPageControls');
+    }
+    return controls;
+}
+
+export function provideSidebarPageControls(controls: SidebarPageControls) {
+    provide(SidebarPageControlsKey, controls);
 }

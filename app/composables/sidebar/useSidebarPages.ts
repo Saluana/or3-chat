@@ -62,20 +62,21 @@ const DEFAULT_ORDER = 200;
 /**
  * Normalize a sidebar page definition, wrapping components with defineAsyncComponent if needed
  */
-function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
-    // Check if component is already a Vue component (has render/setup or is object)
-    const isVueComponent =
-        typeof def.component === 'object' &&
-        (def.component.render ||
-            def.component.setup ||
-            def.component.template ||
-            def.component.name);
+function isAsyncComponentLoader(
+    component: SidebarPageDef['component']
+): component is () => Promise<any> {
+    if (typeof component !== 'function') return false;
+    const candidate = component as any;
+    // Functions produced by `defineComponent` expose `setup`/`render`.
+    // Raw async loaders (e.g. `() => import('./Comp.vue')`) have none of these hints.
+    return !candidate.setup && !candidate.render && !candidate.__asyncLoader;
+}
 
-    // Wrap any function that isn't already a Vue component with defineAsyncComponent
+function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
     const normalized: RegisteredSidebarPage = {
         ...def,
         component: markRaw(
-            typeof def.component === 'function' && !isVueComponent
+            isAsyncComponentLoader(def.component)
                 ? defineAsyncComponent({
                       loader: def.component as () => Promise<any>,
                       timeout: 15000,
