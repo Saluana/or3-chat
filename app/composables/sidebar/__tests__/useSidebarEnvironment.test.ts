@@ -202,13 +202,18 @@ describe('useSidebarEnvironment', () => {
         });
 
         it('openDoc creates new pane for document', async () => {
+            const panesArray = ref([] as any[]);
             const mockFullApi = {
-                panes: ref([]),
+                panes: panesArray,
                 activePaneIndex: ref(0),
                 newPaneForApp: vi.fn(),
-                addPane: vi.fn(),
+                addPane: vi.fn().mockImplementation(() => {
+                    // Simulate adding a pane to the array
+                    panesArray.value.push({ id: 'new-pane', mode: 'chat' });
+                }),
                 closePane: vi.fn(),
                 setPaneThread: vi.fn(),
+                updatePane: vi.fn(),
             };
 
             const sidebarApi = createSidebarMultiPaneApi(mockFullApi as any);
@@ -216,6 +221,35 @@ describe('useSidebarEnvironment', () => {
             await sidebarApi.openDoc('doc-123');
 
             expect(mockFullApi.addPane).toHaveBeenCalled();
+            expect(mockFullApi.updatePane).toHaveBeenCalledWith(0, {
+                mode: 'doc',
+                documentId: 'doc-123',
+                threadId: '',
+                messages: [],
+            });
+        });
+
+        it('openDoc handles pane limit blocking gracefully', async () => {
+            const mockFullApi = {
+                panes: ref([{ id: 'existing-pane', mode: 'chat' }]),
+                activePaneIndex: ref(0),
+                newPaneForApp: vi.fn(),
+                addPane: vi.fn().mockImplementation(() => {
+                    // Simulate pane limit - don't add new pane
+                    return;
+                }),
+                closePane: vi.fn(),
+                setPaneThread: vi.fn(),
+                updatePane: vi.fn(),
+            };
+
+            const sidebarApi = createSidebarMultiPaneApi(mockFullApi as any);
+
+            await sidebarApi.openDoc('doc-123');
+
+            expect(mockFullApi.addPane).toHaveBeenCalled();
+            // Should not call updatePane since pane wasn't added
+            expect(mockFullApi.updatePane).not.toHaveBeenCalled();
         });
 
         it('activePaneId returns correct pane ID', () => {

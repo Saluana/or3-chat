@@ -98,11 +98,17 @@ export function createSidebarMultiPaneApi(
                 await multiPaneApi.setPaneThread(index, threadId);
             }
         },
-        openDoc: async (_documentId?: string) => {
-            // Current multi-pane API does not expose direct document helpers.
-            // Adding a new pane maintains parity with the legacy behaviour
-            // (actual document selection handled elsewhere).
+        openDoc: async (documentId?: string) => {
+            const nextIndex = multiPaneApi.panes.value.length;
             multiPaneApi.addPane();
+            const pane = multiPaneApi.panes.value[nextIndex];
+            if (!pane) return;
+            multiPaneApi.updatePane(nextIndex, {
+                mode: 'doc',
+                documentId: documentId ?? undefined,
+                threadId: '',
+                messages: [],
+            });
         },
         closePane: multiPaneApi.closePane,
         setActive: multiPaneApi.setActive,
