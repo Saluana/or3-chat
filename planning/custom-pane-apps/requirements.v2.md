@@ -30,25 +30,30 @@ Define the functional scope for the V2 “sidebar pages” pivot. The goal is to
 4. **`SideNavContent.vue` refactor**
    - The component SHALL render only the active page inside the scroll area using `<Suspense>` and `<KeepAlive>` according to the page definition.
    - When `usesDefaultHeader` is true, the existing `SideNavHeader` MUST render and forward events exactly as before; otherwise the header SHALL be hidden to allow custom layouts.
-   - The default page MUST receive props/events matching the legacy interface so no upstream callers need to change.
+   - The shell SHALL pass only minimal props (`pageId`, `isActive`, `setActivePage`, `resetToDefault`) and MUST provide a shared environment via Vue provide/inject so pages can opt into data on demand.
    - When a page component emits `SidebarPageEmit` events, `SideNavContent` SHALL forward them to its parent to keep existing wiring intact.
 
-5. **Collapsed navigation integration**
+5. **Sidebar environment & helper composables**
+   - Implement `provideSidebarEnvironment()` that exposes lazily evaluated getters for the multi-pane adapter, posts API, projects, threads, documents, sections, and sidebar query.
+   - Publish helper composables (`useSidebarProjects`, `useSidebarThreads`, `useSidebarDocuments`, `useSidebarSections`, `useSidebarMultiPane`, `useSidebarPostsApi`, `useSidebarPageControls`) that consume the environment and return trimmed APIs suitable for unit testing.
+   - The multi-pane helper SHALL return an adapter limited to `{ openApp, openChat, openDoc, closePane, panes, activePaneId }`, avoiding direct dependence on the full global multi-pane object.
+
+6. **Collapsed navigation integration**
    - `SideNavContentCollapsed.vue` SHALL list registered sidebar pages under the built-in button stack.
    - Buttons MUST display the provided `icon`, set `aria-label` to `label`, and highlight the active page.
    - Clicking a button MUST invoke `setActivePage(page.id)` after validating `page.canActivate`.
    - Ordering SHALL respect `page.order` and remain stable between sessions.
 
-6. **Plugin developer utilities**
+7. **Plugin developer utilities**
    - Ship helper `registerSidebarPage()` (client-only) that wraps registry calls, ensures async component wrapping, and handles auto-unregister on HMR.
-   - Provide `useSidebarPageContext()` composable returning `{ page, setActivePage, resetToDefault, isCollapsed, multiPaneApi, panePluginApi }`.
+   - Provide composables for page authors (`useSidebarPageControls`, `useSidebarProjects`, `useSidebarMultiPane`, `useSidebarPostsApi`, etc.) instead of large prop contracts; they SHALL be mockable for unit tests.
    - Update plugin example + documentation to demonstrate registering a sidebar page alongside a pane app.
 
-7. **Lazy loading & fallbacks**
+8. **Lazy loading & fallbacks**
    - Non-default pages SHALL be lazy loaded on demand. Timeouts or import failures MUST surface a friendly fallback UI and leave the previous page active.
    - Unknown page ids or missing registry entries SHALL not break the UI; instead log a dev warning and revert to default.
 
-8. **Telemetry & accessibility**
+9. **Telemetry & accessibility**
    - Emit an analytics hook/event (`ui.sidebar.page:action:open`) after a page becomes active (parallels existing hook style).
    - Ensure new controls are keyboard accessible and pass basic a11y checks (focus ring, `aria-pressed`).
 
