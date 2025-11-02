@@ -6,6 +6,10 @@ import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
 
+type PaneAppsModule = typeof import('./usePaneApps');
+type PaneAppGetter = ReturnType<PaneAppsModule['usePaneApps']>['getPaneApp'];
+type RegisteredPaneApp = ReturnType<PaneAppGetter>;
+
 // Pane mode: allow built-in modes with full autocomplete, but accept arbitrary strings for custom pane apps
 export type PaneMode = 'chat' | 'doc' | (string & { _brand?: 'pane-mode' });
 
@@ -116,6 +120,32 @@ async function defaultLoadMessagesFor(id: string): Promise<MultiPaneMessage[]> {
     } catch (e) {
         return [];
     }
+}
+
+let cachedPaneAppGetter: PaneAppGetter | null = null;
+let paneAppGetterPromise: Promise<PaneAppGetter | null> | null = null;
+
+async function ensurePaneAppGetter(): Promise<PaneAppGetter | null> {
+    if (cachedPaneAppGetter) return cachedPaneAppGetter;
+    if (!paneAppGetterPromise) {
+        paneAppGetterPromise = import('./usePaneApps')
+            .then((mod: PaneAppsModule) => {
+                const getter = mod.usePaneApps().getPaneApp;
+                cachedPaneAppGetter = getter;
+                return getter;
+            })
+            .catch((err) => {
+                if (import.meta.dev) {
+                    console.error(
+                        '[multiPane] Failed to import usePaneApps',
+                        err
+                    );
+                }
+                paneAppGetterPromise = null;
+                return null;
+            });
+    }
+    return paneAppGetterPromise;
 }
 
 export function useMultiPane(
@@ -324,22 +354,11 @@ export function useMultiPane(
         }
 
         // Lazy import to avoid circular dependencies and keep server bundle clean
-        let getPaneApp: any;
-        try {
-            const { usePaneApps } = await import('./usePaneApps');
-            getPaneApp = usePaneApps().getPaneApp;
-        } catch (e) {
-            if (import.meta.dev) {
-                console.error(
-                    '[multiPane] newPaneForApp: Failed to import usePaneApps',
-                    e
-                );
-            }
-            return;
-        }
+        const getPaneApp = await ensurePaneAppGetter();
+        if (!getPaneApp) return;
 
         // Resolve pane app definition
-        const appDef = getPaneApp(appId);
+        const appDef = getPaneApp(appId) as RegisteredPaneApp | undefined;
         if (!appDef) {
             if (import.meta.dev) {
                 console.warn(
@@ -428,22 +447,11 @@ export function useMultiPane(
         }
 
         // Lazy import to avoid circular dependencies
-        let getPaneApp: any;
-        try {
-            const { usePaneApps } = await import('./usePaneApps');
-            getPaneApp = usePaneApps().getPaneApp;
-        } catch (e) {
-            if (import.meta.dev) {
-                console.error(
-                    '[multiPane] setPaneApp: Failed to import usePaneApps',
-                    e
-                );
-            }
-            return;
-        }
+        const getPaneApp = await ensurePaneAppGetter();
+        if (!getPaneApp) return;
 
         // Resolve pane app definition
-        const appDef = getPaneApp(appId);
+        const appDef = getPaneApp(appId) as RegisteredPaneApp | undefined;
         if (!appDef) {
             if (import.meta.dev) {
                 console.warn(

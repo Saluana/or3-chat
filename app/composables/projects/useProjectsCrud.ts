@@ -59,6 +59,54 @@ export function useProjectsCrud() {
         }
     }
 
+    async function createThreadEntry(
+        projectId: string
+    ): Promise<{ id: string; name: string } | null> {
+        const project = await db.projects.get(projectId);
+        if (!project) return null;
+        const now = nowSec();
+        const threadId = newId();
+        const title = 'New Thread';
+        await create.thread({
+            id: threadId,
+            title,
+            forked: false,
+            created_at: now,
+            updated_at: now,
+            deleted: false,
+            clock: 0,
+            meta: null,
+        } as any);
+        const entries = normalizeProjectData(project.data);
+        entries.push({ id: threadId, name: title, kind: 'chat' });
+        await upsert.project({
+            ...project,
+            data: entries,
+            updated_at: now,
+        });
+        return { id: threadId, name: title };
+    }
+
+    async function createDocumentEntry(
+        projectId: string
+    ): Promise<{ id: string; title: string } | null> {
+        const project = await db.projects.get(projectId);
+        if (!project) return null;
+        const doc = await create.document({ title: 'Untitled' });
+        const entries = normalizeProjectData(project.data);
+        entries.push({
+            id: doc.id,
+            name: doc.title || 'Untitled',
+            kind: 'doc',
+        });
+        await upsert.project({
+            ...project,
+            data: entries,
+            updated_at: nowSec(),
+        });
+        return { id: doc.id, title: doc.title };
+    }
+
     async function updateProjectEntries(
         id: string,
         entries: ProjectEntry[]
@@ -120,6 +168,8 @@ export function useProjectsCrud() {
         createProject,
         renameProject,
         deleteProject,
+        createThreadEntry,
+        createDocumentEntry,
         updateProjectEntries,
         syncProjectEntryTitle,
     };

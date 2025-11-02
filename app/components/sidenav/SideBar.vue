@@ -391,11 +391,10 @@ import {
     db,
     upsert,
     del as dbDel,
-    create,
     type Post,
     type Project,
 } from '~/db'; // Dexie + barrel helpers
-import { nowSec, newId } from '~/db/util';
+import { nowSec } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
@@ -412,6 +411,8 @@ const {
     createProject: createProjectCrud,
     renameProject: renameProjectCrud,
     deleteProject: deleteProjectCrud,
+    createThreadEntry,
+    createDocumentEntry,
     updateProjectEntries,
     syncProjectEntryTitle,
 } = useProjectsCrud();
@@ -908,28 +909,12 @@ async function onProjectDocumentSelected(id: string) {
 
 // ---- Project Tree Handlers ----
 async function handleAddChatToProject(projectId: string) {
-    // Create a new chat thread and insert into project data array
     try {
-        const now = nowSec();
-        const threadId = newId();
-        await create.thread({
-            id: threadId,
-            title: 'New Thread',
-            forked: false,
-            created_at: now,
-            updated_at: now,
-            deleted: false,
-            clock: 0,
-            meta: null,
-        } as any);
-        const project = await db.projects.get(projectId);
-        if (!project) return;
-        const entries = normalizeProjectData(project.data);
-        entries.push({ id: threadId, name: 'New Thread', kind: 'chat' });
-        await updateProjectEntries(projectId, entries);
+        const created = await createThreadEntry(projectId);
+        if (!created) return;
         if (!expandedProjects.value.includes(projectId))
             expandedProjects.value.push(projectId);
-        emit('chatSelected', threadId);
+        emit('chatSelected', created.id);
     } catch (e) {
         console.error('add chat to project failed', e);
     }
@@ -937,13 +922,8 @@ async function handleAddChatToProject(projectId: string) {
 
 async function handleAddDocumentToProject(projectId: string) {
     try {
-        // Create document (minimal title)
-        const doc = await create.document({ title: 'Untitled' });
-        const project = await db.projects.get(projectId);
-        if (!project) return;
-        const entries = normalizeProjectData(project.data);
-        entries.push({ id: doc.id, name: doc.title, kind: 'doc' });
-        await updateProjectEntries(projectId, entries);
+        const doc = await createDocumentEntry(projectId);
+        if (!doc) return;
         if (!expandedProjects.value.includes(projectId))
             expandedProjects.value.push(projectId);
         emit('documentSelected', doc.id);
