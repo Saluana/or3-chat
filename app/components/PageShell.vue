@@ -16,10 +16,9 @@
                 class="w-[60px]!"
                 :active-thread="activeChatThreadId"
                 @new-chat="onNewChat"
-                @new-document="onNewDocument"
-                @new-project="() => {}"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
+                @new-document="openCollapsedCreateDocumentModal"
+                @new-project="openCollapsedCreateProjectModal"
+                @focus-search="focusSidebarSearch"
                 @toggle-dashboard="showDashboardModal = !showDashboardModal"
             />
         </template>
@@ -29,9 +28,9 @@
                 ref="sideNavExpandedRef"
                 :active-thread="activeChatThreadId"
                 @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
+                @chat-selected="onSidebarSelected"
+                @new-document="onNewDocument"
+                @document-selected="onDocumentSelected"
                 @toggle-dashboard="showDashboardModal = !showDashboardModal"
             />
         </template>
@@ -39,8 +38,8 @@
             <lazy-sidebar-side-nav-content-collapsed
                 :active-thread="activeChatThreadId"
                 @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
+                @chat-selected="onSidebarSelected"
+                @focus-search="focusSidebarSearch"
                 @toggle-dashboard="showDashboardModal = !showDashboardModal"
             />
         </template>
@@ -247,7 +246,7 @@ import type {
     DocumentEntity,
 } from '~/core/hooks/hook-types';
 import { useMagicKeys, whenever } from '@vueuse/core';
-import { type Component, shallowRef, markRaw } from 'vue';
+import { type Component, shallowRef, markRaw, nextTick, watch } from 'vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 
@@ -697,13 +696,51 @@ const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
 function openMobileSidebar() {
     (layoutRef.value as any)?.openSidebar?.();
 }
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
 
-    setTimeout(() => {
-        sideNavExpandedRef.value?.focusSearchInput?.();
-    }, 300);
+async function ensureSidebarExpanded() {
+    const layout: any = layoutRef.value;
+    if (!layout) return;
+    layout?.expand?.();
+    const collapsedRef = layout?.isCollapsed;
+    if (!collapsedRef || typeof collapsedRef.value === 'undefined') return;
+    if (!collapsedRef.value) return;
+    await new Promise<void>((resolve) => {
+        const stop = watch(
+            () => collapsedRef.value,
+            (val) => {
+                if (!val) {
+                    stop();
+                    resolve();
+                }
+            }
+        );
+    });
+}
+
+async function focusSidebarSearch() {
+    await ensureSidebarExpanded();
+    await nextTick();
+    await delay(60);
+    for (let attempt = 0; attempt < 6; attempt++) {
+        const didFocus = !!sideNavExpandedRef.value?.focusSearchInput?.();
+        if (didFocus) return;
+        await delay(30);
+    }
+}
+
+function openCollapsedCreateDocumentModal() {
+    sideNavExpandedRef.value?.openCreateDocumentModal?.();
+}
+
+function openCollapsedCreateProjectModal() {
+    sideNavExpandedRef.value?.openCreateProject?.();
+}
+
+function delay(ms: number) {
+    return new Promise<void>((resolve) => {
+        if (ms <= 0) resolve();
+        else setTimeout(resolve, ms);
+    });
 }
 
 function closeSidebarIfMobile() {

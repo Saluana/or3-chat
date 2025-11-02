@@ -1,6 +1,6 @@
 <template>
     <div id="side-nav-content-header" class="px-2 pt-2 flex flex-col space-y-2">
-        <div class="flex w-full gap-2 mb-1">
+        <div class="flex w-full items-center gap-2 mb-1">
             <div class="relative flex-1 ml-[1px]">
                 <UInput
                     ref="searchInputWrapper"
@@ -31,11 +31,12 @@
                 <UButton
                     size="md"
                     color="neutral"
-                    variant="basic"
+                    variant="ghost"
                     icon="material-symbols:filter-alt-sharp"
                     :square="true"
                     aria-label="Filter sections"
-                    class="retro-btn backdrop-blur bg-[var(--md-surface)]/30"
+                    :ui="{ base: 'shadow-none!' }"
+                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[3px] border-3! bg-[var(--md-inverse-surface)]/5 backdrop-blur"
                 />
                 <template #content>
                     <div class="p-2 space-y-1 min-w-[140px]">
@@ -374,9 +375,12 @@ function focusSearchInput() {
     // Access underlying input inside UInput component
     const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
         searchInputWrapper.value) as HTMLElement | null;
-    if (!root) return;
-    const input = root.querySelector('input');
-    if (input) (input as HTMLInputElement).focus();
+    if (!root) return false;
+    const input = root.querySelector('input') as HTMLInputElement | null;
+    if (!input) return false;
+    input.focus();
+    input.select?.();
+    return true;
 }
 defineExpose({ focusSearchInput });
 

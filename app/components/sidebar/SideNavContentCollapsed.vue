@@ -3,53 +3,81 @@
         class="flex min-w-[55px] max-w-[55px] flex-col justify-between h-[calc(100dvh-151.27px)] relative"
     >
         <div class="px-1 pt-2 flex flex-col space-y-2">
-            <UButton
-                size="md"
-                class="flex item-center justify-center"
-                icon="pixelarticons:search"
-                :ui="{
-                    base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                    leadingIcon: 'w-5 h-5',
+            <div class="flex items-center justify-center w-full pr-0.5">
+                <UTooltip
+                    :delay-duration="0"
+                    :content="{
+                        side: 'right',
+                    }"
+                    text="New chat"
+                >
+                    <UButton
+                        size="md"
+                        class="flex item-center justify-center"
+                        icon="pixelarticons:message-plus"
+                        :ui="{
+                            base: 'w-[38.5px]! h-[39px]',
+                            leadingIcon: 'w-5 h-5',
+                        }"
+                        @click="emit('new-chat')"
+                    ></UButton>
+                </UTooltip>
+            </div>
+            <UTooltip
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
                 }"
-                @click="emit('focusSearch')"
-            ></UButton>
-            <UTooltip :delay-duration="0" text="New chat">
+                text="Search"
+            >
                 <UButton
-                    @click="onNewChat"
                     size="md"
                     class="flex item-center justify-center"
-                    icon="pixelarticons:message-plus"
+                    icon="pixelarticons:search"
                     :ui="{
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-black',
                         leadingIcon: 'w-5 h-5',
                     }"
+                    @click="emit('focus-search')"
                 ></UButton>
             </UTooltip>
-            <UTooltip :delay-duration="0" text="Create document">
+            <UTooltip
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
+                }"
+                text="Create document"
+            >
                 <UButton
-                    @click="emit('newDocument')"
                     class="flex item-center justify-center"
                     icon="pixelarticons:note-plus"
                     :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-black',
                         leadingIcon: 'w-5 h-5',
                     }"
+                    @click="emit('new-document')"
                 />
             </UTooltip>
-            <UTooltip :delay-duration="0" text="Create project">
+            <UTooltip
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
+                }"
+                text="Create project"
+            >
                 <UButton
-                    @click="emit('newProject')"
                     class="flex item-center justify-center"
                     icon="pixelarticons:folder-plus"
                     :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-black',
                         leadingIcon: 'w-5 h-5',
                     }"
+                    @click="emit('new-project')"
                 />
             </UTooltip>
         </div>
         <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
             <UButton
-                @click="emit('toggleDashboard')"
                 size="md"
                 class="flex item-center justify-center"
                 icon="pixelarticons:dashboard"
@@ -57,6 +85,7 @@
                     base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
                     leadingIcon: 'w-5 h-5',
                 }"
+                @click="emit('toggle-dashboard')"
             ></UButton>
         </div>
         <div
@@ -95,7 +124,10 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useSidebarFooterActions } from '~/composables/sidebar/useSidebarSections';
+import {
+    useSidebarFooterActions,
+    type SidebarFooterActionEntry,
+} from '~/composables/sidebar/useSidebarSections';
 
 const props = defineProps<{
     activeThread?: string;
@@ -143,16 +175,11 @@ async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
     }
 }
 
-const emit = defineEmits([
-    'chatSelected',
-    'newChat',
-    'newDocument',
-    'newProject',
-    'focusSearch',
-    'toggleDashboard',
-]);
-
-function onNewChat() {
-    emit('newChat');
-}
+const emit = defineEmits<{
+    (e: 'new-chat'): void;
+    (e: 'new-document'): void;
+    (e: 'new-project'): void;
+    (e: 'focus-search'): void;
+    (e: 'toggle-dashboard'): void;
+}>();
 </script>

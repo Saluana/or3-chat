@@ -185,7 +185,7 @@ const bottomNavRef = ref<HTMLElement | null>(null);
 
 // Expose focusSearchInput to parent components
 function focusSearchInput() {
-    sideNavHeaderRef.value?.focusSearchInput?.();
+    return sideNavHeaderRef.value?.focusSearchInput?.() ?? false;
 }
 
 defineExpose({ focusSearchInput });

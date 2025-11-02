@@ -10,6 +10,7 @@
             @toggle-dashboard="emit('toggleDashboard')"
         />
         <SidebarSideNavContent
+            ref="sideNavContentRef"
             class="w-full"
             :active-thread="props.activeThread"
             :items="items"
@@ -385,7 +386,6 @@ import {
 import type { Component } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
-import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import { liveQuery } from 'dexie';
 import {
     db,
@@ -427,7 +427,7 @@ const props = defineProps<{
     activeThread?: string;
 }>();
 
-const sideNavHeaderRef = ref<InstanceType<typeof SideNavHeader> | null>(null);
+const sideNavContentRef = ref<any | null>(null);
 const items = ref<any[]>([]);
 const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
@@ -1238,8 +1238,12 @@ async function submitCreateDocument() {
 
 // Expose focusSearchInput to parent components
 function focusSearchInput() {
-    sideNavHeaderRef.value?.focusSearchInput?.();
+    return sideNavContentRef.value?.focusSearchInput?.() ?? false;
 }
 
-defineExpose({ focusSearchInput });
+defineExpose({
+    focusSearchInput,
+    openCreateDocumentModal,
+    openCreateProject,
+});
 </script>
