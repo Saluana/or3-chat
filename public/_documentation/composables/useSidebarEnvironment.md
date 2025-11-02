@@ -166,14 +166,14 @@ When you call `useSidebarEnvironment()`, you get an object with:
 | **Data Accessors**              |                                    |                                |
 | `getProjects()`                 | `() => Ref<Project[]>`             | Reactive projects list         |
 | `getThreads()`                  | `() => Ref<Thread[]>`              | Reactive threads list          |
-| `getDocuments()`                | `() => Ref<Document[]>`            | Reactive documents list        |
-| `getSections()`                 | `() => Ref<SidebarSections>`       | Sidebar section components     |
-| `getSidebarFooterActions()`     | `() => Ref<FooterAction[]>`        | Footer action buttons          |
+| `getDocuments()`                | `() => Ref<Post[]>`                | Reactive documents list        |
+| `getSections()`                 | `() => ComputedRef<SidebarSectionGroups>` | Sidebar section components     |
+| `getSidebarFooterActions()`     | `() => ComputedRef<SidebarFooterActionEntry[]>` | Footer action buttons          |
 | **State Control**               |                                    |                                |
 | `getSidebarQuery()`             | `() => Ref<string>`                | Current search query           |
 | `setSidebarQuery(value)`        | `(value: string) => void`          | Update search query            |
-| `getActiveSections()`           | `() => Ref<SectionState>`          | Visible sections               |
-| `setActiveSections(sections)`   | `(sections) => void`               | Update visible sections        |
+| `getActiveSections()`           | `() => Ref<{projects: boolean, chats: boolean, docs: boolean}>` | Visible sections               |
+| `setActiveSections(sections)`   | `(sections: {projects: boolean, chats: boolean, docs: boolean}) => void` | Update visible sections        |
 | `getExpandedProjects()`         | `() => Ref<string[]>`              | Expanded project IDs           |
 | `setExpandedProjects(projects)` | `(projects: string[]) => void`     | Update expanded projects       |
 | `getActiveThreadIds()`          | `() => Ref<string[]>`              | Active thread selections       |
@@ -182,9 +182,9 @@ When you call `useSidebarEnvironment()`, you get an object with:
 | `setActiveDocumentIds(ids)`     | `(ids: string[]) => void`          | Update active documents        |
 | **API Access**                  |                                    |                                |
 | `getMultiPane()`                | `() => SidebarMultiPaneApi`        | Multi-pane workspace API       |
-| `getPanePluginApi()`            | `() => any`                        | Pane plugin API                |
+| `getPanePluginApi()`            | `() => PanePluginApi | null`       | Pane plugin API                |
 | **Page Controls**               |                                    |                                |
-| `pageId`                        | `string`                           | Current page identifier        |
+| `pageId`                        | `string | null`                     | Current page identifier        |
 | `isActive`                      | `boolean`                          | Whether current page is active |
 | `setActivePage(id)`             | `(id: string) => Promise<boolean>` | Switch to different page       |
 | `resetToDefault()`              | `() => Promise<boolean>`           | Reset to default page          |
@@ -198,11 +198,11 @@ When you call `useSidebarEnvironment()`, you get an object with:
 ```ts
 interface SidebarEnvironment {
     // Data accessors (return reactive refs)
-    getProjects(): Ref<any[]>;
-    getThreads(): Ref<any[]>;
-    getDocuments(): Ref<any[]>;
-    getSections(): Ref<any>;
-    getSidebarFooterActions(): Ref<any[]>;
+    getProjects(): Ref<Project[]>;
+    getThreads(): Ref<Thread[]>;
+    getDocuments(): Ref<Post[]>;
+    getSections(): ComputedRef<SidebarSectionGroups>;
+    getSidebarFooterActions(): ComputedRef<SidebarFooterActionEntry[]>;
 
     // UI state control
     getSidebarQuery(): Ref<string>;
@@ -226,11 +226,11 @@ interface SidebarEnvironment {
 
     // API access
     getMultiPane(): SidebarMultiPaneApi;
-    getPanePluginApi(): any;
+    getPanePluginApi(): PanePluginApi | null;
 }
 
 interface SidebarPageControls {
-    pageId: string;
+    pageId: string | null;
     isActive: boolean;
     setActivePage: (id: string) => Promise<boolean>;
     resetToDefault: () => Promise<boolean>;
@@ -250,9 +250,9 @@ interface SidebarMultiPaneApi {
     openDoc: (documentId?: string) => Promise<void>;
     closePane: (index: number) => Promise<void> | void;
     setActive: (index: number) => void;
-    panes: Ref<any[]>;
+    panes: Ref<PaneState[]>;
     activePaneId: Ref<string | null>;
-    updatePane: (index: number, updates: Partial<any>) => void;
+    updatePane: (index: number, updates: Partial<PaneState>) => void;
 }
 ```
 
@@ -263,7 +263,7 @@ interface SidebarMultiPaneApi {
 -   **`switchToApp(appId, opts?)`**: Switches the active pane to the app (no new pane created)
     -   `opts.recordId` - Optional record ID to open with the app
 -   **`openChat(threadId?)`**: Opens or creates a chat thread
--   **`openDoc(documentId?)`**: Opens or creates a document
+-   **`openDoc(documentId?)`**: Opens a document pane in doc mode with optional document ID
 -   **`closePane(index)`**: Closes the pane at the given index
 -   **`setActive(index)`**: Makes the pane at the given index active
 -   **`updatePane(index, updates)`**: Updates pane properties without replacing it
@@ -573,11 +573,11 @@ function useSidebarEnvironment(): SidebarEnvironment;
 
 interface SidebarEnvironment {
     getMultiPane(): SidebarMultiPaneApi;
-    getPanePluginApi(): any;
-    getProjects(): Ref<any[]>;
-    getThreads(): Ref<any[]>;
-    getDocuments(): Ref<any[]>;
-    getSections(): Ref<any>;
+    getPanePluginApi(): PanePluginApi | null;
+    getProjects(): Ref<Project[]>;
+    getThreads(): Ref<Thread[]>;
+    getDocuments(): Ref<Post[]>;
+    getSections(): ComputedRef<SidebarSectionGroups>;
     getSidebarQuery(): Ref<string>;
     setSidebarQuery(value: string): void;
     getActiveSections(): Ref<{
@@ -596,13 +596,13 @@ interface SidebarEnvironment {
     setActiveThreadIds(ids: string[]): void;
     getActiveDocumentIds(): Ref<string[]>;
     setActiveDocumentIds(ids: string[]): void;
-    getSidebarFooterActions(): Ref<any[]>;
+    getSidebarFooterActions(): ComputedRef<SidebarFooterActionEntry[]>;
 }
 
 function useSidebarPageControls(): SidebarPageControls;
 
 interface SidebarPageControls {
-    pageId: string;
+    pageId: string | null;
     isActive: boolean;
     setActivePage: (id: string) => Promise<boolean>;
     resetToDefault: () => Promise<boolean>;
