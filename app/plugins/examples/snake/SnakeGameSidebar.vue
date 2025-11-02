@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { useSidebarMultiPane, useSidebarPostsApi } from '~/composables/sidebar';
+import { useSidebarMultiPane, useSidebarPostsApi } from '~/composables/sidebar/useSidebarEnvironment';
 import { usePostsList } from '~/composables/posts/usePostsList';
 
 interface SnakeGameMeta {

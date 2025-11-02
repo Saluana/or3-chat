@@ -1,5 +1,5 @@
 // app/plugins/snake-game.client.ts
-import { registerSidebarPage } from '~/composables/sidebar';
+import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import SnakeGamePane from './snake/SnakeGamePane.vue';
 import SnakeGameSidebar from './snake/SnakeGameSidebar.vue';

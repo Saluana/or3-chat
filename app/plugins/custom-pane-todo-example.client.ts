@@ -18,9 +18,9 @@
 import { defineComponent, h, ref, computed, onMounted, watch } from 'vue';
 import {
     useSidebarMultiPane,
-    useSidebarPageControls,
     useSidebarPostsApi,
-} from '~/composables/sidebar';
+} from '~/composables/sidebar/useSidebarEnvironment';
+import { useSidebarPageControls } from '~/composables/sidebar/useSidebarPageControls';
 import { usePostsList } from '~/composables/posts/usePostsList';
 
 export default defineNuxtPlugin(async () => {

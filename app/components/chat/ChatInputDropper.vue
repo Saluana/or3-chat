@@ -58,7 +58,7 @@
 
                     <!-- Settings Button (stub) -->
                     <div class="relative shrink-0">
-                        <UPopover>
+                        <UPopover id="chat-input-settings-popover">
                             <UButton
                                 label="Open"
                                 :square="true"

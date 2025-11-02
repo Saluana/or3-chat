@@ -205,7 +205,7 @@ export default defineNuxtConfig({
             '~/composables',
             // Scan all composables within subdirectories
             '~/composables/**',
-            // Scan core directory for auth and other utilities
+            // Core directory for auth and other utilities
             '~/core',
             '~/core/**',
         ],

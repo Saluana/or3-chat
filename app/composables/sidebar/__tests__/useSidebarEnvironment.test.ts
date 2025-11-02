@@ -6,18 +6,20 @@ import {
     useSidebarProjects,
     useSidebarThreads,
     useSidebarDocuments,
-    useSidebarSections,
     useSidebarQuery,
     useActiveSections,
     useExpandedProjects,
     useActiveThreadIds,
     useActiveDocumentIds,
-    useSidebarFooterActions,
     useSidebarMultiPane,
     useSidebarPostsApi,
     type SidebarEnvironment,
     createSidebarMultiPaneApi
 } from '../useSidebarEnvironment';
+import {
+    useSidebarSections,
+    useSidebarFooterActions
+} from '../useSidebarSections';
 
 // Mock dependencies
 vi.mock('~/composables/core/useMultiPane', () => ({
@@ -160,7 +162,6 @@ describe('useSidebarEnvironment', () => {
 
             // Should not include the excluded methods
             expect('canAddPane' in sidebarApi).toBe(false);
-            expect('setActive' in sidebarApi).toBe(false);
         });
 
         it('openChat creates new pane and sets thread', async () => {

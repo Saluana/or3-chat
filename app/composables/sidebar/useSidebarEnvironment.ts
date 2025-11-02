@@ -1,6 +1,21 @@
 import { provide, inject, computed, type Ref, type InjectionKey } from 'vue';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 
+export interface SidebarPageControls {
+    pageId: string;
+    isActive: boolean;
+    setActivePage: (id: string) => Promise<boolean>;
+    resetToDefault: () => Promise<boolean>;
+}
+
+export const SidebarPageControlsKey: InjectionKey<SidebarPageControls> = Symbol(
+    'SidebarPageControls'
+);
+
+export function provideSidebarPageControls(controls: SidebarPageControls) {
+    provide(SidebarPageControlsKey, controls);
+}
+
 export interface SidebarMultiPaneApi {
     openApp: (
         appId: string,
@@ -46,9 +61,6 @@ export interface SidebarEnvironment {
 
 export const SidebarEnvironmentKey: InjectionKey<SidebarEnvironment> =
     Symbol('SidebarEnvironment');
-export const SidebarPageControlsKey: InjectionKey<SidebarPageControls> = Symbol(
-    'SidebarPageControls'
-);
 
 /**
  * Create a trimmed SidebarMultiPaneApi adapter from the full UseMultiPaneApi
@@ -134,13 +146,6 @@ export function useSidebarDocuments() {
     return environment.getDocuments();
 }
 
-/**
- * Helper composable for accessing sidebar sections
- */
-export function useSidebarSections() {
-    const environment = useSidebarEnvironment();
-    return environment.getSections();
-}
 
 /**
  * Helper composable for accessing sidebar query
@@ -212,13 +217,6 @@ export function useActiveDocumentIds() {
     };
 }
 
-/**
- * Helper composable for accessing sidebar footer actions
- */
-export function useSidebarFooterActions() {
-    const environment = useSidebarEnvironment();
-    return environment.getSidebarFooterActions();
-}
 
 /**
  * Helper composable for accessing multi-pane API
@@ -236,26 +234,3 @@ export function useSidebarPostsApi() {
     return environment.getPanePluginApi();
 }
 
-/**
- * Helper composable for page controls
- */
-export interface SidebarPageControls {
-    pageId: string;
-    isActive: boolean;
-    setActivePage: (id: string) => Promise<boolean>;
-    resetToDefault: () => Promise<boolean>;
-}
-
-export function useSidebarPageControls(): SidebarPageControls {
-    const controls = inject(SidebarPageControlsKey);
-    if (!controls) {
-        throw new Error(
-            'useSidebarPageControls must be used within a component that provides SidebarPageControls'
-        );
-    }
-    return controls;
-}
-
-export function provideSidebarPageControls(controls: SidebarPageControls) {
-    provide(SidebarPageControlsKey, controls);
-}

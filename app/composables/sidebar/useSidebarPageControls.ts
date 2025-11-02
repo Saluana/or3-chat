@@ -1,6 +1,5 @@
 import { inject } from 'vue';
-import { SidebarPageControlsKey } from './useSidebarEnvironment';
-import type { SidebarPageControls } from './useSidebarEnvironment';
+import { SidebarPageControlsKey, type SidebarPageControls } from './useSidebarEnvironment';
 
 /**
  * Composable for accessing sidebar page controls

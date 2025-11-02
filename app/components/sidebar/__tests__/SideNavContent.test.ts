@@ -11,11 +11,14 @@ import {
 const mockEnvironment: SidebarEnvironment = {
     getMultiPane: () => ({
         openApp: () => Promise.resolve(),
+        switchToApp: () => Promise.resolve(),
         openChat: () => Promise.resolve(),
         openDoc: () => Promise.resolve(),
         closePane: () => {},
+        setActive: () => {},
         panes: ref([]),
         activePaneId: ref(null),
+        updatePane: () => {},
     }),
     getPanePluginApi: () => null,
     getProjects: () => ref([]),
