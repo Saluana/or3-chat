@@ -53,7 +53,6 @@
             @sidebar-footer-action="handleSidebarFooterAction"
         />
     </div>
-    <sidebar-side-bottom-nav @toggle-dashboard="emit('toggleDashboard')" />
 
     <!-- Rename modal -->
     <UModal
@@ -431,9 +430,6 @@ const sideNavContentRef = ref<any | null>(null);
 const items = ref<any[]>([]);
 const projects = ref<SidebarProject[]>([]);
 const expandedProjects = ref<string[]>([]);
-const bottomNavRef = ref<HTMLElement | null>(null);
-// Dynamic bottom padding to avoid content hidden under absolute bottom nav
-const bottomPad = ref(140); // fallback
 const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
 import {
@@ -608,19 +604,13 @@ function recomputeListHeight() {
     // Get specific element heights by ID
     const topHeader = document.getElementById('top-header');
     const sideNavHeader = document.getElementById('side-nav-content-header');
-    const bottomNav = document.getElementById('bottom-nav-root');
 
     const topHeaderHeight = topHeader?.offsetHeight || 48; // fallback to known value
     const sideNavHeaderHeight = sideNavHeader?.offsetHeight || 67.3; // fallback to known value
-    const bottomNavHeight = bottomNav?.offsetHeight || 105.9; // fallback to known value
 
     // Calculate available space for the list
     // Add extra padding to account for borders, margins, and visual gaps (20px total)
-    const available =
-        viewportHeight -
-        topHeaderHeight -
-        sideNavHeaderHeight -
-        bottomNavHeight;
+    const available = viewportHeight - topHeaderHeight - sideNavHeaderHeight;
 
     listHeight.value = available > 100 ? available : 100;
 }
@@ -640,11 +630,8 @@ if (process.client) {
         const sideNavHeader = document.getElementById(
             'side-nav-content-header'
         );
-        const bottomNav = document.getElementById('bottom-nav-root');
-
         if (topHeader) resizeObserver.observe(topHeader);
         if (sideNavHeader) resizeObserver.observe(sideNavHeader);
-        if (bottomNav) resizeObserver.observe(bottomNav);
 
         // Also listen to window resize
         window.addEventListener('resize', recomputeListHeight);
@@ -705,13 +692,6 @@ onMounted(async () => {
 watch([projects, expandedProjects, sidebarFooterActions], () => {
     nextTick(() => {
         recomputeListHeight();
-        const navContainer = bottomNavRef.value as HTMLElement | null;
-        const containerHeight = navContainer?.offsetHeight ?? 0;
-        const hudHeight = (
-            navContainer?.querySelector('.hud') as HTMLElement | null
-        )?.offsetHeight;
-        const h = Math.max(containerHeight, hudHeight ?? 0);
-        bottomPad.value = h + 12;
     });
 });
 

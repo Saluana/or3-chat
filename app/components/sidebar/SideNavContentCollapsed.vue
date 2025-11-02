@@ -1,6 +1,6 @@
 <template>
     <div
-        class="flex min-w-[55px] max-w-[55px] flex-col justify-between h-[calc(100dvh-151.27px)] relative"
+        class="flex min-w-[64px] max-w-[64px] flex-col justify-between h-[calc(100dvh-49.818px)] relative"
     >
         <div class="px-1 pt-2 flex flex-col space-y-2">
             <div class="flex items-center justify-center w-full pr-0.5">
@@ -120,6 +120,7 @@
                 </UButton>
             </UTooltip>
         </div>
+        <SideBottomNav @toggle-dashboard="emit('toggle-dashboard')" />
     </div>
 </template>
 <script setup lang="ts">
@@ -128,6 +129,7 @@ import {
     useSidebarFooterActions,
     type SidebarFooterActionEntry,
 } from '~/composables/sidebar/useSidebarSections';
+import SideBottomNav from './SideBottomNav.vue';
 
 const props = defineProps<{
     activeThread?: string;

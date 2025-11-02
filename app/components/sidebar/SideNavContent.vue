@@ -22,7 +22,6 @@
         <div
             ref="scrollAreaRef"
             class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
-            :style="{ paddingBottom: 90 + 'px' }"
         >
             <component
                 v-for="section in resolvedSidebarSections.top"
@@ -78,7 +77,7 @@
                 :is="section.component"
             />
         </div>
-        <div ref="bottomNavRef" class="shrink-0 pb-2 flex flex-col gap-2">
+        <div ref="bottomNavRef" class="shrink-0 flex flex-col gap-2">
             <div
                 v-if="sidebarFooterActions.length"
                 class="flex flex-wrap gap-2"
