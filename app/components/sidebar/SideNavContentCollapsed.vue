@@ -35,7 +35,7 @@
                     class="flex item-center justify-center"
                     icon="pixelarticons:search"
                     :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-black',
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
                     }"
                     @click="emit('focus-search')"
@@ -52,7 +52,7 @@
                     class="flex item-center justify-center"
                     icon="pixelarticons:note-plus"
                     :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-black',
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
                     }"
                     @click="emit('new-document')"
@@ -69,7 +69,7 @@
                     class="flex item-center justify-center"
                     icon="pixelarticons:folder-plus"
                     :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-black',
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
                     }"
                     @click="emit('new-project')"
