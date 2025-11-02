@@ -3,8 +3,6 @@
         id="bottom-nav-root"
         class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-2 border-r-2 border-[var(--md-inverse-surface)] px-0.5"
     >
-        <div class="h-[10px] top-10"></div>
-
         <!-- MY INFO -->
         <UPopover>
             <button type="button" aria-label="My Info" class="hud-button">
@@ -105,8 +103,6 @@
             </span>
             <span class="hud-button__indicator" aria-hidden="true"></span>
         </button>
-
-        <div class="h-[10px] top-10"></div>
     </div>
     <lazy-modal-model-catalog
         hydrate-on-visible
@@ -159,6 +155,14 @@ function navigateToCredits() {
 <style scoped>
 /* Root area background uses configurable bottom nav color */
 .bottomnav-root {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px; /* MD3 vertical spacing unit */
+    padding: 8px 2px 12px;
+    /* Respect device safe areas so the bottom button never collides with OS UI */
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
     background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
 }
 .dark .bottomnav-root {
