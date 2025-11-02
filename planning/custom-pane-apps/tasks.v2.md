@@ -2,15 +2,15 @@
 
 1. Registry & State
 
-- [ ] Implement `app/composables/sidebar/useSidebarPages.ts` with global Map registry and sorted computed list.
-- [ ] Add unit tests for registry (register, overwrite, async component wrapping, ordering).
-- [ ] Create `app/composables/sidebar/useActiveSidebarPage.ts` handling state, persistence, activation hooks.
+- [x] Implement `app/composables/sidebar/useSidebarPages.ts` with global Map registry and sorted computed list.
+- [x] Add unit tests for registry (register, overwrite, async component wrapping, ordering).
+- [x] Create `app/composables/sidebar/useActiveSidebarPage.ts` handling state, persistence, activation hooks.
 
 2. Default Page Extraction
 
-- [ ] Move current `SideNavContent` body into `app/components/sidebar/SidebarHomePage.vue`.
-- [ ] Register home page via new registry during app bootstrap (client plugin or composable init).
-- [ ] Refactor the component to consume the new sidebar helpers (projects/threads/docs) instead of prop drilling while keeping emitted events identical.
+- [x] Move current `SideNavContent` body into `app/components/sidebar/SidebarHomePage.vue`.
+- [x] Register home page via new registry during app bootstrap (client plugin or composable init).
+- [x] Refactor the component to consume the new sidebar helpers (projects/threads/docs) instead of prop drilling while keeping emitted events identical.
 
 3. Sidebar Environment Layer
 

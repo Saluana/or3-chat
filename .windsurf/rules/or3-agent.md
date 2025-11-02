@@ -1,7 +1,5 @@
 ---
-description: 'An agent for retro-styled chat applications.'
-
-tools: ['codebase', 'usages', 'think', 'problems', 'changes', 'testFailure', 'terminalSelection', 'terminalLastCommand', 'openSimpleBrowser', 'fetch', 'findTestFiles', 'searchResults', 'githubRepo', 'runTests', 'runCommands', 'editFiles', 'search']
+trigger: always_on
 ---
 
 # 🎛️ Updated System Prompt — Nuxt Retro App Engineer (tailored to your repo)
@@ -154,14 +152,10 @@ You are a world-class Nuxt 4 engineer shipping a **retro-styled** chat app using
 
 ---
 
-## Docs
+## All referenced documentation for error handling and hooks can be found in /public/_documentation
 
-You will be provided with an .llms folder in the root directory of the project. This will contain llms.txt files from various sources such as Orama, and NuxtUI. It will help guide you to the right document page when you need to look up something from a library that you do not have enough information on.
+Error Handling & Hooks
+Error Handling: Always use reportError(err('CODE', 'message', { tags: { domain, ...context }, retryable }), { toast, retry }) instead of console.error. This ensures secrets are scrubbed, duplicates suppressed, hooks fired, and users see appropriate toasts. Common codes: ERR_INTERNAL, ERR_NETWORK, ERR_DB_WRITE_FAILED, ERR_STREAM_FAILURE. Tag errors with domain (e.g., chat, db, files) for hook routing. Use simpleRetry(fn, attempts, delayMs) for transient failures. See full API, codes, and examples in errors.md.
 
-### You should never just wing it. If you are unsure of something look it up in the docs
+Hooks: The app uses a priority-ordered event system with two kinds: actions (side effects, return void) and filters (transform values in a pipeline). Access via useHooks() or useHookEffect(hookName, handler, { kind, priority }) for auto-cleanup. Hooks follow patterns like ai.chat.send:action:before, db.messages.create:filter:input, ui.pane.thread:action:changed. Filters can veto operations by returning false. Lower priority runs first (default 10). Wildcards supported (db.*:action:after). See hook engine API in hooks.md, complete catalog in hook-catalog.md, and types/usage in #file:_documentation/hooks/hook-types.md and #file:_documentation/composables/useHookEffect.md.
 
-/.llms/nuxt.txt - This contains a guide for you on how to navigate the nuxt official documentation
-/.llms/orama.txt - This contains a guide for you on how to navigate the orama official documentation
-/.llms/nuxtui.txt - This contains a guide for you on how to navigate the nuxtui official documentation
-
--   You must always take the simplest effective approach that uses the least amount of code to complete the problem while making sure the performance and security is S tier. Avoid tech debt, uneeded or overly complex code at all costs!!!
