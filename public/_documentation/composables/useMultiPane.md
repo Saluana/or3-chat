@@ -66,8 +66,19 @@ await multiPane.setPaneThread(activeIndex.value, selectedThreadId);
 Launch a registered pane app (see `usePaneApps`) with optional initial record reuse.
 
 ```ts
+// Create a new pane with the app (adds to workspace)
 await multiPane.newPaneForApp('custom-todo', { initialRecordId: todoId });
+
+// Switch the existing pane to the app (no new pane)
+await multiPane.setPaneApp(activeIndex.value, 'custom-todo', {
+    recordId: todoId,
+});
 ```
+
+**When to use each:**
+
+-   **`newPaneForApp()`**: Opens the app in a new pane (like "open in new tab")
+-   **`setPaneApp()`**: Replaces current pane's content with the app (like navigation)
 
 ### 6. Keep at least one pane alive
 
@@ -90,22 +101,23 @@ const multiPane = useMultiPane(options?: UseMultiPaneOptions);
 
 ### Returned object
 
-| Property / Method                | Type                                                                    | Purpose                                                                             |
-| -------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `panes`                          | `Ref<PaneState[]>`                                                      | Reactive list of panes in open order.                                               |
-| `activePaneIndex`                | `Ref<number>`                                                           | Index of the currently focused pane.                                                |
-| `canAddPane`                     | `ComputedRef<boolean>`                                                  | `true` when below `maxPanes`.                                                       |
-| `newWindowTooltip`               | `ComputedRef<string>`                                                   | Pre-baked tooltip text for “new pane” buttons.                                      |
-| `addPane()`                      | `() => void`                                                            | Append a blank pane and focus it.                                                   |
-| `closePane(index)`               | `(index: number) => Promise<void> \| void`                              | Close a pane; never removes the last one.                                           |
-| `setActive(index)`               | `(index: number) => void`                                               | Mark a pane as focused, firing switch hooks.                                        |
-| `focusPrev(current)`             | `(current: number) => void`                                             | Focus the previous pane if available.                                               |
-| `focusNext(current)`             | `(current: number) => void`                                             | Focus the next pane if available.                                                   |
-| `setPaneThread(index, threadId)` | `(index: number, threadId: string) => Promise<void>`                    | Load messages for a chat and attach it to the pane. Pass `''` to clear.             |
-| `loadMessagesFor`                | `(threadId: string) => Promise<MultiPaneMessage[]>`                     | Exposed loader (useful for tests).                                                  |
-| `ensureAtLeastOne()`             | `() => void`                                                            | Guarantees at least one pane exists.                                                |
-| `newPaneForApp(appId, opts?)`    | `(appId: string, opts?: { initialRecordId?: string }) => Promise<void>` | Opens a pane for a registered custom pane app, optionally reusing a record.         |
-| `updatePane(index, updates)`     | `(index: number, updates: Partial<PaneState>) => void`                  | Mutates pane metadata (e.g., `mode`, `documentId`) while keeping reactivity intact. |
+| Property / Method                 | Type                                                                            | Purpose                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `panes`                           | `Ref<PaneState[]>`                                                              | Reactive list of panes in open order.                                                        |
+| `activePaneIndex`                 | `Ref<number>`                                                                   | Index of the currently focused pane.                                                         |
+| `canAddPane`                      | `ComputedRef<boolean>`                                                          | `true` when below `maxPanes`.                                                                |
+| `newWindowTooltip`                | `ComputedRef<string>`                                                           | Pre-baked tooltip text for “new pane” buttons.                                               |
+| `addPane()`                       | `() => void`                                                                    | Append a blank pane and focus it.                                                            |
+| `closePane(index)`                | `(index: number) => Promise<void> \| void`                                      | Close a pane; never removes the last one.                                                    |
+| `setActive(index)`                | `(index: number) => void`                                                       | Mark a pane as focused, firing switch hooks.                                                 |
+| `focusPrev(current)`              | `(current: number) => void`                                                     | Focus the previous pane if available.                                                        |
+| `focusNext(current)`              | `(current: number) => void`                                                     | Focus the next pane if available.                                                            |
+| `setPaneThread(index, threadId)`  | `(index: number, threadId: string) => Promise<void>`                            | Load messages for a chat and attach it to the pane. Pass `''` to clear.                      |
+| `loadMessagesFor`                 | `(threadId: string) => Promise<MultiPaneMessage[]>`                             | Exposed loader (useful for tests).                                                           |
+| `ensureAtLeastOne()`              | `() => void`                                                                    | Guarantees at least one pane exists.                                                         |
+| `newPaneForApp(appId, opts?)`     | `(appId: string, opts?: { initialRecordId?: string }) => Promise<void>`         | Opens a pane for a registered custom pane app, optionally reusing a record.                  |
+| `setPaneApp(index, appId, opts?)` | `(index: number, appId: string, opts?: { recordId?: string }) => Promise<void>` | Switches an existing pane to an app without creating a new pane (like thread/doc switching). |
+| `updatePane(index, updates)`      | `(index: number, updates: Partial<PaneState>) => void`                          | Mutates pane metadata (e.g., `mode`, `documentId`) while keeping reactivity intact.          |
 
 `PaneState` consists of:
 

@@ -46,7 +46,7 @@ env.setActiveSections({ projects: true, chats: false, docs: true });
         <!-- Use data from environment -->
         <div>Found {{ projects.length }} projects</div>
         <div>Search: {{ env.getSidebarQuery() }}</div>
-        
+
         <!-- Use multi-pane API -->
         <button @click="() => multiPane.openApp('example-todo')">
             Open Todo App
@@ -69,14 +69,14 @@ const env = useSidebarEnvironment();
 
 ```ts
 // Reactive data collections
-const projects = env.getProjects();           // Ref<Project[]>
-const threads = env.getThreads();             // Ref<Thread[]>
-const documents = env.getDocuments();         // Ref<Document[]>
-const sections = env.getSections();           // Ref<SidebarSections>
+const projects = env.getProjects(); // Ref<Project[]>
+const threads = env.getThreads(); // Ref<Thread[]>
+const documents = env.getDocuments(); // Ref<Document[]>
+const sections = env.getSections(); // Ref<SidebarSections>
 const footerActions = env.getSidebarFooterActions(); // Ref<FooterAction[]>
 
 // UI state
-const query = env.getSidebarQuery();          // Ref<string>
+const query = env.getSidebarQuery(); // Ref<string>
 const activeSections = env.getActiveSections(); // Ref<{projects, chats, docs}>
 const expandedProjects = env.getExpandedProjects(); // Ref<string[]>
 const activeThreadIds = env.getActiveThreadIds(); // Ref<string[]>
@@ -140,7 +140,8 @@ if (pluginApi?.posts) {
 ### 6. Access page controls
 
 ```ts
-const { pageId, isActive, setActivePage, resetToDefault } = useSidebarPageControls();
+const { pageId, isActive, setActivePage, resetToDefault } =
+    useSidebarPageControls();
 
 // Check if current page is active
 if (isActive) {
@@ -160,33 +161,33 @@ await resetToDefault();
 
 When you call `useSidebarEnvironment()`, you get an object with:
 
-| Property | Type | Description |
-| --- | --- | --- |
-| **Data Accessors** | | |
-| `getProjects()` | `() => Ref<Project[]>` | Reactive projects list |
-| `getThreads()` | `() => Ref<Thread[]>` | Reactive threads list |
-| `getDocuments()` | `() => Ref<Document[]>` | Reactive documents list |
-| `getSections()` | `() => Ref<SidebarSections>` | Sidebar section components |
-| `getSidebarFooterActions()` | `() => Ref<FooterAction[]>` | Footer action buttons |
-| **State Control** | | |
-| `getSidebarQuery()` | `() => Ref<string>` | Current search query |
-| `setSidebarQuery(value)` | `(value: string) => void` | Update search query |
-| `getActiveSections()` | `() => Ref<SectionState>` | Visible sections |
-| `setActiveSections(sections)` | `(sections) => void` | Update visible sections |
-| `getExpandedProjects()` | `() => Ref<string[]>` | Expanded project IDs |
-| `setExpandedProjects(projects)` | `(projects: string[]) => void` | Update expanded projects |
-| `getActiveThreadIds()` | `() => Ref<string[]>` | Active thread selections |
-| `setActiveThreadIds(ids)` | `(ids: string[]) => void` | Update active threads |
-| `getActiveDocumentIds()` | `() => Ref<string[]>` | Active document selections |
-| `setActiveDocumentIds(ids)` | `(ids: string[]) => void` | Update active documents |
-| **API Access** | | |
-| `getMultiPane()` | `() => SidebarMultiPaneApi` | Multi-pane workspace API |
-| `getPanePluginApi()` | `() => any` | Pane plugin API |
-| **Page Controls** | | |
-| `pageId` | `string` | Current page identifier |
-| `isActive` | `boolean` | Whether current page is active |
-| `setActivePage(id)` | `(id: string) => Promise<boolean>` | Switch to different page |
-| `resetToDefault()` | `() => Promise<boolean>` | Reset to default page |
+| Property                        | Type                               | Description                    |
+| ------------------------------- | ---------------------------------- | ------------------------------ |
+| **Data Accessors**              |                                    |                                |
+| `getProjects()`                 | `() => Ref<Project[]>`             | Reactive projects list         |
+| `getThreads()`                  | `() => Ref<Thread[]>`              | Reactive threads list          |
+| `getDocuments()`                | `() => Ref<Document[]>`            | Reactive documents list        |
+| `getSections()`                 | `() => Ref<SidebarSections>`       | Sidebar section components     |
+| `getSidebarFooterActions()`     | `() => Ref<FooterAction[]>`        | Footer action buttons          |
+| **State Control**               |                                    |                                |
+| `getSidebarQuery()`             | `() => Ref<string>`                | Current search query           |
+| `setSidebarQuery(value)`        | `(value: string) => void`          | Update search query            |
+| `getActiveSections()`           | `() => Ref<SectionState>`          | Visible sections               |
+| `setActiveSections(sections)`   | `(sections) => void`               | Update visible sections        |
+| `getExpandedProjects()`         | `() => Ref<string[]>`              | Expanded project IDs           |
+| `setExpandedProjects(projects)` | `(projects: string[]) => void`     | Update expanded projects       |
+| `getActiveThreadIds()`          | `() => Ref<string[]>`              | Active thread selections       |
+| `setActiveThreadIds(ids)`       | `(ids: string[]) => void`          | Update active threads          |
+| `getActiveDocumentIds()`        | `() => Ref<string[]>`              | Active document selections     |
+| `setActiveDocumentIds(ids)`     | `(ids: string[]) => void`          | Update active documents        |
+| **API Access**                  |                                    |                                |
+| `getMultiPane()`                | `() => SidebarMultiPaneApi`        | Multi-pane workspace API       |
+| `getPanePluginApi()`            | `() => any`                        | Pane plugin API                |
+| **Page Controls**               |                                    |                                |
+| `pageId`                        | `string`                           | Current page identifier        |
+| `isActive`                      | `boolean`                          | Whether current page is active |
+| `setActivePage(id)`             | `(id: string) => Promise<boolean>` | Switch to different page       |
+| `resetToDefault()`              | `() => Promise<boolean>`           | Reset to default page          |
 
 ---
 
@@ -202,19 +203,27 @@ interface SidebarEnvironment {
     getDocuments(): Ref<any[]>;
     getSections(): Ref<any>;
     getSidebarFooterActions(): Ref<any[]>;
-    
+
     // UI state control
     getSidebarQuery(): Ref<string>;
     setSidebarQuery(value: string): void;
-    getActiveSections(): Ref<{projects: boolean; chats: boolean; docs: boolean}>;
-    setActiveSections(sections: {projects: boolean; chats: boolean; docs: boolean}): void;
+    getActiveSections(): Ref<{
+        projects: boolean;
+        chats: boolean;
+        docs: boolean;
+    }>;
+    setActiveSections(sections: {
+        projects: boolean;
+        chats: boolean;
+        docs: boolean;
+    }): void;
     getExpandedProjects(): Ref<string[]>;
     setExpandedProjects(projects: string[]): void;
     getActiveThreadIds(): Ref<string[]>;
     setActiveThreadIds(ids: string[]): void;
     getActiveDocumentIds(): Ref<string[]>;
     setActiveDocumentIds(ids: string[]): void;
-    
+
     // API access
     getMultiPane(): SidebarMultiPaneApi;
     getPanePluginApi(): any;
@@ -232,7 +241,11 @@ interface SidebarPageControls {
 
 ```ts
 interface SidebarMultiPaneApi {
-    openApp: (appId: string, opts?: { initialRecordId?: string }) => Promise<void>;
+    openApp: (
+        appId: string,
+        opts?: { initialRecordId?: string }
+    ) => Promise<void>;
+    switchToApp: (appId: string, opts?: { recordId?: string }) => Promise<void>;
     openChat: (threadId?: string) => Promise<void>;
     openDoc: (documentId?: string) => Promise<void>;
     closePane: (index: number) => Promise<void> | void;
@@ -243,6 +256,18 @@ interface SidebarMultiPaneApi {
 }
 ```
 
+**Key Methods:**
+
+-   **`openApp(appId, opts?)`**: Opens app in a new pane (adds to workspace)
+    -   `opts.initialRecordId` - Optional record ID to open with the app
+-   **`switchToApp(appId, opts?)`**: Switches the active pane to the app (no new pane created)
+    -   `opts.recordId` - Optional record ID to open with the app
+-   **`openChat(threadId?)`**: Opens or creates a chat thread
+-   **`openDoc(documentId?)`**: Opens or creates a document
+-   **`closePane(index)`**: Closes the pane at the given index
+-   **`setActive(index)`**: Makes the pane at the given index active
+-   **`updatePane(index, updates)`**: Updates pane properties without replacing it
+
 ---
 
 ## Providing the Environment
@@ -252,10 +277,10 @@ Usually you don't create the environment yourself — `SideNavContent.vue` provi
 ```vue
 <!-- In SideNavContent.vue -->
 <script setup>
-import { 
-    provideSidebarEnvironment, 
+import {
+    provideSidebarEnvironment,
     provideSidebarPageControls,
-    createSidebarMultiPaneApi 
+    createSidebarMultiPaneApi,
 } from '~/composables/sidebar';
 
 // Create environment
@@ -324,7 +349,8 @@ const postsApi = useSidebarPostsApi();
 ### Page control helpers
 
 ```ts
-const { pageId, isActive, setActivePage, resetToDefault } = useSidebarPageControls();
+const { pageId, isActive, setActivePage, resetToDefault } =
+    useSidebarPageControls();
 ```
 
 ---
@@ -335,11 +361,15 @@ const { pageId, isActive, setActivePage, resetToDefault } = useSidebarPageContro
 
 ```vue
 <script setup>
-import { useSidebarEnvironment, useSidebarPageControls } from '~/composables/sidebar';
+import {
+    useSidebarEnvironment,
+    useSidebarPageControls,
+} from '~/composables/sidebar';
 
 // Get environment and controls
 const env = useSidebarEnvironment();
-const { pageId, isActive, setActivePage, resetToDefault } = useSidebarPageControls();
+const { pageId, isActive, setActivePage, resetToDefault } =
+    useSidebarPageControls();
 
 // Access data
 const projects = env.getProjects();
@@ -373,13 +403,13 @@ const projects = useSidebarProjects();
 const multiPane = useSidebarMultiPane();
 
 // Filter and display projects
-const myProjects = computed(() => 
-    projects.value.filter(p => p.owner === 'me')
+const myProjects = computed(() =>
+    projects.value.filter((p) => p.owner === 'me')
 );
 
 async function openProject(project) {
-    await multiPane.openApp('project-detail', { 
-        initialRecordId: project.id 
+    await multiPane.openApp('project-detail', {
+        initialRecordId: project.id,
     });
 }
 </script>
@@ -395,15 +425,19 @@ const env = useSidebarEnvironment();
 const isMobile = useResponsiveState().isMobile;
 
 // Auto-collapse sections on mobile
-watch(isMobile, (mobile) => {
-    if (mobile) {
-        env.setActiveSections({
-            projects: false,
-            chats: true,
-            docs: false,
-        });
-    }
-}, { immediate: true });
+watch(
+    isMobile,
+    (mobile) => {
+        if (mobile) {
+            env.setActiveSections({
+                projects: false,
+                chats: true,
+                docs: false,
+            });
+        }
+    },
+    { immediate: true }
+);
 </script>
 ```
 
@@ -416,9 +450,13 @@ The environment provides a simplified multi-pane API tailored for sidebar use:
 ```ts
 const multiPane = env.getMultiPane();
 
-// Open apps in new panes
+// Open apps in new panes (adds to workspace)
 await multiPane.openApp('todo-app');
 await multiPane.openApp('note-editor', { initialRecordId: 'note-123' });
+
+// Switch active pane to an app (no new pane created)
+await multiPane.switchToApp('snake-game');
+await multiPane.switchToApp('todo-app', { recordId: 'todo-456' });
 
 // Quick pane control
 multiPane.setActive(0); // Focus first pane
@@ -428,6 +466,11 @@ multiPane.closePane(2); // Close third pane
 console.log(multiPane.panes.value); // All panes
 console.log(multiPane.activePaneId.value); // Currently active pane
 ```
+
+**When to use each:**
+
+-   **`openApp()`**: When you want to add a new pane to the workspace (e.g., "open in new tab" behavior)
+-   **`switchToApp()`**: When you want to replace the current pane's content (e.g., navigation within current context)
 
 ---
 
@@ -512,12 +555,12 @@ const projects = env.getProjects().value;
 
 ## Related
 
-- `provideSidebarEnvironment` - Create and provide the environment
-- `provideSidebarPageControls` - Create and provide page controls
-- `useSidebarPageControls` - Access page navigation controls
-- `useSidebarMultiPane` - Direct access to multi-pane API
-- `useActiveSidebarPage` - Manage active page state
-- `createSidebarMultiPaneApi` - Create the multi-pane adapter
+-   `provideSidebarEnvironment` - Create and provide the environment
+-   `provideSidebarPageControls` - Create and provide page controls
+-   `useSidebarPageControls` - Access page navigation controls
+-   `useSidebarMultiPane` - Direct access to multi-pane API
+-   `useActiveSidebarPage` - Manage active page state
+-   `createSidebarMultiPaneApi` - Create the multi-pane adapter
 
 ---
 
@@ -537,8 +580,16 @@ interface SidebarEnvironment {
     getSections(): Ref<any>;
     getSidebarQuery(): Ref<string>;
     setSidebarQuery(value: string): void;
-    getActiveSections(): Ref<{projects: boolean; chats: boolean; docs: boolean}>;
-    setActiveSections(sections: {projects: boolean; chats: boolean; docs: boolean}): void;
+    getActiveSections(): Ref<{
+        projects: boolean;
+        chats: boolean;
+        docs: boolean;
+    }>;
+    setActiveSections(sections: {
+        projects: boolean;
+        chats: boolean;
+        docs: boolean;
+    }): void;
     getExpandedProjects(): Ref<string[]>;
     setExpandedProjects(projects: string[]): void;
     getActiveThreadIds(): Ref<string[]>;
@@ -570,7 +621,7 @@ function provideSidebarPageControls(controls: SidebarPageControls): void;
     <div class="my-sidebar-page">
         <!-- Search control -->
         <div class="search-bar">
-            <input 
+            <input
                 v-model="searchQuery"
                 placeholder="Search projects..."
                 @input="updateSearch"
@@ -579,7 +630,7 @@ function provideSidebarPageControls(controls: SidebarPageControls): void;
 
         <!-- Project list -->
         <div class="project-list">
-            <div 
+            <div
                 v-for="project in filteredProjects"
                 :key="project.id"
                 class="project-item"
@@ -600,10 +651,10 @@ function provideSidebarPageControls(controls: SidebarPageControls): void;
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { 
-    useSidebarEnvironment, 
+import {
+    useSidebarEnvironment,
     useSidebarPageControls,
-    useSidebarProjects 
+    useSidebarProjects,
 } from '~/composables/sidebar';
 
 // Get environment and page controls
@@ -617,9 +668,10 @@ const searchQuery = ref('');
 // Computed filtered list
 const filteredProjects = computed(() => {
     const query = searchQuery.value.toLowerCase();
-    return projects.value.filter(project => 
-        project.title.toLowerCase().includes(query) ||
-        project.description?.toLowerCase().includes(query)
+    return projects.value.filter(
+        (project) =>
+            project.title.toLowerCase().includes(query) ||
+            project.description?.toLowerCase().includes(query)
     );
 });
 
@@ -631,8 +683,8 @@ function updateSearch() {
 async function openProject(project: any) {
     const multiPane = env.getMultiPane();
     if (multiPane) {
-        await multiPane.openApp('project-detail', { 
-            initialRecordId: project.id 
+        await multiPane.openApp('project-detail', {
+            initialRecordId: project.id,
         });
     }
 }
@@ -645,7 +697,7 @@ async function createNewProject() {
             title: 'New Project',
             content: '',
         });
-        
+
         if (result.ok) {
             await openProject({ id: result.id });
         }

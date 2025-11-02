@@ -163,6 +163,70 @@ if (result.ok) {
 }
 ```
 
+### Get Single Post
+
+```typescript
+const result = await postApi.get({
+    id: 'post-id',
+});
+
+if (result.ok) {
+    console.log(result.post.title, result.post.meta);
+}
+```
+
+### Delete Post
+
+```typescript
+const result = await postApi.delete({
+    id: 'post-id',
+    source: 'my-plugin',
+});
+
+if (result.ok) {
+    console.log('Deleted successfully');
+}
+```
+
+## Opening Panes Programmatically
+
+### From Anywhere (Global API)
+
+```typescript
+const multiPaneApi = (globalThis as any).__or3MultiPaneApi;
+
+// Create new pane
+await multiPaneApi.newPaneForApp('my-app', {
+    existingRecordId: 'optional-post-id', // Skip createInitialRecord
+});
+```
+
+### From Sidebar (Recommended)
+
+Use the sidebar multi-pane API for cleaner integration:
+
+```typescript
+import { useSidebarMultiPane } from '~/composables/sidebar';
+
+const multiPane = useSidebarMultiPane();
+
+// Open in new pane (if space available)
+await multiPane.openApp('my-app');
+
+// Switch current pane to your app (recommended for navigation)
+await multiPane.switchToApp('my-app');
+
+// With existing record
+await multiPane.switchToApp('my-app', { recordId: 'post-id' });
+```
+
+**Pattern guidelines:**
+
+-   Use `openApp()` for "open in new window" actions
+-   Use `switchToApp()` for sidebar navigation (mimics chat/doc behavior)
+-   `switchToApp()` replaces the active pane instead of opening a new one
+-   This follows the same pattern as selecting threads or documents
+
 ## Opening Panes Programmatically
 
 ```typescript
