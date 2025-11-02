@@ -1,0 +1,130 @@
+## How Multipane Mini App Development Works
+
+### **The Complete Workflow**
+
+Based on the example and codebase, here's exactly how developing a multipane mini app works:
+
+#### **1. Plugin Registration (Entry Point)**
+You create a `.client.ts` Nuxt plugin file that runs client-side and:
+- Imports `usePaneApps()` to access the global pane registry
+- Imports `registerSidebarPostList()` helper for the sidebar UI
+- Calls these functions during plugin initialization
+
+#### **2. Three-Layer Architecture**
+
+```
+Your Plugin (.client.ts)
+    ↓
+[Registry Layer] usePaneApps + registerSidebarPostList
+    ↓
+[State Layer] useMultiPane + usePostsList (live Dexie queries)
+    ↓
+[API Layer] panePluginApi.posts (CRUD bridge to database)
+    ↓
+[Rendering] PageShell resolves component + passes props
+```
+
+---
+
+## File Reference & Purpose
+
+| File | Location | Purpose | Effects |
+|------|----------|---------|---------|
+| **usePaneApps.ts** | core | Global registry for pane apps using Map stored in `globalThis.__or3PaneAppsRegistry`. Maintains sorted list by order. | Enables `registerPaneApp()`, `getPaneApp()`, `listPaneApps()` - all composables can access registered apps |
+| **useMultiPane.ts** | core | State management for all panes (chat, doc, custom). Manages pane array, active index, thread binding, messages. | Exports `newPaneForApp(appId)` which creates pane, calls `createInitialRecord()` callback, pushes to pane array, fires hooks |
+| **registerSidebarPostList.ts** | sidebar | DX helper that creates an inline Vue component rendering live post list. On item click, calls `newPaneForApp()`. | Auto-registers sidebar section showing filtered posts by `postType`. When user clicks item, opens pane with that record. |
+| **usePostsList.ts** | posts | Wraps Dexie `liveQuery` for reactive post subscriptions filtered by `postType`. Automatically handles soft-delete filtering and sorting. | Returns computed `items`, `loading`, `error` - updates reactively when database changes. Unsubscribes on unmount. |
+| **pane-plugin-api.client.ts** | plugins | Nuxt plugin that creates global `__or3PanePluginApi` with `posts` namespace (`create`, `update`, `listByType`). | Bridges Dexie database (`createPost`, `upsertPost`, `getPost`) for plugins. Parses meta JSON. Returns Result<T> or Err. |
+| **PageShell.vue** | components | Main layout that renders all panes. Contains `resolvePaneComponent()` and `buildPaneProps()` functions. | `resolvePaneComponent()`: returns ChatContainer/DocumentEditor for built-ins, looks up `getPaneApp(mode).component` for custom, or fallback PaneUnknown |
+| **PaneUnknown.vue** | components | Fallback stub component shown when pane mode can't be resolved. | Graceful degradation when custom pane component missing. |
+| **custom-pane-todo-example.client.ts** | plugins | **Reference example** showing complete workflow: register pane app + sidebar list, handle CRUD via posts API. | Demonstrates all three layers working together. |
+
+---
+
+## Data Flow: "Opening a Custom Pane"
+
+```
+1. USER CLICKS SIDEBAR ITEM
+   └─ registerSidebarPostList click handler triggered
+      └─ Calls: multiPaneApi.newPaneForApp('example-todo', { existingRecordId: post.id })
+
+2. newPaneForApp() IN useMultiPane
+   ├─ Guard: Check canAddPane (not exceeding 3 pane limit)
+   ├─ Resolve: Call getPaneApp('example-todo') from usePaneApps registry
+   ├─ If !initialRecordId && createInitialRecord exists:
+   │  └─ Await appDef.createInitialRecord() → returns { id }
+   │     └─ This calls panePluginApi.posts.create({ postType, title, meta })
+   │        └─ Which uses db.posts wrapper to insert into Dexie
+   ├─ Create pane: { id, mode: 'example-todo', documentId: recordId, threadId: '', messages: [], validating: false }
+   ├─ Push pane to array
+   ├─ Set activePaneIndex
+   └─ Fire hook: ui.pane.open:action:after
+
+3. PageShell.vue RENDERS THE PANE
+   ├─ Loop through panes
+   ├─ Call resolvePaneComponent(pane)
+   │  └─ pane.mode === 'example-todo'
+   │     └─ Look up getPaneApp('example-todo')?.component
+   │        └─ Returns TodoPaneComponent
+   ├─ Call buildPaneProps(pane)
+   │  └─ Returns { paneId, recordId (documentId), postType, postApi }
+   └─ Render: <component :is="TodoPaneComponent" v-bind="props" />
+
+4. TODO PANE COMPONENT MOUNTS
+   ├─ Receives props: { paneId, recordId, postType, postApi }
+   ├─ Loads existing post: await postApi.posts.listByType({ postType })
+   ├─ User edits title/description/completed
+   ├─ On save:
+   │  └─ await postApi.posts.update({ id, patch: { title, content, meta } })
+   │     └─ Calls upsertPost() → updates Dexie
+   │        └─ Fires hook: db.posts.upsert:action:after
+   │           └─ usePostsList (via liveQuery) detects change
+   │              └─ Sidebar list re-renders automatically
+```
+
+---
+
+## Key Integration Points
+
+### **Global API Exposure**
+Two globals are created for plugins to access:
+
+1. **`globalThis.__or3MultiPaneApi`** (from useMultiPane)
+   - `panes: Ref<PaneState[]>` - all open panes
+   - `activePaneIndex: Ref<number>` - which pane is focused
+   - `newPaneForApp(appId, opts)` - create/open pane
+   - `setPaneThread(index, threadId)` - bind chat to thread
+   - etc.
+
+2. **`globalThis.__or3PanePluginApi`** (from pane-plugin-api.client.ts)
+   - `posts.create(opts)` - create post
+   - `posts.update(opts)` - update post  
+   - `posts.listByType(opts)` - query posts
+   - `getActivePaneData()` - get current pane info
+   - etc.
+
+### **Type Generalization**
+- `PaneState.mode` type widened from `'chat' | 'doc'` to `'chat' | 'doc' | (string & { _brand?: 'pane-mode' })`
+- Runtime behavior unchanged; only TS typing loosened to accept custom strings
+- All chat/doc logic untouched; custom panes only execute when opt-in
+
+### **Hook Integration**
+Custom panes fire standard hooks:
+- `ui.pane.open:action:after` - when pane created
+- `db.posts.create:action:after` - when post created
+- `db.posts.upsert:action:after` - when post updated
+- Plugins can listen via `useHookEffect()` or `$hooks` API
+
+---
+
+## Development Checklist for Plugin Authors
+
+1. **Create `.client.ts` plugin file** in plugins
+2. **Define Vue component** receiving props: `{ paneId, recordId, postType, postApi }`
+3. **Register pane app**: `registerPaneApp({ id, label, icon, component, postType, createInitialRecord })`
+4. **Register sidebar list** (optional): `registerSidebarPostList({ id, label, appId, postType, icon, ... })`
+5. **Use posts API**: `postApi.posts.create/update/listByType()`
+6. **Handle reactivity**: `usePostsList(postType)` gives live-updating items
+7. **Guard `process.client`**: Avoid SSR issues
+8. **Provide source**: All API calls require `source` identifier for auditing
+
