@@ -1,8 +1,24 @@
-import { provide, inject, computed, type Ref, type InjectionKey } from 'vue';
-import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
+import {
+    provide,
+    inject,
+    computed,
+    type Ref,
+    type InjectionKey,
+    type ComputedRef,
+} from 'vue';
+import type {
+    UseMultiPaneApi,
+    PaneState,
+} from '~/composables/core/useMultiPane';
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
+import type { Project, Thread, Post } from '~/db';
+import type {
+    SidebarSectionGroups,
+    SidebarFooterActionEntry,
+} from './useSidebarSections';
 
 export interface SidebarPageControls {
-    pageId: string;
+    pageId: string | null;
     isActive: boolean;
     setActivePage: (id: string) => Promise<boolean>;
     resetToDefault: () => Promise<boolean>;
@@ -26,37 +42,35 @@ export interface SidebarMultiPaneApi {
     openDoc: (documentId?: string) => Promise<void>;
     closePane: (index: number) => Promise<void> | void;
     setActive: (index: number) => void;
-    panes: Ref<any[]>;
+    panes: Ref<PaneState[]>;
     activePaneId: Ref<string | null>;
-    updatePane: (index: number, updates: Partial<any>) => void;
+    updatePane: (index: number, updates: Partial<PaneState>) => void;
+}
+
+interface ActiveSections {
+    projects: boolean;
+    chats: boolean;
+    docs: boolean;
 }
 
 export interface SidebarEnvironment {
     getMultiPane(): SidebarMultiPaneApi;
-    getPanePluginApi(): any; // Will be typed when we create the adapter
-    getProjects(): Ref<any[]>;
-    getThreads(): Ref<any[]>;
-    getDocuments(): Ref<any[]>;
-    getSections(): Ref<any>;
+    getPanePluginApi(): PanePluginApi | null;
+    getProjects(): Ref<Project[]>;
+    getThreads(): Ref<Thread[]>;
+    getDocuments(): Ref<Post[]>;
+    getSections(): ComputedRef<SidebarSectionGroups>;
     getSidebarQuery(): Ref<string>;
     setSidebarQuery(value: string): void;
-    getActiveSections(): Ref<{
-        projects: boolean;
-        chats: boolean;
-        docs: boolean;
-    }>;
-    setActiveSections(sections: {
-        projects: boolean;
-        chats: boolean;
-        docs: boolean;
-    }): void;
+    getActiveSections(): Ref<ActiveSections>;
+    setActiveSections(sections: ActiveSections): void;
     getExpandedProjects(): Ref<string[]>;
     setExpandedProjects(projects: string[]): void;
     getActiveThreadIds(): Ref<string[]>;
     setActiveThreadIds(ids: string[]): void;
     getActiveDocumentIds(): Ref<string[]>;
     setActiveDocumentIds(ids: string[]): void;
-    getSidebarFooterActions(): Ref<any[]>;
+    getSidebarFooterActions(): ComputedRef<SidebarFooterActionEntry[]>;
 }
 
 export const SidebarEnvironmentKey: InjectionKey<SidebarEnvironment> =
@@ -146,7 +160,6 @@ export function useSidebarDocuments() {
     return environment.getDocuments();
 }
 
-
 /**
  * Helper composable for accessing sidebar query
  */
@@ -217,11 +230,10 @@ export function useActiveDocumentIds() {
     };
 }
 
-
 /**
  * Helper composable for accessing multi-pane API
  */
-export function useSidebarMultiPane() {
+export function useSidebarMultiPane(): SidebarMultiPaneApi {
     const environment = useSidebarEnvironment();
     return environment.getMultiPane();
 }
@@ -229,8 +241,7 @@ export function useSidebarMultiPane() {
 /**
  * Helper composable for accessing pane plugin API
  */
-export function useSidebarPostsApi() {
+export function useSidebarPostsApi(): PanePluginApi | null {
     const environment = useSidebarEnvironment();
     return environment.getPanePluginApi();
 }
-

@@ -6,6 +6,9 @@ import {
     type Component,
     type ComputedRef,
 } from 'vue';
+import { z } from 'zod';
+import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
 export interface SidebarPageDef {
     /** Unique identifier for the sidebar page */
@@ -17,7 +20,7 @@ export interface SidebarPageDef {
     /** Optional ordering (lower = earlier in sorted lists). Defaults to 200 */
     order?: number;
     /** Vue component or async component factory */
-    component: Component | (() => Promise<any>);
+    component: Component | (() => Promise<Component>);
     /** Opt-in caching for the component */
     keepAlive?: boolean;
     /** Whether this page uses the default header. Defaults to true for home page */
@@ -34,28 +37,66 @@ export interface SidebarPageDef {
 
 export interface SidebarPageContext {
     page: SidebarPageDef;
-    expose: (api: any) => void;
+    expose: (api: Record<string, unknown>) => void;
 }
 
 export interface SidebarActivateContext {
     page: SidebarPageDef;
     previousPage: SidebarPageDef | null;
     isCollapsed: boolean;
-    multiPane: any; // Will be typed later when we create the adapter
-    panePluginApi: any; // Will be typed later
+    multiPane: UseMultiPaneApi;
+    panePluginApi: PanePluginApi;
 }
 
 export interface RegisteredSidebarPage extends SidebarPageDef {
     // SidebarPageDef fields, component already wrapped
 }
 
-// Global registry storage using the same pattern as other registries
-const g: any = globalThis as any;
-const registry: Map<string, RegisteredSidebarPage> =
-    g.__or3SidebarPagesRegistry || (g.__or3SidebarPagesRegistry = new Map());
+/**
+ * Zod schema for validating sidebar page definitions at registration.
+ * Enforces constraints like id format, label length, and required fields.
+ */
+const SidebarPageDefSchema = z.object({
+    id: z
+        .string()
+        .min(1, 'Page id is required')
+        .regex(
+            /^[a-z0-9-]+$/,
+            'Page id must be lowercase alphanumeric with hyphens'
+        ),
+    label: z
+        .string()
+        .min(1, 'Label is required')
+        .max(100, 'Label must be 100 characters or less'),
+    icon: z.string().min(1, 'Icon is required'),
+    order: z
+        .number()
+        .int()
+        .min(0)
+        .max(1000, 'Order must be between 0 and 1000')
+        .optional(),
+    component: z.any(), // Cannot strictly validate Vue component shape at runtime
+    keepAlive: z.boolean().optional(),
+    usesDefaultHeader: z.boolean().optional(),
+    provideContext: z.function().optional(),
+    canActivate: z.function().optional(),
+    onActivate: z.function().optional(),
+    onDeactivate: z.function().optional(),
+});
 
-// Reactive wrapper to trigger Vue reactivity on changes
-const reactiveRegistry = reactive<{ version: number }>({ version: 0 });
+// Helper to get the global registry (supports test isolation)
+function getRegistry(): Map<string, RegisteredSidebarPage> {
+    const g = globalThis as {
+        __or3SidebarPagesRegistry?: Map<string, RegisteredSidebarPage>;
+    };
+    if (!g.__or3SidebarPagesRegistry) {
+        g.__or3SidebarPagesRegistry = new Map();
+    }
+    return g.__or3SidebarPagesRegistry;
+}
+
+// Version tracker for reactivity
+const state = reactive({ version: 0 });
 
 const DEFAULT_ORDER = 200;
 
@@ -64,12 +105,16 @@ const DEFAULT_ORDER = 200;
  */
 function isAsyncComponentLoader(
     component: SidebarPageDef['component']
-): component is () => Promise<any> {
+): component is () => Promise<Component> {
     if (typeof component !== 'function') return false;
-    const candidate = component as any;
+    const candidate = component as unknown;
     // Functions produced by `defineComponent` expose `setup`/`render`.
     // Raw async loaders (e.g. `() => import('./Comp.vue')`) have none of these hints.
-    return !candidate.setup && !candidate.render && !candidate.__asyncLoader;
+    return (
+        !(candidate as { setup?: unknown }).setup &&
+        !(candidate as { render?: unknown }).render &&
+        !(candidate as { __asyncLoader?: unknown }).__asyncLoader
+    );
 }
 
 function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
@@ -78,7 +123,7 @@ function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
         component: markRaw(
             isAsyncComponentLoader(def.component)
                 ? defineAsyncComponent({
-                      loader: def.component as () => Promise<any>,
+                      loader: def.component,
                       timeout: 15000,
                       suspensible: true,
                       onError(error, retry, fail, attempts) {
@@ -100,12 +145,6 @@ function normalizeSidebarPageDef(def: SidebarPageDef): RegisteredSidebarPage {
  * Uses a global Map so plugins can register pages that persist across component lifecycles.
  */
 export function useSidebarPages() {
-    // Get fresh registry reference each time
-    const g: any = globalThis as any;
-    const registry: Map<string, RegisteredSidebarPage> =
-        g.__or3SidebarPagesRegistry ||
-        (g.__or3SidebarPagesRegistry = new Map());
-
     /**
      * Register a new sidebar page. If a page with the same id exists, it is replaced.
      * Returns an unregister function for cleanup.
@@ -116,7 +155,18 @@ export function useSidebarPages() {
             return () => {};
         }
 
+        // Validate input with Zod schema
+        const parsed = SidebarPageDefSchema.safeParse(def);
+        if (!parsed.success) {
+            console.error('[useSidebarPages] Invalid definition', parsed.error);
+            throw new Error(
+                parsed.error.issues[0]?.message ??
+                    'Invalid sidebar page definition'
+            );
+        }
+
         const normalized = normalizeSidebarPageDef(def);
+        const registry = getRegistry();
 
         if (import.meta.dev && registry.has(def.id)) {
             console.warn(
@@ -125,14 +175,15 @@ export function useSidebarPages() {
         }
 
         registry.set(def.id, normalized);
-        // Trigger reactivity by bumping version
-        reactiveRegistry.version++;
+        // Trigger reactivity
+        state.version++;
 
         // Return unregister function
         return () => {
-            if (registry.get(def.id) === normalized) {
-                registry.delete(def.id);
-                reactiveRegistry.version++;
+            const reg = getRegistry();
+            if (reg.get(def.id) === normalized) {
+                reg.delete(def.id);
+                state.version++;
             }
         };
     }
@@ -141,9 +192,10 @@ export function useSidebarPages() {
      * Unregister a sidebar page by id.
      */
     function unregisterSidebarPage(id: string): void {
+        const registry = getRegistry();
         if (registry.delete(id)) {
             // Trigger reactivity
-            reactiveRegistry.version++;
+            state.version++;
         }
     }
 
@@ -151,7 +203,7 @@ export function useSidebarPages() {
      * Get a registered sidebar page by id.
      */
     function getSidebarPage(id: string): RegisteredSidebarPage | undefined {
-        return registry.get(id);
+        return getRegistry().get(id);
     }
 
     /**
@@ -159,14 +211,10 @@ export function useSidebarPages() {
      */
     const listSidebarPages: ComputedRef<RegisteredSidebarPage[]> = computed(
         () => {
-            // Access version to make computed depend on registry changes
-            reactiveRegistry.version;
-            // Always read fresh from global registry
-            const currentRegistry: Map<string, RegisteredSidebarPage> =
-                (globalThis as any).__or3SidebarPagesRegistry || new Map();
-            const pages = Array.from(
-                currentRegistry.values()
-            ) as RegisteredSidebarPage[];
+            // Access state.version to establish dependency
+            void state.version;
+            const registry = getRegistry();
+            const pages = Array.from(registry.values());
             return pages.sort(
                 (a, b) =>
                     (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)

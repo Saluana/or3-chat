@@ -4,7 +4,9 @@ import { usePaneApps, type PaneAppDef } from '../usePaneApps';
 describe('usePaneApps', () => {
     beforeEach(() => {
         // Clean up global registry before each test
-        const g = globalThis as any;
+        const g = globalThis as {
+            __or3PaneAppsRegistry?: Map<string, unknown>;
+        };
         g.__or3PaneAppsRegistry = new Map();
     });
 
@@ -24,6 +26,67 @@ describe('usePaneApps', () => {
         expect(app).toBeDefined();
         expect(app?.id).toBe('todo');
         expect(app?.label).toBe('Todo App');
+    });
+
+    it('throws error for invalid id (uppercase)', () => {
+        const { registerPaneApp } = usePaneApps();
+
+        expect(() => {
+            registerPaneApp({
+                id: 'TodoApp',
+                label: 'Todo App',
+                component: { name: 'TodoPane', template: '<div>todo</div>' },
+            });
+        }).toThrow(/lowercase/);
+    });
+
+    it('throws error for invalid id (with spaces)', () => {
+        const { registerPaneApp } = usePaneApps();
+
+        expect(() => {
+            registerPaneApp({
+                id: 'todo app',
+                label: 'Todo App',
+                component: { name: 'TodoPane', template: '<div>todo</div>' },
+            });
+        }).toThrow(/lowercase/);
+    });
+
+    it('throws error for empty label', () => {
+        const { registerPaneApp } = usePaneApps();
+
+        expect(() => {
+            registerPaneApp({
+                id: 'todo',
+                label: '',
+                component: { name: 'TodoPane', template: '<div>todo</div>' },
+            });
+        }).toThrow(/Label is required/);
+    });
+
+    it('throws error for label too long', () => {
+        const { registerPaneApp } = usePaneApps();
+
+        expect(() => {
+            registerPaneApp({
+                id: 'todo',
+                label: 'A'.repeat(101),
+                component: { name: 'TodoPane', template: '<div>todo</div>' },
+            });
+        }).toThrow(/100 characters/);
+    });
+
+    it('throws error for order out of range', () => {
+        const { registerPaneApp } = usePaneApps();
+
+        expect(() => {
+            registerPaneApp({
+                id: 'todo',
+                label: 'Todo',
+                component: { name: 'TodoPane', template: '<div>todo</div>' },
+                order: 1001,
+            });
+        }).toThrow(/between 0 and 1000/);
     });
 
     it('overwrites existing app with same id', () => {

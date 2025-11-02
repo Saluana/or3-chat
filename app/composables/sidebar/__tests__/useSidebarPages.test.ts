@@ -8,14 +8,13 @@ describe('useSidebarPages', () => {
     beforeEach(() => {
         // Clean up global registry before each test
         const g = globalThis as any;
-        g.__or3SidebarPagesRegistry = new Map();
-        
-        // Force the reactive registry to update by bumping version
-        // Access the reactive registry through the composable to trigger reactivity
-        const { listSidebarPages } = useSidebarPages();
-        // Access the computed to ensure it's using the fresh registry
-        void listSidebarPages.value;
-        
+        // Clear existing entries or create new Map
+        if (g.__or3SidebarPagesRegistry) {
+            g.__or3SidebarPagesRegistry.clear();
+        } else {
+            g.__or3SidebarPagesRegistry = new Map();
+        }
+
         // Mock process.client
         (global as any).process = { ...originalProcess, client: true };
     });
@@ -159,10 +158,10 @@ describe('useSidebarPages', () => {
     it('passes through Vue components without wrapping', () => {
         const { registerSidebarPage, getSidebarPage } = useSidebarPages();
 
-        const vueComponent = { 
-            name: 'VueComponent', 
+        const vueComponent = {
+            name: 'VueComponent',
             template: '<div>vue component</div>',
-            setup: () => ({})
+            setup: () => ({}),
         };
 
         registerSidebarPage({
@@ -239,7 +238,10 @@ describe('useSidebarPages', () => {
     it('component is marked raw to avoid reactivity overhead', () => {
         const { registerSidebarPage, getSidebarPage } = useSidebarPages();
 
-        const component = { name: 'TestPage', template: '<div>test page</div>' };
+        const component = {
+            name: 'TestPage',
+            template: '<div>test page</div>',
+        };
 
         registerSidebarPage({
             id: 'raw-test',
@@ -280,7 +282,7 @@ describe('useSidebarPages', () => {
     it('returns no-op unregister function on server side', () => {
         // Mock server side
         (global as any).process = { ...originalProcess, client: false };
-        
+
         const { registerSidebarPage, getSidebarPage } = useSidebarPages();
 
         const def: SidebarPageDef = {
@@ -294,7 +296,7 @@ describe('useSidebarPages', () => {
 
         // Should not register on server side
         expect(getSidebarPage('server-test')).toBeUndefined();
-        
+
         // Unregister should be a no-op but not throw
         expect(() => unregister()).not.toThrow();
     });
@@ -314,5 +316,84 @@ describe('useSidebarPages', () => {
         unregister();
 
         expect(getSidebarPage('unregister-test')).toBeUndefined();
+    });
+
+    it('throws error for invalid id (uppercase)', () => {
+        const { registerSidebarPage } = useSidebarPages();
+
+        expect(() => {
+            registerSidebarPage({
+                id: 'TodoPage',
+                label: 'Todo Page',
+                icon: 'pixelarticons:list',
+                component: { name: 'TodoPage', template: '<div>todo</div>' },
+            });
+        }).toThrow(/lowercase/);
+    });
+
+    it('throws error for invalid id (with spaces)', () => {
+        const { registerSidebarPage } = useSidebarPages();
+
+        expect(() => {
+            registerSidebarPage({
+                id: 'todo page',
+                label: 'Todo Page',
+                icon: 'pixelarticons:list',
+                component: { name: 'TodoPage', template: '<div>todo</div>' },
+            });
+        }).toThrow(/lowercase/);
+    });
+
+    it('throws error for empty label', () => {
+        const { registerSidebarPage } = useSidebarPages();
+
+        expect(() => {
+            registerSidebarPage({
+                id: 'todo',
+                label: '',
+                icon: 'pixelarticons:list',
+                component: { name: 'TodoPage', template: '<div>todo</div>' },
+            });
+        }).toThrow(/Label is required/);
+    });
+
+    it('throws error for missing icon', () => {
+        const { registerSidebarPage } = useSidebarPages();
+
+        expect(() => {
+            registerSidebarPage({
+                id: 'todo',
+                label: 'Todo',
+                icon: '',
+                component: { name: 'TodoPage', template: '<div>todo</div>' },
+            });
+        }).toThrow(/Icon is required/);
+    });
+
+    it('throws error for label too long', () => {
+        const { registerSidebarPage } = useSidebarPages();
+
+        expect(() => {
+            registerSidebarPage({
+                id: 'todo',
+                label: 'A'.repeat(101),
+                icon: 'pixelarticons:list',
+                component: { name: 'TodoPage', template: '<div>todo</div>' },
+            });
+        }).toThrow(/100 characters/);
+    });
+
+    it('throws error for order out of range', () => {
+        const { registerSidebarPage } = useSidebarPages();
+
+        expect(() => {
+            registerSidebarPage({
+                id: 'todo',
+                label: 'Todo',
+                icon: 'pixelarticons:list',
+                component: { name: 'TodoPage', template: '<div>todo</div>' },
+                order: 1001,
+            });
+        }).toThrow(/between 0 and 1000/);
     });
 });

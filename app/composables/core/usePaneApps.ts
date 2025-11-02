@@ -5,6 +5,7 @@ import {
     type Component,
     type ComputedRef,
 } from 'vue';
+import { z } from 'zod';
 
 /**
  * Pane app definition: describes a custom pane application that can be registered
@@ -21,7 +22,7 @@ export interface PaneAppDef {
     icon?: string;
 
     /** Vue component or async component factory. */
-    component: Component | (() => Promise<any>);
+    component: Component | (() => Promise<Component>);
 
     /**
      * Optional override for the postType stored in the posts table.
@@ -47,13 +48,47 @@ export interface RegisteredPaneApp extends PaneAppDef {
     // PaneAppDef fields, component already wrapped
 }
 
-// Global registry storage
-const g: any = globalThis as any;
-const registry: Map<string, RegisteredPaneApp> =
-    g.__or3PaneAppsRegistry || (g.__or3PaneAppsRegistry = new Map());
+/**
+ * Zod schema for validating pane app definitions at registration.
+ * Enforces constraints like id format, label length, and order bounds.
+ */
+const PaneAppDefSchema = z.object({
+    id: z
+        .string()
+        .min(1, 'App id is required')
+        .regex(
+            /^[a-z0-9-]+$/,
+            'App id must be lowercase alphanumeric with hyphens'
+        ),
+    label: z
+        .string()
+        .min(1, 'Label is required')
+        .max(100, 'Label must be 100 characters or less'),
+    icon: z.string().optional(),
+    component: z.any(), // Cannot strictly validate Vue component shape at runtime
+    order: z
+        .number()
+        .int()
+        .min(0)
+        .max(1000, 'Order must be between 0 and 1000')
+        .optional(),
+    postType: z.string().optional(),
+    createInitialRecord: z.function().optional(),
+});
 
-// Reactive wrapper to trigger Vue reactivity on changes
-const reactiveRegistry = reactive<{ version: number }>({ version: 0 });
+// Global registry storage
+const registry: Map<string, RegisteredPaneApp> = (() => {
+    const g = globalThis as {
+        __or3PaneAppsRegistry?: Map<string, RegisteredPaneApp>;
+    };
+    if (!g.__or3PaneAppsRegistry) {
+        g.__or3PaneAppsRegistry = new Map();
+    }
+    return g.__or3PaneAppsRegistry;
+})();
+
+// Reactive wrapper - we track the registry itself so Vue can react to map changes
+const reactiveRegistry = reactive({ registry });
 
 const DEFAULT_ORDER = 200;
 
@@ -66,6 +101,15 @@ export function usePaneApps() {
      * Register a new pane app. If an app with the same id exists, it is replaced.
      */
     function registerPaneApp(def: PaneAppDef): void {
+        // Validate input with Zod schema
+        const parsed = PaneAppDefSchema.safeParse(def);
+        if (!parsed.success) {
+            console.error('[usePaneApps] Invalid definition', parsed.error);
+            throw new Error(
+                parsed.error.issues[0]?.message ?? 'Invalid pane app definition'
+            );
+        }
+
         const normalized: RegisteredPaneApp = {
             ...def,
             component: markRaw(
@@ -76,8 +120,8 @@ export function usePaneApps() {
             order: def.order ?? DEFAULT_ORDER,
         };
         registry.set(def.id, normalized);
-        // Trigger reactivity by bumping version
-        reactiveRegistry.version++;
+        // Trigger reactivity by mutating the reactive wrapper
+        reactiveRegistry.registry = new Map(registry);
     }
 
     /**
@@ -86,7 +130,7 @@ export function usePaneApps() {
     function unregisterPaneApp(id: string): void {
         registry.delete(id);
         // Trigger reactivity
-        reactiveRegistry.version++;
+        reactiveRegistry.registry = new Map(registry);
     }
 
     /**
@@ -100,9 +144,9 @@ export function usePaneApps() {
      * List all registered pane apps, sorted by order (ascending).
      */
     const listPaneApps: ComputedRef<RegisteredPaneApp[]> = computed(() => {
-        // Access version to make computed depend on registry changes
-        reactiveRegistry.version;
-        const apps = Array.from(registry.values());
+        // Access reactive registry to establish dependency
+        const currentRegistry = reactiveRegistry.registry;
+        const apps = Array.from(currentRegistry.values());
         return apps.sort(
             (a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
         );

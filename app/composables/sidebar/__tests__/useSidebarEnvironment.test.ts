@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ref, computed, getCurrentInstance } from 'vue';
-import { 
+import {
     provideSidebarEnvironment,
     useSidebarEnvironment,
     useSidebarProjects,
@@ -20,6 +20,14 @@ import {
     useSidebarSections,
     useSidebarFooterActions
 } from '../useSidebarSections';
+import {
+    createMockSidebarEnvironment,
+    createMockProject,
+    createMockThread,
+    createMockPost,
+    createMockPanePluginApi,
+} from '../../../../tests/utils/sidebar-test-helpers';
+import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 
 // Mock dependencies
 vi.mock('~/composables/core/useMultiPane', () => ({
@@ -37,32 +45,43 @@ describe('useSidebarEnvironment', () => {
     let mockEnvironment: SidebarEnvironment;
 
     beforeEach(() => {
-        mockEnvironment = {
-            getMultiPane: () => createSidebarMultiPaneApi({
-                panes: ref([{ id: 'test-pane' }]),
-                activePaneIndex: ref(0),
-                newPaneForApp: vi.fn(),
-                addPane: vi.fn(),
-                closePane: vi.fn(),
-                setPaneThread: vi.fn(),
-            } as any),
-            getPanePluginApi: () => ({ test: 'api' }),
-            getProjects: () => ref([{ id: 'proj-1' }]),
-            getThreads: () => ref([{ id: 'thread-1' }]),
-            getDocuments: () => ref([{ id: 'doc-1' }]),
-            getSections: () => ref({ top: [], main: [], bottom: [] }),
+        const fullMultiPaneApi = {
+            panes: ref([{ id: 'test-pane', mode: 'chat' }] as any),
+            activePaneIndex: ref(0),
+            newPaneForApp: vi.fn(),
+            addPane: vi.fn(),
+            closePane: vi.fn(),
+            setPaneThread: vi.fn(),
+            setActive: vi.fn(),
+            updatePane: vi.fn(),
+        } as unknown as UseMultiPaneApi;
+
+        mockEnvironment = createMockSidebarEnvironment({
+            getMultiPane: () => createSidebarMultiPaneApi(fullMultiPaneApi),
+            getPanePluginApi: () => createMockPanePluginApi(),
+            getProjects: () => ref([createMockProject({ id: 'proj-1', name: 'Project 1' })]),
+            getThreads: () => ref([createMockThread({ id: 'thread-1', title: 'Thread 1' })]),
+            getDocuments: () => ref([createMockPost({ id: 'doc-1', title: 'Doc 1' })]),
             getSidebarQuery: () => ref('test query'),
             setSidebarQuery: vi.fn(),
-            getActiveSections: () => ref({ projects: true, chats: true, docs: true }),
-            setActiveSections: vi.fn(),
             getExpandedProjects: () => ref(['proj-1']),
             setExpandedProjects: vi.fn(),
             getActiveThreadIds: () => ref(['thread-1']),
             setActiveThreadIds: vi.fn(),
             getActiveDocumentIds: () => ref(['doc-1']),
             setActiveDocumentIds: vi.fn(),
-            getSidebarFooterActions: () => ref([{ id: 'action-1' }]),
-        };
+            getSidebarFooterActions: () =>
+                computed(() => [
+                    {
+                        action: {
+                            id: 'action-1',
+                            icon: 'pixelarticons:test',
+                            handler: vi.fn(),
+                        },
+                        disabled: false,
+                    },
+                ]),
+        });
     });
 
     it('provides and injects environment correctly', () => {
@@ -70,9 +89,9 @@ describe('useSidebarEnvironment', () => {
         // Since we can't use provide/inject outside setup(), we'll test the logic
         
         // Test that the environment is created correctly
-        expect(mockEnvironment.getProjects().value).toEqual([{ id: 'proj-1' }]);
-        expect(mockEnvironment.getThreads().value).toEqual([{ id: 'thread-1' }]);
-        expect(mockEnvironment.getDocuments().value).toEqual([{ id: 'doc-1' }]);
+        expect(mockEnvironment.getProjects().value[0]?.id).toBe('proj-1');
+        expect(mockEnvironment.getThreads().value[0]?.id).toBe('thread-1');
+        expect(mockEnvironment.getDocuments().value[0]?.id).toBe('doc-1');
     });
 
     it('throws error when environment not provided', () => {

@@ -9,11 +9,17 @@ export interface SidebarSection extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
     /** Async or synchronous component rendered inside the sidebar stack. */
-    component: Component | (() => Promise<any>);
+    component: Component | (() => Promise<Component>);
     /** Ordering (lower first). Defaults to 200. */
     order?: number;
     /** Where the section should render relative to built-ins. Defaults to `main`. */
     placement?: SidebarSectionPlacement;
+}
+
+export interface SidebarSectionGroups {
+    top: SidebarSection[];
+    main: SidebarSection[];
+    bottom: SidebarSection[];
 }
 
 export interface SidebarFooterActionContext {
@@ -87,7 +93,7 @@ export function unregisterSidebarFooterAction(id: string) {
 
 export function useSidebarSections() {
     const items = sectionRegistry.useItems();
-    return computed(() => ({
+    return computed<SidebarSectionGroups>(() => ({
         top: items.value
             .filter((entry) => (entry.placement ?? 'main') === 'top')
             .sort(

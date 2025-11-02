@@ -89,7 +89,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { useSidebarMultiPane, useSidebarPostsApi } from '~/composables/sidebar/useSidebarEnvironment';
+import {
+    useSidebarMultiPane,
+    useSidebarPostsApi,
+} from '~/composables/sidebar/useSidebarEnvironment';
 import { usePostsList } from '~/composables/posts/usePostsList';
 
 interface SnakeGameMeta {
@@ -159,6 +162,11 @@ async function clearAllScores() {
             'Are you sure you want to delete all game scores? This cannot be undone.'
         )
     ) {
+        return;
+    }
+
+    if (!postsApi) {
+        console.error('[SnakeGameSidebar] Posts API not available');
         return;
     }
 

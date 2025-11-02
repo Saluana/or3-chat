@@ -1,5 +1,6 @@
 import type { Component } from 'vue';
 import type { SidebarPageDef } from './useSidebarPages';
+import type { Post } from '~/db';
 import { useSidebarPages } from './useSidebarPages';
 
 /**
@@ -19,10 +20,7 @@ export function registerSidebarPage(
     def: SidebarPageDef,
     options: RegisterSidebarPageOptions = {}
 ) {
-    const {
-        clientOnly = true,
-        hmrCleanup = true,
-    } = options;
+    const { clientOnly = true, hmrCleanup = true } = options;
 
     // Client-side guard
     if (clientOnly && !process.client) {
@@ -31,7 +29,7 @@ export function registerSidebarPage(
 
     // Get the register function from the composable
     const { registerSidebarPage: baseRegisterSidebarPage } = useSidebarPages();
-    
+
     // Register the page
     const unregister = baseRegisterSidebarPage(def);
 
@@ -48,11 +46,12 @@ export function registerSidebarPage(
 /**
  * Shorthand helper for registering pages with posts list integration
  */
-export interface RegisterSidebarPageWithPostsOptions extends RegisterSidebarPageOptions {
+export interface RegisterSidebarPageWithPostsOptions
+    extends RegisterSidebarPageOptions {
     /** Post type to associate with this page */
     postType: string;
     /** Optional handler for when posts are selected */
-    onPostSelect?: (post: any) => void | Promise<void>;
+    onPostSelect?: (post: Post) => void | Promise<void>;
 }
 
 export function registerSidebarPageWithPosts(
@@ -63,21 +62,24 @@ export function registerSidebarPageWithPosts(
 ) {
     const { postType, onPostSelect, ...registerOptions } = options;
 
-    return registerSidebarPage({
-        ...def,
-        provideContext(ctx) {
-            // Expose posts-related helpers
-            ctx.expose({
-                postType,
-                async selectPost(post: any) {
-                    await onPostSelect?.(post);
-                },
-            });
-            
-            // Call original provideContext if present
-            def.provideContext?.(ctx);
+    return registerSidebarPage(
+        {
+            ...def,
+            provideContext(ctx) {
+                // Expose posts-related helpers
+                ctx.expose({
+                    postType,
+                    async selectPost(post: Post) {
+                        await onPostSelect?.(post);
+                    },
+                });
+
+                // Call original provideContext if present
+                def.provideContext?.(ctx);
+            },
         },
-    }, registerOptions);
+        registerOptions
+    );
 }
 
 // Attach the withPosts method to the main function

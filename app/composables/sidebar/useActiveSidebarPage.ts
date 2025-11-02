@@ -5,6 +5,8 @@ import type {
     SidebarActivateContext,
 } from './useSidebarPages';
 import { useHooks } from '~/core/hooks/useHooks';
+import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
+import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
 const STORAGE_KEY = 'or3-active-sidebar-page';
@@ -33,7 +35,14 @@ function loadActivePage(): string | null {
 }
 
 // Global singleton state (similar to useSidebarPages registry pattern)
-const g: any = globalThis as any;
+const g = globalThis as {
+    __or3ActiveSidebarPageState?: {
+        activePageId: ReturnType<typeof ref<string>>;
+        previousPageId: ReturnType<typeof ref<string | null>>;
+        initialRequestedPageId: string | null;
+        isInitialized: boolean;
+    };
+};
 
 // Initialize global state once
 if (!g.__or3ActiveSidebarPageState) {
@@ -63,17 +72,16 @@ export function useActiveSidebarPage() {
     const hooks = useHooks();
 
     // Get global singleton state
-    const state = (globalThis as any).__or3ActiveSidebarPageState;
+    const state = g.__or3ActiveSidebarPageState!;
     const activePageId = state.activePageId;
     const previousPageId = state.previousPageId;
     const initialRequestedPageId = state.initialRequestedPageId;
 
     // Computed for the active page definition
     const activePageDef = computed<RegisteredSidebarPage | null>(() => {
+        const pageId = activePageId.value ?? DEFAULT_PAGE_ID;
         return (
-            getSidebarPage(activePageId.value) ||
-            getSidebarPage(DEFAULT_PAGE_ID) ||
-            null
+            getSidebarPage(pageId) || getSidebarPage(DEFAULT_PAGE_ID) || null
         );
     });
 
@@ -92,34 +100,71 @@ export function useActiveSidebarPage() {
                     `[useActiveSidebarPage] Unknown page id: ${id}, falling back to default`
                 );
             }
+            await hooks.doAction('ui.sidebar.page:action:load-error', {
+                pageId: id,
+                error: new Error(`Unknown page id: ${id}`),
+            });
             return false;
         }
 
-        const currentPage = getSidebarPage(activePageId.value);
+        const currentPageId = activePageId.value ?? DEFAULT_PAGE_ID;
+        const currentPage = getSidebarPage(currentPageId);
+        const previousPageIdSnapshot = activePageId.value;
 
         // Create activation context
         const ctx: SidebarActivateContext = {
             page: nextPage,
             previousPage: currentPage || null,
             isCollapsed: false, // Will be updated when we integrate with sidebar state
-            multiPane: null, // Will be populated when we create the adapter
-            panePluginApi: null, // Will be populated when we create the adapter
+            multiPane: null as unknown as UseMultiPaneApi, // Will be populated when we create the adapter
+            panePluginApi: null as unknown as PanePluginApi, // Will be populated when we create the adapter
         };
 
         try {
             // Check activation guard
             if (nextPage.canActivate) {
-                const canActivate = await Promise.resolve(
-                    nextPage.canActivate(ctx)
-                );
-                if (!canActivate) {
+                try {
+                    const canActivate = await Promise.resolve(
+                        nextPage.canActivate(ctx)
+                    );
+                    if (!canActivate) {
+                        if (import.meta.dev) {
+                            console.log(
+                                `[useActiveSidebarPage] canActivate returned false for ${id}`
+                            );
+                        }
+                        return false;
+                    }
+                } catch (guardError) {
+                    console.error(
+                        `[useActiveSidebarPage] canActivate hook failed for ${id}:`,
+                        guardError
+                    );
+                    await hooks.doAction('ui.sidebar.page:action:load-error', {
+                        pageId: id,
+                        error: guardError,
+                        phase: 'canActivate',
+                    });
                     return false;
                 }
             }
 
             // Deactivate current page
             if (currentPage?.onDeactivate) {
-                await Promise.resolve(currentPage.onDeactivate(ctx));
+                try {
+                    await Promise.resolve(currentPage.onDeactivate(ctx));
+                } catch (deactivateError) {
+                    // Log but don't block the transition
+                    console.error(
+                        `[useActiveSidebarPage] onDeactivate hook failed for ${currentPage.id}:`,
+                        deactivateError
+                    );
+                    await hooks.doAction('ui.sidebar.page:action:load-error', {
+                        pageId: currentPage.id,
+                        error: deactivateError,
+                        phase: 'onDeactivate',
+                    });
+                }
             }
 
             // Update state
@@ -128,7 +173,22 @@ export function useActiveSidebarPage() {
 
             // Activate new page
             if (nextPage.onActivate) {
-                await Promise.resolve(nextPage.onActivate(ctx));
+                try {
+                    await Promise.resolve(nextPage.onActivate(ctx));
+                } catch (activateError) {
+                    console.error(
+                        `[useActiveSidebarPage] onActivate hook failed for ${id}:`,
+                        activateError
+                    );
+                    // Roll back state
+                    activePageId.value = previousPageIdSnapshot;
+                    await hooks.doAction('ui.sidebar.page:action:load-error', {
+                        pageId: id,
+                        error: activateError,
+                        phase: 'onActivate',
+                    });
+                    return false;
+                }
             }
 
             // Persist the selection
@@ -143,13 +203,16 @@ export function useActiveSidebarPage() {
             return true;
         } catch (error) {
             console.error(
-                '[useActiveSidebarPage] Error during page activation:',
+                '[useActiveSidebarPage] Unexpected error during page activation:',
                 error
             );
             // Revert to previous page on error
-            if (previousPageId.value) {
-                activePageId.value = previousPageId.value;
-            }
+            activePageId.value = previousPageIdSnapshot;
+            await hooks.doAction('ui.sidebar.page:action:load-error', {
+                pageId: id,
+                error,
+                phase: 'general',
+            });
             return false;
         }
     }
@@ -165,10 +228,11 @@ export function useActiveSidebarPage() {
      * Watch for page changes and validate they exist
      */
     watch(activePageId, (newId) => {
-        const page = getSidebarPage(newId);
-        if (!page && newId !== DEFAULT_PAGE_ID) {
+        const pageId = newId ?? DEFAULT_PAGE_ID;
+        const page = getSidebarPage(pageId);
+        if (!page && pageId !== DEFAULT_PAGE_ID) {
             console.warn(
-                `[useActiveSidebarPage] Active page ${newId} not found, resetting to default`
+                `[useActiveSidebarPage] Active page ${pageId} not found, resetting to default`
             );
             activePageId.value = DEFAULT_PAGE_ID;
         }
@@ -198,7 +262,7 @@ export function useActiveSidebarPage() {
             },
             { immediate: true }
         );
-        
+
         // Add cleanup on unmount
         onUnmounted(() => {
             stop();

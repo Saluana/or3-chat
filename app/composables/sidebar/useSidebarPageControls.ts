@@ -24,7 +24,7 @@ export function useIsActivePage(pageId: string): boolean {
 /**
  * Helper to get the current active page ID
  */
-export function useActivePageId(): string {
+export function useActivePageId(): string | null {
     const { pageId } = useSidebarPageControls();
     return pageId;
 }

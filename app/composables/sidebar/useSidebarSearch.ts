@@ -18,10 +18,19 @@ interface IndexDoc {
     updated_at: number;
 }
 
-type OramaInstance = any;
-let dbInstance: OramaInstance | null = null;
-let lastQueryToken = 0;
-let warnedFallback = false;
+type OramaInstance = unknown;
+
+// Debounce constants
+const SEARCH_DEBOUNCE_MS = 300;
+const QUERY_DEBOUNCE_MS = 120;
+
+/**
+ * Type guard for doc posts
+ */
+function isDocPost(post: Post): boolean {
+    const record = post as Record<string, unknown>;
+    return record.postType === 'doc' && !record.deleted;
+}
 
 function toDocs(
     threads: Thread[],
@@ -30,24 +39,25 @@ function toDocs(
 ): IndexDoc[] {
     const threadDocs: IndexDoc[] = threads.map((t) => ({
         id: t.id,
-        kind: 'thread',
+        kind: 'thread' as const,
         title: (t.title || 'Untitled Thread').trim() || 'Untitled Thread',
         updated_at: t.updated_at,
     }));
     const projectDocs: IndexDoc[] = projects.map((p) => ({
         id: p.id,
-        kind: 'project',
+        kind: 'project' as const,
         title: (p.name || 'Untitled Project').trim() || 'Untitled Project',
         updated_at: p.updated_at,
     }));
-    const docDocs: IndexDoc[] = documents
-        .filter((d) => (d as any).postType === 'doc' && !(d as any).deleted)
-        .map((d) => ({
+    const docDocs: IndexDoc[] = documents.filter(isDocPost).map((d) => {
+        const record = d as Record<string, unknown>;
+        return {
             id: d.id,
-            kind: 'doc',
-            title: (d as any).title || 'Untitled',
-            updated_at: (d as any).updated_at,
-        }));
+            kind: 'doc' as const,
+            title: (record.title as string | undefined) || 'Untitled',
+            updated_at: (record.updated_at as number) || 0,
+        };
+    });
     return [...threadDocs, ...projectDocs, ...docDocs];
 }
 
@@ -56,16 +66,16 @@ async function buildIndex(
     projects: Project[],
     documents: Post[]
 ) {
-    dbInstance = await createDb({
+    const instance = await createDb({
         id: 'string',
         kind: 'string',
         title: 'string',
         updated_at: 'number',
     });
-    if (!dbInstance) return null;
+    if (!instance) return null;
     const docs = toDocs(threads, projects, documents);
-    if (docs.length) await buildOramaIndex(dbInstance, docs);
-    return dbInstance;
+    if (docs.length) await buildOramaIndex(instance, docs);
+    return instance;
 }
 
 // Signature helper to know when to rebuild (counts + latest updated_at)
@@ -77,8 +87,11 @@ function computeSignature(
     let latest = 0;
     for (const t of threads) if (t.updated_at > latest) latest = t.updated_at;
     for (const p of projects) if (p.updated_at > latest) latest = p.updated_at;
-    for (const d of documents)
-        if ((d as any).updated_at > latest) latest = (d as any).updated_at;
+    for (const d of documents) {
+        const record = d as Record<string, unknown>;
+        const updatedAt = (record.updated_at as number) || 0;
+        if (updatedAt > latest) latest = updatedAt;
+    }
     return `${threads.length}:${projects.length}:${documents.length}:${latest}`;
 }
 
@@ -87,6 +100,9 @@ export function useSidebarSearch(
     projects: Ref<Project[]>,
     documents: Ref<Post[]>
 ) {
+    let dbInstance: OramaInstance | null = null;
+    let lastQueryToken = 0;
+    let warnedFallback = false;
     const query = ref('');
     const threadResults = ref<Thread[]>([]);
     const projectResults = ref<Project[]>([]);
@@ -117,14 +133,13 @@ export function useSidebarSearch(
                 projects.value.map((p) => [p.id, p])
             );
             idMaps.doc.value = Object.fromEntries(
-                documents.value
-                    .filter(
-                        (d) =>
-                            (d as any).postType === 'doc' && !(d as any).deleted
-                    )
-                    .map((d) => [d.id, d])
+                documents.value.filter(isDocPost).map((d) => [d.id, d])
             );
-            await buildIndex(threads.value, projects.value, documents.value);
+            dbInstance = await buildIndex(
+                threads.value,
+                projects.value,
+                documents.value
+            );
             lastIndexedSignature.value = sig;
             ready.value = true;
         } finally {
@@ -140,12 +155,12 @@ export function useSidebarSearch(
         const projectHits = projects.value.filter((p) =>
             (p.name || '').toLowerCase().includes(ql)
         );
-        const docHits = documents.value.filter(
-            (d) =>
-                (d as any).postType === 'doc' &&
-                !(d as any).deleted &&
-                ((d as any).title || '').toLowerCase().includes(ql)
-        );
+        const docHits = documents.value.filter((d) => {
+            if (!isDocPost(d)) return false;
+            const record = d as Record<string, unknown>;
+            const title = (record.title as string | undefined) || '';
+            return title.toLowerCase().includes(ql);
+        });
         threadResults.value = threadHits;
         projectResults.value = projectHits;
         documentResults.value = docHits;
@@ -163,9 +178,7 @@ export function useSidebarSearch(
         if (!raw) {
             threadResults.value = threads.value;
             projectResults.value = projects.value;
-            documentResults.value = documents.value.filter(
-                (d) => (d as any).postType === 'doc' && !(d as any).deleted
-            );
+            documentResults.value = documents.value.filter(isDocPost);
             return;
         }
         const token = ++lastQueryToken;
@@ -179,7 +192,8 @@ export function useSidebarSearch(
                 doc: new Set(),
             };
             for (const h of hits) {
-                const doc = h.document || h;
+                const doc =
+                    (h as { document?: IndexDoc }).document || (h as IndexDoc);
                 if (
                     doc?.kind &&
                     doc?.id &&
@@ -213,25 +227,31 @@ export function useSidebarSearch(
         }
     }
 
-    // Rebuild index & rerun search on data change
-    watch([threads, projects, documents], async () => {
-        await ensureIndex();
-        await runSearch();
-    });
+    // Rebuild index & rerun search on data change with debounce
+    let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    watch(
+        [threads, projects, documents],
+        () => {
+            if (rebuildTimer) clearTimeout(rebuildTimer);
+            rebuildTimer = setTimeout(async () => {
+                await ensureIndex();
+                await runSearch();
+            }, SEARCH_DEBOUNCE_MS);
+        },
+        { deep: false }
+    );
 
-    // Debounce query changes (120ms like existing thread search)
-    let debounceTimer: any;
+    // Debounce query changes
+    let queryTimer: ReturnType<typeof setTimeout> | null = null;
     watch(query, () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(runSearch, 120);
+        if (queryTimer) clearTimeout(queryTimer);
+        queryTimer = setTimeout(runSearch, QUERY_DEBOUNCE_MS);
     });
 
     // Initial population (pass-through until first build completes)
     threadResults.value = threads.value;
     projectResults.value = projects.value;
-    documentResults.value = documents.value.filter(
-        (d) => (d as any).postType === 'doc' && !(d as any).deleted
-    );
+    documentResults.value = documents.value.filter(isDocPost);
 
     return {
         query,

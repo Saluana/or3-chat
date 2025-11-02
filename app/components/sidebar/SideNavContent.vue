@@ -174,10 +174,12 @@ const multiPaneApiRef = shallowRef<ReturnType<typeof useMultiPane> | null>(
 );
 
 if (!multiPaneApiRef.value && import.meta.dev) {
-    console.warn('[SideNavContent] Waiting for __or3MultiPaneApi initialization');
+    console.warn(
+        '[SideNavContent] Waiting for __or3MultiPaneApi initialization'
+    );
 }
 
-const sidebarMultiPaneApi = multiPaneApiRef.value 
+const sidebarMultiPaneApi = multiPaneApiRef.value
     ? createSidebarMultiPaneApi(multiPaneApiRef.value)
     : null;
 
@@ -198,9 +200,12 @@ const footerActionsRef = computed(() => props.sidebarFooterActions);
 
 // Create environment for child components
 const environment: SidebarEnvironment = {
-    getMultiPane: () => sidebarMultiPaneApi || (() => {
-        throw new Error('Multi-pane API not available');
-    })(),
+    getMultiPane: () => {
+        if (!sidebarMultiPaneApi) {
+            throw new Error('Multi-pane API not available');
+        }
+        return sidebarMultiPaneApi;
+    },
     getPanePluginApi: () => (globalThis as any).__or3PanePluginApi || null,
     getProjects: () => projectsRef,
     getThreads: () => threadsRef,
@@ -225,7 +230,7 @@ provideSidebarEnvironment(environment);
 
 const injectedPageControls: SidebarPageControls = {
     get pageId() {
-        return activePageId.value;
+        return activePageId.value ?? null;
     },
     get isActive() {
         return activePageDef.value?.id === activePageId.value;
