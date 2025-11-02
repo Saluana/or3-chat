@@ -4,7 +4,11 @@
         class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-2 border-r-2 border-[var(--md-inverse-surface)] px-0.5"
     >
         <!-- MY INFO -->
-        <UPopover>
+        <UPopover
+            :content="{
+                side: 'right',
+            }"
+        >
             <button type="button" aria-label="My Info" class="hud-button">
                 <span class="hud-button__icon">
                     <UIcon
@@ -159,10 +163,10 @@ function navigateToCredits() {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: 8px; /* MD3 vertical spacing unit */
+    gap: 4px; /* MD3 vertical spacing unit */
     padding: 8px 2px 12px;
     /* Respect device safe areas so the bottom button never collides with OS UI */
-    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
     background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
 }
 .dark .bottomnav-root {
@@ -342,7 +346,7 @@ function navigateToCredits() {
 
 .hud-button__label {
     display: block;
-    font-size: 6.5px;
+    font-size: 7px;
     letter-spacing: 0.082em;
     text-align: center;
     line-height: 1.06;
@@ -350,7 +354,7 @@ function navigateToCredits() {
 }
 
 .hud-button__label--wide {
-    font-size: 6.5px;
+    font-size: 7px;
     letter-spacing: 0.068em;
 }
 

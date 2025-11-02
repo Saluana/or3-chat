@@ -1,5 +1,5 @@
 <template>
-    <resizable-sidebar-layout ref="layoutRef">
+    <resizable-sidebar-layout :collapsed-width="64" ref="layoutRef">
         <template #sidebar-expanded>
             <SidenavSideBar
                 ref="sideNavExpandedRef"
@@ -13,7 +13,6 @@
         </template>
         <template #sidebar-collapsed>
             <lazy-sidebar-side-nav-content-collapsed
-                class="w-[60px]!"
                 :active-thread="activeChatThreadId"
                 @new-chat="onNewChat"
                 @new-document="openCollapsedCreateDocumentModal"
