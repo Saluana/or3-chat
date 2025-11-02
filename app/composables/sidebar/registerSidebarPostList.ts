@@ -84,11 +84,16 @@ export function registerSidebarPostList(
                                 p.mode === appId && p.documentId === post.id
                         );
                         if (existingPane) {
-                            // Find index and activate
                             const idx =
                                 multiPaneApi.panes.value.indexOf(existingPane);
-                            if (idx >= 0 && multiPaneApi.activePaneIndex) {
-                                multiPaneApi.activePaneIndex.value = idx;
+                            if (idx >= 0) {
+                                if (
+                                    typeof multiPaneApi.setActive === 'function'
+                                ) {
+                                    multiPaneApi.setActive(idx);
+                                } else if (multiPaneApi.activePaneIndex) {
+                                    multiPaneApi.activePaneIndex.value = idx;
+                                }
                                 return;
                             }
                         }
@@ -96,7 +101,7 @@ export function registerSidebarPostList(
 
                     // Create new pane or activate existing
                     await multiPaneApi.newPaneForApp(appId, {
-                        existingRecordId: post.id,
+                        initialRecordId: post.id,
                     });
                 } catch (err) {
                     console.error(

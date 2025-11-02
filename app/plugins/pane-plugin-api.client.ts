@@ -571,15 +571,14 @@ async function makeApi(): Promise<PanePluginApi> {
                     return err('invalid_post_type', 'postType required');
 
                 try {
-                    let query = db.posts
+                    const results = await db.posts
                         .where('postType')
                         .equals(postType)
                         .and((p) => !p.deleted)
-                        .reverse()
                         .sortBy('updated_at');
 
-                    const results = await query;
-                    const sliced = limit ? results.slice(0, limit) : results;
+                    const sorted = results.slice().reverse();
+                    const sliced = limit ? sorted.slice(0, limit) : sorted;
 
                     // Parse meta for each post
                     const posts: PostData[] = sliced.map((p) => ({
