@@ -37,7 +37,6 @@ export async function useSwitchToPage(pageId: string): Promise<boolean> {
     try {
         return await setActivePage(pageId);
     } catch (error) {
-        console.error(`Failed to switch to page "${pageId}":`, error);
         return false;
     }
 }
@@ -50,7 +49,6 @@ export async function useResetToDefaultPage(): Promise<boolean> {
     try {
         return await resetToDefault();
     } catch (error) {
-        console.error('Failed to reset to default page:', error);
         return false;
     }
 }

@@ -119,16 +119,7 @@ const {
 
 // Compute top scores sorted by score
 const topScores = computed(() => {
-    if (isDev) {
-        console.log('[SnakeGameSidebar] Computing scores', {
-            totalScores: scores.value.length,
-            scores: scores.value.map((s) => ({
-                id: s.id,
-                title: s.title,
-                meta: s.meta,
-            })),
-        });
-    }
+    // Compute top scores
 
     return scores.value
         .filter((post) => {
@@ -136,16 +127,7 @@ const topScores = computed(() => {
             const isCompleted = meta?.status === 'completed';
             const hasScore = typeof meta?.score === 'number';
 
-            if (isDev && !isCompleted) {
-                console.log(
-                    '[SnakeGameSidebar] Filtering out incomplete game:',
-                    {
-                        id: post.id,
-                        status: meta?.status,
-                        hasScore,
-                    }
-                );
-            }
+            // Filter incomplete games
 
             return isCompleted && hasScore;
         })
@@ -188,10 +170,7 @@ async function clearAllScores() {
                 source: 'snake-game-sidebar',
             });
             if (!result.ok) {
-                console.error('[SnakeGameSidebar] Failed to delete score:', {
-                    id: score.id,
-                    error: result.message,
-                });
+                // Handle score deletion failure
             }
         }
 
@@ -201,7 +180,7 @@ async function clearAllScores() {
         // Refresh the list
         await refresh();
     } catch (err) {
-        console.error('[SnakeGameSidebar] Failed to clear scores:', err);
+        // Handle clear scores failure
     }
 }
 
@@ -219,21 +198,8 @@ function formatTime(timestamp: number) {
 }
 
 function debugScores() {
-    console.log('[SnakeGameSidebar] Debug Info', {
-        totalPosts: scores.value.length,
-        loading: loading.value,
-        error: error.value,
-        topScores: topScores.value,
-        allScores: scores.value.map((s) => ({
-            id: s.id,
-            title: s.title,
-            postType: s.postType,
-            meta: s.meta,
-            created: s.created_at,
-            updated: s.updated_at,
-        })),
-    });
-    alert('Check console for debug info');
+    // Debug scores function placeholder
+    alert('Debug scores function called');
 }
 
 onMounted(() => {

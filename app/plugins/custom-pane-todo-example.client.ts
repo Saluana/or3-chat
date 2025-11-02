@@ -49,14 +49,7 @@ export default defineNuxtPlugin(async () => {
                 const saving = ref(false);
                 const error = ref<string | null>(null);
 
-                if (import.meta.dev) {
-                    console.debug('[TodoPane] setup', {
-                        paneId: props.paneId,
-                        recordId: props.recordId,
-                        postType: props.postType,
-                        hasPostApi: !!props.postApi,
-                    });
-                }
+                // Development setup complete
 
                 async function loadTodo(recordId: string | null) {
                     if (!process.client) return;
@@ -97,7 +90,6 @@ export default defineNuxtPlugin(async () => {
                         }
                     } catch (err) {
                         error.value = 'Failed to load todo';
-                        console.error('[TodoPane] Load failed:', err);
                     } finally {
                         loading.value = false;
                     }
@@ -163,7 +155,6 @@ export default defineNuxtPlugin(async () => {
                         }
                     } catch (err) {
                         error.value = 'Failed to save todo';
-                        console.error('[TodoPane] Save failed:', err);
                     } finally {
                         saving.value = false;
                     }
@@ -186,14 +177,7 @@ export default defineNuxtPlugin(async () => {
                 };
             },
             render() {
-                if (import.meta.dev) {
-                    console.debug('[TodoPane] render', {
-                        paneId: this.paneId,
-                        recordId: this.recordId,
-                        loading: this.loading,
-                        error: this.error,
-                    });
-                }
+                // Render todo pane
                 if (this.loading) {
                     return h(
                         'div',
@@ -307,17 +291,7 @@ export default defineNuxtPlugin(async () => {
                 );
 
                 async function openTodo(id: string) {
-                    if (import.meta.dev) {
-                        console.debug(
-                            '[TodoSidebarPage] openTodo request',
-                            id,
-                            multiPane.panes.value.map((pane: any) => ({
-                                mode: pane.mode,
-                                documentId: pane.documentId,
-                                threadId: pane.threadId,
-                            }))
-                        );
-                    }
+                    // Open todo in pane
 
                     // Check if this todo is already open in any pane
                     const existingIndex = multiPane.panes.value.findIndex(
@@ -328,13 +302,6 @@ export default defineNuxtPlugin(async () => {
 
                     if (existingIndex !== -1) {
                         // Focus the existing pane instead of opening a new one
-                        if (import.meta.dev) {
-                            console.debug(
-                                '[TodoSidebarPage] focusing existing pane',
-                                id,
-                                existingIndex
-                            );
-                        }
                         multiPane.setActive(existingIndex);
                         return;
                     }
@@ -363,11 +330,7 @@ export default defineNuxtPlugin(async () => {
                             });
 
                             if (import.meta.dev) {
-                                console.debug(
-                                    '[TodoSidebarPage] reused active pane',
-                                    id,
-                                    activeIndex
-                                );
+                                // Reused active pane for todo
                             }
                         } else {
                             // Create a new pane only if we can't reuse the active one
@@ -376,22 +339,11 @@ export default defineNuxtPlugin(async () => {
                             });
 
                             if (import.meta.dev) {
-                                console.debug(
-                                    '[TodoSidebarPage] opened new pane',
-                                    id,
-                                    multiPane.panes.value.map((pane: any) => ({
-                                        mode: pane.mode,
-                                        documentId: pane.documentId,
-                                        threadId: pane.threadId,
-                                    }))
-                                );
+                                // Development debug info
                             }
                         }
                     } catch (error) {
-                        console.error(
-                            '[TodoSidebarPage] openTodo failed',
-                            error
-                        );
+                        // Handle openTodo failure
                     }
                 }
 
@@ -410,7 +362,7 @@ export default defineNuxtPlugin(async () => {
                             await refresh();
                         }
                     } catch (err) {
-                        console.error('[TodoSidebarPage] create failed:', err);
+                        // Handle createTodo failure
                     }
                 }
 
@@ -564,12 +516,8 @@ export default defineNuxtPlugin(async () => {
             component: () => Promise.resolve(TodoSidebarPage),
         });
 
-        if (import.meta.dev) {
-            console.log(
-                '[custom-pane-todo-example] Registered todo pane app + sidebar page'
-            );
-        }
+        // Registration complete
     } catch (e) {
-        console.error('[custom-pane-todo-example] Failed to register:', e);
+        // Handle registration failure
     }
 });

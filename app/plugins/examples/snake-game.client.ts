@@ -5,7 +5,7 @@ import SnakeGamePane from './snake/SnakeGamePane.vue';
 import SnakeGameSidebar from './snake/SnakeGameSidebar.vue';
 
 export default defineNuxtPlugin(() => {
-    console.log('Registering Snake Game mini app...');
+    // Register Snake Game mini app
 
     // Register the pane app with post type for score tracking
     const { registerPaneApp } = usePaneApps();
@@ -20,7 +20,6 @@ export default defineNuxtPlugin(() => {
             // Create a new game session record
             const api = (globalThis as any).__or3PanePluginApi;
             if (!api?.posts) {
-                console.warn('[snake-game] Posts API not available');
                 return null;
             }
 
@@ -37,10 +36,6 @@ export default defineNuxtPlugin(() => {
             });
 
             if (!result.ok) {
-                console.error(
-                    '[snake-game] Failed to create game record:',
-                    result.message
-                );
                 return null;
             }
 
@@ -61,10 +56,9 @@ export default defineNuxtPlugin(() => {
     // HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            console.log('Cleaning up Snake Game plugin...');
             cleanup();
         });
     }
 
-    console.log('Snake Game mini app registered successfully!');
+    // Snake Game mini app registered
 });
