@@ -214,8 +214,47 @@ describe('SideNavContentCollapsed', () => {
             },
         });
 
-        // Should not render the home page but should render test page
-        expect(wrapper.html()).not.toContain('Home');
+        // Should render the hardcoded Home button (once) and test page
+        // The home page should be filtered from the dynamic list to avoid duplication
+        const homeButtons = wrapper.findAll('button[icon="pixelarticons:home"]');
+        expect(homeButtons.length).toBe(1); // Only the hardcoded Home button
         expect(wrapper.html()).toContain('Test Page');
+    });
+
+    it('shows hardcoded home button when home page is not in sidebar pages list', () => {
+        // Reset to default mock (no home page in list)
+        mockListSidebarPages.value = [
+            {
+                id: 'test-page-1',
+                label: 'Test Page 1',
+                icon: 'pixelarticons:test',
+                order: 100,
+                component: vi.fn(),
+            },
+            {
+                id: 'test-page-2',
+                label: 'Test Page 2',
+                icon: 'pixelarticons:test2',
+                order: 50,
+                component: vi.fn(),
+            },
+        ];
+
+        const wrapper = mount(SideNavContentCollapsed, {
+            global: {
+                stubs: {
+                    UIcon: true,
+                    UButton: { template: '<button><slot /></button>' },
+                    UTooltip: { template: '<div><slot /></div>' },
+                    SideBottomNav: true,
+                },
+            },
+        });
+
+        // Should render the hardcoded Home button and the test pages
+        const homeButtons = wrapper.findAll('button[icon="pixelarticons:home"]');
+        expect(homeButtons.length).toBe(1); // Only the hardcoded Home button
+        expect(wrapper.html()).toContain('Test Page 1');
+        expect(wrapper.html()).toContain('Test Page 2');
     });
 });
