@@ -24,6 +24,12 @@
                     "path": "/start/development-setup",
                     "category": "Tutorial",
                     "summary": "Step-by-step guide to setting up a local development environment for OR3. Covers cloning the repo, installing dependencies, running the dev server, and debugging tips."
+                },
+                              {
+                    "name": "mini-app-tutorial.md",
+                    "path": "/start/mini-app-tutorial",
+                    "category": "Tutorial",
+                    "summary": "Comprehensive step-by-step tutorial for building a complete mini application in OR3 that integrates with the multi-pane workspace, adds sidebar pages, and uses custom post types for data storage.\\n\\nLearn how to create a Task Manager mini app that demonstrates:\\n- Creating custom post types for tasks\\n- Registering sidebar pages for task management\\n- Opening tasks in multi-pane panes\\n- Proper HMR cleanup and error handling\\n- TypeScript integration and validation\\n- Export/import functionality and advanced features"
                 }
             ]
         },
@@ -222,6 +228,36 @@
                     "path": "/composables/useTokenizer",
                     "category": "Core",
                     "summary": "Composable for GPT tokenization with automatic Web Worker optimization. Counts tokens using a dedicated worker thread when available, falling back to direct encoding for SSR or when workers fail.\\n\\n`useTokenizer` keeps the UI responsive while counting tokens:\\n\\n-   Count tokens in single messages or batches\\n-   Uses Web Worker to avoid blocking main thread\\n-   Automatic fallback when workers unavailable\\n-   Shared worker instance across all components\\n-   SSR-safe with client-side hydration"
+                },
+                {
+                    "name": "useActiveSidebarPage.md",
+                    "path": "/composables/useActiveSidebarPage",
+                    "category": "Sidebar",
+                    "summary": "Manages the active sidebar page state with persistence, activation hooks, and page transitions. Uses global singleton state to ensure consistency across all components.\\n\\nThink of `useActiveSidebarPage` as the sidebar's navigation controller — it tracks which page is currently active, handles page switching logic, and maintains the selected page across sessions."
+                },
+                {
+                    "name": "useSidebarEnvironment.md",
+                    "path": "/composables/useSidebarEnvironment",
+                    "category": "Sidebar",
+                    "summary": "Provides dependency injection and context access for sidebar components. Creates a reactive environment with access to multi-pane API, data sources, and UI controls.\\n\\nThink of `useSidebarEnvironment` as the sidebar's service locator — it gives child components access to everything they need without prop drilling or global dependencies."
+                },
+                {
+                    "name": "useSidebarPageControls.md",
+                    "path": "/composables/useSidebarPageControls",
+                    "category": "Sidebar",
+                    "summary": "Provides access to sidebar page navigation controls from child components. Allows sidebar pages to programmatically switch pages or check their own active status.\\n\\nThink of `useSidebarPageControls` as the sidebar's navigation remote — it gives pages the ability to navigate to other pages or check their own state without directly accessing the page manager."
+                },
+                {
+                    "name": "useSidebarPages.md",
+                    "path": "/composables/useSidebarPages",
+                    "category": "Sidebar",
+                    "summary": "Registry and discovery system for sidebar pages. Manages page registration, provides listing functionality, and handles HMR cleanup for dynamic page management.\\n\\nThink of `useSidebarPages` as the sidebar's page directory — it tracks all available pages, handles registration, and provides the tools to discover and manage sidebar pages."
+                },
+                {
+                    "name": "registerSidebarPage.md",
+                    "path": "/composables/registerSidebarPage",
+                    "category": "Sidebar",
+                    "summary": "Enhanced helper function for registering sidebar pages with guardrails, HMR cleanup, and developer-friendly error handling. Provides a safe and convenient way to register sidebar pages.\\n\\nThink of `registerSidebarPage` as the sidebar's page registration assistant — it handles all the boilerplate, validation, and cleanup so you can focus on creating great sidebar pages."
                 },
                 {
                     "name": "useMultiPane.md",
