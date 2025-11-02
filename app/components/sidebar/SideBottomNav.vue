@@ -373,10 +373,12 @@ function navigateToCredits() {
 
 .hud-button__indicator--danger {
     background: var(--md-error, #d14343);
+    opacity: 0.52;
 }
 
 .hud-button__indicator--success {
     background: var(--md-success, #28a745);
+    opacity: 1;
 }
 
 .dark .hud-button__indicator--danger {

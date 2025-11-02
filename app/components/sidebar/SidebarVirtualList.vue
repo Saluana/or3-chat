@@ -8,8 +8,7 @@
         >
             <Virtualizer
                 :data="flatItems"
-                :overscan="10"
-                :item-size="44"
+                :item-size="50"
                 :scrollRef="scrollContainerRef || undefined"
             >
                 <template v-slot="{ item }">
