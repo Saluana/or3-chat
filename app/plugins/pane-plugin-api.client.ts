@@ -9,7 +9,7 @@ import {
 } from '~/composables/documents/useDocumentsStore';
 import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/core/useMultiPane';
-import { createPost, upsertPost, getPost } from '~/db/posts';
+import { createPost, upsertPost, getPost, softDeletePost } from '~/db/posts';
 import { db } from '~/db/client';
 import type { Post, PostCreate } from '~/db/schema';
 
@@ -30,7 +30,8 @@ export type PaneApiErrorCode =
     | 'invalid_post_type'
     | 'post_not_found'
     | 'post_create_failed'
-    | 'post_update_failed';
+    | 'post_update_failed'
+    | 'post_delete_failed';
 
 /** Success result helper */
 export type Ok<T extends object = {}> = { ok: true } & T;
@@ -127,6 +128,18 @@ export interface ListPostsByTypeOptions {
     postType: string;
     limit?: number;
 }
+
+/** Options for deleting a post */
+export interface DeletePostOptions {
+    id: string;
+    source: string;
+}
+
+/** Options for getting a single post */
+export interface GetPostOptions {
+    id: string;
+}
+
 export interface PanePluginApi {
     /**
      * Append a new message into a chat pane's thread. Optionally creates a thread if missing.
@@ -154,8 +167,14 @@ export interface PanePluginApi {
         /** Create a new post with specified type and data */
         create(opts: CreatePostOptions): Promise<Result<{ id: string }>>;
 
+        /** Get a single post by ID */
+        get(opts: GetPostOptions): Promise<Result<{ post: PostData }>>;
+
         /** Update an existing post by ID */
         update(opts: UpdatePostOptions): Promise<Result>;
+
+        /** Delete a post by ID (soft delete) */
+        delete(opts: DeletePostOptions): Promise<Result>;
 
         /** List all posts of a given type (soft-delete filtered, sorted by updated_at desc) */
         listByType(
@@ -466,6 +485,32 @@ async function makeApi(): Promise<PanePluginApi> {
                 }
             },
 
+            async get({ id }: GetPostOptions) {
+                if (!id) return err('post_not_found', 'id required');
+
+                try {
+                    const post = await getPost(id);
+                    if (!post) {
+                        return err('post_not_found', 'post not found');
+                    }
+
+                    // getPost returns Post, convert to PostData with parsed meta
+                    const dbPost = post as unknown as Post;
+                    const postData: PostData = {
+                        ...dbPost,
+                        meta: parseMeta(dbPost.meta),
+                    };
+
+                    log('posts.get', { id });
+                    return { ok: true, post: postData };
+                } catch (e: unknown) {
+                    return err(
+                        'post_not_found',
+                        e instanceof Error ? e.message : 'get failed'
+                    );
+                }
+            },
+
             async update({ id, patch, source }: UpdatePostOptions) {
                 if (!source) return err('missing_source', 'source required');
                 if (!id) return err('post_not_found', 'id required');
@@ -497,6 +542,26 @@ async function makeApi(): Promise<PanePluginApi> {
                     return err(
                         'post_update_failed',
                         e instanceof Error ? e.message : 'update failed'
+                    );
+                }
+            },
+
+            async delete({ id, source }: DeletePostOptions) {
+                if (!source) return err('missing_source', 'source required');
+                if (!id) return err('post_not_found', 'id required');
+
+                try {
+                    const existing = await getPost(id);
+                    if (!existing)
+                        return err('post_not_found', 'post not found');
+
+                    await softDeletePost(id);
+                    log('posts.delete', { source, id });
+                    return { ok: true };
+                } catch (e: unknown) {
+                    return err(
+                        'post_delete_failed',
+                        e instanceof Error ? e.message : 'delete failed'
                     );
                 }
             },

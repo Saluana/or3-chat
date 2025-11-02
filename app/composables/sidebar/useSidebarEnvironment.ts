@@ -2,7 +2,11 @@ import { provide, inject, computed, type Ref, type InjectionKey } from 'vue';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 
 export interface SidebarMultiPaneApi {
-    openApp: (appId: string, opts?: { initialRecordId?: string }) => Promise<void>;
+    openApp: (
+        appId: string,
+        opts?: { initialRecordId?: string }
+    ) => Promise<void>;
+    switchToApp: (appId: string, opts?: { recordId?: string }) => Promise<void>;
     openChat: (threadId?: string) => Promise<void>;
     openDoc: (documentId?: string) => Promise<void>;
     closePane: (index: number) => Promise<void> | void;
@@ -40,15 +44,27 @@ export interface SidebarEnvironment {
     getSidebarFooterActions(): Ref<any[]>;
 }
 
-export const SidebarEnvironmentKey: InjectionKey<SidebarEnvironment> = Symbol('SidebarEnvironment');
-export const SidebarPageControlsKey: InjectionKey<SidebarPageControls> = Symbol('SidebarPageControls');
+export const SidebarEnvironmentKey: InjectionKey<SidebarEnvironment> =
+    Symbol('SidebarEnvironment');
+export const SidebarPageControlsKey: InjectionKey<SidebarPageControls> = Symbol(
+    'SidebarPageControls'
+);
 
 /**
  * Create a trimmed SidebarMultiPaneApi adapter from the full UseMultiPaneApi
  */
-export function createSidebarMultiPaneApi(multiPaneApi: UseMultiPaneApi): SidebarMultiPaneApi {
+export function createSidebarMultiPaneApi(
+    multiPaneApi: UseMultiPaneApi
+): SidebarMultiPaneApi {
     return {
         openApp: multiPaneApi.newPaneForApp,
+        switchToApp: async (appId: string, opts?: { recordId?: string }) => {
+            await multiPaneApi.setPaneApp(
+                multiPaneApi.activePaneIndex.value,
+                appId,
+                opts
+            );
+        },
         openChat: async (threadId?: string) => {
             const index = multiPaneApi.panes.value.length;
             multiPaneApi.addPane();
@@ -87,7 +103,9 @@ export function provideSidebarEnvironment(environment: SidebarEnvironment) {
 export function useSidebarEnvironment(): SidebarEnvironment {
     const environment = inject(SidebarEnvironmentKey);
     if (!environment) {
-        throw new Error('useSidebarEnvironment must be used within a component that provides SidebarEnvironment');
+        throw new Error(
+            'useSidebarEnvironment must be used within a component that provides SidebarEnvironment'
+        );
     }
     return environment;
 }
@@ -131,7 +149,7 @@ export function useSidebarQuery() {
     const environment = useSidebarEnvironment();
     const query = environment.getSidebarQuery();
     const setQuery = environment.setSidebarQuery;
-    
+
     return {
         query,
         setQuery,
@@ -145,7 +163,7 @@ export function useActiveSections() {
     const environment = useSidebarEnvironment();
     const activeSections = environment.getActiveSections();
     const setActiveSections = environment.setActiveSections;
-    
+
     return {
         activeSections,
         setActiveSections,
@@ -159,7 +177,7 @@ export function useExpandedProjects() {
     const environment = useSidebarEnvironment();
     const expandedProjects = environment.getExpandedProjects();
     const setExpandedProjects = environment.setExpandedProjects;
-    
+
     return {
         expandedProjects,
         setExpandedProjects,
@@ -173,7 +191,7 @@ export function useActiveThreadIds() {
     const environment = useSidebarEnvironment();
     const activeThreadIds = environment.getActiveThreadIds();
     const setActiveThreadIds = environment.setActiveThreadIds;
-    
+
     return {
         activeThreadIds,
         setActiveThreadIds,
@@ -187,7 +205,7 @@ export function useActiveDocumentIds() {
     const environment = useSidebarEnvironment();
     const activeDocumentIds = environment.getActiveDocumentIds();
     const setActiveDocumentIds = environment.setActiveDocumentIds;
-    
+
     return {
         activeDocumentIds,
         setActiveDocumentIds,
@@ -231,7 +249,9 @@ export interface SidebarPageControls {
 export function useSidebarPageControls(): SidebarPageControls {
     const controls = inject(SidebarPageControlsKey);
     if (!controls) {
-        throw new Error('useSidebarPageControls must be used within a component that provides SidebarPageControls');
+        throw new Error(
+            'useSidebarPageControls must be used within a component that provides SidebarPageControls'
+        );
     }
     return controls;
 }

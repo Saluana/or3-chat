@@ -38,5 +38,9 @@ export {
 } from './registerSidebarPage';
 
 // Re-export types for convenience
-export type { SidebarPageDef, RegisteredSidebarPage } from './useSidebarPages';
-export type { SidebarActivateContext, SidebarPageContext } from './useActiveSidebarPage';
+export type { 
+    SidebarPageDef, 
+    RegisteredSidebarPage,
+    SidebarActivateContext,
+    SidebarPageContext 
+} from './useSidebarPages';

@@ -25,7 +25,13 @@
                     "category": "Tutorial",
                     "summary": "Step-by-step guide to setting up a local development environment for OR3. Covers cloning the repo, installing dependencies, running the dev server, and debugging tips."
                 },
-                              {
+                {
+                    "name": "snake-game-tutorial.md",
+                    "path": "/start/snake-game-tutorial",
+                    "category": "Tutorial",
+                    "summary": "Comprehensive guide to building custom pane applications for OR3's multi-pane workspace. Learn by building a complete Snake Game with data persistence, sidebar integration, and proper pane management patterns.\n\nCovers:\n- Pane app architecture and registration\n- Vue reactivity with game logic classes\n- Data persistence using custom post types\n- Sidebar pages for navigation and management\n- Pane lifecycle and cleanup patterns\n- Real code examples from the Snake Game\n- Best practices and common patterns\n- Testing and debugging tips"
+                },
+                {
                     "name": "mini-app-tutorial.md",
                     "path": "/start/mini-app-tutorial",
                     "category": "Tutorial",

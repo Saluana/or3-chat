@@ -55,6 +55,11 @@ export interface UseMultiPaneApi {
         appId: string,
         opts?: { initialRecordId?: string }
     ) => Promise<void>;
+    setPaneApp: (
+        index: number,
+        appId: string,
+        opts?: { recordId?: string }
+    ) => Promise<void>;
     updatePane: (index: number, updates: Partial<PaneState>) => void;
 }
 
@@ -401,15 +406,123 @@ export function useMultiPane(
     }
 
     /**
+     * Switch an existing pane to a specific app mode.
+     * Similar to how setPaneThread switches to chat mode, this switches to an app mode.
+     * @param index - The pane index to modify
+     * @param appId - The pane app ID to switch to
+     * @param opts - Optional configuration (e.g., recordId to use existing record or create new)
+     */
+    async function setPaneApp(
+        index: number,
+        appId: string,
+        opts: { recordId?: string } = {}
+    ): Promise<void> {
+        const pane = panes.value[index];
+        if (!pane) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[multiPane] setPaneApp: Pane at index ${index} not found`
+                );
+            }
+            return;
+        }
+
+        // Lazy import to avoid circular dependencies
+        let getPaneApp: any;
+        try {
+            const { usePaneApps } = await import('./usePaneApps');
+            getPaneApp = usePaneApps().getPaneApp;
+        } catch (e) {
+            if (import.meta.dev) {
+                console.error(
+                    '[multiPane] setPaneApp: Failed to import usePaneApps',
+                    e
+                );
+            }
+            return;
+        }
+
+        // Resolve pane app definition
+        const appDef = getPaneApp(appId);
+        if (!appDef) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[multiPane] setPaneApp: Pane app "${appId}" not registered`
+                );
+            }
+            return;
+        }
+
+        // Store old values for hooks
+        const oldMode = pane.mode;
+        const oldDocumentId = pane.documentId;
+
+        // If no recordId provided and app has createInitialRecord, create new record
+        let recordId = opts.recordId;
+        if (!recordId && appDef.createInitialRecord) {
+            try {
+                const result = await appDef.createInitialRecord({
+                    app: appDef,
+                });
+                if (result && result.id) {
+                    recordId = result.id;
+                }
+            } catch (error) {
+                if (import.meta.dev) {
+                    console.error(
+                        `[multiPane] setPaneApp: createInitialRecord failed for "${appId}"`,
+                        error
+                    );
+                }
+                return;
+            }
+        }
+
+        // Update pane to app mode
+        pane.mode = appId;
+        pane.documentId = recordId;
+        pane.threadId = '';
+        pane.messages = [];
+
+        // Fire hook if mode changed
+        if (oldMode !== appId) {
+            try {
+                hooks.doAction('ui.pane.open:action:after', {
+                    pane,
+                    index,
+                    previousIndex: index, // Same pane, just mode changed
+                });
+            } catch (e) {
+                // Hook errors should not abort pane switch
+                if (import.meta.dev) {
+                    console.error('[multiPane] setPaneApp: Hook error', e);
+                }
+            }
+        }
+
+        if (import.meta.dev) {
+            try {
+                console.debug('[multiPane] setPaneApp:switched', {
+                    appId,
+                    paneId: pane.id,
+                    recordId,
+                    index,
+                    oldMode,
+                });
+            } catch {}
+        }
+    }
+
+    /**
      * Update pane properties safely (maintains reactivity)
      */
     function updatePane(index: number, updates: Partial<PaneState>) {
         const pane = panes.value[index];
         if (!pane) return;
-        
+
         // Update properties while maintaining Vue reactivity
         Object.assign(pane, updates);
-        
+
         if (import.meta.dev) {
             console.debug('[multiPane] updatePane', { index, updates });
         }
@@ -429,6 +542,7 @@ export function useMultiPane(
         loadMessagesFor,
         ensureAtLeastOne,
         newPaneForApp,
+        setPaneApp,
         updatePane,
     };
 
