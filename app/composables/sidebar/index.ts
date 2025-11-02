@@ -1,6 +1,9 @@
-// Re-export all sidebar composables for easier imports
-export { useSidebarPages } from './useSidebarPages';
+// Re-export all sidebar composables
+// Core sidebar composables
 export { useActiveSidebarPage } from './useActiveSidebarPage';
+export { useSidebarPages } from './useSidebarPages';
+
+// Environment and data access helpers
 export { 
     provideSidebarEnvironment,
     provideSidebarPageControls,
@@ -9,18 +12,31 @@ export {
     useSidebarThreads,
     useSidebarDocuments,
     useSidebarSections,
-    useSidebarQuery,
-    useActiveSections,
-    useExpandedProjects,
-    useActiveThreadIds,
-    useActiveDocumentIds,
-    useSidebarFooterActions,
-    useSidebarMultiPane,
     useSidebarPostsApi,
-    useSidebarPageControls,
+    useSidebarMultiPane,
     createSidebarMultiPaneApi,
-    SidebarEnvironmentKey,
     type SidebarEnvironment,
-    type SidebarMultiPaneApi,
-    type SidebarPageControls
+    type SidebarPageControls,
+    type SidebarMultiPaneApi
 } from './useSidebarEnvironment';
+
+// Page controls and state management
+export {
+    useSidebarPageControls,
+    useIsActivePage,
+    useActivePageId,
+    useSwitchToPage,
+    useResetToDefaultPage,
+    useSidebarPageState,
+} from './useSidebarPageControls';
+
+// Registration helpers with DX improvements
+export {
+    registerSidebarPage,
+    type RegisterSidebarPageOptions,
+    type RegisterSidebarPageWithPostsOptions,
+} from './registerSidebarPage';
+
+// Re-export types for convenience
+export type { SidebarPageDef, RegisteredSidebarPage } from './useSidebarPages';
+export type { SidebarActivateContext, SidebarPageContext } from './useActiveSidebarPage';

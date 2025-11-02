@@ -27,19 +27,19 @@
 
 5. Collapsed Navigation
 
-- [ ] Inject page list into `SideNavContentCollapsed.vue` and render ordered icon buttons.
-- [ ] Highlight active page, respect `page.canActivate`, and maintain keyboard accessibility.
-- [ ] Provide visual regression/screenshot coverage if available.
+- [x] Inject page list into `SideNavContentCollapsed.vue` and render ordered icon buttons.
+- [x] Highlight active page, respect `page.canActivate`, and maintain keyboard accessibility.
+- [x] Provide visual regression/screenshot coverage if available.
 
 6. Plugin DX Helpers
 
-- [ ] Create `app/composables/sidebar/registerSidebarPage.ts` exporting register helper + HMR cleanup.
-- [ ] Ship `useSidebarPageControls.ts` plus environment-backed helpers to surface multi-pane/posts APIs without tight coupling.
-- [ ] Update type exports/barrels so plugins import from a stable path.
+- [x] Create `app/composables/sidebar/registerSidebarPage.ts` exporting register helper + HMR cleanup.
+- [x] Ship `useSidebarPageControls.ts` plus environment-backed helpers to surface multi-pane/posts APIs without tight coupling.
+- [x] Update type exports/barrels so plugins import from a stable path.
 
 7. Example & Migration Aids
 
-- [ ] Update `custom-pane-todo-example.client.ts` to register a sidebar page that lists todos and opens panes.
+- [x] Update `custom-pane-todo-example.client.ts` to register a sidebar page that lists todos and opens panes.
 - [ ] Add README/guide snippet explaining sidebar page + pane app interplay.
 - [ ] Provide migration notes referencing V1 vs V2 behaviour.
 

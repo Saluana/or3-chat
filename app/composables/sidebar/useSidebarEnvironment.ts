@@ -6,8 +6,10 @@ export interface SidebarMultiPaneApi {
     openChat: (threadId?: string) => Promise<void>;
     openDoc: (documentId?: string) => Promise<void>;
     closePane: (index: number) => Promise<void> | void;
+    setActive: (index: number) => void;
     panes: Ref<any[]>;
     activePaneId: Ref<string | null>;
+    updatePane: (index: number, updates: Partial<any>) => void;
 }
 
 export interface SidebarEnvironment {
@@ -61,12 +63,14 @@ export function createSidebarMultiPaneApi(multiPaneApi: UseMultiPaneApi): Sideba
             multiPaneApi.addPane();
         },
         closePane: multiPaneApi.closePane,
+        setActive: multiPaneApi.setActive,
         panes: multiPaneApi.panes,
         activePaneId: computed(() => {
             const activeIndex = multiPaneApi.activePaneIndex.value;
             const pane = multiPaneApi.panes.value[activeIndex];
             return pane?.id || null;
         }),
+        updatePane: multiPaneApi.updatePane,
     };
 }
 

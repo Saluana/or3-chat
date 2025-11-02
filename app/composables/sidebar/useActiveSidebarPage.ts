@@ -1,6 +1,9 @@
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { useSidebarPages } from './useSidebarPages';
-import type { RegisteredSidebarPage, SidebarActivateContext } from './useSidebarPages';
+import type {
+    RegisteredSidebarPage,
+    SidebarActivateContext,
+} from './useSidebarPages';
 import { useHooks } from '~/core/hooks/useHooks';
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
@@ -29,25 +32,50 @@ function loadActivePage(): string | null {
     }
 }
 
+// Global singleton state (similar to useSidebarPages registry pattern)
+const g: any = globalThis as any;
+
+// Initialize global state once
+if (!g.__or3ActiveSidebarPageState) {
+    const storedId = loadActivePage();
+    const initialRequestedPageId =
+        storedId && storedId !== DEFAULT_PAGE_ID ? storedId : null;
+
+    g.__or3ActiveSidebarPageState = {
+        activePageId: ref<string>(
+            initialRequestedPageId
+                ? DEFAULT_PAGE_ID
+                : storedId || DEFAULT_PAGE_ID
+        ),
+        previousPageId: ref<string | null>(null),
+        initialRequestedPageId,
+        isInitialized: false, // Track if we've run the mount logic
+    };
+}
+
 /**
  * Composable for managing the active sidebar page state.
  * Handles persistence, activation hooks, and page transitions.
+ * Uses global singleton state to ensure consistency across all components.
  */
 export function useActiveSidebarPage() {
-    const { getSidebarPage } = useSidebarPages();
+    const { getSidebarPage, listSidebarPages } = useSidebarPages();
     const hooks = useHooks();
 
-    // Initialize active page ID from storage or default
-    const storedId = loadActivePage();
-    const activePageId = ref<string>(storedId || DEFAULT_PAGE_ID);
+    // Get global singleton state
+    const state = (globalThis as any).__or3ActiveSidebarPageState;
+    const activePageId = state.activePageId;
+    const previousPageId = state.previousPageId;
+    const initialRequestedPageId = state.initialRequestedPageId;
 
     // Computed for the active page definition
     const activePageDef = computed<RegisteredSidebarPage | null>(() => {
-        return getSidebarPage(activePageId.value) || getSidebarPage(DEFAULT_PAGE_ID) || null;
+        return (
+            getSidebarPage(activePageId.value) ||
+            getSidebarPage(DEFAULT_PAGE_ID) ||
+            null
+        );
     });
-
-    // Track previous page for hooks
-    const previousPageId = ref<string | null>(null);
 
     /**
      * Set the active sidebar page with hook execution
@@ -60,13 +88,15 @@ export function useActiveSidebarPage() {
         const nextPage = getSidebarPage(id) || getSidebarPage(DEFAULT_PAGE_ID);
         if (!nextPage) {
             if (import.meta.dev) {
-                console.warn(`[useActiveSidebarPage] Unknown page id: ${id}, falling back to default`);
+                console.warn(
+                    `[useActiveSidebarPage] Unknown page id: ${id}, falling back to default`
+                );
             }
             return false;
         }
 
         const currentPage = getSidebarPage(activePageId.value);
-        
+
         // Create activation context
         const ctx: SidebarActivateContext = {
             page: nextPage,
@@ -79,7 +109,9 @@ export function useActiveSidebarPage() {
         try {
             // Check activation guard
             if (nextPage.canActivate) {
-                const canActivate = await Promise.resolve(nextPage.canActivate(ctx));
+                const canActivate = await Promise.resolve(
+                    nextPage.canActivate(ctx)
+                );
                 if (!canActivate) {
                     return false;
                 }
@@ -110,7 +142,10 @@ export function useActiveSidebarPage() {
 
             return true;
         } catch (error) {
-            console.error('[useActiveSidebarPage] Error during page activation:', error);
+            console.error(
+                '[useActiveSidebarPage] Error during page activation:',
+                error
+            );
             // Revert to previous page on error
             if (previousPageId.value) {
                 activePageId.value = previousPageId.value;
@@ -132,9 +167,42 @@ export function useActiveSidebarPage() {
     watch(activePageId, (newId) => {
         const page = getSidebarPage(newId);
         if (!page && newId !== DEFAULT_PAGE_ID) {
-            console.warn(`[useActiveSidebarPage] Active page ${newId} not found, resetting to default`);
+            console.warn(
+                `[useActiveSidebarPage] Active page ${newId} not found, resetting to default`
+            );
             activePageId.value = DEFAULT_PAGE_ID;
         }
+    });
+
+    // Only run initialization logic once globally
+    onMounted(() => {
+        if (state.isInitialized || !initialRequestedPageId) return;
+        state.isInitialized = true;
+
+        const attemptActivation = async () => {
+            await setActivePage(initialRequestedPageId);
+        };
+
+        if (getSidebarPage(initialRequestedPageId)) {
+            attemptActivation();
+            return;
+        }
+
+        const stop = watch(
+            () => listSidebarPages.value.map((page) => page.id),
+            (ids) => {
+                if (ids.includes(initialRequestedPageId)) {
+                    attemptActivation();
+                    stop();
+                }
+            },
+            { immediate: true }
+        );
+        
+        // Add cleanup on unmount
+        onUnmounted(() => {
+            stop();
+        });
     });
 
     return {

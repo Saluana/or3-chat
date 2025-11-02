@@ -55,6 +55,7 @@ export interface UseMultiPaneApi {
         appId: string,
         opts?: { initialRecordId?: string }
     ) => Promise<void>;
+    updatePane: (index: number, updates: Partial<PaneState>) => void;
 }
 
 function genId() {
@@ -399,6 +400,21 @@ export function useMultiPane(
         }
     }
 
+    /**
+     * Update pane properties safely (maintains reactivity)
+     */
+    function updatePane(index: number, updates: Partial<PaneState>) {
+        const pane = panes.value[index];
+        if (!pane) return;
+        
+        // Update properties while maintaining Vue reactivity
+        Object.assign(pane, updates);
+        
+        if (import.meta.dev) {
+            console.debug('[multiPane] updatePane', { index, updates });
+        }
+    }
+
     const api: UseMultiPaneApi = {
         panes,
         activePaneIndex,
@@ -413,6 +429,7 @@ export function useMultiPane(
         loadMessagesFor,
         ensureAtLeastOne,
         newPaneForApp,
+        updatePane,
     };
 
     // Expose globally so plugins (message action handlers etc.) can interact.

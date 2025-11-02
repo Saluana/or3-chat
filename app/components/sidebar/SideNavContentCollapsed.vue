@@ -76,23 +76,56 @@
                 />
             </UTooltip>
 
-            <div v-if="orderedPages.length" class="pt-2 flex flex-col space-y-2">
-                <UTooltip
-                    v-for="page in orderedPages"
-                    :key="`sidebar-page-btn-${page.id}`"
-                    :delay-duration="0"
-                    :text="page.label"
-                >
-                    <UButton
-                        size="md"
-                        class="flex item-center justify-center"
-                        :icon="page.icon || 'pixelarticons:view-grid'"
-                        :aria-pressed="activePageId === page.id"
-                        :ui="pageButtonUi(activePageId === page.id)"
-                        @click="() => handlePageSelect(page.id)"
-                    />
-                </UTooltip>
-            </div>
+            <ClientOnly>
+                <div class="pt-2 flex flex-col space-y-2 border-t-2">
+                    <UTooltip
+                        :delay-duration="0"
+                        :content="{
+                            side: 'right',
+                        }"
+                        text="Home"
+                    >
+                        <UButton
+                            size="md"
+                            class="flex item-center justify-center"
+                            icon="pixelarticons:home"
+                            :aria-pressed="activePageId === DEFAULT_PAGE_ID"
+                            aria-label="Home"
+                            :ui="pageButtonUi(activePageId === DEFAULT_PAGE_ID)"
+                            @click="() => handlePageSelect(DEFAULT_PAGE_ID)"
+                            @keydown.enter="
+                                () => handlePageSelect(DEFAULT_PAGE_ID)
+                            "
+                            @keydown.space.prevent="
+                                () => handlePageSelect(DEFAULT_PAGE_ID)
+                            "
+                        />
+                    </UTooltip>
+                    <UTooltip
+                        v-for="page in orderedPages"
+                        :key="`sidebar-page-btn-${page.id}`"
+                        :content="{
+                            side: 'right',
+                        }"
+                        :delay-duration="0"
+                        :text="page.label"
+                    >
+                        <UButton
+                            size="md"
+                            class="flex item-center justify-center"
+                            :icon="page.icon || 'pixelarticons:view-grid'"
+                            :aria-pressed="activePageId === page.id"
+                            :aria-label="page.label"
+                            :ui="pageButtonUi(activePageId === page.id)"
+                            @click="() => handlePageSelect(page.id)"
+                            @keydown.enter="() => handlePageSelect(page.id)"
+                            @keydown.space.prevent="
+                                () => handlePageSelect(page.id)
+                            "
+                        />
+                    </UTooltip>
+                </div>
+            </ClientOnly>
         </div>
         <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
             <UButton
@@ -138,11 +171,14 @@
                 </UButton>
             </UTooltip>
         </div>
-        <SideBottomNav @toggle-dashboard="emit('toggle-dashboard')" />
+        <ClientOnly>
+            <SideBottomNav @toggle-dashboard="emit('toggle-dashboard')" />
+        </ClientOnly>
     </div>
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useToast } from '#imports';
 import {
     useSidebarFooterActions,
     type SidebarFooterActionEntry,
@@ -164,17 +200,11 @@ const orderedPages = computed(() => {
     const pages = listSidebarPages.value.slice();
     if (!pages.length) return [];
 
-    const sorted = pages.sort(
-        (a, b) => (a.order ?? 200) - (b.order ?? 200)
-    );
+    // Filter out the default page as it should not appear in collapsed nav
+    const filtered = pages.filter((page) => page.id !== DEFAULT_PAGE_ID);
 
-    const homeIndex = sorted.findIndex((page) => page.id === DEFAULT_PAGE_ID);
-    const home = homeIndex >= 0 ? sorted.splice(homeIndex, 1)[0] : null;
-    const others = sorted;
-
-    if (!home) return others;
-    if (!others.length) return [];
-    return [home, ...others];
+    // Sort by order (default 200) so custom pages appear under built-in controls
+    return filtered.sort((a, b) => (a.order ?? 200) - (b.order ?? 200));
 });
 
 const activeDocumentIds = computed<string[]>(() => {
@@ -219,16 +249,43 @@ async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
     }
 }
 
+const toast = useToast();
+
 async function handlePageSelect(pageId: string) {
     if (pageId === activePageId.value) return;
-    const ok = await setActivePage(pageId);
-    if (!ok && import.meta.dev) {
-        console.warn(`[SidebarCollapsed] unable to activate sidebar page "${pageId}"`);
+
+    try {
+        const ok = await setActivePage(pageId);
+        if (!ok) {
+            // Show toast if activation was vetoed
+            const page = listSidebarPages.value.find((p) => p.id === pageId);
+            toast.add({
+                title: 'Cannot switch page',
+                description: page?.label
+                    ? `Unable to activate "${page.label}"`
+                    : 'Page activation failed',
+                color: 'neutral',
+            });
+        } else {
+            // Expand sidebar to show the selected page content
+            emit('expand-sidebar');
+        }
+    } catch (error) {
+        console.error(
+            `[SidebarCollapsed] failed to activate sidebar page "${pageId}"`,
+            error
+        );
+        toast.add({
+            title: 'Error',
+            description: 'Failed to switch pages',
+            color: 'error',
+        });
     }
 }
 
 function pageButtonUi(isActive: boolean) {
-    const base = 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]';
+    const base =
+        'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]';
     if (!isActive) return { base };
     return {
         base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
@@ -241,5 +298,6 @@ const emit = defineEmits<{
     (e: 'new-project'): void;
     (e: 'focus-search'): void;
     (e: 'toggle-dashboard'): void;
+    (e: 'expand-sidebar'): void;
 }>();
 </script>

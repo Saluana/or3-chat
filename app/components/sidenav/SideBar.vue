@@ -8,6 +8,7 @@
             @new-project="openCreateProject"
             @focus-search="focusSearchInput"
             @toggle-dashboard="emit('toggleDashboard')"
+            @expand-sidebar="() => {}"
         />
         <SidebarSideNavContent
             ref="sideNavContentRef"

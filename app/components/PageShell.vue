@@ -19,6 +19,7 @@
                 @new-project="openCollapsedCreateProjectModal"
                 @focus-search="focusSidebarSearch"
                 @toggle-dashboard="showDashboardModal = !showDashboardModal"
+                @expand-sidebar="expandSidebar"
             />
         </template>
         <!--
@@ -341,11 +342,17 @@ const { getPaneApp } = usePaneApps();
 function resolvePaneComponent(pane: PaneState): Component {
     // Built-in: chat
     if (pane.mode === 'chat') {
+        if (import.meta.dev) {
+            console.debug('[PageShell] resolve component: chat');
+        }
         return ChatContainer;
     }
 
     // Built-in: doc (lazy loaded)
     if (pane.mode === 'doc') {
+        if (import.meta.dev) {
+            console.debug('[PageShell] resolve component: doc');
+        }
         return defineAsyncComponent(
             () => import('~/components/documents/DocumentEditor.vue')
         );
@@ -353,11 +360,24 @@ function resolvePaneComponent(pane: PaneState): Component {
 
     // Custom pane app
     const app = getPaneApp(pane.mode);
+    if (import.meta.dev && !app?.component) {
+        console.warn('[PageShell] Missing component for pane mode', pane.mode);
+    }
     if (app?.component) {
+        if (import.meta.dev) {
+            console.debug(
+                '[PageShell] resolve component: custom',
+                pane.mode,
+                app.component
+            );
+        }
         return app.component as Component;
     }
 
     // Fallback for unknown modes
+    if (import.meta.dev) {
+        console.debug('[PageShell] resolve component: unknown', pane.mode);
+    }
     return PaneUnknown;
 }
 
@@ -385,11 +405,20 @@ function buildPaneProps(
 
     // Custom pane app - provide generic contract
     const app = getPaneApp(pane.mode);
+    const panePluginApi = (globalThis as any).__or3PanePluginApi ?? null;
+    if (import.meta.dev) {
+        console.debug('[PageShell] build props for custom pane', {
+            paneId: pane.id,
+            mode: pane.mode,
+            recordId: pane.documentId ?? null,
+            hasPostApi: !!panePluginApi?.posts,
+        });
+    }
     return {
         paneId: pane.id,
         recordId: pane.documentId ?? null,
         postType: app?.postType ?? pane.mode,
-        // Note: postApi would be added here in task 5
+        postApi: panePluginApi?.posts ?? null,
     };
 }
 
@@ -714,6 +743,12 @@ async function ensureSidebarExpanded() {
             }
         );
     });
+}
+
+function expandSidebar() {
+    const layout: any = layoutRef.value;
+    if (!layout) return;
+    layout?.expand?.();
 }
 
 async function focusSidebarSearch() {

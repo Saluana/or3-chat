@@ -4,24 +4,31 @@
         class="flex flex-col w-full h-full relative overflow-hidden"
     >
         <!-- Header only shown for pages that use default header -->
-        <SideNavHeader
-            v-if="activePageDef?.usesDefaultHeader"
-            ref="sideNavHeaderRef"
-            :sidebar-query="sidebarQuery"
-            :active-sections="activeSections"
-            :projects="projects"
-            @update:sidebar-query="emit('update:sidebar-query', $event)"
-            @update:active-sections="emit('update:active-sections', $event)"
-            @new-chat="emit('new-chat')"
-            @new-document="emit('new-document', $event)"
-            @open-rename="emit('open-rename', $event)"
-            @open-rename-project="emit('open-rename-project', $event)"
-            @add-to-project="emit('add-to-project', $event)"
-            @add-document-to-project="emit('add-document-to-project', $event)"
-        />
+        <ClientOnly>
+            <SideNavHeader
+                v-if="activePageDef?.usesDefaultHeader"
+                ref="sideNavHeaderRef"
+                :sidebar-query="sidebarQuery"
+                :active-sections="activeSections"
+                :projects="projects"
+                @update:sidebar-query="emit('update:sidebar-query', $event)"
+                @update:active-sections="emit('update:active-sections', $event)"
+                @new-chat="emit('new-chat')"
+                @new-document="emit('new-document', $event)"
+                @open-rename="emit('open-rename', $event)"
+                @open-rename-project="emit('open-rename-project', $event)"
+                @add-to-project="emit('add-to-project', $event)"
+                @add-document-to-project="
+                    emit('add-document-to-project', $event)
+                "
+            />
+        </ClientOnly>
 
         <!-- Dynamic page content with suspense and keepalive -->
-        <div ref="scrollAreaRef" class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden">
+        <div
+            ref="scrollAreaRef"
+            class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
+        >
             <!-- Dynamic page renderer -->
             <Suspense>
                 <template #default>
@@ -53,7 +60,7 @@
                 </template>
             </Suspense>
         </div>
-        
+
         <div ref="bottomNavRef" class="shrink-0 flex flex-col gap-2">
             <div
                 v-if="sidebarFooterActions.length"
@@ -89,15 +96,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, type Component } from 'vue';
-import { useMultiPane } from '~/composables/core/useMultiPane';
+import { ref, computed, shallowRef, type Component } from 'vue';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
-import { 
-    provideSidebarEnvironment, 
+import {
+    provideSidebarEnvironment,
     createSidebarMultiPaneApi,
     type SidebarEnvironment,
     type SidebarPageControls,
-    provideSidebarPageControls
+    provideSidebarPageControls,
 } from '~/composables/sidebar/useSidebarEnvironment';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import SidebarHomePage from '~/components/sidebar/SidebarHomePage.vue';
@@ -162,12 +168,22 @@ const emit = defineEmits([
     'sidebar-footer-action',
 ]);
 
-// Get multi-pane API and create sidebar adapter
-const multiPaneApi = useMultiPane();
-const sidebarMultiPaneApi = createSidebarMultiPaneApi(multiPaneApi);
+// Get multi-pane API from the instance initialised in PageShell
+const multiPaneApiRef = shallowRef<ReturnType<typeof useMultiPane> | null>(
+    (globalThis as any).__or3MultiPaneApi ?? null
+);
+
+if (!multiPaneApiRef.value && import.meta.dev) {
+    console.warn('[SideNavContent] Waiting for __or3MultiPaneApi initialization');
+}
+
+const sidebarMultiPaneApi = multiPaneApiRef.value 
+    ? createSidebarMultiPaneApi(multiPaneApiRef.value)
+    : null;
 
 // Get active page state
-const { activePageId, activePageDef, setActivePage, resetToDefault } = useActiveSidebarPage();
+const { activePageId, activePageDef, setActivePage, resetToDefault } =
+    useActiveSidebarPage();
 
 const projectsRef = computed(() => props.projects);
 const threadsRef = computed(() => props.displayThreads);
@@ -182,7 +198,9 @@ const footerActionsRef = computed(() => props.sidebarFooterActions);
 
 // Create environment for child components
 const environment: SidebarEnvironment = {
-    getMultiPane: () => sidebarMultiPaneApi,
+    getMultiPane: () => sidebarMultiPaneApi || (() => {
+        throw new Error('Multi-pane API not available');
+    })(),
     getPanePluginApi: () => (globalThis as any).__or3PanePluginApi || null,
     getProjects: () => projectsRef,
     getThreads: () => threadsRef,
@@ -193,7 +211,8 @@ const environment: SidebarEnvironment = {
     getActiveSections: () => activeSectionsRef,
     setActiveSections: (sections) => emit('update:active-sections', sections),
     getExpandedProjects: () => expandedProjectsRef,
-    setExpandedProjects: (projects) => emit('update:expanded-projects', projects),
+    setExpandedProjects: (projects) =>
+        emit('update:expanded-projects', projects),
     getActiveThreadIds: () => activeThreadIdsRef,
     setActiveThreadIds: (ids) => emit('update:active-thread-ids', ids),
     getActiveDocumentIds: () => activeDocumentIdsRef,
@@ -248,7 +267,7 @@ const activePageProps = computed(() => {
 // Forward events from active page to parent
 const forwardedEvents = computed(() => {
     const events: Record<string, (payload: any) => void> = {};
-    
+
     // Forward all existing events
     const eventNames = [
         'add-chat-to-project',
@@ -270,7 +289,7 @@ const forwardedEvents = computed(() => {
         'sidebar-footer-action',
     ];
 
-    eventNames.forEach(eventName => {
+    eventNames.forEach((eventName) => {
         events[eventName] = (payload: any) => emit(eventName as any, payload);
     });
 
@@ -297,7 +316,7 @@ function focusSearchInput() {
     return sideNavHeaderRef.value?.focusSearchInput?.() ?? false;
 }
 
-defineExpose({ 
+defineExpose({
     focusSearchInput,
     setActivePage,
     resetToDefault,
