@@ -298,15 +298,17 @@ export function useMultiPane(
         const currentWidth = paneWidths.value[paneIndex];
         const nextWidth = paneWidths.value[paneIndex + 1];
         
-        const newCurrentWidth = clampWidth(currentWidth + deltaX);
-        const actualDelta = newCurrentWidth - currentWidth;
-        const newNextWidth = clampWidth(nextWidth - actualDelta);
-        
-        // Only update if both constraints satisfied
-        if (newCurrentWidth >= minPaneWidth && newNextWidth >= minPaneWidth) {
-            paneWidths.value[paneIndex] = newCurrentWidth;
-            paneWidths.value[paneIndex + 1] = newNextWidth;
-            persistWidths();
+        if (currentWidth !== undefined && nextWidth !== undefined) {
+            const newCurrentWidth = clampWidth(currentWidth + deltaX);
+            const actualDelta = newCurrentWidth - currentWidth;
+            const newNextWidth = clampWidth(nextWidth - actualDelta);
+            
+            // Only update if both constraints satisfied
+            if (newCurrentWidth >= minPaneWidth && newNextWidth >= minPaneWidth) {
+                paneWidths.value[paneIndex] = newCurrentWidth;
+                paneWidths.value[paneIndex + 1] = newNextWidth;
+                persistWidths();
+            }
         }
     }
 
@@ -468,15 +470,17 @@ export function useMultiPane(
         // Redistribute width to remaining panes
         if (paneWidths.value.length > i && paneWidths.value.length === panes.value.length) {
             const removedWidth = paneWidths.value[i];
-            paneWidths.value.splice(i, 1);
-            
-            if (paneWidths.value.length > 0) {
-                const additionPerPane = removedWidth / paneWidths.value.length;
-                paneWidths.value = paneWidths.value.map(w => 
-                    clampWidth(w + additionPerPane)
-                );
+            if (removedWidth !== undefined) {
+                paneWidths.value.splice(i, 1);
+                
+                if (paneWidths.value.length > 0) {
+                    const additionPerPane = removedWidth / paneWidths.value.length;
+                    paneWidths.value = paneWidths.value.map(w => 
+                        clampWidth(w + additionPerPane)
+                    );
+                }
+                persistWidths();
             }
-            persistWidths();
         }
         
         const wasActive = i === activePaneIndex.value;

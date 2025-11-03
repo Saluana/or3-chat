@@ -351,13 +351,18 @@ function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
         event.preventDefault();
         // Set to minimum width - calculate delta from current
         const currentWidth = paneWidths.value[paneIndex];
-        deltaX = minPaneWidth - currentWidth;
+        if (currentWidth !== undefined) {
+            deltaX = minPaneWidth - currentWidth;
+        }
     } else if (event.key === 'End') {
         event.preventDefault();
         // Set to maximum possible width
+        const currentWidth = paneWidths.value[paneIndex];
         const nextWidth = paneWidths.value[paneIndex + 1];
-        const available = paneWidths.value[paneIndex] + nextWidth - minPaneWidth; // keep next at minPaneWidth
-        deltaX = available - paneWidths.value[paneIndex];
+        if (currentWidth !== undefined && nextWidth !== undefined) {
+            const available = currentWidth + nextWidth - minPaneWidth; // keep next at minPaneWidth
+            deltaX = available - currentWidth;
+        }
     }
     
     if (deltaX !== 0) {
