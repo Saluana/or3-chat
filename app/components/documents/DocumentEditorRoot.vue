@@ -112,7 +112,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, computed, nextTick } from 'vue';
+import {
+    onMounted,
+    onBeforeUnmount,
+    ref,
+    watch,
+    computed,
+    nextTick,
+    type Ref,
+} from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import {
     useDocumentState,
@@ -148,6 +156,7 @@ watch(
         // Switch to new state object from map
         const currentLoadId = id;
         await loadDocument(id);
+        if (didUnmount) return;
         if (props.documentId !== currentLoadId) return; // prop changed again
         titleDraft.value = state.value.record?.title || '';
         if (editor.value && state.value.record) {
@@ -159,6 +168,7 @@ watch(
 
 const editor = ref<Editor | null>(null);
 const editorMountEl = ref<HTMLElement | null>(null);
+let didUnmount = false;
 
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
@@ -205,9 +215,11 @@ async function makeEditor() {
     );
 
     try {
+        if (didUnmount) return;
         let mountTarget = editorMountEl.value;
         if (!mountTarget) {
             await nextTick();
+            if (didUnmount) return;
             mountTarget = editorMountEl.value;
         }
         if (!mountTarget) {
@@ -246,6 +258,7 @@ async function makeEditor() {
 
 onMounted(async () => {
     await loadDocument(props.documentId);
+    if (didUnmount) return;
     // Ensure title reflects loaded record (refresh / deep link case)
     titleDraft.value = state.value.record?.title || titleDraft.value || '';
     // Ensure initial state ref matches (in case of rapid prop change before mount)
@@ -253,6 +266,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+    didUnmount = true;
     editor.value?.destroy();
 });
 

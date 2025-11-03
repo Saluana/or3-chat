@@ -225,9 +225,20 @@ import type {
     DocumentEntity,
 } from '~/core/hooks/hook-types';
 import { useMagicKeys, whenever } from '@vueuse/core';
-import { type Component, shallowRef, markRaw, nextTick, watch } from 'vue';
+import {
+    type Component,
+    shallowRef,
+    markRaw,
+    nextTick,
+    watch,
+    defineAsyncComponent,
+} from 'vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
+
+const DocumentEditorAsync = defineAsyncComponent(
+    () => import('~/components/documents/DocumentEditor.vue')
+);
 
 const props = withDefaults(
     defineProps<{
@@ -332,9 +343,7 @@ function resolvePaneComponent(pane: PaneState): Component {
         if (import.meta.dev) {
             console.debug('[PageShell] resolve component: doc');
         }
-        return defineAsyncComponent(
-            () => import('~/components/documents/DocumentEditor.vue')
-        );
+        return DocumentEditorAsync;
     }
 
     // Custom pane app
