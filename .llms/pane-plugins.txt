@@ -7,15 +7,15 @@ Based on the example and codebase, here's exactly how developing a multipane min
 #### **1. Plugin Registration (Entry Point)**
 You create a `.client.ts` Nuxt plugin file that runs client-side and:
 - Imports `usePaneApps()` to access the global pane registry
-- Imports `registerSidebarPostList()` helper for the sidebar UI
+- Imports `registerSidebarPage()` helper for optional sidebar UI
 - Calls these functions during plugin initialization
 
 #### **2. Three-Layer Architecture**
 
 ```
 Your Plugin (.client.ts)
-    ↓
-[Registry Layer] usePaneApps + registerSidebarPostList
+   ↓
+[Registry Layer] usePaneApps + registerSidebarPage
     ↓
 [State Layer] useMultiPane + usePostsList (live Dexie queries)
     ↓
@@ -32,7 +32,7 @@ Your Plugin (.client.ts)
 |------|----------|---------|---------|
 | **usePaneApps.ts** | core | Global registry for pane apps using Map stored in `globalThis.__or3PaneAppsRegistry`. Maintains sorted list by order. | Enables `registerPaneApp()`, `getPaneApp()`, `listPaneApps()` - all composables can access registered apps |
 | **useMultiPane.ts** | core | State management for all panes (chat, doc, custom). Manages pane array, active index, thread binding, messages. | Exports `newPaneForApp(appId)` which creates pane, calls `createInitialRecord()` callback, pushes to pane array, fires hooks |
-| **registerSidebarPostList.ts** | sidebar | DX helper that creates an inline Vue component rendering live post list. On item click, calls `newPaneForApp()`. | Auto-registers sidebar section showing filtered posts by `postType`. When user clicks item, opens pane with that record. |
+| **registerSidebarPage.ts** | sidebar | Helper that registers custom sidebar pages against the page registry. | Lets plugins expose bespoke UI in the sidebar, typically to browse posts and open panes. |
 | **usePostsList.ts** | posts | Wraps Dexie `liveQuery` for reactive post subscriptions filtered by `postType`. Automatically handles soft-delete filtering and sorting. | Returns computed `items`, `loading`, `error` - updates reactively when database changes. Unsubscribes on unmount. |
 | **pane-plugin-api.client.ts** | plugins | Nuxt plugin that creates global `__or3PanePluginApi` with `posts` namespace (`create`, `update`, `listByType`). | Bridges Dexie database (`createPost`, `upsertPost`, `getPost`) for plugins. Parses meta JSON. Returns Result<T> or Err. |
 | **PageShell.vue** | components | Main layout that renders all panes. Contains `resolvePaneComponent()` and `buildPaneProps()` functions. | `resolvePaneComponent()`: returns ChatContainer/DocumentEditor for built-ins, looks up `getPaneApp(mode).component` for custom, or fallback PaneUnknown |
@@ -45,7 +45,7 @@ Your Plugin (.client.ts)
 
 ```
 1. USER CLICKS SIDEBAR ITEM
-   └─ registerSidebarPostList click handler triggered
+   └─ Custom sidebar page handler triggered
       └─ Calls: multiPaneApi.newPaneForApp('example-todo', { existingRecordId: post.id })
 
 2. newPaneForApp() IN useMultiPane
@@ -79,7 +79,7 @@ Your Plugin (.client.ts)
    │     └─ Calls upsertPost() → updates Dexie
    │        └─ Fires hook: db.posts.upsert:action:after
    │           └─ usePostsList (via liveQuery) detects change
-   │              └─ Sidebar list re-renders automatically
+   │              └─ Sidebar page re-renders automatically
 ```
 
 ---
@@ -122,7 +122,7 @@ Custom panes fire standard hooks:
 1. **Create `.client.ts` plugin file** in plugins
 2. **Define Vue component** receiving props: `{ paneId, recordId, postType, postApi }`
 3. **Register pane app**: `registerPaneApp({ id, label, icon, component, postType, createInitialRecord })`
-4. **Register sidebar list** (optional): `registerSidebarPostList({ id, label, appId, postType, icon, ... })`
+4. **Register sidebar page** (optional): `registerSidebarPage({ id, label, icon, component, ... })`
 5. **Use posts API**: `postApi.posts.create/update/listByType()`
 6. **Handle reactivity**: `usePostsList(postType)` gives live-updating items
 7. **Guard `process.client`**: Avoid SSR issues

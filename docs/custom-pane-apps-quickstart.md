@@ -14,8 +14,8 @@ export default defineNuxtPlugin(async () => {
     if (!process.client) return;
 
     const { registerPaneApp } = usePaneApps();
-    const { registerSidebarPostList } = await import(
-        '~/composables/sidebar/registerSidebarPostList'
+    const { registerSidebarPage } = await import(
+        '~/composables/sidebar/registerSidebarPage'
     );
 
     // Your registration code here...
@@ -91,28 +91,53 @@ const MyPaneComponent = defineComponent({
 });
 ```
 
-### 4. Register a Sidebar List (Optional)
+### 4. Register a Sidebar Page (Optional)
 
-Display a live-updating list in the sidebar:
+Expose a custom sidebar surface that can open your pane app:
 
 ```typescript
-registerSidebarPostList({
-    id: 'my-app:list',
+import { defineComponent, h } from 'vue';
+import { usePostsList } from '~/composables/posts/usePostsList';
+import { useSidebarMultiPane } from '~/composables/sidebar/useSidebarEnvironment';
+
+const MySidebarPage = defineComponent({
+    name: 'MySidebarPage',
+    setup() {
+        const { items } = usePostsList('my-app-data');
+        const multiPane = useSidebarMultiPane();
+
+        async function openItem(postId: string) {
+            await multiPane.switchToApp('my-app', { recordId: postId });
+        }
+
+        return { items, openItem };
+    },
+    render() {
+        return h(
+            'div',
+            { class: 'flex flex-col gap-2 p-3' },
+            this.items.map((post) =>
+                h(
+                    'button',
+                    {
+                        key: post.id,
+                        class: 'retro-btn text-left px-3 py-2',
+                        onClick: () => this.openItem(post.id),
+                    },
+                    post.title || 'Untitled'
+                )
+            )
+        );
+    },
+});
+
+registerSidebarPage({
+    id: 'my-app-sidebar',
     label: 'My Items',
-    appId: 'my-app', // Links to your pane app
-    postType: 'my-app-data',
     icon: 'pixelarticons:list',
-    placement: 'main', // 'top' | 'main' | 'bottom'
-    order: 200,
-    limit: 50,
-    emptyMessage: 'No items yet',
-    renderItem: (post) => ({
-        title: post.title,
-        subtitle: `Updated ${new Date(
-            post.updated_at * 1000
-        ).toLocaleDateString()}`,
-        icon: 'pixelarticons:note',
-    }),
+    order: 210,
+    usesDefaultHeader: false,
+    component: () => Promise.resolve(MySidebarPage),
 });
 ```
 
@@ -260,7 +285,7 @@ See `app/plugins/examples/custom-pane-todo-example.client.ts` for a full working
 
 -   Custom pane component
 -   CRUD operations
--   Sidebar list integration
+-   Sidebar page integration
 -   State management
 
 ## Best Practices

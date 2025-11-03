@@ -22,28 +22,6 @@
                 @expand-sidebar="expandSidebar"
             />
         </template>
-        <!--
-        <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
-                ref="sideNavExpandedRef"
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chat-selected="onSidebarSelected"
-                @new-document="onNewDocument"
-                @document-selected="onDocumentSelected"
-                @toggle-dashboard="showDashboardModal = !showDashboardModal"
-            />
-        </template>
-        <template #sidebar-collapsed>
-            <lazy-sidebar-side-nav-content-collapsed
-                :active-thread="activeChatThreadId"
-                @new-chat="onNewChat"
-                @chat-selected="onSidebarSelected"
-                @focus-search="focusSidebarSearch"
-                @toggle-dashboard="showDashboardModal = !showDashboardModal"
-            />
-        </template>
-        -->
         <div class="flex-1 h-[100dvh] w-full relative">
             <div
                 id="top-nav"
@@ -230,6 +208,7 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
+import SidenavSideBar from '~/components/sidebar/SideBar.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import { db } from '~/db';

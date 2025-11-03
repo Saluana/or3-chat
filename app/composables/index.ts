@@ -8,7 +8,6 @@ export * from './sidebar/useSidebarSections';
 export * from './sidebar/useHeaderActions';
 export * from './sidebar/useComposerActions';
 export * from './sidebar/useSidebarSearch';
-export * from './sidebar/registerSidebarPostList';
 
 // Document composables
 export * from './documents/useDocumentsStore';

@@ -387,13 +387,7 @@ import type { Component } from 'vue';
 import { useHooks } from '~/core/hooks/useHooks';
 import SidebarVirtualList from '~/components/sidebar/SidebarVirtualList.vue';
 import { liveQuery } from 'dexie';
-import {
-    db,
-    upsert,
-    del as dbDel,
-    type Post,
-    type Project,
-} from '~/db'; // Dexie + barrel helpers
+import { db, upsert, del as dbDel, type Post, type Project } from '~/db'; // Dexie + barrel helpers
 import { nowSec } from '~/db/util';
 import { updateDocument } from '~/db/documents';
 import { loadDocument } from '~/composables/documents/useDocumentsStore';
@@ -438,9 +432,14 @@ import {
     useSidebarSections,
     useSidebarFooterActions,
 } from '~/composables/sidebar/useSidebarSections';
+import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 // Documents live query (docs only) to feed search
 const docs = ref<Post[]>([]);
 let subDocs: { unsubscribe: () => void } | null = null;
+
+const DEFAULT_PAGE_ID = 'sidebar-home';
+
+const { activePageId, resetToDefault } = useActiveSidebarPage();
 
 // Active item tracking (multi-pane aware). Uses global multi-pane API if present.
 const activeDocumentIds = computed<string[]>(() => {
@@ -1198,8 +1197,19 @@ async function submitCreateDocument() {
 }
 
 // Expose focusSearchInput to parent components
-function focusSearchInput() {
-    return sideNavContentRef.value?.focusSearchInput?.() ?? false;
+async function focusSearchInput() {
+    if (activePageId.value !== DEFAULT_PAGE_ID) {
+        const switched = await resetToDefault();
+        if (!switched) return false;
+        await nextTick();
+    }
+
+    let focused = sideNavContentRef.value?.focusSearchInput?.() ?? false;
+    if (focused) return true;
+
+    await nextTick();
+    focused = sideNavContentRef.value?.focusSearchInput?.() ?? false;
+    return focused;
 }
 
 defineExpose({

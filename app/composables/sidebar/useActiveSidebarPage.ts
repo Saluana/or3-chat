@@ -1,3 +1,8 @@
+/**
+ * Composable for managing the active sidebar page state with persistence and lifecycle hooks.
+ * Handles page transitions, activation guards, and maintains global singleton state.
+ * Integrates with the hooks system for extensibility and analytics.
+ */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { useSidebarPages } from './useSidebarPages';
 import type {
@@ -8,13 +13,31 @@ import { useHooks } from '~/core/hooks/useHooks';
 import type { UseMultiPaneApi } from '~/composables/core/useMultiPane';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 
+/**
+ * Default page ID used when no specific page is requested or available.
+ */
 const DEFAULT_PAGE_ID = 'sidebar-home';
+
+/**
+ * Local storage key for persisting the active page across sessions.
+ */
 const STORAGE_KEY = 'or3-active-sidebar-page';
 
+/**
+ * Browser environment check for safe localStorage access.
+ * 
+ * @returns True if running in a browser environment
+ */
 function isBrowser() {
     return typeof window !== 'undefined' && typeof document !== 'undefined';
 }
 
+/**
+ * Persist the active page ID to localStorage.
+ * Handles storage errors gracefully with warning logs.
+ * 
+ * @param pageId - The page ID to persist
+ */
 function persistActivePage(pageId: string) {
     if (!isBrowser()) return;
     try {
@@ -24,6 +47,12 @@ function persistActivePage(pageId: string) {
     }
 }
 
+/**
+ * Load the active page ID from localStorage.
+ * Handles storage errors gracefully with warning logs.
+ * 
+ * @returns The stored page ID, or null if unavailable
+ */
 function loadActivePage(): string | null {
     if (!isBrowser()) return null;
     try {
@@ -44,7 +73,10 @@ const g = globalThis as {
     };
 };
 
-// Initialize global state once
+/**
+ * Initialize global singleton state once for the entire application.
+ * Ensures consistent state across all component instances.
+ */
 if (!g.__or3ActiveSidebarPageState) {
     const storedId = loadActivePage();
     const initialRequestedPageId =
@@ -85,9 +117,14 @@ export function useActiveSidebarPage() {
         );
     });
 
-    /**
-     * Set the active sidebar page with hook execution
-     */
+/**
+ * Set the active sidebar page with comprehensive hook execution and error handling.
+ * Executes activation guards, deactivation hooks, and activation hooks in sequence.
+ * Handles errors gracefully with state rollback and proper error reporting.
+ * 
+ * @param id - The ID of the page to activate
+ * @returns True if activation succeeded, false if it failed or was blocked
+ */
     async function setActivePage(id: string): Promise<boolean> {
         if (!process.client) {
             return false;
@@ -218,14 +255,18 @@ export function useActiveSidebarPage() {
     }
 
     /**
-     * Reset to the default page
+     * Reset to the default page (sidebar-home).
+ * Provides a simple way to return to the home page.
+     * 
+     * @returns True if reset succeeded, false if it failed
      */
     async function resetToDefault(): Promise<boolean> {
         return await setActivePage(DEFAULT_PAGE_ID);
     }
 
     /**
-     * Watch for page changes and validate they exist
+     * Watch for page changes and validate they exist in the registry.
+     * Automatically resets to default page if the active page becomes unavailable.
      */
     watch(activePageId, (newId) => {
         const pageId = newId ?? DEFAULT_PAGE_ID;
@@ -239,6 +280,11 @@ export function useActiveSidebarPage() {
     });
 
     // Only run initialization logic once globally
+    /**
+     * Initialize the composable by attempting to restore the previously active page.
+     * Watches for page registration if the requested page isn't immediately available.
+     * Ensures proper cleanup on component unmount.
+     */
     onMounted(() => {
         if (state.isInitialized || !initialRequestedPageId) return;
         state.isInitialized = true;
@@ -270,9 +316,13 @@ export function useActiveSidebarPage() {
     });
 
     return {
+        /** Reactive ID of the currently active page */
         activePageId: computed(() => activePageId.value),
+        /** Reactive definition of the currently active page */
         activePageDef,
+        /** Function to set the active page with hook execution */
         setActivePage,
+        /** Function to reset to the default page */
         resetToDefault,
     };
 }

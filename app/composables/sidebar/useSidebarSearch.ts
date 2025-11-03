@@ -1,8 +1,10 @@
-// Unified sidebar search across threads, projects, and documents.
-// Modeled after useThreadSearch but merges all three domains into one Orama index
-// for a single fast query. Falls back to substring filtering if Orama fails.
-//
-// Exposed API mirrors existing pattern so integration stays minimal.
+/**
+ * Unified sidebar search across threads, projects, and documents.
+ * Modeled after useThreadSearch but merges all three domains into one Orama index
+ * for a single fast query. Falls back to substring filtering if Orama fails.
+ *
+ * Exposed API mirrors existing pattern so integration stays minimal.
+ */
 import { ref, watch, type Ref } from 'vue';
 import type { Thread, Project, Post } from '~/db';
 import {
@@ -11,27 +13,58 @@ import {
     searchWithIndex,
 } from '~/core/search/orama';
 
+/**
+ * Interface for documents stored in the search index.
+ * Normalizes different entity types (threads, projects, docs) into a common format.
+ */
 interface IndexDoc {
+    /** Unique identifier for the entity */
     id: string;
+    /** Type of entity being indexed */
     kind: 'thread' | 'project' | 'doc';
+    /** Title used for search matching */
     title: string;
+    /** Timestamp for sorting and change detection */
     updated_at: number;
 }
 
+/**
+ * Type alias for Orama database instance.
+ * Using unknown since the exact Orama type isn't needed for this composable.
+ */
 type OramaInstance = unknown;
 
-// Debounce constants
+/**
+ * Debounce delay for rebuilding the search index when data changes (in milliseconds).
+ */
 const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * Debounce delay for running searches when the query changes (in milliseconds).
+ */
 const QUERY_DEBOUNCE_MS = 120;
 
 /**
- * Type guard for doc posts
+ * Type guard to check if a post is a document post.
+ * Filters out non-doc posts and deleted posts.
+ * 
+ * @param post - The post to check
+ * @returns True if the post is a document and not deleted
  */
 function isDocPost(post: Post): boolean {
     const record = post as Record<string, unknown>;
     return record.postType === 'doc' && !record.deleted;
 }
 
+/**
+ * Converts threads, projects, and documents into normalized IndexDoc format.
+ * Handles title fallbacks and ensures consistent data structure for indexing.
+ * 
+ * @param threads - Array of thread entities
+ * @param projects - Array of project entities
+ * @param documents - Array of document entities
+ * @returns Array of normalized documents ready for indexing
+ */
 function toDocs(
     threads: Thread[],
     projects: Project[],
@@ -61,6 +94,15 @@ function toDocs(
     return [...threadDocs, ...projectDocs, ...docDocs];
 }
 
+/**
+ * Builds an Orama search index from the provided entities.
+ * Creates the database schema and indexes all documents.
+ * 
+ * @param threads - Array of thread entities to index
+ * @param projects - Array of project entities to index
+ * @param documents - Array of document entities to index
+ * @returns Orama database instance or null if creation failed
+ */
 async function buildIndex(
     threads: Thread[],
     projects: Project[],
@@ -78,7 +120,15 @@ async function buildIndex(
     return instance;
 }
 
-// Signature helper to know when to rebuild (counts + latest updated_at)
+/**
+ * Computes a signature string to detect when the search index needs rebuilding.
+ * Uses entity counts and the latest updated_at timestamp to determine if data has changed.
+ * 
+ * @param threads - Array of thread entities
+ * @param projects - Array of project entities
+ * @param documents - Array of document entities
+ * @returns Signature string representing the current data state
+ */
 function computeSignature(
     threads: Thread[],
     projects: Project[],
@@ -95,6 +145,16 @@ function computeSignature(
     return `${threads.length}:${projects.length}:${documents.length}:${latest}`;
 }
 
+/**
+ * Composable for unified sidebar search across threads, projects, and documents.
+ * Uses Orama for fast full-text search with substring fallback.
+ * Automatically manages index rebuilding and provides debounced search.
+ * 
+ * @param threads - Reactive reference to threads array
+ * @param projects - Reactive reference to projects array
+ * @param documents - Reactive reference to documents array
+ * @returns Object containing search state and control functions
+ */
 export function useSidebarSearch(
     threads: Ref<Thread[]>,
     projects: Ref<Project[]>,
@@ -116,6 +176,11 @@ export function useSidebarSearch(
         doc: ref<Record<string, Post>>({}),
     };
 
+    /**
+     * Ensures the search index is built and up-to-date.
+     * Rebuilds the index only when data has changed based on signature comparison.
+     * Updates ID maps for result mapping and sets ready/busy states.
+     */
     async function ensureIndex() {
         if (busy.value) return;
         const sig = computeSignature(
@@ -147,6 +212,13 @@ export function useSidebarSearch(
         }
     }
 
+    /**
+     * Fallback search using substring matching when Orama search fails or returns no results.
+     * Provides basic search functionality without requiring the index.
+     * Warns once when fallback mode is used.
+     * 
+     * @param raw - The raw search query string
+     */
     function substringFallback(raw: string) {
         const ql = raw.toLowerCase();
         const threadHits = threads.value.filter((t) =>
@@ -171,6 +243,11 @@ export function useSidebarSearch(
         }
     }
 
+    /**
+     * Executes the search using the Orama index.
+     * Handles empty queries, result mapping, and automatic fallback to substring search.
+     * Uses token-based cancellation to prevent stale results from overriding newer searches.
+     */
     async function runSearch() {
         if (!dbInstance) await ensureIndex();
         if (!dbInstance) return;
@@ -254,13 +331,21 @@ export function useSidebarSearch(
     documentResults.value = documents.value.filter(isDocPost);
 
     return {
+        /** Reactive search query string */
         query,
+        /** Reactive array of matching threads */
         threadResults,
+        /** Reactive array of matching projects */
         projectResults,
+        /** Reactive array of matching documents */
         documentResults,
+        /** Whether the search index is ready for use */
         ready,
+        /** Whether the index is currently being built */
         busy,
+        /** Function to manually rebuild the search index */
         rebuild: ensureIndex,
+        /** Function to manually run a search with current query */
         runSearch,
     };
 }
