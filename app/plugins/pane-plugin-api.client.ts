@@ -9,6 +9,9 @@ import {
 } from '~/composables/documents/useDocumentsStore';
 import type { Ref } from 'vue';
 import type { PaneState } from '~/composables/core/useMultiPane';
+import { createPost, upsertPost, getPost, softDeletePost } from '~/db/posts';
+import { db } from '~/db/client';
+import type { Post, PostCreate } from '~/db/schema';
 
 /** All error codes emitted by the Pane Plugin API */
 export type PaneApiErrorCode =
@@ -23,7 +26,12 @@ export type PaneApiErrorCode =
     | 'append_failed'
     | 'no_document'
     | 'no_active_pane'
-    | 'no_panes';
+    | 'no_panes'
+    | 'invalid_post_type'
+    | 'post_not_found'
+    | 'post_create_failed'
+    | 'post_update_failed'
+    | 'post_delete_failed';
 
 /** Success result helper */
 export type Ok<T extends object = {}> = { ok: true } & T;
@@ -80,6 +88,7 @@ export interface ActivePaneInfo {
     mode: string;
     threadId?: string;
     documentId?: string;
+    recordId?: string;
     contentSnapshot?: unknown;
 }
 
@@ -88,7 +97,49 @@ export interface PaneDescriptor {
     mode: PaneState['mode'];
     threadId?: string;
     documentId?: string;
+    recordId?: string;
 }
+
+/** Post data returned from posts API (meta parsed when JSON string) */
+export interface PostData extends Omit<Post, 'meta'> {
+    meta?: unknown;
+}
+
+/** Options for creating a new post */
+export interface CreatePostOptions {
+    postType: string;
+    title: string;
+    content?: string;
+    meta?: unknown;
+    source: string;
+}
+
+/** Options for updating an existing post */
+export interface UpdatePostOptions {
+    id: string;
+    patch: Partial<Pick<Post, 'title' | 'content' | 'postType'>> & {
+        meta?: unknown;
+    };
+    source: string;
+}
+
+/** Options for listing posts by type */
+export interface ListPostsByTypeOptions {
+    postType: string;
+    limit?: number;
+}
+
+/** Options for deleting a post */
+export interface DeletePostOptions {
+    id: string;
+    source: string;
+}
+
+/** Options for getting a single post */
+export interface GetPostOptions {
+    id: string;
+}
+
 export interface PanePluginApi {
     /**
      * Append a new message into a chat pane's thread. Optionally creates a thread if missing.
@@ -110,6 +161,26 @@ export interface PanePluginApi {
 
     /** List all panes (lightweight descriptors) and the current active index. */
     getPanes(): Result<{ panes: PaneDescriptor[]; activeIndex: number }>;
+
+    /** Posts CRUD helpers for custom pane apps */
+    posts: {
+        /** Create a new post with specified type and data */
+        create(opts: CreatePostOptions): Promise<Result<{ id: string }>>;
+
+        /** Get a single post by ID */
+        get(opts: GetPostOptions): Promise<Result<{ post: PostData }>>;
+
+        /** Update an existing post by ID */
+        update(opts: UpdatePostOptions): Promise<Result>;
+
+        /** Delete a post by ID (soft delete) */
+        delete(opts: DeletePostOptions): Promise<Result>;
+
+        /** List all posts of a given type (soft-delete filtered, sorted by updated_at desc) */
+        listByType(
+            opts: ListPostsByTypeOptions
+        ): Promise<Result<{ posts: PostData[] }>>;
+    };
 }
 const err = <C extends PaneApiErrorCode>(code: C, message: string): Err<C> => ({
     ok: false,
@@ -185,6 +256,21 @@ const log = (tag: string, meta: unknown) => {
             console.debug('[pane-plugin-api] ' + tag, meta);
         } catch {}
 };
+
+/**
+ * Parse meta field from string to object/array when it contains JSON.
+ * Returns parsed value or original if not parseable.
+ */
+function parseMeta(meta: unknown): unknown {
+    if (typeof meta !== 'string') return meta;
+    if (!meta) return meta;
+    try {
+        return JSON.parse(meta);
+    } catch {
+        return meta; // Return as-is if not valid JSON
+    }
+}
+
 async function makeApi(): Promise<PanePluginApi> {
     const hooks: HookBus = (useNuxtApp() as any).$hooks;
     return {
@@ -324,6 +410,12 @@ async function makeApi(): Promise<PanePluginApi> {
             const p = panes[idx];
             if (!p) return err('no_active_pane', 'no active pane');
             const base: ActivePaneInfo = { paneId: p.id, mode: p.mode };
+
+            // Add recordId for all panes (alias of documentId)
+            if (p.documentId) {
+                base.recordId = p.documentId;
+            }
+
             if (p.mode === 'chat' && p.threadId) base.threadId = p.threadId;
             if (p.mode === 'doc' && p.documentId) {
                 base.documentId = p.documentId;
@@ -357,8 +449,155 @@ async function makeApi(): Promise<PanePluginApi> {
                 mode: p.mode,
                 threadId: p.threadId || undefined,
                 documentId: p.documentId || undefined,
+                recordId: p.documentId || undefined, // Alias for non-doc panes
             }));
             return { ok: true, panes: mapped, activeIndex };
+        },
+        posts: {
+            async create({
+                postType,
+                title,
+                content = '',
+                meta,
+                source,
+            }: CreatePostOptions) {
+                if (!source) return err('missing_source', 'source required');
+                if (!postType || typeof postType !== 'string')
+                    return err('invalid_post_type', 'postType required');
+                if (!title || typeof title !== 'string' || !title.trim())
+                    return err('invalid_text', 'title required');
+
+                try {
+                    const input: PostCreate = {
+                        title: title.trim(),
+                        content,
+                        postType,
+                        meta: meta as any, // Schema will normalize
+                    };
+                    const created = await createPost(input);
+                    log('posts.create', { source, postType, id: created.id });
+                    return { ok: true, id: created.id };
+                } catch (e: unknown) {
+                    return err(
+                        'post_create_failed',
+                        e instanceof Error ? e.message : 'create failed'
+                    );
+                }
+            },
+
+            async get({ id }: GetPostOptions) {
+                if (!id) return err('post_not_found', 'id required');
+
+                try {
+                    const post = await getPost(id);
+                    if (!post) {
+                        return err('post_not_found', 'post not found');
+                    }
+
+                    // getPost returns Post, convert to PostData with parsed meta
+                    const dbPost = post as unknown as Post;
+                    const postData: PostData = {
+                        ...dbPost,
+                        meta: parseMeta(dbPost.meta),
+                    };
+
+                    log('posts.get', { id });
+                    return { ok: true, post: postData };
+                } catch (e: unknown) {
+                    return err(
+                        'post_not_found',
+                        e instanceof Error ? e.message : 'get failed'
+                    );
+                }
+            },
+
+            async update({ id, patch, source }: UpdatePostOptions) {
+                if (!source) return err('missing_source', 'source required');
+                if (!id) return err('post_not_found', 'id required');
+
+                try {
+                    const existing = await getPost(id);
+                    if (!existing)
+                        return err('post_not_found', 'post not found');
+
+                    // getPost returns Post through db.posts.get
+                    const existingPost = existing as unknown as Post;
+
+                    const updated: Post = {
+                        ...existingPost,
+                        title: patch.title?.trim() || existingPost.title,
+                        content: patch.content ?? existingPost.content,
+                        postType: patch.postType ?? existingPost.postType,
+                        meta:
+                            patch.meta !== undefined
+                                ? (patch.meta as any)
+                                : existingPost.meta,
+                        updated_at: nowSec(),
+                    };
+
+                    await upsertPost(updated);
+                    log('posts.update', { source, id });
+                    return { ok: true };
+                } catch (e: unknown) {
+                    return err(
+                        'post_update_failed',
+                        e instanceof Error ? e.message : 'update failed'
+                    );
+                }
+            },
+
+            async delete({ id, source }: DeletePostOptions) {
+                if (!source) return err('missing_source', 'source required');
+                if (!id) return err('post_not_found', 'id required');
+
+                try {
+                    const existing = await getPost(id);
+                    if (!existing)
+                        return err('post_not_found', 'post not found');
+
+                    await softDeletePost(id);
+                    log('posts.delete', { source, id });
+                    return { ok: true };
+                } catch (e: unknown) {
+                    return err(
+                        'post_delete_failed',
+                        e instanceof Error ? e.message : 'delete failed'
+                    );
+                }
+            },
+
+            async listByType({ postType, limit }: ListPostsByTypeOptions) {
+                if (!postType || typeof postType !== 'string')
+                    return err('invalid_post_type', 'postType required');
+
+                try {
+                    const results = await db.posts
+                        .where('postType')
+                        .equals(postType)
+                        .and((p) => !p.deleted)
+                        .sortBy('updated_at');
+
+                    const sorted = results.slice().reverse();
+                    const sliced = limit ? sorted.slice(0, limit) : sorted;
+
+                    // Parse meta for each post
+                    const posts: PostData[] = sliced.map((p) => ({
+                        ...p,
+                        meta: parseMeta(p.meta),
+                    }));
+
+                    log('posts.listByType', {
+                        postType,
+                        count: posts.length,
+                    });
+                    return { ok: true, posts };
+                } catch (e: unknown) {
+                    return err(
+                        'post_not_found',
+                        e instanceof Error ? e.message : 'list failed'
+                    );
+                }
+            },
         },
     };
 }

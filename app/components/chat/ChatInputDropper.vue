@@ -58,7 +58,7 @@
 
                     <!-- Settings Button (stub) -->
                     <div class="relative shrink-0">
-                        <UPopover>
+                        <UPopover id="chat-input-settings-popover">
                             <UButton
                                 label="Open"
                                 :square="true"
@@ -487,7 +487,7 @@ onMounted(async () => {
                 }
             }
         } catch (e) {
-            console.warn('[ChatInputDropper] restore last model failed', e);
+            // Silently handle restore failure
         }
     }
 });
@@ -562,10 +562,7 @@ onMounted(async () => {
             content: '',
         });
     } catch (err) {
-        console.warn(
-            '[ChatInputDropper] TipTap init failed, using fallback textarea',
-            err
-        );
+        // Silently handle TipTap init failure
     }
 });
 
@@ -573,7 +570,7 @@ onBeforeUnmount(() => {
     try {
         editor.value?.destroy();
     } catch (err) {
-        console.warn('[ChatInputDropper] TipTap destroy error', err);
+        // Silently handle TipTap destroy error
     }
 });
 
@@ -658,10 +655,7 @@ async function handleComposerAction(entry: ComposerActionEntry) {
     try {
         await entry.action.handler(composerActionContext());
     } catch (error) {
-        console.error(
-            `[ChatInputDropper] composer action "${entry.action.id}" failed`,
-            error
-        );
+        // Silently handle composer action failure
     }
 }
 
@@ -702,7 +696,7 @@ watch(selectedModel, (newModel) => {
         try {
             localStorage.setItem(LAST_MODEL_KEY, newModel);
         } catch (e) {
-            console.warn('[ChatInputDropper] persist last model failed', e);
+            // Silently handle persist failure
         }
     }
 });
@@ -942,10 +936,7 @@ const handleSend = async () => {
             // Fire as an action to avoid transforming data; listeners can stash it
             await hooks.doAction('ui.chat.editor:action:before_send', json);
         } catch (e) {
-            console.warn(
-                '[ChatInputDropper] Failed to dispatch editor JSON before_send',
-                e
-            );
+            // Silently handle editor JSON dispatch failure
         }
 
         emit('send', {

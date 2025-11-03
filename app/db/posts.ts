@@ -22,28 +22,44 @@ function toPostEntity(post: Post): PostEntity {
 }
 
 // Normalize meta to stored string form (JSON) regardless of input shape
-function normalizeMeta(meta: any): string | null | undefined {
-    if (meta == null) return meta; // keep null/undefined as-is
+// Rejects unserialisable objects by returning undefined
+function normalizeMeta(meta: unknown): string | null | undefined {
+    if (meta === null) return null; // keep null as-is
+    if (meta === undefined) return undefined; // preserve undefined (omit column)
     if (typeof meta === 'string') return meta; // assume already JSON or raw string
+
+    // Reject functions, symbols, and other non-serializable types
+    if (typeof meta === 'function' || typeof meta === 'symbol') {
+        console.warn(
+            '[posts] Meta contains non-serializable type, dropping value'
+        );
+        return undefined;
+    }
+
     try {
-        return JSON.stringify(meta);
-    } catch {
+        const serialized = JSON.stringify(meta);
+        // Verify it round-trips to catch edge cases
+        JSON.parse(serialized);
+        return serialized;
+    } catch (e) {
+        console.warn('[posts] Failed to serialize meta, dropping value:', e);
         return undefined; // fallback: drop invalid meta
     }
 }
 
 export async function createPost(input: PostCreate): Promise<Post> {
     const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
+    const filtered: unknown = await hooks.applyFilters(
         'db.posts.create:filter:input',
         input as any
     );
     // Ensure title present & trimmed early (schema will enforce non-empty)
-    if (typeof (filtered as any).title === 'string') {
-        (filtered as any).title = (filtered as any).title.trim();
+    const mutable = filtered as Record<string, unknown>;
+    if (typeof mutable.title === 'string') {
+        mutable.title = mutable.title.trim();
     }
-    if ((filtered as any).meta !== undefined) {
-        (filtered as any).meta = normalizeMeta((filtered as any).meta);
+    if (mutable.meta !== undefined) {
+        mutable.meta = normalizeMeta(mutable.meta);
     }
     const prepared = parseOrThrow(PostCreateSchema, filtered);
     const value = parseOrThrow(PostSchema, prepared);
@@ -65,15 +81,16 @@ export async function createPost(input: PostCreate): Promise<Post> {
 
 export async function upsertPost(value: Post): Promise<void> {
     const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
+    const filtered: unknown = await hooks.applyFilters(
         'db.posts.upsert:filter:input',
         value
     );
-    if (typeof (filtered as any).title === 'string') {
-        (filtered as any).title = (filtered as any).title.trim();
+    const mutable = filtered as unknown as Record<string, unknown>;
+    if (typeof mutable.title === 'string') {
+        mutable.title = (mutable.title as string).trim();
     }
-    if ((filtered as any).meta !== undefined) {
-        (filtered as any).meta = normalizeMeta((filtered as any).meta);
+    if (mutable.meta !== undefined) {
+        mutable.meta = normalizeMeta(mutable.meta);
     }
     const validated = parseOrThrow(PostSchema, filtered);
     await hooks.doAction('db.posts.upsert:action:before', {
@@ -98,9 +115,7 @@ export function getPost(id: string) {
         entity: 'posts',
         action: 'get',
     })?.then((res) =>
-        res
-            ? hooks.applyFilters('db.posts.get:filter:output', res as any)
-            : undefined
+        res ? hooks.applyFilters('db.posts.get:filter:output', res) : undefined
     );
 }
 
@@ -111,7 +126,7 @@ export function allPosts() {
         entity: 'posts',
         action: 'all',
     })?.then((res) =>
-        res ? hooks.applyFilters('db.posts.all:filter:output', res as any) : []
+        res ? hooks.applyFilters('db.posts.all:filter:output', res) : []
     );
 }
 
@@ -123,9 +138,7 @@ export function searchPosts(term: string) {
             db.posts.filter((p) => p.title.toLowerCase().includes(q)).toArray(),
         { op: 'read', entity: 'posts', action: 'search' }
     )?.then((res) =>
-        res
-            ? hooks.applyFilters('db.posts.search:filter:output', res as any)
-            : []
+        res ? hooks.applyFilters('db.posts.search:filter:output', res) : []
     );
 }
 

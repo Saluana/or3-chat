@@ -1,31 +1,134 @@
 <template>
-    <div class="flex flex-col justify-between h-full relative">
+    <div
+        class="flex min-w-[64px] max-w-[64px] flex-col justify-between h-[calc(100dvh-49.818px)] relative"
+    >
         <div class="px-1 pt-2 flex flex-col space-y-2">
-            <UTooltip :delay-duration="0" text="New chat">
-                <UButton
-                    @click="onNewChat"
-                    size="md"
-                    class="flex item-center justify-center"
-                    icon="pixelarticons:message-plus"
-                    :ui="{
-                        leadingIcon: 'w-5 h-5',
+            <div class="flex items-center justify-center w-full pr-0.5">
+                <UTooltip
+                    :delay-duration="0"
+                    :content="{
+                        side: 'right',
                     }"
-                ></UButton>
+                    text="New chat"
+                >
+                    <UButton
+                        size="md"
+                        class="flex item-center justify-center"
+                        icon="pixelarticons:message-plus"
+                        :ui="{
+                            base: 'w-[38.5px]! h-[39px]',
+                            leadingIcon: 'w-5 h-5',
+                        }"
+                        @click="emit('new-chat')"
+                    ></UButton>
+                </UTooltip>
+            </div>
+            <UTooltip
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
+                }"
+                text="Search"
+            >
                 <UButton
                     size="md"
                     class="flex item-center justify-center"
                     icon="pixelarticons:search"
                     :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
                     }"
-                    @click="emit('focusSearch')"
+                    @click="emit('focus-search')"
                 ></UButton>
             </UTooltip>
+            <UTooltip
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
+                }"
+                text="Create document"
+            >
+                <UButton
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:note-plus"
+                    :ui="{
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="emit('new-document')"
+                />
+            </UTooltip>
+            <UTooltip
+                :delay-duration="0"
+                :content="{
+                    side: 'right',
+                }"
+                text="Create project"
+            >
+                <UButton
+                    class="flex item-center justify-center"
+                    icon="pixelarticons:folder-plus"
+                    :ui="{
+                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+                        leadingIcon: 'w-5 h-5',
+                    }"
+                    @click="emit('new-project')"
+                />
+            </UTooltip>
+
+            <ClientOnly>
+                <div class="pt-2 flex flex-col space-y-2 border-t-2">
+                    <UTooltip
+                        :delay-duration="0"
+                        :content="{
+                            side: 'right',
+                        }"
+                        text="Home"
+                    >
+                        <UButton
+                            size="md"
+                            class="flex item-center justify-center"
+                            icon="pixelarticons:home"
+                            :aria-pressed="activePageId === DEFAULT_PAGE_ID"
+                            aria-label="Home"
+                            :ui="pageButtonUi(activePageId === DEFAULT_PAGE_ID)"
+                            @click="() => handlePageSelect(DEFAULT_PAGE_ID)"
+                            @keydown.enter="
+                                () => handlePageSelect(DEFAULT_PAGE_ID)
+                            "
+                            @keydown.space.prevent="
+                                () => handlePageSelect(DEFAULT_PAGE_ID)
+                            "
+                        />
+                    </UTooltip>
+                    <UTooltip
+                        v-for="page in orderedPages"
+                        :key="`sidebar-page-btn-${page.id}`"
+                        :content="{
+                            side: 'right',
+                        }"
+                        :delay-duration="0"
+                        :text="page.label"
+                    >
+                        <UButton
+                            size="md"
+                            class="flex item-center justify-center"
+                            :icon="page.icon || 'pixelarticons:view-grid'"
+                            :aria-pressed="activePageId === page.id"
+                            :aria-label="page.label"
+                            :ui="pageButtonUi(activePageId === page.id)"
+                            @click="() => handlePageSelect(page.id)"
+                            @keydown.enter="() => handlePageSelect(page.id)"
+                            @keydown.space.prevent="
+                                () => handlePageSelect(page.id)
+                            "
+                        />
+                    </UTooltip>
+                </div>
+            </ClientOnly>
         </div>
         <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
             <UButton
-                @click="emit('toggleDashboard')"
                 size="md"
                 class="flex item-center justify-center"
                 icon="pixelarticons:dashboard"
@@ -33,6 +136,7 @@
                     base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
                     leadingIcon: 'w-5 h-5',
                 }"
+                @click="emit('toggle-dashboard')"
             ></UButton>
         </div>
         <div
@@ -67,25 +171,41 @@
                 </UButton>
             </UTooltip>
         </div>
+        <ClientOnly>
+            <SideBottomNav @toggle-dashboard="emit('toggle-dashboard')" />
+        </ClientOnly>
     </div>
 </template>
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
-import { liveQuery } from 'dexie';
-import { db, upsert, del as dbDel } from '~/db'; // Dexie + barrel helpers
-import { nowSec } from '~/db/util';
+import { computed } from 'vue';
+import { useToast } from '#imports';
+import {
+    useSidebarFooterActions,
+    type SidebarFooterActionEntry,
+} from '~/composables/sidebar/useSidebarSections';
+import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
+import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
+import SideBottomNav from './SideBottomNav.vue';
 
 const props = defineProps<{
     activeThread?: string;
 }>();
 
-const items = ref<any[]>([]);
-import { useThreadSearch } from '~/composables/threads/useThreadSearch';
-const { query: threadSearchQuery, results: threadSearchResults } =
-    useThreadSearch(items as any);
-const displayThreads = computed(() =>
-    threadSearchQuery.value.trim() ? threadSearchResults.value : items.value
-);
+const DEFAULT_PAGE_ID = 'sidebar-home';
+
+const { listSidebarPages } = useSidebarPages();
+const { activePageId, setActivePage } = useActiveSidebarPage();
+
+const orderedPages = computed(() => {
+    const pages = listSidebarPages.value.slice();
+    if (!pages.length) return [];
+
+    // Filter out the default page as it should not appear in collapsed nav
+    const filtered = pages.filter((page) => page.id !== DEFAULT_PAGE_ID);
+
+    // Sort by order (default 200) so custom pages appear under built-in controls
+    return filtered.sort((a, b) => (a.order ?? 200) - (b.order ?? 200));
+});
 
 const activeDocumentIds = computed<string[]>(() => {
     const api: any = (globalThis as any).__or3MultiPaneApi;
@@ -128,78 +248,56 @@ async function handleSidebarFooterAction(entry: SidebarFooterActionEntry) {
         );
     }
 }
-let sub: { unsubscribe: () => void } | null = null;
 
-onMounted(() => {
-    // Sort by last opened using updated_at index; filter out deleted
-    sub = liveQuery(() =>
-        db.threads
-            .orderBy('updated_at')
-            .reverse()
-            .filter((t) => !t.deleted)
-            .toArray()
-    ).subscribe({
-        next: (results) => (items.value = results),
-        error: (err) => console.error('liveQuery error', err),
-    });
-});
+const toast = useToast();
 
-watch(
-    () => items.value,
-    () => {
-        /* silent: removed Items updated log */
+async function handlePageSelect(pageId: string) {
+    if (pageId === activePageId.value) return;
+
+    try {
+        const ok = await setActivePage(pageId);
+        if (!ok) {
+            // Show toast if activation was vetoed
+            const page = listSidebarPages.value.find((p) => p.id === pageId);
+            toast.add({
+                title: 'Cannot switch page',
+                description: page?.label
+                    ? `Unable to activate "${page.label}"`
+                    : 'Page activation failed',
+                color: 'neutral',
+            });
+        } else {
+            // Expand sidebar to show the selected page content
+            emit('expand-sidebar');
+        }
+    } catch (error) {
+        console.error(
+            `[SidebarCollapsed] failed to activate sidebar page "${pageId}"`,
+            error
+        );
+        toast.add({
+            title: 'Error',
+            description: 'Failed to switch pages',
+            color: 'error',
+        });
     }
-);
-
-onUnmounted(() => {
-    sub?.unsubscribe();
-});
-
-const emit = defineEmits([
-    'chatSelected',
-    'newChat',
-    'focusSearch',
-    'toggleDashboard',
-]);
-
-// ----- Actions: menu, rename, delete -----
-const showRenameModal = ref(false);
-const renameId = ref<string | null>(null);
-const renameTitle = ref('');
-
-const showDeleteModal = ref(false);
-const deleteId = ref<string | null>(null);
-
-function openRename(thread: any) {
-    renameId.value = thread.id;
-    renameTitle.value = thread.title ?? '';
-    showRenameModal.value = true;
 }
 
-async function saveRename() {
-    if (!renameId.value) return;
-    const t = await db.threads.get(renameId.value);
-    if (!t) return;
-    const now = nowSec();
-    await upsert.thread({ ...t, title: renameTitle.value, updated_at: now });
-    showRenameModal.value = false;
-    renameId.value = null;
-    renameTitle.value = '';
+function pageButtonUi(isActive: boolean) {
+    const base =
+        'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]';
+    if (!isActive) return { base };
+    return {
+        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
+    };
 }
 
-function confirmDelete(thread: any) {
-    deleteId.value = thread.id as string;
-    showDeleteModal.value = true;
-}
-
-async function deleteThread() {
-    if (!deleteId.value) return;
-    await dbDel.hard.thread(deleteId.value);
-    showDeleteModal.value = false;
-    deleteId.value = null;
-}
-
-function onNewChat() {
-    emit('newChat');
-}
+const emit = defineEmits<{
+    (e: 'new-chat'): void;
+    (e: 'new-document'): void;
+    (e: 'new-project'): void;
+    (e: 'focus-search'): void;
+    (e: 'toggle-dashboard'): void;
+    (e: 'expand-sidebar'): void;
+}>();
 </script>

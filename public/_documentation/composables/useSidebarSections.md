@@ -114,6 +114,7 @@ Each `SidebarFooterActionEntry` contains the original action and `disabled` bool
 
 -   `useHeaderActions` — header button registry sharing the same pattern.
 -   `useComposerActions` — controls the chat composer quick actions.
+-   `registerSidebarPage` — helper for registering custom sidebar pages.
 -   `~/composables/_registry` — factory implementing the registry mechanics.
 
 ---

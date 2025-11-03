@@ -1,4 +1,4 @@
-import { computed, shallowRef } from 'vue';
+import { computed, reactive, shallowRef } from 'vue';
 import type { ComputedRef, ShallowRef } from 'vue';
 
 export interface RegistryItem {
@@ -18,6 +18,22 @@ const DEFAULT_ORDER = 200;
 
 function defaultSort<T extends RegistryItem>(a: T, b: T) {
     return (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER);
+}
+
+/**
+ * Create a Vue-reactive global registry. Used for plugin registries that
+ * must persist across component lifecycles and HMR.
+ */
+export function useGlobalRegistry<T extends object>(
+    key: string,
+    init: () => T
+): T {
+    const globalKey = `__or3_${key}`;
+    const store = globalThis as unknown as Record<string, T>;
+    if (!store[globalKey]) {
+        store[globalKey] = reactive(init()) as T;
+    }
+    return store[globalKey];
 }
 
 export function createRegistry<T extends RegistryItem>(

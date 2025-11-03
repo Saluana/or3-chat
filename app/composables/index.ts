@@ -40,6 +40,13 @@ export * from './core/useResponsiveState';
 export * from './core/useScrollLock';
 export * from './core/useTokenizer';
 
+// Multi-pane & Custom Pane Apps
+export * from './core/useMultiPane';
+export * from './core/usePaneApps';
+
+// Posts composables
+export * from './posts/usePostsList';
+
 // Project composables
 export * from './projects/useProjectTreeActions';
 export * from './projects/useProjectsCrud';

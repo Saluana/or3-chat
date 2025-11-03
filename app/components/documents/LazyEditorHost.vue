@@ -2,7 +2,10 @@
     <div class="flex flex-col h-full w-full min-h-0">
         <Suspense>
             <template #default>
-                <DocumentEditorRoot :document-id="documentId" />
+                <DocumentEditorRoot
+                    :key="renderKey"
+                    :document-id="documentId"
+                />
             </template>
             <template #fallback>
                 <div
@@ -72,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue';
+import { ref, watch, onBeforeUnmount, onErrorCaptured } from 'vue';
 import DocumentEditorRoot from './DocumentEditorRoot.vue';
 
 const props = defineProps<{ documentId: string }>();
@@ -81,6 +84,7 @@ const emit = defineEmits<{ error: [error: Error] }>();
 const showError = ref(false);
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let isMounted = true;
+const renderKey = ref(0);
 
 // Show error after 5 seconds if editor hasn't loaded
 function startErrorTimeout() {
@@ -102,6 +106,7 @@ function retryLoad() {
     showError.value = false;
     clearErrorTimeout();
     startErrorTimeout();
+    renderKey.value += 1;
 }
 
 // Start error timeout when mounted
@@ -120,8 +125,17 @@ watch(
         showError.value = false;
         clearErrorTimeout();
         startErrorTimeout();
+        renderKey.value += 1;
     }
 );
+
+onErrorCaptured((err) => {
+    clearErrorTimeout();
+    showError.value = true;
+    const error = err instanceof Error ? err : new Error(String(err));
+    emit('error', error);
+    return false;
+});
 </script>
 
 <style scoped>

@@ -1,84 +1,67 @@
 <template>
-    <div class="px-2 pt-2 flex flex-col space-y-2">
-        <div class="flex">
-            <UButton
-                @click="$emit('new-chat')"
-                class="w-full flex text-[22px] items-center justify-center backdrop-blur-2xl"
-                >New Chat</UButton
-            >
-            <UTooltip :delay-duration="0" text="Create project">
+    <div id="side-nav-content-header" class="px-2 pt-2 flex flex-col space-y-2">
+        <div class="flex w-full items-center gap-2 mb-1">
+            <div class="relative flex-1 ml-[1px]">
+                <UInput
+                    ref="searchInputWrapper"
+                    v-model="sidebarQuery"
+                    icon="pixelarticons:search"
+                    size="md"
+                    :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
+                    variant="outline"
+                    placeholder="Search..."
+                    aria-label="Search"
+                    class="w-full"
+                    @keydown.escape.prevent.stop="onEscapeClear"
+                >
+                    <template v-if="sidebarQuery.length > 0" #trailing>
+                        <UButton
+                            color="neutral"
+                            variant="subtle"
+                            size="xs"
+                            class="flex items-center justify-center p-0"
+                            icon="pixelarticons:close-box"
+                            aria-label="Clear input"
+                            @click="sidebarQuery = ''"
+                        />
+                    </template>
+                </UInput>
+            </div>
+            <UPopover :content="{ side: 'bottom', align: 'end' }">
                 <UButton
-                    color="inverse-primary"
-                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                    icon="pixelarticons:folder-plus"
-                    :ui="{
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="openCreateProject"
+                    size="md"
+                    color="neutral"
+                    variant="ghost"
+                    icon="material-symbols:filter-alt-sharp"
+                    :square="true"
+                    aria-label="Filter sections"
+                    :ui="{ base: 'shadow-none!' }"
+                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[3px] border-3! bg-[var(--md-inverse-surface)]/5 backdrop-blur"
                 />
-            </UTooltip>
-            <UTooltip :delay-duration="0" text="Create document">
-                <UButton
-                    class="ml-2 flex items-center justify-center backdrop-blur-2xl"
-                    icon="pixelarticons:note-plus"
-                    :ui="{
-                        base: 'bg-white text-black hover:bg-gray-100 active:bg-gray-200',
-                        leadingIcon: 'w-5 h-5',
-                    }"
-                    @click="openCreateDocumentModal"
-                />
-            </UTooltip>
-        </div>
-        <div class="relative w-full ml-[1px]">
-            <UInput
-                ref="searchInputWrapper"
-                v-model="sidebarQuery"
-                icon="pixelarticons:search"
-                size="md"
-                :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
-                variant="outline"
-                placeholder="Search..."
-                aria-label="Search"
-                class="w-full"
-                @keydown.escape.prevent.stop="onEscapeClear"
-            >
-                <template v-if="sidebarQuery.length > 0" #trailing>
-                    <UButton
-                        color="neutral"
-                        variant="subtle"
-                        size="xs"
-                        class="flex items-center justify-center p-0"
-                        icon="pixelarticons:close-box"
-                        aria-label="Clear input"
-                        @click="sidebarQuery = ''"
-                    />
+                <template #content>
+                    <div class="p-2 space-y-1 min-w-[140px]">
+                        <button
+                            v-for="item in filterItems"
+                            :key="item.key"
+                            class="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted rounded-[4px] transition-colors"
+                            @click="toggleSection(item.key)"
+                        >
+                            <UIcon
+                                :name="
+                                    activeSections[item.key]
+                                        ? 'pixelarticons:eye'
+                                        : 'pixelarticons:eye-closed'
+                                "
+                                class="w-4 h-4"
+                            />
+                            <span>{{ item.label }}</span>
+                        </button>
+                    </div>
                 </template>
-            </UInput>
+            </UPopover>
         </div>
 
-        <div
-            class="flex w-full gap-1 border-b-3 border-primary/50 pb-3"
-            role="group"
-            aria-label="Sidebar sections"
-        >
-            <UButton
-                v-for="seg in sectionToggles"
-                :key="seg.value"
-                size="sm"
-                :color="activeSections[seg.value] ? 'secondary' : 'neutral'"
-                :variant="activeSections[seg.value] ? 'solid' : 'ghost'"
-                class="flex-1 retro-btn px-2 py-[6px] text-[16px] leading-none border-2 rounded-[4px] select-none transition-colors"
-                :class="
-                    activeSections[seg.value]
-                        ? 'shadow-[2px_2px_0_0_rgba(0,0,0,0.35)]'
-                        : 'opacity-70 hover:bg-primary/15'
-                "
-                :aria-pressed="activeSections[seg.value]"
-                @click="toggleSection(seg.value)"
-            >
-                {{ seg.label }}
-            </UButton>
-        </div>
+        <div class="border-b-3 border-primary/50 pb-2"></div>
 
         <!-- Rename modal -->
         <UModal
@@ -373,11 +356,13 @@ const { createProject: createProjectCrud, renameProject: renameProjectCrud } =
     useProjectsCrud();
 
 // Section visibility (multi-select) defaults to all on
-const sectionToggles = [
-    { label: 'Proj', value: 'projects' as const },
-    { label: 'Chats', value: 'chats' as const },
-    { label: 'Docs', value: 'docs' as const },
-];
+const filterItems = [
+    { label: 'Projects', key: 'projects' as const },
+    { label: 'Chats', key: 'chats' as const },
+    { label: 'Docs', key: 'docs' as const },
+] as const;
+
+const activeSections = computed(() => props.activeSections);
 
 function toggleSection(v: 'projects' | 'chats' | 'docs') {
     const next = { ...props.activeSections, [v]: !props.activeSections[v] };
@@ -390,9 +375,12 @@ function focusSearchInput() {
     // Access underlying input inside UInput component
     const root: HTMLElement | null = (searchInputWrapper.value?.$el ||
         searchInputWrapper.value) as HTMLElement | null;
-    if (!root) return;
-    const input = root.querySelector('input');
-    if (input) (input as HTMLInputElement).focus();
+    if (!root) return false;
+    const input = root.querySelector('input') as HTMLInputElement | null;
+    if (!input) return false;
+    input.focus();
+    input.select?.();
+    return true;
 }
 defineExpose({ focusSearchInput });
 

@@ -207,7 +207,7 @@ export type MultiPaneMessage = {
 
 export interface PaneState {
     id: string;
-    mode: 'chat' | 'doc';
+    mode: 'chat' | 'doc' | string; // Custom pane apps can register with arbitrary mode identifiers
     threadId: string;
     documentId?: string;
     messages: MultiPaneMessage[];

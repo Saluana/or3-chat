@@ -1,13 +1,13 @@
 <template>
-    <resizable-sidebar-layout ref="layoutRef">
+    <resizable-sidebar-layout :collapsed-width="64" ref="layoutRef">
         <template #sidebar-expanded>
-            <lazy-sidebar-side-nav-content
+            <SidenavSideBar
                 ref="sideNavExpandedRef"
                 :active-thread="activeChatThreadId"
+                @chat-selected="onSidebarSelected"
                 @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @newDocument="onNewDocument"
-                @documentSelected="onDocumentSelected"
+                @new-document="onNewDocument"
+                @document-selected="onDocumentSelected"
                 @toggle-dashboard="showDashboardModal = !showDashboardModal"
             />
         </template>
@@ -15,9 +15,11 @@
             <lazy-sidebar-side-nav-content-collapsed
                 :active-thread="activeChatThreadId"
                 @new-chat="onNewChat"
-                @chatSelected="onSidebarSelected"
-                @focusSearch="focusSidebarSearch"
+                @new-document="openCollapsedCreateDocumentModal"
+                @new-project="openCollapsedCreateProjectModal"
+                @focus-search="focusSidebarSearch"
                 @toggle-dashboard="showDashboardModal = !showDashboardModal"
+                @expand-sidebar="expandSidebar"
             />
         </template>
         <div class="flex-1 h-[100dvh] w-full relative">
@@ -186,30 +188,16 @@
                         </UTooltip>
                     </div>
 
-                    <template v-if="pane.mode === 'chat'">
-                        <ChatContainer
-                            class="flex-1 min-h-0"
-                            :message-history="pane.messages"
-                            :thread-id="pane.threadId"
-                            :pane-id="pane.id"
-                            @thread-selected="
-                                (id: string) => onInternalThreadCreated(id, i)
-                            "
-                        />
-                    </template>
-                    <template v-else-if="pane.mode === 'doc'">
-                        <LazyDocumentsDocumentEditor
-                            v-if="pane.documentId"
-                            :document-id="pane.documentId"
-                            class="flex-1 min-h-0"
-                        ></LazyDocumentsDocumentEditor>
-                        <div
-                            v-else
-                            class="flex-1 flex items-center justify-center text-sm opacity-70"
-                        >
-                            No document.
-                        </div>
-                    </template>
+                    <component
+                        :is="resolvePaneComponent(pane)"
+                        v-bind="buildPaneProps(pane, i)"
+                        class="flex-1 min-h-0"
+                        @thread-selected="
+                            pane.mode === 'chat'
+                                ? (id: string) => onInternalThreadCreated(id, i)
+                                : undefined
+                        "
+                    />
                 </div>
             </div>
         </div>
@@ -220,7 +208,9 @@
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
 import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
-import { useMultiPane } from '~/composables/core/useMultiPane';
+import SidenavSideBar from '~/components/sidebar/SideBar.vue';
+import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
+import { usePaneApps } from '~/composables/core/usePaneApps';
 import { db } from '~/db';
 import { useHookEffect } from '~/composables/core/useHookEffect';
 import {
@@ -235,6 +225,20 @@ import type {
     DocumentEntity,
 } from '~/core/hooks/hook-types';
 import { useMagicKeys, whenever } from '@vueuse/core';
+import {
+    type Component,
+    shallowRef,
+    markRaw,
+    nextTick,
+    watch,
+    defineAsyncComponent,
+} from 'vue';
+import ChatContainer from '~/components/chat/ChatContainer.vue';
+import PaneUnknown from '~/components/PaneUnknown.vue';
+
+const DocumentEditorAsync = defineAsyncComponent(
+    () => import('~/components/documents/DocumentEditor.vue')
+);
 
 const props = withDefaults(
     defineProps<{
@@ -317,6 +321,94 @@ whenever(shiftRight, () => {
 
     focusNext(activePaneIndex.value);
 });
+
+// ---------------- Pane Component Resolution ----------------
+const { getPaneApp } = usePaneApps();
+
+/**
+ * Resolve the component to render for a pane based on its mode.
+ * Returns the appropriate component for built-in modes or registered custom apps.
+ */
+function resolvePaneComponent(pane: PaneState): Component {
+    // Built-in: chat
+    if (pane.mode === 'chat') {
+        if (import.meta.dev) {
+            console.debug('[PageShell] resolve component: chat');
+        }
+        return ChatContainer;
+    }
+
+    // Built-in: doc (lazy loaded)
+    if (pane.mode === 'doc') {
+        if (import.meta.dev) {
+            console.debug('[PageShell] resolve component: doc');
+        }
+        return DocumentEditorAsync;
+    }
+
+    // Custom pane app
+    const app = getPaneApp(pane.mode);
+    if (import.meta.dev && !app?.component) {
+        console.warn('[PageShell] Missing component for pane mode', pane.mode);
+    }
+    if (app?.component) {
+        if (import.meta.dev) {
+            console.debug(
+                '[PageShell] resolve component: custom',
+                pane.mode,
+                app.component
+            );
+        }
+        return app.component as Component;
+    }
+
+    // Fallback for unknown modes
+    if (import.meta.dev) {
+        console.debug('[PageShell] resolve component: unknown', pane.mode);
+    }
+    return PaneUnknown;
+}
+
+/**
+ * Build props object for the pane component.
+ * Built-in panes get their specific props, custom panes get a generic contract.
+ */
+function buildPaneProps(
+    pane: PaneState,
+    paneIndex: number
+): Record<string, any> {
+    // Built-in: chat
+    if (pane.mode === 'chat') {
+        return {
+            messageHistory: pane.messages,
+            threadId: pane.threadId,
+            paneId: pane.id,
+        };
+    }
+
+    // Built-in: doc
+    if (pane.mode === 'doc') {
+        return pane.documentId ? { documentId: pane.documentId } : {};
+    }
+
+    // Custom pane app - provide generic contract
+    const app = getPaneApp(pane.mode);
+    const panePluginApi = (globalThis as any).__or3PanePluginApi ?? null;
+    if (import.meta.dev) {
+        console.debug('[PageShell] build props for custom pane', {
+            paneId: pane.id,
+            mode: pane.mode,
+            recordId: pane.documentId ?? null,
+            hasPostApi: !!panePluginApi?.posts,
+        });
+    }
+    return {
+        paneId: pane.id,
+        recordId: pane.documentId ?? null,
+        postType: app?.postType ?? pane.mode,
+        postApi: panePluginApi?.posts ?? null,
+    };
+}
 
 // Active thread convenience (first pane for sidebar highlight)
 const activeChatThreadId = computed(() =>
@@ -455,6 +547,10 @@ function updateUrl(force = false) {
     if (currentPath.startsWith('/openrouter-callback')) return;
     const pane = panes.value[activePaneIndex.value];
     if (!pane) return;
+
+    // Skip route sync for custom pane apps (only sync chat/doc modes)
+    if (pane.mode !== 'chat' && pane.mode !== 'doc') return;
+
     const base = pane.mode === 'doc' ? '/docs' : '/chat';
     const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
     const newPath = id ? `${base}/${id}` : base;
@@ -616,13 +712,57 @@ const showTopOffset = computed(() => panes.value.length > 1 || isMobile.value);
 function openMobileSidebar() {
     (layoutRef.value as any)?.openSidebar?.();
 }
-function focusSidebarSearch() {
-    const layout: any = layoutRef.value;
-    if (layout?.expand) layout.expand();
 
-    setTimeout(() => {
-        sideNavExpandedRef.value?.focusSearchInput?.();
-    }, 300);
+async function ensureSidebarExpanded() {
+    const layout: any = layoutRef.value;
+    if (!layout) return;
+    layout?.expand?.();
+    const collapsedRef = layout?.isCollapsed;
+    if (!collapsedRef || typeof collapsedRef.value === 'undefined') return;
+    if (!collapsedRef.value) return;
+    await new Promise<void>((resolve) => {
+        const stop = watch(
+            () => collapsedRef.value,
+            (val) => {
+                if (!val) {
+                    stop();
+                    resolve();
+                }
+            }
+        );
+    });
+}
+
+function expandSidebar() {
+    const layout: any = layoutRef.value;
+    if (!layout) return;
+    layout?.expand?.();
+}
+
+async function focusSidebarSearch() {
+    await ensureSidebarExpanded();
+    await nextTick();
+    await delay(60);
+    for (let attempt = 0; attempt < 6; attempt++) {
+        const didFocus = !!sideNavExpandedRef.value?.focusSearchInput?.();
+        if (didFocus) return;
+        await delay(30);
+    }
+}
+
+function openCollapsedCreateDocumentModal() {
+    sideNavExpandedRef.value?.openCreateDocumentModal?.();
+}
+
+function openCollapsedCreateProjectModal() {
+    sideNavExpandedRef.value?.openCreateProject?.();
+}
+
+function delay(ms: number) {
+    return new Promise<void>((resolve) => {
+        if (ms <= 0) resolve();
+        else setTimeout(resolve, ms);
+    });
 }
 
 function closeSidebarIfMobile() {
