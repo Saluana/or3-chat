@@ -1,6 +1,6 @@
 <template>
     <div class="flex flex-col h-full w-full min-h-0">
-        <Suspense>
+        <Suspense @resolve="handleEditorResolved">
             <template #default>
                 <DocumentEditorRoot
                     :key="renderKey"
@@ -50,7 +50,7 @@
 
                     <!-- Error & Retry (shown after timeout) -->
                     <div
-                        v-if="showError"
+                        v-if="showErrorMessage"
                         class="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
                     >
                         <div
@@ -75,22 +75,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount, onErrorCaptured } from 'vue';
+import {
+    ref,
+    watch,
+    onMounted,
+    onBeforeUnmount,
+    onErrorCaptured,
+} from 'vue';
 import DocumentEditorRoot from './DocumentEditorRoot.vue';
 
 const props = defineProps<{ documentId: string }>();
 const emit = defineEmits<{ error: [error: Error] }>();
 
-const showError = ref(false);
+const showErrorMessage = ref(false);
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let isMounted = true;
 const renderKey = ref(0);
 
 // Show error after 5 seconds if editor hasn't loaded
 function startErrorTimeout() {
+    clearErrorTimeout();
     timeoutId = setTimeout(() => {
-        if (isMounted && !showError.value) {
-            showError.value = true;
+        if (isMounted && !showErrorMessage.value) {
+            showErrorMessage.value = true;
         }
     }, 5000);
 }
@@ -103,14 +110,22 @@ function clearErrorTimeout() {
 }
 
 function retryLoad() {
-    showError.value = false;
+    showErrorMessage.value = false;
     clearErrorTimeout();
     startErrorTimeout();
     renderKey.value += 1;
 }
 
+function handleEditorResolved() {
+    clearErrorTimeout();
+    showErrorMessage.value = false;
+}
+
 // Start error timeout when mounted
-startErrorTimeout();
+onMounted(() => {
+    isMounted = true;
+    startErrorTimeout();
+});
 
 // Clear on unmount
 onBeforeUnmount(() => {
@@ -122,7 +137,7 @@ onBeforeUnmount(() => {
 watch(
     () => props.documentId,
     () => {
-        showError.value = false;
+        showErrorMessage.value = false;
         clearErrorTimeout();
         startErrorTimeout();
         renderKey.value += 1;
@@ -131,7 +146,7 @@ watch(
 
 onErrorCaptured((err) => {
     clearErrorTimeout();
-    showError.value = true;
+    showErrorMessage.value = true;
     const error = err instanceof Error ? err : new Error(String(err));
     emit('error', error);
     return false;
