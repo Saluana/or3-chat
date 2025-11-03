@@ -345,6 +345,8 @@ function handleContainerClick(event: MouseEvent) {
 
 const statusText = computed(() => {
     switch (state.value.status) {
+        case 'loading':
+            return 'Loading…';
         case 'saving':
             return 'Saving…';
         case 'saved':

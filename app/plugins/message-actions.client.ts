@@ -69,10 +69,8 @@ export default defineNuxtPlugin(() => {
                             pane.mode = 'doc';
                             pane.documentId = doc.id;
                             // Reset chat-related fields when switching
-                            pane.threadId =
-                                pane.mode === 'doc'
-                                    ? pane.threadId
-                                    : pane.threadId;
+                            pane.threadId = '';
+                            pane.messages = [];
                         }
                     }
                 }
