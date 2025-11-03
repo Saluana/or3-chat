@@ -2,7 +2,7 @@
 // Keeps pane logic outside of UI components for easier testing & extension.
 
 import Dexie from 'dexie';
-import { ref, computed, type Ref, type ComputedRef } from 'vue';
+import { ref, computed, nextTick, type Ref, type ComputedRef } from 'vue';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
 
@@ -40,6 +40,9 @@ export interface UseMultiPaneOptions {
     maxPanes?: number; // default 3
     onFlushDocument?: (id: string) => void | Promise<void>;
     loadMessagesFor?: (id: string) => Promise<MultiPaneMessage[]>; // override for tests
+    minPaneWidth?: number; // minimum width per pane in pixels (default 280)
+    maxPaneWidth?: number; // maximum width per pane in pixels (default 2000)
+    storageKey?: string; // localStorage key for persisting widths (default 'pane-widths')
 }
 
 export interface UseMultiPaneApi {
@@ -65,6 +68,9 @@ export interface UseMultiPaneApi {
         opts?: { recordId?: string }
     ) => Promise<void>;
     updatePane: (index: number, updates: Partial<PaneState>) => void;
+    getPaneWidth: (index: number) => string;
+    handleResize: (paneIndex: number, deltaX: number) => void;
+    paneWidths: Ref<number[]>;
 }
 
 function genId() {
@@ -151,11 +157,20 @@ async function ensurePaneAppGetter(): Promise<PaneAppGetter | null> {
 export function useMultiPane(
     options: UseMultiPaneOptions = {}
 ): UseMultiPaneApi {
-    const { initialThreadId = '', maxPanes = 3 } = options;
+    const { 
+        initialThreadId = '', 
+        maxPanes = 3,
+        minPaneWidth = 280,
+        maxPaneWidth = 2000,
+        storageKey = 'pane-widths'
+    } = options;
 
     const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
     const activePaneIndex = ref(0);
     const hooks = useHooks();
+
+    // Width management state
+    const paneWidths = ref<number[]>([]);
 
     const canAddPane = computed(() => panes.value.length < maxPanes);
     const newWindowTooltip = computed(() =>
@@ -163,6 +178,139 @@ export function useMultiPane(
     );
 
     const loadMessagesFor = options.loadMessagesFor || defaultLoadMessagesFor;
+
+    // -------- Width Management Functions --------
+
+    /**
+     * Clamp width to min/max constraints
+     */
+    function clampWidth(width: number): number {
+        return Math.max(minPaneWidth, Math.min(maxPaneWidth, width));
+    }
+
+    /**
+     * Restore widths from localStorage
+     */
+    function restoreWidths() {
+        if (typeof window === 'undefined') return;
+        try {
+            const saved = localStorage.getItem(storageKey);
+            if (!saved) return;
+            
+            const parsed = JSON.parse(saved);
+            if (!Array.isArray(parsed)) {
+                if (import.meta.dev) {
+                    console.warn('[useMultiPane] Invalid stored widths format, ignoring');
+                }
+                return;
+            }
+            
+            // Validate each width
+            const valid = parsed.every(w => typeof w === 'number' && w > 0);
+            if (!valid) {
+                if (import.meta.dev) {
+                    console.warn('[useMultiPane] Invalid stored width values, ignoring');
+                }
+                return;
+            }
+            
+            paneWidths.value = parsed.map(w => clampWidth(w));
+        } catch (e) {
+            if (import.meta.dev) {
+                console.warn('[useMultiPane] Failed to restore widths:', e);
+            }
+        }
+    }
+
+    /**
+     * Persist widths to localStorage
+     */
+    function persistWidths() {
+        if (typeof window === 'undefined') return;
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(paneWidths.value));
+        } catch (e) {
+            if (import.meta.dev) {
+                console.warn('[useMultiPane] Failed to persist widths:', e);
+            }
+        }
+    }
+
+    /**
+     * Get width for a specific pane as a CSS value
+     */
+    function getPaneWidth(index: number): string {
+        const paneCount = panes.value.length;
+        
+        // Single pane or no panes
+        if (paneCount <= 1) return '100%';
+        
+        // Stored widths match current pane count
+        if (paneWidths.value.length === paneCount && 
+            index >= 0 && 
+            index < paneWidths.value.length) {
+            return `${paneWidths.value[index]}px`;
+        }
+        
+        // Mismatch or no stored widths - fall back to equal distribution
+        return `${100 / paneCount}%`;
+    }
+
+    /**
+     * Initialize widths based on current container size
+     */
+    function initializeWidths() {
+        if (typeof document === 'undefined') return;
+        
+        const container = document.querySelector('.pane-container') as HTMLElement;
+        if (!container) return;
+        
+        const totalWidth = container.clientWidth;
+        const paneCount = panes.value.length;
+        const equalWidth = Math.floor(totalWidth / paneCount);
+        
+        paneWidths.value = new Array(paneCount).fill(clampWidth(equalWidth));
+    }
+
+    /**
+     * Handle resize drag
+     */
+    function handleResize(paneIndex: number, deltaX: number) {
+        // Guard against invalid index
+        if (paneIndex < 0 || paneIndex >= panes.value.length - 1) {
+            if (import.meta.dev) {
+                console.warn('[useMultiPane] Invalid pane index for resize:', paneIndex);
+            }
+            return;
+        }
+        
+        // Initialize widths array if needed
+        if (paneWidths.value.length !== panes.value.length) {
+            initializeWidths();
+        }
+        
+        // If still not initialized, can't resize
+        if (paneWidths.value.length !== panes.value.length) {
+            return;
+        }
+        
+        // Calculate new widths
+        const currentWidth = paneWidths.value[paneIndex];
+        const nextWidth = paneWidths.value[paneIndex + 1];
+        
+        const newCurrentWidth = clampWidth(currentWidth + deltaX);
+        const actualDelta = newCurrentWidth - currentWidth;
+        const newNextWidth = clampWidth(nextWidth - actualDelta);
+        
+        // Only update if both constraints satisfied
+        if (newCurrentWidth >= minPaneWidth && newNextWidth >= minPaneWidth) {
+            paneWidths.value[paneIndex] = newCurrentWidth;
+            paneWidths.value[paneIndex + 1] = newNextWidth;
+            persistWidths();
+        }
+    }
+
+    // -------- End Width Management Functions --------
 
     async function setPaneThread(index: number, threadId: string) {
         const pane = panes.value[index];
@@ -271,6 +419,21 @@ export function useMultiPane(
     function addPane() {
         if (!canAddPane.value) return;
         const pane = createEmptyPane();
+        
+        // Adjust widths for new pane
+        if (paneWidths.value.length > 0 && paneWidths.value.length === panes.value.length) {
+            // Take space proportionally from existing panes
+            const totalWidth = paneWidths.value.reduce((sum, w) => sum + w, 0);
+            const newPaneWidth = clampWidth(totalWidth / (panes.value.length + 1));
+            const reductionPerPane = newPaneWidth / panes.value.length;
+            
+            paneWidths.value = paneWidths.value.map(w => 
+                clampWidth(w - reductionPerPane)
+            );
+            paneWidths.value.push(newPaneWidth);
+            persistWidths();
+        }
+        
         panes.value.push(pane);
         const prevIndex = activePaneIndex.value;
         const newIndex = panes.value.length - 1;
@@ -301,6 +464,21 @@ export function useMultiPane(
                 await options.onFlushDocument(closing.documentId);
             } catch {}
         }
+        
+        // Redistribute width to remaining panes
+        if (paneWidths.value.length > i && paneWidths.value.length === panes.value.length) {
+            const removedWidth = paneWidths.value[i];
+            paneWidths.value.splice(i, 1);
+            
+            if (paneWidths.value.length > 0) {
+                const additionPerPane = removedWidth / paneWidths.value.length;
+                paneWidths.value = paneWidths.value.map(w => 
+                    clampWidth(w + additionPerPane)
+                );
+            }
+            persistWidths();
+        }
+        
         const wasActive = i === activePaneIndex.value;
         panes.value.splice(i, 1);
         if (!panes.value.length) {
@@ -552,6 +730,9 @@ export function useMultiPane(
         newPaneForApp,
         setPaneApp,
         updatePane,
+        getPaneWidth,
+        handleResize,
+        paneWidths,
     };
 
     // Expose globally so plugins (message action handlers etc.) can interact.
@@ -559,6 +740,14 @@ export function useMultiPane(
     try {
         (globalThis as any).__or3MultiPaneApi = api;
     } catch {}
+
+    // Initialize widths on mount (client-side only)
+    if (typeof window !== 'undefined') {
+        // Use nextTick to ensure DOM is ready
+        nextTick(() => {
+            restoreWidths();
+        });
+    }
 
     return api;
 }

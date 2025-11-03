@@ -145,18 +145,20 @@
             <div
                 :class="[
                     showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden',
+                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden pane-container',
                 ]"
             >
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
-                    class="flex-1 min-w-0 relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    class="relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    :style="{ width: getPaneWidth(i) }"
                     :class="[
                         i === activePaneIndex && panes.length > 1
                             ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
                             : 'border-[var(--md-inverse-surface)]',
                         'transition-colors',
+                        panes.length === 1 ? 'min-w-0' : '',
                     ]"
                     tabindex="0"
                     @focus="setActive(i)"
@@ -198,6 +200,16 @@
                                 : undefined
                         "
                     />
+
+                    <!-- Resize handle (only between panes, not after the last one) -->
+                    <PaneResizeHandle
+                        v-if="i < panes.length - 1"
+                        :pane-index="i"
+                        :pane-count="panes.length"
+                        :is-desktop="!isMobile"
+                        @resize-start="onPaneResizeStart"
+                        @resize-keydown="onPaneResizeKeydown"
+                    />
                 </div>
             </div>
         </div>
@@ -232,9 +244,11 @@ import {
     nextTick,
     watch,
     defineAsyncComponent,
+    onBeforeUnmount,
 } from 'vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
+import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 
 const DocumentEditorAsync = defineAsyncComponent(
     () => import('~/components/documents/DocumentEditor.vue')
@@ -273,11 +287,90 @@ const {
     setPaneThread,
     loadMessagesFor,
     ensureAtLeastOne,
+    getPaneWidth,
+    handleResize,
+    paneWidths,
 } = useMultiPane({
     initialThreadId: props.initialThreadId,
     maxPanes: 3,
     onFlushDocument: (id) => flushDocument(id),
+    minPaneWidth: 280,
+    maxPaneWidth: 2000,
 });
+
+// Store min/max for use in keyboard handlers
+const minPaneWidth = 280;
+const maxPaneWidth = 2000;
+
+// -------- Pane Resize Handlers --------
+let resizingPaneIndex: number | null = null;
+let resizeStartX = 0;
+let resizeStartWidths: number[] = [];
+
+function onPaneResizeStart(event: PointerEvent, paneIndex: number) {
+    if (isMobile.value) return;
+    
+    // Capture pointer to this element
+    (event.target as Element)?.setPointerCapture?.(event.pointerId);
+    
+    // Store initial state
+    resizingPaneIndex = paneIndex;
+    resizeStartX = event.clientX;
+    resizeStartWidths = [...paneWidths.value];
+    
+    // Add move and up listeners
+    window.addEventListener('pointermove', onPaneResizeMove);
+    window.addEventListener('pointerup', onPaneResizeEnd, { once: true });
+}
+
+function onPaneResizeMove(event: PointerEvent) {
+    if (resizingPaneIndex === null) return;
+    
+    const deltaX = event.clientX - resizeStartX;
+    handleResize(resizingPaneIndex, deltaX);
+}
+
+function onPaneResizeEnd() {
+    resizingPaneIndex = null;
+    window.removeEventListener('pointermove', onPaneResizeMove);
+}
+
+function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
+    if (isMobile.value) return;
+    
+    const step = event.shiftKey ? 32 : 16;
+    let deltaX = 0;
+    
+    if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        deltaX = -step;
+    } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        deltaX = step;
+    } else if (event.key === 'Home') {
+        event.preventDefault();
+        // Set to minimum width - calculate delta from current
+        const currentWidth = paneWidths.value[paneIndex];
+        deltaX = minPaneWidth - currentWidth;
+    } else if (event.key === 'End') {
+        event.preventDefault();
+        // Set to maximum possible width
+        const nextWidth = paneWidths.value[paneIndex + 1];
+        const available = paneWidths.value[paneIndex] + nextWidth - minPaneWidth; // keep next at minPaneWidth
+        deltaX = available - paneWidths.value[paneIndex];
+    }
+    
+    if (deltaX !== 0) {
+        handleResize(paneIndex, deltaX);
+    }
+}
+
+// Cleanup on unmount
+onBeforeUnmount(() => {
+    window.removeEventListener('pointermove', onPaneResizeMove);
+    window.removeEventListener('pointerup', onPaneResizeEnd);
+});
+// -------- End Pane Resize Handlers --------
 
 // Pane navigation with Shift+Arrow keys (using VueUse)
 const keys = useMagicKeys();
