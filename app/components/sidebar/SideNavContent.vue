@@ -25,41 +25,45 @@
         </ClientOnly>
 
         <!-- Dynamic page content with suspense and keepalive -->
-        <div
-            ref="scrollAreaRef"
-            class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
-        >
-            <!-- Dynamic page renderer -->
-            <Suspense>
-                <template #default>
-                    <KeepAlive>
-                        <component
-                            v-if="activePageDef?.keepAlive"
-                            :is="activePageComponent"
-                            :key="`keepalive-${activePageId}`"
-                            v-bind="activePageProps"
-                            @vue:mounted="onPageMounted"
-                            @vue:unmounted="onPageUnmounted"
-                            v-on="forwardedEvents"
-                        />
-                        <component
-                            v-else
-                            :is="activePageComponent"
-                            :key="`no-keepalive-${activePageId}`"
-                            v-bind="activePageProps"
-                            @vue:mounted="onPageMounted"
-                            @vue:unmounted="onPageUnmounted"
-                            v-on="forwardedEvents"
-                        />
-                    </KeepAlive>
-                </template>
-                <template #fallback>
-                    <div class="flex-1 flex items-center justify-center">
-                        <div class="text-sm opacity-70">Loading page...</div>
-                    </div>
-                </template>
-            </Suspense>
-        </div>
+        <ClientOnly>
+            <div
+                ref="scrollAreaRef"
+                class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
+            >
+                <!-- Dynamic page renderer -->
+                <Suspense>
+                    <template #default>
+                        <KeepAlive include="sidebar-home">
+                            <component
+                                v-if="activePageDef?.keepAlive"
+                                :is="activePageComponent"
+                                :key="`keepalive-${activePageId}`"
+                                v-bind="activePageProps"
+                                @vue:mounted="onPageMounted"
+                                @vue:unmounted="onPageUnmounted"
+                                v-on="forwardedEvents"
+                            />
+                            <component
+                                v-else
+                                :is="activePageComponent"
+                                :key="`no-keepalive-${activePageId}`"
+                                v-bind="activePageProps"
+                                @vue:mounted="onPageMounted"
+                                @vue:unmounted="onPageUnmounted"
+                                v-on="forwardedEvents"
+                            />
+                        </KeepAlive>
+                    </template>
+                    <template #fallback>
+                        <div class="flex-1 flex items-center justify-center">
+                            <div class="text-sm opacity-70">
+                                Loading page...
+                            </div>
+                        </div>
+                    </template>
+                </Suspense>
+            </div>
+        </ClientOnly>
 
         <div ref="bottomNavRef" class="shrink-0 flex flex-col gap-2">
             <div
