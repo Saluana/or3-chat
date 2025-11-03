@@ -2,7 +2,7 @@
 // Keeps pane logic outside of UI components for easier testing & extension.
 
 import Dexie from 'dexie';
-import { ref, computed, type Ref, type ComputedRef } from 'vue';
+import { ref, computed, nextTick, type Ref, type ComputedRef } from 'vue';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
 
@@ -743,10 +743,10 @@ export function useMultiPane(
 
     // Initialize widths on mount (client-side only)
     if (typeof window !== 'undefined') {
-        // Use a slight delay to ensure DOM is ready
-        setTimeout(() => {
+        // Use nextTick to ensure DOM is ready
+        nextTick(() => {
             restoreWidths();
-        }, 0);
+        });
     }
 
     return api;

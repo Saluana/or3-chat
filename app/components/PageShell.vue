@@ -245,8 +245,6 @@ import {
     watch,
     defineAsyncComponent,
     onBeforeUnmount,
-    onMounted,
-    onUnmounted,
 } from 'vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
@@ -296,7 +294,13 @@ const {
     initialThreadId: props.initialThreadId,
     maxPanes: 3,
     onFlushDocument: (id) => flushDocument(id),
+    minPaneWidth: 280,
+    maxPaneWidth: 2000,
 });
+
+// Store min/max for use in keyboard handlers
+const minPaneWidth = 280;
+const maxPaneWidth = 2000;
 
 // -------- Pane Resize Handlers --------
 let resizingPaneIndex: number | null = null;
@@ -347,12 +351,12 @@ function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
         event.preventDefault();
         // Set to minimum width - calculate delta from current
         const currentWidth = paneWidths.value[paneIndex];
-        deltaX = 280 - currentWidth; // minPaneWidth
+        deltaX = minPaneWidth - currentWidth;
     } else if (event.key === 'End') {
         event.preventDefault();
         // Set to maximum possible width
         const nextWidth = paneWidths.value[paneIndex + 1];
-        const available = paneWidths.value[paneIndex] + nextWidth - 280; // keep next at minPaneWidth
+        const available = paneWidths.value[paneIndex] + nextWidth - minPaneWidth; // keep next at minPaneWidth
         deltaX = available - paneWidths.value[paneIndex];
     }
     
