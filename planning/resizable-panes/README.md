@@ -52,10 +52,11 @@ This directory contains comprehensive planning documentation for implementing re
 ## Key Implementation Principles
 
 1. ✅ **Minimal Code**: Reuse patterns from `ResizableSidebarLayout.vue`
-2. ✅ **No Visual Changes**: Only add resize handles between panes
-3. ✅ **Performance First**: Target 60fps, < 5KB bundle increase
-4. ✅ **Simple State**: Pixel widths stored in localStorage
-5. ✅ **Smooth UX**: Responsive pointer-based dragging
+2. ✅ **Invisible by Default**: Handles only appear when hovering within 1.5-2px of pane borders
+3. ✅ **No Content Overlap**: Indicators positioned exactly on borders, never overlapping pane content
+4. ✅ **Performance First**: Target 60fps, < 5KB bundle increase
+5. ✅ **Simple State**: Pixel widths stored in localStorage
+6. ✅ **Smooth UX**: Responsive pointer-based dragging with smooth transitions
 
 ## Technology Stack
 

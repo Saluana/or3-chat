@@ -7,10 +7,21 @@ This document describes the technical implementation for making multipane window
 ### Key Design Principles
 
 1. **Minimal Code**: Reuse existing patterns from `ResizableSidebarLayout.vue` and `ResizeHandle.vue`
-2. **No Visual Changes**: Preserve all existing UI styling, only add resize handles between panes
-3. **Performance First**: Use CSS-based width updates, avoid unnecessary re-renders
-4. **Simple State**: Store pane widths as pixel values or percentages, persist to localStorage
-5. **Smooth UX**: Leverage pointer events and requestAnimationFrame for 60fps updates
+2. **Invisible by Default**: Resize handles are completely invisible until hover to avoid visual clutter and content overlap
+3. **Precision Hover Zone**: Handles appear when hovering within 1.5-2px of pane borders for intuitive discovery
+4. **No Content Overlap**: Indicators positioned exactly on borders, never overlapping pane content
+5. **Performance First**: Use CSS-based width updates, avoid unnecessary re-renders
+6. **Simple State**: Store pane widths as pixel values, persist to localStorage
+7. **Smooth UX**: Smooth transitions for handle appearance/disappearance, 60fps resize performance
+
+### UX Philosophy
+
+Unlike the sidebar resize handle (which is always visible), pane resize handles use an **invisible-by-default** approach:
+
+- **Problem**: Visible handles between panes could overlap UI elements within panes (buttons, text, interactive components)
+- **Solution**: Handles are invisible until the user hovers near the border
+- **Benefit**: Clean interface with no visual clutter, discoverable on-demand
+- **Implementation**: Extended hit area (4px wide) with smooth CSS transitions for indicator appearance
 
 ### Technology Stack
 
@@ -52,7 +63,7 @@ graph TD
 
 ### 1. PaneResizeHandle Component
 
-Create a new component following the pattern of `ResizeHandle.vue` from the sidebar:
+Create a new component with an invisible-by-default approach that only shows on hover:
 
 ```typescript
 // app/components/panes/PaneResizeHandle.vue
@@ -60,21 +71,36 @@ Create a new component following the pattern of `ResizeHandle.vue` from the side
 <template>
     <div
         v-if="isDesktop && paneCount > 1"
-        class="pane-resize-handle absolute top-0 bottom-0 w-3 cursor-col-resize select-none group z-20 -right-1.5"
+        class="pane-resize-handle absolute top-0 bottom-0 w-1 cursor-col-resize select-none group z-20 -right-0.5"
         @pointerdown="onPointerDown"
+        @mouseenter="isHovered = true"
+        @mouseleave="isHovered = false"
         role="separator"
         aria-orientation="vertical"
         :aria-label="`Resize pane ${paneIndex + 1}`"
         tabindex="0"
         @keydown="onHandleKeydown"
     >
+        <!-- Invisible hit area that extends 1.5-2px on each side -->
         <div
-            class="absolute inset-y-0 my-auto h-24 w-1.5 rounded-full bg-[var(--md-outline-variant)]/70 group-hover:bg-[var(--md-primary)]/70 transition-colors"
+            class="absolute inset-y-0 -left-[2px] -right-[2px] pointer-events-auto"
+        ></div>
+        
+        <!-- Visible indicator (only on hover or focus) -->
+        <div
+            :class="[
+                'absolute inset-y-0 my-auto h-24 rounded-full transition-all duration-200',
+                isHovered || isFocused
+                    ? 'w-1.5 bg-[var(--md-primary)] opacity-100'
+                    : 'w-0 opacity-0'
+            ]"
         ></div>
     </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
+
 interface Props {
     paneIndex: number;
     paneCount: number;
@@ -88,6 +114,9 @@ const emit = defineEmits<{
     resizeKeydown: [event: KeyboardEvent, paneIndex: number];
 }>();
 
+const isHovered = ref(false);
+const isFocused = ref(false);
+
 function onPointerDown(e: PointerEvent) {
     emit('resizeStart', e, props.paneIndex);
 }
@@ -95,21 +124,46 @@ function onPointerDown(e: PointerEvent) {
 function onHandleKeydown(e: KeyboardEvent) {
     emit('resizeKeydown', e, props.paneIndex);
 }
+
+// Track focus state for keyboard users
+if (import.meta.client) {
+    const handleFocusIn = () => (isFocused.value = true);
+    const handleFocusOut = () => (isFocused.value = false);
+    
+    onMounted(() => {
+        const el = document.querySelector('.pane-resize-handle');
+        if (el) {
+            el.addEventListener('focusin', handleFocusIn);
+            el.addEventListener('focusout', handleFocusOut);
+        }
+    });
+    
+    onBeforeUnmount(() => {
+        const el = document.querySelector('.pane-resize-handle');
+        if (el) {
+            el.removeEventListener('focusin', handleFocusIn);
+            el.removeEventListener('focusout', handleFocusOut);
+        }
+    });
+}
 </script>
 
 <style scoped>
 .pane-resize-handle {
-    /* Extend hit area for easier grabbing */
-    margin-right: -6px;
+    /* Position on the exact border */
+    transform: translateX(50%);
 }
 </style>
 ```
 
 **Key Design Decisions:**
-- Positioned absolutely within each pane container (except the last one)
-- Centered on the border between panes (`-right-1.5` to span the gap)
-- Uses same visual language as sidebar handle (rounded pill, color transitions)
-- Includes ARIA attributes for accessibility
+- **Invisible by default**: Handle is transparent (w-0, opacity-0) until hover/focus
+- **Extended hit area**: Invisible div extends 2px on each side of border for easy targeting
+- **Smooth appearance**: Transitions from invisible to 1.5px wide primary-colored indicator
+- **Hover reveals**: When mouse enters the 4px-wide hit area, indicator smoothly appears
+- **Focus support**: Keyboard users see the indicator when handle has focus
+- **Non-overlapping**: Positioned exactly on the border, won't overlap pane content
+- **Primary color on hover**: Uses theme's primary color for consistency with active elements
 - Only renders on desktop when multiple panes exist
 
 ### 2. Enhanced PageShell Layout

@@ -21,20 +21,24 @@ The implementation must:
 **User Story:** As a user with multiple panes open, I want to drag the border between adjacent panes to adjust their relative widths, so that I can allocate more screen space to the content I'm focusing on.
 
 **Acceptance Criteria:**
-- WHEN the user hovers over the border between two adjacent panes THEN a visual indicator (resize cursor and/or highlight) SHALL appear to show the border is interactive
+- WHEN the user hovers within 1.5-2px of the border between two adjacent panes THEN a visual indicator SHALL appear showing the border is resizable
+- WHEN the visual indicator appears THEN it SHALL be positioned exactly on the border, not overlapping pane content
 - WHEN the user clicks and drags the border between two panes THEN the width of both panes SHALL adjust in real-time as the mouse moves
 - WHEN the user releases the mouse button THEN the new pane widths SHALL be persisted
 - WHEN there is only one pane visible THEN no resize handles SHALL be displayed
+- WHEN the user moves the mouse away from the border THEN the visual indicator SHALL smoothly disappear
 
 #### 1.2 Visual Feedback During Resize
 
 **User Story:** As a user resizing panes, I want clear visual feedback during the drag operation, so that I understand what is happening and can precisely position the divider.
 
 **Acceptance Criteria:**
-- WHEN the user hovers over a resize handle THEN the cursor SHALL change to `col-resize` to indicate resizability
-- WHEN the user is actively dragging a resize handle THEN a visual highlight or indicator SHALL appear on the handle
+- WHEN the user hovers within 1.5-2px of a pane border THEN the cursor SHALL change to `col-resize` to indicate resizability
+- WHEN the user hovers within 1.5-2px of a pane border THEN a subtle indicator SHALL appear on the border using the primary theme color
+- WHEN the user is actively dragging a resize handle THEN the visual indicator SHALL remain visible and grow slightly larger
 - WHEN the user drags a resize handle THEN the pane widths SHALL update smoothly without jank or visible layout shifts
-- WHEN the resize operation completes THEN all visual feedback SHALL return to the default state
+- WHEN the resize operation completes THEN all visual feedback SHALL return to the invisible state
+- WHEN the user moves the mouse away without dragging THEN the indicator SHALL smoothly fade out
 
 #### 1.3 Minimum and Maximum Pane Widths
 
@@ -171,13 +175,17 @@ The implementation must:
 
 #### 7.2 Resize Handle Design
 
-**User Story:** As a user, I want resize handles to be subtle yet discoverable, so that they don't clutter the interface but are easily found when needed.
+**User Story:** As a user, I want resize handles to be invisible by default and only appear on hover, so that they don't clutter the interface or overlap with pane content.
 
 **Acceptance Criteria:**
-- WHEN resize handles are visible THEN they SHALL use a consistent design with the existing sidebar resize handle
-- WHEN the user hovers over a resize handle THEN it SHALL highlight with a color transition (e.g., primary color)
-- WHEN resize handles are idle THEN they SHALL be subtle and not distract from content (e.g., using outline-variant color)
-- WHEN resize handles are placed THEN they SHALL be positioned on the border between panes without overlapping content
+- WHEN panes are at rest (no hover) THEN resize handles SHALL be completely invisible
+- WHEN the user hovers within 1.5-2px of a pane border THEN a visual indicator SHALL smoothly appear
+- WHEN the indicator appears THEN it SHALL use the primary theme color for visibility and consistency
+- WHEN the indicator appears THEN it SHALL be a rounded vertical bar approximately 1.5px wide and centered on the border
+- WHEN the indicator appears THEN it SHALL NOT overlap any content within the panes
+- WHEN the user moves the mouse away THEN the indicator SHALL smoothly transition back to invisible
+- WHEN a resize handle has keyboard focus THEN the indicator SHALL be visible to aid keyboard navigation
+- WHEN the user is actively dragging THEN the indicator SHALL remain visible until the drag completes
 
 ### 8. Error Handling and Edge Cases
 

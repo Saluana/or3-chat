@@ -37,12 +37,16 @@ This document provides a detailed, actionable task list for implementing resizab
   - Add conditional rendering (desktop only, multiple panes only)
   - Add absolute positioning styles
 
-- [ ] 2.2 Implement visual styling
+- [ ] 2.2 Implement invisible-by-default visual styling
   - Requirements: 1.2, 7.1, 7.2
-  - Add rounded pill visual indicator
-  - Implement color transitions on hover (outline-variant → primary)
-  - Add group/hover classes for interactive feedback
-  - Match styling patterns from sidebar ResizeHandle
+  - Create invisible hit area (4px wide, 2px on each side of border)
+  - Create visual indicator that's hidden by default (width: 0, opacity: 0)
+  - Implement hover state tracking (mouseenter/mouseleave)
+  - Implement focus state tracking for keyboard users
+  - Add smooth transitions for indicator appearance (width 0→1.5px, opacity 0→100%)
+  - Use primary theme color for visible indicator
+  - Position indicator exactly on border without overlapping pane content
+  - Add rounded pill shape for visual indicator
 
 - [ ] 2.3 Add pointer event handlers
   - Requirements: 1.1, 1.2
@@ -274,10 +278,16 @@ This document provides a detailed, actionable task list for implementing resizab
   - Test component renders on desktop with multiple panes
   - Test component does not render on mobile
   - Test component does not render with single pane
+  - Test indicator is invisible by default
+  - Test mouseenter event shows indicator
+  - Test mouseleave event hides indicator
+  - Test indicator uses primary color when visible
+  - Test hit area extends 2px on each side of border
   - Test pointerdown emits resizeStart event
   - Test keydown emits resizeKeydown event
   - Test ARIA attributes are present and correct
   - Test focus management (tabindex)
+  - Test focus state makes indicator visible
 
 ### 6. Testing - Integration Tests
 
@@ -342,13 +352,18 @@ This document provides a detailed, actionable task list for implementing resizab
   - Check Performance tab for 60fps during drag
   - Verify no console errors or warnings
 
-- [ ] 7.2 Test visual appearance
+- [ ] 7.2 Test invisible-by-default visual behavior
   - Requirements: 7.1, 7.2
   - Verify panes look identical to before (borders, colors, spacing)
-  - Verify resize handle matches sidebar handle styling
-  - Verify hover effects work correctly
+  - Verify resize handles are completely invisible when not hovered
+  - Hover within 2px of pane border and verify indicator smoothly appears
+  - Verify indicator uses primary theme color
+  - Verify indicator is positioned exactly on border without overlapping content
+  - Verify indicator smoothly fades out when mouse moves away
+  - Verify indicator width is approximately 1.5px when visible
   - Verify active pane highlighting still works
   - Test in both light and dark modes
+  - Verify no visual clutter or distractions when handles are hidden
 
 - [ ] 7.3 Test keyboard accessibility
   - Requirements: 3.1, 3.2
