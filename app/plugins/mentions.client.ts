@@ -41,9 +41,7 @@ export default defineNuxtPlugin(async () => {
                 collectMentions,
                 resolveMention,
                 upsertDocument,
-                updateDocument,
                 upsertThread,
-                updateThread,
                 removeDocument,
                 removeThread,
                 resetIndex,
@@ -63,9 +61,7 @@ export default defineNuxtPlugin(async () => {
                 collectMentions,
                 resolveMention,
                 upsertDocument,
-                updateDocument,
                 upsertThread,
-                updateThread,
                 removeDocument,
                 removeThread,
                 resetIndex,
@@ -226,7 +222,7 @@ export default defineNuxtPlugin(async () => {
         'db.documents.update:action:after',
         async (payload: any) => {
             const module = mentionsModule || (await loadMentionsModule());
-            if (module) module.updateDocument(payload.updated);
+            if (module) module.upsertDocument(payload.updated);
         },
         { kind: 'action' }
     );
@@ -262,7 +258,7 @@ export default defineNuxtPlugin(async () => {
         'db.threads.upsert:action:after',
         async (payload: any) => {
             const module = mentionsModule || (await loadMentionsModule());
-            if (module) module.updateThread(payload.entity);
+            if (module) module.upsertThread(payload.entity);
         },
         { kind: 'action' }
     );
