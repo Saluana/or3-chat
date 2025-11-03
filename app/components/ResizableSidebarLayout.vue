@@ -29,7 +29,7 @@
                 // mobile overlay behavior
                 !isDesktop
                     ? [
-                          'absolute top-0 bottom-0 w-[380px] max-w-[90vw] shadow-xl',
+                          'absolute inset-0 w-full shadow-xl',
                           // animated slide
                           'transition-transform duration-200 ease-out',
                           side === 'right'
@@ -69,7 +69,7 @@
                 </SidebarHeader>
 
                 <!-- Sidebar content -->
-                <div class="flex-1 overflow-auto min-w-fit">
+                <div class="flex-1 overflow-auto overscroll-contain min-w-fit">
                     <div v-show="!collapsed" class="flex-1 h-full">
                         <slot name="sidebar-expanded">
                             <div class="p-3 space-y-2 text-sm opacity-80">

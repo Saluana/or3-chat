@@ -3,7 +3,7 @@
         <!-- Single scroll container sized by measured height prop -->
         <div
             ref="scrollContainerRef"
-            class="overflow-y-auto overflow-x-hidden scrollbar-hidden pb-8"
+            class="overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-hidden pb-8"
             :style="{ height: `${height}px` }"
         >
             <Virtualizer

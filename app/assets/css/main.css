@@ -55,8 +55,24 @@
 }
 
 html, body {
-	font-family: var(--app-font-sans-current, var(--font-sans)) !important;
+        font-family: var(--app-font-sans-current, var(--font-sans)) !important;
     font-size: var(--app-font-size-root, 20px);
+    height: 100%;
+    min-height: 100%;
+    overscroll-behavior: none;
+}
+
+body {
+        overflow: hidden;
+    background-color: var(--md-surface);
+    touch-action: pan-y;
+}
+
+html,
+body,
+#__nuxt,
+#__nuxt > div {
+        height: 100%;
 }
 
 /* Reusable scrollbar style for inner scroll containers (Firefox specific props) */
