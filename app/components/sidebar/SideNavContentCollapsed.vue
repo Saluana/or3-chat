@@ -16,7 +16,7 @@
                         class="flex item-center justify-center"
                         icon="pixelarticons:message-plus"
                         :ui="{
-                            base: 'w-[38.5px]! h-[39px]',
+                            base: 'w-[38.5px]! h-[39px] text-[var(--md-on-surface)]',
                             leadingIcon: 'w-5 h-5',
                         }"
                         @click="emit('new-chat')"
