@@ -10,14 +10,21 @@
 /* Ensure Tailwind scans files outside srcDir (e.g. root-level app.config.ts)
 	so classes used in Nuxt UI theme overrides are generated. */
 @source "../../../app.config.ts";
+@source "../../theme/default/theme.ts"; /* Scan theme config too */
 
+/* Theme CSS variables (scoped by .light, .dark classes) */
+@import "~/theme/default/light.css";
+@import "~/theme/default/dark.css";
+@import "~/theme/default/light-hc.css";
+@import "~/theme/default/dark-hc.css";
+@import "~/theme/default/light-mc.css";
+@import "~/theme/default/dark-mc.css";
 
-/* Your Material theme variable files (scoped: .light, .dark, etc.) */
-@import "./theme.css";
+/* Nuxt UI token mapping (must come after theme variables) */
+@import "~/theme/_shared/nuxt-ui-map.css";
 
-/* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
-@import "~/assets/css/nuxt-ui-map.css";
-@import "./retro.css"; /* shared retro utility classes */
+/* Theme utility classes and custom styles */
+@import "~/theme/default/main.css";
 /* mentions.css removed: .mention styles live in ChatInputDropper.vue */
 
 /* Font setup: body uses VT323, headings use Press Start 2P */

@@ -10,71 +10,71 @@ This document breaks down the theming system refactor into actionable tasks orga
 **Requirements**: 1.1, 1.2, 5.2, 5.3
 
 ### 1. Directory Structure Setup
-- [ ] 1.1 Create `app/theme/` directory
-- [ ] 1.2 Create `app/theme/default/` subdirectory
-- [ ] 1.3 Create `app/theme/_shared/` subdirectory for utilities
-- [ ] 1.4 Add `.gitkeep` or README.md in each directory
+- [x] 1.1 Create `app/theme/` directory
+- [x] 1.2 Create `app/theme/default/` subdirectory
+- [x] 1.3 Create `app/theme/_shared/` subdirectory for utilities
+- [x] 1.4 Add `.gitkeep` or README.md in each directory
 - **Requirements**: 1.1
 
 ### 2. Migrate CSS Files to Theme Directory
-- [ ] 2.1 Move `app/assets/css/light.css` → `app/theme/default/light.css`
-- [ ] 2.2 Move `app/assets/css/dark.css` → `app/theme/default/dark.css`
-- [ ] 2.3 Move `app/assets/css/light-hc.css` → `app/theme/default/light-hc.css`
-- [ ] 2.4 Move `app/assets/css/dark-hc.css` → `app/theme/default/dark-hc.css`
-- [ ] 2.5 Move `app/assets/css/light-mc.css` → `app/theme/default/light-mc.css`
-- [ ] 2.6 Move `app/assets/css/dark-mc.css` → `app/theme/default/dark-mc.css`
-- [ ] 2.7 Keep `nuxt-ui-map.css` in `app/theme/_shared/` (shared across themes)
+- [x] 2.1 Move `app/assets/css/light.css` → `app/theme/default/light.css`
+- [x] 2.2 Move `app/assets/css/dark.css` → `app/theme/default/dark.css`
+- [x] 2.3 Move `app/assets/css/light-hc.css` → `app/theme/default/light-hc.css`
+- [x] 2.4 Move `app/assets/css/dark-hc.css` → `app/theme/default/dark-hc.css`
+- [x] 2.5 Move `app/assets/css/light-mc.css` → `app/theme/default/light-mc.css`
+- [x] 2.6 Move `app/assets/css/dark-mc.css` → `app/theme/default/dark-mc.css`
+- [x] 2.7 Keep `nuxt-ui-map.css` in `app/theme/_shared/` (shared across themes)
 - **Requirements**: 5.3
 
 ### 3. Create Theme Main Stylesheet
-- [ ] 3.1 Merge `app/assets/css/retro.css` into `app/theme/default/main.css`
-- [ ] 3.2 Merge `app/assets/css/prose-retro.css` into `app/theme/default/main.css`
-- [ ] 3.3 Add comments to separate sections (retro utilities, prose, custom)
-- [ ] 3.4 Test that all utility classes still work
+- [x] 3.1 Merge `app/assets/css/retro.css` into `app/theme/default/main.css`
+- [x] 3.2 Merge `app/assets/css/prose-retro.css` into `app/theme/default/main.css`
+- [x] 3.3 Add comments to separate sections (retro utilities, prose, custom)
+- [x] 3.4 Test that all utility classes still work
 - **Requirements**: 1.3, 5.3
 
 ### 4. Update Import Paths in main.css
-- [ ] 4.1 Update `@import` statements in `app/assets/css/main.css` to reference `~/theme/default/` and `~/theme/_shared/`
-- [ ] 4.2 Add `@source` directive for `theme.ts` if needed by Tailwind
-- [ ] 4.3 Verify import order: Tailwind → Nuxt UI → Theme Vars → UI Map → Theme Utils
-- [ ] 4.4 Test dev server starts without errors
+- [x] 4.1 Update `@import` statements in `app/assets/css/main.css` to reference `~/theme/default/` and `~/theme/_shared/`
+- [x] 4.2 Add `@source` directive for `theme.ts` if needed by Tailwind
+- [x] 4.3 Verify import order: Tailwind → Nuxt UI → Theme Vars → UI Map → Theme Utils
+- [x] 4.4 Test dev server starts without errors
 - **Requirements**: 5.3
 
 ### 5. Extract Nuxt UI Config to theme.ts
-- [ ] 5.1 Create `app/theme/default/theme.ts` file
-- [ ] 5.2 Copy `ui` object from `app.config.ts` to `theme.ts`
-- [ ] 5.3 Wrap in `defineAppConfig()` export
-- [ ] 5.4 Remove `ui` object from root `app.config.ts` (keep other settings)
-- [ ] 5.5 Test that buttons, modals, etc. still render correctly
+- [x] 5.1 Create `app/theme/default/theme.ts` file
+- [x] 5.2 Copy `ui` object from `app.config.ts` to `theme.ts`
+- [x] 5.3 Wrap in `defineAppConfig()` export
+- [x] 5.4 Remove `ui` object from root `app.config.ts` (keep other settings)
+- [x] 5.5 Test that buttons, modals, etc. still render correctly
 - **Requirements**: 1.3, 3.1, 5.2
 
 ### 6. Create Theme Loader Infrastructure
-- [ ] 6.1 Create `app/theme/_shared/theme-loader.ts`
-- [ ] 6.2 Implement `ThemeManifest` interface
-- [ ] 6.3 Implement `discoverThemes()` function (scans app/theme directory)
-- [ ] 6.4 Implement `loadTheme(name)` function (loads CSS and config files)
-- [ ] 6.5 Implement `validateThemeVariables()` function (checks required CSS vars)
-- [ ] 6.6 Add error/warning types and logging
+- [x] 6.1 Create `app/theme/_shared/theme-loader.ts`
+- [x] 6.2 Implement `ThemeManifest` interface
+- [x] 6.3 Implement `discoverThemes()` function (scans app/theme directory)
+- [x] 6.4 Implement `loadTheme(name)` function (loads CSS and config files)
+- [x] 6.5 Implement `validateThemeVariables()` function (checks required CSS vars)
+- [x] 6.6 Add error/warning types and logging
 - **Requirements**: 1.1, 1.2, 6.3
 
 ### 7. Create Config Merger Utility
-- [ ] 7.1 Create `app/theme/_shared/config-merger.ts`
-- [ ] 7.2 Implement `mergeThemeConfig()` function using `defu`
-- [ ] 7.3 Add TypeScript types for safe merging
-- [ ] 7.4 Test deep merge behavior (objects merge, arrays replace)
+- [x] 7.1 Create `app/theme/_shared/config-merger.ts`
+- [x] 7.2 Implement `mergeThemeConfig()` function using `defu`
+- [x] 7.3 Add TypeScript types for safe merging
+- [x] 7.4 Test deep merge behavior (objects merge, arrays replace)
 - **Requirements**: 3.1
 
 ### 8. Unit Tests for Theme Infrastructure
-- [ ] 8.1 Create `app/theme/_shared/__tests__/theme-loader.test.ts`
-- [ ] 8.2 Test `discoverThemes()` finds default theme
-- [ ] 8.3 Test `loadTheme()` loads valid theme without errors
-- [ ] 8.4 Test `loadTheme()` handles missing files gracefully
-- [ ] 8.5 Test `validateThemeVariables()` detects missing CSS variables
-- [ ] 8.6 Create `app/theme/_shared/__tests__/config-merger.test.ts`
-- [ ] 8.7 Test deep merge preserves base config
-- [ ] 8.8 Test override config takes precedence
-- [ ] 8.9 Test nested objects merge correctly
-- [ ] 8.10 Test arrays are replaced (not merged)
+- [x] 8.1 Create `app/theme/_shared/__tests__/theme-loader.test.ts`
+- [x] 8.2 Test `discoverThemes()` finds default theme
+- [x] 8.3 Test `loadTheme()` loads valid theme without errors
+- [x] 8.4 Test `loadTheme()` handles missing files gracefully
+- [x] 8.5 Test `validateThemeVariables()` detects missing CSS variables
+- [x] 8.6 Create `app/theme/_shared/__tests__/config-merger.test.ts`
+- [x] 8.7 Test deep merge preserves base config
+- [x] 8.8 Test override config takes precedence
+- [x] 8.9 Test nested objects merge correctly
+- [x] 8.10 Test arrays are replaced (not merged)
 - **Requirements**: Testing requirements
 
 ### 9. Verify No Visual Regression

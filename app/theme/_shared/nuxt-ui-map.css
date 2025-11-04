@@ -1,0 +1,93 @@
+/* Map Material Design variables to Nuxt UI CSS tokens.
+   We scope per theme class so switching themes updates Nuxt UI instantly. */
+
+/* Light */
+.light {
+  /* primary scale + base */
+  --ui-primary: var(--md-primary);
+  --ui-color-primary-500: var(--md-primary);
+  --ui-color-primary-600: var(--md-primary);
+
+  /* secondary -> use your secondary container as the accent */
+  --ui-secondary: var(--md-secondary);
+  --ui-color-secondary-500: var(--md-secondary);
+
+  /* success/info/warning/error from extended colors */
+  --ui-success: var(--md-extended-color-success-color);
+  --ui-color-success-500: var(--md-extended-color-success-color);
+  --ui-info: var(--md-primary-container);
+  --ui-color-info-500: var(--md-primary-container);
+  --ui-warning: var(--md-extended-color-warning-color);
+  --ui-color-warning-500: var(--md-extended-color-warning-color);
+  --ui-error: var(--md-error);
+  --ui-color-error-500: var(--md-error);
+
+  /* text + background + borders */
+  --ui-text: var(--md-on-surface);
+  --ui-text-inverted: var(--md-on-primary);
+  --ui-text-muted: color-mix(in oklab, var(--md-on-surface), transparent 35%);
+  --ui-text-dimmed: color-mix(in oklab, var(--md-on-surface), transparent 55%);
+  --ui-bg: var(--md-surface);
+  --ui-bg-muted: var(--md-surface-container);
+  --ui-bg-elevated: var(--md-surface-container-high);
+  --ui-bg-accented: var(--md-primary-container);
+  --ui-bg-inverted: var(--md-inverse-surface);
+  --ui-border: var(--md-outline);
+  --ui-border-muted: var(--md-outline-variant);
+  --ui-border-accented: var(--md-primary);
+  --ui-border-inverted: var(--md-inverse-primary);
+
+  /* optional radii scale base */
+  --ui-radius: 0.5rem;
+}
+
+/* Dark */
+.dark {
+  --ui-primary: var(--md-primary);
+  --ui-color-primary-500: var(--md-primary);
+  --ui-color-primary-600: var(--md-primary);
+
+  --ui-secondary: var(--md-secondary);
+  --ui-color-secondary-500: var(--md-secondary);
+
+  --ui-success: var(--md-extended-color-success-color);
+  --ui-color-success-500: var(--md-extended-color-success-color);
+  --ui-info: var(--md-primary-container);
+  --ui-color-info-500: var(--md-primary-container);
+  --ui-warning: var(--md-extended-color-warning-color);
+  --ui-color-warning-500: var(--md-extended-color-warning-color);
+  --ui-error: var(--md-error);
+  --ui-color-error-500: var(--md-error);
+
+  --ui-text: var(--md-on-surface);
+  --ui-text-inverted: var(--md-on-primary);
+  --ui-text-muted: color-mix(in oklab, var(--md-on-surface), transparent 35%);
+  --ui-text-dimmed: color-mix(in oklab, var(--md-on-surface), transparent 55%);
+  --ui-bg: var(--md-surface);
+  --ui-bg-muted: var(--md-surface-container);
+  --ui-bg-elevated: var(--md-surface-container-high);
+  --ui-bg-accented: var(--md-primary-container);
+  --ui-bg-inverted: var(--md-inverse-surface);
+  --ui-border: var(--md-outline);
+  --ui-border-muted: var(--md-outline-variant);
+  --ui-border-accented: var(--md-primary);
+  --ui-border-inverted: var(--md-inverse-primary);
+
+  --ui-radius: 0.5rem;
+}
+
+/* High/Medium contrast variants inherit the same mapping */
+.light-high-contrast,
+.light-medium-contrast,
+.dark-high-contrast,
+.dark-medium-contrast {
+  --ui-primary: var(--md-primary);
+  --ui-secondary: var(--md-secondary);
+  --ui-success: var(--md-extended-color-success-color);
+  --ui-info: var(--md-primary-container);
+  --ui-warning: var(--md-extended-color-warning-color);
+  --ui-error: var(--md-error);
+  --ui-text: var(--md-on-surface);
+  --ui-bg: var(--md-surface);
+  --ui-border: var(--md-outline);
+}

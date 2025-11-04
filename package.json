@@ -29,6 +29,7 @@
         "@types/node": "^24.3.1",
         "@types/streamsaver": "^2.0.5",
         "@vueuse/core": "^13.7.0",
+        "defu": "^6.1.4",
         "dexie": "^4.0.11",
         "dexie-export-import": "^4.1.4",
         "gpt-tokenizer": "^3.0.1",
