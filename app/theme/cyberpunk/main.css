@@ -63,6 +63,8 @@
 
 /* Cyberpunk-specific customizations */
 .retro-btn {
+	background: var(--btn-bg);
+	color: var(--btn-color);
 	font-family: 'Orbitron', monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.1em;

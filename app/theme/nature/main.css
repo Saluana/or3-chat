@@ -63,6 +63,8 @@
 
 /* Nature-specific customizations */
 .retro-btn {
+	background: var(--btn-bg);
+	color: var(--btn-color);
 	font-family: 'Comfortaa', cursive;
 	position: relative;
 	overflow: hidden;
