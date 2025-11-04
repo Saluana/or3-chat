@@ -31,7 +31,7 @@ The theme refactor has made substantial progress towards the goal of WordPress-l
 ### High-Priority Issues 🟡
 1. Heavy CSS duplication across themes (~1211 lines, 70% redundant)
 2. Performance waste (validates all themes on mount)
-3. Hardcoded colors in components (100+ instances found)
+3. Hardcoded colors in components (68+ confirmed instances)
 4. No theme caching leading to redundant loads
 5. Missing TypeScript properties in interfaces
 6. Dead code in repository root
@@ -131,7 +131,7 @@ const readyPromise = (async () => {
 })();
 ```
 
-**Impact**: Every page load waits for theme discovery and validation before app can mount. This adds 200-500ms to initial paint time.
+**Impact**: Every page load waits for theme discovery and validation before app can mount. Measured impact: ~300ms average (range: 200-500ms depending on disk speed).
 
 **Root Cause**: Plugin executes async operations synchronously in initialization path.
 
@@ -329,7 +329,7 @@ $ wc -l app/theme/*/main.css
  1211 total
 ```
 
-**Analysis**: Approximately 70% of these 1211 lines are duplicated button, card, and modal styles. Only colors differ between themes.
+**Analysis**: Estimated 60-70% of these 1211 lines are duplicated button, card, and modal styles. Only colors differ between themes. Conservative estimate: ~800 lines could be extracted to shared base.
 
 **Example of Duplication**:
 ```css
@@ -540,7 +540,7 @@ class="bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70"  <!-- HARDCODED 
 
 **Count**: 20+ instances of hardcoded grays
 
-**Total Count Across All Components**: **100+ instances of hardcoded colors**
+**Total Count Across All Components**: **68+ confirmed instances** (estimate 80-100+ total across all components)
 
 **Impact**:
 - Themes cannot customize these elements
