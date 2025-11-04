@@ -7,9 +7,9 @@
 
 /* Default theme specific CSS variables */
 :root {
-	/* Button variables */
-	--btn-bg: transparent;
-	--btn-color: inherit;
+	/* Button variables - use 'initial' to allow Nuxt UI color utilities to apply */
+	--btn-bg: initial;
+	--btn-color: initial;
 	--btn-border: var(--md-inverse-surface);
 	--btn-shadow: 2px 2px 0 var(--md-inverse-surface);
 	--btn-radius: 3px;
