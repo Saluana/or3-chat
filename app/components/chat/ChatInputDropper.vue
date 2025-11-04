@@ -51,6 +51,9 @@
                             type="button"
                             aria-label="Add attachments"
                             :disabled="loading"
+                            :ui="{
+                                leadingIcon: 'text-[var(--md-on-primary)]',
+                            }"
                         >
                             <UIcon name="i-lucide:plus" class="w-4 h-4" />
                         </UButton>
@@ -274,6 +277,9 @@
                         class="retro-btn disabled:opacity-40 flex items-center justify-center"
                         type="button"
                         aria-label="Send message"
+                        :ui="{
+                            leadingIcon: 'text-[var(--md-on-primary)]',
+                        }"
                     >
                         <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
                     </UButton>

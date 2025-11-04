@@ -13,11 +13,12 @@
                 >
                     <UButton
                         size="md"
+                        color="primary"
                         class="flex item-center justify-center"
                         icon="pixelarticons:message-plus"
                         :ui="{
-                            base: 'w-[38.5px]! h-[39px] text-[var(--md-on-surface)]',
-                            leadingIcon: 'w-5 h-5',
+                            base: 'w-[38.5px]! h-[39px]',
+                            leadingIcon: 'w-5 h-5 text-[var(--md-on-primary)]',
                         }"
                         @click="emit('new-chat')"
                     ></UButton>
@@ -156,7 +157,7 @@
                     :square="!entry.action.label"
                     :disabled="entry.disabled"
                     class="retro-btn pointer-events-auto flex items-center justify-center gap-1"
-                    :ui="{ base: 'retro-btn text-[var(--md-on-surface)]' }"
+                    :ui="{ base: 'retro-btn' }"
                     :aria-label="
                         entry.action.tooltip ||
                         entry.action.label ||

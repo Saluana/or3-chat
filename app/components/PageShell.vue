@@ -45,7 +45,7 @@
                             aria-label="Open sidebar"
                             title="Open sidebar"
                             :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn text-[var(--md-on-surface)]' }"
+                            :ui="{ base: 'retro-btn' }"
                             @click="openMobileSidebar"
                         >
                             <UIcon
@@ -71,7 +71,10 @@
                                     ? 'opacity-50 cursor-not-allowed'
                                     : '')
                             "
-                            :ui="{ base: 'retro-btn text-[var(--md-on-surface)]' }"
+                            :ui="{ 
+                                base: 'retro-btn',
+                                leadingIcon: 'text-[var(--md-on-surface)]'
+                            }"
                             aria-label="New window"
                             title="New window"
                             @click="addPane"
@@ -91,7 +94,7 @@
                             variant="ghost"
                             :square="true"
                             :class="'retro-btn pointer-events-auto backdrop-blur'"
-                            :ui="{ base: 'retro-btn text-[var(--md-on-surface)]' }"
+                            :ui="{ base: 'retro-btn' }"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"
                             @click="toggleTheme"
@@ -119,7 +122,7 @@
                                     'retro-btn pointer-events-auto flex items-center gap-1',
                                     entry.action.label ? 'px-3' : '',
                                 ]"
-                                :ui="{ base: 'retro-btn text-[var(--md-on-surface)]' }"
+                                :ui="{ base: 'retro-btn' }"
                                 :aria-label="
                                     entry.action.tooltip ||
                                     entry.action.label ||
@@ -177,7 +180,7 @@
                                 :square="true"
                                 :class="'retro-btn'"
                                 :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm text-[var(--md-on-surface)]',
+                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
                                 }"
                                 aria-label="Close window"
                                 title="Close window"
