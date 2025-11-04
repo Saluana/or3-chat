@@ -8,3 +8,8 @@ const engine = createHookEngine();
 export function useNuxtApp() {
     return { $hooks: engine } as any;
 }
+
+// Mock defineNuxtPlugin for plugin tests
+export function defineNuxtPlugin(plugin: any) {
+    return plugin;
+}

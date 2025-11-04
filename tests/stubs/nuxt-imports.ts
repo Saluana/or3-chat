@@ -2,3 +2,8 @@
 export function useToast() {
     return { add: () => {} };
 }
+
+// Mock defineNuxtPlugin for plugin tests
+export function defineNuxtPlugin(plugin: any) {
+    return plugin;
+}

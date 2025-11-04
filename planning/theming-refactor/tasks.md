@@ -148,51 +148,51 @@ This document breaks down the theming system refactor into actionable tasks orga
 **Requirements**: 3.1, 6.1, 6.2, 6.3
 
 ### 16. Enhance Theme Plugin with Multi-Theme Support
-- [ ] 16.1 Modify `app/plugins/theme.client.ts` to add `activeTheme` ref
-- [ ] 16.2 Read `activeTheme` from localStorage on init (default: 'default')
-- [ ] 16.3 Call `discoverThemes()` to get list of available themes
-- [ ] 16.4 Expose `availableThemes` on `$theme` provider
+- [x] 16.1 Modify `app/plugins/theme.client.ts` to add `activeTheme` ref
+- [x] 16.2 Read `activeTheme` from localStorage on init (default: 'default')
+- [x] 16.3 Call `discoverThemes()` to get list of available themes
+- [x] 16.4 Expose `availableThemes` on `$theme` provider
 - **Requirements**: 6.1
 
 ### 17. Implement Theme Switching API
-- [ ] 17.1 Implement `switchTheme(themeName)` function in theme plugin
-- [ ] 17.2 Validate theme exists before switching
-- [ ] 17.3 Update `activeTheme` ref and localStorage
-- [ ] 17.4 For now, log message to reload page (dynamic injection is future enhancement)
-- [ ] 17.5 Implement `reloadTheme()` helper that reloads current theme
-- [ ] 17.6 Expose both functions on `$theme` provider
+- [x] 17.1 Implement `switchTheme(themeName)` function in theme plugin
+- [x] 17.2 Validate theme exists before switching
+- [x] 17.3 Update `activeTheme` ref and localStorage
+- [x] 17.4 For now, log message to reload page (dynamic injection is future enhancement)
+- [x] 17.5 Implement `reloadTheme()` helper that reloads current theme
+- [x] 17.6 Expose both functions on `$theme` provider
 - **Requirements**: 6.1
 
 ### 18. Add Theme Validation and Error Handling
-- [ ] 18.1 Call `validateThemeVariables()` when loading theme
-- [ ] 18.2 Log warnings for missing CSS variables
-- [ ] 18.3 Fall back to default theme if critical errors occur
-- [ ] 18.4 Expose theme errors/warnings on `$theme.errors` and `$theme.warnings`
-- [ ] 18.5 Test error scenarios (missing files, invalid CSS)
+- [x] 18.1 Call `validateThemeVariables()` when loading theme
+- [x] 18.2 Log warnings for missing CSS variables
+- [x] 18.3 Fall back to default theme if critical errors occur
+- [x] 18.4 Expose theme errors/warnings on `$theme.errors` and `$theme.warnings`
+- [x] 18.5 Test error scenarios (missing files, invalid CSS)
 - **Requirements**: 6.3
 
 ### 19. TypeScript Declarations for Theme API
-- [ ] 19.1 Update `types/global.d.ts` or create `types/theme.d.ts`
-- [ ] 19.2 Declare `$theme` with new methods: `switchTheme`, `reloadTheme`, `activeTheme`, `availableThemes`
-- [ ] 19.3 Add JSDoc comments for IDE autocomplete
-- [ ] 19.4 Verify autocomplete works in components using `useNuxtApp().$theme`
+- [x] 19.1 Update `types/global.d.ts` or create `types/theme.d.ts`
+- [x] 19.2 Declare `$theme` with new methods: `switchTheme`, `reloadTheme`, `activeTheme`, `availableThemes`
+- [x] 19.3 Add JSDoc comments for IDE autocomplete
+- [x] 19.4 Verify autocomplete works in components using `useNuxtApp().$theme`
 - **Requirements**: 3.2
 
 ### 20. Theme Plugin Tests
-- [ ] 20.1 Create `app/plugins/__tests__/theme.client.test.ts`
-- [ ] 20.2 Test theme mode switching (light/dark/variants)
-- [ ] 20.3 Test localStorage persistence
-- [ ] 20.4 Test `switchTheme()` updates `activeTheme` ref
-- [ ] 20.5 Test invalid theme name falls back gracefully
-- [ ] 20.6 Test system preference detection
+- [x] 20.1 Create `app/plugins/__tests__/theme-provider.test.ts`
+- [x] 20.2 Test theme mode switching (light/dark/variants)
+- [x] 20.3 Test localStorage persistence
+- [x] 20.4 Test `switchTheme()` updates `activeTheme` ref
+- [x] 20.5 Test invalid theme name falls back gracefully
+- [x] 20.6 Test system preference detection
 - **Requirements**: Testing requirements
 
 ### 21. Optional: Theme Switcher UI in Dashboard
-- [ ] 21.1 Create `ThemeSelector.vue` component (dropdown or card list)
-- [ ] 21.2 Fetch `$theme.availableThemes` and display options
-- [ ] 21.3 Call `$theme.switchTheme(name)` on selection
-- [ ] 21.4 Show current theme as selected
-- [ ] 21.5 Add to Dashboard as a new plugin page or section
+- [x] 21.1 Create `ThemeSelector.vue` component (dropdown or card list)
+- [x] 21.2 Fetch `$theme.availableThemes` and display options
+- [x] 21.3 Call `$theme.switchTheme(name)` on selection
+- [x] 21.4 Show current theme as selected
+- [x] 21.5 Add to Dashboard as a new plugin page or section
 - **Requirements**: 6.1 (optional for phase 3, can defer)
 
 ---

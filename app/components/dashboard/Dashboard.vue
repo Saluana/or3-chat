@@ -160,6 +160,13 @@ const coreItems: DashboardPlugin[] = [
                 component: () => import('./ThemePage.vue'),
             },
             {
+                id: 'theme-selector',
+                title: 'Theme Selector',
+                description: 'Switch between different themes and validate theme configurations.',
+                icon: 'pixelarticons:palette',
+                component: () => import('./ThemeSelector.vue'),
+            },
+            {
                 id: 'ai-settings',
                 title: 'AI Settings',
                 description: 'Configure AI-related preferences and options.',
