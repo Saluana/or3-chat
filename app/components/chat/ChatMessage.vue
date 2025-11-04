@@ -1,6 +1,12 @@
 <template>
     <div
-        :class="outerClass"
+        :class="[
+            outerClass,
+            'app-chat-message',
+            props.message.role === 'user' ? 'app-chat-message--user' : '',
+            props.message.role === 'assistant' ? 'app-chat-message--assistant' : ''
+        ]"
+        :data-message-role="props.message.role"
         :style="{
             paddingRight:
                 props.message.role === 'user' && hashList.length && !expanded

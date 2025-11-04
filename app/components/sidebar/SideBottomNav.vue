@@ -1,6 +1,6 @@
 <template>
     <div
-        id="bottom-nav-root"
+        id="app-bottom-nav"
         class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-2 border-r-2 border-[var(--md-inverse-surface)] px-0.5"
     >
         <!-- MY INFO -->

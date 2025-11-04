@@ -151,7 +151,8 @@
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
-                    class="relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    class="relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0 app-pane"
+                    :data-pane-id="pane.id"
                     :style="{ width: getPaneWidth(i) }"
                     :class="[
                         i === activePaneIndex && panes.length > 1

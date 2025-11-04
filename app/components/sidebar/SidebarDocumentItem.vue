@@ -1,6 +1,6 @@
 <template>
     <RetroGlassBtn
-        class="w-full flex items-center justify-between text-left"
+        class="w-full flex items-center justify-between text-left app-document-item"
         :class="{ 'active-element bg-primary/25': active }"
         @click="emit('select', doc.id)"
         @mouseenter="onHoverDoc()"

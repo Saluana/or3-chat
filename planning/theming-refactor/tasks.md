@@ -78,11 +78,11 @@ This document breaks down the theming system refactor into actionable tasks orga
 - **Requirements**: Testing requirements
 
 ### 9. Verify No Visual Regression
-- [ ] 9.1 Take screenshots of app before refactor (light & dark mode)
-- [ ] 9.2 Take screenshots of app after refactor
-- [ ] 9.3 Compare screenshots pixel-by-pixel (use Percy, Chromatic, or manual)
-- [ ] 9.4 Fix any visual differences
-- [ ] 9.5 Verify all pages load without CSS errors
+- [x] 9.1 Take screenshots of app before refactor (light & dark mode)
+- [x] 9.2 Take screenshots of app after refactor
+- [x] 9.3 Compare screenshots pixel-by-pixel (use Percy, Chromatic, or manual)
+- [x] 9.4 Fix any visual differences
+- [x] 9.5 Verify all pages load without CSS errors
 - **Requirements**: 5.2
 
 ---
@@ -93,51 +93,51 @@ This document breaks down the theming system refactor into actionable tasks orga
 **Requirements**: 4.1, 4.2, 4.3
 
 ### 10. Add Unique IDs to Singleton Components
-- [ ] 10.1 Add `id="app-sidebar"` to sidebar in `ResizableSidebarLayout.vue` (`<aside>` element)
-- [ ] 10.2 Add `id="app-content"` to main content area in `ResizableSidebarLayout.vue` (`<main>` element)
-- [ ] 10.3 Add `id="app-header"` to header in `SidebarHeader.vue`
-- [ ] 10.4 Add `id="app-bottom-nav"` to bottom nav in `SideBottomNav.vue`
-- [ ] 10.5 Add `id="app-chat-container"` to chat container in `ChatContainer.vue` (`<main>` element)
-- [ ] 10.6 Add `id="app-dashboard-modal"` to dashboard modal in `Dashboard.vue`
+- [x] 10.1 Add `id="app-sidebar"` to sidebar in `ResizableSidebarLayout.vue` (`<aside>` element)
+- [x] 10.2 Add `id="app-content"` to main content area in `ResizableSidebarLayout.vue` (`<main>` element)
+- [x] 10.3 Add `id="app-header"` to header in `SidebarHeader.vue`
+- [x] 10.4 Add `id="app-bottom-nav"` to bottom nav in `SideBottomNav.vue`
+- [x] 10.5 Add `id="app-chat-container"` to chat container in `ChatContainer.vue` (`<main>` element)
+- [x] 10.6 Add `id="app-dashboard-modal"` to dashboard modal in `Dashboard.vue`
 - **Requirements**: 4.1
 
 ### 11. Add Component Classes to Chat Messages
-- [ ] 11.1 Add `app-chat-message` class to root element in `ChatMessage.vue`
-- [ ] 11.2 Add `app-chat-message--user` class when `role === 'user'`
-- [ ] 11.3 Add `app-chat-message--assistant` class when `role === 'assistant'`
-- [ ] 11.4 Add `data-message-role` attribute with role value
-- [ ] 11.5 Test classes don't conflict with existing Tailwind classes
+- [x] 11.1 Add `app-chat-message` class to root element in `ChatMessage.vue`
+- [x] 11.2 Add `app-chat-message--user` class when `role === 'user'`
+- [x] 11.3 Add `app-chat-message--assistant` class when `role === 'assistant'`
+- [x] 11.4 Add `data-message-role` attribute with role value
+- [x] 11.5 Test classes don't conflict with existing Tailwind classes
 - **Requirements**: 4.2
 
 ### 12. Add Classes to Sidebar Components
-- [ ] 12.1 Add `app-sidebar-item` class to thread list items in `ThreadListItem.vue`
-- [ ] 12.2 Add `app-sidebar-item--active` class when thread is selected
-- [ ] 12.3 Add `app-prompt-item` class to prompt items in `PromptsList.vue`
-- [ ] 12.4 Add `app-document-item` class to document items in `DocumentsList.vue`
-- [ ] 12.5 Test hover/active states still work
+- [x] 12.1 Add `app-sidebar-item` class to thread list items in `ThreadListItem.vue`
+- [x] 12.2 Add `app-sidebar-item--active` class when thread is selected
+- [x] 12.3 Add `app-prompt-item` class to prompt items in `PromptsList.vue`
+- [x] 12.4 Add `app-document-item` class to document items in `DocumentsList.vue`
+- [x] 12.5 Test hover/active states still work
 - **Requirements**: 4.2
 
 ### 13. Add Classes to Other Components
-- [ ] 13.1 Add `app-pane` class and `data-pane-id` attribute to panes in `PageShell.vue`
-- [ ] 13.2 Add `app-model-card` class to model cards in `ModelCatalog.vue`
-- [ ] 13.3 Add `app-theme-section` class to theme sections in `ThemePage.vue`
-- [ ] 13.4 Verify classes are applied in DOM (use browser DevTools)
+- [x] 13.1 Add `app-pane` class and `data-pane-id` attribute to panes in `PageShell.vue`
+- [x] 13.2 Add `app-model-card` class to model cards in `ModelCatalog.vue`
+- [x] 13.3 Add `app-theme-section` class to theme sections in `ThemePage.vue`
+- [x] 13.4 Verify classes are applied in DOM (use browser DevTools)
 - **Requirements**: 4.2
 
 ### 14. Document IDs and Classes
-- [ ] 14.1 Create `docs/UI/component-ids-classes.md`
-- [ ] 14.2 List all unique IDs with descriptions and file locations
-- [ ] 14.3 List all component classes with usage examples
-- [ ] 14.4 Add before/after CSS examples for common customizations
-- [ ] 14.5 Include section on best practices (don't override Tailwind, use specificity wisely)
+- [x] 14.1 Create `docs/UI/component-ids-classes.md`
+- [x] 14.2 List all unique IDs with descriptions and file locations
+- [x] 14.3 List all component classes with usage examples
+- [x] 14.4 Add before/after CSS examples for common customizations
+- [x] 14.5 Include section on best practices (don't override Tailwind, use specificity wisely)
 - **Requirements**: 4.3
 
 ### 15. Integration Tests for IDs and Classes
-- [ ] 15.1 Create `tests/integration/component-targeting.test.ts`
-- [ ] 15.2 Test all expected IDs present in DOM after mount
-- [ ] 15.3 Test component classes applied correctly (user messages vs assistant messages)
-- [ ] 15.4 Test `data-*` attributes set properly
-- [ ] 15.5 Test classes don't conflict with Tailwind (specificity issues)
+- [x] 15.1 Create `tests/integration/component-targeting.test.ts`
+- [x] 15.2 Test all expected IDs present in DOM after mount
+- [x] 15.3 Test component classes applied correctly (user messages vs assistant messages)
+- [x] 15.4 Test `data-*` attributes set properly
+- [x] 15.5 Test classes don't conflict with Tailwind (specificity issues)
 - **Requirements**: Testing requirements
 
 ---

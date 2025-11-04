@@ -1,7 +1,9 @@
 <template>
     <RetroGlassBtn
-        class="w-full flex items-center justify-between text-left"
-        :class="{ 'active-element bg-primary/25': active }"
+        class="w-full flex items-center justify-between text-left app-sidebar-item"
+        :class="{ 
+            'active-element bg-primary/25 app-sidebar-item--active': active 
+        }"
         @click="emit('select', thread.id)"
     >
         <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">

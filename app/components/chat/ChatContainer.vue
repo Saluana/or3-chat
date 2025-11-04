@@ -1,5 +1,6 @@
 <template>
     <main
+        id="app-chat-container"
         ref="containerRoot"
         class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
     >

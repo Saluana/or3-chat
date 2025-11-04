@@ -1,5 +1,6 @@
 <template>
     <UModal
+        id="app-dashboard-modal"
         v-model:open="open"
         :modal="false"
         :ui="{

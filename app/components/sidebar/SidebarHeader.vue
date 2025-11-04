@@ -4,7 +4,7 @@
             'px-0 justify-center': collapsed,
             'px-3 justify-between': !collapsed,
         }"
-        id="top-header"
+        id="app-header"
         class="flex items-center min-h-[48px] max-h-[48px] header-pattern py-2 border-b-2 border-[var(--md-inverse-surface)]"
     >
         <div v-show="!collapsed">

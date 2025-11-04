@@ -5,7 +5,7 @@
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
         <!-- Mode Toggle -->
         <section
-            class="section-card space-y-2"
+            class="section-card space-y-2 app-theme-section"
             role="group"
             aria-labelledby="theme-section-mode"
         >
@@ -55,7 +55,7 @@
         </section>
         <!-- Color Palette Overrides -->
         <section
-            class="section-card space-y-3"
+            class="section-card space-y-3 app-theme-section"
             role="group"
             aria-labelledby="theme-section-palette"
         >
@@ -326,7 +326,7 @@
         </section>
         <!-- Custom Background Colors Master Toggle -->
         <section
-            class="section-card space-y-2"
+            class="section-card space-y-2 app-theme-section"
             role="group"
             aria-labelledby="theme-section-custom-bg"
         >
@@ -364,7 +364,7 @@
         </section>
         <!-- Typography -->
         <section
-            class="section-card space-y-3"
+            class="section-card space-y-3 app-theme-section"
             role="group"
             aria-labelledby="theme-section-typography"
         >
@@ -402,7 +402,7 @@
 
         <!-- Content Background Layer 1 -->
         <section
-            class="section-card space-y-4"
+            class="section-card space-y-4 app-theme-section"
             role="group"
             aria-labelledby="theme-section-content1"
         >
@@ -578,7 +578,7 @@
 
         <!-- Content Background Layer 2 -->
         <section
-            class="section-card space-y-4"
+            class="section-card space-y-4 app-theme-section"
             role="group"
             aria-labelledby="theme-section-content2"
         >
@@ -752,7 +752,7 @@
 
         <!-- Sidebar Background -->
         <section
-            class="section-card space-y-4"
+            class="section-card space-y-4 app-theme-section"
             role="group"
             aria-labelledby="theme-section-sidebar"
         >
@@ -923,7 +923,7 @@
 
         <!-- Accessibility -->
         <section
-            class="section-card space-y-3"
+            class="section-card space-y-3 app-theme-section"
             role="group"
             aria-labelledby="theme-section-accessibility"
         >
@@ -947,7 +947,7 @@
 
         <!-- Navigation Header -->
         <section
-            class="section-card space-y-4"
+            class="section-card space-y-4 app-theme-section"
             role="group"
             aria-labelledby="theme-section-header"
         >
@@ -1026,7 +1026,7 @@
 
         <!-- Navigation Footer -->
         <section
-            class="section-card space-y-4"
+            class="section-card space-y-4 app-theme-section"
             role="group"
             aria-labelledby="theme-section-footer"
         >
@@ -1105,7 +1105,7 @@
 
         <!-- Reset -->
         <section
-            class="section-card space-y-3"
+            class="section-card space-y-3 app-theme-section"
             role="group"
             aria-labelledby="theme-section-reset"
         >

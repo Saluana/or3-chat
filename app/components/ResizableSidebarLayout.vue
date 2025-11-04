@@ -18,6 +18,7 @@
 
         <!-- Sidebar -->
         <aside
+            id="app-sidebar"
             :class="[
                 'z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex flex-col',
                 // width transition on desktop
@@ -119,7 +120,7 @@
         </aside>
 
         <!-- Main content -->
-        <div class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
+        <main id="app-content" class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
             <div
                 class="flex-1 overflow-hidden content-bg"
                 :style="{
@@ -140,7 +141,7 @@
                     </div>
                 </slot>
             </div>
-        </div>
+        </main>
     </div>
 </template>
 

@@ -76,7 +76,7 @@
                             <div
                                 v-for="prompt in filteredPrompts"
                                 :key="prompt.id"
-                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
+                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow app-prompt-item"
                                 :data-active="
                                     prompt.id === currentActivePromptId
                                         ? 'true'
