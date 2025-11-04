@@ -1,0 +1,59 @@
+.light {
+  /* Primary colors - bright neon cyan */
+  --md-primary: #00ffff;
+  --md-on-primary: #000000;
+  --md-primary-container: #e6f9ff;
+  --md-on-primary-container: #006666;
+
+  /* Secondary colors - neon pink */
+  --md-secondary: #ff00ff;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #ffe6ff;
+  --md-on-secondary-container: #660066;
+
+  /* Surface colors - dark with neon accents */
+  --md-surface: #1a0033;
+  --md-on-surface: #ffffff;
+  --md-surface-variant: #2d0052;
+  --md-on-surface-variant: #e6ccff;
+
+  /* Background colors - dark futuristic */
+  --md-background: #0d001a;
+  --md-on-background: #ffffff;
+
+  /* Error colors - neon red */
+  --md-error: #ff0066;
+  --md-on-error: #ffffff;
+  --md-error-container: #ff99cc;
+  --md-on-error-container: #330019;
+
+  /* Outline colors - neon purple */
+  --md-outline: #9933ff;
+  --md-outline-variant: #cc99ff;
+
+  /* Application-specific cyberpunk colors */
+  --app-content-bg-1: #1a0033;
+  --app-content-bg-2: #2d0052;
+  --app-content-bg-3: #400066;
+  --app-content-border: #9933ff;
+
+  /* Interactive elements - neon glow */
+  --app-hover-bg: #2d0052;
+  --app-active-bg: #400066;
+  --app-focus-ring: #00ffff;
+
+  /* Typography - neon colors */
+  --app-text-primary: #ffffff;
+  --app-text-secondary: #e6ccff;
+  --app-text-muted: #9933ff;
+
+  /* Cyberpunk accent colors */
+  --cyberpunk-neon-cyan: #00ffff;
+  --cyberpunk-neon-pink: #ff00ff;
+  --cyberpunk-neon-purple: #9933ff;
+  --cyberpunk-neon-green: #00ff88;
+  --cyberpunk-neon-yellow: #ffff00;
+  --cyberpunk-neon-red: #ff0066;
+  --cyberpunk-dark-bg: #0d001a;
+  --cyberpunk-grid: #1a0033;
+}

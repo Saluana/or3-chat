@@ -1,0 +1,174 @@
+/* Minimal theme - remove all decorative patterns and transitions */
+
+/* Remove all transitions for instant feedback */
+* {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Clean, sharp borders without shadows */
+.retro-btn {
+  border: 1px solid var(--md-outline) !important;
+  box-shadow: none !important;
+  border-radius: 2px;
+}
+
+.retro-btn:hover {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.retro-btn:active {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Minimal input styling */
+.retro-input {
+  border: 1px solid var(--md-outline) !important;
+  box-shadow: none !important;
+  border-radius: 2px;
+}
+
+.retro-input:focus {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Remove all decorative backgrounds */
+body::before,
+body::after {
+  display: none !important;
+}
+
+/* Clean card styling */
+.card,
+.ucard,
+[class*="card"] {
+  box-shadow: none !important;
+  border: 1px solid var(--md-outline) !important;
+  border-radius: 2px;
+}
+
+/* Minimal modal styling */
+.modal,
+.umodal,
+[class*="modal"] {
+  box-shadow: none !important;
+  border: 1px solid var(--md-outline) !important;
+  border-radius: 2px;
+}
+
+/* Remove scanlines and CRT effects */
+.scanlines,
+.crt-effect,
+[class*="scanline"],
+[class*="crt"] {
+  display: none !important;
+}
+
+/* Clean scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--app-content-bg-2);
+  border: 1px solid var(--md-outline);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--md-secondary);
+  border: 1px solid var(--md-outline);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--md-secondary-container);
+}
+
+/* Remove all pattern backgrounds */
+[class*="pattern"],
+[class*="gradient"],
+[class*="texture"] {
+  background-image: none !important;
+  background-color: var(--md-surface) !important;
+}
+
+/* Minimal focus indicators */
+*:focus {
+  outline: 1px solid var(--app-focus-ring) !important;
+  outline-offset: 1px !important;
+}
+
+/* Clean typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+  text-shadow: none !important;
+}
+
+/* Remove pixel font effects for clean sans-serif */
+.font-pixel,
+.font-retro,
+[class*="pixel"],
+[class*="retro"] {
+  font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+/* Minimal spacing and layout */
+.container,
+.layout,
+[class*="container"] {
+  padding: 1rem;
+  margin: 0;
+}
+
+/* Clean button states */
+button,
+.u-button,
+[class*="button"] {
+  background: var(--md-surface) !important;
+  color: var(--md-on-surface) !important;
+  border: 1px solid var(--md-outline) !important;
+  padding: 0.5rem 1rem;
+  margin: 0.25rem;
+}
+
+button:hover,
+.u-button:hover,
+[class*="button"]:hover {
+  background: var(--app-hover-bg) !important;
+}
+
+button:active,
+.u-button:active,
+[class*="button"]:active {
+  background: var(--app-active-bg) !important;
+}
+
+/* Minimal form elements */
+input,
+textarea,
+select {
+  background: var(--md-surface) !important;
+  color: var(--md-on-surface) !important;
+  border: 1px solid var(--md-outline) !important;
+  padding: 0.5rem;
+  border-radius: 2px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--app-focus-ring) !important;
+  outline: 1px solid var(--app-focus-ring) !important;
+}
+
+/* Remove all decorative elements */
+.decoration,
+ ornament,
+[class*="decoration"],
+[class*="ornament"] {
+  display: none !important;
+}

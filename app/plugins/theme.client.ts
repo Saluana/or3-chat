@@ -1,5 +1,12 @@
 import { ref } from 'vue';
-import { discoverThemes, loadTheme, validateThemeVariables, type ThemeManifest, type ThemeError, type ThemeWarning } from '~/theme/_shared/theme-loader';
+import {
+    discoverThemes,
+    loadTheme,
+    validateThemeVariables,
+    type ThemeManifest,
+    type ThemeError,
+    type ThemeWarning,
+} from '~/theme/_shared/theme-loader';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     const THEME_CLASSES = [
@@ -30,13 +37,18 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const initializeThemes = async () => {
         try {
             availableThemes.value = discoverThemes();
-            console.log('[theme] Discovered themes:', availableThemes.value.map(t => t.name));
+            console.log(
+                '[theme] Discovered themes:',
+                availableThemes.value.map((t) => t.name)
+            );
         } catch (err) {
             console.error('[theme] Failed to discover themes:', err);
             errors.value.push({
                 file: 'theme-discovery',
-                message: `Theme discovery failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-                severity: 'error'
+                message: `Theme discovery failed: ${
+                    err instanceof Error ? err.message : 'Unknown error'
+                }`,
+                severity: 'error',
             });
         }
     };
@@ -59,39 +71,83 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         root.classList.add(name);
     };
 
-    // Load and validate theme
-    const loadAndValidateTheme = async (themeName: string) => {
+    // Inject CSS into the page
+    const injectThemeCSS = (css: string, themeName: string, mode: string) => {
+        const styleId = `theme-${themeName}-${mode}`;
+        let styleElement = document.getElementById(styleId) as HTMLStyleElement;
+
+        if (!styleElement) {
+            styleElement = document.createElement('style');
+            styleElement.id = styleId;
+            styleElement.setAttribute('data-theme', themeName);
+            styleElement.setAttribute('data-mode', mode);
+            document.head.appendChild(styleElement);
+        }
+
+        styleElement.textContent = css;
+    };
+
+    // Remove theme CSS from the page
+    const removeThemeCSS = (themeName: string) => {
+        const styleElements = document.querySelectorAll(
+            `style[data-theme="${themeName}"]`
+        );
+        styleElements.forEach((el) => el.remove());
+    };
+
+    // Load and validate theme (injects CSS into page)
+    const loadAndValidateTheme = async (
+        themeName: string,
+        injectCss = true
+    ) => {
         try {
             errors.value = [];
             warnings.value = [];
-            
+
             const result = await loadTheme(themeName);
-            
+
             // Store errors and warnings
             errors.value = result.errors;
             warnings.value = result.warnings;
-            
+
             // Log warnings
-            result.warnings.forEach(warning => {
+            result.warnings.forEach((warning) => {
                 console.warn('[theme]', warning.message, warning.file);
             });
-            
+
             // Log errors
-            result.errors.forEach(error => {
+            result.errors.forEach((error) => {
                 console.error('[theme]', error.message, error.file);
             });
-            
+
+            // Only inject CSS if requested (default true for backwards compatibility)
+            if (injectCss) {
+                if (result.lightCss) {
+                    injectThemeCSS(result.lightCss, themeName, 'light');
+                }
+
+                if (result.darkCss) {
+                    injectThemeCSS(result.darkCss, themeName, 'dark');
+                }
+
+                if (result.mainCss) {
+                    injectThemeCSS(result.mainCss, themeName, 'main');
+                }
+            }
+
             return result;
         } catch (err) {
             const error: ThemeError = {
                 file: themeName,
-                message: `Failed to load theme: ${err instanceof Error ? err.message : 'Unknown error'}`,
-                severity: 'error'
+                message: `Failed to load theme: ${
+                    err instanceof Error ? err.message : 'Unknown error'
+                }`,
+                severity: 'error',
             };
-            
+
             errors.value = [error];
             console.error('[theme]', error.message);
-            
+
             return null;
         }
     };
@@ -116,19 +172,30 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const toggle = () =>
         set(current.value.startsWith('dark') ? 'light' : 'dark');
 
-    // Switch to a different theme (requires page reload for now)
+    // Switch to a different theme (now works dynamically without reload)
     const switchTheme = async (themeName: string) => {
         // Validate theme exists
-        const theme = availableThemes.value.find(t => t.name === themeName);
+        const theme = availableThemes.value.find((t) => t.name === themeName);
         if (!theme) {
-            console.error(`[theme] Theme "${themeName}" not found. Available themes:`, availableThemes.value.map(t => t.name));
+            console.error(
+                `[theme] Theme "${themeName}" not found. Available themes:`,
+                availableThemes.value.map((t) => t.name)
+            );
             return false;
         }
 
-        // Validate theme can be loaded
+        // Remove old theme CSS
+        const oldTheme = activeTheme.value;
+        if (oldTheme && oldTheme !== themeName) {
+            removeThemeCSS(oldTheme);
+        }
+
+        // Validate and load new theme
         const result = await loadAndValidateTheme(themeName);
         if (!result || result.errors.length > 0) {
-            console.error(`[theme] Theme "${themeName}" has critical errors and cannot be applied`);
+            console.error(
+                `[theme] Theme "${themeName}" has critical errors and cannot be applied`
+            );
             return false;
         }
 
@@ -136,23 +203,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         activeTheme.value = themeName;
         localStorage.setItem(activeThemeStorageKey, themeName);
 
-        console.log(`[theme] Switched to theme "${themeName}". Page reload required to apply all theme assets.`);
-        console.log('[theme] In a future version, this will be applied dynamically without reload.');
-        
-        // For now, we need to reload the page to apply the new theme
-        // In a future enhancement, this could be done dynamically
-        setTimeout(() => {
-            if (confirm(`Theme "${themeName}" requires a page reload to take effect. Reload now?`)) {
-                window.location.reload();
-            }
-        }, 100);
+        // Apply the current mode to ensure correct CSS is active
+        apply(current.value);
 
         return true;
     };
 
     // Reload current theme
     const reloadTheme = async () => {
-        console.log(`[theme] Reloading current theme "${activeTheme.value}"`);
         const result = await loadAndValidateTheme(activeTheme.value);
         return result !== null;
     };
@@ -167,14 +225,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
     media.addEventListener('change', onChange);
 
-    nuxtApp.hook('app:beforeMount', async () => {
-        current.value = readThemeMode();
-        activeTheme.value = readActiveTheme();
+    nuxtApp.hook('app:beforeMount', () => {
+        // Only sync the mode (light/dark) from localStorage and apply it
+        // Don't reload themes - they're already loaded during plugin init
+        const storedMode = readThemeMode();
+        const storedTheme = readActiveTheme();
+
+        // Only update if values changed (avoid unnecessary operations)
+        if (current.value !== storedMode) {
+            current.value = storedMode;
+        }
+        if (activeTheme.value !== storedTheme) {
+            activeTheme.value = storedTheme;
+        }
+
+        // Apply the current mode to update HTML class
         apply(current.value);
-        
-        // Re-initialize themes and load active theme
-        await initializeThemes();
-        await loadAndValidateTheme(activeTheme.value);
     });
 
     // Cleanup for HMR in dev so we don't stack listeners
@@ -191,7 +257,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         get: () => current.value,
         system: getSystemPref,
         current, // expose ref for reactivity if needed
-        
+
         // New multi-theme API
         activeTheme,
         availableThemes,
@@ -199,15 +265,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         reloadTheme,
         errors,
         warnings,
-        
+
         // Utility methods
         validateTheme: async (themeName: string) => {
-            return await loadAndValidateTheme(themeName);
+            // Validate without injecting CSS (just check for errors/warnings)
+            return await loadAndValidateTheme(themeName, false);
         },
-        
+
         // Get theme manifest by name
         getThemeManifest: (themeName: string) => {
-            return availableThemes.value.find(t => t.name === themeName);
-        }
+            return availableThemes.value.find((t) => t.name === themeName);
+        },
     });
 });

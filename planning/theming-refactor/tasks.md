@@ -203,60 +203,60 @@ This document breaks down the theming system refactor into actionable tasks orga
 **Requirements**: 8.1, 8.2, 8.3
 
 ### 22. Write Theming Quick Start Guide
-- [ ] 22.1 Create `docs/UI/theming-quickstart.md`
-- [ ] 22.2 Section: "Creating Your First Theme" (step-by-step, <10 min)
-- [ ] 22.3 Section: "Required Files" (light.css, dark.css, what goes in each)
-- [ ] 22.4 Section: "Optional Files" (main.css for utilities, theme.ts for component overrides)
-- [ ] 22.5 Section: "Activating Your Theme" (how to test locally)
-- [ ] 22.6 Add code snippets and screenshots
+- [x] 22.1 Create `docs/UI/theming-quickstart.md`
+- [x] 22.2 Section: "Creating Your First Theme" (step-by-step, <10 min)
+- [x] 22.3 Section: "Required Files" (light.css, dark.css, what goes in each)
+- [x] 22.4 Section: "Optional Files" (main.css for utilities, theme.ts for component overrides)
+- [x] 22.5 Section: "Activating Your Theme" (how to test locally)
+- [x] 22.6 Add code snippets and screenshots
 - **Requirements**: 8.1, 6.1
 
 ### 23. Document CSS Variables Reference
-- [ ] 23.1 Create `docs/UI/css-variables-reference.md`
-- [ ] 23.2 Table of Material Design core variables (--md-primary, etc.) with descriptions
-- [ ] 23.3 Table of application-specific variables (--app-content-bg-1, etc.)
-- [ ] 23.4 Table of Nuxt UI token variables (auto-generated, read-only)
-- [ ] 23.5 Add usage examples for each variable
-- [ ] 23.6 Include light and dark mode default values
+- [x] 23.1 Create `docs/UI/css-variables-reference.md`
+- [x] 23.2 Table of Material Design core variables (--md-primary, etc.) with descriptions
+- [x] 23.3 Table of application-specific variables (--app-content-bg-1, etc.)
+- [x] 23.4 Table of Nuxt UI token variables (auto-generated, read-only)
+- [x] 23.5 Add usage examples for each variable
+- [x] 23.6 Include light and dark mode default values
 - **Requirements**: 8.1, 2.1, 2.3
 
 ### 24. Document Component Override System
-- [ ] 24.1 Create `docs/UI/component-overrides.md`
-- [ ] 24.2 Explain `theme.ts` file structure and purpose
-- [ ] 24.3 Show how to override button, input, modal, tooltip with examples
-- [ ] 24.4 Explain slot-based vs variant-based customization
-- [ ] 24.5 Link to Nuxt UI component docs for full API
-- [ ] 24.6 Add troubleshooting section (common errors)
+- [x] 24.1 Create `docs/UI/component-overrides.md`
+- [x] 24.2 Explain `theme.ts` file structure and purpose
+- [x] 24.3 Show how to override button, input, modal, tooltip with examples
+- [x] 24.4 Explain slot-based vs variant-based customization
+- [x] 24.5 Link to Nuxt UI component docs for full API
+- [x] 24.6 Add troubleshooting section (common errors)
 - **Requirements**: 8.1, 3.3
 
 ### 25. Create Example Themes
-- [ ] 25.1 Create `app/theme/minimal/` theme (black/white, no patterns)
-  - [ ] 25.1.1 Write `light.css` (white background, black text)
-  - [ ] 25.1.2 Write `dark.css` (black background, white text)
-  - [ ] 25.1.3 Write `main.css` (remove patterns, sharp borders)
-  - [ ] 25.1.4 Write `theme.ts` (disable transitions)
-  - [ ] 25.1.5 Add README.md describing theme
-- [ ] 25.2 Create `app/theme/cyberpunk/` theme (neon colors, glow effects)
-  - [ ] 25.2.1 Write `light.css` (bright neon accent)
-  - [ ] 25.2.2 Write `dark.css` (neon on dark background)
-  - [ ] 25.2.3 Write `main.css` (glow box-shadows, futuristic fonts)
-  - [ ] 25.2.4 Add README.md
-- [ ] 25.3 Create `app/theme/nature/` theme (green/brown, organic)
-  - [ ] 25.3.1 Write `light.css` (soft greens, beige)
-  - [ ] 25.3.2 Write `dark.css` (dark greens, browns)
-  - [ ] 25.3.3 Write `main.css` (rounded corners, leaf patterns)
-  - [ ] 25.3.4 Add README.md
-- [ ] 25.4 Test all example themes load without errors
+- [x] 25.1 Create `app/theme/minimal/` theme (black/white, no patterns)
+  - [x] 25.1.1 Write `light.css` (white background, black text)
+  - [x] 25.1.2 Write `dark.css` (black background, white text)
+  - [x] 25.1.3 Write `main.css` (remove patterns, sharp borders)
+  - [x] 25.1.4 Write `theme.ts` (disable transitions)
+  - [x] 25.1.5 Add README.md describing theme
+- [x] 25.2 Create `app/theme/cyberpunk/` theme (neon colors, glow effects)
+  - [x] 25.2.1 Write `light.css` (bright neon accent)
+  - [x] 25.2.2 Write `dark.css` (neon on dark background)
+  - [x] 25.2.3 Write `main.css` (glow box-shadows, futuristic fonts)
+  - [x] 25.2.4 Add README.md
+- [x] 25.3 Create `app/theme/nature/` theme (green/brown, organic)
+  - [x] 25.3.1 Write `light.css` (soft greens, beige)
+  - [x] 25.3.2 Write `dark.css` (dark greens, browns)
+  - [x] 25.3.3 Write `main.css` (rounded corners, leaf patterns)
+  - [x] 25.3.4 Add README.md
+- [x] 25.4 Test all example themes load without errors
 - **Requirements**: 8.1
 
 ### 26. Write Migration Guide for Contributors
-- [ ] 26.1 Create `docs/migration-guides/theming-refactor.md`
-- [ ] 26.2 Section: "What Changed" (high-level summary)
-- [ ] 26.3 Section: "Breaking Changes" (if any)
-- [ ] 26.4 Section: "Migrating Custom Components" (before/after examples)
-- [ ] 26.5 Section: "Converting Inline Styles to CSS Variables"
-- [ ] 26.6 Section: "Deprecated Patterns" (list old patterns and replacements)
-- [ ] 26.7 Add FAQ section
+- [x] 26.1 Create `docs/migration-guides/theming-refactor.md`
+- [x] 26.2 Section: "What Changed" (high-level summary)
+- [x] 26.3 Section: "Breaking Changes" (if any)
+- [x] 26.4 Section: "Migrating Custom Components" (before/after examples)
+- [x] 26.5 Section: "Converting Inline Styles to CSS Variables"
+- [x] 26.6 Section: "Deprecated Patterns" (list old patterns and replacements)
+- [x] 26.7 Add FAQ section
 - **Requirements**: 8.2
 
 ### 27. Create Theming Video Walkthrough (Optional)

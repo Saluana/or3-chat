@@ -1,0 +1,322 @@
+/* Cyberpunk theme - neon glow effects and futuristic styling */
+
+/* Import futuristic fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+/* Neon glow effects */
+.neon-glow {
+  text-shadow: 
+    0 0 10px var(--cyberpunk-neon-cyan),
+    0 0 20px var(--cyberpunk-neon-cyan),
+    0 0 30px var(--cyberpunk-neon-cyan);
+}
+
+.neon-border {
+  border: 2px solid var(--cyberpunk-neon-cyan);
+  box-shadow: 
+    0 0 10px var(--cyberpunk-neon-cyan),
+    inset 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+/* Cyberpunk button styling */
+.retro-btn {
+  background: linear-gradient(45deg, var(--cyberpunk-dark-bg), var(--cyberpunk-grid));
+  border: 2px solid var(--cyberpunk-neon-cyan);
+  color: var(--cyberpunk-neon-cyan);
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.5),
+    inset 0 0 20px rgba(0, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.retro-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--cyberpunk-neon-cyan), transparent);
+  transition: left 0.5s ease;
+}
+
+.retro-btn:hover::before {
+  left: 100%;
+}
+
+.retro-btn:hover {
+  box-shadow: 
+    0 0 30px rgba(0, 255, 255, 0.8),
+    inset 0 0 30px rgba(0, 255, 255, 0.2);
+  text-shadow: 0 0 10px var(--cyberpunk-neon-cyan);
+}
+
+.retro-btn:active {
+  box-shadow: 
+    0 0 40px rgba(0, 255, 255, 1),
+    inset 0 0 40px rgba(0, 255, 255, 0.3);
+  transform: translateY(2px);
+}
+
+/* Cyberpunk input styling */
+.retro-input {
+  background: var(--cyberpunk-dark-bg);
+  border: 2px solid var(--cyberpunk-neon-purple);
+  color: var(--cyberpunk-neon-cyan);
+  font-family: 'Share Tech Mono', monospace;
+  box-shadow: 
+    0 0 15px rgba(153, 51, 255, 0.3),
+    inset 0 0 15px rgba(153, 51, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.retro-input:focus {
+  border-color: var(--cyberpunk-neon-cyan);
+  box-shadow: 
+    0 0 25px rgba(0, 255, 255, 0.6),
+    inset 0 0 25px rgba(0, 255, 255, 0.2);
+  outline: none;
+}
+
+.retro-input::placeholder {
+  color: var(--cyberpunk-neon-purple);
+  opacity: 0.7;
+}
+
+/* Grid background pattern */
+body {
+  background-image: 
+    linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: 0 0, 0 0;
+  animation: grid-move 10s linear infinite;
+}
+
+@keyframes grid-move {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 50px 50px, 50px 50px; }
+}
+
+/* Cyberpunk card styling */
+.card,
+.ucard,
+[class*="card"] {
+  background: linear-gradient(135deg, var(--cyberpunk-dark-bg), var(--cyberpunk-grid));
+  border: 2px solid var(--cyberpunk-neon-purple);
+  box-shadow: 
+    0 0 30px rgba(153, 51, 255, 0.4),
+    inset 0 0 30px rgba(153, 51, 255, 0.1);
+  position: relative;
+}
+
+.card::before,
+.ucard::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, var(--cyberpunk-neon-cyan), var(--cyberpunk-neon-pink), var(--cyberpunk-neon-purple));
+  z-index: -1;
+  opacity: 0.5;
+  animation: border-rotate 3s linear infinite;
+}
+
+@keyframes border-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Cyberpunk modal styling */
+.modal,
+.umodal,
+[class*="modal"] {
+  background: linear-gradient(135deg, var(--cyberpunk-dark-bg), var(--cyberpunk-grid));
+  border: 3px solid var(--cyberpunk-neon-cyan);
+  box-shadow: 
+    0 0 50px rgba(0, 255, 255, 0.8),
+    inset 0 0 50px rgba(0, 255, 255, 0.2);
+}
+
+/* Glowing scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--cyberpunk-dark-bg);
+  border: 1px solid var(--cyberpunk-neon-purple);
+  box-shadow: inset 0 0 10px rgba(153, 51, 255, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, var(--cyberpunk-neon-cyan), var(--cyberpunk-neon-purple));
+  border: 1px solid var(--cyberpunk-neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, var(--cyberpunk-neon-pink), var(--cyberpunk-neon-cyan));
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.8);
+}
+
+/* Cyberpunk typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: linear-gradient(45deg, var(--cyberpunk-neon-cyan), var(--cyberpunk-neon-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+}
+
+/* Futuristic link styling */
+a {
+  color: var(--cyberpunk-neon-cyan);
+  text-decoration: none;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+a::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyberpunk-neon-cyan), var(--cyberpunk-neon-pink));
+  transition: width 0.3s ease;
+}
+
+a:hover::after {
+  width: 100%;
+}
+
+a:hover {
+  color: var(--cyberpunk-neon-pink);
+  text-shadow: 0 0 10px var(--cyberpunk-neon-pink);
+}
+
+/* Glowing focus indicators */
+*:focus {
+  outline: 2px solid var(--cyberpunk-neon-cyan);
+  outline-offset: 2px;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+}
+
+/* Cyberpunk alert styling */
+.alert,
+.u-alert,
+[class*="alert"] {
+  background: linear-gradient(135deg, var(--cyberpunk-dark-bg), var(--cyberpunk-grid));
+  border: 2px solid var(--cyberpunk-neon-red);
+  color: var(--cyberpunk-neon-red);
+  box-shadow: 
+    0 0 20px rgba(255, 0, 102, 0.6),
+    inset 0 0 20px rgba(255, 0, 102, 0.1);
+  font-family: 'Orbitron', monospace;
+}
+
+/* Animated background particles */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(153, 51, 255, 0.1) 0%, transparent 50%);
+  animation: particles-float 20s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes particles-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -30px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+/* Code block styling */
+pre, code {
+  font-family: 'Share Tech Mono', monospace;
+  background: var(--cyberpunk-dark-bg);
+  border: 1px solid var(--cyberpunk-neon-green);
+  color: var(--cyberpunk-neon-green);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+/* Terminal-style text */
+.terminal {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--cyberpunk-neon-green);
+  text-shadow: 0 0 5px rgba(0, 255, 136, 0.8);
+}
+
+.terminal::before {
+  content: '> ';
+  color: var(--cyberpunk-neon-cyan);
+}
+
+/* Glitch effect for special elements */
+.glitch {
+  position: relative;
+  color: var(--cyberpunk-neon-cyan);
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch::before {
+  animation: glitch-1 0.5s infinite;
+  color: var(--cyberpunk-neon-pink);
+  z-index: -1;
+}
+
+.glitch::after {
+  animation: glitch-2 0.5s infinite;
+  color: var(--cyberpunk-neon-purple);
+  z-index: -2;
+}
+
+@keyframes glitch-1 {
+  0%, 100% { clip-path: inset(0 0 0 0); transform: translate(0); }
+  20% { clip-path: inset(20% 0 30% 0); transform: translate(-2px, 2px); }
+  40% { clip-path: inset(50% 0 20% 0); transform: translate(2px, -2px); }
+  60% { clip-path: inset(10% 0 60% 0); transform: translate(-2px, 1px); }
+  80% { clip-path: inset(80% 0 5% 0); transform: translate(1px, -1px); }
+}
+
+@keyframes glitch-2 {
+  0%, 100% { clip-path: inset(0 0 0 0); transform: translate(0); }
+  20% { clip-path: inset(60% 0 10% 0); transform: translate(2px, -1px); }
+  40% { clip-path: inset(20% 0 50% 0); transform: translate(-2px, 2px); }
+  60% { clip-path: inset(30% 0 40% 0); transform: translate(1px, -2px); }
+  80% { clip-path: inset(5% 0 80% 0); transform: translate(-1px, 1px); }
+}

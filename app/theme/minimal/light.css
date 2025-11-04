@@ -1,0 +1,49 @@
+.light {
+  /* Primary colors - pure black and white */
+  --md-primary: #000000;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #f5f5f5;
+  --md-on-primary-container: #000000;
+
+  /* Secondary colors - grayscale variants */
+  --md-secondary: #666666;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #e0e0e0;
+  --md-on-secondary-container: #333333;
+
+  /* Surface colors - clean whites and grays */
+  --md-surface: #ffffff;
+  --md-on-surface: #000000;
+  --md-surface-variant: #f8f8f8;
+  --md-on-surface-variant: #666666;
+
+  /* Background colors */
+  --md-background: #ffffff;
+  --md-on-background: #000000;
+
+  /* Error colors - subtle red */
+  --md-error: #dc2626;
+  --md-on-error: #ffffff;
+  --md-error-container: #fee2e2;
+  --md-on-error-container: #991b1b;
+
+  /* Outline colors */
+  --md-outline: #d1d5db;
+  --md-outline-variant: #e5e7eb;
+
+  /* Application-specific minimal colors */
+  --app-content-bg-1: #ffffff;
+  --app-content-bg-2: #f8f8f8;
+  --app-content-bg-3: #f1f1f1;
+  --app-content-border: #e5e7eb;
+
+  /* Interactive elements - no transitions */
+  --app-hover-bg: #f8f8f8;
+  --app-active-bg: #e5e7eb;
+  --app-focus-ring: #000000;
+
+  /* Typography - high contrast */
+  --app-text-primary: #000000;
+  --app-text-secondary: #666666;
+  --app-text-muted: #999999;
+}

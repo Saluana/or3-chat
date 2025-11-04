@@ -1,0 +1,63 @@
+.dark {
+  /* Primary colors - deep forest green */
+  --md-primary: #87a96b;
+  --md-on-primary: #1a3309;
+  --md-primary-container: #2d5016;
+  --md-on-primary-container: #b8d4a1;
+
+  /* Secondary colors - rich earth brown */
+  --md-secondary: #d7ccc8;
+  --md-on-secondary: #3e2723;
+  --md-secondary-container: #5d4037;
+  --md-on-secondary-container: #f3e5f5;
+
+  /* Surface colors - dark earth tones */
+  --md-surface: #1a1a1a;
+  --md-on-surface: #e6e1e5;
+  --md-surface-variant: #2d2d2d;
+  --md-on-surface-variant: #cac4d0;
+
+  /* Background colors - deep forest night */
+  --md-background: #0d0d0d;
+  --md-on-background: #e6e1e5;
+
+  /* Error colors - deep berry red */
+  --md-error: #ffb4ab;
+  --md-on-error: #690005;
+  --md-error-container: #93000a;
+  --md-on-error-container: #ffb4ab;
+
+  /* Outline colors - muted stone */
+  --md-outline: #938f99;
+  --md-outline-variant: #49454f;
+
+  /* Application-specific nature colors */
+  --app-content-bg-1: #1a1a1a;
+  --app-content-bg-2: #2d2d2d;
+  --app-content-bg-3: #404040;
+  --app-content-border: #5d4037;
+
+  /* Interactive elements - organic transitions */
+  --app-hover-bg: #2d2d2d;
+  --app-active-bg: #404040;
+  --app-focus-ring: #87a96b;
+
+  /* Typography - earth tones */
+  --app-text-primary: #e6e1e5;
+  --app-text-secondary: #cac4d0;
+  --app-text-muted: #938f99;
+
+  /* Nature accent colors */
+  --nature-leaf-green: #87a96b;
+  --nature-sage-green: #a8d5a8;
+  --nature-moss-green: #8fbc8f;
+  --nature-forest-green: #2d5016;
+  --nature-sky-blue: #5f9ea0;
+  --nature-earth-brown: #8d6e63;
+  --nature-bark-brown: #5d4037;
+  --nature-stone-gray: #a1887f;
+  --nature-sand-beige: #d7c8b8;
+  --nature-cream: #f5f5dc;
+  --nature-sunlight: #fff8dc;
+  --nature-berry-red: #c62828;
+}
