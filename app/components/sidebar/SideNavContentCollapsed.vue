@@ -156,7 +156,7 @@
                     :square="!entry.action.label"
                     :disabled="entry.disabled"
                     class="retro-btn pointer-events-auto flex items-center justify-center gap-1"
-                    :ui="{ base: 'retro-btn' }"
+                    :ui="{ base: 'retro-btn text-[var(--md-on-surface)]' }"
                     :aria-label="
                         entry.action.tooltip ||
                         entry.action.label ||
