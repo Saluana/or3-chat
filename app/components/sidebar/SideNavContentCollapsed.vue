@@ -13,11 +13,12 @@
                 >
                     <UButton
                         size="md"
+                        color="primary"
                         class="flex item-center justify-center"
                         icon="pixelarticons:message-plus"
                         :ui="{
                             base: 'w-[38.5px]! h-[39px]',
-                            leadingIcon: 'w-5 h-5',
+                            leadingIcon: 'w-5 h-5 text-[var(--md-on-primary)]',
                         }"
                         @click="emit('new-chat')"
                     ></UButton>

@@ -71,7 +71,10 @@
                                     ? 'opacity-50 cursor-not-allowed'
                                     : '')
                             "
-                            :ui="{ base: 'retro-btn' }"
+                            :ui="{ 
+                                base: 'retro-btn',
+                                leadingIcon: 'text-[var(--md-on-surface)]'
+                            }"
                             aria-label="New window"
                             title="New window"
                             @click="addPane"
