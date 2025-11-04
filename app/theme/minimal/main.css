@@ -2,9 +2,7 @@
 
 /* Minimal theme specific CSS variables */
 :root {
-	/* Button variables - clean and simple */
-	--btn-bg: var(--md-surface);
-	--btn-color: var(--md-on-surface);
+	/* Button variables - border only (bg/color handled by Nuxt UI, no shadow in minimal) */
 	--btn-border: 1px solid var(--md-outline);
 	--btn-shadow: none;
 	--btn-radius: 2px;

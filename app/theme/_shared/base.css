@@ -193,11 +193,11 @@ textarea.retro-input {
 	position: relative;
 	border-radius: var(--btn-radius, 3px);
 	border: 2px solid var(--btn-border, var(--md-inverse-surface));
-	background-color: var(--btn-bg);
-	color: var(--btn-color);
 	box-shadow: var(--btn-shadow, 2px 2px 0 var(--md-inverse-surface));
-	font-weight: var(--btn-font-weight);
+	font-weight: var(--btn-font-weight, 500);
 	transition: transform 80ms ease, box-shadow 80ms ease;
+	/* NOTE: background-color and color are intentionally NOT set here to allow Nuxt UI color utilities to apply.
+	   Fancy themes (cyberpunk, nature) override these via their own .retro-btn selectors with gradients. */
 }
 .retro-btn.aspect-square {
 	padding: 0;
