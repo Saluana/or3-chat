@@ -2,7 +2,7 @@
     <RetroGlassBtn
         class="w-full flex items-center justify-between text-left app-sidebar-item"
         :class="{ 
-            'active-element bg-primary/25 app-sidebar-item--active': active 
+            'active-element bg-(--app-sidebar-item-active-bg)/25 app-sidebar-item--active': active 
         }"
         @click="emit('select', thread.id)"
     >
@@ -20,7 +20,7 @@
         </div>
         <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
             <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-(--app-sidebar-quick-btn-hover-bg)/10 active:bg-(--app-sidebar-quick-btn-hover-bg)/20"
                 @click.stop
             >
                 <UIcon
@@ -52,7 +52,7 @@
                         color="error"
                         variant="popover"
                         size="sm"
-                        class="w-full justify-start text-error-500"
+                        class="w-full justify-start text-(--app-sidebar-warning-text)"
                         icon="pixelarticons:trash"
                         @click="emit('delete', thread)"
                         >Delete</UButton

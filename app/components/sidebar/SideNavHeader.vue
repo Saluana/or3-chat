@@ -61,7 +61,7 @@
             </UPopover>
         </div>
 
-        <div class="border-b-3 border-primary/50 pb-2"></div>
+        <div class="border-b-3 border-(--app-sidebar-divider)/50 pb-2"></div>
 
         <!-- Rename modal -->
         <UModal
@@ -192,7 +192,7 @@
                             class="retro-btn px-2 py-1 rounded-[4px] border-2"
                             :class="
                                 addMode === 'select'
-                                    ? 'bg-primary/30'
+                                    ? 'bg-(--app-sidebar-pill-active-bg)/30'
                                     : 'opacity-70'
                             "
                             @click="addMode = 'select'"
@@ -203,7 +203,7 @@
                             class="retro-btn px-2 py-1 rounded-[4px] border-2"
                             :class="
                                 addMode === 'create'
-                                    ? 'bg-primary/30'
+                                    ? 'bg-(--app-sidebar-pill-active-bg)/30'
                                     : 'opacity-70'
                             "
                             @click="addMode = 'create'"
@@ -222,7 +222,7 @@
                                 class="w-full"
                             />
                         </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
+                        <p v-if="addToProjectError" class="text-(--app-sidebar-warning-text) text-xs">
                             {{ addToProjectError }}
                         </p>
                     </div>
@@ -246,7 +246,7 @@
                                 class="w-full border-2 rounded-[6px]"
                             />
                         </UFormField>
-                        <p v-if="addToProjectError" class="text-error text-xs">
+                        <p v-if="addToProjectError" class="text-(--app-sidebar-warning-text) text-xs">
                             {{ addToProjectError }}
                         </p>
                     </div>

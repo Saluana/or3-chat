@@ -193,11 +193,11 @@ textarea.retro-input {
 	position: relative;
 	border-radius: var(--btn-radius, 3px);
 	border: 2px solid var(--btn-border, var(--md-inverse-surface));
-	background: var(--btn-bg, var(--md-surface));
-	color: var(--btn-color, var(--md-on-surface));
+	background-color: var(--btn-bg);
+	color: var(--btn-color);
 	box-shadow: var(--btn-shadow, 2px 2px 0 var(--md-inverse-surface));
-	font-weight: var(--btn-font-weight, 600);
-	transition: transform 80ms ease, box-shadow 80ms ease, all 0.3s ease;
+	font-weight: var(--btn-font-weight);
+	transition: transform 80ms ease, box-shadow 80ms ease;
 }
 .retro-btn.aspect-square {
 	padding: 0;
@@ -306,9 +306,13 @@ textarea.retro-input {
 }
 
 /* Base focus indicators */
-*:focus {
+*:focus-visible {
 	outline: 2px solid var(--focus-outline, var(--md-primary));
 	outline-offset: var(--focus-offset, 2px);
+}
+
+*:focus:not(:focus-visible) {
+	outline: none;
 }
 
 /* ========================================

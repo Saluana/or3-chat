@@ -23,14 +23,14 @@
             <template #content>
                 <div class="flex flex-col items-start w-[140px]">
                     <button
-                        class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                        class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-(--app-sidebar-quick-btn-hover-bg)/10 dark:hover:bg-(--app-sidebar-quick-btn-hover-bg)/10 cursor-pointer"
                         @click="navigateToActivity"
                     >
                         <UIcon name="pixelarticons:human-run" class="mr-1.5" />
                         Activity
                     </button>
                     <button
-                        class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
+                        class="flex items-center justify-start px-2 py-1 w-full hover:bg-(--app-sidebar-quick-btn-hover-bg)/10 text-start dark:hover:bg-(--app-sidebar-quick-btn-hover-bg)/10 cursor-pointer"
                         @click="navigateToCredits"
                     >
                         <UIcon name="pixelarticons:coin" class="mr-1.5" />
@@ -380,20 +380,22 @@ function navigateToCredits() {
 }
 
 .hud-button__indicator--danger {
-    background: var(--md-error, #d14343);
+    background: var(--md-error, var(--app-sidebar-warning-text));
     opacity: 0.52;
 }
 
+.dark .hud-button__indicator--danger {
+    background: var(--app-sidebar-warning-text);
+    opacity: 0.7;
+}
+
 .hud-button__indicator--success {
-    background: var(--md-success, #28a745);
+    background: var(--md-extended-color-success-color, #28a745);
     opacity: 1;
 }
 
-.dark .hud-button__indicator--danger {
-    background: #f87171;
-}
-
 .dark .hud-button__indicator--success {
-    background: #50fa7b;
+    background: var(--md-extended-color-success-color, #50fa7b);
+    opacity: 1;
 }
 </style>

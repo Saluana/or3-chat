@@ -35,7 +35,7 @@
                     class="flex item-center justify-center"
                     icon="pixelarticons:search"
                     :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+                        base: 'bg-transparent hover:bg-(--app-sidebar-item-hover-bg)/10 active:bg-(--app-sidebar-item-hover-bg)/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
                     }"
                     @click="emit('focus-search')"
@@ -52,7 +52,7 @@
                     class="flex item-center justify-center"
                     icon="pixelarticons:note-plus"
                     :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+                        base: 'bg-transparent hover:bg-(--app-sidebar-item-hover-bg)/10 active:bg-(--app-sidebar-item-hover-bg)/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
                     }"
                     @click="emit('new-document')"
@@ -69,7 +69,7 @@
                     class="flex item-center justify-center"
                     icon="pixelarticons:folder-plus"
                     :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+                        base: 'bg-transparent hover:bg-(--app-sidebar-item-hover-bg)/10 active:bg-(--app-sidebar-item-hover-bg)/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
                     }"
                     @click="emit('new-project')"
@@ -77,7 +77,7 @@
             </UTooltip>
 
             <ClientOnly>
-                <div class="pt-2 flex flex-col space-y-2 border-t-2">
+                <div class="pt-2 flex flex-col space-y-2 border-t-2 border-(--app-sidebar-divider)">
                     <UTooltip
                         :delay-duration="0"
                         :content="{
@@ -133,9 +133,9 @@
                 class="flex item-center justify-center"
                 icon="pixelarticons:dashboard"
                 :ui="{
-                    base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-                    leadingIcon: 'w-5 h-5',
-                }"
+                        base: 'bg-(--app-sidebar-pill-idle-bg) hover:bg-(--app-sidebar-pill-idle-bg)/80 active:bg-(--app-sidebar-pill-idle-bg)/90 border-0! shadow-none! text-[var(--md-on-surface)]',
+                        leadingIcon: 'w-5 h-5',
+                    }"
                 @click="emit('toggle-dashboard')"
             ></UButton>
         </div>

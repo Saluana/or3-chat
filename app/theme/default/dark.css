@@ -57,6 +57,19 @@
   --md-extended-color-warning-color-container: rgb(111 56 19);
   --md-extended-color-warning-on-color-container: rgb(255 219 202);
 
+  /* Sidebar tokens for theme customization */
+  --app-sidebar-surface: var(--md-surface);
+  --app-sidebar-divider: var(--md-outline-variant);
+  --app-sidebar-item-bg: var(--md-inverse-surface);
+  --app-sidebar-item-hover-bg: var(--md-primary);
+  --app-sidebar-item-active-bg: var(--md-primary);
+  --app-sidebar-quick-btn-bg: transparent;
+  --app-sidebar-quick-btn-hover-bg: var(--md-inverse-surface);
+  --app-sidebar-project-border: var(--md-primary);
+  --app-sidebar-pill-active-bg: var(--md-primary);
+  --app-sidebar-pill-idle-bg: var(--md-surface-variant);
+  --app-sidebar-warning-text: var(--md-error);
+
   /* Editor variables - dark mode */
   --app-editor-backdrop: rgba(0, 0, 0, 0.1);
   --app-skeleton-bg: rgba(64, 64, 64, 0.3);

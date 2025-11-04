@@ -60,4 +60,17 @@
   --nature-cream: #faf8f3;
   --nature-sunlight: #fff8dc;
   --nature-berry-red: #c62828;
+
+  /* Sidebar tokens for theme customization */
+  --app-sidebar-surface: var(--md-surface);
+  --app-sidebar-divider: var(--md-outline-variant);
+  --app-sidebar-item-bg: var(--md-surface-variant);
+  --app-sidebar-item-hover-bg: var(--app-hover-bg);
+  --app-sidebar-item-active-bg: var(--nature-forest-green);
+  --app-sidebar-quick-btn-bg: transparent;
+  --app-sidebar-quick-btn-hover-bg: var(--app-hover-bg);
+  --app-sidebar-project-border: var(--nature-forest-green);
+  --app-sidebar-pill-active-bg: var(--nature-forest-green);
+  --app-sidebar-pill-idle-bg: var(--nature-sand-beige);
+  --app-sidebar-warning-text: var(--md-error);
 }

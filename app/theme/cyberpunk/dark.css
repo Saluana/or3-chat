@@ -57,6 +57,19 @@
   --cyberpunk-dark-bg: #000000;
   --cyberpunk-grid: #1a0033;
 
+  /* Sidebar tokens for theme customization */
+  --app-sidebar-surface: var(--md-surface);
+  --app-sidebar-divider: var(--md-outline);
+  --app-sidebar-item-bg: var(--md-surface-variant);
+  --app-sidebar-item-hover-bg: var(--cyberpunk-neon-purple);
+  --app-sidebar-item-active-bg: var(--cyberpunk-neon-cyan);
+  --app-sidebar-quick-btn-bg: transparent;
+  --app-sidebar-quick-btn-hover-bg: var(--cyberpunk-neon-pink);
+  --app-sidebar-project-border: var(--cyberpunk-neon-cyan);
+  --app-sidebar-pill-active-bg: var(--cyberpunk-neon-cyan);
+  --app-sidebar-pill-idle-bg: var(--cyberpunk-grid);
+  --app-sidebar-warning-text: var(--cyberpunk-neon-red);
+
   /* Editor variables - dark mode overrides */
   --app-editor-backdrop: rgba(0, 0, 0, 0.5);
   --app-skeleton-bg: rgba(153, 51, 255, 0.3);

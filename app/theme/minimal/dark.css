@@ -47,6 +47,19 @@
   --app-text-secondary: #999999;
   --app-text-muted: #666666;
 
+  /* Sidebar tokens for theme customization */
+  --app-sidebar-surface: var(--md-surface);
+  --app-sidebar-divider: var(--md-outline-variant);
+  --app-sidebar-item-bg: var(--md-surface-variant);
+  --app-sidebar-item-hover-bg: var(--app-hover-bg);
+  --app-sidebar-item-active-bg: var(--app-active-bg);
+  --app-sidebar-quick-btn-bg: transparent;
+  --app-sidebar-quick-btn-hover-bg: var(--app-hover-bg);
+  --app-sidebar-project-border: var(--md-primary);
+  --app-sidebar-pill-active-bg: var(--md-primary);
+  --app-sidebar-pill-idle-bg: var(--md-surface-variant);
+  --app-sidebar-warning-text: var(--md-error);
+
   /* Editor variables - dark mode overrides */
   --app-editor-backdrop: rgba(0, 0, 0, 0.1);
   --app-skeleton-bg: rgba(64, 64, 64, 0.2);

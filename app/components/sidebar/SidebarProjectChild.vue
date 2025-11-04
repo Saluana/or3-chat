@@ -1,9 +1,9 @@
 <template>
-    <div class="border-l-2! my-0.5 border-primary-500 h-[40px]">
+    <div class="border-l-2! my-0.5 border-l-(--app-sidebar-project-border) h-[40px]">
         <button
             type="button"
-            class="relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 text-[13px] rounded-r-[4px] py-1"
-            :class="{ 'bg-primary/25 hover:bg-primary/25': active }"
+            class="relative group w-full flex items-center h-full bg-(--app-sidebar-item-bg)/5 hover:bg-(--app-sidebar-item-hover-bg)/10 backdrop-blur-md px-2.5 gap-1.5 text-[13px] rounded-r-[4px] py-1"
+            :class="{ 'bg-(--app-sidebar-item-active-bg)/25 hover:bg-(--app-sidebar-item-active-bg)/25': active }"
             @click="emit('select')"
         >
             <UIcon
@@ -26,7 +26,7 @@
                     }"
                 >
                     <span
-                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                        class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-(--app-sidebar-quick-btn-hover-bg)/10 active:bg-(--app-sidebar-quick-btn-hover-bg)/20"
                         @click.stop
                         aria-label="Entry actions"
                     >
@@ -50,7 +50,7 @@
                                 color="error"
                                 variant="popover"
                                 size="sm"
-                                class="w-full justify-start text-error-500"
+                                class="w-full justify-start text-(--app-sidebar-warning-text)"
                                 icon="pixelarticons:trash"
                                 @click.stop.prevent="emit('remove')"
                                 >Remove from Project</UButton

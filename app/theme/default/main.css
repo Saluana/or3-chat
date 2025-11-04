@@ -8,12 +8,12 @@
 /* Default theme specific CSS variables */
 :root {
 	/* Button variables */
-	--btn-bg: var(--md-surface);
-	--btn-color: var(--md-on-surface);
+	--btn-bg: transparent;
+	--btn-color: inherit;
 	--btn-border: var(--md-inverse-surface);
 	--btn-shadow: 2px 2px 0 var(--md-inverse-surface);
 	--btn-radius: 3px;
-	--btn-font-weight: 600;
+	--btn-font-weight: 500;
 
 	/* Input variables */
 	--input-bg: var(--md-surface);

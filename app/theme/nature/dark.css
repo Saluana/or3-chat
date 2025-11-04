@@ -61,6 +61,19 @@
   --nature-sunlight: #fff8dc;
   --nature-berry-red: #c62828;
 
+  /* Sidebar tokens for theme customization */
+  --app-sidebar-surface: var(--md-surface);
+  --app-sidebar-divider: var(--md-outline-variant);
+  --app-sidebar-item-bg: var(--md-surface-variant);
+  --app-sidebar-item-hover-bg: var(--app-hover-bg);
+  --app-sidebar-item-active-bg: var(--nature-leaf-green);
+  --app-sidebar-quick-btn-bg: transparent;
+  --app-sidebar-quick-btn-hover-bg: var(--app-hover-bg);
+  --app-sidebar-project-border: var(--nature-leaf-green);
+  --app-sidebar-pill-active-bg: var(--nature-leaf-green);
+  --app-sidebar-pill-idle-bg: var(--nature-bark-brown);
+  --app-sidebar-warning-text: var(--md-error);
+
   /* Editor variables - dark mode overrides */
   --app-editor-backdrop: rgba(0, 0, 0, 0.2);
   --app-skeleton-bg: rgba(93, 64, 55, 0.3);
