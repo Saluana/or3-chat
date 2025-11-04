@@ -4,10 +4,10 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            'flex flex-col bg-(--md-surface)  border-2 border-(--md-inverse-surface) mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
             isDragging
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+                ? 'border-(--app-dropzone-active-border) bg-(--app-dropzone-active-bg)'
+                : 'hover:border-(--md-primary) focus-within:border-(--md-primary)',
             loading ? 'opacity-90 pointer-events-auto' : '',
         ]"
     >
@@ -47,7 +47,7 @@
                             :square="true"
                             size="sm"
                             color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
+                            class="retro-btn flex items-center justify-center"
                             type="button"
                             aria-label="Add attachments"
                             :disabled="loading"
@@ -64,7 +64,7 @@
                                 :square="true"
                                 size="sm"
                                 color="info"
-                                class="retro-btn text-black dark:text-white flex items-center justify-center"
+                                class="retro-btn flex items-center justify-center"
                                 type="button"
                                 aria-label="Settings"
                                 :disabled="loading"
@@ -271,7 +271,7 @@
                         :square="true"
                         size="sm"
                         color="primary"
-                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
+                        class="retro-btn disabled:opacity-40 flex items-center justify-center"
                         type="button"
                         aria-label="Send message"
                     >
@@ -283,7 +283,7 @@
                         :square="true"
                         size="sm"
                         color="error"
-                        class="retro-btn text-white dark:text-black flex items-center justify-center"
+                        class="retro-btn flex items-center justify-center"
                         type="button"
                         aria-label="Stop generation"
                     >
@@ -313,7 +313,7 @@
                 />
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-(--md-inverse-surface) border bg-opacity-60 text-(--md-on-error) opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
                 >
@@ -331,7 +331,7 @@
                     (att: any) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="relative group aspect-square border border-(--md-inverse-surface) retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center"
             >
                 <div
                     class="flex flex-col items-center justify-center w-full h-full"
@@ -348,7 +348,7 @@
                 </div>
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-(--md-inverse-surface) border bg-opacity-60 text-(--md-on-error) opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove PDF"
                     :disabled="loading"
                 >
@@ -359,7 +359,7 @@
             <div
                 v-for="(block, tIndex) in largeTextBlocks"
                 :key="'txt-' + block.id"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="relative group aspect-square border border-(--md-inverse-surface) retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-(--md-surface-container-low) p-2 text-center"
             >
                 <div
                     class="flex flex-col items-center justify-center w-full h-full"
@@ -380,7 +380,7 @@
                 </div>
                 <button
                     @click="removeTextBlock(tIndex)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-(--md-inverse-surface) border bg-opacity-60 text-(--md-on-error) opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove text block"
                     :disabled="loading"
                 >
@@ -392,14 +392,14 @@
         <!-- Drag and Drop Overlay -->
         <div
             v-if="isDragging"
-            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+            class="absolute inset-0 bg-(--app-dropzone-overlay-bg) border-2 border-dashed border-(--app-dropzone-overlay-border) rounded-2xl flex items-center justify-center z-50"
         >
             <div class="text-center">
                 <UIcon
                     name="i-lucide:upload-cloud"
-                    class="w-12 h-12 mx-auto mb-3 text-blue-500"
+                    class="w-12 h-12 mx-auto mb-3 text-(--app-dropzone-icon-color)"
                 />
-                <p class="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                <p class="text-(--app-dropzone-text-color) text-sm font-medium">
                     Drop images here to upload
                 </p>
             </div>

@@ -63,6 +63,25 @@
 	--prose-code-font-size: 16px;
 	--prose-pre-radius: 3px;
 	--prose-pre-border: var(--md-inverse-surface);
+
+	/* Chat surfaces */
+	--app-dropzone-active-border: var(--md-primary);
+	--app-dropzone-active-bg: color-mix(in oklab, var(--md-primary) 16%, transparent);
+	--app-dropzone-overlay-bg: color-mix(in oklab, var(--md-primary) 26%, transparent);
+	--app-dropzone-icon-color: var(--md-primary);
+	--app-dropzone-text-color: var(--md-on-primary-container);
+	--app-msg-user-bg: var(--md-primary);
+	--app-msg-user-text: var(--md-on-primary);
+	--app-msg-assistant-bg: color-mix(in oklab, var(--md-surface-container-high) 85%, transparent);
+	--app-msg-assistant-text: var(--md-on-surface);
+	--app-msg-assistant-border: var(--md-inverse-surface);
+	--app-msg-assistant-actions-bg: var(--md-surface-container-high);
+	--app-msg-action-text: var(--md-on-surface);
+	--app-modal-header-bg: color-mix(in oklab, var(--md-surface) 92%, transparent);
+	--app-modal-item-bg: color-mix(in oklab, var(--md-surface) 95%, transparent);
+	--app-modal-item-odd-bg: color-mix(in oklab, var(--md-primary) 14%, transparent);
+	--app-modal-text: var(--md-on-surface);
+	--app-modal-text-muted: var(--md-on-surface-variant);
 }
 
 /* Default theme specific customizations */

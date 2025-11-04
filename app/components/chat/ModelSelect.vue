@@ -7,7 +7,7 @@
             :disabled="loading"
             :ui="ui"
             :search-input="searchInput"
-            class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]"
+            class="retro-btn h-[32px] text-sm rounded-md px-2 w-full min-w-[100px] max-w-[320px]"
         />
     </div>
 </template>
@@ -59,7 +59,8 @@ const items = computed(() =>
 );
 
 const ui = {
-    content: 'border-[2px] border-black rounded-[3px] w-[320px]',
+    content:
+        'border-[2px] border-(--md-inverse-surface) rounded-[3px] w-[320px]',
     input: 'border-0 rounded-none!',
     arrow: 'h-[18px] w-[18px]',
     itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',

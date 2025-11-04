@@ -1,3 +1,5 @@
+/// <reference types="nuxt" />
+
 import type { RegisteredPaneApp } from '~/composables/core/usePaneApps';
 import type { RegisteredSidebarPage } from '~/composables/sidebar/useSidebarPages';
 

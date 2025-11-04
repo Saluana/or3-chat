@@ -13,7 +13,7 @@
             <div class="flex flex-col h-full" @keydown="handleKeydown">
                 <div
                     v-show="!editingPrompt"
-                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
+                    class="px-4 border-b-2 border-(--app-modal-border-strong) min-h-[50px] max-h-[100px] bg-(--app-modal-header-bg) backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
                 >
                     <div
                         class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
@@ -56,14 +56,14 @@
                         >
                             <UIcon
                                 name="pixelarticons:script-text"
-                                class="w-16 h-16 text-gray-400 mb-4"
+                                class="w-16 h-16 text-(--app-modal-text-muted) mb-4"
                             />
                             <h3
-                                class="text-lg font-medium text-gray-900 dark:text-white mb-2"
+                                class="text-lg font-medium text-(--app-modal-text) mb-2"
                             >
                                 No system prompts yet
                             </h3>
-                            <p class="text-gray-500 dark:text-gray-400 mb-4">
+                            <p class="text-(--app-modal-text-muted) mb-4">
                                 Create your first system prompt to customize AI
                                 behavior.
                             </p>
@@ -76,7 +76,7 @@
                             <div
                                 v-for="prompt in filteredPrompts"
                                 :key="prompt.id"
-                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow app-prompt-item"
+                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-(--app-modal-border-strong) bg-(--app-modal-item-bg) not-odd:bg-(--app-modal-item-odd-bg) retro-shadow app-prompt-item"
                                 :data-active="
                                     prompt.id === currentActivePromptId
                                         ? 'true'
@@ -89,7 +89,7 @@
                                         class="flex flex-wrap items-center gap-2 mb-1"
                                     >
                                         <h4
-                                            class="font-medium text-xs leading-tight text-gray-900 dark:text-white truncate max-w-full"
+                                            class="font-medium text-xs leading-tight text-(--app-modal-text) truncate max-w-full"
                                             :class="{
                                                 'italic opacity-60':
                                                     !prompt.title,
@@ -102,7 +102,7 @@
                                         </h4>
                                         <span
                                             v-if="prompt.id === defaultPromptId"
-                                            class="text-[10px] px-1.5 py-0.5 rounded border border-black/70 dark:border-white/40 bg-primary/80 text-white uppercase tracking-wide"
+                                            class="text-[10px] px-1.5 py-0.5 rounded border border-(--app-modal-border-strong) bg-primary/80 text-(--md-on-primary) uppercase tracking-wide"
                                             >Default</span
                                         >
                                         <span
@@ -111,12 +111,12 @@
                                                     currentActivePromptId &&
                                                 prompt.id !== defaultPromptId
                                             "
-                                            class="text-[10px] px-1 py-0.5 rounded border border-black/60 dark:border-white/30 bg-neutral-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 uppercase tracking-wide"
+                                            class="text-[10px] px-1 py-0.5 rounded border border-(--app-modal-border-subtle) bg-(--app-modal-item-odd-bg) text-(--app-modal-text) uppercase tracking-wide"
                                             >Active</span
                                         >
                                     </div>
                                     <div
-                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-600 dark:text-gray-400"
+                                        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-(--app-modal-text-muted)"
                                     >
                                         <span class="flex items-center gap-1">
                                             <UIcon
@@ -143,7 +143,7 @@
 
                                 <!-- Actions -->
                                 <div
-                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-black/20 dark:border-white/10"
+                                    class="mt-3 sm:mt-0 sm:ml-4 flex w-full sm:w-auto flex-wrap items-center gap-2 justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-(--app-modal-border-subtle)"
                                 >
                                     <UTooltip
                                         :delay-duration="0"

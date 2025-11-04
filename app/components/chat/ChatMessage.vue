@@ -4,7 +4,9 @@
             outerClass,
             'app-chat-message',
             props.message.role === 'user' ? 'app-chat-message--user' : '',
-            props.message.role === 'assistant' ? 'app-chat-message--assistant' : ''
+            props.message.role === 'assistant'
+                ? 'app-chat-message--assistant'
+                : '',
         ]"
         :data-message-role="props.message.role"
         :style="{
@@ -171,8 +173,9 @@
         >
             <UButtonGroup
                 :class="{
-                    'bg-primary': props.message.role === 'user',
-                    'bg-white': props.message.role === 'assistant',
+                    'bg-(--app-msg-user-bg)': props.message.role === 'user',
+                    'bg-(--app-msg-assistant-actions-bg)':
+                        props.message.role === 'assistant',
                 }"
                 class="rounded-[3px]"
             >
@@ -182,7 +185,7 @@
                         icon="pixelarticons:copy"
                         color="info"
                         size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        class="text-(--app-msg-action-text) flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip
@@ -195,7 +198,7 @@
                         icon="pixelarticons:reload"
                         color="info"
                         size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        class="text-(--app-msg-action-text) flex items-center justify-center"
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
@@ -205,7 +208,7 @@
                         icon="pixelarticons:git-branch"
                         color="info"
                         size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        class="text-(--app-msg-action-text) flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Edit" :teleport="true">
@@ -213,7 +216,7 @@
                         icon="pixelarticons:edit-box"
                         color="info"
                         size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        class="text-(--app-msg-action-text) flex items-center justify-center"
                         @click="wrappedBeginEdit"
                     ></UButton>
                 </UTooltip>
@@ -228,7 +231,7 @@
                             :icon="action.icon"
                             color="info"
                             size="sm"
-                            class="text-black dark:text-white/95 flex items-center justify-center"
+                            class="text-(--app-msg-action-text) flex items-center justify-center"
                             @click="() => runExtraAction(action)"
                         ></UButton>
                     </UTooltip>
@@ -288,9 +291,9 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
+    'bg-(--app-msg-user-bg) text-(--app-msg-user-text) border-2 px-4 border-(--app-msg-user-border) retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm min-w-0':
+    'bg-(--app-msg-assistant-bg) text-(--app-msg-assistant-text) border-2 border-(--app-msg-assistant-border) w-full retro-shadow backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',
 }));
 
