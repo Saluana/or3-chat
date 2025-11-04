@@ -1674,15 +1674,15 @@ watch(
     font-size: 16px;
     font-weight: 600;
     /* Stronger scrim for readability over any image */
-    background: linear-gradient(rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.58));
-    color: #fff;
+    background: var(--app-drop-hint-bg);
+    color: var(--app-drop-hint-text);
     opacity: 0;
     transition: opacity 0.18s ease;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.9);
-    -webkit-text-stroke: 0.25px rgba(0, 0, 0, 0.6);
-    backdrop-filter: brightness(0.85) saturate(0.9) contrast(1.15);
+    text-shadow: var(--app-drop-hint-text-shadow);
+    -webkit-text-stroke: 0.25px var(--app-drop-hint-stroke);
+    backdrop-filter: var(--app-drop-hint-backdrop);
     /* Fallback if backdrop-filter unsupported */
     mix-blend-mode: normal;
 }

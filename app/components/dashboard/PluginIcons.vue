@@ -3,19 +3,18 @@
         <!-- Icon Shell -->
         <button
             type="button"
-            :class="[
-                'group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]',
+            class="group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none dashboard-icon-button"
+            :class="
                 retro
-                    ? ' shadow-[0_0_0_2px_var(--md-outline),0_2px_0_0_#000,0_2px_0_2px_var(--md-outline)] active:shadow-[0_0_0_2px_var(--md-outline),0_1px_0_0_#000,0_1px_0_1px_var(--md-outline)] transition-all duration-150 bg-[linear-gradient(145deg,var(--md-surface-container-high)_0%,var(--md-surface-container)_60%,var(--md-surface)_100%)]'
-                    : ' ring-1 ring-black/5 dark:ring-white/10 bg-gradient-to-br from-gray-800/40 to-gray-700/20 backdrop-blur-sm shadow',
-            ]"
+                    ? 'dashboard-icon-button--retro'
+                    : 'dashboard-icon-button--modern'
+            "
             :style="iconBoxStyle"
         >
             <!-- Subtle pixel noise / scanline using layered gradients -->
             <div
                 v-if="retro"
-                class="pointer-events-none absolute inset-0 mix-blend-overlay opacity-60"
-                :class="'bg-[repeating-linear-gradient(0deg,rgba(255,255,255,0.12)_0_1px,rgba(255,255,255,0)_1px_2px),repeating-linear-gradient(90deg,rgba(0,0,0,0.05)_0_2px,rgba(255,255,255,0.05)_2px_4px)]'"
+                class="pointer-events-none absolute inset-0 mix-blend-overlay opacity-60 dashboard-icon-retro-noise"
             ></div>
 
             <img
@@ -31,26 +30,29 @@
                 :class="[
                     'transition-transform duration-150',
                     retro
-                        ? 'text-[color:var(--md-on-surface)] drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] group-active:translate-y-[1px]'
-                        : 'text-gray-200',
+                        ? 'dashboard-icon-retro-icon'
+                        : 'dashboard-icon-modern-icon',
                 ]"
                 :style="iconStyle"
             />
             <div
                 v-else
-                class="w-full h-full bg-gray-500/40"
+                class="w-full h-full dashboard-icon-empty"
                 :style="{ borderRadius: cornerRadius }"
             ></div>
 
             <!-- Inner highlight for retro -->
             <div
                 v-if="retro"
-                class="pointer-events-none absolute inset-0 rounded-[4px] bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.35),transparent_55%),radial-gradient(circle_at_75%_70%,rgba(0,0,0,0.35),transparent_70%)] mix-blend-soft-light"
+                class="pointer-events-none absolute inset-0 rounded-[4px] dashboard-icon-retro-highlight mix-blend-soft-light"
             />
         </button>
         <!-- Label -->
         <div
-            class="mt-1.5 text-[10px] sm:text-[11px] font-medium text-center text-[color:var(--md-on-surface-variant,var(--md-on-surface))] max-w-[90px] truncate tracking-wide"
+            class="mt-1.5 text-[10px] sm:text-[11px] font-medium text-center max-w-[90px] truncate tracking-wide"
+            :style="{
+                color: 'var(--md-on-surface-variant, var(--md-on-surface))',
+            }"
             :title="label"
         >
             {{ label }}
@@ -87,3 +89,72 @@ const wrapperStyle = computed(() => ({
     width: `${size.value + 12}px`, // small breathing room for label truncation alignment
 }));
 </script>
+
+<style scoped>
+.dashboard-icon-button {
+    border-radius: inherit;
+    padding: 0;
+    transition: transform 140ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+.dashboard-icon-button:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+.dashboard-icon-button--retro {
+    box-shadow: var(--app-dashboard-icon-retro-shadow);
+    background: var(--app-dashboard-icon-retro-bg);
+}
+
+.dashboard-icon-button--retro:active {
+    box-shadow: var(--app-dashboard-icon-retro-shadow-active);
+    transform: translateY(1px);
+}
+
+.dashboard-icon-button--modern {
+    border: 1px solid var(--app-dashboard-icon-modern-ring);
+    background: var(--app-dashboard-icon-modern-bg);
+    box-shadow: var(--app-dashboard-icon-modern-shadow);
+    backdrop-filter: saturate(1.1) brightness(1.02);
+}
+
+.dashboard-icon-button--modern:active {
+    transform: translateY(1px);
+}
+
+.dashboard-icon-retro-noise {
+    background: var(--app-dashboard-icon-retro-noise);
+}
+
+.dashboard-icon-retro-highlight {
+    background: var(--app-dashboard-icon-retro-highlight);
+}
+
+.dashboard-icon-retro-icon {
+    color: var(--md-on-surface);
+    filter: drop-shadow(
+        0 1px 0 color-mix(in oklab, var(--md-inverse-surface) 35%, transparent)
+    );
+}
+
+.dashboard-icon-modern-icon {
+    color: var(--app-dashboard-icon-modern-icon);
+}
+
+.dashboard-icon-empty {
+    background: var(--app-dashboard-icon-empty-bg);
+}
+
+.dashboard-icon-button--modern .dashboard-icon-empty {
+    filter: saturate(1.05);
+}
+
+.dashboard-icon-button:hover {
+    filter: brightness(1.02);
+}
+
+.dashboard-icon-button:active {
+    filter: brightness(0.97);
+}
+</style>

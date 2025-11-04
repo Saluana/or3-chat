@@ -70,7 +70,7 @@
                         variant="basic"
                         class="retro-chip"
                         :class="{
-                            'bg-primary/50 hover:bg-primary/50':
+                            'bg-(--app-chip-active-bg) hover:bg-(--app-chip-active-bg)':
                                 settings.defaultModelMode === 'lastSelected',
                         }"
                         :aria-pressed="
@@ -85,7 +85,7 @@
                         variant="basic"
                         class="retro-chip"
                         :class="{
-                            'bg-primary/50 hover:bg-primary/50':
+                            'bg-(--app-chip-active-bg) hover:bg-(--app-chip-active-bg)':
                                 settings.defaultModelMode === 'fixed',
                         }"
                         :aria-pressed="settings.defaultModelMode === 'fixed'"

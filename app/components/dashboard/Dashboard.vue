@@ -45,7 +45,7 @@
                         variant="subtle"
                         color="primary"
                         size="sm"
-                        class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10"
+                        class="ml-2 text-[20px] gap-0.5 hover:bg-(--app-dashboard-back-hover-bg)"
                         @click="goBack()"
                     >
                         <UIcon
@@ -74,7 +74,7 @@
                     <button
                         v-for="p in landingPages"
                         :key="p.id"
-                        class="group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left"
+                        class="group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-(--app-dashboard-item-hover-bg) transition-colors text-left"
                         @click="handleLandingPageClick(p.id)"
                     >
                         <div class="flex items-center gap-2">
@@ -162,7 +162,8 @@ const coreItems: DashboardPlugin[] = [
             {
                 id: 'theme-selector',
                 title: 'Theme Selector',
-                description: 'Switch between different themes and validate theme configurations.',
+                description:
+                    'Switch between different themes and validate theme configurations.',
                 icon: 'pixelarticons:palette',
                 component: () => import('./ThemeSelector.vue'),
             },

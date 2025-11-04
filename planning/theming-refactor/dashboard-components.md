@@ -311,11 +311,11 @@ None.
 
 ## Dashboard Components Checklist
 
--   [ ] Replace `bg-primary/50` in AiPage with CSS variable
--   [ ] Extract hover states in Dashboard to CSS variables
--   [ ] Refactor PluginIcons gradients and shadows to CSS classes
--   [ ] Replace hardcoded drag hint colors in ThemePage
--   [ ] Replace all hardcoded colors in ThemeSelector (border-black, bg-yellow-200, etc.)
+-   [x] Replace `bg-primary/50` in AiPage with CSS variable
+-   [x] Extract hover states in Dashboard to CSS variables
+-   [x] Refactor PluginIcons gradients and shadows to CSS classes
+-   [x] Replace hardcoded drag hint colors in ThemePage
+-   [x] Replace all hardcoded colors in ThemeSelector (border-black, bg-yellow-200, etc.)
 -   [ ] Optional: Extract repeated color-mix patterns in WorkspaceBackupApp
 -   [ ] Test all dashboard components in light, dark, and HC modes
 -   [ ] Verify icon rendering in both retro and non-retro modes
