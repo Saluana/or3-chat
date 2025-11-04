@@ -15,7 +15,7 @@
                     <!-- Root-level quick add buttons (appear on hover) -->
                     <template v-if="level === 0">
                         <button
-                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-[var(--app-sidebar-quick-btn-hover-bg)]/10 active:bg-[var(--app-sidebar-quick-btn-hover-bg)]/20"
                             @click.stop="emit('addChat', item.value)"
                             aria-label="Add chat to project"
                         >
@@ -25,7 +25,7 @@
                             />
                         </button>
                         <button
-                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="cursor-pointer sm:opacity-0 sm:group-hover/addchat:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-[var(--app-sidebar-quick-btn-hover-bg)]/10 active:bg-[var(--app-sidebar-quick-btn-hover-bg)]/20"
                             @click.stop="emit('addDocument', item.value)"
                             aria-label="Add document to project"
                         >
@@ -43,7 +43,7 @@
                         }"
                     >
                         <span
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-[var(--app-sidebar-quick-btn-hover-bg)]/10 active:bg-[var(--app-sidebar-quick-btn-hover-bg)]/20"
                             @click.stop
                             :aria-label="
                                 level === 0
@@ -74,7 +74,7 @@
                                         color="error"
                                         variant="popover"
                                         size="sm"
-                                        class="w-full justify-start cursor-pointer text-error-500"
+                                        class="w-full justify-start cursor-pointer text-[var(--app-sidebar-warning-text)]"
                                         icon="pixelarticons:trash"
                                         @click.stop.prevent="
                                             emit('deleteProject', item.value)
@@ -125,7 +125,7 @@
                                         color="error"
                                         variant="popover"
                                         size="sm"
-                                        class="w-full justify-start text-error-500"
+                                        class="w-full justify-start text-[var(--app-sidebar-warning-text)]"
                                         icon="pixelarticons:trash"
                                         @click.stop.prevent="
                                             emit('removeFromProject', {

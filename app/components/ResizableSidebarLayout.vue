@@ -1,6 +1,6 @@
 <template>
     <div
-        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-(--app-sidebar-surface,var(--md-surface)) text-(--md-on-surface) flex overflow-x-hidden"
     >
         <!-- Backdrop on mobile when open -->
         <Transition
@@ -20,7 +20,7 @@
         <aside
             id="app-sidebar"
             :class="[
-                'z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex flex-col',
+                'z-40 bg-(--app-sidebar-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex flex-col',
                 // width transition on desktop
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
@@ -120,7 +120,10 @@
         </aside>
 
         <!-- Main content -->
-        <main id="app-content" class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
+        <main
+            id="app-content"
+            class="relative z-10 flex-1 h-full min-w-0 flex flex-col"
+        >
             <div
                 class="flex-1 overflow-hidden content-bg"
                 :style="{
@@ -369,7 +372,7 @@ const toggleAria = computed(() =>
     /* Base matches sidebar/header */
     background-color: var(
         --app-content-bg-1-color,
-        var(--md-surface-container-low)
+        var(--app-content-bg-1, var(--md-surface-container-low))
     );
 }
 /* Sidebar background size support */
@@ -380,7 +383,7 @@ const toggleAria = computed(() =>
 .dark .content-bg {
     background-color: var(
         --app-content-bg-1-color,
-        var(--md-surface-container-low)
+        var(--app-content-bg-1, var(--md-surface-container-low))
     );
 }
 
@@ -452,20 +455,20 @@ aside::before {
     background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);
     opacity: var(--app-sidebar-bg-1-opacity, var(--sidebar-rep-opacity));
     z-index: 0;
-    background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
+    background-color: var(--app-sidebar-surface, var(--md-surface-variant));
     background-size: var(--app-sidebar-bg-size, 240px)
         var(--app-sidebar-bg-size, 240px);
 }
 
 aside {
     background-color: var(
-        --app-sidebar-bg-color,
+        --app-sidebar-surface,
         var(--md-surface-container-lowest)
     );
 }
 .dark aside {
     background-color: var(
-        --app-sidebar-bg-color,
+        --app-sidebar-surface,
         var(--md-surface-container-low)
     );
 }
