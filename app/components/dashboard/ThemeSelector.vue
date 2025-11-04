@@ -35,6 +35,7 @@
           'opacity-50 cursor-not-allowed': isLoading && theme.name === activeTheme
         }"
         @click="selectTheme(theme.name)"
+        @mouseenter="validateTheme(theme.name)"
       >
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -51,12 +52,12 @@
                   title="Dark variant"
                 ></div>
                 <div 
-                  v-if="theme.hasLightHc" 
+                  v-if="theme.variants.includes('light-hc')" 
                   class="w-3 h-3 rounded-full bg-yellow-200 border-2 border-black"
                   title="Light high-contrast variant"
                 ></div>
                 <div 
-                  v-if="theme.hasDarkHc" 
+                  v-if="theme.variants.includes('dark-hc')" 
                   class="w-3 h-3 rounded-full bg-gray-900 border-2 border-white"
                   title="Dark high-contrast variant"
                 ></div>
@@ -105,19 +106,19 @@
         </div>
 
         <!-- Theme Status -->
-        <div v-if="themeErrors[theme.name]?.length" class="mt-3 text-xs text-error">
+        <div v-if="validationCache[theme.name]?.errors?.length" class="mt-3 text-xs text-error">
           <div class="font-bold">Errors:</div>
           <ul class="list-disc list-inside">
-            <li v-for="error in themeErrors[theme.name]" :key="error.file">
+            <li v-for="error in validationCache[theme.name]?.errors || []" :key="error.file">
               {{ error.message }}
             </li>
           </ul>
         </div>
         
-        <div v-if="themeWarnings[theme.name]?.length" class="mt-3 text-xs text-warning">
+        <div v-if="validationCache[theme.name]?.warnings?.length" class="mt-3 text-xs text-warning">
           <div class="font-bold">Warnings:</div>
           <ul class="list-disc list-inside">
-            <li v-for="warning in themeWarnings[theme.name]" :key="warning.file">
+            <li v-for="warning in validationCache[theme.name]?.warnings || []" :key="warning.file">
               {{ warning.message }}
             </li>
           </ul>
@@ -169,8 +170,8 @@ const isReloading = ref(false)
 const selectedTheme = ref<string | null>(null)
 
 // Theme validation cache
-const themeErrors = ref<Record<string, ThemeError[]>>({})
-const themeWarnings = ref<Record<string, ThemeWarning[]>>({})
+const validationCache = ref<Record<string, { errors: ThemeError[], warnings: ThemeWarning[] }>>({})
+const validating = ref<Set<string>>(new Set())
 
 // Computed properties
 const currentThemeManifest = computed(() => {
@@ -184,8 +185,8 @@ watch(() => $theme.activeTheme.value, (newTheme: string) => {
 
 watch(() => $theme.availableThemes.value, (newThemes: ThemeManifest[]) => {
   availableThemes.value = newThemes
-  // Validate all themes when list changes
-  validateAllThemes()
+  // Clear validation cache when theme list changes
+  validationCache.value = {}
 })
 
 watch(() => $theme.errors.value, (newErrors: ThemeError[]) => {
@@ -239,50 +240,50 @@ const reloadTheme = async () => {
 }
 
 const validateTheme = async (themeName: string) => {
+  // Already cached
+  if (validationCache.value[themeName]) {
+    return validationCache.value[themeName]
+  }
+
+  // Already validating
+  if (validating.value.has(themeName)) {
+    return
+  }
+
+  validating.value.add(themeName)
+
   try {
     const result = await $theme.validateTheme(themeName)
     if (result) {
-      themeErrors.value[themeName] = result.errors
-      themeWarnings.value[themeName] = result.warnings
+      validationCache.value[themeName] = {
+        errors: result.errors,
+        warnings: result.warnings
+      }
     }
   } catch (error) {
     console.error(`Error validating theme ${themeName}:`, error)
-    themeErrors.value[themeName] = [{
-      file: themeName,
-      message: `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      severity: 'error'
-    }]
-    themeWarnings.value[themeName] = []
-  }
-}
-
-const validateAllThemes = async () => {
-  // Clear existing validation
-  themeErrors.value = {}
-  themeWarnings.value = {}
-  
-  // Validate each theme
-  for (const theme of availableThemes.value) {
-    await validateTheme(theme.name)
+    validationCache.value[themeName] = {
+      errors: [{
+        file: themeName,
+        message: `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        severity: 'error'
+      }],
+      warnings: []
+    }
+  } finally {
+    validating.value.delete(themeName)
   }
 }
 
 // Initialize
-onMounted(async () => {
-  // Validate all themes on mount
-  await validateAllThemes()
+onMounted(() => {
+  // No longer validate all themes on mount - lazy loading instead
 })
 
 // Helper to check if theme has specific variants
 const hasVariant = (theme: ThemeManifest, variant: string): boolean => {
   return theme.variants.includes(variant as any)
 }
-
-// Make helpers available in template
-const themeHasLight = (theme: ThemeManifest) => hasVariant(theme, 'light')
-const themeHasDark = (theme: ThemeManifest) => hasVariant(theme, 'dark')
-const themeHasLightHc = (theme: ThemeManifest) => hasVariant(theme, 'light-hc')
-const themeHasDarkHc = (theme: ThemeManifest) => hasVariant(theme, 'dark-hc')
 </script>
 
 <style scoped>

@@ -17,7 +17,7 @@ export interface AppConfig {
         color?: Record<string, string>;
       };
     };
-    [key: string]: any;
+    [key: string]: unknown;
   };
   mentions?: {
     enabled?: boolean;
@@ -25,7 +25,7 @@ export interface AppConfig {
     maxPerGroup?: number;
     maxContextBytes?: number;
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -64,7 +64,7 @@ export function safeMergeThemeConfig<T extends AppConfig>(
  * @param config - Configuration to validate
  * @returns True if config is valid, false otherwise
  */
-export function validateThemeConfig(config: any): config is Partial<AppConfig> {
+export function validateThemeConfig(config: unknown): config is Partial<AppConfig> {
   if (!config || typeof config !== 'object') {
     return false;
   }

@@ -1,62 +1,85 @@
 /* Minimal theme - remove all decorative patterns and transitions */
 
-/* Remove all transitions for instant feedback */
-* {
-  transition: none !important;
-  animation: none !important;
+/* Minimal theme specific CSS variables */
+:root {
+	/* Button variables - clean and simple */
+	--btn-bg: var(--md-surface);
+	--btn-color: var(--md-on-surface);
+	--btn-border: 1px solid var(--md-outline);
+	--btn-shadow: none;
+	--btn-radius: 2px;
+	--btn-font-weight: 400;
+
+	/* Input variables - minimal styling */
+	--input-bg: var(--md-surface);
+	--input-color: var(--md-on-surface);
+	--input-border: 1px solid var(--md-outline);
+	--input-shadow: none;
+	--input-radius: 2px;
+	--input-height: 32px;
+	--input-font-size: 12px;
+
+	/* Card variables - clean panels */
+	--card-bg: var(--md-surface);
+	--card-border: 1px solid var(--md-outline);
+	--card-shadow: none;
+	--card-radius: 2px;
+
+	/* Modal variables - simple dialogs */
+	--modal-bg: var(--md-surface);
+	--modal-border: 1px solid var(--md-outline);
+	--modal-shadow: none;
+	--modal-radius: 2px;
+
+	/* Scrollbar variables - minimal */
+	--scrollbar-width: 8px;
+	--scrollbar-height: 8px;
+	--scrollbar-track-bg: var(--app-content-bg-2);
+	--scrollbar-track-border: var(--md-outline);
+	--scrollbar-thumb-bg: var(--md-secondary);
+	--scrollbar-thumb-border: var(--md-outline);
+	--scrollbar-thumb-radius: 2px;
+	--scrollbar-thumb-hover-bg: var(--md-secondary-container);
+
+	/* Focus variables - minimal */
+	--focus-outline: var(--app-focus-ring);
+	--focus-offset: 1px;
 }
 
-/* Clean, sharp borders without shadows */
+/* Remove all transitions for instant feedback */
+* {
+	transition: none !important;
+	animation: none !important;
+}
+
+/* Minimal theme customizations */
 .retro-btn {
-  border: 1px solid var(--md-outline) !important;
-  box-shadow: none !important;
-  border-radius: 2px;
+	box-shadow: none !important;
 }
 
 .retro-btn:hover {
-  box-shadow: none !important;
-  transform: none !important;
+	box-shadow: none !important;
+	transform: none !important;
 }
 
 .retro-btn:active {
-  box-shadow: none !important;
-  transform: none !important;
+	box-shadow: none !important;
+	transform: none !important;
 }
 
-/* Minimal input styling */
 .retro-input {
-  border: 1px solid var(--md-outline) !important;
-  box-shadow: none !important;
-  border-radius: 2px;
+	box-shadow: none !important;
 }
 
 .retro-input:focus {
-  box-shadow: none !important;
-  transform: none !important;
+	box-shadow: none !important;
+	transform: none !important;
 }
 
 /* Remove all decorative backgrounds */
 body::before,
 body::after {
-  display: none !important;
-}
-
-/* Clean card styling */
-.card,
-.ucard,
-[class*="card"] {
-  box-shadow: none !important;
-  border: 1px solid var(--md-outline) !important;
-  border-radius: 2px;
-}
-
-/* Minimal modal styling */
-.modal,
-.umodal,
-[class*="modal"] {
-  box-shadow: none !important;
-  border: 1px solid var(--md-outline) !important;
-  border-radius: 2px;
+	display: none !important;
 }
 
 /* Remove scanlines and CRT effects */
@@ -64,48 +87,22 @@ body::after {
 .crt-effect,
 [class*="scanline"],
 [class*="crt"] {
-  display: none !important;
-}
-
-/* Clean scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--app-content-bg-2);
-  border: 1px solid var(--md-outline);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--md-secondary);
-  border: 1px solid var(--md-outline);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--md-secondary-container);
+	display: none !important;
 }
 
 /* Remove all pattern backgrounds */
 [class*="pattern"],
 [class*="gradient"],
 [class*="texture"] {
-  background-image: none !important;
-  background-color: var(--md-surface) !important;
-}
-
-/* Minimal focus indicators */
-*:focus {
-  outline: 1px solid var(--app-focus-ring) !important;
-  outline-offset: 1px !important;
+	background-image: none !important;
+	background-color: var(--md-surface) !important;
 }
 
 /* Clean typography */
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 500 !important;
-  letter-spacing: normal !important;
-  text-shadow: none !important;
+	font-weight: 500 !important;
+	letter-spacing: normal !important;
+	text-shadow: none !important;
 }
 
 /* Remove pixel font effects for clean sans-serif */
@@ -113,62 +110,62 @@ h1, h2, h3, h4, h5, h6 {
 .font-retro,
 [class*="pixel"],
 [class*="retro"] {
-  font-family: system-ui, -apple-system, sans-serif !important;
+	font-family: system-ui, -apple-system, sans-serif !important;
 }
 
 /* Minimal spacing and layout */
 .container,
 .layout,
 [class*="container"] {
-  padding: 1rem;
-  margin: 0;
+	padding: 1rem;
+	margin: 0;
 }
 
 /* Clean button states */
 button,
 .u-button,
 [class*="button"] {
-  background: var(--md-surface) !important;
-  color: var(--md-on-surface) !important;
-  border: 1px solid var(--md-outline) !important;
-  padding: 0.5rem 1rem;
-  margin: 0.25rem;
+	background: var(--md-surface) !important;
+	color: var(--md-on-surface) !important;
+	border: 1px solid var(--md-outline) !important;
+	padding: 0.5rem 1rem;
+	margin: 0.25rem;
 }
 
 button:hover,
 .u-button:hover,
 [class*="button"]:hover {
-  background: var(--app-hover-bg) !important;
+	background: var(--app-hover-bg) !important;
 }
 
 button:active,
 .u-button:active,
 [class*="button"]:active {
-  background: var(--app-active-bg) !important;
+	background: var(--app-active-bg) !important;
 }
 
 /* Minimal form elements */
 input,
 textarea,
 select {
-  background: var(--md-surface) !important;
-  color: var(--md-on-surface) !important;
-  border: 1px solid var(--md-outline) !important;
-  padding: 0.5rem;
-  border-radius: 2px;
+	background: var(--md-surface) !important;
+	color: var(--md-on-surface) !important;
+	border: 1px solid var(--md-outline) !important;
+	padding: 0.5rem;
+	border-radius: 2px;
 }
 
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--app-focus-ring) !important;
-  outline: 1px solid var(--app-focus-ring) !important;
+	border-color: var(--app-focus-ring) !important;
+	outline: 1px solid var(--app-focus-ring) !important;
 }
 
 /* Remove all decorative elements */
 .decoration,
- ornament,
+ornament,
 [class*="decoration"],
 [class*="ornament"] {
-  display: none !important;
+	display: none !important;
 }

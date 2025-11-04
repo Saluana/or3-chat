@@ -1,14 +1,75 @@
-import { ref } from 'vue';
+import { ref, readonly } from 'vue';
+import sharedBaseCssUrl from '~/theme/_shared/base.css?url';
+
+// Simple LRU cache implementation
+class LRUCache<K, V> {
+    private cache = new Map<K, V>();
+    private maxSize: number;
+
+    constructor(maxSize: number = 3) {
+        this.maxSize = maxSize;
+    }
+
+    get(key: K): V | undefined {
+        const value = this.cache.get(key);
+        if (value !== undefined) {
+            // Move to end (most recently used)
+            this.cache.delete(key);
+            this.cache.set(key, value);
+        }
+        return value;
+    }
+
+    set(key: K, value: V): void {
+        if (this.cache.has(key)) {
+            // Update existing
+            this.cache.delete(key);
+        } else if (this.cache.size >= this.maxSize) {
+            // Remove least recently used (first item)
+            const iterator = this.cache.keys().next();
+            if (!iterator.done) {
+                this.cache.delete(iterator.value);
+            }
+        }
+        this.cache.set(key, value);
+    }
+
+    has(key: K): boolean {
+        return this.cache.has(key);
+    }
+
+    clear(): void {
+        this.cache.clear();
+    }
+
+    size(): number {
+        return this.cache.size;
+    }
+}
+
 import {
     discoverThemes,
     loadTheme,
-    validateThemeVariables,
     type ThemeManifest,
     type ThemeError,
     type ThemeWarning,
+    type ThemeLoadResult,
 } from '~/theme/_shared/theme-loader';
 
-export default defineNuxtPlugin(async (nuxtApp) => {
+export default defineNuxtPlugin((nuxtApp) => {
+    const ensureBaseCssInjected = () => {
+        const linkId = 'theme-shared-base';
+        if (document.getElementById(linkId)) {
+            return;
+        }
+
+        const linkElement = document.createElement('link');
+        linkElement.id = linkId;
+        linkElement.rel = 'stylesheet';
+        linkElement.href = sharedBaseCssUrl;
+        linkElement.setAttribute('data-theme-shared', 'true');
+        document.head.appendChild(linkElement);
+    };
     const THEME_CLASSES = [
         'light',
         'dark',
@@ -27,6 +88,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const activeTheme = ref<string>('default');
     const errors = ref<ThemeError[]>([]);
     const warnings = ref<ThemeWarning[]>([]);
+
+    // LRU cache for loaded themes (size 3 as requested)
+    const themeCache = new LRUCache<string, ThemeLoadResult>(3);
 
     const getSystemPref = () =>
         window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -77,6 +141,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         let styleElement = document.getElementById(styleId) as HTMLStyleElement;
 
         if (!styleElement) {
+            ensureBaseCssInjected();
             styleElement = document.createElement('style');
             styleElement.id = styleId;
             styleElement.setAttribute('data-theme', themeName);
@@ -104,24 +169,84 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             errors.value = [];
             warnings.value = [];
 
+            // Check cache first
+            const cached = themeCache.get(themeName);
+            if (cached) {
+                console.log(`[theme] Loaded "${themeName}" from cache`);
+
+                // Separate critical errors from warnings
+                const criticalErrors = cached.errors.filter(
+                    (e) => e.severity === 'error'
+                );
+                const warningErrors = cached.errors.filter(
+                    (e) => e.severity === 'warning'
+                );
+
+                errors.value = criticalErrors;
+                warnings.value = [...cached.warnings, ...warningErrors];
+
+                // Log warnings but don't block
+                warnings.value.forEach((warning) => {
+                    console.warn('[theme]', warning.message, warning.file);
+                });
+
+                // Log and surface critical errors
+                criticalErrors.forEach((error) => {
+                    console.error('[theme]', error.message, error.file);
+                });
+
+                // Only inject CSS if requested (default true for backwards compatibility)
+                if (injectCss) {
+                    // Inject CSS even with warnings (not critical errors)
+                    if (cached.lightCss) {
+                        injectThemeCSS(cached.lightCss, themeName, 'light');
+                    }
+
+                    if (cached.darkCss) {
+                        injectThemeCSS(cached.darkCss, themeName, 'dark');
+                    }
+
+                    if (cached.mainCss) {
+                        injectThemeCSS(cached.mainCss, themeName, 'main');
+                    }
+                }
+
+                return cached;
+            }
+
+            // Load from disk if not in cache
             const result = await loadTheme(themeName);
 
-            // Store errors and warnings
-            errors.value = result.errors;
-            warnings.value = result.warnings;
+            // Cache the result
+            themeCache.set(themeName, result);
+            console.log(
+                `[theme] Loaded "${themeName}" from disk and cached (cache size: ${themeCache.size()})`
+            );
 
-            // Log warnings
-            result.warnings.forEach((warning) => {
+            // Separate critical errors from warnings
+            const criticalErrors = result.errors.filter(
+                (e) => e.severity === 'error'
+            );
+            const warningErrors = result.errors.filter(
+                (e) => e.severity === 'warning'
+            );
+
+            errors.value = criticalErrors;
+            warnings.value = [...result.warnings, ...warningErrors];
+
+            // Log warnings but don't block
+            warnings.value.forEach((warning) => {
                 console.warn('[theme]', warning.message, warning.file);
             });
 
-            // Log errors
-            result.errors.forEach((error) => {
+            // Log and surface critical errors
+            criticalErrors.forEach((error) => {
                 console.error('[theme]', error.message, error.file);
             });
 
             // Only inject CSS if requested (default true for backwards compatibility)
             if (injectCss) {
+                // Inject CSS even with warnings (not critical errors)
                 if (result.lightCss) {
                     injectThemeCSS(result.lightCss, themeName, 'light');
                 }
@@ -159,9 +284,19 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     // Initialize active theme
     activeTheme.value = readActiveTheme();
 
-    // Load and validate the active theme
-    await initializeThemes();
-    await loadAndValidateTheme(activeTheme.value);
+    // Add ready state tracking
+    const isReady = ref(false);
+
+    // Defer async work (don't await)
+    const readyPromise = (async () => {
+        try {
+            await initializeThemes();
+            await loadAndValidateTheme(activeTheme.value);
+            isReady.value = true;
+        } catch (err) {
+            console.error('[theme] Init failed:', err);
+        }
+    })();
 
     const set = (name: string) => {
         current.value = name;
@@ -184,29 +319,57 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             return false;
         }
 
-        // Remove old theme CSS
         const oldTheme = activeTheme.value;
-        if (oldTheme && oldTheme !== themeName) {
-            removeThemeCSS(oldTheme);
-        }
+        let cssInjected = false;
 
-        // Validate and load new theme
-        const result = await loadAndValidateTheme(themeName);
-        if (!result || result.errors.length > 0) {
-            console.error(
-                `[theme] Theme "${themeName}" has critical errors and cannot be applied`
-            );
+        try {
+            // Load and validate theme first (don't inject CSS yet)
+            const result = await loadAndValidateTheme(themeName, false);
+
+            const criticalErrors =
+                result?.errors.filter((e) => e.severity === 'error') ?? [];
+
+            if (!result || criticalErrors.length > 0) {
+                throw new Error(
+                    `Theme "${themeName}" has ${criticalErrors.length} critical errors`
+                );
+            }
+
+            // Inject CSS only after validation passes
+            if (result.lightCss) {
+                injectThemeCSS(result.lightCss, themeName, 'light');
+            }
+            if (result.darkCss) {
+                injectThemeCSS(result.darkCss, themeName, 'dark');
+            }
+            if (result.mainCss) {
+                injectThemeCSS(result.mainCss, themeName, 'main');
+            }
+            cssInjected = true;
+
+            // Remove old theme CSS
+            if (oldTheme && oldTheme !== themeName) {
+                removeThemeCSS(oldTheme);
+            }
+
+            // Store the active theme
+            activeTheme.value = themeName;
+            localStorage.setItem(activeThemeStorageKey, themeName);
+
+            // Apply the current mode to ensure correct CSS is active
+            apply(current.value);
+
+            return true;
+        } catch (err) {
+            console.error(`[theme] Failed to switch to ${themeName}:`, err);
+
+            // Rollback: remove any CSS we injected
+            if (cssInjected) {
+                removeThemeCSS(themeName);
+            }
+
             return false;
         }
-
-        // Store the active theme
-        activeTheme.value = themeName;
-        localStorage.setItem(activeThemeStorageKey, themeName);
-
-        // Apply the current mode to ensure correct CSS is active
-        apply(current.value);
-
-        return true;
     };
 
     // Reload current theme
@@ -266,6 +429,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         errors,
         warnings,
 
+        // Ready state for components that need to wait
+        ready: readyPromise,
+        isReady: readonly(isReady),
+
         // Utility methods
         validateTheme: async (themeName: string) => {
             // Validate without injecting CSS (just check for errors/warnings)
@@ -275,6 +442,24 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         // Get theme manifest by name
         getThemeManifest: (themeName: string) => {
             return availableThemes.value.find((t) => t.name === themeName);
+        },
+
+        // Cache management methods
+        clearCache: () => {
+            themeCache.clear();
+            console.log('[theme] Cache cleared');
+        },
+
+        getCacheSize: () => {
+            return themeCache.size();
+        },
+
+        getCacheInfo: () => {
+            return {
+                size: themeCache.size(),
+                maxSize: 3,
+                description: 'LRU cache for loaded themes',
+            };
         },
     });
 });

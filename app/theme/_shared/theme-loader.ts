@@ -6,6 +6,7 @@
  */
 
 import { mergeThemeConfig as defuMerge } from './config-merger';
+import type { AppConfig } from './config-merger';
 
 // Core interfaces for theme management
 export interface ThemeManifest {
@@ -30,7 +31,7 @@ export interface ThemeLoadResult {
     lightCss?: string;
     darkCss?: string;
     mainCss?: string;
-    config?: any; // Partial<AppConfig>
+    config?: Partial<AppConfig>;
     errors: ThemeError[];
     warnings: ThemeWarning[];
 }
@@ -167,7 +168,7 @@ export async function loadTheme(themeName: string): Promise<ThemeLoadResult> {
         let lightCss: string | undefined;
         let darkCss: string | undefined;
         let mainCss: string | undefined;
-        let config: any | undefined;
+        let config: Partial<AppConfig> | undefined;
 
         // Use the relative path format that matches import.meta.glob
         const basePath = `../${themeName}`;
@@ -200,7 +201,7 @@ export async function loadTheme(themeName: string): Promise<ThemeLoadResult> {
         if (manifest.hasConfig) {
             const loader = themeConfigFiles[`${basePath}/theme.ts`];
             if (loader) {
-                config = await loader();
+                config = (await loader()) as Partial<AppConfig>;
             }
         }
 
@@ -265,40 +266,9 @@ export function validateThemeVariables(
 /**
  * Deep merge theme.ts config with default app.config.ts
  */
-export function mergeThemeConfig(base: any, override: any): any {
+export function mergeThemeConfig(
+    base: AppConfig,
+    override: Partial<AppConfig>
+): AppConfig {
     return defuMerge(base, override);
 }
-
-/**
- * Theme error service for centralized error handling
- */
-export class ThemeErrorService {
-    private errors: ThemeError[] = [];
-    private warnings: ThemeWarning[] = [];
-
-    logError(error: ThemeError) {
-        this.errors.push(error);
-        console.error('[theme]', error.message, error.file);
-    }
-
-    logWarning(warning: ThemeWarning) {
-        this.warnings.push(warning);
-        if (import.meta?.dev !== false) {
-            // Show warnings in dev and test
-            console.warn('[theme]', warning.message, warning.file);
-        }
-    }
-
-    getErrors() {
-        return this.errors;
-    }
-    getWarnings() {
-        return this.warnings;
-    }
-    clear() {
-        this.errors = [];
-        this.warnings = [];
-    }
-}
-
-export const themeErrors = new ThemeErrorService();

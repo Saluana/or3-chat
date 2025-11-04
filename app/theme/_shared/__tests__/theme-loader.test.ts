@@ -4,24 +4,22 @@
  * Tests for theme discovery, loading, and validation functionality.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
+
+// Mock defineAppConfig for theme config loading
+beforeAll(() => {
+    (globalThis as any).defineAppConfig = (config: any) => config;
+});
 import {
     discoverThemes,
     loadTheme,
     validateThemeVariables,
     mergeThemeConfig,
-    ThemeErrorService,
-    themeErrors,
     type ThemeManifest,
     type ThemeLoadResult,
 } from '../theme-loader';
 
 describe('Theme Loader', () => {
-    beforeEach(() => {
-        // Clear errors before each test
-        themeErrors.clear();
-    });
-
     describe('discoverThemes', () => {
         it('should find all available themes', () => {
             const themes = discoverThemes();
@@ -126,6 +124,12 @@ describe('Theme Loader', () => {
             const criticalErrors = result.errors.filter(
                 (e) => e.severity === 'error'
             );
+
+            // Debug: log the actual errors
+            if (criticalErrors.length > 0) {
+                console.log('Critical errors found:', criticalErrors);
+            }
+
             expect(criticalErrors).toHaveLength(0);
             expect(result.manifest.hasLight).toBe(true);
             expect(result.manifest.hasDark).toBe(true);
@@ -174,77 +178,14 @@ describe('Theme Loader', () => {
 
             const result = mergeThemeConfig(base, override);
 
-            expect(result.ui.button.slots.base).toBe('base-class'); // Preserved
-            expect(result.ui.button.slots.label).toBe('label-class'); // Added
-            expect(result.ui.button.variants.size).toEqual(
+            expect(result.ui?.button?.slots?.base).toBe('base-class'); // Preserved
+            expect(result.ui?.button?.slots?.label).toBe('label-class'); // Added
+            expect(result.ui?.button?.variants?.size).toEqual(
                 base.ui.button.variants.size
             ); // Preserved
-            expect(result.ui.button.variants.color).toEqual(
+            expect(result.ui?.button?.variants?.color).toEqual(
                 override.ui.button.variants.color
             ); // Added
-        });
-    });
-
-    describe('ThemeErrorService', () => {
-        it('should log errors and warnings', () => {
-            const consoleErrorSpy = vi
-                .spyOn(console, 'error')
-                .mockImplementation(() => {});
-            const consoleWarnSpy = vi
-                .spyOn(console, 'warn')
-                .mockImplementation(() => {});
-
-            const error = {
-                file: 'test.css',
-                message: 'Test error',
-                severity: 'error' as const,
-            };
-            const warning = {
-                file: 'test.css',
-                message: 'Test warning',
-                severity: 'warning' as const,
-            };
-
-            themeErrors.logError(error);
-            themeErrors.logWarning(warning);
-
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
-                '[theme]',
-                'Test error',
-                'test.css'
-            );
-            expect(consoleWarnSpy).toHaveBeenCalledWith(
-                '[theme]',
-                'Test warning',
-                'test.css'
-            );
-
-            expect(themeErrors.getErrors()).toContain(error);
-            expect(themeErrors.getWarnings()).toContain(warning);
-
-            consoleErrorSpy.mockRestore();
-            consoleWarnSpy.mockRestore();
-        });
-
-        it('should clear errors and warnings', () => {
-            themeErrors.logError({
-                file: 'test.css',
-                message: 'Test error',
-                severity: 'error',
-            });
-            themeErrors.logWarning({
-                file: 'test.css',
-                message: 'Test warning',
-                severity: 'warning',
-            });
-
-            expect(themeErrors.getErrors()).toHaveLength(1);
-            expect(themeErrors.getWarnings()).toHaveLength(1);
-
-            themeErrors.clear();
-
-            expect(themeErrors.getErrors()).toHaveLength(0);
-            expect(themeErrors.getWarnings()).toHaveLength(0);
         });
     });
 });
