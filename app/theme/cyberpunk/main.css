@@ -53,6 +53,12 @@
 	/* Focus variables - neon highlights */
 	--focus-outline: var(--cyberpunk-neon-cyan);
 	--focus-offset: 2px;
+
+	/* Editor variables */
+	--app-editor-backdrop: rgba(0, 0, 0, 0.3);
+	--app-skeleton-bg: rgba(153, 51, 255, 0.2);
+	--app-skeleton-modal-bg: var(--cyberpunk-dark-bg);
+	--app-toolbar-btn-active-bg: color-mix(in srgb, var(--cyberpunk-neon-cyan) 40%, transparent);
 }
 
 /* Cyberpunk-specific customizations */

@@ -53,6 +53,12 @@
 	/* Focus variables - organic */
 	--focus-outline: var(--nature-leaf-green);
 	--focus-offset: 3px;
+
+	/* Editor variables */
+	--app-editor-backdrop: rgba(139, 119, 101, 0.1);
+	--app-skeleton-bg: rgba(160, 142, 120, 0.3);
+	--app-skeleton-modal-bg: var(--nature-sand-beige);
+	--app-toolbar-btn-active-bg: color-mix(in srgb, var(--nature-forest-green) 40%, transparent);
 }
 
 /* Nature-specific customizations */

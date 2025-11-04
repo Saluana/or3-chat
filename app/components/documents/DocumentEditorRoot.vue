@@ -1,6 +1,6 @@
 <template>
     <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+        class="flex flex-col h-full w-full bg-(--app-editor-backdrop) backdrop-blur-sm"
     >
         <div
             class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"

@@ -186,9 +186,9 @@ None.
 
 ## Documents Components Checklist
 
--   [ ] Replace `bg-white/10 dark:bg-black/10` in DocumentEditorRoot
--   [ ] Replace all `bg-neutral-*` in LazyEditorHost skeleton
--   [ ] Replace `text-red-*` with `--md-error` in error states
--   [ ] Extract `bg-primary/40` in ToolbarButton to CSS variable
--   [ ] Test editor loading states in both themes
--   [ ] Test toolbar button active states across themes
+-   [x] Replace `bg-white/10 dark:bg-black/10` in DocumentEditorRoot
+-   [x] Replace all `bg-neutral-*` in LazyEditorHost skeleton
+-   [x] Replace `text-red-*` with `--md-error` in error states
+-   [x] Extract `bg-primary/40` in ToolbarButton to CSS variable
+-   [x] Test editor loading states in both themes
+-   [x] Test toolbar button active states across themes

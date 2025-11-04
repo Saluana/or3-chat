@@ -56,4 +56,8 @@
   --md-extended-color-warning-on-color: rgb(83 34 1);
   --md-extended-color-warning-color-container: rgb(111 56 19);
   --md-extended-color-warning-on-color-container: rgb(255 219 202);
+
+  /* Editor variables - dark mode */
+  --app-editor-backdrop: rgba(0, 0, 0, 0.1);
+  --app-skeleton-bg: rgba(64, 64, 64, 0.3);
 }

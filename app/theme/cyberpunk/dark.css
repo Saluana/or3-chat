@@ -56,4 +56,8 @@
   --cyberpunk-neon-red: #ff0066;
   --cyberpunk-dark-bg: #000000;
   --cyberpunk-grid: #1a0033;
+
+  /* Editor variables - dark mode overrides */
+  --app-editor-backdrop: rgba(0, 0, 0, 0.5);
+  --app-skeleton-bg: rgba(153, 51, 255, 0.3);
 }

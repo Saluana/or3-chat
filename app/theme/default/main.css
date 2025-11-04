@@ -82,6 +82,12 @@
 	--app-modal-item-odd-bg: color-mix(in oklab, var(--md-primary) 14%, transparent);
 	--app-modal-text: var(--md-on-surface);
 	--app-modal-text-muted: var(--md-on-surface-variant);
+
+	/* Editor variables */
+	--app-editor-backdrop: rgba(255, 255, 255, 0.1);
+	--app-skeleton-bg: rgba(212, 212, 212, 0.3);
+	--app-skeleton-modal-bg: var(--md-surface-container);
+	--app-toolbar-btn-active-bg: color-mix(in srgb, var(--md-primary) 40%, transparent);
 }
 
 /* Default theme specific customizations */

@@ -44,6 +44,12 @@
 	/* Focus variables - minimal */
 	--focus-outline: var(--app-focus-ring);
 	--focus-offset: 1px;
+
+	/* Editor variables */
+	--app-editor-backdrop: rgba(128, 128, 128, 0.05);
+	--app-skeleton-bg: rgba(128, 128, 128, 0.1);
+	--app-skeleton-modal-bg: var(--md-surface);
+	--app-toolbar-btn-active-bg: color-mix(in srgb, var(--md-primary) 40%, transparent);
 }
 
 /* Remove all transitions for instant feedback */

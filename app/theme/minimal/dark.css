@@ -46,4 +46,8 @@
   --app-text-primary: #ffffff;
   --app-text-secondary: #999999;
   --app-text-muted: #666666;
+
+  /* Editor variables - dark mode overrides */
+  --app-editor-backdrop: rgba(0, 0, 0, 0.1);
+  --app-skeleton-bg: rgba(64, 64, 64, 0.2);
 }
