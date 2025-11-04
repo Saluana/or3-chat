@@ -170,13 +170,9 @@ html {
 	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
 }
 
-/* Fix Nuxt UI button colors - force proper text color for all buttons */
-button.retro-btn,
-.retro-btn {
-	color: var(--md-on-surface);
-}
-
-.retro-btn svg,
-.retro-btn [class*="i-"] {
-	color: currentColor;
+/* Override Nuxt UI's default button text colors which are inverted */
+/* Nuxt UI applies text-white or text-gray-900 which don't work with our theme */
+.retro-btn,
+.retro-btn * {
+	color: var(--md-on-surface) !important;
 }
