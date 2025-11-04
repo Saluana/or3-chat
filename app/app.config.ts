@@ -43,10 +43,14 @@ export default defineAppConfig({
                     basic: 'border-2 shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
+                    ghost: 'bg-transparent! text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-variant)]/50! border-transparent! shadow-none!',
                 },
                 color: {
                     'inverse-primary':
                         'bg-[var(--md-inverse-primary)] text-tertiary-foreground hover:backdrop-blur-sm hover:bg-[var(--md-inverse-primary)]/80',
+                    neutral:
+                        'bg-[var(--md-surface)]! text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-variant)]! hover:text-[var(--md-on-surface-variant)]!',
+                    info: 'bg-[var(--md-primary-container)]! text-[var(--md-on-primary-container)]! hover:bg-[var(--md-primary-container)]/80! hover:text-[var(--md-on-primary-container)]!',
                 },
                 // Override size variant so padding wins over defaults
                 size: {

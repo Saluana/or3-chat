@@ -169,3 +169,14 @@ html {
 .hljs {
 	background: transparent !important; /* override highlight.js default bg so it works in dark mode */
 }
+
+/* Fix Nuxt UI button colors - force proper text color for all buttons */
+button.retro-btn,
+.retro-btn {
+	color: var(--md-on-surface);
+}
+
+.retro-btn svg,
+.retro-btn [class*="i-"] {
+	color: currentColor;
+}
