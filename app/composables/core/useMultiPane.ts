@@ -69,7 +69,12 @@ export interface UseMultiPaneApi {
     ) => Promise<void>;
     updatePane: (index: number, updates: Partial<PaneState>) => void;
     getPaneWidth: (index: number) => string;
-    handleResize: (paneIndex: number, deltaX: number) => void;
+    handleResize: (
+        paneIndex: number,
+        deltaX: number,
+        persist?: boolean
+    ) => void;
+    persistPaneWidths: () => void;
     paneWidths: Ref<number[]>;
 }
 
@@ -157,12 +162,12 @@ async function ensurePaneAppGetter(): Promise<PaneAppGetter | null> {
 export function useMultiPane(
     options: UseMultiPaneOptions = {}
 ): UseMultiPaneApi {
-    const { 
-        initialThreadId = '', 
+    const {
+        initialThreadId = '',
         maxPanes = 3,
         minPaneWidth = 280,
         maxPaneWidth = 2000,
-        storageKey = 'pane-widths'
+        storageKey = 'pane-widths',
     } = options;
 
     const panes = ref<PaneState[]>([createEmptyPane(initialThreadId)]);
@@ -196,25 +201,29 @@ export function useMultiPane(
         try {
             const saved = localStorage.getItem(storageKey);
             if (!saved) return;
-            
+
             const parsed = JSON.parse(saved);
             if (!Array.isArray(parsed)) {
                 if (import.meta.dev) {
-                    console.warn('[useMultiPane] Invalid stored widths format, ignoring');
+                    console.warn(
+                        '[useMultiPane] Invalid stored widths format, ignoring'
+                    );
                 }
                 return;
             }
-            
+
             // Validate each width
-            const valid = parsed.every(w => typeof w === 'number' && w > 0);
+            const valid = parsed.every((w) => typeof w === 'number' && w > 0);
             if (!valid) {
                 if (import.meta.dev) {
-                    console.warn('[useMultiPane] Invalid stored width values, ignoring');
+                    console.warn(
+                        '[useMultiPane] Invalid stored width values, ignoring'
+                    );
                 }
                 return;
             }
-            
-            paneWidths.value = parsed.map(w => clampWidth(w));
+
+            paneWidths.value = parsed.map((w) => clampWidth(w));
         } catch (e) {
             if (import.meta.dev) {
                 console.warn('[useMultiPane] Failed to restore widths:', e);
@@ -241,17 +250,19 @@ export function useMultiPane(
      */
     function getPaneWidth(index: number): string {
         const paneCount = panes.value.length;
-        
+
         // Single pane or no panes
         if (paneCount <= 1) return '100%';
-        
+
         // Stored widths match current pane count
-        if (paneWidths.value.length === paneCount && 
-            index >= 0 && 
-            index < paneWidths.value.length) {
+        if (
+            paneWidths.value.length === paneCount &&
+            index >= 0 &&
+            index < paneWidths.value.length
+        ) {
             return `${paneWidths.value[index]}px`;
         }
-        
+
         // Mismatch or no stored widths - fall back to equal distribution
         return `${100 / paneCount}%`;
     }
@@ -261,53 +272,66 @@ export function useMultiPane(
      */
     function initializeWidths() {
         if (typeof document === 'undefined') return;
-        
-        const container = document.querySelector('.pane-container') as HTMLElement;
+
+        const container = document.querySelector(
+            '.pane-container'
+        ) as HTMLElement;
         if (!container) return;
-        
+
         const totalWidth = container.clientWidth;
         const paneCount = panes.value.length;
         const equalWidth = Math.floor(totalWidth / paneCount);
-        
+
         paneWidths.value = new Array(paneCount).fill(clampWidth(equalWidth));
     }
 
     /**
      * Handle resize drag
+     * @param persist - Whether to persist to localStorage (default false, only persist on drag end)
      */
-    function handleResize(paneIndex: number, deltaX: number) {
+    function handleResize(paneIndex: number, deltaX: number, persist = false) {
         // Guard against invalid index
         if (paneIndex < 0 || paneIndex >= panes.value.length - 1) {
             if (import.meta.dev) {
-                console.warn('[useMultiPane] Invalid pane index for resize:', paneIndex);
+                console.warn(
+                    '[useMultiPane] Invalid pane index for resize:',
+                    paneIndex
+                );
             }
             return;
         }
-        
+
         // Initialize widths array if needed
         if (paneWidths.value.length !== panes.value.length) {
             initializeWidths();
         }
-        
+
         // If still not initialized, can't resize
         if (paneWidths.value.length !== panes.value.length) {
             return;
         }
-        
+
         // Calculate new widths
         const currentWidth = paneWidths.value[paneIndex];
         const nextWidth = paneWidths.value[paneIndex + 1];
-        
+
         if (currentWidth !== undefined && nextWidth !== undefined) {
             const newCurrentWidth = clampWidth(currentWidth + deltaX);
             const actualDelta = newCurrentWidth - currentWidth;
             const newNextWidth = clampWidth(nextWidth - actualDelta);
-            
+
             // Only update if both constraints satisfied
-            if (newCurrentWidth >= minPaneWidth && newNextWidth >= minPaneWidth) {
+            if (
+                newCurrentWidth >= minPaneWidth &&
+                newNextWidth >= minPaneWidth
+            ) {
                 paneWidths.value[paneIndex] = newCurrentWidth;
                 paneWidths.value[paneIndex + 1] = newNextWidth;
-                persistWidths();
+
+                // Only persist when explicitly requested (e.g., on drag end or keyboard resize)
+                if (persist) {
+                    persistWidths();
+                }
             }
         }
     }
@@ -421,21 +445,26 @@ export function useMultiPane(
     function addPane() {
         if (!canAddPane.value) return;
         const pane = createEmptyPane();
-        
+
         // Adjust widths for new pane
-        if (paneWidths.value.length > 0 && paneWidths.value.length === panes.value.length) {
+        if (
+            paneWidths.value.length > 0 &&
+            paneWidths.value.length === panes.value.length
+        ) {
             // Take space proportionally from existing panes
             const totalWidth = paneWidths.value.reduce((sum, w) => sum + w, 0);
-            const newPaneWidth = clampWidth(totalWidth / (panes.value.length + 1));
+            const newPaneWidth = clampWidth(
+                totalWidth / (panes.value.length + 1)
+            );
             const reductionPerPane = newPaneWidth / panes.value.length;
-            
-            paneWidths.value = paneWidths.value.map(w => 
+
+            paneWidths.value = paneWidths.value.map((w) =>
                 clampWidth(w - reductionPerPane)
             );
             paneWidths.value.push(newPaneWidth);
             persistWidths();
         }
-        
+
         panes.value.push(pane);
         const prevIndex = activePaneIndex.value;
         const newIndex = panes.value.length - 1;
@@ -466,23 +495,27 @@ export function useMultiPane(
                 await options.onFlushDocument(closing.documentId);
             } catch {}
         }
-        
+
         // Redistribute width to remaining panes
-        if (paneWidths.value.length > i && paneWidths.value.length === panes.value.length) {
+        if (
+            paneWidths.value.length > i &&
+            paneWidths.value.length === panes.value.length
+        ) {
             const removedWidth = paneWidths.value[i];
             if (removedWidth !== undefined) {
                 paneWidths.value.splice(i, 1);
-                
+
                 if (paneWidths.value.length > 0) {
-                    const additionPerPane = removedWidth / paneWidths.value.length;
-                    paneWidths.value = paneWidths.value.map(w => 
+                    const additionPerPane =
+                        removedWidth / paneWidths.value.length;
+                    paneWidths.value = paneWidths.value.map((w) =>
                         clampWidth(w + additionPerPane)
                     );
                 }
                 persistWidths();
             }
         }
-        
+
         const wasActive = i === activePaneIndex.value;
         panes.value.splice(i, 1);
         if (!panes.value.length) {
@@ -736,6 +769,7 @@ export function useMultiPane(
         updatePane,
         getPaneWidth,
         handleResize,
+        persistPaneWidths: persistWidths,
         paneWidths,
     };
 

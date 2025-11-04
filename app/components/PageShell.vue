@@ -289,6 +289,7 @@ const {
     ensureAtLeastOne,
     getPaneWidth,
     handleResize,
+    persistPaneWidths,
     paneWidths,
 } = useMultiPane({
     initialThreadId: props.initialThreadId,
@@ -306,18 +307,21 @@ const maxPaneWidth = 2000;
 let resizingPaneIndex: number | null = null;
 let resizeStartX = 0;
 let resizeStartWidths: number[] = [];
+let pendingResizeFrame: number | null = null;
+let accumulatedDeltaX = 0;
 
 function onPaneResizeStart(event: PointerEvent, paneIndex: number) {
     if (isMobile.value) return;
-    
+
     // Capture pointer to this element
     (event.target as Element)?.setPointerCapture?.(event.pointerId);
-    
+
     // Store initial state
     resizingPaneIndex = paneIndex;
     resizeStartX = event.clientX;
     resizeStartWidths = [...paneWidths.value];
-    
+    accumulatedDeltaX = 0;
+
     // Add move and up listeners
     window.addEventListener('pointermove', onPaneResizeMove);
     window.addEventListener('pointerup', onPaneResizeEnd, { once: true });
@@ -325,22 +329,54 @@ function onPaneResizeStart(event: PointerEvent, paneIndex: number) {
 
 function onPaneResizeMove(event: PointerEvent) {
     if (resizingPaneIndex === null) return;
-    
+
+    // Calculate incremental delta from last position
     const deltaX = event.clientX - resizeStartX;
-    handleResize(resizingPaneIndex, deltaX);
+    accumulatedDeltaX = deltaX;
+    resizeStartX = event.clientX;
+
+    // Throttle updates using requestAnimationFrame - only update once per frame
+    if (pendingResizeFrame === null) {
+        pendingResizeFrame = requestAnimationFrame(() => {
+            if (resizingPaneIndex !== null && accumulatedDeltaX !== 0) {
+                // Don't persist on every move - only on drag end for performance
+                handleResize(resizingPaneIndex, accumulatedDeltaX, false);
+                accumulatedDeltaX = 0;
+            }
+            pendingResizeFrame = null;
+        });
+    }
 }
 
 function onPaneResizeEnd() {
     resizingPaneIndex = null;
     window.removeEventListener('pointermove', onPaneResizeMove);
+
+    // Cancel any pending frame
+    if (pendingResizeFrame !== null) {
+        cancelAnimationFrame(pendingResizeFrame);
+        pendingResizeFrame = null;
+    }
+
+    // Apply any remaining accumulated delta
+    if (accumulatedDeltaX !== 0 && resizeStartWidths.length > 0) {
+        const lastIndex = resizeStartWidths.length - 2; // last valid resize index
+        if (lastIndex >= 0) {
+            handleResize(lastIndex, accumulatedDeltaX, false);
+        }
+    }
+
+    // Persist the final widths when drag completes
+    persistPaneWidths();
+    accumulatedDeltaX = 0;
 }
 
 function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
     if (isMobile.value) return;
-    
+
     const step = event.shiftKey ? 32 : 16;
     let deltaX = 0;
-    
+
     if (event.key === 'ArrowLeft') {
         event.preventDefault();
         deltaX = -step;
@@ -364,9 +400,10 @@ function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
             deltaX = available - currentWidth;
         }
     }
-    
+
     if (deltaX !== 0) {
-        handleResize(paneIndex, deltaX);
+        // Persist immediately for keyboard actions (discrete events)
+        handleResize(paneIndex, deltaX, true);
     }
 }
 
@@ -374,6 +411,9 @@ function onPaneResizeKeydown(event: KeyboardEvent, paneIndex: number) {
 onBeforeUnmount(() => {
     window.removeEventListener('pointermove', onPaneResizeMove);
     window.removeEventListener('pointerup', onPaneResizeEnd);
+    if (pendingResizeFrame !== null) {
+        cancelAnimationFrame(pendingResizeFrame);
+    }
 });
 // -------- End Pane Resize Handlers --------
 

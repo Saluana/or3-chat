@@ -19,12 +19,12 @@
         <!-- Sidebar -->
         <aside
             :class="[
-                'z-40 bg-[var(--md-surface)] text-[var(--md-on-surface)] border-[var(--md-inverse-surface)] flex flex-col',
+                'z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex flex-col',
                 // width transition on desktop
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
                     : 'hidden',
-                'md:relative md:h-full md:flex-shrink-0 md:border-r-2',
+                'md:relative md:h-full md:shrink-0 md:border-r-2',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
                 // mobile overlay behavior
                 !isDesktop
