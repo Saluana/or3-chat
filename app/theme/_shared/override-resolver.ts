@@ -8,7 +8,8 @@ import type {
   ButtonProps, 
   InputProps, 
   ModalProps, 
-  CardProps 
+  CardProps,
+  IdentifierOverride,
 } from './override-types';
 
 // Re-export types for use in other modules
@@ -95,10 +96,28 @@ export class OverrideResolver {
     rules.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
     
     // Merge props from all rules
-    const overrideProps = this.mergeProps(rules);
+    let overrideProps = this.mergeProps(rules);
+
+    // 4. Identifier overrides (highest priority within theme overrides)
+    if (overrideContext.identifier) {
+      const identifierConfig = this.overrides.identifiers?.[overrideContext.identifier];
+
+      if (identifierConfig) {
+        overrideProps = this.applyIdentifierOverride(overrideProps, identifierConfig);
+      } else if (import.meta.dev) {
+        console.warn(
+          `[override-resolver] Identifier "${overrideContext.identifier}" not found in active theme overrides`
+        );
+      }
+    }
     
-    // Props Win: Start with theme overrides, then component props (component props win)
-    const props = { ...overrideProps, ...overrideContext.componentProps };
+    // Props win: start with theme overrides, then selectively apply component props
+    const props = { ...overrideProps };
+    for (const [key, value] of Object.entries(overrideContext.componentProps)) {
+      if (value !== undefined) {
+        props[key] = value;
+      }
+    }
     
     // Cache result
     const result: ResolvedOverride = {
@@ -174,6 +193,35 @@ export class OverrideResolver {
     
     return merged;
   }
+
+  /**
+   * Apply identifier override on top of existing theme props
+   */
+  private applyIdentifierOverride(
+    baseProps: Record<string, unknown>,
+    identifierConfig: IdentifierOverride
+  ): Record<string, unknown> {
+    const merged = { ...baseProps };
+
+    for (const [key, value] of Object.entries(identifierConfig)) {
+      if (value === undefined) continue;
+
+      if (key === 'class') {
+        merged[key] = merged[key]
+          ? `${value} ${merged[key]}`
+          : value;
+      } else if (key === 'ui' && typeof value === 'object') {
+        merged[key] = this.deepMerge(
+          (merged[key] as Record<string, unknown>) ?? {},
+          value as Record<string, unknown>
+        );
+      } else {
+        merged[key] = value;
+      }
+    }
+
+    return merged;
+  }
   
   /**
    * Deep merge objects
@@ -206,8 +254,9 @@ export class OverrideResolver {
     const elementId = overrideContext.element?.id || overrideContext.element?.className || 'no-element';
     // Include explicit reactive state from context
     const componentState = overrideContext.state ?? 'default';
-    
-    return `${componentType}:${context}:${overrideContext.mode}:${overrideContext.theme}:${componentState}:${propsHash}:${elementId}`;
+    const identifier = overrideContext.identifier ?? 'no-identifier';
+
+    return `${componentType}:${context}:${overrideContext.mode}:${overrideContext.theme}:${componentState}:${identifier}:${propsHash}:${elementId}`;
   }
 
   /**

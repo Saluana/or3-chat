@@ -41,10 +41,11 @@
                 <div
                     class="flex h-[40px] shrink-0 items-center border-b-2 border-[var(--md-inverse-surface)] pr-2"
                 >
-                    <UButton
+                    <ThemeButton
                         variant="subtle"
                         color="primary"
                         size="sm"
+                        context="dashboard"
                         class="ml-2 text-[20px] gap-0.5 hover:bg-(--app-dashboard-back-hover-bg)"
                         @click="goBack()"
                     >
@@ -52,7 +53,7 @@
                             class="h-6 w-6"
                             :name="'pixelarticons:chevron-left'"
                         />
-                    </UButton>
+                    </ThemeButton>
                     <div class="ml-2 font-semibold text-sm truncate">
                         {{ headerPluginLabel }}
                         <span v-if="activePageTitle" class="opacity-60"
@@ -131,6 +132,7 @@ import {
     registerDashboardPluginPage,
     type DashboardPlugin,
 } from '~/composables';
+import ThemeButton from '~/components/theme/ThemeButton.vue';
 
 const props = defineProps<{
     showModal: boolean;

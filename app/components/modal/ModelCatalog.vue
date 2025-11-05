@@ -16,7 +16,7 @@
                 >
                     <div class="flex items-center gap-3 w-full">
                         <div class="relative w-full max-w-md">
-                            <UInput
+                            <ThemeInput
                                 v-model="searchQuery"
                                 icon="pixelarticons:search"
                                 placeholder="Search models (id, name, description, modality)"
@@ -38,11 +38,12 @@
                                 />
                             </button>
                         </div>
-                        <UButton
+                        <ThemeButton
                             :disabled="refreshing"
                             size="sm"
                             variant="ghost"
                             :square="true"
+                            context="dashboard"
                             class="retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
                             aria-label="Refresh model catalog"
                             :title="
@@ -62,7 +63,7 @@
                                 name="i-heroicons-arrow-path"
                                 class="h-4 w-4 animate-spin"
                             />
-                        </UButton>
+                        </ThemeButton>
                     </div>
                 </div>
                 <div v-if="!searchReady" class="p-6 text-sm text-neutral-500">
@@ -182,6 +183,8 @@ import { computed } from 'vue';
 import { VList } from 'virtua/vue';
 import { useModelSearch } from '~/core/search/useModelSearch';
 import type { OpenRouterModel } from '~/core/auth/models-service';
+import ThemeButton from '~/components/theme/ThemeButton.vue';
+import ThemeInput from '~/components/theme/ThemeInput.vue';
 
 const props = defineProps<{
     showModal: boolean;

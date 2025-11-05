@@ -77,6 +77,12 @@ describe('useThemeOverrides', () => {
             }
           ]
         }
+      },
+      identifiers: {
+        'test.identifier': {
+          variant: 'neon',
+          class: 'identifier-btn'
+        }
       }
     };
 
@@ -372,6 +378,17 @@ describe('useThemeOverrides', () => {
         base: 'red-base', // Component props win
         label: 'md-label', // Keep theme prop
         padding: { x: 4, y: 4 } // Deep merge nested objects
+      });
+    });
+  });
+
+  describe('Identifier overrides', () => {
+    it('should apply identifier-specific overrides on top of context rules', () => {
+      const { overrides } = useThemeOverrides('button', 'global', {}, ref<ComponentState>('default'), 'test.identifier');
+
+      expect(overrides.value as Record<string, unknown>).toEqual({
+        variant: 'neon',
+        class: 'identifier-btn'
       });
     });
   });

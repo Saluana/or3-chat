@@ -40,6 +40,18 @@ export type ComponentState =
   | 'focus';
 
 /**
+ * Identifier-specific override configuration
+ */
+export interface IdentifierOverride {
+  variant?: string;
+  size?: string;
+  color?: string;
+  class?: string;
+  ui?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
  * Override rule defines what props to apply to which components
  */
 export interface OverrideRule<TProps = Record<string, unknown>> {
@@ -80,6 +92,9 @@ export interface OverrideContext {
   
   /** Component state (reactive) */
   state?: ComponentState;
+
+  /** Identifier for precise overrides */
+  identifier?: string;
 }
 
 /**
@@ -114,6 +129,9 @@ export interface ComponentOverrides {
     focus?: ComponentOverrides['global'];
     [key: string]: ComponentOverrides['global'];
   };
+
+  /** Identifier-based overrides (highest priority) */
+  identifiers?: Record<string, IdentifierOverride>;
 }
 
 /**

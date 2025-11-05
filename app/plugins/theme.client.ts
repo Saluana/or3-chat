@@ -7,9 +7,9 @@ import {
     setOverrideResolver,
     clearOverrideResolver,
     type ComponentOverrides,
-    type OverrideResolver,
-    type OverrideRule
+    type OverrideRule,
 } from '~/theme/_shared/override-resolver';
+import type { IdentifierOverride } from '~/theme/_shared/override-types';
 import {
     validateComponentOverrides,
     logValidationErrors,
@@ -115,6 +115,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         contextsCount: 0,
         lastInitTheme: '',
     });
+    const currentOverrides = ref<ComponentOverrides | null>(null);
 
     // Initialize override system with theme config
     const initializeOverrides = (themeConfig?: Partial<AppConfig>) => {
@@ -122,6 +123,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Clear any existing resolver
             clearOverrideResolver();
             overrideStats.value.resolverLoaded = false;
+            currentOverrides.value = null;
 
             if (!themeConfig?.componentOverrides) {
                 console.log('[theme] No component overrides found in theme config');
@@ -144,6 +146,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             // Set up the resolver (validation passed)
             setOverrideResolver(themeConfig.componentOverrides);
+            currentOverrides.value = themeConfig.componentOverrides;
             
             // Calculate stats
             const resolver = getOverrideResolver();
@@ -167,7 +170,8 @@ export default defineNuxtPlugin((nuxtApp) => {
                     Object.values(overrides.states ?? {}).reduce(
                         (total, stateBucket) => total + countRules(stateBucket ?? {}),
                         0,
-                    );
+                    ) +
+                    Object.keys(overrides.identifiers ?? {}).length;
                 
                 const contextsCount = Object.keys(overrides.contexts || {}).length;
                 
@@ -192,6 +196,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 contextsCount: 0,
                 lastInitTheme: '',
             };
+            currentOverrides.value = null;
         }
     };
 
@@ -580,5 +585,8 @@ export default defineNuxtPlugin((nuxtApp) => {
         reinitializeOverrides: (themeConfig?: Partial<AppConfig>) => {
             initializeOverrides(themeConfig);
         },
+        componentOverrides: readonly(currentOverrides),
+        getIdentifierOverride: (identifier: string): IdentifierOverride | undefined =>
+            currentOverrides.value?.identifiers?.[identifier],
     });
 });

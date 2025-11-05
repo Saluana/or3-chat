@@ -89,7 +89,8 @@ describe('ThemeModal', () => {
         'modal',
         expect.any(Object), // context ref
         expect.any(Object), // componentProps ref
-        expect.any(Object)  // state ref
+        expect.any(Object),  // state ref
+        expect.any(Object)   // identifier ref
       )
     })
 
@@ -126,7 +127,8 @@ describe('ThemeModal', () => {
         'modal',
         expect.any(Object), // context ref
         expect.any(Object), // componentProps ref
-        expect.any(Object)  // state ref
+        expect.any(Object),  // state ref
+        expect.any(Object)   // identifier ref
       )
     })
 
@@ -157,7 +159,8 @@ describe('ThemeModal', () => {
         'modal',
         expect.any(Object), // context ref
         expect.any(Object), // componentProps ref
-        expect.any(Object)  // state ref
+        expect.any(Object),  // state ref
+        expect.any(Object)   // identifier ref
       )
     })
   })

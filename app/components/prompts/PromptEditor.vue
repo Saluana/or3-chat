@@ -3,7 +3,7 @@
         class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
         <div
-            class="flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
+            class="flex items-center border-b-2 border-(--md-inverse-surface) pb-5"
         >
             <UButton
                 @click="emit('back')"
@@ -13,7 +13,7 @@
                 icon="pixelarticons:arrow-left"
                 aria-label="Back to list"
             />
-            <UInput
+            <ThemeInput
                 v-model="titleDraft"
                 placeholder="Untitled Prompt"
                 label="Prompt Title"
@@ -46,7 +46,7 @@
             >
                 <EditorContent
                     :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-normal prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
                 />
             </div>
         </div>
@@ -59,6 +59,7 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
+import ThemeInput from '~/components/theme/ThemeInput.vue';
 
 const props = defineProps<{ promptId: string }>();
 const emit = defineEmits<{ (e: 'back'): void }>();

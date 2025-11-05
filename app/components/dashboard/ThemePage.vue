@@ -17,34 +17,37 @@
                     Theme Mode
                 </h2>
                 <div class="flex gap-2 items-center">
-                    <UButton
+                    <ThemeButton
                         size="sm"
                         variant="basic"
+                        context="dashboard"
                         class="retro-chip"
                         :class="activeMode === 'light' ? 'active' : ''"
                         :disabled="activeMode === 'light'"
                         :aria-pressed="activeMode === 'light'"
                         @click="switchMode('light')"
-                        >Light</UButton
+                        >Light</ThemeButton
                     >
-                    <UButton
+                    <ThemeButton
                         size="sm"
                         variant="basic"
+                        context="dashboard"
                         class="retro-chip"
                         :class="activeMode === 'dark' ? 'active' : ''"
                         :disabled="activeMode === 'dark'"
                         :aria-pressed="activeMode === 'dark'"
                         @click="switchMode('dark')"
-                        >Dark</UButton
+                        >Dark</ThemeButton
                     >
-                    <UButton
+                    <ThemeButton
                         size="sm"
                         variant="basic"
+                        context="dashboard"
                         class="retro-chip"
                         aria-label="Reset current theme mode"
                         @click="onResetCurrent"
                         :title="'Reset ' + activeMode + ' profile'"
-                        >Reset {{ activeMode }}</UButton
+                        >Reset {{ activeMode }}</ThemeButton
                     >
                 </div>
             </div>
@@ -452,9 +455,10 @@
             </div>
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     v-for="p in presetsContent1"
                     :key="p.src"
                     @click="applyPreset('contentBg1', p.src, p.opacity)"
@@ -462,15 +466,16 @@
                     :class="isPresetActive('contentBg1', p.src)"
                 >
                     {{ p.label }}
-                </UButton>
-                <UButton
+                </ThemeButton>
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     @click="removeLayer('contentBg1')"
                 >
                     Remove
-                </UButton>
+                </ThemeButton>
                 <!-- hidden input for programmatic trigger -->
                 <input
                     :ref="(el:any)=> fileInputs.contentBg1 = el"
@@ -479,16 +484,17 @@
                     accept="image/*"
                     @change="onUpload($event, 'contentBg1')"
                 />
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     @click="toggleRepeat('contentBg1Repeat')"
                     :aria-pressed="settings.contentBg1Repeat === 'repeat'"
                 >
                     Repeat:
                     {{ settings.contentBg1Repeat === 'repeat' ? 'On' : 'Off' }}
-                </UButton>
+                </ThemeButton>
                 <label
                     class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
                 >
@@ -627,9 +633,10 @@
             </div>
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     v-for="p in presetsContent2"
                     :key="p.src"
                     @click="applyPreset('contentBg2', p.src, p.opacity)"
@@ -637,15 +644,16 @@
                     :class="isPresetActive('contentBg2', p.src)"
                 >
                     {{ p.label }}
-                </UButton>
-                <UButton
+                </ThemeButton>
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     @click="removeLayer('contentBg2')"
                 >
                     Remove
-                </UButton>
+                </ThemeButton>
                 <input
                     :ref="(el:any)=> fileInputs.contentBg2 = el"
                     type="file"
@@ -653,16 +661,17 @@
                     accept="image/*"
                     @change="onUpload($event, 'contentBg2')"
                 />
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     @click="toggleRepeat('contentBg2Repeat')"
                     :aria-pressed="settings.contentBg2Repeat === 'repeat'"
                 >
                     Repeat:
                     {{ settings.contentBg2Repeat === 'repeat' ? 'On' : 'Off' }}
-                </UButton>
+                </ThemeButton>
                 <label
                     class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
                 >
@@ -800,9 +809,10 @@
             </div>
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     v-for="p in presetsSidebar"
                     :key="p.src"
                     @click="applyPreset('sidebarBg', p.src, p.opacity)"
@@ -810,15 +820,16 @@
                     :class="isPresetActive('sidebarBg', p.src)"
                 >
                     {{ p.label }}
-                </UButton>
-                <UButton
+                </ThemeButton>
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     @click="removeLayer('sidebarBg')"
                 >
                     Remove
-                </UButton>
+                </ThemeButton>
                 <input
                     :ref="(el:any)=> fileInputs.sidebarBg = el"
                     type="file"
@@ -826,16 +837,17 @@
                     accept="image/*"
                     @change="onUpload($event, 'sidebarBg')"
                 />
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     @click="toggleRepeat('sidebarRepeat')"
                     :aria-pressed="settings.sidebarRepeat === 'repeat'"
                 >
                     Repeat:
                     {{ settings.sidebarRepeat === 'repeat' ? 'On' : 'Off' }}
-                </UButton>
+                </ThemeButton>
                 <label
                     class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
                 >
@@ -959,21 +971,23 @@
             </h2>
             <div class="flex items-center gap-3 text-xs">
                 <span class="opacity-70">Gradient:</span>
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     :disabled="settings.showHeaderGradient"
                     @click="set({ showHeaderGradient: true })"
-                    >Default</UButton
+                    >Default</ThemeButton
                 >
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     :disabled="!settings.showHeaderGradient"
                     @click="set({ showHeaderGradient: false })"
-                    >Remove</UButton
+                    >Remove</ThemeButton
                 >
                 <span class="opacity-60"
                     >Current:
@@ -1038,21 +1052,23 @@
             </h2>
             <div class="flex items-center gap-3 text-xs">
                 <span class="opacity-70">Gradient:</span>
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     :disabled="settings.showBottomBarGradient"
                     @click="set({ showBottomBarGradient: true })"
-                    >Default</UButton
+                    >Default</ThemeButton
                 >
-                <UButton
+                <ThemeButton
                     size="sm"
                     variant="basic"
+                    context="dashboard"
                     class="retro-chip"
                     :disabled="!settings.showBottomBarGradient"
                     @click="set({ showBottomBarGradient: false })"
-                    >Remove</UButton
+                    >Remove</ThemeButton
                 >
                 <span class="opacity-60"
                     >Current:
@@ -1115,14 +1131,15 @@
             >
                 Reset
             </h2>
-            <UButton
+            <ThemeButton
                 size="sm"
                 variant="basic"
+                context="dashboard"
                 class="retro-btn px-3 py-2 text-xs"
                 @click="onResetAll"
             >
                 Reset All
-            </UButton>
+            </ThemeButton>
         </section>
     </div>
 </template>
@@ -1135,6 +1152,7 @@ import { getFileBlob } from '~/db/files';
 import { useThemeSettings } from '~/core/theme/useThemeSettings';
 import type { ThemeSettings } from '~/core/theme/theme-types';
 import type { Ref } from 'vue';
+import ThemeButton from '~/components/theme/ThemeButton.vue';
 
 const themeApi = useThemeSettings();
 const settings = themeApi.settings as Ref<ThemeSettings>; // active mode settings

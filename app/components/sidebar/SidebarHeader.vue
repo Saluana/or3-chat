@@ -29,11 +29,12 @@
         </div>
 
         <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
-            <UButton
+            <ThemeButton
                 size="xs"
                 :square="true"
                 color="neutral"
                 variant="ghost"
+                context="sidebar"
                 :class="'retro-btn'"
                 @click="onToggle"
                 :ui="{ base: 'retro-btn' }"
@@ -41,13 +42,14 @@
                 :title="toggleAria"
             >
                 <UIcon :name="toggleIcon" class="w-5 h-5" />
-            </UButton>
+            </ThemeButton>
         </slot>
     </div>
 </template>
 
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue';
+import ThemeButton from '~/components/theme/ThemeButton.vue';
 
 const props = defineProps({
     collapsed: { type: Boolean, required: true },

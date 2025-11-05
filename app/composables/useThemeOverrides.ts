@@ -17,14 +17,19 @@ export function useThemeOverrides<TProps = Record<string, unknown>>(
   componentType: ComponentType,
   context: ContextSelector | Ref<ContextSelector> = 'global',
   componentProps: MaybeRef<Partial<TProps>> = {},
-  state: Ref<ComponentState> = ref<ComponentState>('default')
+  state: Ref<ComponentState> = ref<ComponentState>('default'),
+  identifier?: MaybeRef<string | undefined>
 ) {
   const { $theme } = useNuxtApp() as unknown as { $theme: ThemePlugin };
   const element = ref<HTMLElement | null>(null);
   
   // Get component element on mount (runs once during setup)
   onMounted(() => {
-    element.value = getCurrentInstance()?.proxy?.$el as HTMLElement;
+    const el = getCurrentInstance()?.proxy?.$el;
+    // Ensure we have a proper HTMLElement
+    if (el && typeof el === 'object' && 'closest' in el) {
+      element.value = el as HTMLElement;
+    }
   });
   
   // Resolve context value (handles both static and reactive context)
@@ -36,15 +41,24 @@ export function useThemeOverrides<TProps = Record<string, unknown>>(
   
   // Resolve component props reactively
   const resolvedProps = computed(() => toValue(componentProps));
+  const resolvedIdentifier = computed(() =>
+    identifier ? toValue(identifier) ?? undefined : undefined
+  );
   
   // Build override context with actual component props and reactive state
-  const overrideContext = computed<OverrideContext>(() => ({
-    mode: $theme.current.value as any,
-    theme: $theme.activeTheme.value,
-    element: element.value || undefined,
-    componentProps: resolvedProps.value as Record<string, unknown>,
-    state: state.value,
-  }));
+  const overrideContext = computed<OverrideContext>(() => {
+    // During SSR, use a simplified context without element detection
+    const isSSR = typeof window === 'undefined';
+    
+    return {
+      mode: $theme.current.value as any,
+      theme: $theme.activeTheme.value,
+      element: isSSR ? undefined : (element.value || undefined),
+      componentProps: resolvedProps.value as Record<string, unknown>,
+      state: state.value,
+      identifier: resolvedIdentifier.value,
+    };
+  });
   
   // Resolve overrides
   const overrides = computed(() => {
@@ -89,6 +103,7 @@ export function useThemeOverrides<TProps = Record<string, unknown>>(
           mode: overrideContext.value.mode,
           componentProps: overrideContext.value.componentProps,
           state: overrideContext.value.state,
+          identifier: overrideContext.value.identifier,
         };
       } catch (error) {
         return {
@@ -125,11 +140,23 @@ export function useAutoContext(): Ref<ContextSelector> {
   const element = ref<HTMLElement | null>(null);
   
   onMounted(() => {
-    element.value = getCurrentInstance()?.proxy?.$el as HTMLElement;
+    const el = getCurrentInstance()?.proxy?.$el;
+    // Ensure we have a proper HTMLElement with closest method
+    if (el && typeof el === 'object' && 'closest' in el) {
+      element.value = el as HTMLElement;
+    }
   });
   
   const context = computed<ContextSelector>(() => {
+    // During SSR, always return 'global' to avoid hydration mismatches
+    if (typeof window === 'undefined') {
+      return 'global';
+    }
+    
     if (!element.value) return 'global';
+    
+    // Double-check that element has closest method
+    if (!('closest' in element.value)) return 'global';
     
     // Check for known context IDs
     if (element.value.closest('#app-chat-container')) return 'chat';
@@ -205,10 +232,11 @@ function deepMerge(
 export function useThemeOverridesAuto<TProps = Record<string, unknown>>(
   componentType: ComponentType,
   componentProps: MaybeRef<Partial<TProps>> = {},
-  state: Ref<ComponentState> = ref<ComponentState>('default')
+  state: Ref<ComponentState> = ref<ComponentState>('default'),
+  identifier?: MaybeRef<string | undefined>
 ) {
   const context = useAutoContext();
   
   // Delegate to useThemeOverrides with reactive context and props - no dual paths!
-  return useThemeOverrides<TProps>(componentType, context, componentProps, state);
+  return useThemeOverrides<TProps>(componentType, context, componentProps, state, identifier);
 }

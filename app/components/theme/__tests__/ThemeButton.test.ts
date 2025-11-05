@@ -92,9 +92,10 @@ describe('ThemeButton', () => {
 
       expect(mockUseThemeOverrides).toHaveBeenCalledWith(
         'button',
-        expect.any(Object),
+        expect.any(Object), // computed context
         expect.any(Object), // componentProps
-        expect.any(Object)  // state
+        expect.any(Object),  // state
+        expect.any(Object)   // identifier
       )
     })
 
@@ -112,19 +113,21 @@ describe('ThemeButton', () => {
   })
 
   describe('Context Detection', () => {
-    it('should use auto-context detection', () => {
-      mockUseAutoContext.mockReturnValue(ref('chat'))
+    it('should use explicit context when provided', () => {
+      mockUseAutoContext.mockReturnValue(ref('global'))
       
-      const wrapper = createWrapper({}, {
+      const wrapper = createWrapper({ context: 'chat' }, {
         default: 'Chat Button'
       })
 
+      // Note: useAutoContext is always called for reactivity, but explicit context takes precedence
       expect(mockUseAutoContext).toHaveBeenCalled()
       expect(mockUseThemeOverrides).toHaveBeenCalledWith(
         'button',
-        expect.any(Object), // context ref
+        expect.any(Object), // computed context (explicit string wrapped)
         expect.any(Object), // componentProps ref
-        expect.any(Object)  // state ref
+        expect.any(Object),  // state ref
+        expect.any(Object)   // identifier ref
       )
     })
 
@@ -154,9 +157,10 @@ describe('ThemeButton', () => {
 
       expect(mockUseThemeOverrides).toHaveBeenCalledWith(
         'button',
-        expect.any(Object), // context ref
+        expect.any(Object), // computed context from mocked useAutoContext
         expect.any(Object), // componentProps ref
-        expect.any(Object)  // state ref
+        expect.any(Object),  // state ref
+        expect.any(Object)   // identifier ref
       )
     })
   })

@@ -363,6 +363,39 @@ describe('Override Validator', () => {
             expect(result.errors).toHaveLength(0);
             expect(result.warnings).toHaveLength(0);
         });
+
+        it('should validate identifier overrides', () => {
+            const config = {
+                identifiers: {
+                    'chat.send': {
+                        variant: 'neonOutline',
+                        size: 'sm',
+                        class: 'text-pink-500',
+                    },
+                },
+            };
+
+            const result = validateComponentOverrides(config);
+
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should reject invalid identifier overrides', () => {
+            const config = {
+                identifiers: {
+                    'chat.send': 'invalid',
+                },
+            };
+
+            const result = validateComponentOverrides(config);
+
+            expect(result.valid).toBe(false);
+            expect(result.errors[0]).toMatchObject({
+                path: 'componentOverrides.identifiers.chat.send',
+                message: 'identifier "chat.send" override must be an object',
+            });
+        });
     });
 
     describe('logValidationErrors', () => {

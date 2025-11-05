@@ -15,7 +15,7 @@
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
+                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto wrap-break-word min-h-4 md:min-h-12"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
@@ -42,11 +42,11 @@
                 >
                     <!-- Attachment Button -->
                     <div class="relative shrink-0">
-                        <UButton
+                        <ThemeButton
+                            identifier="chat.attach"
                             @click="triggerFileInput"
                             :square="true"
                             size="sm"
-                            color="info"
                             class="retro-btn flex items-center justify-center"
                             type="button"
                             aria-label="Add attachments"
@@ -56,17 +56,17 @@
                             }"
                         >
                             <UIcon name="i-lucide:plus" class="w-4 h-4" />
-                        </UButton>
+                        </ThemeButton>
                     </div>
 
                     <!-- Settings Button (stub) -->
                     <div class="relative shrink-0">
                         <UPopover id="chat-input-settings-popover">
-                            <UButton
+                            <ThemeButton
+                                identifier="chat.settings"
                                 label="Open"
                                 :square="true"
                                 size="sm"
-                                color="info"
                                 class="retro-btn flex items-center justify-center"
                                 type="button"
                                 aria-label="Settings"
@@ -76,7 +76,7 @@
                                     name="pixelarticons:sliders"
                                     class="w-4 h-4"
                                 />
-                            </UButton>
+                            </ThemeButton>
                             <template #content>
                                 <div class="flex flex-col w-[320px]">
                                     <!-- Model Selector extracted -->
@@ -227,12 +227,13 @@
                         :delay-duration="0"
                         :text="entry.action.tooltip || entry.action.label"
                     >
-                        <UButton
+                        <ThemeButton
                             size="sm"
                             variant="ghost"
                             :color="(entry.action.color || 'neutral') as any"
                             :square="!entry.action.label"
                             :disabled="entry.disabled"
+                            context="chat"
                             class="retro-btn pointer-events-auto flex items-center gap-1"
                             :ui="{ base: 'retro-btn' }"
                             :aria-label="
@@ -249,7 +250,7 @@
                             >
                                 {{ entry.action.label }}
                             </span>
-                        </UButton>
+                        </ThemeButton>
                     </UTooltip>
                 </div>
 
@@ -264,8 +265,9 @@
 
                 <!-- Send / Stop Button -->
                 <div>
-                    <UButton
+                    <ThemeButton
                         v-if="!props.streaming"
+                        :identifier="'chat.send.idle'"
                         @click="handleSend"
                         :disabled="
                             loading ||
@@ -273,7 +275,6 @@
                         "
                         :square="true"
                         size="sm"
-                        color="primary"
                         class="retro-btn disabled:opacity-40 flex items-center justify-center"
                         type="button"
                         aria-label="Send message"
@@ -282,19 +283,19 @@
                         }"
                     >
                         <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
-                    </UButton>
-                    <UButton
+                    </ThemeButton>
+                    <ThemeButton
                         v-else
+                        identifier="chat.send.streaming"
                         @click="emit('stop-stream')"
                         :square="true"
                         size="sm"
-                        color="error"
                         class="retro-btn flex items-center justify-center"
                         type="button"
                         aria-label="Stop generation"
                     >
                         <UIcon name="pixelarticons:pause" class="w-4 h-4" />
-                    </UButton>
+                    </ThemeButton>
                 </div>
             </div>
         </div>
@@ -347,7 +348,7 @@
                         >PDF</span
                     >
                     <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        class="text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
                         :title="pdf.name"
                         >{{ pdf.name }}</span
                     >
@@ -375,7 +376,7 @@
                         >TXT</span
                     >
                     <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        class="text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
                         :title="block.previewFull"
                     >
                         {{ block.preview }}
@@ -437,6 +438,7 @@ import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { computed } from 'vue';
+import ThemeButton from '~/components/theme/ThemeButton.vue';
 import { isMobile, state } from '~/state/global';
 import { useToast, useUserApiKey, useOpenRouterAuth } from '#imports';
 import {

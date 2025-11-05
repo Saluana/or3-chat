@@ -141,21 +141,25 @@
                 :focus-delay="120"
             />
             <div class="flex w-full justify-end gap-2 mt-2">
-                <UButton
+                <ThemeButton
                     size="sm"
                     color="success"
                     class="retro-btn"
+                    context="chat"
                     @click="saveEdit"
                     :loading="saving"
-                    >Save</UButton
                 >
-                <UButton
+                    Save
+                </ThemeButton>
+                <ThemeButton
                     size="sm"
                     color="error"
                     class="retro-btn"
+                    context="chat"
                     @click="wrappedCancelEdit"
-                    >Cancel</UButton
                 >
+                    Cancel
+                </ThemeButton>
             </div>
         </div>
 
@@ -180,13 +184,14 @@
                 class="rounded-[3px]"
             >
                 <UTooltip :delay-duration="0" text="Copy" :teleport="true">
-                    <UButton
+                    <ThemeButton
                         @click="copyMessage"
                         icon="pixelarticons:copy"
                         color="info"
                         size="sm"
+                        context="chat"
                         class="text-(--app-msg-action-text) flex items-center justify-center"
-                    ></UButton>
+                    />
                 </UTooltip>
                 <UTooltip
                     :delay-duration="0"
@@ -194,31 +199,34 @@
                     :popper="{ strategy: 'fixed' }"
                     :teleport="true"
                 >
-                    <UButton
+                    <ThemeButton
                         icon="pixelarticons:reload"
                         color="info"
                         size="sm"
+                        context="chat"
                         class="text-(--app-msg-action-text) flex items-center justify-center"
                         @click="onRetry"
-                    ></UButton>
+                    />
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Branch" :teleport="true">
-                    <UButton
+                    <ThemeButton
                         @click="onBranch"
                         icon="pixelarticons:git-branch"
                         color="info"
                         size="sm"
+                        context="chat"
                         class="text-(--app-msg-action-text) flex items-center justify-center"
-                    ></UButton>
+                    />
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Edit" :teleport="true">
-                    <UButton
+                    <ThemeButton
                         icon="pixelarticons:edit-box"
                         color="info"
                         size="sm"
+                        context="chat"
                         class="text-(--app-msg-action-text) flex items-center justify-center"
                         @click="wrappedBeginEdit"
-                    ></UButton>
+                    />
                 </UTooltip>
                 <!-- Dynamically registered plugin actions -->
                 <template v-for="action in extraActions" :key="action.id">
@@ -227,13 +235,14 @@
                         :text="action.tooltip"
                         :teleport="true"
                     >
-                        <UButton
+                        <ThemeButton
                             :icon="action.icon"
                             color="info"
                             size="sm"
+                            context="chat"
                             class="text-(--app-msg-action-text) flex items-center justify-center"
                             @click="() => runExtraAction(action)"
-                        ></UButton>
+                        />
                     </UTooltip>
                 </template>
             </UButtonGroup>
@@ -261,6 +270,7 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafFn } from '@vueuse/core';
+import ThemeButton from '~/components/theme/ThemeButton.vue';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };

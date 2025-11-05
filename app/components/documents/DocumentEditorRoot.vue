@@ -5,7 +5,7 @@
         <div
             class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
         >
-            <UInput
+            <ThemeInput
                 v-model="titleDraft"
                 placeholder="Untitled"
                 size="md"
@@ -22,7 +22,7 @@
             </div>
         </div>
         <div
-            class="flex flex-row items-stretch border-b-2 border-[var(--md-inverse-surface)] px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
+            class="flex flex-row items-stretch border-b-2 border-(--md-inverse-surface) px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
         >
             <ToolbarButton
                 icon="carbon:text-bold"
@@ -104,7 +104,7 @@
             >
                 <div
                     ref="editorMountEl"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-normal prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
                 ></div>
             </div>
         </div>
@@ -122,6 +122,7 @@ import {
     type Ref,
 } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
+import ThemeInput from '~/components/theme/ThemeInput.vue';
 import {
     useDocumentState,
     setDocumentContent,

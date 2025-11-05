@@ -68,11 +68,91 @@ export function validateComponentOverrides(
     validateStateOverrides(config.states, errors, warnings);
   }
 
+  // Validate identifier overrides
+  if (config.identifiers !== undefined) {
+    validateIdentifierOverrides(config.identifiers, errors, warnings);
+  }
+
   return {
     valid: errors.length === 0,
     errors,
     warnings,
   };
+}
+
+/**
+ * Validates identifier override configuration
+ */
+function validateIdentifierOverrides(
+  identifiers: unknown,
+  errors: ValidationError[],
+  warnings: ValidationError[],
+): void {
+  if (typeof identifiers !== 'object' || identifiers === null) {
+    errors.push({
+      path: 'componentOverrides.identifiers',
+      message: 'identifier overrides must be an object',
+      severity: 'error',
+    });
+    return;
+  }
+
+  const identifiersObj = identifiers as Record<string, unknown>;
+
+  for (const [identifier, config] of Object.entries(identifiersObj)) {
+    const identifierPath = `componentOverrides.identifiers.${identifier}`;
+
+    if (typeof config !== 'object' || config === null) {
+      errors.push({
+        path: identifierPath,
+        message: `identifier "${identifier}" override must be an object`,
+        severity: 'error',
+      });
+      continue;
+    }
+
+    const cfg = config as Record<string, unknown>;
+
+    if (cfg.variant !== undefined && typeof cfg.variant !== 'string') {
+      errors.push({
+        path: `${identifierPath}.variant`,
+        message: 'variant must be a string',
+        severity: 'error',
+      });
+    }
+
+    if (cfg.size !== undefined && typeof cfg.size !== 'string') {
+      errors.push({
+        path: `${identifierPath}.size`,
+        message: 'size must be a string',
+        severity: 'error',
+      });
+    }
+
+    if (cfg.color !== undefined && typeof cfg.color !== 'string') {
+      errors.push({
+        path: `${identifierPath}.color`,
+        message: 'color must be a string',
+        severity: 'error',
+      });
+    }
+
+    if (cfg.class !== undefined && typeof cfg.class !== 'string') {
+      errors.push({
+        path: `${identifierPath}.class`,
+        message: 'class must be a string',
+        severity: 'error',
+      });
+    }
+
+    if (cfg.ui !== undefined && (typeof cfg.ui !== 'object' || cfg.ui === null)) {
+      errors.push({
+        path: `${identifierPath}.ui`,
+        message: 'ui must be an object when provided',
+        severity: 'error',
+      });
+    }
+  }
 }
 
 /**
