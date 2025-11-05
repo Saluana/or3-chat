@@ -1,5 +1,8 @@
 import type { ButtonProps, InputProps, ModalProps, CardProps } from '@nuxt/ui';
 
+// Re-export UI component types for use in other modules
+export type { ButtonProps, InputProps, ModalProps, CardProps } from '@nuxt/ui';
+
 /**
  * Context selector for targeting specific UI areas
  */

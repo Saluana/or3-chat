@@ -59,7 +59,7 @@ describe('PaneResizeHandle', () => {
         });
 
         expect(wrapper.emitted('resizeStart')).toBeTruthy();
-        expect(wrapper.emitted('resizeStart')![0][1]).toBe(0); // paneIndex
+        expect(wrapper.emitted('resizeStart')?.[0]?.[1]).toBe(0); // paneIndex
     });
 
     it('emits resizeKeydown on keyboard event', async () => {
@@ -75,7 +75,7 @@ describe('PaneResizeHandle', () => {
         await handle.trigger('keydown', { key: 'ArrowRight' });
 
         expect(wrapper.emitted('resizeKeydown')).toBeTruthy();
-        expect(wrapper.emitted('resizeKeydown')![0][1]).toBe(1); // paneIndex
+        expect(wrapper.emitted('resizeKeydown')?.[0]?.[1]).toBe(1); // paneIndex
     });
 
     it('has correct ARIA attributes', () => {

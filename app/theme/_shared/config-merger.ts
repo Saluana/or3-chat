@@ -6,6 +6,7 @@
  */
 
 import { defu } from 'defu';
+import type { ComponentOverrides } from './override-types';
 
 // Type definitions for safe merging
 export interface AppConfig {
@@ -25,6 +26,7 @@ export interface AppConfig {
     maxPerGroup?: number;
     maxContextBytes?: number;
   };
+  componentOverrides?: ComponentOverrides;
   [key: string]: unknown;
 }
 
@@ -69,12 +71,19 @@ export function validateThemeConfig(config: unknown): config is Partial<AppConfi
     return false;
   }
   
+  // Type assertion to access properties safely
+  const cfg = config as Record<string, unknown>;
+  
   // Basic structure validation - can be extended as needed
-  if (config.ui && typeof config.ui !== 'object') {
+  if (cfg.ui && typeof cfg.ui !== 'object') {
     return false;
   }
   
-  if (config.mentions && typeof config.mentions !== 'object') {
+  if (cfg.mentions && typeof cfg.mentions !== 'object') {
+    return false;
+  }
+  
+  if (cfg.componentOverrides && typeof cfg.componentOverrides !== 'object') {
     return false;
   }
   

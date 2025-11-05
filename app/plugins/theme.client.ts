@@ -1,6 +1,21 @@
 import { ref, readonly } from 'vue';
 import sharedBaseCssUrl from '~/theme/_shared/base.css?url';
 
+// Import override system functions
+import {
+    getOverrideResolver,
+    setOverrideResolver,
+    clearOverrideResolver,
+    type ComponentOverrides,
+    type OverrideResolver,
+    type OverrideRule
+} from '~/theme/_shared/override-resolver';
+import {
+    validateComponentOverrides,
+    logValidationErrors,
+    type ValidationResult
+} from '~/theme/_shared/override-validator';
+
 // Simple LRU cache implementation
 class LRUCache<K, V> {
     private cache = new Map<K, V>();
@@ -55,6 +70,7 @@ import {
     type ThemeWarning,
     type ThemeLoadResult,
 } from '~/theme/_shared/theme-loader';
+import type { AppConfig } from '~/theme/_shared/config-merger';
 
 export default defineNuxtPlugin((nuxtApp) => {
     const ensureBaseCssInjected = () => {
@@ -91,6 +107,93 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     // LRU cache for loaded themes (size 3 as requested)
     const themeCache = new LRUCache<string, ThemeLoadResult>(3);
+
+    // Override system state
+    const overrideStats = ref({
+        resolverLoaded: false,
+        rulesCount: 0,
+        contextsCount: 0,
+        lastInitTheme: '',
+    });
+
+    // Initialize override system with theme config
+    const initializeOverrides = (themeConfig?: Partial<AppConfig>) => {
+        try {
+            // Clear any existing resolver
+            clearOverrideResolver();
+            overrideStats.value.resolverLoaded = false;
+
+            if (!themeConfig?.componentOverrides) {
+                console.log('[theme] No component overrides found in theme config');
+                return;
+            }
+
+            // 6.8 Integrate validation into theme loading
+            const validation = validateComponentOverrides(themeConfig.componentOverrides);
+            
+            // 6.9 Log validation errors in console
+            if (!validation.valid || validation.warnings.length > 0) {
+                logValidationErrors(validation, activeTheme.value);
+            }
+
+            // 6.10 Fall back gracefully on validation failure
+            if (!validation.valid) {
+                console.error(`[theme] Skipping override initialization due to validation errors in theme "${activeTheme.value}"`);
+                return;
+            }
+
+            // Set up the resolver (validation passed)
+            setOverrideResolver(themeConfig.componentOverrides);
+            
+            // Calculate stats
+            const resolver = getOverrideResolver();
+            if (resolver) {
+                const overrides = themeConfig.componentOverrides;
+                
+                // Helper function to count rules in a bucket
+                const countRules = (bucket: Record<string, OverrideRule[] | undefined> = {}) =>
+                    Object.values(bucket).reduce(
+                        (total, rules) => total + (Array.isArray(rules) ? rules.length : 0),
+                        0,
+                    );
+
+                // Count all rules across global, contexts, and states
+                const rulesCount =
+                    countRules(overrides.global) +
+                    Object.values(overrides.contexts ?? {}).reduce(
+                        (total, ctx) => total + countRules(ctx ?? {}),
+                        0,
+                    ) +
+                    Object.values(overrides.states ?? {}).reduce(
+                        (total, stateBucket) => total + countRules(stateBucket ?? {}),
+                        0,
+                    );
+                
+                const contextsCount = Object.keys(overrides.contexts || {}).length;
+                
+                overrideStats.value = {
+                    resolverLoaded: true,
+                    rulesCount,
+                    contextsCount,
+                    lastInitTheme: activeTheme.value,
+                };
+
+                console.log(
+                    `[theme] Initialized overrides for "${activeTheme.value}":`,
+                    `${rulesCount} global rules, ${contextsCount} contexts`
+                );
+            }
+        } catch (err) {
+            console.error('[theme] Failed to initialize overrides:', err);
+            // Clear stats on error
+            overrideStats.value = {
+                resolverLoaded: false,
+                rulesCount: 0,
+                contextsCount: 0,
+                lastInitTheme: '',
+            };
+        }
+    };
 
     const getSystemPref = () =>
         window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -169,10 +272,17 @@ export default defineNuxtPlugin((nuxtApp) => {
             errors.value = [];
             warnings.value = [];
 
+            // Clear override resolver before loading new theme
+            clearOverrideResolver();
+            overrideStats.value.resolverLoaded = false;
+
             // Check cache first
             const cached = themeCache.get(themeName);
             if (cached) {
                 console.log(`[theme] Loaded "${themeName}" from cache`);
+
+                // Initialize overrides from cached theme config
+                initializeOverrides(cached.config);
 
                 // Separate critical errors from warnings
                 const criticalErrors = cached.errors.filter(
@@ -222,6 +332,9 @@ export default defineNuxtPlugin((nuxtApp) => {
             console.log(
                 `[theme] Loaded "${themeName}" from disk and cached (cache size: ${themeCache.size()})`
             );
+
+            // Initialize overrides from loaded theme config
+            initializeOverrides(result.config);
 
             // Separate critical errors from warnings
             const criticalErrors = result.errors.filter(
@@ -460,6 +573,12 @@ export default defineNuxtPlugin((nuxtApp) => {
                 maxSize: 3,
                 description: 'LRU cache for loaded themes',
             };
+        },
+
+        // Override system API
+        overrides: readonly(overrideStats),
+        reinitializeOverrides: (themeConfig?: Partial<AppConfig>) => {
+            initializeOverrides(themeConfig);
         },
     });
 });

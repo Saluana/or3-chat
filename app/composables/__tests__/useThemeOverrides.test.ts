@@ -152,16 +152,16 @@ describe('useThemeOverrides', () => {
       const props = ref({ variant: 'solid' });
       const { overrides } = useThemeOverrides('button', 'global', props);
       
-      // Initial props
+      // Initial props - component props win, so variant stays 'solid'
       const initialOverrides = overrides.value;
       expect(initialOverrides.variant).toBe('solid');
       
-      // Change props
+      // Change props - component props still win
       props.value = { variant: 'outline' };
       
-      // Should still resolve (props affect cache key)
+      // Should reflect new component props (Props Win principle)
       const stillOverrides = overrides.value;
-      expect(stillOverrides.variant).toBe('solid'); // Still uses override config
+      expect(stillOverrides.variant).toBe('outline'); // Component props win
     });
 
     it('should accept computed props', () => {
@@ -173,11 +173,13 @@ describe('useThemeOverrides', () => {
       
       const { overrides } = useThemeOverrides('button', 'global', computedProps);
       
+      // Initial computed props win
       expect((overrides.value as Record<string, unknown>).variant).toBe('solid');
       
       baseProps.value.disabled = true;
       
-      expect((overrides.value as Record<string, unknown>).variant).toBe('solid'); // Still uses override config
+      // Updated computed props win (Props Win principle)
+      expect((overrides.value as Record<string, unknown>).variant).toBe('ghost');
     });
   });
 
@@ -244,9 +246,11 @@ describe('useThemeOverrides', () => {
       
       const { overrides } = useThemeOverridesAuto('button', props, state);
       
-      // Should use hover state overrides with global context
+      // Should use hover state overrides, but component props win (Props Win principle)
       const hoverOverrides = overrides.value;
-      expect(hoverOverrides.variant).toBe('ghost');
+      expect(hoverOverrides.variant).toBe('solid'); // Component props win over hover state override
+      expect(hoverOverrides.size).toBe('lg'); // Component props preserved
+      expect((hoverOverrides as Record<string, unknown>).class).toBe('hover-btn global-btn'); // Classes concatenated from hover + global
     });
   });
 
@@ -268,7 +272,7 @@ describe('useThemeOverrides', () => {
       const variant: string | undefined = overridesObj.variant;
       const size: string | undefined = overridesObj.size;
       
-      expect(variant).toBe('solid'); // Override takes precedence
+      expect(variant).toBe('outline'); // Component props win (Props Win principle)
       expect(size).toBe('lg'); // Component prop preserved
     });
   });

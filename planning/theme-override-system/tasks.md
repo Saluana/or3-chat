@@ -129,40 +129,40 @@ All subtasks for Task 4 have been completed:
 
 ### 5. Enhance Theme Plugin
 
-- [ ] 5.1 Modify `app/plugins/theme.client.ts` to import override functions
-- [ ] 5.2 Add `initializeOverrides()` function to setup resolver
-- [ ] 5.3 Call `clearOverrideResolver()` before loading new theme
-- [ ] 5.4 Extract `componentOverrides` from theme config
-- [ ] 5.5 Call `setOverrideResolver()` when theme loads
-- [ ] 5.6 Update `switchTheme()` to reinitialize overrides
-- [ ] 5.7 Add error handling for invalid override configs
-- [ ] 5.8 Log override initialization in development mode
-- [ ] 5.9 Expose override stats on `$theme` for debugging
+- [x] 5.1 Modify `app/plugins/theme.client.ts` to import override functions
+- [x] 5.2 Add `initializeOverrides()` function to setup resolver
+- [x] 5.3 Call `clearOverrideResolver()` before loading new theme
+- [x] 5.4 Extract `componentOverrides` from theme config
+- [x] 5.5 Call `setOverrideResolver()` when theme loads
+- [x] 5.6 Update `switchTheme()` to reinitialize overrides
+- [x] 5.7 Add error handling for invalid override configs
+- [x] 5.8 Log override initialization in development mode
+- [x] 5.9 Expose override stats on `$theme` for debugging
 - **Requirements**: 6.1, 7.3
 
 ### 6. Add Validation Logic
 
-- [ ] 6.1 Create `app/theme/_shared/override-validator.ts`
-- [ ] 6.2 Implement `validateComponentOverrides()` function
-- [ ] 6.3 Check override config structure
-- [ ] 6.4 Validate global overrides are arrays
-- [ ] 6.5 Validate context overrides are objects
-- [ ] 6.6 Validate rule structure (component, props, etc.)
-- [ ] 6.7 Return validation errors with descriptive messages
-- [ ] 6.8 Integrate validation into theme loading
-- [ ] 6.9 Log validation errors in console
-- [ ] 6.10 Fall back gracefully on validation failure
+- [x] 6.1 Create `app/theme/_shared/override-validator.ts`
+- [x] 6.2 Implement `validateComponentOverrides()` function
+- [x] 6.3 Check override config structure
+- [x] 6.4 Validate global overrides are arrays
+- [x] 6.5 Validate context overrides are objects
+- [x] 6.6 Validate rule structure (component, props, etc.)
+- [x] 6.7 Return validation errors with descriptive messages
+- [x] 6.8 Integrate validation into theme loading
+- [x] 6.9 Log validation errors in console
+- [x] 6.10 Fall back gracefully on validation failure
 - **Requirements**: 4.2, 8.2
 
 ### 7. Plugin Tests
 
-- [ ] 7.1 Create `app/plugins/__tests__/theme-overrides.test.ts`
-- [ ] 7.2 Test plugin initializes resolver on theme load
-- [ ] 7.3 Test plugin clears resolver on theme switch
-- [ ] 7.4 Test plugin handles themes without overrides
-- [ ] 7.5 Test plugin validates override config
-- [ ] 7.6 Test plugin logs errors for invalid config
-- [ ] 7.7 Mock theme loader and verify resolver calls
+- [x] 7.1 Create `app/plugins/__tests__/theme-overrides.test.ts`
+- [x] 7.2 Test plugin initializes resolver on theme load
+- [x] 7.3 Test plugin clears resolver on theme switch
+- [x] 7.4 Test plugin handles themes without overrides
+- [x] 7.5 Test plugin validates override config
+- [x] 7.6 Test plugin logs errors for invalid config
+- [x] 7.7 Mock theme loader and verify resolver calls
 - **Requirements**: Testing requirements
 
 ---

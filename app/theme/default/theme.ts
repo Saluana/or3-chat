@@ -30,4 +30,38 @@ export default defineAppConfig({
             },
         },
     },
+    // Component overrides for theme system
+    componentOverrides: {
+        global: {
+            button: [
+                {
+                    component: 'button',
+                    props: { variant: 'solid' as const, class: 'theme-default-btn' },
+                    priority: 1,
+                },
+            ],
+        },
+        contexts: {
+            chat: {
+                button: [
+                    {
+                        component: 'button',
+                        props: { variant: 'outline' as const, class: 'chat-btn' },
+                        priority: 10,
+                    },
+                ],
+            },
+        },
+        states: {
+            hover: {
+                button: [
+                    {
+                        component: 'button',
+                        props: { variant: 'ghost' as const, class: 'hover-btn' },
+                        priority: 5,
+                    },
+                ],
+            },
+        },
+    },
 });

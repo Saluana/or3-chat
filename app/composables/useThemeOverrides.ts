@@ -1,4 +1,4 @@
-import { ref, computed, readonly, onMounted, getCurrentInstance, type Ref, type MaybeRef } from 'vue';
+import { ref, computed, readonly, onMounted, getCurrentInstance, watch, type Ref, type MaybeRef } from 'vue';
 import { useNuxtApp } from '#app';
 import type { ComponentType, ContextSelector, OverrideContext, ComponentState } from '~/theme/_shared/override-types';
 import { getOverrideResolver } from '~/theme/_shared/override-resolver';

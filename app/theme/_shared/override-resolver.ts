@@ -4,8 +4,15 @@ import type {
   ResolvedOverride, 
   OverrideContext,
   ComponentType,
-  ContextSelector 
+  ContextSelector,
+  ButtonProps, 
+  InputProps, 
+  ModalProps, 
+  CardProps 
 } from './override-types';
+
+// Re-export types for use in other modules
+export type { ComponentOverrides, OverrideRule, ButtonProps, InputProps, ModalProps, CardProps };
 
 /**
  * Simple LRU cache implementation
@@ -90,8 +97,8 @@ export class OverrideResolver {
     // Merge props from all rules
     const overrideProps = this.mergeProps(rules);
     
-    // Start with component props, then apply overrides
-    const props = { ...overrideContext.componentProps, ...overrideProps };
+    // Props Win: Start with theme overrides, then component props (component props win)
+    const props = { ...overrideProps, ...overrideContext.componentProps };
     
     // Cache result
     const result: ResolvedOverride = {
