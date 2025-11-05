@@ -1,4 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
 
 export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
@@ -211,6 +212,13 @@ export default defineNuxtConfig({
         ],
     },
     vite: {
+        plugins: [
+            themeCompilerPlugin({
+                failOnError: true,
+                showWarnings: true,
+                generateTypes: true,
+            }),
+        ],
         worker: {
             format: 'es',
         },
