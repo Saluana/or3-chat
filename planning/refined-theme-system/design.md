@@ -63,6 +63,7 @@ export interface ThemeDefinition {
         surface: string;
         surfaceVariant?: string;
         onSurface?: string;
+        inverseSurface?: string;
 
         outline?: string;
 
@@ -88,19 +89,33 @@ export interface ThemeDefinition {
  * Uses proper Nuxt UI 3 type definitions where available.
  */
 export interface OverrideProps {
-    /** Component variant (e.g., 'solid', 'outline', 'ghost', 'soft', 'link') */
+    /** Component variant (e.g., 'solid', 'outline', 'ghost', 'soft', 'link')
+     * For Nuxt UI components: Passed as-is to component
+     * For custom components: Mapped to CSS classes via variantMap
+     */
     variant?: string;
 
-    /** Component size (e.g., 'xs', 'sm', 'md', 'lg', 'xl', '2xs', '2xl') */
+    /** Component size (e.g., 'xs', 'sm', 'md', 'lg', 'xl', '2xs', '2xl')
+     * For Nuxt UI components: Passed as-is to component
+     * For custom components: Mapped to CSS classes via sizeMap
+     */
     size?: string;
 
-    /** Component color (e.g., 'primary', 'secondary', 'success', 'error', 'warning', 'info') */
+    /** Component color (e.g., 'primary', 'secondary', 'success', 'error', 'warning', 'info')
+     * For Nuxt UI components: Passed as-is to component
+     * For custom components: Mapped to CSS classes via colorMap
+     */
     color?: string;
 
-    /** Additional CSS classes */
+    /** Additional CSS classes - always applied directly to element */
     class?: string;
 
-    /** Nuxt UI component-specific config object (passed to :ui prop) */
+    /** Inline styles object - applied directly to element */
+    style?: Record<string, string>;
+
+    /** Nuxt UI component-specific config object (passed to :ui prop)
+     * Only works with Nuxt UI components
+     */
     ui?: Record<string, unknown>;
 
     /** Allow any additional component-specific props */
@@ -301,6 +316,7 @@ export class ThemeCompiler {
                 context: parsed.context,
                 state: parsed.state,
                 identifier: parsed.identifier,
+                attributes: parsed.attributes,
                 props,
                 selector: selector,
                 specificity: this.calculateSpecificity(selector),
@@ -313,11 +329,13 @@ export class ThemeCompiler {
     /**
      * Parse CSS selector into override components
      *
-     * Supports both simple and advanced syntax:
+     * Supports multiple syntaxes:
      * - Simple context: 'button.chat' → [data-context="chat"]
      * - Simple identifier: 'button#chat.send' → [data-id="chat.send"]
+     * - HTML attributes: 'button[id="submit"]' → matches component with id="submit"
      * - Advanced: 'button[data-context="chat"]' → unchanged
      * - Mixed: 'button.chat:hover' → [data-context="chat"]:hover
+     * - Combined: 'button.chat[type="submit"]' → [data-context="chat"][type="submit"]
      */
     private parseSelector(selector: string): ParsedSelector {
         // First, normalize simple syntax to attribute selectors
@@ -326,15 +344,46 @@ export class ThemeCompiler {
         // Examples after normalization:
         // 'button.chat' → 'button[data-context="chat"]'
         // 'button#chat.send' → 'button[data-id="chat.send"]'
-        // 'button[data-context="chat"]' → unchanged
-        // 'button.chat:hover' → 'button[data-context="chat"]:hover'
+        // 'button[id="x"]' → unchanged (already attribute selector)
+        // 'button.chat[type="submit"]' → 'button[data-context="chat"][type="submit"]'
 
         const component = normalized.match(/^(\w+)/)?.[1] || 'button';
         const context = normalized.match(/data-context="([^"]+)"/)?.[1];
         const identifier = normalized.match(/data-id="([^"]+)"/)?.[1];
         const state = normalized.match(/:(\w+)/)?.[1];
 
-        return { component, context, identifier, state };
+        // Extract HTML attribute selectors (id, class, type, data-*, aria-*, etc.)
+        // These are NOT data-context or data-id which are already handled
+        const attributeMatchers: AttributeMatcher[] = [];
+        const attrRegex = /\[([^=\]]+)((?:[~|^$*]?=)"([^"]+)")?\]/g;
+        let match;
+
+        while ((match = attrRegex.exec(normalized)) !== null) {
+            const attrName = match[1];
+            const operator =
+                match[2]?.[0] === '='
+                    ? '='
+                    : match[2]?.slice(0, -1) || 'exists';
+            const attrValue = match[3];
+
+            // Skip data-context and data-id (already handled above)
+            if (attrName === 'data-context' || attrName === 'data-id') continue;
+
+            attributeMatchers.push({
+                attribute: attrName,
+                operator: operator as AttributeOperator,
+                value: attrValue,
+            });
+        }
+
+        return {
+            component,
+            context,
+            identifier,
+            state,
+            attributes:
+                attributeMatchers.length > 0 ? attributeMatchers : undefined,
+        };
     }
 
     /**
@@ -462,6 +511,31 @@ export default defineConfig({
 
 ```typescript
 // app/theme/_shared/runtime-resolver.ts
+
+export type AttributeOperator =
+    | 'exists' // [attr]
+    | '=' // [attr="value"]
+    | '~=' // [attr~="value"] - contains word
+    | '|=' // [attr|="value"] - starts with word
+    | '^=' // [attr^="value"] - starts with
+    | '$=' // [attr$="value"] - ends with
+    | '*='; // [attr*="value"] - contains
+
+export interface AttributeMatcher {
+    attribute: string;
+    operator: AttributeOperator;
+    value?: string;
+}
+
+export interface ResolveParams {
+    component: string;
+    context?: string;
+    identifier?: string;
+    state?: string;
+    element?: HTMLElement; // For attribute matching
+    isNuxtUI?: boolean; // Whether component is a Nuxt UI component
+}
+
 export class RuntimeResolver {
     private overrides: CompiledOverride[];
 
@@ -509,7 +583,62 @@ export class RuntimeResolver {
         // State must match (if specified)
         if (override.state && override.state !== params.state) return false;
 
+        // HTML attribute matching (if specified)
+        if (override.attributes && params.element) {
+            for (const matcher of override.attributes) {
+                if (!this.matchesAttribute(params.element, matcher)) {
+                    return false;
+                }
+            }
+        }
+
         return true;
+    }
+
+    /**
+     * Check if an element matches an attribute selector
+     */
+    private matchesAttribute(
+        element: HTMLElement | undefined,
+        matcher: AttributeMatcher
+    ): boolean {
+        if (!element) return false;
+
+        const attrValue = element.getAttribute(matcher.attribute);
+
+        // [attr] - attribute exists
+        if (matcher.operator === 'exists') {
+            return attrValue !== null;
+        }
+
+        if (attrValue === null) return false;
+        if (!matcher.value) return false;
+
+        switch (matcher.operator) {
+            case '=': // [attr="value"] - exact match
+                return attrValue === matcher.value;
+
+            case '~=': // [attr~="value"] - contains word
+                return attrValue.split(/\s+/).includes(matcher.value);
+
+            case '|=': // [attr|="value"] - starts with word
+                return (
+                    attrValue === matcher.value ||
+                    attrValue.startsWith(matcher.value + '-')
+                );
+
+            case '^=': // [attr^="value"] - starts with
+                return attrValue.startsWith(matcher.value);
+
+            case '$=': // [attr$="value"] - ends with
+                return attrValue.endsWith(matcher.value);
+
+            case '*=': // [attr*="value"] - contains
+                return attrValue.includes(matcher.value);
+
+            default:
+                return false;
+        }
     }
 
     /**
@@ -583,6 +712,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 context,
                 identifier,
                 state: state.value,
+                element: el, // Pass element for attribute matching
             });
 
             // Merge with existing props (props win)
@@ -737,6 +867,59 @@ The theme DSL supports both **simple** and **advanced** selector syntax, giving 
 -   `.header` → `[data-context="header"]`
 -   `.global` → `[data-context="global"]`
 
+### Targeting by HTML Attributes
+
+For more granular control, you can target components by their standard HTML attributes:
+
+**By ID Attribute:**
+
+```typescript
+// Target component with specific DOM id
+'button[id="submit-form"]': { variant: 'solid', size: 'lg' }
+'input[id="search-bar"]': { variant: 'outline' }
+
+// Works with any attribute
+'button[id^="delete-"]': { color: 'error' }  // Starts with "delete-"
+```
+
+**By Class Attribute:**
+
+```typescript
+// Target components with specific CSS class
+'button[class*="primary-action"]': { variant: 'solid', color: 'primary' }
+'input[class*="search"]': { size: 'lg' }
+
+// Multiple classes
+'button[class*="icon"][class*="small"]': { size: 'xs' }
+```
+
+**By Other Attributes:**
+
+```typescript
+// By type
+'input[type="email"]': { variant: 'outline' }
+'button[type="submit"]': { variant: 'solid' }
+
+// By data attributes
+'button[data-action="confirm"]': { color: 'success' }
+'input[data-validation="required"]': { color: 'primary' }
+
+// By aria attributes
+'button[aria-label*="delete"]': { color: 'error' }
+```
+
+**Combining Attributes:**
+
+```typescript
+// Multiple attribute targeting
+'button[type="submit"][class*="primary"]': { variant: 'solid', size: 'lg' }
+'input[type="text"][class*="search"]': { variant: 'outline' }
+
+// Mix with context/identifier
+'button.chat[type="submit"]': { variant: 'neon' }
+'input#search.header[type="text"]': { variant: 'ghost' }
+```
+
 ### Advanced Syntax (For power users)
 
 **Full Attribute Selectors:**
@@ -762,9 +945,43 @@ overrides: {
   'button.chat': { variant: 'neon' },
   'input.sidebar': { size: 'sm' },
 
+  // Target by HTML attributes
+  'button[id="main-cta"]': { variant: 'solid', size: 'xl' },
+  'input[class*="search"]': { variant: 'outline' },
+
   // Advanced syntax when you need more control
   'button[data-context="chat"][type="submit"]': { variant: 'solid' },
   'input[data-context="sidebar"][disabled]': { class: 'opacity-50' },
+}
+```
+
+### Attribute Selector Operators
+
+Standard CSS attribute selector operators are supported:
+
+-   `[attr]` - Has attribute
+-   `[attr="value"]` - Exact match
+-   `[attr~="value"]` - Contains word
+-   `[attr|="value"]` - Starts with word
+-   `[attr^="value"]` - Starts with string
+-   `[attr$="value"]` - Ends with string
+-   `[attr*="value"]` - Contains substring
+
+**Examples:**
+
+```typescript
+overrides: {
+  // Any button with an id
+  'button[id]': { variant: 'solid' },
+
+  // Buttons with id starting with "action-"
+  'button[id^="action-"]': { color: 'primary' },
+
+  // Inputs with class containing "large"
+  'input[class*="large"]': { size: 'lg' },
+
+  // Buttons with aria-label ending with "delete"
+  'button[aria-label$="delete"]': { color: 'error' },
 }
 ```
 
@@ -773,11 +990,391 @@ overrides: {
 Both syntaxes follow CSS specificity rules:
 
 -   Element: `button` (specificity: 1)
+-   With attribute: `button[id="x"]` (specificity: 11)
 -   With context: `button.chat` (specificity: 11)
 -   With identifier: `button#chat.send` (specificity: 21)
 -   With state: `button.chat:hover` (specificity: 21)
+-   Multiple attributes: `button[id="x"][class*="y"]` (specificity: 21)
 
 **Higher specificity always wins!**
+
+### Best Practices
+
+1. **Use context/identifier for semantic grouping** - `.chat`, `#chat.send`
+2. **Use HTML attributes for one-off styling** - `[id="submit"]`, `[class*="search"]`
+3. **Combine both for maximum control** - `button.chat[type="submit"]`
+4. **Avoid over-specific selectors** - Keep it simple when possible
+5. **Document your attribute conventions** - Especially custom data attributes
+
+---
+
+## Prop-to-Class Mapping for Custom Components
+
+### The Problem
+
+For Nuxt UI components, props like `variant="solid"` and `color="primary"` are native props that the component understands. But for custom HTML elements or non-Nuxt UI components, these props don't mean anything.
+
+### The Solution
+
+The theme system provides automatic prop-to-class mapping for custom components. When a component doesn't recognize a prop (like `variant` or `color`), the resolver converts it to CSS classes.
+
+### Mapping Configuration
+
+```typescript
+// app/theme/_shared/prop-class-maps.ts
+
+export const defaultPropMaps = {
+    variant: {
+        solid: 'variant-solid',
+        outline: 'variant-outline',
+        ghost: 'variant-ghost',
+        soft: 'variant-soft',
+        link: 'variant-link',
+    },
+    size: {
+        xs: 'text-xs px-2 py-1',
+        sm: 'text-sm px-3 py-1.5',
+        md: 'text-base px-4 py-2',
+        lg: 'text-lg px-5 py-2.5',
+        xl: 'text-xl px-6 py-3',
+    },
+    color: {
+        primary: 'text-primary-600 bg-primary-50 border-primary-300',
+        secondary: 'text-secondary-600 bg-secondary-50 border-secondary-300',
+        success: 'text-green-600 bg-green-50 border-green-300',
+        error: 'text-red-600 bg-red-50 border-red-300',
+        warning: 'text-yellow-600 bg-yellow-50 border-yellow-300',
+    },
+};
+
+// Custom mapping per theme
+export const themePropMaps: Record<string, Partial<typeof defaultPropMaps>> = {
+    cyberpunk: {
+        color: {
+            primary:
+                'text-cyan-400 bg-cyan-950 border-cyan-500 shadow-cyan-500/50',
+            secondary:
+                'text-purple-400 bg-purple-950 border-purple-500 shadow-purple-500/50',
+            error: 'text-red-400 bg-red-950 border-red-500 shadow-red-500/50',
+        },
+    },
+    nature: {
+        color: {
+            primary: 'text-green-700 bg-green-100 border-green-400',
+            secondary: 'text-emerald-700 bg-emerald-100 border-emerald-400',
+        },
+    },
+};
+```
+
+### Runtime Resolution with Mapping
+
+```typescript
+// app/theme/_shared/runtime-resolver.ts
+
+export class RuntimeResolver {
+    private overrides: CompiledOverride[];
+    private propMaps: typeof defaultPropMaps;
+
+    constructor(compiledTheme: CompiledTheme) {
+        this.overrides = [...compiledTheme.overrides].sort(
+            (a, b) => b.specificity - a.specificity
+        );
+
+        // Load prop maps for this theme (with defaults)
+        this.propMaps = {
+            ...defaultPropMaps,
+            ...themePropMaps[compiledTheme.name],
+        };
+    }
+
+    /**
+     * Resolve overrides for a component instance
+     */
+    resolve(params: ResolveParams): ResolvedOverride {
+        const matching: CompiledOverride[] = [];
+
+        for (const override of this.overrides) {
+            if (this.matches(override, params)) {
+                matching.push(override);
+            }
+        }
+
+        // Merge in specificity order (highest first)
+        const merged = this.merge(matching);
+
+        // Convert semantic props to classes if component is not Nuxt UI
+        if (!params.isNuxtUI) {
+            return this.mapPropsToClasses(merged);
+        }
+
+        return merged;
+    }
+
+    /**
+     * Convert semantic props (variant, size, color) to CSS classes
+     */
+    private mapPropsToClasses(override: ResolvedOverride): ResolvedOverride {
+        const classes: string[] = [];
+        const cleanProps: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(override.props)) {
+            // Check if this prop should be mapped to classes
+            if (key === 'variant' && typeof value === 'string') {
+                const mappedClass = this.propMaps.variant[value];
+                if (mappedClass) {
+                    classes.push(mappedClass);
+                    continue; // Don't include in props
+                }
+            }
+
+            if (key === 'size' && typeof value === 'string') {
+                const mappedClass = this.propMaps.size[value];
+                if (mappedClass) {
+                    classes.push(mappedClass);
+                    continue;
+                }
+            }
+
+            if (key === 'color' && typeof value === 'string') {
+                const mappedClass = this.propMaps.color[value];
+                if (mappedClass) {
+                    classes.push(mappedClass);
+                    continue;
+                }
+            }
+
+            // Keep all other props (class, style, etc.)
+            cleanProps[key] = value;
+        }
+
+        // Merge mapped classes with existing class prop
+        if (classes.length > 0) {
+            const existingClass = (cleanProps.class as string) || '';
+            cleanProps.class = [...classes, existingClass]
+                .filter(Boolean)
+                .join(' ');
+        }
+
+        return { props: cleanProps };
+    }
+
+    // ... rest of the methods
+}
+```
+
+### Component Detection
+
+The directive needs to detect whether a component is a Nuxt UI component:
+
+```typescript
+// app/plugins/auto-theme.client.ts
+export default defineNuxtPlugin((nuxtApp) => {
+    const { activeTheme } = useTheme();
+
+    // List of known Nuxt UI component names
+    const nuxtUIComponents = new Set([
+        'ubutton',
+        'uinput',
+        'umodal',
+        'ucard',
+        'ubadge',
+        'ualert',
+        'uavatar',
+        'utable',
+        'uselect',
+        'utextarea',
+        // ... add all Nuxt UI components
+    ]);
+
+    nuxtApp.vueApp.directive('theme', {
+        created(el, binding, vnode) {
+            const instance = vnode.component;
+            if (!instance) return;
+
+            // Get component name
+            const componentName =
+                instance.type.name?.toLowerCase() ||
+                vnode.type.__name?.toLowerCase() ||
+                'button';
+
+            // Check if this is a Nuxt UI component
+            const isNuxtUI = nuxtUIComponents.has(componentName);
+
+            // Get identifier from directive value
+            const identifier =
+                typeof binding.value === 'string'
+                    ? binding.value
+                    : binding.value?.identifier;
+
+            // Detect context from DOM
+            const context = detectContext(el);
+
+            // Get current state (default to 'default')
+            const state = ref('default');
+
+            // Resolve overrides
+            const resolver = getResolver(activeTheme.value);
+            const resolved = resolver.resolve({
+                component: componentName,
+                context,
+                identifier,
+                state: state.value,
+                element: el,
+                isNuxtUI, // Pass this to resolver
+            });
+
+            // Merge with existing props (props win)
+            const existingProps = instance.props;
+            const mergedProps = { ...resolved.props };
+
+            for (const [key, value] of Object.entries(existingProps)) {
+                if (value !== undefined) {
+                    if (key === 'class') {
+                        mergedProps[key] = `${
+                            resolved.props.class || ''
+                        } ${value}`.trim();
+                    } else {
+                        mergedProps[key] = value; // prop wins
+                    }
+                }
+            }
+
+            // Apply to component
+            Object.assign(instance.props, mergedProps);
+
+            // Watch for theme changes
+            watch(activeTheme, () => {
+                const newResolver = getResolver(activeTheme.value);
+                const newResolved = newResolver.resolve({
+                    component: componentName,
+                    context,
+                    identifier,
+                    state: state.value,
+                    element: el,
+                    isNuxtUI,
+                });
+                Object.assign(instance.props, newResolved.props);
+            });
+        },
+    });
+});
+
+function detectContext(el: HTMLElement): string {
+    if (el.closest('#app-chat-container')) return 'chat';
+    if (el.closest('#app-sidebar')) return 'sidebar';
+    if (el.closest('#app-dashboard-modal')) return 'dashboard';
+    return 'global';
+}
+```
+
+### Usage Examples
+
+**For Nuxt UI Components (no mapping needed):**
+
+```typescript
+overrides: {
+  'button.chat': {
+    variant: 'solid',  // Passed directly to UButton
+    color: 'primary',  // Passed directly to UButton
+    size: 'lg',        // Passed directly to UButton
+  }
+}
+```
+
+```vue
+<!-- Component receives props as-is -->
+<UButton v-theme />
+<!-- Renders with variant="solid" color="primary" size="lg" -->
+```
+
+**For Custom Components (automatic mapping):**
+
+```typescript
+overrides: {
+  'button[data-custom]': {
+    variant: 'solid',  // Mapped to 'variant-solid' class
+    color: 'primary',  // Mapped to 'text-primary-600 bg-primary-50...' classes
+    size: 'lg',        // Mapped to 'text-lg px-5 py-2.5' classes
+  }
+}
+```
+
+```vue
+<!-- Custom button element -->
+<button v-theme data-custom>Click me</button>
+<!-- Renders with class="variant-solid text-primary-600 bg-primary-50 border-primary-300 text-lg px-5 py-2.5" -->
+```
+
+**For Direct Styling (no mapping):**
+
+```typescript
+overrides: {
+  'div.custom': {
+    class: 'bg-blue-500 text-white rounded-lg p-4',  // Applied directly
+    style: { fontWeight: 'bold' },                   // Applied directly
+  }
+}
+```
+
+### Customizing Prop Maps
+
+Themes can override the default prop-to-class mappings:
+
+```typescript
+// app/theme/cyberpunk/prop-maps.ts
+export default {
+    variant: {
+        solid: 'variant-neon-solid shadow-neon-lg',
+        outline: 'variant-neon-outline border-2 border-neon',
+        ghost: 'variant-neon-ghost hover:bg-neon-900/20',
+    },
+    size: {
+        sm: 'text-xs px-3 py-1.5 tracking-wider uppercase',
+        md: 'text-sm px-4 py-2 tracking-wider uppercase',
+        lg: 'text-base px-6 py-3 tracking-wider uppercase',
+    },
+    color: {
+        primary:
+            'text-cyan-400 bg-cyan-950/50 border-cyan-500 shadow-[0_0_15px_rgba(34,211,238,0.3)]',
+        secondary:
+            'text-purple-400 bg-purple-950/50 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]',
+    },
+};
+```
+
+```typescript
+// app/theme/cyberpunk/theme.ts
+import propMaps from './prop-maps';
+
+export default defineTheme({
+    name: 'cyberpunk',
+    propMaps, // Custom mappings for this theme
+    colors: {
+        /* ... */
+    },
+    overrides: {
+        /* ... */
+    },
+});
+```
+
+### Best Practices
+
+1. **For Nuxt UI components**: Use semantic props (`variant`, `color`, `size`) - they work natively
+2. **For custom components with v-theme**: Use semantic props - they'll be mapped to classes automatically
+3. **For direct styling**: Use `class` and `style` props - they're always applied directly
+4. **Mix approaches**: You can use both semantic props and direct classes together
+
+```typescript
+overrides: {
+  'button.chat': {
+    variant: 'solid',              // Mapped to classes for custom components
+    color: 'primary',              // Mapped to classes for custom components
+    class: 'shadow-lg rounded-xl', // Always applied directly
+  }
+}
+```
 
 ---
 
