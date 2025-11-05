@@ -130,6 +130,14 @@ export default defineNuxtPlugin((nuxtApp) => {
     // LRU cache for loaded themes (size 3 as requested)
     const themeCache = new LRUCache<string, ThemeLoadResult>(3);
 
+    const setThemeAttribute = (themeName?: string | null) => {
+        if (themeName) {
+            root.setAttribute('data-theme', themeName);
+        } else {
+            root.removeAttribute('data-theme');
+        }
+    };
+
     // Override system state
     const overrideStats = ref({
         resolverLoaded: false,
@@ -140,53 +148,68 @@ export default defineNuxtPlugin((nuxtApp) => {
     const currentOverrides = ref<ComponentOverrides | null>(null);
 
     // Initialize override system with theme config
-    const initializeOverrides = (themeConfig?: Partial<AppConfig>) => {
+    const initializeOverrides = (
+        themeConfig?: Partial<AppConfig>,
+        applyConfig = true,
+        applyResolver = true,
+        logContext?: string
+    ) => {
         try {
-            // Clear any existing resolver
-            clearOverrideResolver();
-            overrideStats.value.resolverLoaded = false;
-            currentOverrides.value = null;
-            applyThemeConfig(themeConfig);
+            if (applyResolver) {
+                clearOverrideResolver();
+                overrideStats.value.resolverLoaded = false;
+                currentOverrides.value = null;
+            }
 
-            if (!themeConfig?.componentOverrides) {
-                console.log('[theme] No component overrides found in theme config');
+            if (applyConfig) {
+                applyThemeConfig(themeConfig);
+            }
+
+            const overridesConfig = themeConfig?.componentOverrides;
+
+            if (!overridesConfig) {
+                if (applyResolver) {
+                    console.log('[theme] No component overrides found in theme config');
+                }
                 return;
             }
 
-            // 6.8 Integrate validation into theme loading
-            const validation = validateComponentOverrides(themeConfig.componentOverrides);
-            
-            // 6.9 Log validation errors in console
+            const validation = validateComponentOverrides(overridesConfig);
+
             if (!validation.valid || validation.warnings.length > 0) {
-                logValidationErrors(validation, activeTheme.value);
+                logValidationErrors(
+                    validation,
+                    logContext ?? activeTheme.value
+                );
             }
 
-            // 6.10 Fall back gracefully on validation failure
             if (!validation.valid) {
                 console.error(
                     `[theme] Skipping override initialization due to validation errors in theme "${activeTheme.value}"`
                 );
-                applyThemeConfig();
+                if (applyConfig) {
+                    applyThemeConfig();
+                }
                 return;
             }
 
-            // Set up the resolver (validation passed)
-            setOverrideResolver(themeConfig.componentOverrides);
-            currentOverrides.value = themeConfig.componentOverrides;
-            
-            // Calculate stats
+            if (!applyResolver) {
+                return;
+            }
+
+            setOverrideResolver(overridesConfig);
+            currentOverrides.value = overridesConfig;
+
             const resolver = getOverrideResolver();
             if (resolver) {
-                const overrides = themeConfig.componentOverrides;
-                
-                // Helper function to count rules in a bucket
+                const overrides = overridesConfig;
+
                 const countRules = (bucket: Record<string, OverrideRule[] | undefined> = {}) =>
                     Object.values(bucket).reduce(
                         (total, rules) => total + (Array.isArray(rules) ? rules.length : 0),
                         0,
                     );
 
-                // Count all rules across global, contexts, and states
                 const rulesCount =
                     countRules(overrides.global) +
                     Object.values(overrides.contexts ?? {}).reduce(
@@ -198,9 +221,9 @@ export default defineNuxtPlugin((nuxtApp) => {
                         0,
                     ) +
                     Object.keys(overrides.identifiers ?? {}).length;
-                
+
                 const contextsCount = Object.keys(overrides.contexts || {}).length;
-                
+
                 overrideStats.value = {
                     resolverLoaded: true,
                     rulesCount,
@@ -208,11 +231,11 @@ export default defineNuxtPlugin((nuxtApp) => {
                     lastInitTheme: activeTheme.value,
                 };
 
-                console.log(
-                    `[theme] Initialized overrides for "${activeTheme.value}":`,
-                    `${rulesCount} global rules, ${contextsCount} contexts`
-                );
-            }
+            console.log(
+                `[theme] Initialized overrides for "${activeTheme.value}":`,
+                `${rulesCount} global rules, ${contextsCount} contexts`
+            );
+        }
         } catch (err) {
             console.error('[theme] Failed to initialize overrides:', err);
             // Clear stats on error
@@ -223,7 +246,9 @@ export default defineNuxtPlugin((nuxtApp) => {
                 lastInitTheme: '',
             };
             currentOverrides.value = null;
-            applyThemeConfig();
+            if (applyConfig) {
+                applyThemeConfig();
+            }
         }
     };
 
@@ -304,17 +329,16 @@ export default defineNuxtPlugin((nuxtApp) => {
             errors.value = [];
             warnings.value = [];
 
-            // Clear override resolver before loading new theme
-            clearOverrideResolver();
-            overrideStats.value.resolverLoaded = false;
-
             // Check cache first
             const cached = themeCache.get(themeName);
             if (cached) {
                 console.log(`[theme] Loaded "${themeName}" from cache`);
 
                 // Initialize overrides from cached theme config
-                initializeOverrides(cached.config);
+                initializeOverrides(cached.config, injectCss, injectCss, themeName);
+                if (injectCss) {
+                    setThemeAttribute(themeName);
+                }
 
                 // Separate critical errors from warnings
                 const criticalErrors = cached.errors.filter(
@@ -366,7 +390,10 @@ export default defineNuxtPlugin((nuxtApp) => {
             );
 
             // Initialize overrides from loaded theme config
-            initializeOverrides(result.config);
+            initializeOverrides(result.config, injectCss, injectCss, themeName);
+            if (injectCss) {
+                setThemeAttribute(themeName);
+            }
 
             // Separate critical errors from warnings
             const criticalErrors = result.errors.filter(
@@ -501,6 +528,9 @@ export default defineNuxtPlugin((nuxtApp) => {
             activeTheme.value = themeName;
             localStorage.setItem(activeThemeStorageKey, themeName);
 
+            initializeOverrides(result.config, true, true, themeName);
+            setThemeAttribute(themeName);
+
             // Apply the current mode to ensure correct CSS is active
             apply(current.value);
 
@@ -512,6 +542,15 @@ export default defineNuxtPlugin((nuxtApp) => {
             if (cssInjected) {
                 removeThemeCSS(themeName);
             }
+
+            // Restore previous theme config if available
+            const previous = themeCache.get(oldTheme);
+            if (previous) {
+                initializeOverrides(previous.config, true, true, oldTheme);
+            } else {
+                initializeOverrides(undefined, true, true, oldTheme);
+            }
+            setThemeAttribute(oldTheme);
 
             return false;
         }

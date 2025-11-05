@@ -1,0 +1,71 @@
+:root[data-mode='dark'] {
+	--primary: #8dd29a;
+	--on-primary: #05200f;
+	--primary-container: #1d3c26;
+	--on-primary-container: #bdf6c8;
+
+	--secondary: #9ec6a5;
+	--on-secondary: #0d2215;
+	--secondary-container: #23392a;
+	--on-secondary-container: #cdecd2;
+
+	--tertiary: #86d2d9;
+	--on-tertiary: #011f23;
+	--tertiary-container: #06353b;
+	--on-tertiary-container: #bef4f9;
+
+	--success: #7fd49a;
+	--on-success: #072416;
+	--warning: #ecb657;
+	--on-warning: #2b1c03;
+	--error: #ff8b7c;
+	--on-error: #3a0903;
+
+	--surface: #0c130d;
+	--surface-variant: #162117;
+	--on-surface: #dbe7dd;
+	--on-surface-variant: #a2b3a4;
+
+	--outline: rgba(133, 198, 149, 0.28);
+	--outline-variant: rgba(133, 198, 149, 0.18);
+
+	--app-chip-active-bg: rgba(109, 181, 123, 0.32);
+	--app-chip-active-border: rgba(168, 226, 180, 0.4);
+	--app-toolbar-btn-active-bg: rgba(116, 205, 135, 0.22);
+	--app-dropzone-active-bg: rgba(116, 205, 135, 0.32);
+	--app-dropzone-active-border: rgba(155, 219, 167, 0.45);
+
+	color-scheme: dark;
+
+	/* Material aliases */
+	--md-primary: var(--primary);
+	--md-on-primary: var(--on-primary);
+	--md-primary-container: var(--primary-container);
+	--md-on-primary-container: var(--on-primary-container);
+
+	--md-secondary: var(--secondary);
+	--md-on-secondary: var(--on-secondary);
+	--md-secondary-container: var(--secondary-container);
+	--md-on-secondary-container: var(--on-secondary-container);
+
+	--md-tertiary: var(--tertiary);
+	--md-on-tertiary: var(--on-tertiary);
+	--md-tertiary-container: var(--tertiary-container);
+	--md-on-tertiary-container: var(--on-tertiary-container);
+
+	--md-surface: var(--surface);
+	--md-on-surface: var(--on-surface);
+	--md-surface-variant: var(--surface-variant);
+	--md-on-surface-variant: var(--on-surface-variant);
+
+	--md-error: var(--error);
+	--md-on-error: var(--on-error);
+	--md-error-container: #7a1c12;
+	--md-on-error-container: #ffe5de;
+
+	--md-background: #08120b;
+	--md-on-background: var(--on-surface);
+
+	--md-outline: var(--outline);
+	--md-outline-variant: var(--outline-variant);
+}

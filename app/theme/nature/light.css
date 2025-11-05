@@ -1,0 +1,71 @@
+:root {
+	--primary: #3f8452;
+	--on-primary: #f6fff5;
+	--primary-container: #d8f3de;
+	--on-primary-container: #132818;
+
+	--secondary: #5a7b62;
+	--on-secondary: #f4f8f3;
+	--secondary-container: #dde9df;
+	--on-secondary-container: #1a2b1f;
+
+	--tertiary: #4a7c83;
+	--on-tertiary: #f0fbff;
+	--tertiary-container: #cfeff4;
+	--on-tertiary-container: #052930;
+
+	--success: #4a9763;
+	--on-success: #f1fff4;
+	--warning: #c8931d;
+	--on-warning: #fff8e7;
+	--error: #b5473c;
+	--on-error: #fff8f5;
+
+	--surface: #f5faf5;
+	--surface-variant: #e6eee5;
+	--on-surface: #1d2a21;
+	--on-surface-variant: #485649;
+
+	--outline: rgba(86, 118, 93, 0.3);
+	--outline-variant: rgba(86, 118, 93, 0.18);
+
+	/* Material Design compatible aliases */
+	--md-primary: var(--primary);
+	--md-on-primary: var(--on-primary);
+	--md-primary-container: var(--primary-container);
+	--md-on-primary-container: var(--on-primary-container);
+
+	--md-secondary: var(--secondary);
+	--md-on-secondary: var(--on-secondary);
+	--md-secondary-container: var(--secondary-container);
+	--md-on-secondary-container: var(--on-secondary-container);
+
+	--md-tertiary: var(--tertiary);
+	--md-on-tertiary: var(--on-tertiary);
+	--md-tertiary-container: var(--tertiary-container);
+	--md-on-tertiary-container: var(--on-tertiary-container);
+
+	--md-surface: var(--surface);
+	--md-on-surface: var(--on-surface);
+	--md-surface-variant: var(--surface-variant);
+	--md-on-surface-variant: var(--on-surface-variant);
+
+	--md-error: var(--error);
+	--md-on-error: var(--on-error);
+	--md-error-container: #fbd1c9;
+	--md-on-error-container: #430a05;
+
+	--md-background: #f3f8f3;
+	--md-on-background: var(--on-surface);
+
+	--md-outline: var(--outline);
+	--md-outline-variant: var(--outline-variant);
+
+	--app-chip-active-bg: rgba(64, 111, 79, 0.18);
+	--app-chip-active-border: rgba(64, 111, 79, 0.35);
+	--app-toolbar-btn-active-bg: rgba(64, 111, 79, 0.12);
+	--app-dropzone-active-bg: rgba(100, 160, 116, 0.24);
+	--app-dropzone-active-border: rgba(64, 111, 79, 0.4);
+
+	color-scheme: light;
+}

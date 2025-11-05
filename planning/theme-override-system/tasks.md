@@ -195,6 +195,18 @@ All subtasks for Task 4 have been completed:
 -   [x] 8.8 Verify neon aesthetic is enhanced
 -   **Requirements**: 4.3
 
+### 9. Add Nature Theme Example
+
+-   [x] 9.1 Create `app/theme/nature/main.css`, `light.css`, and `dark.css`
+-   [x] 9.2 Style global surfaces with nature-inspired gradients and glass cards
+-   [x] 9.3 Implement `app/theme/nature/theme.ts` with custom button/input/modal variants
+-   [x] 9.4 Add identifier overrides for chat send/attach/settings actions
+-   [x] 9.5 Add sidebar/chat context overrides tailored to the theme
+-   [x] 9.6 Define hover/disabled state overrides with soft glow effects
+-   [x] 9.7 Ensure theme plugin merges the nature UI config into app config
+-   [x] 9.8 Document the theme in `app/theme/nature/README.md`
+-   **Requirements**: 4.3, 6.1
+
 ---
 
 ## Phase 4: Component Integration
