@@ -1,4 +1,4 @@
-:root[data-mode='dark'] {
+.dark {
 	--primary: #8dd29a;
 	--on-primary: #05200f;
 	--primary-container: #1d3c26;

@@ -189,19 +189,6 @@ const handleClick = (event: MouseEvent) => {
 const handleKeydown = (event: KeyboardEvent) => {
     emit('keydown', event);
 };
-
-if (import.meta.dev) {
-    watchEffect(() => {
-        console.log('[ThemeButton] overrides', {
-            identifier: identifierRef.value,
-            context: context.value,
-            props: props,
-            resolved: overrides.value,
-            mergedProps: mergedProps.value,
-            mergedClass: mergedClass.value,
-        });
-    });
-}
 </script>
 
 <style scoped>

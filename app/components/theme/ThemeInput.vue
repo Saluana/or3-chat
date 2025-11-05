@@ -55,7 +55,7 @@ interface ThemeInputProps {
     /** Input variant - if provided, wins over theme override */
     variant?: any;
     /** Input size - if provided, wins over theme override */
-    size?: string;
+    size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     /** Additional CSS classes */
     class?: string;
     /** Whether input is disabled */
