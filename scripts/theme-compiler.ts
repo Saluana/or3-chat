@@ -306,7 +306,12 @@ export class ThemeCompiler {
      */
     private extractAttributes(selector: string): AttributeMatcher[] {
         const attributes: AttributeMatcher[] = [];
-        const attrRegex = /\[([^=\]]+)(([~|^$*]?=)"([^"]+)")?\]/g;
+        // Match: [attribute] or [attribute="value"] or [attribute*="value"] etc.
+        // Group 1: attribute name (without operator)
+        // Group 2: full operator+value part (optional)
+        // Group 3: operator (optional)
+        // Group 4: value (optional)
+        const attrRegex = /\[([a-zA-Z0-9-]+)([~|^$*]?=)?(?:"([^"]+)")?\]/g;
         let match;
         
         while ((match = attrRegex.exec(selector)) !== null) {
@@ -315,11 +320,11 @@ export class ThemeCompiler {
             // Skip data-context and data-id (already handled)
             if (attrName === 'data-context' || attrName === 'data-id') continue;
             
-            const hasValue = match[2] !== undefined;
-            const operator = hasValue
-                ? (match[3] || '=') as AttributeOperator
+            const hasOperator = match[2] !== undefined;
+            const operator = hasOperator
+                ? match[2] as AttributeOperator
                 : 'exists' as AttributeOperator;
-            const value = match[4];
+            const value = match[3];
             
             attributes.push({
                 attribute: attrName,
@@ -340,18 +345,24 @@ export class ThemeCompiler {
         // Element: 1 point
         specificity += 1;
         
-        // Attributes: 10 points each
-        const attrCount = (selector.match(/\[/g) || []).length;
-        specificity += attrCount * 10;
+        // Context adds attribute specificity
+        if (parsed.context) {
+            specificity += 10;
+        }
+        
+        // Identifier gets extra weight (it's also an attribute)
+        if (parsed.identifier) {
+            specificity += 20; // 10 for attribute + 10 extra
+        }
+        
+        // Other HTML attributes: 10 points each
+        if (parsed.attributes) {
+            specificity += parsed.attributes.length * 10;
+        }
         
         // Pseudo-classes: 10 points each
         const pseudoCount = (selector.match(/:/g) || []).length;
         specificity += pseudoCount * 10;
-        
-        // Identifier gets extra weight
-        if (parsed.identifier) {
-            specificity += 10;
-        }
         
         return specificity;
     }
