@@ -30,6 +30,7 @@
 
         <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
             <UButton
+                v-theme="'sidebar.toggle'"
                 size="xs"
                 :square="true"
                 color="neutral"

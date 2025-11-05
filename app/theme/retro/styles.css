@@ -1,0 +1,319 @@
+/**
+ * Retro Theme Styles
+ * 
+ * All retro-specific CSS classes, extracted from global stylesheets.
+ * These styles are only loaded when the retro theme is active.
+ * 
+ * This file contains the visual identity of the retro theme:
+ * - Hard 2px borders
+ * - Offset shadows (2px 2px)
+ * - 3px border radius
+ * - Pixel-perfect press animations
+ */
+
+/* Screen-reader only helper (follows inclusive components pattern) */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Retro "chip" toggle button used across dashboard settings */
+.retro-chip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.25rem 0.5rem;
+	font-size: 0.75rem;
+	font-weight: 500;
+	user-select: none;
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	border-radius: 3px;
+	background: var(--md-surface);
+	color: var(--md-on-surface);
+	line-height: 1;
+	transition: background-color 120ms ease, color 120ms ease,
+		transform 80ms ease, box-shadow 80ms ease;
+}
+.retro-chip:hover {
+	background: var(--md-secondary-container);
+	color: var(--md-on-secondary-container);
+}
+.retro-chip:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface);
+}
+.retro-chip.active {
+	background: var(--md-primary-container);
+	color: var(--md-on-primary-container);
+}
+.retro-chip:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+/* Retro text inputs (text + number inputs share the same base look) */
+.retro-input {
+	height: 32px;
+	padding: 0 6px;
+	font-size: 12px;
+	font-family: inherit;
+	line-height: 1;
+	border: 2px solid var(--md-inverse-surface);
+	background: var(--md-surface);
+	color: var(--md-on-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.retro-input:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+textarea.retro-input {
+	height: auto;
+	padding-top: 6px;
+	padding-bottom: 6px;
+	line-height: 1.25;
+}
+.retro-input:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Primary retro button scaffold (used with Nuxt UI buttons) */
+.retro-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+	position: relative;
+	border-radius: 3px;
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.retro-btn.aspect-square {
+	padding: 0;
+	place-items: center;
+}
+.retro-btn:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+		inset 0 2px 0 rgba(0, 0, 0, 0.25),
+		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+.retro-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+.retro-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	box-shadow: 2px 2px 0 color-mix(in oklab, var(--md-inverse-surface) 70%, transparent 30%);
+}
+
+/* Iconic copy button variant used in theme palette rows */
+.retro-btn-copy {
+	height: 32px;
+	padding: 0 8px;
+	font-size: 10px;
+	line-height: 1;
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	background: var(--md-secondary-container);
+	color: var(--md-on-secondary-container);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	cursor: pointer;
+	transition: transform 80ms ease, box-shadow 80ms ease,
+		background-color 120ms ease, color 120ms ease;
+}
+.retro-btn-copy:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+.retro-btn-copy:active:not(:disabled) {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface);
+}
+.retro-btn-copy:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+/* Utility class for retro shadow (used globally) */
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Utility class for active/pressed state (used globally) */
+.active-element {
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+		inset 0 2px 0 rgba(0, 0, 0, 0.25),
+		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Workspace backup component styles */
+.retro-upload-panel {
+	border: 2px dashed color-mix(in oklab, var(--md-outline-variant) 85%, transparent 15%);
+	border-radius: 6px;
+	padding: 1rem;
+	background: color-mix(in oklab, var(--md-surface) 94%, var(--md-surface-variant) 6%);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--md-outline-variant) 55%, transparent 45%);
+	transition: border-color 150ms ease, background 150ms ease;
+}
+
+.retro-upload-panel:has(button:hover) {
+	border-color: color-mix(in oklab, var(--md-primary) 60%, transparent 40%);
+}
+
+.retro-upload-icon {
+	font-size: 1.5rem;
+	color: var(--md-primary);
+	flex-shrink: 0;
+}
+
+.retro-file-card {
+	margin-top: 0.75rem;
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.75rem 0.9rem;
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--md-surface) 92%, var(--md-surface-variant) 8%);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-meta-panel {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--md-surface) 95%, var(--md-surface-variant) 5%);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	padding: 1rem;
+	display: grid;
+	gap: 0.75rem;
+}
+
+.retro-meta-table {
+	max-height: 11rem;
+	overflow-y: auto;
+	border: 2px dashed color-mix(in oklab, var(--md-outline-variant) 75%, transparent 25%);
+	border-radius: 4px;
+	padding: 0.5rem;
+	display: grid;
+	gap: 0.35rem;
+}
+
+.retro-meta-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 0.75rem;
+	padding: 0.2rem 0.35rem;
+	background: color-mix(in oklab, var(--md-surface) 92%, transparent 8%);
+	border-radius: 3px;
+}
+
+.retro-choice-btn {
+	border: 2px solid color-mix(in oklab, var(--md-inverse-surface) 92%, transparent 8%);
+	background: color-mix(in oklab, var(--md-surface) 96%, var(--md-surface-variant) 4%);
+	border-radius: 6px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	padding: 0.75rem;
+	transition: box-shadow 120ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.retro-choice-btn:hover {
+	border-color: var(--md-primary);
+	background: color-mix(in oklab, var(--md-secondary-container) 70%, var(--md-surface) 30%);
+	box-shadow: 3px 3px 0 var(--md-inverse-surface);
+}
+
+.retro-choice-btn:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 3px;
+}
+
+.retro-choice-btn--active {
+	background: color-mix(in oklab, var(--md-primary-container) 85%, var(--md-surface) 15%);
+	color: var(--md-on-primary-container);
+	border-color: var(--md-primary);
+	box-shadow: 3px 3px 0 color-mix(in oklab, var(--md-primary) 70%, var(--md-inverse-surface) 30%);
+}
+
+.retro-choice-icon {
+	font-size: 1.4rem;
+	color: currentColor;
+}
+
+.retro-checkbox {
+	--checkbox-border: color-mix(in oklab, var(--md-inverse-surface) 80%, transparent 20%);
+	padding: 0.5rem 0.25rem 0.5rem 0;
+}
+
+.retro-badge {
+	--retro-badge-bg: color-mix(in oklab, var(--md-surface) 96%, var(--md-surface-variant) 4%);
+	--retro-badge-fg: var(--md-on-surface);
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.25rem 0.6rem;
+	min-height: 1.5rem;
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 4px;
+	background: var(--retro-badge-bg);
+	color: var(--retro-badge-fg);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	font-weight: 600;
+	line-height: 1;
+}
+
+.retro-badge--neutral {
+	--retro-badge-bg: color-mix(in oklab, var(--md-surface) 95%, var(--md-surface-variant) 5%);
+	--retro-badge-fg: var(--md-on-surface);
+}
+
+.retro-badge--primary,
+.retro-badge--info {
+	--retro-badge-bg: color-mix(in oklab, var(--md-primary-container) 85%, var(--md-surface) 15%);
+	--retro-badge-fg: var(--md-on-primary-container);
+}
+
+.retro-badge--success {
+	--retro-badge-bg: color-mix(in oklab, var(--md-extended-color-success-color-container) 80%, var(--md-surface) 20%);
+	--retro-badge-fg: var(--md-extended-color-success-on-color-container);
+}
+
+.retro-badge--error {
+	--retro-badge-bg: color-mix(in oklab, var(--md-error-container) 85%, var(--md-surface) 15%);
+	--retro-badge-fg: var(--md-on-error-container);
+}
+
+.retro-badge--warning {
+	--retro-badge-bg: color-mix(in oklab, var(--md-extended-color-warning-color-container) 80%, var(--md-surface) 20%);
+	--retro-badge-fg: var(--md-extended-color-warning-on-color-container);
+}
+
+/* Shared motion reduction: keep retro UI snappy yet accessible */
+@media (prefers-reduced-motion: reduce) {
+	.retro-chip,
+	.retro-btn,
+	.retro-btn-copy,
+	.retro-input,
+	.retro-choice-btn,
+	.retro-upload-panel,
+	.retro-file-card {
+		transition: none;
+		transform: none;
+	}
+}

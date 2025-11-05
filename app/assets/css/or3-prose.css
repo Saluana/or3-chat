@@ -1,4 +1,4 @@
-.prose-retro {
+.or3-prose {
     font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
         Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue',
         sans-serif !important;
@@ -10,7 +10,7 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
-.prose-retro :deep(p) {
+.or3-prose :deep(p) {
     margin-top: 1rem;
     margin-bottom: 1rem;
     line-height: 1.5;
@@ -18,20 +18,20 @@
     font-weight: 400;
 }
 
-.prose-retro :deep(span),
-.prose-retro :deep(strong),
-.prose-retro :deep(em),
-.prose-retro :deep(b),
-.prose-retro :deep(i) {
+.or3-prose :deep(span),
+.or3-prose :deep(strong),
+.or3-prose :deep(em),
+.or3-prose :deep(b),
+.or3-prose :deep(i) {
     font-family: inherit;
 }
 
 
 
-.prose-retro :deep(h1),
-.prose-retro :deep(h2),
-.prose-retro :deep(h3),
-.prose-retro :deep(h4) {
+.or3-prose :deep(h1),
+.or3-prose :deep(h2),
+.or3-prose :deep(h3),
+.or3-prose :deep(h4) {
     font-family: "IBM Plex Sans", system-ui !important;
     color: var(--md-primary);
     margin-top: 2rem;
@@ -40,31 +40,31 @@
     font-weight: 600;
 }
 
-.prose-retro :deep(h1) {
+.or3-prose :deep(h1) {
     font-size: 1.875rem;
     border-bottom: 2px solid var(--md-inverse-surface);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
 }
 
-.prose-retro :deep(h2) {
+.or3-prose :deep(h2) {
     font-size: 1.5rem;
 }
 
-.prose-retro :deep(h3) {
+.or3-prose :deep(h3) {
     font-size: 1.25rem;
 }
 
-.prose-retro :deep(a) {
+.or3-prose :deep(a) {
     color: var(--md-primary);
     text-decoration: underline;
 }
 
-.prose-retro :deep(a:hover) {
+.or3-prose :deep(a:hover) {
     color: var(--md-primary-variant);
 }
 
-.prose-retro :deep(code) {
+.or3-prose :deep(code) {
     background: var(--md-surface-container);
     padding: 0.1rem 0.1rem;
     color: var(--md-on-surface);
@@ -73,12 +73,12 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    .prose-retro :deep(code) {
+    .or3-prose :deep(code) {
         color: white !important;
     }
 }
 
-.prose-retro :deep(pre) {
+.or3-prose :deep(pre) {
     padding: 1rem;
     border-radius: 3px;
     border: 2px solid var(--md-inverse-surface);
@@ -87,7 +87,7 @@
     font-weight: 505;
 }
 
-.prose-retro :deep(pre code) {
+.or3-prose :deep(pre code) {
     background: transparent;
     padding: 0;
     border: none;
@@ -95,7 +95,7 @@
 }
 
 /* Streamdown code blocks */
-.prose-retro :deep([data-streamdown='code-block']) {
+.or3-prose :deep([data-streamdown='code-block']) {
     margin: 1rem 0;
     border: 2px solid var(--md-inverse-surface);
     border-radius: 3px;
@@ -103,16 +103,16 @@
 }
 
 /* Streamdown code blocks */
-.prose-retro :deep([data-streamdown='code-body']) {
+.or3-prose :deep([data-streamdown='code-body']) {
     padding-bottom: 0 !important;
 }
 
 /* Streamdown code blocks */
-.prose-retro :deep([data-streamdown='pre']) {
+.or3-prose :deep([data-streamdown='pre']) {
     padding-bottom: 20px !important;
 }
 
-.prose-retro :deep([data-streamdown='code-block-header']) {
+.or3-prose :deep([data-streamdown='code-block-header']) {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -123,31 +123,31 @@
     font-size: 16px;
 }
 
-.prose-retro :deep([data-streamdown='code-lang']) {
+.or3-prose :deep([data-streamdown='code-lang']) {
     text-transform: uppercase;
     color: var(--md-primary);
     letter-spacing: 0.5px;
     font-size: 10px !important;
 }
 
-.prose-retro :deep([data-streamdown='code']) {
+.or3-prose :deep([data-streamdown='code']) {
 font-family: "VT323", monospace !important;
     font-size: 18px !important;
 }
 
-.prose-retro :deep([data-streamdown='code-body']) {
+.or3-prose :deep([data-streamdown='code-body']) {
     padding: 1rem;
     overflow-x: auto;
 }
 
-.prose-retro :deep([data-streamdown='code-body'] pre) {
+.or3-prose :deep([data-streamdown='code-body'] pre) {
     margin: 0;
     padding: 0;
     border: none;
     background: transparent;
 }
 
-.prose-retro :deep([data-streamdown='copy-button']) {
+.or3-prose :deep([data-streamdown='copy-button']) {
     padding: 0.25rem 0.5rem;
     background: var(--md-primary);
     color: white;
@@ -158,33 +158,33 @@ font-family: "VT323", monospace !important;
     transition: background 0.2s;
 }
 
-.prose-retro :deep([data-streamdown='copy-button']:hover) {
+.or3-prose :deep([data-streamdown='copy-button']:hover) {
     background: var(--md-primary-variant);
 }
 
-.prose-retro :deep([data-streamdown='table-wrapper']) {
+.or3-prose :deep([data-streamdown='table-wrapper']) {
     overflow-x: auto;
     border-radius: 3px;
 }
 
-.prose-retro :deep(blockquote) {
+.or3-prose :deep(blockquote) {
     border-left: 4px solid var(--md-primary);
     padding-left: 1rem;
     margin: 1rem 0;
     font-style: italic;
 }
 
-.prose-retro :deep(ul),
-.prose-retro :deep(ol) {
+.or3-prose :deep(ul),
+.or3-prose :deep(ol) {
     margin: 1rem 0;
     padding-left: 2rem;
 }
 
-.prose-retro :deep(li) {
+.or3-prose :deep(li) {
     margin: 0.5rem 0;
 }
 
-.prose-retro :deep(table) {
+.or3-prose :deep(table) {
     width: auto;
     min-width: min-content;
     max-width: 100%;
@@ -192,8 +192,8 @@ font-family: "VT323", monospace !important;
     margin: 1rem 0;
 }
 
-.prose-retro :deep(th),
-.prose-retro :deep(td) {
+.or3-prose :deep(th),
+.or3-prose :deep(td) {
     border: 2px solid var(--md-inverse-surface);
     padding: 0.5rem 0.75rem;
     text-align: left;
@@ -201,7 +201,7 @@ font-family: "VT323", monospace !important;
     white-space: nowrap;
 }
 
-.prose-retro :deep(th) {
+.or3-prose :deep(th) {
     background: var(--md-primary-container);
     font-weight: bold;
 }
