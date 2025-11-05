@@ -21,7 +21,7 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         globals: true,
-        include: ['app/**/__tests__/**/*.test.ts'],
+        include: ['app/**/__tests__/**/*.test.ts', 'scripts/__tests__/**/*.test.ts'],
         exclude: ['node_modules', 'dist', '.nuxt'],
         setupFiles: ['tests/setup.ts'],
         testTimeout: 10000,

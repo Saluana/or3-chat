@@ -162,7 +162,13 @@ export class RuntimeResolver {
         }
 
         // HTML attribute matching (if specified in override)
-        if (override.attributes && params.element) {
+        if (override.attributes) {
+            // If override requires attributes but no element provided, no match
+            if (!params.element) {
+                return false;
+            }
+            
+            // Check all required attributes
             for (const matcher of override.attributes) {
                 if (!this.matchesAttribute(params.element, matcher)) {
                     return false;
@@ -258,7 +264,7 @@ export class RuntimeResolver {
                     merged[key] = value + (merged[key] ? ` ${merged[key]}` : '');
                 } else if (key === 'ui') {
                     // Deep merge ui objects
-                    merged[key] = { ...(merged[key] as object), ...(value as object) };
+                    merged[key] = this.deepMerge(merged[key] as Record<string, unknown> || {}, value as Record<string, unknown>);
                 } else {
                     // Higher specificity wins
                     merged[key] = value;
@@ -267,6 +273,35 @@ export class RuntimeResolver {
         }
 
         return { props: merged };
+    }
+
+    /**
+     * Deep merge two objects
+     * 
+     * @param target - Target object
+     * @param source - Source object
+     * @returns Merged object
+     */
+    private deepMerge(
+        target: Record<string, unknown>,
+        source: Record<string, unknown>
+    ): Record<string, unknown> {
+        const result = { ...target };
+
+        for (const [key, value] of Object.entries(source)) {
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                // Recursively merge nested objects
+                result[key] = this.deepMerge(
+                    (result[key] as Record<string, unknown>) || {},
+                    value as Record<string, unknown>
+                );
+            } else {
+                // Override with source value
+                result[key] = value;
+            }
+        }
+
+        return result;
     }
 
     /**
