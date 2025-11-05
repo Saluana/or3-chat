@@ -131,6 +131,44 @@ export default defineTheme({
             size: 'xs',
         },
 
+        // Sidebar specific buttons
+        'button#sidebar.toggle': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'xs',
+        },
+
+        'button#sidebar.new-chat': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+            color: 'primary',
+        },
+
+        'button#sidebar.new-document': {
+            class: 'retro-btn',
+            variant: 'soft',
+            size: 'sm',
+        },
+
+        'button#sidebar.new-project': {
+            class: 'retro-btn',
+            variant: 'soft',
+            size: 'sm',
+        },
+
+        'button#sidebar.search-clear': {
+            class: 'retro-btn',
+            variant: 'subtle',
+            size: 'xs',
+        },
+
+        'button#sidebar.filter': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'md',
+        },
+
         // Chat context buttons
         'button.chat': {
             class: 'retro-btn',
@@ -138,8 +176,20 @@ export default defineTheme({
             size: 'sm',
         },
 
-        // Sidebar buttons
-        'button.sidebar': {
+        'button#chat.send': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'md',
+            color: 'primary',
+        },
+
+        'button#chat.model-select': {
+            class: 'retro-btn',
+            variant: 'soft',
+            size: 'sm',
+        },
+
+        'button#chat.attach': {
             class: 'retro-btn',
             variant: 'ghost',
             size: 'sm',
@@ -152,6 +202,32 @@ export default defineTheme({
             size: 'md',
         },
 
+        'button#dashboard.export': {
+            class: 'retro-btn',
+            variant: 'light',
+            size: 'md',
+        },
+
+        'button#dashboard.import': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'md',
+            color: 'primary',
+        },
+
+        // Document toolbar buttons
+        'button#document.toolbar': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'sm',
+        },
+
+        'button#document.search': {
+            class: 'retro-btn',
+            variant: 'soft',
+            size: 'sm',
+        },
+
         // Global input styling
         'input': {
             class: 'retro-input',
@@ -159,8 +235,20 @@ export default defineTheme({
             size: 'md',
         },
 
+        // Sidebar inputs
+        'input.sidebar': {
+            class: 'retro-input',
+            size: 'md',
+        },
+
         // Chat context inputs
         'input.chat': {
+            class: 'retro-input',
+            size: 'sm',
+        },
+
+        // Dashboard inputs
+        'input.dashboard': {
             class: 'retro-input',
             size: 'sm',
         },
