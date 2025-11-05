@@ -47,7 +47,7 @@
                             @click="triggerFileInput"
                             :square="true"
                             size="sm"
-                            class="retro-btn flex items-center justify-center"
+                            class="flex items-center justify-center"
                             type="button"
                             aria-label="Add attachments"
                             :disabled="loading"
@@ -67,7 +67,7 @@
                                 label="Open"
                                 :square="true"
                                 size="sm"
-                                class="retro-btn flex items-center justify-center"
+                                class="flex items-center justify-center"
                                 type="button"
                                 aria-label="Settings"
                                 :disabled="loading"
@@ -234,8 +234,7 @@
                             :square="!entry.action.label"
                             :disabled="entry.disabled"
                             context="chat"
-                            class="retro-btn pointer-events-auto flex items-center gap-1"
-                            :ui="{ base: 'retro-btn' }"
+                            class="pointer-events-auto flex items-center gap-1"
                             :aria-label="
                                 entry.action.tooltip ||
                                 entry.action.label ||
@@ -275,7 +274,7 @@
                         "
                         :square="true"
                         size="sm"
-                        class="retro-btn disabled:opacity-40 flex items-center justify-center"
+                        class="disabled:opacity-40 flex items-center justify-center"
                         type="button"
                         aria-label="Send message"
                         :ui="{
@@ -290,7 +289,7 @@
                         @click="emit('stop-stream')"
                         :square="true"
                         size="sm"
-                        class="retro-btn flex items-center justify-center"
+                        class="flex items-center justify-center"
                         type="button"
                         aria-label="Stop generation"
                     >

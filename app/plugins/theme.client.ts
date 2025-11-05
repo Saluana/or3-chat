@@ -1,4 +1,5 @@
 import { ref, readonly } from 'vue';
+import { useAppConfig } from '#imports';
 import sharedBaseCssUrl from '~/theme/_shared/base.css?url';
 
 // Import override system functions
@@ -70,7 +71,7 @@ import {
     type ThemeWarning,
     type ThemeLoadResult,
 } from '~/theme/_shared/theme-loader';
-import type { AppConfig } from '~/theme/_shared/config-merger';
+import { mergeThemeConfig, type AppConfig } from '~/theme/_shared/config-merger';
 
 export default defineNuxtPlugin((nuxtApp) => {
     const ensureBaseCssInjected = () => {
@@ -85,6 +86,27 @@ export default defineNuxtPlugin((nuxtApp) => {
         linkElement.href = sharedBaseCssUrl;
         linkElement.setAttribute('data-theme-shared', 'true');
         document.head.appendChild(linkElement);
+    };
+
+    const appConfig = useAppConfig();
+    const baseAppConfig = JSON.parse(JSON.stringify(appConfig)) as AppConfig;
+
+    const replaceAppConfig = (next: AppConfig) => {
+        const target = appConfig as Record<string, unknown>;
+        for (const key of Object.keys(target)) {
+            delete target[key];
+        }
+        Object.assign(target, JSON.parse(JSON.stringify(next)));
+    };
+
+    const applyThemeConfig = (themeConfig?: Partial<AppConfig>) => {
+        if (!themeConfig) {
+            replaceAppConfig(baseAppConfig);
+            return;
+        }
+
+        const merged = mergeThemeConfig(baseAppConfig, themeConfig);
+        replaceAppConfig(merged);
     };
     const THEME_CLASSES = [
         'light',
@@ -124,6 +146,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             clearOverrideResolver();
             overrideStats.value.resolverLoaded = false;
             currentOverrides.value = null;
+            applyThemeConfig(themeConfig);
 
             if (!themeConfig?.componentOverrides) {
                 console.log('[theme] No component overrides found in theme config');
@@ -140,7 +163,10 @@ export default defineNuxtPlugin((nuxtApp) => {
 
             // 6.10 Fall back gracefully on validation failure
             if (!validation.valid) {
-                console.error(`[theme] Skipping override initialization due to validation errors in theme "${activeTheme.value}"`);
+                console.error(
+                    `[theme] Skipping override initialization due to validation errors in theme "${activeTheme.value}"`
+                );
+                applyThemeConfig();
                 return;
             }
 
@@ -197,6 +223,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 lastInitTheme: '',
             };
             currentOverrides.value = null;
+            applyThemeConfig();
         }
     };
 

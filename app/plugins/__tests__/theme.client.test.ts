@@ -24,9 +24,11 @@ beforeAll(() => {
     (globalThis as any).defineNuxtPlugin = (fn: any) => fn;
 });
 
-// Mock #app
-vi.mock('#app', () => ({
-    useNuxtApp: () => ({ $hooks: {} }),
+let appConfigMock: any = { ui: {} };
+
+// Mock Nuxt composables
+vi.mock('#imports', () => ({
+    useAppConfig: () => appConfigMock,
 }));
 
 // Mock the theme-loader module
@@ -34,7 +36,18 @@ vi.mock('~/theme/_shared/theme-loader', () => ({
     discoverThemes: vi.fn(),
     loadTheme: vi.fn(),
     validateThemeVariables: vi.fn(),
-    mergeThemeConfig: vi.fn(),
+}));
+
+const mergeThemeConfigMock = vi
+    .fn((base: Record<string, unknown>, override: Record<string, unknown> | undefined) => {
+        return {
+            ...JSON.parse(JSON.stringify(base)),
+            ...(override ? JSON.parse(JSON.stringify(override)) : {}),
+        };
+    });
+
+vi.mock('~/theme/_shared/config-merger', () => ({
+    mergeThemeConfig: mergeThemeConfigMock,
 }));
 
 // Mock process.client
@@ -83,6 +96,7 @@ describe('Theme Plugin', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        appConfigMock = { ui: {} };
 
         // Reset DOM
         document.documentElement.className = '';

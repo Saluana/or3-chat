@@ -152,9 +152,8 @@ export default defineAppConfig({
                 class: 'bg-red-600 border-2 border-red-500 text-white animate-pulse shadow-[0_0_20px_rgba(255,0,0,0.6)] hover:shadow-[0_0_30px_rgba(255,0,0,0.9)]',
             },
             'chat.attach': {
-                variant: 'ghost',
+                variant: 'cyberpunkSolid',
                 size: 'sm',
-                class: 'bg-transparent border-2 border-cyan-500 text-cyan-500 shadow-[0_0_10px_rgba(0,255,255,0.4)] hover:shadow-[0_0_20px_rgba(0,255,255,0.7)] hover:bg-cyan-500/10 transition-all duration-300',
             },
             'chat.settings': {
                 variant: 'soft',

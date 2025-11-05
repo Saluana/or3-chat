@@ -36,7 +36,14 @@ export default defineAppConfig({
             button: [
                 {
                     component: 'button',
-                    props: { variant: 'solid' as const, class: 'theme-default-btn' },
+                    props: { variant: 'solid' as const, class: 'retro-btn theme-default-btn' },
+                    priority: 1,
+                },
+            ],
+            input: [
+                {
+                    component: 'input',
+                    props: { class: 'retro-input' },
                     priority: 1,
                 },
             ],
@@ -46,7 +53,7 @@ export default defineAppConfig({
                 button: [
                     {
                         component: 'button',
-                        props: { variant: 'outline' as const, class: 'chat-btn' },
+                        props: { variant: 'outline' as const, class: 'retro-btn chat-btn' },
                         priority: 10,
                     },
                 ],
@@ -57,7 +64,7 @@ export default defineAppConfig({
                 button: [
                     {
                         component: 'button',
-                        props: { variant: 'ghost' as const, class: 'hover-btn' },
+                        props: { variant: 'ghost' as const, class: 'retro-btn hover-btn' },
                         priority: 5,
                     },
                 ],
