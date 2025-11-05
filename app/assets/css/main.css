@@ -17,7 +17,13 @@
 
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
-@import "./retro.css"; /* shared retro utility classes */
+
+/* Retro theme styles - now loaded conditionally via theme system */
+@import "~/theme/retro/styles.css";
+
+/* Generic prose styles (theme-agnostic, renamed from prose-retro) */
+@import "./or3-prose.css";
+
 /* mentions.css removed: .mention styles live in ChatInputDropper.vue */
 
 /* Font setup: body uses VT323, headings use Press Start 2P */
@@ -95,15 +101,8 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--app-font-heading-current, var(--font-heading)) !important;
 }
 
-.active-element {
-	box-shadow: 0 0 0 var(--md-inverse-surface),
-		inset 0 2px 0 rgba(0, 0, 0, 0.25),
-		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
-}
-
-.retro-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
+/* Retro utility classes moved to ~/theme/retro/styles.css */
+/* active-element and retro-shadow are still loaded from retro theme */
 
 /* Global thin colored scrollbars (WebKit + Firefox) */
 /* Firefox */

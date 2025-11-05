@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
-import type { CompiledTheme } from '~/theme/_shared/types';
+import type { CompiledTheme, CompiledOverride } from '~/theme/_shared/types';
 
 export default defineNuxtPlugin((nuxtApp) => {
     const THEME_CLASSES = [
@@ -73,39 +73,154 @@ export default defineNuxtPlugin((nuxtApp) => {
     const activeTheme = ref(readActiveTheme() || 'default');
 
     /**
-     * Load a compiled theme configuration
+     * Load a theme configuration
      * 
-     * This is called at build time by the theme compiler or at runtime
-     * to dynamically import compiled theme configs.
-     * 
-     * Note: The dynamic import path is intentionally constructed this way
-     * to allow flexible theme loading. The compiler ensures these files exist.
+     * This loads the theme definition and compiles it at runtime.
+     * The theme compiler has already validated the theme at build time.
      */
-    const loadCompiledTheme = async (themeName: string): Promise<CompiledTheme | null> => {
+    const loadTheme = async (themeName: string): Promise<CompiledTheme | null> => {
         try {
-            // Dynamic import of compiled theme
-            // The path is constructed at runtime but validated at build time
-            const themePath = `~/theme/${themeName}/theme.compiled.js`;
-            const compiledTheme = await import(/* @vite-ignore */ themePath).catch(() => null);
+            // Dynamic import of theme definition
+            const themeModule = await import(`~/theme/${themeName}/theme.ts`).catch(() => null);
             
-            if (compiledTheme?.default) {
-                const theme = compiledTheme.default as CompiledTheme;
-                themeRegistry.set(themeName, theme);
+            if (themeModule?.default) {
+                const definition = themeModule.default;
+                
+                // Create a simple compiled theme from the definition
+                // The full compilation happened at build time for validation
+                const compiledTheme: CompiledTheme = {
+                    name: definition.name,
+                    displayName: definition.displayName,
+                    description: definition.description,
+                    cssVariables: '', // CSS variables are already in the theme CSS files
+                    overrides: compileOverridesRuntime(definition.overrides || {}),
+                    ui: definition.ui,
+                    propMaps: definition.propMaps,
+                };
+                
+                themeRegistry.set(themeName, compiledTheme);
                 
                 // Initialize resolver for this theme
-                const resolver = new RuntimeResolver(theme);
+                const resolver = new RuntimeResolver(compiledTheme);
                 resolverRegistry.set(themeName, resolver);
                 
-                return theme;
+                return compiledTheme;
             }
         } catch (error) {
             if (import.meta.dev) {
-                console.warn(`[theme] Failed to load compiled theme "${themeName}":`, error);
+                console.warn(`[theme] Failed to load theme "${themeName}":`, error);
             }
         }
         
         return null;
     };
+
+    /**
+     * Simple runtime compilation of overrides
+     * This mirrors the build-time compilation but runs in the browser
+     */
+    function compileOverridesRuntime(overrides: Record<string, any>): CompiledOverride[] {
+        const compiled: CompiledOverride[] = [];
+        
+        for (const [selector, props] of Object.entries(overrides)) {
+            const parsed = parseSelector(selector);
+            const specificity = calculateSpecificity(parsed);
+            
+            compiled.push({
+                component: parsed.component,
+                context: parsed.context,
+                identifier: parsed.identifier,
+                state: parsed.state,
+                attributes: parsed.attributes,
+                props,
+                selector,
+                specificity,
+            });
+        }
+        
+        // Sort by specificity (descending)
+        return compiled.sort((a, b) => b.specificity - a.specificity);
+    }
+
+    /**
+     * Parse a CSS selector into components
+     */
+    function parseSelector(selector: string): any {
+        const normalized = normalizeSelector(selector);
+        
+        const component = normalized.match(/^(\w+)/)?.[1] || 'button';
+        const context = normalized.match(/data-context="([^"]+)"/)?.[1];
+        const identifier = normalized.match(/data-id="([^"]+)"/)?.[1];
+        const state = normalized.match(/:(\w+)/)?.[1];
+        
+        // Extract HTML attribute selectors
+        const attributes: any[] = [];
+        const attrRegex = /\[([^=\]]+)((?:[~|^$*]?=)"([^"]+)")?\]/g;
+        let match;
+        
+        while ((match = attrRegex.exec(normalized)) !== null) {
+            const attrName = match[1];
+            if (attrName === 'data-context' || attrName === 'data-id') continue;
+            
+            const operator = match[2]?.[0] === '=' ? '=' : match[2]?.slice(0, -1) || 'exists';
+            const attrValue = match[3];
+            
+            attributes.push({
+                attribute: attrName,
+                operator,
+                value: attrValue,
+            });
+        }
+        
+        return {
+            component,
+            context,
+            identifier,
+            state,
+            attributes: attributes.length > 0 ? attributes : undefined,
+        };
+    }
+
+    /**
+     * Normalize simple selector syntax to attribute selectors
+     */
+    function normalizeSelector(selector: string): string {
+        let result = selector;
+        
+        // Convert .context to [data-context="context"]
+        const knownContexts = ['chat', 'sidebar', 'dashboard', 'header', 'global'];
+        result = result.replace(
+            /(\w+)\.(\w+)(?=[:\[]|$)/g,
+            (match, component, context) => {
+                if (knownContexts.includes(context)) {
+                    return `${component}[data-context="${context}"]`;
+                }
+                return match;
+            }
+        );
+        
+        // Convert #identifier to [data-id="identifier"]
+        result = result.replace(
+            /(\w+)#([\w.]+)(?=[:\[]|$)/g,
+            '$1[data-id="$2"]'
+        );
+        
+        return result;
+    }
+
+    /**
+     * Calculate CSS specificity
+     */
+    function calculateSpecificity(parsed: any): number {
+        let specificity = 1; // element
+        
+        if (parsed.context) specificity += 10;
+        if (parsed.identifier) specificity += 20;
+        if (parsed.state) specificity += 10;
+        if (parsed.attributes) specificity += parsed.attributes.length * 10;
+        
+        return specificity;
+    }
 
     /**
      * Get resolver for a specific theme
@@ -142,7 +257,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     const setActiveTheme = async (themeName: string) => {
         // Load theme if not already loaded
         if (!themeRegistry.has(themeName)) {
-            await loadCompiledTheme(themeName);
+            await loadTheme(themeName);
         }
 
         // Update active theme
@@ -157,12 +272,12 @@ export default defineNuxtPlugin((nuxtApp) => {
         }
     };
 
-    // Initialize: Try to load example-refined theme if available
-    if (import.meta.dev) {
-        loadCompiledTheme('example-refined').catch(() => {
-            // Theme not available yet, that's ok
-        });
-    }
+    // Initialize: Load retro theme by default
+    loadTheme('retro').catch(() => {
+        if (import.meta.dev) {
+            console.warn('[theme] Failed to load retro theme');
+        }
+    });
 
     nuxtApp.provide('theme', {
         // Original theme API (for light/dark mode)
@@ -176,6 +291,6 @@ export default defineNuxtPlugin((nuxtApp) => {
         activeTheme, // Reactive ref to active theme name
         setActiveTheme, // Function to switch themes
         getResolver, // Function to get resolver for a theme
-        loadCompiledTheme, // Function to dynamically load a theme
+        loadTheme, // Function to dynamically load a theme
     });
 });

@@ -342,7 +342,7 @@
 
                             <StreamMarkdown
                                 :content="displayContent"
-                                class="prose prose-pre:font-mono prose-retro max-w-none"
+                                class="prose prose-pre:font-mono or3-prose max-w-none"
                                 :allowed-link-prefixes="[
                                     'https://',
                                     'http://',
@@ -1136,7 +1136,7 @@ function onMobileTocSelect(id: string) {
 </script>
 
 <style scoped>
-@import '~/assets/css/prose-retro.css';
+@import '~/assets/css/or3-prose.css';
 
 .docs-shell {
     font-family: var(--font-sans);

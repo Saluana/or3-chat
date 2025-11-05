@@ -768,13 +768,13 @@ async function runExtraAction(action: ChatMessageAction) {
 
 // Classes applied to <StreamMarkdown> (joined string for TS friendliness)
 const streamMdClasses = [
-    'w-full min-w-full prose prose-pre:font-mono prose-retro prose-pre:max-w-full prose-pre:overflow-x-auto',
+    'w-full min-w-full prose prose-pre:font-mono or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto',
     'prose-table:!w-auto prose-table:table-auto',
 ].join(' ');
 </script>
 
 <style scoped>
-@import '~/assets/css/prose-retro.css';
+@import '~/assets/css/or3-prose.css';
 
 .retro-shadow {
     box-shadow: 2px 2px 0 0 var(--md-inverse-surface);

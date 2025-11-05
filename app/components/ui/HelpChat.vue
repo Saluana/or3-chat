@@ -112,7 +112,7 @@
                                         ? 'max-w-[820px]'
                                         : 'max-w-full',
                                 ]"
-                                class="prose prose-pre:font-mono prose-retro prose-pre:max-w-full prose-pre:overflow-x-auto"
+                                class="prose prose-pre:font-mono or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto"
                                 :allowed-link-prefixes="[
                                     'https://',
                                     'http://',
@@ -769,5 +769,5 @@ watch(isMobile, (mobile) => {
 </script>
 
 <style scoped>
-@import '~/assets/css/prose-retro.css';
+@import '~/assets/css/or3-prose.css';
 </style>

@@ -1,11 +1,15 @@
-/*
-	Retro dashboard utility classes
-	--------------------------------
-	- Exported globally so dashboard modules share identical visuals.
-	- Extend styles by stacking an extra class (e.g. `.retro-chip.my-variant`).
-	- Do not duplicate these selectors in component-scoped blocks—update here instead.
-	- Documented for plugin authors in `docs/UI/dashboard-plugins.md`.
-*/
+/**
+ * Retro Theme Styles
+ * 
+ * All retro-specific CSS classes, extracted from global stylesheets.
+ * These styles are only loaded when the retro theme is active.
+ * 
+ * This file contains the visual identity of the retro theme:
+ * - Hard 2px borders
+ * - Offset shadows (2px 2px)
+ * - 3px border radius
+ * - Pixel-perfect press animations
+ */
 
 /* Screen-reader only helper (follows inclusive components pattern) */
 .sr-only {
@@ -21,7 +25,7 @@
 	border: 0;
 }
 
-/* Retro “chip” toggle button used across dashboard settings */
+/* Retro "chip" toggle button used across dashboard settings */
 .retro-chip {
 	display: inline-flex;
 	align-items: center;
@@ -142,6 +146,18 @@ textarea.retro-input {
 .retro-btn-copy:focus-visible {
 	outline: 2px solid var(--md-primary);
 	outline-offset: 2px;
+}
+
+/* Utility class for retro shadow (used globally) */
+.retro-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Utility class for active/pressed state (used globally) */
+.active-element {
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+		inset 0 2px 0 rgba(0, 0, 0, 0.25),
+		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* Shared motion reduction: keep retro UI snappy yet accessible */
