@@ -1,3 +1,8 @@
+// Allow using the Nuxt macro without relying on generated types at dev-time in this editor.
+// Nuxt will inject the proper macro type from .nuxt during build/dev.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const defineAppConfig: (config: any) => any;
+
 export default defineAppConfig({
   ui: {
     button: {
@@ -69,6 +74,112 @@ export default defineAppConfig({
       all: {
         enter: 'transition-all duration-300 ease-out',
         leave: 'transition-all duration-300 ease-in'
+      }
+    }
+  },
+  componentOverrides: {
+    global: {
+      button: [
+        {
+          component: 'button',
+          props: { 
+            variant: 'cyberpunkSolid',
+            size: 'md',
+            class: 'shadow-[0_0_20px_rgba(0,255,255,0.5)] hover:shadow-[0_0_30px_rgba(0,255,255,0.8)]'
+          },
+          priority: 0
+        },
+        {
+          component: 'button',
+          props: { 
+            variant: 'neonSolid',
+            size: 'md',
+            class: 'shadow-[0_0_20px_rgba(255,0,255,0.5)] hover:shadow-[0_0_30px_rgba(255,0,255,0.8)]'
+          },
+          priority: 1
+        }
+      ],
+      input: [
+        {
+          component: 'input',
+          props: { 
+            variant: 'cyberpunk',
+            size: 'md',
+            class: 'bg-black border-2 border-cyan-400 text-cyan-400 shadow-[0_0_15px_rgba(0,255,255,0.3)] focus:border-cyan-300 focus:shadow-[0_0_25px_rgba(0,255,255,0.6)]'
+          },
+          priority: 0
+        }
+      ],
+      modal: [
+        {
+          component: 'modal',
+          props: { 
+            class: 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-black border-[3px] border-cyan-400 shadow-[0_0_50px_rgba(0,255,255,0.8)]'
+          },
+          priority: 0
+        }
+      ]
+    },
+    contexts: {
+      chat: {
+        button: [
+          {
+            component: 'button',
+            props: { 
+              variant: 'neonOutline',
+              size: 'sm',
+              class: 'border-2 border-pink-500! text-pink-500! shadow-[0_0_15px_rgba(255,0,255,0.3)] hover:shadow-[0_0_25px_rgba(255,0,255,0.6)] hover:bg-pink-500/10'
+            },
+            priority: 2
+          }
+        ]
+      },
+      sidebar: {
+        button: [
+          {
+            component: 'button',
+            props: { 
+              variant: 'cyberpunkOutline',
+              size: 'sm',
+              class: 'border-cyan-400 text-cyan-400 shadow-[0_0_15px_rgba(0,255,255,0.3)] hover:shadow-[0_0_25px_rgba(0,255,255,0.6)] hover:bg-cyan-400/10'
+            },
+            priority: 2
+          }
+        ]
+      }
+    },
+    states: {
+      hover: {
+        button: [
+          {
+            component: 'button',
+            props: { 
+              class: 'hover:shadow-[0_0_40px_rgba(0,255,255,1)] hover:scale-105 transition-all duration-200'
+            },
+            priority: 3
+          }
+        ],
+        input: [
+          {
+            component: 'input',
+            props: { 
+              class: 'hover:shadow-[0_0_30px_rgba(0,255,255,0.8)] transition-all duration-200'
+            },
+            priority: 3
+          }
+        ]
+      },
+      disabled: {
+        button: [
+          {
+            component: 'button',
+            props: { 
+              variant: 'ghost',
+              class: 'opacity-50 cursor-not-allowed shadow-none'
+            },
+            priority: 4
+          }
+        ]
       }
     }
   }

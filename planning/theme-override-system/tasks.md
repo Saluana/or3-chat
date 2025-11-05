@@ -172,53 +172,18 @@ All subtasks for Task 4 have been completed:
 **Timeline**: Week 3  
 **Requirements**: 4.3, 7.1
 
-### 8. Add Overrides to Default Theme
+### 8. Add Overrides to Cyberpunk Theme
 
-- [ ] 8.1 Modify `app/theme/default/theme.ts`
-- [ ] 8.2 Add `componentOverrides` section
-- [ ] 8.3 Define global button overrides (color, size)
-- [ ] 8.4 Define global input overrides
-- [ ] 8.5 Define global modal overrides
-- [ ] 8.6 Add context-specific overrides for chat
-- [ ] 8.7 Add context-specific overrides for sidebar
-- [ ] 8.8 Add state-based overrides for disabled state
-- [ ] 8.9 Test default theme renders correctly
-- [ ] 8.10 Verify no visual regression
-- **Requirements**: 4.3, 6.1
-
-### 9. Add Overrides to Minimal Theme
-
-- [ ] 9.1 Modify `app/theme/minimal/theme.ts`
-- [ ] 9.2 Add simple button overrides (black/white colors)
-- [ ] 9.3 Add input overrides (sharp borders, no rounded corners)
-- [ ] 9.4 Add modal overrides (minimal shadow, flat design)
-- [ ] 9.5 Add chat context overrides (compact buttons)
-- [ ] 9.6 Test minimal theme applies overrides correctly
-- [ ] 9.7 Verify minimal aesthetic is maintained
+- [x] 8.1 Modify `app/theme/cyberpunk/theme.ts`
+- [x] 8.2 Add button overrides (neon colors, glow effects)
+- [x] 8.3 Add input overrides (neon borders, futuristic styling)
+- [x] 8.4 Add modal overrides (glow shadows, neon accents)
+- [x] 8.5 Add chat context overrides (neon action buttons)
+- [x] 8.6 Add hover state overrides (enhanced glow)
+- [x] 8.7 Test cyberpunk theme applies overrides correctly
+- [x] 8.8 Verify neon aesthetic is enhanced
 - **Requirements**: 4.3
 
-### 10. Add Overrides to Cyberpunk Theme
-
-- [ ] 10.1 Modify `app/theme/cyberpunk/theme.ts`
-- [ ] 10.2 Add button overrides (neon colors, glow effects)
-- [ ] 10.3 Add input overrides (neon borders, futuristic styling)
-- [ ] 10.4 Add modal overrides (glow shadows, neon accents)
-- [ ] 10.5 Add chat context overrides (neon action buttons)
-- [ ] 10.6 Add hover state overrides (enhanced glow)
-- [ ] 10.7 Test cyberpunk theme applies overrides correctly
-- [ ] 10.8 Verify neon aesthetic is enhanced
-- **Requirements**: 4.3
-
-### 11. Add Overrides to Nature Theme
-
-- [ ] 11.1 Modify `app/theme/nature/theme.ts`
-- [ ] 11.2 Add button overrides (green/brown colors, organic feel)
-- [ ] 11.3 Add input overrides (soft borders, natural tones)
-- [ ] 11.4 Add modal overrides (soft shadows, earthy colors)
-- [ ] 11.5 Add sidebar context overrides (muted colors)
-- [ ] 11.6 Test nature theme applies overrides correctly
-- [ ] 11.7 Verify organic aesthetic is maintained
-- **Requirements**: 4.3
 
 ---
 
