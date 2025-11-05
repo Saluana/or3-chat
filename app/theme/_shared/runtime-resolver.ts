@@ -1,0 +1,353 @@
+/**
+ * Runtime Override Resolver
+ * 
+ * This class is responsible for resolving theme overrides at runtime.
+ * It matches component parameters against compiled overrides and merges
+ * them by specificity.
+ * 
+ * Performance targets:
+ * - Override resolution: < 1ms per component
+ * - Theme switch: < 50ms total
+ */
+
+import type {
+    CompiledOverride,
+    CompiledTheme,
+    OverrideProps,
+    AttributeMatcher,
+    PropClassMaps,
+} from './types';
+
+/**
+ * Parameters for resolving overrides
+ */
+export interface ResolveParams {
+    /** Component type (e.g., 'button', 'input', 'modal') */
+    component: string;
+
+    /** Context name (e.g., 'chat', 'sidebar', 'dashboard') */
+    context?: string;
+
+    /** Theme identifier (e.g., 'chat.send', 'search.query') */
+    identifier?: string;
+
+    /** Component state (e.g., 'hover', 'active', 'focus') */
+    state?: string;
+
+    /** HTML element for attribute matching */
+    element?: HTMLElement;
+
+    /** Whether component is a Nuxt UI component (for prop mapping) */
+    isNuxtUI?: boolean;
+}
+
+/**
+ * Resolved override result
+ */
+export interface ResolvedOverride {
+    /** Merged props to apply to component */
+    props: Record<string, unknown>;
+}
+
+/**
+ * Runtime resolver for theme overrides
+ * 
+ * The resolver is initialized with a compiled theme configuration
+ * and provides efficient override resolution based on component parameters.
+ */
+export class RuntimeResolver {
+    private overrides: CompiledOverride[];
+    private propMaps: PropClassMaps;
+    private themeName: string;
+
+    /**
+     * Create a new runtime resolver
+     * 
+     * @param compiledTheme - Compiled theme configuration from build time
+     */
+    constructor(compiledTheme: CompiledTheme) {
+        // Sort overrides by specificity (highest first) for efficient resolution
+        this.overrides = [...compiledTheme.overrides].sort(
+            (a, b) => b.specificity - a.specificity
+        );
+
+        // Store prop-to-class mappings (with defaults)
+        this.propMaps = compiledTheme.propMaps || {};
+        this.themeName = compiledTheme.name;
+    }
+
+    /**
+     * Resolve overrides for a component instance
+     * 
+     * Matches component parameters against compiled overrides and merges
+     * by specificity. Returns merged props ready to apply to component.
+     * 
+     * @param params - Component parameters for resolution
+     * @returns Resolved override props
+     */
+    resolve(params: ResolveParams): ResolvedOverride {
+        try {
+            // Find all matching overrides
+            const matching: CompiledOverride[] = [];
+
+            for (const override of this.overrides) {
+                if (this.matches(override, params)) {
+                    matching.push(override);
+                }
+            }
+
+            // Merge matching overrides by specificity
+            const merged = this.merge(matching);
+
+            // Convert semantic props to classes if component is not Nuxt UI
+            if (!params.isNuxtUI) {
+                return this.mapPropsToClasses(merged);
+            }
+
+            return merged;
+        } catch (error) {
+            // Graceful degradation - log in dev, return empty in production
+            if (import.meta.dev) {
+                console.error('[theme-resolver] Override resolution failed:', error, {
+                    theme: this.themeName,
+                    params,
+                });
+            }
+
+            // Return empty props - component uses defaults
+            return { props: {} };
+        }
+    }
+
+    /**
+     * Check if an override matches the given component parameters
+     * 
+     * Implements CSS-like specificity matching:
+     * 1. Component type must match
+     * 2. Context must match (if specified in override)
+     * 3. Identifier must match (if specified in override)
+     * 4. State must match (if specified in override)
+     * 5. HTML attributes must match (if specified in override)
+     * 
+     * @param override - Compiled override to check
+     * @param params - Component parameters to match against
+     * @returns true if override matches
+     */
+    private matches(
+        override: CompiledOverride,
+        params: ResolveParams
+    ): boolean {
+        // Component type must match
+        if (override.component !== params.component) {
+            return false;
+        }
+
+        // Context must match (if specified in override)
+        // If override has no context, it's a global override and matches any context
+        if (override.context && override.context !== params.context) {
+            return false;
+        }
+
+        // Identifier must match (if specified in override)
+        if (override.identifier && override.identifier !== params.identifier) {
+            return false;
+        }
+
+        // State must match (if specified in override)
+        if (override.state && override.state !== params.state) {
+            return false;
+        }
+
+        // HTML attribute matching (if specified in override)
+        if (override.attributes && params.element) {
+            for (const matcher of override.attributes) {
+                if (!this.matchesAttribute(params.element, matcher)) {
+                    return false;
+                }
+            }
+        }
+
+        // All criteria matched
+        return true;
+    }
+
+    /**
+     * Check if an element matches an attribute selector
+     * 
+     * Supports all CSS attribute selector operators:
+     * - [attr] - attribute exists
+     * - [attr="value"] - exact match
+     * - [attr~="value"] - contains word
+     * - [attr|="value"] - starts with word
+     * - [attr^="value"] - starts with string
+     * - [attr$="value"] - ends with string
+     * - [attr*="value"] - contains substring
+     * 
+     * @param element - HTML element to check
+     * @param matcher - Attribute matcher to apply
+     * @returns true if element matches
+     */
+    private matchesAttribute(
+        element: HTMLElement | undefined,
+        matcher: AttributeMatcher
+    ): boolean {
+        if (!element) return false;
+
+        const attrValue = element.getAttribute(matcher.attribute);
+
+        // [attr] - attribute exists
+        if (matcher.operator === 'exists') {
+            return attrValue !== null;
+        }
+
+        if (attrValue === null) return false;
+        if (!matcher.value) return false;
+
+        switch (matcher.operator) {
+            case '=': // [attr="value"] - exact match
+                return attrValue === matcher.value;
+
+            case '~=': // [attr~="value"] - contains word
+                return attrValue.split(/\s+/).includes(matcher.value);
+
+            case '|=': // [attr|="value"] - starts with word
+                return (
+                    attrValue === matcher.value ||
+                    attrValue.startsWith(matcher.value + '-')
+                );
+
+            case '^=': // [attr^="value"] - starts with string
+                return attrValue.startsWith(matcher.value);
+
+            case '$=': // [attr$="value"] - ends with string
+                return attrValue.endsWith(matcher.value);
+
+            case '*=': // [attr*="value"] - contains substring
+                return attrValue.includes(matcher.value);
+
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Merge matching overrides by specificity
+     * 
+     * Merging rules:
+     * - Classes are concatenated (highest specificity first)
+     * - UI objects are deep merged
+     * - Other props: highest specificity wins
+     * 
+     * @param overrides - Matching overrides (pre-sorted by specificity)
+     * @returns Merged override props
+     */
+    private merge(overrides: CompiledOverride[]): ResolvedOverride {
+        const merged: Record<string, unknown> = {};
+
+        // Iterate in reverse (lowest specificity first, highest last)
+        // This ensures highest specificity wins
+        for (let i = overrides.length - 1; i >= 0; i--) {
+            const override = overrides[i];
+
+            for (const [key, value] of Object.entries(override.props)) {
+                if (key === 'class') {
+                    // Concatenate classes (highest specificity first)
+                    merged[key] = value + (merged[key] ? ` ${merged[key]}` : '');
+                } else if (key === 'ui') {
+                    // Deep merge ui objects
+                    merged[key] = { ...(merged[key] as object), ...(value as object) };
+                } else {
+                    // Higher specificity wins
+                    merged[key] = value;
+                }
+            }
+        }
+
+        return { props: merged };
+    }
+
+    /**
+     * Convert semantic props (variant, size, color) to CSS classes
+     * 
+     * For custom components that don't understand Nuxt UI props,
+     * we map variant/size/color to CSS classes using the theme's prop maps.
+     * 
+     * @param override - Resolved override with semantic props
+     * @returns Override with props mapped to classes
+     */
+    private mapPropsToClasses(override: ResolvedOverride): ResolvedOverride {
+        const classes: string[] = [];
+        const cleanProps: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(override.props)) {
+            // Check if this prop should be mapped to classes
+            if (key === 'variant' && typeof value === 'string') {
+                const mappedClass = this.propMaps.variant?.[value];
+                if (mappedClass) {
+                    classes.push(mappedClass);
+                    continue; // Don't include in props
+                }
+            }
+
+            if (key === 'size' && typeof value === 'string') {
+                const mappedClass = this.propMaps.size?.[value];
+                if (mappedClass) {
+                    classes.push(mappedClass);
+                    continue;
+                }
+            }
+
+            if (key === 'color' && typeof value === 'string') {
+                const mappedClass = this.propMaps.color?.[value];
+                if (mappedClass) {
+                    classes.push(mappedClass);
+                    continue;
+                }
+            }
+
+            // Keep all other props (class, style, ui, etc.)
+            cleanProps[key] = value;
+        }
+
+        // Merge mapped classes with existing class prop
+        if (classes.length > 0) {
+            const existingClass = (cleanProps.class as string) || '';
+            cleanProps.class = [...classes, existingClass]
+                .filter(Boolean)
+                .join(' ');
+        }
+
+        return { props: cleanProps };
+    }
+}
+
+/**
+ * Default prop-to-class mappings
+ * 
+ * These are used when a theme doesn't provide custom mappings.
+ * They follow standard Tailwind/Nuxt UI conventions.
+ */
+export const defaultPropMaps: PropClassMaps = {
+    variant: {
+        solid: 'variant-solid',
+        outline: 'variant-outline',
+        ghost: 'variant-ghost',
+        soft: 'variant-soft',
+        link: 'variant-link',
+    },
+    size: {
+        xs: 'text-xs px-2 py-1',
+        sm: 'text-sm px-3 py-1.5',
+        md: 'text-base px-4 py-2',
+        lg: 'text-lg px-5 py-2.5',
+        xl: 'text-xl px-6 py-3',
+    },
+    color: {
+        primary: 'text-primary-600 bg-primary-50 border-primary-300',
+        secondary: 'text-secondary-600 bg-secondary-50 border-secondary-300',
+        success: 'text-green-600 bg-green-50 border-green-300',
+        error: 'text-red-600 bg-red-50 border-red-300',
+        warning: 'text-yellow-600 bg-yellow-50 border-yellow-300',
+        info: 'text-blue-600 bg-blue-50 border-blue-300',
+    },
+};
