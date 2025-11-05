@@ -85,24 +85,40 @@ All subtasks for Task 3 have been completed:
 
 **Next:** Ready to proceed with Task 4 (Unit Tests for Core Components)
 
-### 4. Unit Tests for Core Components
+### 4. Unit Tests for Core Components ✅ COMPLETED
 
-- [ ] 4.1 Create `app/theme/_shared/__tests__/override-resolver.test.ts`
-- [ ] 4.2 Test resolver initializes with config
-- [ ] 4.3 Test global override resolution
-- [ ] 4.4 Test context-specific override resolution
-- [ ] 4.5 Test priority ordering (higher priority wins)
-- [ ] 4.6 Test condition filtering
-- [ ] 4.7 Test prop merging (class concatenation, ui deep merge)
-- [ ] 4.8 Test cache hit/miss behavior
-- [ ] 4.9 Test cache clearing on theme switch
-- [ ] 4.10 Create `app/composables/__tests__/useThemeOverrides.test.ts`
-- [ ] 4.11 Test composable returns empty object when no resolver
-- [ ] 4.12 Test composable resolves global overrides
-- [ ] 4.13 Test composable resolves context overrides
-- [ ] 4.14 Test context detection with useAutoContext
-- [ ] 4.15 Test mergeOverrides helper
-- **Requirements**: Testing requirements
+All subtasks for Task 4 have been completed:
+- ✅ Created `app/theme/_shared/__tests__/override-resolver.test.ts` with comprehensive resolver tests
+- ✅ Tested resolver initializes with config and proper cache setup
+- ✅ Tested global override resolution with correct prop application
+- ✅ Tested context-specific override resolution with priority handling
+- ✅ Tested priority ordering (higher priority wins, proper merging)
+- ✅ Tested condition filtering with met/unmet conditions
+- ✅ Tested prop merging (class concatenation, ui deep merge)
+- ✅ Tested cache hit/miss behavior with proper cache key generation
+- ✅ Tested cache clearing on theme switch
+- ✅ Created `app/composables/__tests__/useThemeOverrides.test.ts` with comprehensive composable tests
+- ✅ Tested composable returns empty object when no resolver
+- ✅ Tested composable resolves global overrides with reactivity
+- ✅ Tested composable resolves context overrides with reactive context changes
+- ✅ Tested context detection with useAutoContext DOM hierarchy detection
+- ✅ Tested mergeOverrides helper with proper prop merging logic
+- ✅ Additional tests for reactive props, reactive state, error handling, and TypeScript generics
+- ✅ Maps to all testing requirements
+
+**Files Created:**
+- `/app/theme/_shared/__tests__/override-resolver.test.ts` - Complete resolver test suite
+- `/app/composables/__tests__/useThemeOverrides.test.ts` - Complete composable test suite
+
+**Test Coverage Achieved:**
+- **Resolver Tests**: Initialization, global/context/state overrides, priority, conditions, prop merging, caching, singleton management
+- **Composable Tests**: Basic functionality, reactivity (props, context, state), auto-context detection, error handling, TypeScript generics
+- **Helper Tests**: mergeOverrides with class concatenation and deep merge
+- **Edge Cases**: Missing resolver, empty overrides, runtime errors, undefined props
+- **Reactivity**: Theme changes, context switches, prop updates, state transitions
+- **Type Safety**: Generic prop type preservation and inference
+
+**Next:** Ready to proceed with Task 5 (Theme Plugin Enhancement)
 
 ---
 

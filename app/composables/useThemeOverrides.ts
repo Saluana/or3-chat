@@ -1,3 +1,5 @@
+import { ref, computed, readonly, onMounted, getCurrentInstance, type Ref, type MaybeRef } from 'vue';
+import { useNuxtApp } from '#app';
 import type { ComponentType, ContextSelector, OverrideContext, ComponentState } from '~/theme/_shared/override-types';
 import { getOverrideResolver } from '~/theme/_shared/override-resolver';
 import { toValue } from '@vueuse/core';
@@ -106,13 +108,13 @@ export function useThemeOverrides<TProps = Record<string, unknown>>(
     
     // Expose debug info in development
     return {
-      overrides: readonly(overrides) as unknown as Readonly<Partial<TProps>>,
+      overrides: readonly(overrides) as Readonly<Ref<Partial<TProps>>>,
       debug: readonly(debugInfo),
     };
   }
   
   return {
-    overrides: readonly(overrides) as unknown as Readonly<Partial<TProps>>,
+    overrides: readonly(overrides) as Readonly<Ref<Partial<TProps>>>,
   };
 }
 

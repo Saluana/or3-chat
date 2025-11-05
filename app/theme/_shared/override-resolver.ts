@@ -88,7 +88,10 @@ export class OverrideResolver {
     rules.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
     
     // Merge props from all rules
-    const props = this.mergeProps(rules);
+    const overrideProps = this.mergeProps(rules);
+    
+    // Start with component props, then apply overrides
+    const props = { ...overrideContext.componentProps, ...overrideProps };
     
     // Cache result
     const result: ResolvedOverride = {
@@ -142,18 +145,21 @@ export class OverrideResolver {
   private mergeProps(rules: OverrideRule[]): Record<string, unknown> {
     const merged: Record<string, unknown> = {};
     
-    for (const rule of rules) {
+    // Sort rules by priority (lower priority first, higher priority last)
+    const sortedRules = [...rules].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+    
+    for (const rule of sortedRules) {
       for (const [key, value] of Object.entries(rule.props)) {
         if (key === 'class') {
-          // Concatenate classes
+          // Concatenate classes with higher priority first
           merged[key] = merged[key] 
-            ? `${merged[key]} ${value}` 
+            ? `${value} ${merged[key]}` 
             : value;
         } else if (key === 'ui' && typeof value === 'object') {
           // Deep merge ui objects
           merged[key] = this.deepMerge(merged[key] as Record<string, unknown> ?? {}, value as Record<string, unknown>);
         } else {
-          // Override with latest value
+          // Override with latest value (higher priority wins)
           merged[key] = value;
         }
       }
