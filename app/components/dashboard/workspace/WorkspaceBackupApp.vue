@@ -828,6 +828,7 @@ defineExpose({
 </script>
 
 <style scoped>
+/* Component-specific styles (non-retro, only used in this component) */
 .section-card {
     position: relative;
     padding: 1.25rem 1rem 1rem 1rem;
@@ -862,222 +863,6 @@ defineExpose({
     opacity: 0.75;
 }
 
-.retro-upload-panel {
-    border: 2px dashed
-        color-mix(in oklab, var(--md-outline-variant) 85%, transparent 15%);
-    border-radius: 6px;
-    padding: 1rem;
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 94%,
-        var(--md-surface-variant) 6%
-    );
-    box-shadow: inset 0 0 0 1px
-        color-mix(in oklab, var(--md-outline-variant) 55%, transparent 45%);
-    transition: border-color 150ms ease, background 150ms ease;
-}
-
-.retro-upload-panel:has(button:hover) {
-    border-color: color-mix(in oklab, var(--md-primary) 60%, transparent 40%);
-}
-
-.retro-upload-icon {
-    font-size: 1.5rem;
-    color: var(--md-primary);
-    flex-shrink: 0;
-}
-
-.retro-file-card {
-    margin-top: 0.75rem;
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.75rem 0.9rem;
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 5px;
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 92%,
-        var(--md-surface-variant) 8%
-    );
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
-.retro-meta-panel {
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 6px;
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 95%,
-        var(--md-surface-variant) 5%
-    );
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    padding: 1rem;
-    display: grid;
-    gap: 0.75rem;
-}
-
-.retro-meta-table {
-    max-height: 11rem;
-    overflow-y: auto;
-    border: 2px dashed
-        color-mix(in oklab, var(--md-outline-variant) 75%, transparent 25%);
-    border-radius: 4px;
-    padding: 0.5rem;
-    display: grid;
-    gap: 0.35rem;
-}
-
-.retro-meta-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    padding: 0.2rem 0.35rem;
-    background: color-mix(in oklab, var(--md-surface) 92%, transparent 8%);
-    border-radius: 3px;
-}
-
-.retro-choice-btn {
-    border: 2px solid
-        color-mix(in oklab, var(--md-inverse-surface) 92%, transparent 8%);
-    background: color-mix(
-        in oklab,
-        var(--md-surface) 96%,
-        var(--md-surface-variant) 4%
-    );
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    padding: 0.75rem;
-    transition: box-shadow 120ms ease, background 120ms ease, color 120ms ease,
-        border-color 120ms ease;
-}
-
-.retro-choice-btn:hover {
-    border-color: var(--md-primary);
-    background: color-mix(
-        in oklab,
-        var(--md-secondary-container) 70%,
-        var(--md-surface) 30%
-    );
-    box-shadow: 3px 3px 0 var(--md-inverse-surface);
-}
-
-.retro-choice-btn:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 3px;
-}
-
-.retro-choice-btn--active {
-    background: color-mix(
-        in oklab,
-        var(--md-primary-container) 85%,
-        var(--md-surface) 15%
-    );
-    color: var(--md-on-primary-container);
-    border-color: var(--md-primary);
-    box-shadow: 3px 3px 0
-        color-mix(
-            in oklab,
-            var(--md-primary) 70%,
-            var(--md-inverse-surface) 30%
-        );
-}
-
-.retro-choice-icon {
-    font-size: 1.4rem;
-    color: currentColor;
-}
-
-.retro-checkbox {
-    --checkbox-border: color-mix(
-        in oklab,
-        var(--md-inverse-surface) 80%,
-        transparent 20%
-    );
-    padding: 0.5rem 0.25rem 0.5rem 0;
-}
-
-.retro-badge {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-surface) 96%,
-        var(--md-surface-variant) 4%
-    );
-    --retro-badge-fg: var(--md-on-surface);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.6rem;
-    min-height: 1.5rem;
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 4px;
-    background: var(--retro-badge-bg);
-    color: var(--retro-badge-fg);
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 600;
-    line-height: 1;
-}
-
-.retro-badge--neutral {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-surface) 95%,
-        var(--md-surface-variant) 5%
-    );
-    --retro-badge-fg: var(--md-on-surface);
-}
-
-.retro-badge--primary,
-.retro-badge--info {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-primary-container) 85%,
-        var(--md-surface) 15%
-    );
-    --retro-badge-fg: var(--md-on-primary-container);
-}
-
-.retro-badge--success {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-extended-color-success-color-container) 80%,
-        var(--md-surface) 20%
-    );
-    --retro-badge-fg: var(--md-extended-color-success-on-color-container);
-}
-
-.retro-badge--error {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-error-container) 85%,
-        var(--md-surface) 15%
-    );
-    --retro-badge-fg: var(--md-on-error-container);
-}
-
-.retro-badge--warning {
-    --retro-badge-bg: color-mix(
-        in oklab,
-        var(--md-extended-color-warning-color-container) 80%,
-        var(--md-surface) 20%
-    );
-    --retro-badge-fg: var(--md-extended-color-warning-on-color-container);
-}
-
-.retro-badge :deep(.n-badge-icon) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-inline-end: 0.35rem;
-}
-
-.retro-badge :deep(.n-badge-icon > *) {
-    font-size: 1rem;
-}
-
 .fade-enter-active,
 .fade-leave-active {
     transition: opacity 150ms ease;
@@ -1089,11 +874,10 @@ defineExpose({
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .retro-choice-btn,
-    .retro-upload-panel,
-    .retro-file-card,
     .section-card {
         transition: none;
     }
 }
+
+/* All retro-* classes have been moved to app/theme/retro/styles.css */
 </style>
