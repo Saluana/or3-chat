@@ -74,6 +74,9 @@ export interface OverrideContext {
   
   /** Component props */
   componentProps: Record<string, unknown>;
+  
+  /** Component state (reactive) */
+  state?: ComponentState;
 }
 
 /**

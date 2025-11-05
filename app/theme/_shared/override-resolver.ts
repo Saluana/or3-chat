@@ -123,8 +123,8 @@ export class OverrideResolver {
     }
     
     // 3. State-based overrides (highest priority)
-    // Extract state from overrideContext or use default
-    const componentState = overrideContext.element ? this.getComponentState(overrideContext.element) : 'default';
+    // Use explicit reactive state from context
+    const componentState = overrideContext.state ?? 'default';
     if (this.overrides.states?.[componentState]?.[componentType]) {
       rules.push(...this.overrides.states[componentState][componentType]);
     }
@@ -134,19 +134,6 @@ export class OverrideResolver {
       if (!rule.condition) return true;
       return rule.condition(overrideContext);
     });
-  }
-
-  /**
-   * Extract component state from DOM element
-   */
-  private getComponentState(element: HTMLElement): string {
-    // Check for common state indicators
-    if (element.matches(':hover')) return 'hover';
-    if (element.matches(':active')) return 'active';
-    if (element.matches(':disabled') || element.hasAttribute('disabled')) return 'disabled';
-    if (element.hasAttribute('aria-busy') || element.classList.contains('loading')) return 'loading';
-    if (element.matches(':focus')) return 'focus';
-    return 'default';
   }
   
   /**
@@ -204,15 +191,19 @@ export class OverrideResolver {
     const propsHash = this.hashObject(overrideContext.componentProps);
     // Include element identifier if available (for state-based conditions)
     const elementId = overrideContext.element?.id || overrideContext.element?.className || 'no-element';
+    // Include explicit reactive state from context
+    const componentState = overrideContext.state ?? 'default';
     
-    return `${componentType}:${context}:${overrideContext.mode}:${overrideContext.theme}:${propsHash}:${elementId}`;
+    return `${componentType}:${context}:${overrideContext.mode}:${overrideContext.theme}:${componentState}:${propsHash}:${elementId}`;
   }
 
   /**
    * Simple hash function for objects
    */
   private hashObject(obj: Record<string, unknown>): string {
-    const str = JSON.stringify(obj, Object.keys(obj).sort());
+    // Recursively sort object keys to ensure consistent hashing
+    const sortedObj = this.sortObjectKeys(obj);
+    const str = JSON.stringify(sortedObj);
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
@@ -220,6 +211,28 @@ export class OverrideResolver {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return hash.toString(36);
+  }
+
+  /**
+   * Recursively sort object keys for consistent hashing
+   */
+  private sortObjectKeys(obj: any): any {
+    if (obj === null || typeof obj !== 'object') {
+      return obj;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.sortObjectKeys(item));
+    }
+    
+    const sortedObj: Record<string, any> = {};
+    const keys = Object.keys(obj).sort();
+    
+    for (const key of keys) {
+      sortedObj[key] = this.sortObjectKeys(obj[key]);
+    }
+    
+    return sortedObj;
   }
   
   /**

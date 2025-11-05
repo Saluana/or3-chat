@@ -55,19 +55,35 @@ All subtasks for Task 2 have been completed:
 
 **Next:** Ready to proceed with Task 3 (Create useThemeOverrides Composable)
 
-### 3. Create useThemeOverrides Composable
+### 3. Create useThemeOverrides Composable ✅ COMPLETED
 
-- [ ] 3.1 Create `app/composables/useThemeOverrides.ts`
-- [ ] 3.2 Implement `useThemeOverrides(componentType, context)` function
-- [ ] 3.3 Build `overrideContext` computed from theme state
-- [ ] 3.4 Resolve overrides using `OverrideResolver`
-- [ ] 3.5 Return reactive overrides ref
-- [ ] 3.6 Add debug logging in development mode
-- [ ] 3.7 Implement `useAutoContext()` for DOM-based context detection
-- [ ] 3.8 Implement `mergeOverrides()` helper for prop merging
-- [ ] 3.9 Handle edge cases (no resolver, empty overrides)
-- [ ] 3.10 Add TypeScript generics for component-specific props
-- **Requirements**: 3.1, 3.2, 3.3
+All subtasks for Task 3 have been completed:
+- ✅ Created `app/composables/useThemeOverrides.ts` with full implementation
+- ✅ Implemented `useThemeOverrides(componentType, context)` with TypeScript generics
+- ✅ Built `overrideContext` computed from theme state ($theme.current, $theme.activeTheme)
+- ✅ Resolved overrides using `OverrideResolver` with error handling
+- ✅ Returned reactive overrides ref with readonly protection
+- ✅ Added debug logging in development mode with detailed info
+- ✅ Implemented `useAutoContext()` for DOM-based context detection
+- ✅ Implemented `mergeOverrides()` helper for prop merging (class concat, ui deep merge)
+- ✅ Handled edge cases (no resolver, empty overrides, errors)
+- ✅ Added TypeScript generics for component-specific props
+- ✅ Maps to requirements 3.1, 3.2, 3.3
+
+**Files Created:**
+- `/app/composables/useThemeOverrides.ts` - Complete composable implementation
+
+**Key Features Implemented:**
+- **Type Safety**: Full TypeScript generics support for component-specific props
+- **Reactivity**: Computed properties that react to theme changes
+- **Auto-Context**: DOM-based context detection for chat, sidebar, dashboard, header
+- **Debug Support**: Development-only logging and debug info
+- **Error Handling**: Graceful fallbacks when resolver fails
+- **Prop Merging**: Smart merging with class concatenation and ui deep merge
+- **Edge Cases**: Handles missing resolver, empty overrides, and runtime errors
+- **Bonus**: Added `useThemeOverridesAuto()` for automatic context detection
+
+**Next:** Ready to proceed with Task 4 (Unit Tests for Core Components)
 
 ### 4. Unit Tests for Core Components
 
