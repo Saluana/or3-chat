@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Retro Theme Visual Verification', () => {
     test.beforeEach(async ({ page }) => {
         // Navigate to the home page
-        await page.goto('http://localhost:3000');
+        await page.goto('/');
         
         // Wait for the page to be fully loaded
         await page.waitForLoadState('networkidle');
@@ -22,7 +22,7 @@ test.describe('Retro Theme Visual Verification', () => {
     test('Home page renders with retro theme styles', async ({ page }) => {
         // Take a full page screenshot
         await page.screenshot({ 
-            path: '/tmp/retro-theme-home.png',
+            path: './test-results/retro-theme-home.png',
             fullPage: true 
         });
         
@@ -57,13 +57,13 @@ test.describe('Retro Theme Visual Verification', () => {
 
     test('Theme demo page renders correctly', async ({ page }) => {
         // Navigate to theme demo page
-        await page.goto('http://localhost:3000/theme-demo');
+        await page.goto('/theme-demo');
         await page.waitForLoadState('networkidle');
         await page.waitForTimeout(1000);
         
         // Take a screenshot of the theme demo
         await page.screenshot({ 
-            path: '/tmp/retro-theme-demo.png',
+            path: './test-results/retro-theme-demo.png',
             fullPage: true 
         });
         
