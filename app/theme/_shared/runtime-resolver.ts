@@ -71,8 +71,11 @@ export class RuntimeResolver {
             (a, b) => b.specificity - a.specificity
         );
 
-        // Store prop-to-class mappings (with defaults)
-        this.propMaps = compiledTheme.propMaps || {};
+        // Store prop-to-class mappings (merge with defaults)
+        this.propMaps = {
+            ...defaultPropMaps,
+            ...(compiledTheme.propMaps || {}),
+        };
         this.themeName = compiledTheme.name;
     }
 
@@ -280,29 +283,11 @@ export class RuntimeResolver {
         const cleanProps: Record<string, unknown> = {};
 
         for (const [key, value] of Object.entries(override.props)) {
-            // Check if this prop should be mapped to classes
-            if (key === 'variant' && typeof value === 'string') {
-                const mappedClass = this.propMaps.variant?.[value];
-                if (mappedClass) {
-                    classes.push(mappedClass);
-                    continue; // Don't include in props
-                }
-            }
-
-            if (key === 'size' && typeof value === 'string') {
-                const mappedClass = this.propMaps.size?.[value];
-                if (mappedClass) {
-                    classes.push(mappedClass);
-                    continue;
-                }
-            }
-
-            if (key === 'color' && typeof value === 'string') {
-                const mappedClass = this.propMaps.color?.[value];
-                if (mappedClass) {
-                    classes.push(mappedClass);
-                    continue;
-                }
+            // Try to map semantic prop to class
+            const mappedClass = this.tryMapPropToClass(key, value);
+            if (mappedClass) {
+                classes.push(mappedClass);
+                continue; // Don't include in props
             }
 
             // Keep all other props (class, style, ui, etc.)
@@ -318,6 +303,28 @@ export class RuntimeResolver {
         }
 
         return { props: cleanProps };
+    }
+
+    /**
+     * Try to map a semantic prop to a CSS class
+     * 
+     * @param propName - Property name (variant, size, color)
+     * @param propValue - Property value
+     * @returns Mapped class name or null if not mapped
+     */
+    private tryMapPropToClass(propName: string, propValue: unknown): string | null {
+        if (typeof propValue !== 'string') return null;
+
+        switch (propName) {
+            case 'variant':
+                return this.propMaps.variant?.[propValue] || null;
+            case 'size':
+                return this.propMaps.size?.[propValue] || null;
+            case 'color':
+                return this.propMaps.color?.[propValue] || null;
+            default:
+                return null;
+        }
     }
 }
 

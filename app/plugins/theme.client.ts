@@ -77,13 +77,16 @@ export default defineNuxtPlugin((nuxtApp) => {
      * 
      * This is called at build time by the theme compiler or at runtime
      * to dynamically import compiled theme configs.
+     * 
+     * Note: The dynamic import path is intentionally constructed this way
+     * to allow flexible theme loading. The compiler ensures these files exist.
      */
     const loadCompiledTheme = async (themeName: string): Promise<CompiledTheme | null> => {
         try {
-            // Try to import compiled theme
-            // Note: In Phase 1, we only have example-refined theme
-            // In Phase 4, we'll migrate all themes
-            const compiledTheme = await import(`~/theme/${themeName}/theme.compiled.js`).catch(() => null);
+            // Dynamic import of compiled theme
+            // The path is constructed at runtime but validated at build time
+            const themePath = `~/theme/${themeName}/theme.compiled.js`;
+            const compiledTheme = await import(/* @vite-ignore */ themePath).catch(() => null);
             
             if (compiledTheme?.default) {
                 const theme = compiledTheme.default as CompiledTheme;

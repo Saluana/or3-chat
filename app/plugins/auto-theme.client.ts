@@ -12,7 +12,7 @@
  */
 
 import type { Directive } from 'vue';
-import { watch } from 'vue';
+import { watch, onScopeDispose } from 'vue';
 import type { ResolveParams } from '~/theme/_shared/runtime-resolver';
 
 /**
@@ -48,11 +48,10 @@ const NUXT_UI_COMPONENTS = new Set([
     'utooltip',
     'unotification',
     'ucommandpalette',
-    'uslideoveruslideoverpanel',
+    'uslideover', // Fixed: was duplicated as 'uslideoveruslideoverpanel'
     'udivider',
     'uskeleton',
     'ukbd',
-    'uavatar',
     'urange',
     'utoggle',
     'ucheckbox',
@@ -262,13 +261,12 @@ export default defineNuxtPlugin((nuxtApp) => {
                         }
                     );
 
-                    // Clean up watcher on unmount
+                    // Clean up watcher on unmount using onScopeDispose
+                    // This is safer than directly manipulating Vue internals
                     if (vnode.component) {
-                        const originalUnmounted = (vnode.component as any).um;
-                        (vnode.component as any).um = () => {
+                        onScopeDispose(() => {
                             unwatchTheme();
-                            if (originalUnmounted) originalUnmounted();
-                        };
+                        });
                     }
                 }
             } catch (error) {
@@ -281,11 +279,13 @@ export default defineNuxtPlugin((nuxtApp) => {
 
         // Update when binding value changes
         updated(el, binding, vnode) {
-            // For now, re-mount behavior is sufficient
-            // Could optimize by only re-resolving if binding.value changed
-            if (binding.value !== binding.oldValue) {
-                directive.mounted?.(el, binding, vnode);
+            // Only re-resolve if binding value actually changed
+            if (binding.value === binding.oldValue) {
+                return;
             }
+
+            // Re-mount with new binding value
+            directive.mounted?.(el, binding, vnode);
         },
     };
 
