@@ -46,6 +46,7 @@
     },
     "devDependencies": {
         "@iconify-json/pixelarticons": "^1.2.2",
+        "@playwright/test": "^1.56.1",
         "@tailwindcss/typography": "^0.5.16",
         "@types/spark-md5": "^3.0.5",
         "@vite-pwa/nuxt": "^1.0.4",
