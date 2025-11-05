@@ -94,6 +94,43 @@ export default defineTheme({
             size: 'md',
         },
 
+        // Shell/PageShell specific buttons
+        'button#shell.sidebar-toggle': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'xs',
+        },
+
+        'button#shell.new-pane': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'xs',
+        },
+
+        'button#shell.theme-toggle': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'xs',
+        },
+
+        'button#shell.pane-toggle': {
+            class: 'retro-btn',
+            size: 'xs',
+        },
+
+        'button#shell.pane-close': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'xs',
+            color: 'error',
+        },
+
+        'button#shell.header-action': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'xs',
+        },
+
         // Chat context buttons
         'button.chat': {
             class: 'retro-btn',

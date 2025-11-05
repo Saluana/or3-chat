@@ -37,6 +37,7 @@
                 >
                     <UTooltip :delay-duration="0" text="Open sidebar">
                         <UButton
+                            v-theme="'shell.sidebar-toggle'"
                             label="Open"
                             size="xs"
                             color="neutral"
@@ -60,6 +61,7 @@
                 >
                     <UTooltip :delay-duration="0" :text="newWindowTooltip">
                         <UButton
+                            v-theme="'shell.new-pane'"
                             size="xs"
                             color="neutral"
                             variant="ghost"
@@ -86,6 +88,7 @@
                 <div class="h-full flex items-center justify-center px-4">
                     <UTooltip :delay-duration="0" text="Toggle theme">
                         <UButton
+                            v-theme="'shell.theme-toggle'"
                             size="xs"
                             color="neutral"
                             variant="ghost"
@@ -110,6 +113,7 @@
                             :text="entry.action.tooltip || entry.action.label"
                         >
                             <UButton
+                                v-theme="'shell.header-action'"
                                 size="xs"
                                 variant="ghost"
                                 :color="(entry.action.color || 'neutral') as any"
@@ -170,6 +174,7 @@
                     >
                         <UTooltip :delay-duration="0" text="Close window">
                             <UButton
+                                v-theme="'shell.pane-close'"
                                 size="xs"
                                 color="neutral"
                                 variant="ghost"
