@@ -441,7 +441,7 @@ _IMPORTANT NOTE_
 -   [ ] 12.2 Create retro theme package
 
     -   **Requirements**: 6.1, Migration Constraints
-    -   **Files**: 
+    -   **Files**:
         -   `app/theme/retro/theme.ts` (new DSL format)
         -   `app/theme/retro/prop-maps.ts` (maps to existing retro classes)
         -   `app/theme/retro/styles.css` (extracted retro styles)
@@ -814,13 +814,13 @@ _IMPORTANT NOTE_
 -   **Phase 1 (Foundation)**: ~35 hours
 -   **Phase 2 (Runtime)**: ~23 hours
 -   **Phase 3 (Testing)**: ~43 hours
--   **Phase 4 (Migration)**: ~53 hours
+-   **Phase 4 (Migration)**: ~66 hours (updated with retro theme migration)
 -   **Phase 5 (CLI)**: ~12 hours
 -   **Phase 6 (Documentation)**: ~28 hours
 -   **Phase 7 (Performance)**: ~46 hours
 -   **Phase 8 (Cleanup)**: ~9 hours
 
-**Total: ~249 hours (~6 weeks at full-time)**
+**Total: ~262 hours (~6.5 weeks at full-time)**
 
 ---
 
