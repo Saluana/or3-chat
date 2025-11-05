@@ -163,8 +163,9 @@ export class ThemeCompiler {
         // Dark mode variables
         if (colors.dark) {
             css += '.dark {\n';
-            const darkColors = { ...colors, ...colors.dark };
-            delete darkColors.dark; // Remove nested dark object
+            // Create merged object without dark property
+            const { dark, ...baseColors } = colors;
+            const darkColors = { ...baseColors, ...dark };
             css += this.generateColorVars(darkColors);
             css += '}\n';
         }
@@ -274,6 +275,13 @@ export class ThemeCompiler {
     }
     
     /**
+     * Escape special regex characters
+     */
+    private escapeRegex(str: string): string {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    /**
      * Normalize simple selector syntax to attribute selectors
      */
     private normalizeSelector(selector: string): string {
@@ -282,7 +290,8 @@ export class ThemeCompiler {
         // Convert .context to [data-context="context"]
         // Only convert known contexts
         for (const context of this.knownContexts) {
-            const regex = new RegExp(`(\\w+)\\.${context}(?=[:\\[]|$)`, 'g');
+            const escapedContext = this.escapeRegex(context);
+            const regex = new RegExp(`(\\w+)\\.${escapedContext}(?=[:\\[]|$)`, 'g');
             result = result.replace(regex, `$1[data-context="${context}"]`);
         }
         

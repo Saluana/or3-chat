@@ -164,28 +164,41 @@ export function validateThemeDefinition(config: ThemeDefinition): ValidationResu
 
 /**
  * Check if a string is a valid CSS color
+ * Note: This is a basic validation that covers common formats.
+ * For production use, consider using a dedicated CSS color parsing library.
  */
 function isValidColor(color: string): boolean {
-    // Hex colors
-    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)) {
+    const trimmed = color.trim();
+    
+    // Hex colors: #rgb, #rrggbb, #rrggbbaa, #rgba
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) {
         return true;
     }
     
-    // RGB/RGBA
-    if (/^rgba?\s*\(/.test(color)) {
+    // RGB/RGBA with proper format validation
+    // Matches: rgb(0, 0, 0), rgba(0, 0, 0, 0.5), rgb(0 0 0), rgb(0 0 0 / 50%)
+    if (/^rgba?\s*\(\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,\/]\s*[\d.%]+)?\s*\)$/i.test(trimmed)) {
         return true;
     }
     
-    // HSL/HSLA
-    if (/^hsla?\s*\(/.test(color)) {
+    // HSL/HSLA with proper format validation
+    // Matches: hsl(0, 0%, 0%), hsla(0, 0%, 0%, 0.5), hsl(0 0% 0%), hsl(0 0% 0% / 50%)
+    if (/^hsla?\s*\(\s*[\d.]+(?:deg|grad|rad|turn)?\s*[,\s]\s*[\d.%]+\s*[,\s]\s*[\d.%]+\s*(?:[,\/]\s*[\d.%]+)?\s*\)$/i.test(trimmed)) {
         return true;
     }
     
-    // CSS color keywords (basic check)
-    const keywords = ['transparent', 'currentcolor', 'inherit', 'initial', 'unset'];
-    if (keywords.includes(color.toLowerCase())) {
+    // CSS color keywords (comprehensive list of common keywords)
+    const keywords = [
+        'transparent', 'currentcolor', 'inherit', 'initial', 'unset',
+        'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+        'gray', 'grey', 'silver', 'maroon', 'olive', 'lime', 'aqua', 'teal',
+        'navy', 'fuchsia', 'purple', 'orange', 'pink', 'brown',
+    ];
+    if (keywords.includes(trimmed.toLowerCase())) {
         return true;
     }
     
+    // If none match, it might still be valid (e.g., newer CSS color functions)
+    // Return false to trigger a warning, but allow compilation to continue
     return false;
 }
