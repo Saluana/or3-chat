@@ -171,7 +171,7 @@ export default defineTheme({
         },
 
         'button#chat.send': {
-            class: 'retro-btn',
+            class: 'retro-btn text-white! dark:text-black!',
             variant: 'solid',
             size: 'sm',
             color: 'primary',
