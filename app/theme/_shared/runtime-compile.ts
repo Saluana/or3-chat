@@ -104,7 +104,7 @@ function normalizeSelector(selector: string): string {
         }
     );
 
-    result = result.replace(/(\w+)#([\w.]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
+    result = result.replace(/(\w+)#([\w.-]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
 
     return result;
 }

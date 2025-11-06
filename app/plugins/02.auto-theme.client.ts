@@ -205,13 +205,16 @@ function parseDirectiveValue(value: ThemeDirectiveValue | undefined): {
 function applyOverrides(
     el: HTMLElement,
     vnode: VNode,
-    resolvedProps: Record<string, unknown>
+    resolvedProps: Record<string, unknown>,
+    identifier?: string
 ) {
     const instance = vnode.component as ComponentInternalInstance | null;
 
     if (!instance) {
         // For plain elements, apply as data attributes that can be read by CSS
-        applyToElement(el, resolvedProps);
+        // Include identifier in props for data-id setting
+        const propsWithIdentifier = identifier ? { ...resolvedProps, identifier } : resolvedProps;
+        applyToElement(el, propsWithIdentifier);
         return;
     }
 
@@ -223,7 +226,8 @@ function applyOverrides(
     // Apply to the actual rendered element if possible
     // This works for components that forward refs or have a root element
     if (instance.subTree?.el) {
-        applyToElement(instance.subTree.el as HTMLElement, resolvedProps);
+        const propsWithIdentifier = identifier ? { ...resolvedProps, identifier } : resolvedProps;
+        applyToElement(instance.subTree.el as HTMLElement, propsWithIdentifier);
     }
 }
 
@@ -234,6 +238,11 @@ function applyOverrides(
  * @param props - Props to apply
  */
 function applyToElement(el: HTMLElement, props: Record<string, unknown>) {
+    // Apply identifier as data-id if present
+    if (props.identifier) {
+        el.setAttribute('data-id', String(props.identifier));
+    }
+
     // Apply color as data attribute
     if (props.color) {
         el.setAttribute('data-theme-color', String(props.color));
@@ -352,7 +361,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             const resolved = resolver.resolve(params);
 
             // Apply to component or element (use target element)
-            applyOverrides(targetEl, vnode, resolved.props);
+            applyOverrides(targetEl, vnode, resolved.props, identifier);
 
             // Watch for theme changes and re-resolve
             if (themePlugin.activeTheme) {
@@ -362,7 +371,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                         const newResolver = themePlugin.getResolver?.(newTheme);
                         if (newResolver) {
                             const newResolved = newResolver.resolve(params);
-                            applyOverrides(targetEl, vnode, newResolved.props);
+                            applyOverrides(targetEl, vnode, newResolved.props, identifier);
                         }
                     }
                 );

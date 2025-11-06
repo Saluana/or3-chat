@@ -105,8 +105,7 @@ export default defineTheme({
         'button#shell.new-pane': {
             class: 'retro-btn',
             variant: 'ghost',
-            size: 'sm',
-            color: 'secondary',
+            size: 'xs',
         },
 
         'button#shell.theme-toggle': {
