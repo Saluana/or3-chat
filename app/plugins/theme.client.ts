@@ -1,6 +1,13 @@
 import { ref } from 'vue';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
-import type { CompiledTheme, CompiledOverride } from '~/theme/_shared/types';
+import type {
+    CompiledTheme,
+    CompiledOverride,
+    ParsedSelector,
+    AttributeMatcher,
+    AttributeOperator,
+    OverrideProps,
+} from '~/theme/_shared/types';
 
 export default defineNuxtPlugin((nuxtApp) => {
     const THEME_CLASSES = [
@@ -27,7 +34,8 @@ export default defineNuxtPlugin((nuxtApp) => {
     };
 
     const read = () => localStorage.getItem(storageKey) as string | null;
-    const readActiveTheme = () => localStorage.getItem(activeThemeStorageKey) as string | null;
+    const readActiveTheme = () =>
+        localStorage.getItem(activeThemeStorageKey) as string | null;
 
     const current = ref(read() || getSystemPref());
     apply(current.value);
@@ -74,13 +82,15 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     /**
      * Load a theme configuration
-     * 
+     *
      * This loads the theme definition and compiles it at runtime.
      * The theme compiler has already validated the theme at build time.
-     * 
+     *
      * Security: themeName is validated against available themes to prevent path traversal
      */
-    const loadTheme = async (themeName: string): Promise<CompiledTheme | null> => {
+    const loadTheme = async (
+        themeName: string
+    ): Promise<CompiledTheme | null> => {
         try {
             // Validate theme name to prevent path traversal attacks
             // Only allow alphanumeric characters and hyphens
@@ -90,13 +100,15 @@ export default defineNuxtPlugin((nuxtApp) => {
                 }
                 return null;
             }
-            
+
             // Dynamic import of theme definition
-            const themeModule = await import(`~/theme/${themeName}/theme.ts`).catch(() => null);
-            
+            const themeModule = await import(
+                `~/theme/${themeName}/theme.ts`
+            ).catch(() => null);
+
             if (themeModule?.default) {
                 const definition = themeModule.default;
-                
+
                 // Create a simple compiled theme from the definition
                 // The full compilation happened at build time for validation
                 const compiledTheme: CompiledTheme = {
@@ -107,25 +119,30 @@ export default defineNuxtPlugin((nuxtApp) => {
                     // and included in the theme's styles.css file, so we don't need to
                     // generate them again at runtime
                     cssVariables: '',
-                    overrides: compileOverridesRuntime(definition.overrides || {}),
+                    overrides: compileOverridesRuntime(
+                        definition.overrides || {}
+                    ),
                     ui: definition.ui,
                     propMaps: definition.propMaps,
                 };
-                
+
                 themeRegistry.set(themeName, compiledTheme);
-                
+
                 // Initialize resolver for this theme
                 const resolver = new RuntimeResolver(compiledTheme);
                 resolverRegistry.set(themeName, resolver);
-                
+
                 return compiledTheme;
             }
         } catch (error) {
             if (import.meta.dev) {
-                console.warn(`[theme] Failed to load theme "${themeName}":`, error);
+                console.warn(
+                    `[theme] Failed to load theme "${themeName}":`,
+                    error
+                );
             }
         }
-        
+
         return null;
     };
 
@@ -133,13 +150,15 @@ export default defineNuxtPlugin((nuxtApp) => {
      * Simple runtime compilation of overrides
      * This mirrors the build-time compilation but runs in the browser
      */
-    function compileOverridesRuntime(overrides: Record<string, any>): CompiledOverride[] {
+    function compileOverridesRuntime(
+        overrides: Record<string, OverrideProps>
+    ): CompiledOverride[] {
         const compiled: CompiledOverride[] = [];
-        
+
         for (const [selector, props] of Object.entries(overrides)) {
             const parsed = parseSelector(selector);
             const specificity = calculateSpecificity(parsed);
-            
+
             compiled.push({
                 component: parsed.component,
                 context: parsed.context,
@@ -151,7 +170,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 specificity,
             });
         }
-        
+
         // Sort by specificity (descending)
         return compiled.sort((a, b) => b.specificity - a.specificity);
     }
@@ -159,33 +178,46 @@ export default defineNuxtPlugin((nuxtApp) => {
     /**
      * Parse a CSS selector into components
      */
-    function parseSelector(selector: string): any {
+    function parseSelector(selector: string): ParsedSelector {
         const normalized = normalizeSelector(selector);
-        
+
         const component = normalized.match(/^(\w+)/)?.[1] || 'button';
         const context = normalized.match(/data-context="([^"]+)"/)?.[1];
         const identifier = normalized.match(/data-id="([^"]+)"/)?.[1];
         const state = normalized.match(/:(\w+)/)?.[1];
-        
+
         // Extract HTML attribute selectors
-        const attributes: any[] = [];
-        const attrRegex = /\[([^=\]]+)((?:[~|^$*]?=)"([^"]+)")?\]/g;
-        let match;
-        
+        const attributes: AttributeMatcher[] = [];
+        // Fixed regex: match attribute name (word chars, hyphens), then optional operator and value
+        const attrRegex = /\[([\w-]+)(([~|^$*]=|=)"([^"]+)")?\]/g;
+        let match: RegExpExecArray | null;
+
         while ((match = attrRegex.exec(normalized)) !== null) {
             const attrName = match[1];
-            if (attrName === 'data-context' || attrName === 'data-id') continue;
-            
-            const operator = match[2]?.[0] === '=' ? '=' : match[2]?.slice(0, -1) || 'exists';
-            const attrValue = match[3];
-            
+            if (
+                !attrName ||
+                attrName === 'data-context' ||
+                attrName === 'data-id'
+            )
+                continue;
+
+            const fullMatch = match[2]; // e.g., ^="btn" or ="submit"
+            let operator: AttributeOperator = 'exists';
+            let attrValue: string | undefined;
+
+            if (fullMatch) {
+                const op = match[3]; // e.g., "^=" or "="
+                operator = op as AttributeOperator;
+                attrValue = match[4]; // e.g., "btn" or "submit"
+            }
+
             attributes.push({
                 attribute: attrName,
                 operator,
                 value: attrValue,
             });
         }
-        
+
         return {
             component,
             context,
@@ -200,9 +232,15 @@ export default defineNuxtPlugin((nuxtApp) => {
      */
     function normalizeSelector(selector: string): string {
         let result = selector;
-        
+
         // Convert .context to [data-context="context"]
-        const knownContexts = ['chat', 'sidebar', 'dashboard', 'header', 'global'];
+        const knownContexts = [
+            'chat',
+            'sidebar',
+            'dashboard',
+            'header',
+            'global',
+        ];
         result = result.replace(
             /(\w+)\.(\w+)(?=[:\[]|$)/g,
             (match, component, context) => {
@@ -212,33 +250,33 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return match;
             }
         );
-        
+
         // Convert #identifier to [data-id="identifier"]
         result = result.replace(
             /(\w+)#([\w.]+)(?=[:\[]|$)/g,
             '$1[data-id="$2"]'
         );
-        
+
         return result;
     }
 
     /**
      * Calculate CSS specificity
      */
-    function calculateSpecificity(parsed: any): number {
+    function calculateSpecificity(parsed: ParsedSelector): number {
         let specificity = 1; // element
-        
+
         if (parsed.context) specificity += 10;
         if (parsed.identifier) specificity += 20;
         if (parsed.state) specificity += 10;
         if (parsed.attributes) specificity += parsed.attributes.length * 10;
-        
+
         return specificity;
     }
 
     /**
      * Get resolver for a specific theme
-     * 
+     *
      * This is used by the v-theme directive to resolve overrides.
      */
     const getResolver = (themeName: string): RuntimeResolver | null => {
@@ -257,7 +295,9 @@ export default defineNuxtPlugin((nuxtApp) => {
         }
 
         if (import.meta.dev) {
-            console.warn(`[theme] No resolver found for theme "${themeName}". Theme may not be compiled.`);
+            console.warn(
+                `[theme] No resolver found for theme "${themeName}". Theme may not be compiled.`
+            );
         }
 
         return null;
@@ -265,7 +305,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     /**
      * Set active theme (for refined theme system)
-     * 
+     *
      * This switches the active theme and persists the selection.
      */
     const setActiveTheme = async (themeName: string) => {
