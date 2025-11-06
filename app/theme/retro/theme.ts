@@ -180,7 +180,7 @@ export default defineTheme({
         'button#chat.send': {
             class: 'retro-btn',
             variant: 'solid',
-            size: 'md',
+            size: 'sm',
             color: 'primary',
         },
 

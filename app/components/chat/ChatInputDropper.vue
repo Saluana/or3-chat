@@ -263,15 +263,12 @@
                 <div>
                     <UButton
                         v-if="!props.streaming"
+                        v-bind="sendButtonProps"
                         @click="handleSend"
                         :disabled="
                             loading ||
                             (!promptText.trim() && uploadedImages.length === 0)
                         "
-                        :square="true"
-                        size="sm"
-                        color="primary"
-                        class="retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center"
                         type="button"
                         aria-label="Send message"
                     >
@@ -279,11 +276,8 @@
                     </UButton>
                     <UButton
                         v-else
+                        v-bind="stopButtonProps"
                         @click="emit('stop-stream')"
-                        :square="true"
-                        size="sm"
-                        color="error"
-                        class="retro-btn text-white dark:text-black flex items-center justify-center"
                         type="button"
                         aria-label="Stop generation"
                     >
@@ -439,6 +433,7 @@ import {
     type ComposerActionContext,
 } from '#imports';
 import { useToolRegistry } from '~/utils/chat/tools-public';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     loading?: boolean;
@@ -658,6 +653,41 @@ async function handleComposerAction(entry: ComposerActionEntry) {
         // Silently handle composer action failure
     }
 }
+
+// Theme overrides for send button
+const sendButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.send',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'primary' as const,
+        class: 'retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const stopButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.stop',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'error' as const,
+        class: 'retro-btn text-white dark:text-black flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
 
 const attachments = ref<UploadedImage[]>([]);
 // Backward compatibility: expose as uploadedImages for template
