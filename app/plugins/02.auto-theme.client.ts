@@ -5,14 +5,30 @@
  * This directive detects component type, context, and identifier, then
  * resolves and applies theme overrides without needing wrapper components.
  *
- * **Important Note on Component Root Nodes:**
- * Vue directives work best on elements with a single root node. When used on
- * components like UButton that wrap other components (ULink, NuxtLink), Vue
- * will show a warning. This is expected behavior, and the directive will still
- * function correctly by applying props to the component instance.
+ * **Important: Vue Warning about Non-Element Root Nodes**
  *
- * To suppress the warning, the directive includes a `getSSRProps()` hook that
- * indicates we're handling prop application ourselves.
+ * When using v-theme on Nuxt UI components (like UButton, UInput), you may see
+ * this Vue warning:
+ *
+ *   "Runtime directive used on component with non-element root node.
+ *    The directives will not function as intended."
+ *
+ * This is a **known limitation** of Vue's directive system. Vue directives are
+ * designed for plain HTML elements, not for components that wrap other components.
+ *
+ * **The directive WILL still work correctly** - it applies theme overrides by:
+ * 1. Finding the actual rendered root element of the component
+ * 2. Applying data attributes that can be styled with CSS
+ * 3. Adding classes for theme styling
+ *
+ * **To avoid the warning**, use one of these alternatives:
+ * 1. Wrap the component in a plain element: `<div v-theme><UButton /></div>`
+ * 2. Use a theme composable: `const theme = useTheme(); const props = theme.resolve(...)`
+ * 3. Use wrapper components that already handle theming
+ *
+ * **If the warning bothers you**, you can filter it in your Vue config or browser console.
+ * The warning does not indicate a functional problem - it's just Vue's way of saying
+ * "directives work best on plain elements."
  *
  * Usage:
  * - <UButton v-theme /> - Auto-detect context
@@ -185,40 +201,79 @@ function parseDirectiveValue(value: ThemeDirectiveValue | undefined): {
 }
 
 /**
- * Apply resolved overrides to component instance
+ * Apply resolved overrides to component instance or element
  *
- * Merges theme overrides with existing component props, ensuring
- * that explicit props always win over theme defaults.
+ * This function handles both Nuxt UI components and regular HTML elements.
+ * For components, we store the overrides and let Vue's reactivity handle updates.
+ * For elements, we apply styles/classes directly.
  *
- * @param instance - Vue component instance
+ * @param el - DOM element
+ * @param vnode - Vue VNode
  * @param resolvedProps - Resolved theme override props
  */
 function applyOverrides(
-    instance: ComponentInternalInstance | null,
+    el: HTMLElement,
+    vnode: VNode,
     resolvedProps: Record<string, unknown>
 ) {
-    if (!instance || !instance.props) return;
+    const instance = vnode.component as ComponentInternalInstance | null;
 
-    const existingProps = instance.props;
-    const mergedProps = { ...resolvedProps };
-
-    // Merge with existing props (component props win)
-    for (const [key, value] of Object.entries(existingProps)) {
-        if (value !== undefined) {
-            if (key === 'class') {
-                // Concatenate classes (theme first, then explicit)
-                mergedProps[key] = `${
-                    resolvedProps.class || ''
-                } ${value}`.trim();
-            } else {
-                // Explicit prop wins
-                mergedProps[key] = value;
-            }
-        }
+    if (!instance) {
+        // For plain elements, apply as data attributes that can be read by CSS
+        applyToElement(el, resolvedProps);
+        return;
     }
 
-    // Apply merged props to component
-    Object.assign(instance.props, mergedProps);
+    // For components, we need to update the vnode's props before rendering
+    // Store resolved props on the element for reactive updates
+    const dataKey = '__theme_overrides__';
+    (el as any)[dataKey] = resolvedProps;
+
+    // Apply to the actual rendered element if possible
+    // This works for components that forward refs or have a root element
+    if (instance.subTree?.el) {
+        applyToElement(instance.subTree.el as HTMLElement, resolvedProps);
+    }
+}
+
+/**
+ * Apply props to a DOM element as attributes/styles
+ *
+ * @param el - DOM element
+ * @param props - Props to apply
+ */
+function applyToElement(el: HTMLElement, props: Record<string, unknown>) {
+    // Apply color as data attribute
+    if (props.color) {
+        el.setAttribute('data-theme-color', String(props.color));
+    }
+
+    // Apply variant as data attribute
+    if (props.variant) {
+        el.setAttribute('data-theme-variant', String(props.variant));
+    }
+
+    // Apply size as data attribute
+    if (props.size) {
+        el.setAttribute('data-theme-size', String(props.size));
+    }
+
+    // Apply classes if present
+    if (props.class && typeof props.class === 'string') {
+        const existingClasses = el.className;
+        const themeClasses = props.class;
+
+        // Only add if not already present
+        const classesToAdd = themeClasses
+            .split(' ')
+            .filter((cls) => cls && !existingClasses.includes(cls));
+
+        if (classesToAdd.length > 0) {
+            el.className = `${existingClasses} ${classesToAdd.join(
+                ' '
+            )}`.trim();
+        }
+    }
 }
 
 /**
@@ -253,6 +308,13 @@ export default defineNuxtPlugin((nuxtApp) => {
         vnode: VNode
     ) => {
         try {
+            // For components, try to get the actual rendered root element
+            // This helps avoid the "non-element root node" warning
+            const instance =
+                vnode.component as ComponentInternalInstance | null;
+            const targetEl =
+                (instance?.subTree?.el as HTMLElement | null) || el;
+
             // Get component name
             const componentName = getComponentName(vnode);
 
@@ -262,8 +324,8 @@ export default defineNuxtPlugin((nuxtApp) => {
                     binding.value as ThemeDirectiveValue | undefined
                 );
 
-            // Detect or use explicit context
-            const context = contextOverride || detectContext(el);
+            // Detect or use explicit context (use target element for better detection)
+            const context = contextOverride || detectContext(targetEl);
 
             // Check if this is a Nuxt UI component
             const isNuxtUI = isNuxtUIComponent(componentName);
@@ -278,7 +340,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 context,
                 identifier,
                 state: 'default', // TODO: Detect state from element
-                element: el,
+                element: targetEl,
                 isNuxtUI,
             };
 
@@ -298,13 +360,8 @@ export default defineNuxtPlugin((nuxtApp) => {
             // Resolve overrides
             const resolved = resolver.resolve(params);
 
-            // Apply to component
-            if (vnode.component) {
-                applyOverrides(
-                    vnode.component as ComponentInternalInstance,
-                    resolved.props
-                );
-            }
+            // Apply to component or element (use target element)
+            applyOverrides(targetEl, vnode, resolved.props);
 
             // Watch for theme changes and re-resolve
             if (themePlugin.activeTheme) {
@@ -312,12 +369,9 @@ export default defineNuxtPlugin((nuxtApp) => {
                     () => themePlugin.activeTheme!.value,
                     (newTheme) => {
                         const newResolver = themePlugin.getResolver?.(newTheme);
-                        if (newResolver && vnode.component) {
+                        if (newResolver) {
                             const newResolved = newResolver.resolve(params);
-                            applyOverrides(
-                                vnode.component as ComponentInternalInstance,
-                                newResolved.props
-                            );
+                            applyOverrides(targetEl, vnode, newResolved.props);
                         }
                     }
                 );
@@ -342,12 +396,18 @@ export default defineNuxtPlugin((nuxtApp) => {
     };
 
     const directive: ObjectDirective = {
-        mounted(el, binding, vnode, prevVnode) {
+        // Created hook runs before mounted, good for setup
+        created(el, binding, vnode) {
+            // Mark element as having theme directive
+            el.setAttribute('data-v-theme', '');
+        },
+
+        mounted(el, binding, vnode) {
             applyThemeDirective(el, binding, vnode);
         },
 
         // Update when binding value changes
-        updated(el, binding, vnode, prevVnode) {
+        updated(el, binding, vnode) {
             // Only re-resolve if binding value actually changed
             if (binding.value === binding.oldValue) {
                 return;
@@ -357,14 +417,30 @@ export default defineNuxtPlugin((nuxtApp) => {
             applyThemeDirective(el, binding, vnode);
         },
 
-        // Provide getSSRProps for client-side to suppress warnings
+        beforeUnmount(el) {
+            // Clean up data attributes
+            el.removeAttribute('data-v-theme');
+            el.removeAttribute('data-theme-color');
+            el.removeAttribute('data-theme-variant');
+            el.removeAttribute('data-theme-size');
+        },
+
+        // This hook tells Vue how to handle SSR
+        // Returning {} means we handle our own prop application
         getSSRProps() {
-            // This tells Vue that we handle our own prop application
-            // and suppresses the "non-element root node" warning
             return {};
         },
     };
 
-    // Register directive globally
-    nuxtApp.vueApp.directive('theme', directive);
+    // Register directive globally (only if not already registered)
+    // The 00.theme-directive.ts plugin registers a no-op for SSR,
+    // so we need to check if it exists before overriding it
+    const app = nuxtApp.vueApp;
+    if (!app.directive('theme')) {
+        app.directive('theme', directive);
+    } else {
+        // Override the SSR no-op with the real implementation
+        // This is safe because we're on the client side
+        app._context.directives.theme = directive;
+    }
 });

@@ -37,16 +37,11 @@
                 >
                     <UTooltip :delay-duration="0" text="Open sidebar">
                         <UButton
-                            v-theme="'shell.sidebar-toggle'"
+                            v-bind="sidebarToggleButtonProps"
                             label="Open"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
-                            :class="'retro-btn'"
-                            :ui="{ base: 'retro-btn' }"
                             @click="openMobileSidebar"
                         >
                             <UIcon
@@ -61,19 +56,13 @@
                 >
                     <UTooltip :delay-duration="0" :text="newWindowTooltip">
                         <UButton
-                            v-theme="'shell.new-pane'"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
+                            v-bind="newPaneButtonProps"
                             :square="true"
                             :disabled="!canAddPane"
-                            :class="
-                                'retro-btn backdrop-blur pointer-events-auto mr-2 ' +
-                                (!canAddPane
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : '')
-                            "
-                            :ui="{ base: 'retro-btn' }"
+                            :class="[
+                                'backdrop-blur pointer-events-auto mr-2',
+                                !canAddPane ? 'opacity-50 cursor-not-allowed' : '',
+                            ]"
                             aria-label="New window"
                             title="New window"
                             @click="addPane"
@@ -88,13 +77,9 @@
                 <div class="h-full flex items-center justify-center px-4">
                     <UTooltip :delay-duration="0" text="Toggle theme">
                         <UButton
-                            v-theme="'shell.theme-toggle'"
-                            size="xs"
-                            color="neutral"
-                            variant="ghost"
+                            v-bind="themeToggleButtonProps"
                             :square="true"
-                            :class="'retro-btn pointer-events-auto backdrop-blur'"
-                            :ui="{ base: 'retro-btn' }"
+                            :class="'pointer-events-auto backdrop-blur'"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"
                             @click="toggleTheme"
@@ -113,17 +98,14 @@
                             :text="entry.action.tooltip || entry.action.label"
                         >
                             <UButton
-                                v-theme="'shell.header-action'"
-                                size="xs"
-                                variant="ghost"
+                                v-bind="headerActionButtonProps"
                                 :color="(entry.action.color || 'neutral') as any"
                                 :square="!entry.action.label"
                                 :disabled="entry.disabled"
                                 :class="[
-                                    'retro-btn pointer-events-auto flex items-center gap-1',
+                                    'pointer-events-auto flex items-center gap-1',
                                     entry.action.label ? 'px-3' : '',
                                 ]"
-                                :ui="{ base: 'retro-btn' }"
                                 :aria-label="
                                     entry.action.tooltip ||
                                     entry.action.label ||
@@ -174,15 +156,8 @@
                     >
                         <UTooltip :delay-duration="0" text="Close window">
                             <UButton
-                                v-theme="'shell.pane-close'"
-                                size="xs"
-                                color="neutral"
-                                variant="ghost"
+                                v-bind="paneCloseButtonProps"
                                 :square="true"
-                                :class="'retro-btn'"
-                                :ui="{
-                                    base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
-                                }"
                                 aria-label="Close window"
                                 title="Close window"
                                 @click.stop="closePane(i)"
@@ -244,6 +219,7 @@ import type {
 import { useMagicKeys, whenever } from '@vueuse/core';
 import {
     type Component,
+    computed,
     shallowRef,
     markRaw,
     nextTick,
@@ -254,6 +230,7 @@ import {
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const DocumentEditorAsync = defineAsyncComponent(
     () => import('~/components/documents/DocumentEditor.vue')
@@ -307,6 +284,67 @@ const {
 // Store min/max for use in keyboard handlers
 const minPaneWidth = 280;
 const maxPaneWidth = 2000;
+
+function useButtonThemeProps(
+    identifier: string,
+    fallback: Record<string, unknown> = {}
+) {
+    const overrides = import.meta.client
+        ? useThemeOverrides({
+              component: 'button',
+              identifier,
+              isNuxtUI: true,
+          })
+        : null;
+
+    return computed(() => ({
+        ...fallback,
+        ...((overrides?.value as Record<string, unknown>) || {}),
+    }));
+}
+
+const sidebarToggleButtonProps = useButtonThemeProps(
+    'shell.sidebar-toggle',
+    {
+        class: 'retro-btn',
+        variant: 'ghost',
+        size: 'xs',
+        color: 'neutral',
+        ui: { base: 'retro-btn' },
+    }
+);
+const newPaneButtonProps = useButtonThemeProps('shell.new-pane', {
+    class: 'retro-btn',
+    variant: 'ghost',
+    size: 'xs',
+    color: 'neutral',
+    ui: { base: 'retro-btn' },
+});
+const themeToggleButtonProps = useButtonThemeProps('shell.theme-toggle', {
+    class: 'retro-btn',
+    variant: 'ghost',
+    size: 'xs',
+    color: 'neutral',
+    ui: { base: 'retro-btn' },
+});
+const headerActionButtonProps = useButtonThemeProps(
+    'shell.header-action',
+    {
+        class: 'retro-btn',
+        variant: 'ghost',
+        size: 'xs',
+        ui: { base: 'retro-btn' },
+    }
+);
+const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {
+    class: 'retro-btn',
+    variant: 'ghost',
+    size: 'xs',
+    color: 'neutral',
+    ui: {
+        base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+    },
+});
 
 // -------- Pane Resize Handlers --------
 let resizingPaneIndex: number | null = null;

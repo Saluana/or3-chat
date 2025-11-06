@@ -30,14 +30,9 @@
 
         <slot name="sidebar-toggle" :collapsed="collapsed" :toggle="onToggle">
             <UButton
-                v-theme="'sidebar.toggle'"
-                size="xs"
+                v-bind="sidebarToggleButtonProps"
                 :square="true"
-                color="neutral"
-                variant="ghost"
-                :class="'retro-btn'"
                 @click="onToggle"
-                :ui="{ base: 'retro-btn' }"
                 :aria-label="toggleAria"
                 :title="toggleAria"
             >
@@ -48,7 +43,8 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, computed } from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps({
     collapsed: { type: Boolean, required: true },
@@ -56,6 +52,27 @@ const props = defineProps({
     toggleAria: { type: String, required: true },
 });
 const emit = defineEmits(['toggle']);
+
+const sidebarToggleOverrides = import.meta.client
+    ? useThemeOverrides({
+          component: 'button',
+          identifier: 'sidebar.toggle',
+          isNuxtUI: true,
+      })
+    : null;
+
+const sidebarToggleFallback = {
+    class: 'retro-btn',
+    variant: 'ghost',
+    size: 'xs',
+    color: 'neutral',
+    ui: { base: 'retro-btn' },
+} as const;
+
+const sidebarToggleButtonProps = computed(() => ({
+    ...sidebarToggleFallback,
+    ...((sidebarToggleOverrides?.value as Record<string, unknown>) || {}),
+}));
 
 function onToggle() {
     emit('toggle');
