@@ -275,6 +275,16 @@ export default defineTheme({
             class: '',
         },
 
+        'button#message.reasoning-toggle': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'sm',
+        },
+
+        'button#message.collapse-attachments': {
+            class: 'text-xs underline',
+        },
+
         'div#message.user-container': {
             // User message container styling
             class: '',
@@ -283,6 +293,32 @@ export default defineTheme({
         'div#message.assistant-container': {
             // Assistant message container styling
             class: '',
+        },
+
+        // Modal buttons (System Prompts Modal)
+        'button.modal': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+        },
+
+        'button#modal.new-prompt': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+            color: 'primary',
+        },
+
+        'button#modal.clear-active': {
+            class: 'retro-btn',
+            variant: 'outline',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#modal.select-prompt': {
+            class: 'retro-btn',
+            size: 'sm',
         },
 
         // Dashboard buttons
