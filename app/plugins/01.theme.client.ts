@@ -1,15 +1,21 @@
-import { ref } from 'vue';
+import { ref, type Ref } from 'vue';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
-import type {
-    CompiledTheme,
-    CompiledOverride,
-    ParsedSelector,
-    AttributeMatcher,
-    AttributeOperator,
-    OverrideProps,
-} from '~/theme/_shared/types';
+import type { CompiledTheme } from '~/theme/_shared/types';
+import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 
-export default defineNuxtPlugin((nuxtApp) => {
+export interface ThemePlugin {
+    set: (name: string) => void;
+    toggle: () => void;
+    get: () => string;
+    system: () => string;
+    current: Ref<string>;
+    activeTheme: Ref<string>;
+    setActiveTheme: (themeName: string) => Promise<void>;
+    getResolver: (themeName: string) => RuntimeResolver | null;
+    loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
+}
+
+export default defineNuxtPlugin(async (nuxtApp) => {
     const THEME_CLASSES = [
         'light',
         'dark',
@@ -19,8 +25,11 @@ export default defineNuxtPlugin((nuxtApp) => {
         'dark-medium-contrast',
     ];
 
+    const DEFAULT_THEME = 'retro';
+
     const storageKey = 'theme';
     const activeThemeStorageKey = 'activeTheme';
+    const activeThemeCookieKey = 'or3_active_theme';
     const root = document.documentElement;
 
     const getSystemPref = () =>
@@ -36,6 +45,18 @@ export default defineNuxtPlugin((nuxtApp) => {
     const read = () => localStorage.getItem(storageKey) as string | null;
     const readActiveTheme = () =>
         localStorage.getItem(activeThemeStorageKey) as string | null;
+    const readActiveThemeCookie = () => {
+        const match = document.cookie.match(
+            new RegExp(`(?:^|; )${activeThemeCookieKey}=([^;]*)`)
+        );
+        return match && match[1] ? decodeURIComponent(match[1]) : null;
+    };
+
+    const writeActiveThemeCookie = (themeName: string) => {
+        document.cookie = `${activeThemeCookieKey}=${encodeURIComponent(
+            themeName
+        )}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+    };
 
     const current = ref(read() || getSystemPref());
     apply(current.value);
@@ -77,8 +98,17 @@ export default defineNuxtPlugin((nuxtApp) => {
     const themeRegistry = new Map<string, CompiledTheme>();
     const resolverRegistry = new Map<string, RuntimeResolver>();
 
+    const sanitizeThemeName = (themeName: string | null) => {
+        if (!themeName) return null;
+        return /^[a-z0-9-]+$/i.test(themeName) ? themeName : null;
+    };
+
+    const storedTheme = sanitizeThemeName(
+        readActiveTheme() || readActiveThemeCookie()
+    );
+
     // Active theme name (for refined theme system)
-    const activeTheme = ref(readActiveTheme() || 'default');
+    const activeTheme = ref<string>(DEFAULT_THEME);
 
     /**
      * Load a theme configuration
@@ -146,133 +176,21 @@ export default defineNuxtPlugin((nuxtApp) => {
         return null;
     };
 
-    /**
-     * Simple runtime compilation of overrides
-     * This mirrors the build-time compilation but runs in the browser
-     */
-    function compileOverridesRuntime(
-        overrides: Record<string, OverrideProps>
-    ): CompiledOverride[] {
-        const compiled: CompiledOverride[] = [];
-
-        for (const [selector, props] of Object.entries(overrides)) {
-            const parsed = parseSelector(selector);
-            const specificity = calculateSpecificity(parsed);
-
-            compiled.push({
-                component: parsed.component,
-                context: parsed.context,
-                identifier: parsed.identifier,
-                state: parsed.state,
-                attributes: parsed.attributes,
-                props,
-                selector,
-                specificity,
-            });
+    const ensureThemeLoaded = async (themeName: string): Promise<boolean> => {
+        if (resolverRegistry.has(themeName)) {
+            return true;
         }
 
-        // Sort by specificity (descending)
-        return compiled.sort((a, b) => b.specificity - a.specificity);
-    }
-
-    /**
-     * Parse a CSS selector into components
-     */
-    function parseSelector(selector: string): ParsedSelector {
-        const normalized = normalizeSelector(selector);
-
-        const component = normalized.match(/^(\w+)/)?.[1] || 'button';
-        const context = normalized.match(/data-context="([^"]+)"/)?.[1];
-        const identifier = normalized.match(/data-id="([^"]+)"/)?.[1];
-        const state = normalized.match(/:(\w+)/)?.[1];
-
-        // Extract HTML attribute selectors
-        const attributes: AttributeMatcher[] = [];
-        // Fixed regex: match attribute name (word chars, hyphens), then optional operator and value
-        const attrRegex = /\[([\w-]+)(([~|^$*]=|=)"([^"]+)")?\]/g;
-        let match: RegExpExecArray | null;
-
-        while ((match = attrRegex.exec(normalized)) !== null) {
-            const attrName = match[1];
-            if (
-                !attrName ||
-                attrName === 'data-context' ||
-                attrName === 'data-id'
-            )
-                continue;
-
-            const fullMatch = match[2]; // e.g., ^="btn" or ="submit"
-            let operator: AttributeOperator = 'exists';
-            let attrValue: string | undefined;
-
-            if (fullMatch) {
-                const op = match[3]; // e.g., "^=" or "="
-                operator = op as AttributeOperator;
-                attrValue = match[4]; // e.g., "btn" or "submit"
-            }
-
-            attributes.push({
-                attribute: attrName,
-                operator,
-                value: attrValue,
-            });
+        if (themeRegistry.has(themeName)) {
+            const cached = themeRegistry.get(themeName)!;
+            const resolver = new RuntimeResolver(cached);
+            resolverRegistry.set(themeName, resolver);
+            return true;
         }
 
-        return {
-            component,
-            context,
-            identifier,
-            state,
-            attributes: attributes.length > 0 ? attributes : undefined,
-        };
-    }
-
-    /**
-     * Normalize simple selector syntax to attribute selectors
-     */
-    function normalizeSelector(selector: string): string {
-        let result = selector;
-
-        // Convert .context to [data-context="context"]
-        const knownContexts = [
-            'chat',
-            'sidebar',
-            'dashboard',
-            'header',
-            'global',
-        ];
-        result = result.replace(
-            /(\w+)\.(\w+)(?=[:\[]|$)/g,
-            (match, component, context) => {
-                if (knownContexts.includes(context)) {
-                    return `${component}[data-context="${context}"]`;
-                }
-                return match;
-            }
-        );
-
-        // Convert #identifier to [data-id="identifier"]
-        result = result.replace(
-            /(\w+)#([\w.]+)(?=[:\[]|$)/g,
-            '$1[data-id="$2"]'
-        );
-
-        return result;
-    }
-
-    /**
-     * Calculate CSS specificity
-     */
-    function calculateSpecificity(parsed: ParsedSelector): number {
-        let specificity = 1; // element
-
-        if (parsed.context) specificity += 10;
-        if (parsed.identifier) specificity += 20;
-        if (parsed.state) specificity += 10;
-        if (parsed.attributes) specificity += parsed.attributes.length * 10;
-
-        return specificity;
-    }
+        const loaded = await loadTheme(themeName);
+        return Boolean(loaded);
+    };
 
     /**
      * Get resolver for a specific theme
@@ -294,6 +212,18 @@ export default defineNuxtPlugin((nuxtApp) => {
             return resolver;
         }
 
+        if (
+            themeName !== DEFAULT_THEME &&
+            resolverRegistry.has(DEFAULT_THEME)
+        ) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[theme] No resolver found for theme "${themeName}". Falling back to "${DEFAULT_THEME}".`
+                );
+            }
+            return resolverRegistry.get(DEFAULT_THEME)!;
+        }
+
         if (import.meta.dev) {
             console.warn(
                 `[theme] No resolver found for theme "${themeName}". Theme may not be compiled.`
@@ -309,31 +239,75 @@ export default defineNuxtPlugin((nuxtApp) => {
      * This switches the active theme and persists the selection.
      */
     const setActiveTheme = async (themeName: string) => {
-        // Load theme if not already loaded
-        if (!themeRegistry.has(themeName)) {
-            await loadTheme(themeName);
+        const target = sanitizeThemeName(themeName) || DEFAULT_THEME;
+
+        const available = await ensureThemeLoaded(target);
+
+        if (!available) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[theme] Failed to load theme "${target}". Falling back to "${DEFAULT_THEME}".`
+                );
+            }
+
+            activeTheme.value = DEFAULT_THEME;
+            localStorage.setItem(activeThemeStorageKey, DEFAULT_THEME);
+            writeActiveThemeCookie(DEFAULT_THEME);
+            await ensureThemeLoaded(DEFAULT_THEME);
+            return;
         }
 
-        // Update active theme
-        activeTheme.value = themeName;
-        localStorage.setItem(activeThemeStorageKey, themeName);
+        activeTheme.value = target;
+        localStorage.setItem(activeThemeStorageKey, target);
+        writeActiveThemeCookie(target);
 
-        // Apply CSS variables if theme provides them
-        const theme = themeRegistry.get(themeName);
+        const theme = themeRegistry.get(target);
         if (theme?.cssVariables) {
             // TODO: Inject CSS variables into document
-            // This will be implemented when we add CSS generation support
         }
     };
 
-    // Initialize: Load retro theme by default
-    loadTheme('retro').catch(() => {
+    // Initialize: ensure default theme is available
+    try {
+        await ensureThemeLoaded(DEFAULT_THEME);
+    } catch (error) {
         if (import.meta.dev) {
-            console.warn('[theme] Failed to load retro theme');
+            console.warn('[theme] Failed to load default theme.', error);
         }
-    });
+    }
 
-    nuxtApp.provide('theme', {
+    if (storedTheme && storedTheme !== DEFAULT_THEME) {
+        try {
+            const available = await ensureThemeLoaded(storedTheme);
+
+            if (available) {
+                activeTheme.value = storedTheme;
+                localStorage.setItem(activeThemeStorageKey, storedTheme);
+                writeActiveThemeCookie(storedTheme);
+            } else {
+                if (import.meta.dev) {
+                    console.warn(
+                        `[theme] Stored theme "${storedTheme}" unavailable. Falling back to "${DEFAULT_THEME}".`
+                    );
+                }
+                activeTheme.value = DEFAULT_THEME;
+                localStorage.setItem(activeThemeStorageKey, DEFAULT_THEME);
+                writeActiveThemeCookie(DEFAULT_THEME);
+            }
+        } catch (error) {
+            if (import.meta.dev) {
+                console.warn(
+                    `[theme] Failed to initialize stored theme "${storedTheme}". Falling back to "${DEFAULT_THEME}".`,
+                    error
+                );
+            }
+            activeTheme.value = DEFAULT_THEME;
+            localStorage.setItem(activeThemeStorageKey, DEFAULT_THEME);
+            writeActiveThemeCookie(DEFAULT_THEME);
+        }
+    }
+
+    const themeApi: ThemePlugin = {
         // Original theme API (for light/dark mode)
         set,
         toggle,
@@ -346,5 +320,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         setActiveTheme, // Function to switch themes
         getResolver, // Function to get resolver for a theme
         loadTheme, // Function to dynamically load a theme
-    });
+    };
+
+    nuxtApp.provide('theme', themeApi);
 });

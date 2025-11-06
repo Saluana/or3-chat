@@ -22,11 +22,11 @@
                 @expand-sidebar="expandSidebar"
             />
         </template>
-        <div class="flex-1 h-[100dvh] w-full relative">
+        <div class="flex-1 h-dvh w-full relative">
             <div
                 id="top-nav"
                 :class="{
-                    'border-[var(--md-inverse-surface)] border-b-2 bg-[var(--md-surface-variant)]/20 backdrop-blur-sm':
+                    'border-(--md-inverse-surface) border-b-2 bg-(--md-surface-variant)/20 backdrop-blur-sm':
                         panes.length > 1 || isMobile,
                 }"
                 class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
@@ -61,7 +61,9 @@
                             :disabled="!canAddPane"
                             :class="[
                                 'backdrop-blur pointer-events-auto mr-2',
-                                !canAddPane ? 'opacity-50 cursor-not-allowed' : '',
+                                !canAddPane
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : '',
                             ]"
                             aria-label="New window"
                             title="New window"
@@ -141,8 +143,8 @@
                     :style="{ width: getPaneWidth(i) }"
                     :class="[
                         i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-[var(--md-primary)] bg-[var(--md-surface-variant)]/10'
-                            : 'border-[var(--md-inverse-surface)]',
+                            ? 'pane-active border-(--md-primary) bg-(--md-surface-variant)/10'
+                            : 'border-(--md-inverse-surface)',
                         'transition-colors',
                         panes.length === 1 ? 'min-w-0' : '',
                     ]"
@@ -231,6 +233,7 @@ import ChatContainer from '~/components/chat/ChatContainer.vue';
 import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import type { ThemePlugin } from '~/plugins/01.theme.client';
 
 const DocumentEditorAsync = defineAsyncComponent(
     () => import('~/components/documents/DocumentEditor.vue')
@@ -289,30 +292,29 @@ function useButtonThemeProps(
     identifier: string,
     fallback: Record<string, unknown> = {}
 ) {
-    const overrides = import.meta.client
+    const theme = useNuxtApp().$theme as ThemePlugin | undefined;
+
+    const overrides = theme
         ? useThemeOverrides({
               component: 'button',
               identifier,
               isNuxtUI: true,
           })
-        : null;
+        : computed(() => ({} as Record<string, unknown>));
 
     return computed(() => ({
         ...fallback,
-        ...((overrides?.value as Record<string, unknown>) || {}),
+        ...overrides.value,
     }));
 }
 
-const sidebarToggleButtonProps = useButtonThemeProps(
-    'shell.sidebar-toggle',
-    {
-        class: 'retro-btn',
-        variant: 'ghost',
-        size: 'xs',
-        color: 'neutral',
-        ui: { base: 'retro-btn' },
-    }
-);
+const sidebarToggleButtonProps = useButtonThemeProps('shell.sidebar-toggle', {
+    class: 'retro-btn',
+    variant: 'ghost',
+    size: 'xs',
+    color: 'neutral',
+    ui: { base: 'retro-btn' },
+});
 const newPaneButtonProps = useButtonThemeProps('shell.new-pane', {
     class: 'retro-btn',
     variant: 'ghost',
@@ -327,15 +329,12 @@ const themeToggleButtonProps = useButtonThemeProps('shell.theme-toggle', {
     color: 'neutral',
     ui: { base: 'retro-btn' },
 });
-const headerActionButtonProps = useButtonThemeProps(
-    'shell.header-action',
-    {
-        class: 'retro-btn',
-        variant: 'ghost',
-        size: 'xs',
-        ui: { base: 'retro-btn' },
-    }
-);
+const headerActionButtonProps = useButtonThemeProps('shell.header-action', {
+    class: 'retro-btn',
+    variant: 'ghost',
+    size: 'xs',
+    ui: { base: 'retro-btn' },
+});
 const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {
     class: 'retro-btn',
     variant: 'ghost',

@@ -1,9 +1,9 @@
 /**
  * Retro Theme - Default Theme for Or3 Chat
- * 
+ *
  * This is the original retro aesthetic theme, migrated to the refined theme system.
  * It features pixel-perfect styling with hard borders, offset shadows, and a nostalgic vibe.
- * 
+ *
  * All retro-specific styles are contained within this theme package and loaded
  * conditionally when the retro theme is active.
  */
@@ -13,7 +13,8 @@ import { defineTheme } from '../_shared/define-theme';
 export default defineTheme({
     name: 'retro',
     displayName: 'Retro (Default)',
-    description: 'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
+    description:
+        'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
 
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
@@ -24,7 +25,7 @@ export default defineTheme({
         primaryContainer: '#b2f5ea',
         onPrimaryContainer: '#002020',
 
-        // Secondary colors  
+        // Secondary colors
         secondary: '#ff6b6b',
         onSecondary: '#ffffff',
         secondaryContainer: '#ffd7d7',
@@ -88,7 +89,7 @@ export default defineTheme({
     // These provide default styling for all retro-themed components
     overrides: {
         // Global button styling
-        'button': {
+        button: {
             class: 'retro-btn',
             variant: 'solid',
             size: 'md',
@@ -104,7 +105,8 @@ export default defineTheme({
         'button#shell.new-pane': {
             class: 'retro-btn',
             variant: 'ghost',
-            size: 'xs',
+            size: 'sm',
+            color: 'secondary',
         },
 
         'button#shell.theme-toggle': {
@@ -229,7 +231,7 @@ export default defineTheme({
         },
 
         // Global input styling
-        'input': {
+        input: {
             class: 'retro-input',
             variant: 'outline',
             size: 'md',
@@ -254,7 +256,7 @@ export default defineTheme({
         },
 
         // Textarea styling
-        'textarea': {
+        textarea: {
             class: 'retro-input',
         },
 

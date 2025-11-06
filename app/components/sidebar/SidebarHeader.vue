@@ -45,6 +45,7 @@
 <script setup lang="ts">
 import { defineProps, defineEmits, computed } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import type { ThemePlugin } from '~/plugins/01.theme.client';
 
 const props = defineProps({
     collapsed: { type: Boolean, required: true },
@@ -53,13 +54,15 @@ const props = defineProps({
 });
 const emit = defineEmits(['toggle']);
 
-const sidebarToggleOverrides = import.meta.client
+const theme = useNuxtApp().$theme as ThemePlugin | undefined;
+
+const sidebarToggleOverrides = theme
     ? useThemeOverrides({
           component: 'button',
           identifier: 'sidebar.toggle',
           isNuxtUI: true,
       })
-    : null;
+    : computed(() => ({} as Record<string, unknown>));
 
 const sidebarToggleFallback = {
     class: 'retro-btn',
@@ -71,7 +74,7 @@ const sidebarToggleFallback = {
 
 const sidebarToggleButtonProps = computed(() => ({
     ...sidebarToggleFallback,
-    ...((sidebarToggleOverrides?.value as Record<string, unknown>) || {}),
+    ...sidebarToggleOverrides.value,
 }));
 
 function onToggle() {

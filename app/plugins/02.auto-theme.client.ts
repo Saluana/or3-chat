@@ -44,16 +44,7 @@ import type {
 } from 'vue';
 import { watch, onScopeDispose } from 'vue';
 import type { ResolveParams } from '~/theme/_shared/runtime-resolver';
-import type { Ref } from 'vue';
-import type { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
-
-/**
- * Theme plugin interface
- */
-interface ThemePlugin {
-    activeTheme?: Ref<string>;
-    getResolver?: (themeName: string) => RuntimeResolver | null;
-}
+import type { ThemePlugin } from './01.theme.client';
 
 /**
  * Directive binding value types
