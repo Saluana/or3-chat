@@ -220,6 +220,71 @@ export default defineTheme({
             size: 'sm',
         },
 
+        // Message action buttons (all buttons in message context)
+        'button.message': {
+            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
+            variant: 'solid',
+            size: 'sm',
+            color: 'info',
+        },
+
+        'button#message.copy': {
+            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
+            variant: 'solid',
+            size: 'sm',
+            color: 'info',
+        },
+
+        'button#message.retry': {
+            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
+            variant: 'solid',
+            size: 'sm',
+            color: 'info',
+        },
+
+        'button#message.branch': {
+            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
+            variant: 'solid',
+            size: 'sm',
+            color: 'info',
+        },
+
+        'button#message.edit': {
+            class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
+            variant: 'solid',
+            size: 'sm',
+            color: 'info',
+        },
+
+        'button#message.save-edit': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+            color: 'success',
+        },
+
+        'button#message.cancel-edit': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+            color: 'error',
+        },
+
+        'button#message.attachment-thumb': {
+            // Attachment thumbnail button styling
+            class: '',
+        },
+
+        'div#message.user-container': {
+            // User message container styling
+            class: '',
+        },
+
+        'div#message.assistant-container': {
+            // Assistant message container styling
+            class: '',
+        },
+
         // Dashboard buttons
         'button.dashboard': {
             class: 'retro-btn',

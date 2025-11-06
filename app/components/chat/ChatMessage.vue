@@ -1,6 +1,11 @@
 <template>
     <div
-        :class="outerClass"
+        :class="[
+            outerClass,
+            (messageContainerProps as any)?.class || '',
+        ]"
+        :data-theme-target="(messageContainerProps as any)?.['data-theme-target']"
+        :data-theme-matches="(messageContainerProps as any)?.['data-theme-matches']"
         :style="{
             paddingRight:
                 props.message.role === 'user' && hashList.length && !expanded
@@ -12,6 +17,9 @@
         <!-- Compact thumb (collapsed state) -->
         <button
             v-if="props.message.role === 'user' && hashList.length && !expanded"
+            :class="(attachmentThumbButtonProps as any)?.class || ''"
+            :data-theme-target="(attachmentThumbButtonProps as any)?.['data-theme-target']"
+            :data-theme-matches="(attachmentThumbButtonProps as any)?.['data-theme-matches']"
             class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
@@ -134,17 +142,13 @@
             />
             <div class="flex w-full justify-end gap-2 mt-2">
                 <UButton
-                    size="sm"
-                    color="success"
-                    class="retro-btn"
+                    v-bind="saveEditButtonProps"
                     @click="saveEdit"
                     :loading="saving"
                     >Save</UButton
                 >
                 <UButton
-                    size="sm"
-                    color="error"
-                    class="retro-btn"
+                    v-bind="cancelEditButtonProps"
                     @click="wrappedCancelEdit"
                     >Cancel</UButton
                 >
@@ -172,11 +176,8 @@
             >
                 <UTooltip :delay-duration="0" text="Copy" :teleport="true">
                     <UButton
+                        v-bind="copyButtonProps"
                         @click="copyMessage"
-                        icon="pixelarticons:copy"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip
@@ -186,28 +187,19 @@
                     :teleport="true"
                 >
                     <UButton
-                        icon="pixelarticons:reload"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        v-bind="retryButtonProps"
                         @click="onRetry"
                     ></UButton>
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Branch" :teleport="true">
                     <UButton
+                        v-bind="branchButtonProps"
                         @click="onBranch"
-                        icon="pixelarticons:git-branch"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
                     ></UButton>
                 </UTooltip>
                 <UTooltip :delay-duration="0" text="Edit" :teleport="true">
                     <UButton
-                        icon="pixelarticons:edit-box"
-                        color="info"
-                        size="sm"
-                        class="text-black dark:text-white/95 flex items-center justify-center"
+                        v-bind="editButtonProps"
                         @click="wrappedBeginEdit"
                     ></UButton>
                 </UTooltip>
@@ -252,6 +244,7 @@ import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
 import { useNuxtApp } from '#app';
 import { useRafFn } from '@vueuse/core';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -264,6 +257,132 @@ const emit = defineEmits<{
     (e: 'cancel-edit', id: string): void;
     (e: 'save-edit', id: string): void;
 }>();
+
+// Theme overrides for message buttons
+const copyButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.copy',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: 'pixelarticons:copy' as const,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const retryButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.retry',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: 'pixelarticons:reload' as const,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const branchButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.branch',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: 'pixelarticons:git-branch' as const,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const editButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.edit',
+        isNuxtUI: true,
+    });
+
+    return {
+        icon: 'pixelarticons:edit-box' as const,
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const saveEditButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.save-edit',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'success' as const,
+        class: 'retro-btn',
+        ...(overrides.value as any),
+    };
+});
+
+const cancelEditButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.cancel-edit',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'error' as const,
+        class: 'retro-btn',
+        ...(overrides.value as any),
+    };
+});
+
+const attachmentThumbButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.attachment-thumb',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
+const messageContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'message',
+        identifier:
+            props.message.role === 'user'
+                ? 'message.user-container'
+                : 'message.assistant-container',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
 
 const isStreamingReasoning = computed(() => {
     return props.message.reasoning_text && !hasContent.value;
