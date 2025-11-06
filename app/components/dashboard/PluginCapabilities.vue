@@ -15,6 +15,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     capabilities?: string[];

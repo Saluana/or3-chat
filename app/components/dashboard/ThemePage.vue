@@ -18,9 +18,7 @@
                 </h2>
                 <div class="flex gap-2 items-center">
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-chip"
+                        v-bind="themeModeButtonProps"
                         :class="activeMode === 'light' ? 'active' : ''"
                         :disabled="activeMode === 'light'"
                         :aria-pressed="activeMode === 'light'"
@@ -28,9 +26,7 @@
                         >Light</UButton
                     >
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-chip"
+                        v-bind="themeModeButtonProps"
                         :class="activeMode === 'dark' ? 'active' : ''"
                         :disabled="activeMode === 'dark'"
                         :aria-pressed="activeMode === 'dark'"
@@ -38,9 +34,7 @@
                         >Dark</UButton
                     >
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-chip"
+                        v-bind="themeModeButtonProps"
                         aria-label="Reset current theme mode"
                         @click="onResetCurrent"
                         :title="'Reset ' + activeMode + ' profile'"
@@ -453,20 +447,16 @@
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
                 <UButton
-                    size="sm"
-                    variant="basic"
+                    v-bind="presetButtonProps"
                     v-for="p in presetsContent1"
                     :key="p.src"
                     @click="applyPreset('contentBg1', p.src, p.opacity)"
-                    class="retro-chip"
                     :class="isPresetActive('contentBg1', p.src)"
                 >
                     {{ p.label }}
                 </UButton>
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="removeLayerButtonProps"
                     @click="removeLayer('contentBg1')"
                 >
                     Remove
@@ -480,9 +470,7 @@
                     @change="onUpload($event, 'contentBg1')"
                 />
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="repeatButtonProps"
                     @click="toggleRepeat('contentBg1Repeat')"
                     :aria-pressed="settings.contentBg1Repeat === 'repeat'"
                 >
@@ -628,20 +616,16 @@
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
                 <UButton
-                    size="sm"
-                    variant="basic"
+                    v-bind="presetButtonProps"
                     v-for="p in presetsContent2"
                     :key="p.src"
                     @click="applyPreset('contentBg2', p.src, p.opacity)"
-                    class="retro-chip"
                     :class="isPresetActive('contentBg2', p.src)"
                 >
                     {{ p.label }}
                 </UButton>
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="removeLayerButtonProps"
                     @click="removeLayer('contentBg2')"
                 >
                     Remove
@@ -654,9 +638,7 @@
                     @change="onUpload($event, 'contentBg2')"
                 />
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="repeatButtonProps"
                     @click="toggleRepeat('contentBg2Repeat')"
                     :aria-pressed="settings.contentBg2Repeat === 'repeat'"
                 >
@@ -801,20 +783,16 @@
             <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-xs opacity-70">Presets:</span>
                 <UButton
-                    size="sm"
-                    variant="basic"
+                    v-bind="presetButtonProps"
                     v-for="p in presetsSidebar"
                     :key="p.src"
                     @click="applyPreset('sidebarBg', p.src, p.opacity)"
-                    class="retro-chip"
                     :class="isPresetActive('sidebarBg', p.src)"
                 >
                     {{ p.label }}
                 </UButton>
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="removeLayerButtonProps"
                     @click="removeLayer('sidebarBg')"
                 >
                     Remove
@@ -827,9 +805,7 @@
                     @change="onUpload($event, 'sidebarBg')"
                 />
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="repeatButtonProps"
                     @click="toggleRepeat('sidebarRepeat')"
                     :aria-pressed="settings.sidebarRepeat === 'repeat'"
                 >
@@ -960,17 +936,13 @@
             <div class="flex items-center gap-3 text-xs">
                 <span class="opacity-70">Gradient:</span>
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="gradientButtonProps"
                     :disabled="settings.showHeaderGradient"
                     @click="set({ showHeaderGradient: true })"
                     >Default</UButton
                 >
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="gradientButtonProps"
                     :disabled="!settings.showHeaderGradient"
                     @click="set({ showHeaderGradient: false })"
                     >Remove</UButton
@@ -1039,17 +1011,13 @@
             <div class="flex items-center gap-3 text-xs">
                 <span class="opacity-70">Gradient:</span>
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="gradientButtonProps"
                     :disabled="settings.showBottomBarGradient"
                     @click="set({ showBottomBarGradient: true })"
                     >Default</UButton
                 >
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-chip"
+                    v-bind="gradientButtonProps"
                     :disabled="!settings.showBottomBarGradient"
                     @click="set({ showBottomBarGradient: false })"
                     >Remove</UButton
@@ -1116,9 +1084,8 @@
                 Reset
             </h2>
             <UButton
-                size="sm"
-                variant="basic"
-                class="retro-btn px-3 py-2 text-xs"
+                v-bind="resetAllButtonProps"
+                class="px-3 py-2 text-xs"
                 @click="onResetAll"
             >
                 Reset All
@@ -1135,6 +1102,7 @@ import { getFileBlob } from '~/db/files';
 import { useThemeSettings } from '~/core/theme/useThemeSettings';
 import type { ThemeSettings } from '~/core/theme/theme-types';
 import type { Ref } from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const themeApi = useThemeSettings();
 const settings = themeApi.settings as Ref<ThemeSettings>; // active mode settings
@@ -1144,6 +1112,91 @@ const resetAll = themeApi.resetAll;
 const reapply = themeApi.reapply;
 const activeMode = themeApi.activeMode;
 const switchMode = themeApi.switchMode;
+
+// Theme overrides for buttons
+const themeModeButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.mode',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const presetButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.preset',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const removeLayerButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.remove-layer',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const repeatButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.repeat',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const gradientButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.gradient',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const resetAllButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.reset-all',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
 
 // Local mutable copy for debounced slider interactions
 const local = reactive({
