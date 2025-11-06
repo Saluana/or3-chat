@@ -57,20 +57,14 @@
                         <template #content>
                             <div class="p-1 w-48 space-y-1">
                                 <UButton
-                                    color="neutral"
-                                    variant="popover"
-                                    size="sm"
+                                    v-bind="renameButtonProps"
                                     class="w-full justify-start cursor-pointer"
-                                    icon="pixelarticons:edit"
                                     @click.stop.prevent="emit('rename')"
                                     >Rename Project</UButton
                                 >
                                 <UButton
-                                    color="error"
-                                    variant="popover"
-                                    size="sm"
+                                    v-bind="deleteButtonProps"
                                     class="w-full justify-start cursor-pointer text-error-500"
-                                    icon="pixelarticons:trash"
                                     @click.stop.prevent="emit('delete')"
                                     >Delete Project</UButton
                                 >
@@ -84,7 +78,9 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Project {
     id: string;
@@ -104,4 +100,37 @@ const emit = defineEmits<{
     (e: 'rename'): void;
     (e: 'delete'): void;
 }>();
+
+// Theme overrides for project action buttons
+const renameButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-rename',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: 'pixelarticons:edit' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const deleteButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.project-delete',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'error' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: 'pixelarticons:trash' as const,
+        ...(overrides.value as any),
+    };
+});
 </script>

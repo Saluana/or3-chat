@@ -21,37 +21,27 @@
             <template #content>
                 <div class="p-1 w-44 space-y-1">
                     <UButton
-                        color="neutral"
-                        variant="popover"
-                        size="sm"
+                        v-bind="renameButtonProps"
                         class="w-full justify-start"
-                        icon="pixelarticons:edit"
                         @click="emit('rename', doc)"
                         >Rename</UButton
                     >
                     <UButton
-                        color="neutral"
-                        variant="popover"
-                        size="sm"
+                        v-bind="addToProjectButtonProps"
                         class="w-full justify-start"
-                        icon="pixelarticons:folder-plus"
                         @click="emit('add-to-project', doc)"
                         >Add to project</UButton
                     >
                     <UButton
-                        variant="popover"
-                        size="sm"
+                        v-bind="deleteButtonProps"
                         class="w-full justify-start text-error-500"
-                        icon="pixelarticons:trash"
                         @click="emit('delete', doc)"
                         >Delete</UButton
                     >
                     <template v-for="action in extraActions" :key="action.id">
                         <UButton
+                            v-bind="extraActionButtonProps"
                             :icon="action.icon"
-                            color="neutral"
-                            variant="popover"
-                            size="sm"
                             class="w-full justify-start"
                             @click="() => runExtraAction(action)"
                             >{{ action.label || '' }}</UButton
@@ -63,10 +53,13 @@
     </RetroGlassBtn>
 </template>
 <script setup lang="ts">
+import { computed } from 'vue';
 import RetroGlassBtn from '~/components/ui/RetroGlassBtn.vue';
 import type { Post } from '~/db';
 import { db } from '~/db';
 import { useThrottleFn } from '@vueuse/core';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+
 const props = defineProps<{ doc: any; active?: boolean }>();
 const emit = defineEmits<{
     (e: 'select', id: string): void;
@@ -74,6 +67,71 @@ const emit = defineEmits<{
     (e: 'delete', doc: any): void;
     (e: 'add-to-project', doc: any): void;
 }>();
+
+// Theme overrides for document action buttons
+const renameButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.document-rename',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: 'pixelarticons:edit' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const addToProjectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.document-add-to-project',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: 'pixelarticons:folder-plus' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const deleteButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.document-delete',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        icon: 'pixelarticons:trash' as const,
+        color: 'error' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const extraActionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.document-extra-action',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'popover' as const,
+        size: 'sm' as const,
+        ...(overrides.value as any),
+    };
+});
+
 const extraActions = useDocumentHistoryActions();
 const fullDocCache = new Map<string, Post>();
 const prefetching = new Set<string>();
