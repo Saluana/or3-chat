@@ -19,19 +19,15 @@
                         class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"
                     >
                         <UButton
+                            v-bind="newPromptButtonProps"
                             @click="createNewPrompt"
-                            size="sm"
-                            color="primary"
-                            class="retro-btn"
                         >
                             New Prompt
                         </UButton>
                         <UButton
                             v-if="currentActivePromptId"
+                            v-bind="clearActiveButtonProps"
                             @click="clearActivePrompt"
-                            size="sm"
-                            color="neutral"
-                            variant="outline"
                         >
                             Clear Active
                         </UButton>
@@ -182,8 +178,8 @@
                                         >
                                     </UTooltip>
                                     <UButton
+                                        v-bind="selectButtonProps"
                                         @click="selectPrompt(prompt.id)"
-                                        size="sm"
                                         :color="
                                             prompt.id === currentActivePromptId
                                                 ? 'primary'
@@ -279,6 +275,7 @@ import {
 import { updateThreadSystemPrompt, getThreadSystemPrompt } from '~/db/threads';
 
 import { isMobile } from '~/state/global';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 // Props & modal open bridging (like SettingsModal pattern)
 const props = defineProps<{
@@ -334,6 +331,53 @@ const currentActivePromptId = computed(() => {
     if (props.threadId) return threadSystemPromptId.value;
     // If no thread yet use pane-scoped pending first, else fall back to global active
     return pendingPromptId.value || activePromptId.value;
+});
+
+// Theme overrides for modal buttons
+const newPromptButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.new-prompt',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'primary' as const,
+        class: 'retro-btn',
+        ...(overrides.value as any),
+    };
+});
+
+const clearActiveButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.clear-active',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        color: 'neutral' as const,
+        variant: 'outline' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const selectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'modal',
+        identifier: 'modal.select-prompt',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        ...(overrides.value as any),
+    };
 });
 
 // Extract plain text from TipTap JSON recursively

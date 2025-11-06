@@ -12,7 +12,7 @@ export type ThemeName = 'nature' | 'retro';
 /**
  * Available theme identifiers for v-theme directive
  */
-export type ThemeIdentifier = 'chat.send' | 'sidebar.toggle' | 'sidebar.filter' | 'chat.attach' | 'dashboard.export' | 'dashboard.import' | 'document.toolbar' | 'document.search';
+export type ThemeIdentifier = 'chat.send' | 'sidebar.toggle' | 'sidebar.filter' | 'chat.stop' | 'chat.attach' | 'chat.settings' | 'chat.editor' | 'message.copy' | 'message.retry' | 'message.branch' | 'message.edit' | 'dashboard.export' | 'dashboard.import' | 'document.toolbar' | 'document.search';
 
 /**
  * Available context names
