@@ -5,7 +5,7 @@
             <UCard
                 v-for="result in searchResults"
                 :key="result.id"
-                class="cursor-pointer hover:border-[var(--md-primary)] transition-colors"
+                v-bind="searchResultCardProps"
                 @click="handleNavigate(result)"
             >
                 <h3 class="font-bold text-[14px] text-[var(--md-on-surface)]">
@@ -26,7 +26,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Props {
     docmap: any;
@@ -50,6 +51,20 @@ const searchQuery = ref(props.searchQuery || '');
 const isSearching = ref(false);
 const searchResults = ref<SearchResult[]>([]);
 const searchIndex = ref<any | null>(null);
+
+// Theme integration for search result cards
+const searchResultCardProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'card',
+        context: 'document',
+        identifier: 'document.search-result',
+        isNuxtUI: true,
+    });
+    return {
+        class: 'cursor-pointer hover:border-[var(--md-primary)] transition-colors',
+        ...(overrides.value as any),
+    };
+});
 
 // Initialize search index on mount
 onMounted(async () => {

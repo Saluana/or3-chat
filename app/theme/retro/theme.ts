@@ -318,6 +318,32 @@ export default defineTheme({
             size: 'sm',
         },
 
+        'button#document.retry': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'md',
+            color: 'primary',
+        },
+
+        'button#document.search-retry': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+            color: 'primary',
+        },
+
+        // Document inputs
+        'input#document.title': {
+            class: 'retro-input',
+            variant: 'outline',
+            size: 'md',
+        },
+
+        // Document search result cards
+        'card#document.search-result': {
+            class: 'cursor-pointer hover:border-[var(--md-primary)] transition-colors',
+        },
+
         // Global input styling
         input: {
             class: 'retro-input',

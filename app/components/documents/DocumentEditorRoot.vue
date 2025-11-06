@@ -6,9 +6,8 @@
             class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
         >
             <UInput
+                v-bind="titleInputProps"
                 v-model="titleDraft"
-                placeholder="Untitled"
-                size="md"
                 class="flex-1 max-w-[60%]"
                 @update:model-value="onTitleChange"
             />
@@ -141,6 +140,7 @@ import {
     type EditorToolbarButton,
 } from '~/composables';
 import { loadEditorExtensions } from '~/composables/editor/useEditorExtensionLoader';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{ documentId: string }>();
 
@@ -172,6 +172,21 @@ let didUnmount = false;
 
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
+
+// Theme integration for title input
+const titleInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'document',
+        identifier: 'document.title',
+        isNuxtUI: true,
+    });
+    return {
+        placeholder: 'Untitled',
+        size: 'md' as const,
+        ...(overrides.value as any),
+    };
+});
 
 function onTitleChange() {
     setDocumentTitle(props.documentId, titleDraft.value);
