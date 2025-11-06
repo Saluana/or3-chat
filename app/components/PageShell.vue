@@ -22,11 +22,18 @@
                 @expand-sidebar="expandSidebar"
             />
         </template>
-        <div class="flex-1 h-dvh w-full relative">
+        <div
+            class="flex-1 h-dvh w-full relative"
+            :class="legacyCompatClasses.height"
+        >
             <div
                 id="top-nav"
                 :class="{
                     'border-(--md-inverse-surface) border-b-2 bg-(--md-surface-variant)/20 backdrop-blur-sm':
+                        panes.length > 1 || isMobile,
+                    [legacyCompatClasses.borderInverse]:
+                        panes.length > 1 || isMobile,
+                    [legacyCompatClasses.bgSurfaceVariant20]:
                         panes.length > 1 || isMobile,
                 }"
                 class="absolute z-50 top-0 w-full h-[46px] inset-0 flex items-center justify-between pr-2 gap-2 pointer-events-none"
@@ -142,9 +149,16 @@
                     class="relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
                     :style="{ width: getPaneWidth(i) }"
                     :class="[
-                        i === activePaneIndex && panes.length > 1
-                            ? 'pane-active border-(--md-primary) bg-(--md-surface-variant)/10'
-                            : 'border-(--md-inverse-surface)',
+                        ...(i === activePaneIndex && panes.length > 1
+                            ? [
+                                  'pane-active border-(--md-primary) bg-(--md-surface-variant)/10',
+                                  legacyCompatClasses.borderPrimary,
+                                  legacyCompatClasses.bgSurfaceVariant10,
+                              ]
+                            : [
+                                  'border-(--md-inverse-surface)',
+                                  legacyCompatClasses.borderInverse,
+                              ]),
                         'transition-colors',
                         panes.length === 1 ? 'min-w-0' : '',
                     ]"
@@ -234,6 +248,14 @@ import PaneUnknown from '~/components/PaneUnknown.vue';
 import PaneResizeHandle from '~/components/panes/PaneResizeHandle.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { ThemePlugin } from '~/plugins/01.theme.client';
+
+const legacyCompatClasses = {
+    height: `h-[${'100dvh'}]`,
+    borderInverse: `border-[${'var(--md-inverse-surface)'}]`,
+    borderPrimary: `border-[${'var(--md-primary)'}]`,
+    bgSurfaceVariant20: `bg-[${'var(--md-surface-variant)'}]/20`,
+    bgSurfaceVariant10: `bg-[${'var(--md-surface-variant)'}]/10`,
+} as const;
 
 const DocumentEditorAsync = defineAsyncComponent(
     () => import('~/components/documents/DocumentEditor.vue')

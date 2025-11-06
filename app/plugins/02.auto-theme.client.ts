@@ -213,7 +213,9 @@ function applyOverrides(
     if (!instance) {
         // For plain elements, apply as data attributes that can be read by CSS
         // Include identifier in props for data-id setting
-        const propsWithIdentifier = identifier ? { ...resolvedProps, identifier } : resolvedProps;
+        const propsWithIdentifier = identifier
+            ? { ...resolvedProps, identifier }
+            : resolvedProps;
         applyToElement(el, propsWithIdentifier);
         return;
     }
@@ -226,7 +228,9 @@ function applyOverrides(
     // Apply to the actual rendered element if possible
     // This works for components that forward refs or have a root element
     if (instance.subTree?.el) {
-        const propsWithIdentifier = identifier ? { ...resolvedProps, identifier } : resolvedProps;
+        const propsWithIdentifier = identifier
+            ? { ...resolvedProps, identifier }
+            : resolvedProps;
         applyToElement(instance.subTree.el as HTMLElement, propsWithIdentifier);
     }
 }
@@ -273,6 +277,14 @@ function applyToElement(el: HTMLElement, props: Record<string, unknown>) {
                 ' '
             )}`.trim();
         }
+    }
+
+    // Apply debug data attributes or custom data-* props (dev helper)
+    for (const [key, value] of Object.entries(props)) {
+        if (!key.startsWith('data-')) continue;
+        if (value === undefined || value === null) continue;
+
+        el.setAttribute(key, String(value));
     }
 }
 
@@ -371,7 +383,12 @@ export default defineNuxtPlugin((nuxtApp) => {
                         const newResolver = themePlugin.getResolver?.(newTheme);
                         if (newResolver) {
                             const newResolved = newResolver.resolve(params);
-                            applyOverrides(targetEl, vnode, newResolved.props, identifier);
+                            applyOverrides(
+                                targetEl,
+                                vnode,
+                                newResolved.props,
+                                identifier
+                            );
                         }
                     }
                 );

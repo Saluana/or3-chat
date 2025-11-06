@@ -1,10 +1,10 @@
 /**
  * Runtime Override Resolver
- * 
+ *
  * This class is responsible for resolving theme overrides at runtime.
  * It matches component parameters against compiled overrides and merges
  * them by specificity.
- * 
+ *
  * Performance targets:
  * - Override resolution: < 1ms per component
  * - Theme switch: < 50ms total
@@ -51,7 +51,7 @@ export interface ResolvedOverride {
 
 /**
  * Runtime resolver for theme overrides
- * 
+ *
  * The resolver is initialized with a compiled theme configuration
  * and provides efficient override resolution based on component parameters.
  */
@@ -62,7 +62,7 @@ export class RuntimeResolver {
 
     /**
      * Create a new runtime resolver
-     * 
+     *
      * @param compiledTheme - Compiled theme configuration from build time
      */
     constructor(compiledTheme: CompiledTheme) {
@@ -81,10 +81,10 @@ export class RuntimeResolver {
 
     /**
      * Resolve overrides for a component instance
-     * 
+     *
      * Matches component parameters against compiled overrides and merges
      * by specificity. Returns merged props ready to apply to component.
-     * 
+     *
      * @param params - Component parameters for resolution
      * @returns Resolved override props
      */
@@ -102,6 +102,22 @@ export class RuntimeResolver {
             // Merge matching overrides by specificity
             const merged = this.merge(matching);
 
+            if (import.meta.dev && matching.length > 0) {
+                const primarySelector = matching[0]?.selector;
+                if (
+                    primarySelector &&
+                    merged.props['data-theme-target'] === undefined
+                ) {
+                    merged.props['data-theme-target'] = primarySelector;
+                }
+
+                if (merged.props['data-theme-matches'] === undefined) {
+                    merged.props['data-theme-matches'] = matching
+                        .map((override) => override.selector)
+                        .join(',');
+                }
+            }
+
             // Convert semantic props to classes if component is not Nuxt UI
             if (!params.isNuxtUI) {
                 return this.mapPropsToClasses(merged);
@@ -111,10 +127,14 @@ export class RuntimeResolver {
         } catch (error) {
             // Graceful degradation - log in dev, return empty in production
             if (import.meta.dev) {
-                console.error('[theme-resolver] Override resolution failed:', error, {
-                    theme: this.themeName,
-                    params,
-                });
+                console.error(
+                    '[theme-resolver] Override resolution failed:',
+                    error,
+                    {
+                        theme: this.themeName,
+                        params,
+                    }
+                );
             }
 
             // Return empty props - component uses defaults
@@ -124,14 +144,14 @@ export class RuntimeResolver {
 
     /**
      * Check if an override matches the given component parameters
-     * 
+     *
      * Implements CSS-like specificity matching:
      * 1. Component type must match
      * 2. Context must match (if specified in override)
      * 3. Identifier must match (if specified in override)
      * 4. State must match (if specified in override)
      * 5. HTML attributes must match (if specified in override)
-     * 
+     *
      * @param override - Compiled override to check
      * @param params - Component parameters to match against
      * @returns true if override matches
@@ -167,7 +187,7 @@ export class RuntimeResolver {
             if (!params.element) {
                 return false;
             }
-            
+
             // Check all required attributes
             for (const matcher of override.attributes) {
                 if (!this.matchesAttribute(params.element, matcher)) {
@@ -182,7 +202,7 @@ export class RuntimeResolver {
 
     /**
      * Check if an element matches an attribute selector
-     * 
+     *
      * Supports all CSS attribute selector operators:
      * - [attr] - attribute exists
      * - [attr="value"] - exact match
@@ -191,7 +211,7 @@ export class RuntimeResolver {
      * - [attr^="value"] - starts with string
      * - [attr$="value"] - ends with string
      * - [attr*="value"] - contains substring
-     * 
+     *
      * @param element - HTML element to check
      * @param matcher - Attribute matcher to apply
      * @returns true if element matches
@@ -241,12 +261,12 @@ export class RuntimeResolver {
 
     /**
      * Merge matching overrides by specificity
-     * 
+     *
      * Merging rules:
      * - Classes are concatenated (highest specificity first)
      * - UI objects are deep merged
      * - Other props: highest specificity wins
-     * 
+     *
      * @param overrides - Matching overrides (pre-sorted by specificity)
      * @returns Merged override props
      */
@@ -257,14 +277,19 @@ export class RuntimeResolver {
         // This ensures highest specificity wins
         for (let i = overrides.length - 1; i >= 0; i--) {
             const override = overrides[i];
+            if (!override) continue;
 
             for (const [key, value] of Object.entries(override.props)) {
                 if (key === 'class') {
                     // Concatenate classes (highest specificity first)
-                    merged[key] = value + (merged[key] ? ` ${merged[key]}` : '');
+                    merged[key] =
+                        value + (merged[key] ? ` ${merged[key]}` : '');
                 } else if (key === 'ui') {
                     // Deep merge ui objects
-                    merged[key] = this.deepMerge(merged[key] as Record<string, unknown> || {}, value as Record<string, unknown>);
+                    merged[key] = this.deepMerge(
+                        (merged[key] as Record<string, unknown>) || {},
+                        value as Record<string, unknown>
+                    );
                 } else {
                     // Higher specificity wins
                     merged[key] = value;
@@ -277,7 +302,7 @@ export class RuntimeResolver {
 
     /**
      * Deep merge two objects
-     * 
+     *
      * @param target - Target object
      * @param source - Source object
      * @returns Merged object
@@ -289,7 +314,11 @@ export class RuntimeResolver {
         const result = { ...target };
 
         for (const [key, value] of Object.entries(source)) {
-            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            if (
+                value !== null &&
+                typeof value === 'object' &&
+                !Array.isArray(value)
+            ) {
                 // Recursively merge nested objects
                 result[key] = this.deepMerge(
                     (result[key] as Record<string, unknown>) || {},
@@ -306,10 +335,10 @@ export class RuntimeResolver {
 
     /**
      * Convert semantic props (variant, size, color) to CSS classes
-     * 
+     *
      * For custom components that don't understand Nuxt UI props,
      * we map variant/size/color to CSS classes using the theme's prop maps.
-     * 
+     *
      * @param override - Resolved override with semantic props
      * @returns Override with props mapped to classes
      */
@@ -317,7 +346,9 @@ export class RuntimeResolver {
         const classes: string[] = [];
         const cleanProps: Record<string, unknown> = {};
 
-        for (const [key, value] of Object.entries(override.props)) {
+        const entries = Object.entries(override.props || {});
+
+        for (const [key, value] of entries) {
             // Try to map semantic prop to class
             const mappedClass = this.tryMapPropToClass(key, value);
             if (mappedClass) {
@@ -325,7 +356,7 @@ export class RuntimeResolver {
                 continue; // Don't include in props
             }
 
-            // Keep all other props (class, style, ui, etc.)
+            // Keep all other props (class, style, ui, data attributes, etc.)
             cleanProps[key] = value;
         }
 
@@ -342,12 +373,15 @@ export class RuntimeResolver {
 
     /**
      * Try to map a semantic prop to a CSS class
-     * 
+     *
      * @param propName - Property name (variant, size, color)
      * @param propValue - Property value
      * @returns Mapped class name or null if not mapped
      */
-    private tryMapPropToClass(propName: string, propValue: unknown): string | null {
+    private tryMapPropToClass(
+        propName: string,
+        propValue: unknown
+    ): string | null {
         if (typeof propValue !== 'string') return null;
 
         switch (propName) {
@@ -365,7 +399,7 @@ export class RuntimeResolver {
 
 /**
  * Default prop-to-class mappings
- * 
+ *
  * These are used when a theme doesn't provide custom mappings.
  * They follow standard Tailwind/Nuxt UI conventions.
  */
