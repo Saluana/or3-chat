@@ -5,10 +5,7 @@
             :items="items"
             :value-key="'value'"
             :disabled="loading"
-            :ui="ui"
-            :search-input="searchInput"
-            :class="(selectProps as any)?.class || ''"
-            class="h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]"
+            v-bind="selectMenuProps"
         />
     </div>
 </template>
@@ -31,17 +28,33 @@ const emit = defineEmits<Emits>();
 
 const { favoriteModels } = useModelStore();
 
-// Theme overrides for select button
-const selectProps = computed(() => {
+// Theme overrides for select menu
+const selectMenuProps = computed(() => {
     const overrides = useThemeOverrides({
-        component: 'button',
+        component: 'selectmenu',
         context: 'chat',
         identifier: 'chat.model-select',
         isNuxtUI: true,
     });
 
     return {
-        class: 'retro-btn',
+        // Default props
+        class: 'h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
+        ui: {
+            content: 'border-[2px] border-black rounded-[3px] w-[320px]',
+            input: 'border-0 rounded-none!',
+            arrow: 'h-[18px] w-[18px]',
+            itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
+        },
+        searchInput: {
+            icon: 'pixelarticons:search',
+            autofocus: !isMobile.value,
+            ui: {
+                base: 'border-0 border-b-1 rounded-none!',
+                leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+            },
+        },
+        // Theme overrides
         ...(overrides.value as any),
     };
 });
@@ -74,22 +87,6 @@ const items = computed(() =>
         value: m.canonical_slug,
     }))
 );
-
-const ui = {
-    content: 'border-[2px] border-black rounded-[3px] w-[320px]',
-    input: 'border-0 rounded-none!',
-    arrow: 'h-[18px] w-[18px]',
-    itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
-};
-
-const searchInput = computed(() => ({
-    icon: 'pixelarticons:search',
-    autofocus: !isMobile.value,
-    ui: {
-        base: 'border-0 border-b-1 rounded-none!',
-        leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
-    },
-}));
 </script>
 
 <style scoped></style>

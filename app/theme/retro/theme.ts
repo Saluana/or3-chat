@@ -220,6 +220,25 @@ export default defineTheme({
             size: 'sm',
         },
 
+        // Model select menu (USelectMenu component)
+        'selectmenu#chat.model-select': {
+            class: 'h-[32px] retro-shadow border-2 border-(--md-inverse-surface) rounded-[3px] text-sm px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
+            ui: {
+                content:
+                    'border-2 border-(--md-inverse-surface) rounded-[3px] w-[320px]',
+                input: 'border-0 rounded-none!',
+                arrow: 'h-[18px] w-[18px]',
+                itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
+            },
+            searchInput: {
+                icon: 'pixelarticons:search',
+                ui: {
+                    base: 'border-0 border-b-1 rounded-none!',
+                    leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+                },
+            },
+        },
+
         // Message action buttons (all buttons in message context)
         'button.message': {
             class: 'retro-btn text-black dark:text-white/95 flex items-center justify-center',
