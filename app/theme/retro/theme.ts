@@ -170,13 +170,6 @@ export default defineTheme({
             size: 'md',
         },
 
-        // Chat context buttons
-        'button.chat': {
-            class: 'retro-btn',
-            variant: 'soft',
-            size: 'sm',
-        },
-
         'button#chat.send': {
             class: 'retro-btn',
             variant: 'solid',
@@ -184,15 +177,46 @@ export default defineTheme({
             color: 'primary',
         },
 
-        'button#chat.model-select': {
+        'button#chat.stop': {
             class: 'retro-btn',
-            variant: 'soft',
+            variant: 'solid',
             size: 'sm',
+            color: 'error',
         },
 
         'button#chat.attach': {
+            class: 'retro-btn text-black dark:text-white flex items-center justify-center',
+            variant: 'solid',
+            size: 'sm',
+            color: 'info',
+        },
+
+        'button#chat.settings': {
+            class: 'retro-btn text-black dark:text-white flex items-center justify-center',
+            variant: 'solid',
+            size: 'sm',
+            color: 'info',
+        },
+
+        'button#chat.composer-action': {
             class: 'retro-btn',
             variant: 'ghost',
+            size: 'sm',
+        },
+
+        'div#chat.input-container': {
+            // Container styling can be customized here
+            class: '',
+        },
+
+        'div#chat.editor': {
+            // Editor wrapper styling can be customized here
+            class: '',
+        },
+
+        'button#chat.model-select': {
+            class: 'retro-btn',
+            variant: 'soft',
             size: 'sm',
         },
 

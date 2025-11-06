@@ -9,18 +9,28 @@
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
             loading ? 'opacity-90 pointer-events-auto' : '',
+            (containerProps as any)?.class || '',
         ]"
+        :data-theme-target="(containerProps as any)?.['data-theme-target']"
+        :data-theme-matches="(containerProps as any)?.['data-theme-matches']"
     >
         <div class="flex flex-col gap-3.5 m-3.5">
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    class="max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
+                    :class="[
+                        'max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]',
+                        (editorProps as any)?.class || '',
+                    ]"
+                    :data-theme-target="(editorProps as any)?.['data-theme-target']"
+                    :data-theme-matches="(editorProps as any)?.['data-theme-matches']"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
                         :editor="editor as Editor"
                         class="prosemirror-host"
+                        :data-theme-target="(editorProps as any)?.['data-theme-target']"
+                        :data-theme-matches="(editorProps as any)?.['data-theme-matches']"
                     ></EditorContent>
 
                     <div
@@ -43,11 +53,8 @@
                     <!-- Attachment Button -->
                     <div class="relative shrink-0">
                         <UButton
+                            v-bind="attachButtonProps"
                             @click="triggerFileInput"
-                            :square="true"
-                            size="sm"
-                            color="info"
-                            class="retro-btn text-black dark:text-white flex items-center justify-center"
                             type="button"
                             aria-label="Add attachments"
                             :disabled="loading"
@@ -60,11 +67,8 @@
                     <div class="relative shrink-0">
                         <UPopover id="chat-input-settings-popover">
                             <UButton
+                                v-bind="settingsButtonProps"
                                 label="Open"
-                                :square="true"
-                                size="sm"
-                                color="info"
-                                class="retro-btn text-black dark:text-white flex items-center justify-center"
                                 type="button"
                                 aria-label="Settings"
                                 :disabled="loading"
@@ -225,13 +229,10 @@
                         :text="entry.action.tooltip || entry.action.label"
                     >
                         <UButton
-                            size="sm"
-                            variant="ghost"
+                            v-bind="composerActionButtonProps"
                             :color="(entry.action.color || 'neutral') as any"
                             :square="!entry.action.label"
                             :disabled="entry.disabled"
-                            class="retro-btn pointer-events-auto flex items-center gap-1"
-                            :ui="{ base: 'retro-btn' }"
                             :aria-label="
                                 entry.action.tooltip ||
                                 entry.action.label ||
@@ -654,7 +655,7 @@ async function handleComposerAction(entry: ComposerActionEntry) {
     }
 }
 
-// Theme overrides for send button
+// Theme overrides for buttons
 const sendButtonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',
@@ -687,6 +688,79 @@ const stopButtonProps = computed(() => {
         class: 'retro-btn text-white dark:text-black flex items-center justify-center',
         ...(overrides.value as any),
     };
+});
+
+const attachButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.attach',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'info' as const,
+        class: 'retro-btn text-black dark:text-white flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const settingsButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.settings',
+        isNuxtUI: true,
+    });
+
+    return {
+        square: true,
+        size: 'sm' as const,
+        color: 'info' as const,
+        class: 'retro-btn text-black dark:text-white flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
+const composerActionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.composer-action',
+        isNuxtUI: true,
+    });
+
+    return {
+        size: 'sm' as const,
+        variant: 'ghost' as const,
+        class: 'retro-btn pointer-events-auto flex items-center gap-1',
+        ui: { base: 'retro-btn' },
+        ...(overrides.value as any),
+    };
+});
+
+const containerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.input-container',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
+const editorProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.editor',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
 });
 
 const attachments = ref<UploadedImage[]>([]);
