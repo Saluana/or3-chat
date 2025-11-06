@@ -7,7 +7,8 @@
             :disabled="loading"
             :ui="ui"
             :search-input="searchInput"
-            class="retro-btn h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]"
+            :class="(selectProps as any)?.class || ''"
+            class="h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]"
         />
     </div>
 </template>
@@ -15,6 +16,7 @@
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue';
 import { isMobile } from '~/state/global';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Emits {
     (e: 'update:model', value: string): void;
@@ -28,6 +30,21 @@ const props = defineProps<{
 const emit = defineEmits<Emits>();
 
 const { favoriteModels } = useModelStore();
+
+// Theme overrides for select button
+const selectProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.model-select',
+        isNuxtUI: true,
+    });
+
+    return {
+        class: 'retro-btn',
+        ...(overrides.value as any),
+    };
+});
 
 // Mirror v-model
 const internalModel = ref<string | undefined>(props.model);

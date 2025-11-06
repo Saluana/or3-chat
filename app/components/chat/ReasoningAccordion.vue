@@ -5,7 +5,12 @@
   -->
     <div v-if="visible" class="reasoning-wrap">
         <button
-            class="reasoning-toggle"
+            :class="[
+                'reasoning-toggle',
+                (toggleButtonProps as any)?.class || ''
+            ]"
+            :data-theme-target="(toggleButtonProps as any)?.['data-theme-target']"
+            :data-theme-matches="(toggleButtonProps as any)?.['data-theme-matches']"
             @click="expanded = !expanded"
             :aria-expanded="expanded"
             :aria-controls="`reasoning-${id}`"
@@ -49,6 +54,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Props {
     content?: string;
@@ -70,6 +76,18 @@ const id = Math.random().toString(36).substr(2, 9);
 
 const visible = computed(() => !!props.content || props.pending);
 const charCount = computed(() => (props.content || '').length);
+
+// Theme overrides for reasoning toggle button
+const toggleButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.reasoning-toggle',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
 </script>
 
 <style scoped>
