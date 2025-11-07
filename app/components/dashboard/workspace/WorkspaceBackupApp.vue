@@ -641,9 +641,11 @@ function clearSelection() {
 async function onFilePicked(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file) {
-        announce('No file selected.');
-        clearSelection();
+    if (!file || file === selectedFile.value) {
+        if (!file) {
+            announce('No file selected.');
+            clearSelection();
+        }
         return;
     }
     pendingAction.value = 'peek';
