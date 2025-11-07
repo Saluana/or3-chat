@@ -85,38 +85,27 @@ cssSelectors: {
   background-color: var(--md-primary);
   border: 2px solid;
 }
-
-[data-theme="retro"] .custom-element {
-  @apply retro-shadow rounded-md hover:scale-105 dark:bg-surface;
-}
 ```
 
-**PostCSS/Tailwind processes:**
-```css
-[data-theme="retro"] .custom-element {
-  background-color: var(--md-primary);
-  border: 2px solid;
-  box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
-  border-radius: 0.375rem;
-}
-
-[data-theme="retro"] .custom-element:hover {
-  transform: scale(1.05);
-}
-
-.dark [data-theme="retro"] .custom-element {
-  background-color: var(--md-surface);
-}
-```
-
-**Runtime switches themes:**
+**Runtime applies classes:**
 ```typescript
+// One-time class application (~1-2ms per theme switch)
+function applyThemeClasses(themeName, selectors) {
+  for (const [selector, config] of Object.entries(selectors)) {
+    if (!config.class) continue;
+    document.querySelectorAll(selector).forEach(el => {
+      el.classList.add(...config.class.split(/\s+/));
+    });
+  }
+}
+
 document.documentElement.setAttribute('data-theme', 'retro');
-// CSS applies automatically - zero JS overhead
+applyThemeClasses('retro', theme.cssSelectors);
 ```
 
 **Performance Benefits:**
-- 🚀 Theme switch: 0ms (just attribute change)
+- 🚀 CSS properties: 0ms (build-time only)
+- 🚀 Class application: ~1-2ms per theme switch
 - 🚀 No MutationObserver overhead
 - 🚀 Cacheable static CSS files
 - 🚀 15-20% smaller JS bundle
@@ -129,7 +118,12 @@ document.documentElement.setAttribute('data-theme', 'retro');
 - External widgets
 - **Rapid prototyping with Tailwind utilities**
 
-**Trade-off:** Classes processed at build time via @apply (not dynamically applied)
+**Important Limitation:**
+- ⚠️ **Lazy-loaded components:** Classes only applied to elements present at theme switch
+- ✅ **Solution:** Auto-apply on page navigation + `useThemeClasses()` composable for dynamic components
+- See [lazy-loading-analysis.md](./lazy-loading-analysis.md) for details
+
+**Trade-off:** ~1-2ms runtime overhead per theme switch, but Tailwind v4 compatible
 
 ### 3. Performance (`performance.md`)
 

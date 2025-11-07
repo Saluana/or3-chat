@@ -237,6 +237,54 @@ const setActiveTheme = async (themeName: string) => {
 - WeakMap tracking: ~500 bytes - 1KB
 - No observer overhead
 
+**Limitation: Lazy-Loaded Components**
+
+⚠️ **Important:** Classes are only applied to elements present at theme switch time.
+
+**Problem:** If a component is lazy-loaded AFTER theme initialization, `querySelectorAll` won't find it, so classes won't be applied.
+
+**Solutions:**
+
+1. **Auto-apply on page navigation** (Recommended for route components):
+   ```typescript
+   nuxtApp.hook('page:finish', () => {
+     nextTick(() => {
+       const theme = getTheme(activeTheme.value);
+       if (theme?.cssSelectors) {
+         applyThemeClasses(activeTheme.value, theme.cssSelectors);
+       }
+     });
+   });
+   ```
+
+2. **Provide composable for dynamic components**:
+   ```typescript
+   // app/composables/useThemeClasses.ts
+   export function useThemeClasses() {
+     const { activeTheme } = useTheme();
+     
+     onMounted(() => {
+       const theme = getTheme(activeTheme.value);
+       if (theme?.cssSelectors) {
+         applyThemeClasses(activeTheme.value, theme.cssSelectors);
+       }
+     });
+   }
+   
+   // In lazy-loaded component
+   <script setup>
+   useThemeClasses(); // Re-apply when component mounts
+   </script>
+   ```
+
+3. **Optional MutationObserver** (for advanced cases):
+   ```typescript
+   // Enable via theme config
+   observeDynamicElements: true
+   ```
+
+See [lazy-loading-analysis.md](./lazy-loading-analysis.md) for detailed analysis and solutions.
+
 ---
 
 ### Option 4: Data Attribute Variants (Tailwind v4 Native)
