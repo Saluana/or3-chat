@@ -396,7 +396,10 @@ export function useDashboardNavigation(
         if (!pages.length) {
             try {
                 await plugin.handler?.({ id: pluginId });
+                state.view = 'dashboard';
+                return { ok: true };
             } catch (cause) {
+                state.view = 'dashboard';
                 return setError({
                     code: 'handler-error',
                     pluginId,
@@ -404,8 +407,6 @@ export function useDashboardNavigation(
                     cause,
                 });
             }
-            state.view = 'dashboard';
-            return { ok: true };
         }
 
         if (pages.length === 1) {
