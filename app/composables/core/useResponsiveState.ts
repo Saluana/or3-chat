@@ -46,6 +46,14 @@ function createResponsiveState() {
         });
     }
 
+    // HMR cleanup: remove listeners on module disposal
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            mobileQuery.removeEventListener('change', updateBreakpoints);
+            desktopQuery.removeEventListener('change', updateBreakpoints);
+        });
+    }
+
     return {
         isMobile,
         isTablet,
