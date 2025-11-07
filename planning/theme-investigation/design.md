@@ -137,14 +137,26 @@ Instead of trying to apply styles directly via selectors (which would bypass Vue
 export default defineTheme({
     // ... existing config ...
     
-    // New: Direct CSS targeting
+    // New: Direct CSS targeting with both styles and classes
     cssSelectors: {
         '.custom-element': {
-            backgroundColor: 'var(--md-primary)',
-            border: '2px solid var(--md-inverse-surface)',
+            // CSS properties (will be converted to inline styles or CSS rules)
+            style: {
+                backgroundColor: 'var(--md-primary)',
+                border: '2px solid var(--md-inverse-surface)',
+            },
+            // Class names to apply
+            class: 'retro-shadow rounded-md',
         },
         '#special-button': {
-            color: 'var(--md-on-primary)',
+            style: {
+                color: 'var(--md-on-primary)',
+            },
+            class: 'retro-btn',
+        },
+        // Shorthand: if only styles are needed, can omit the wrapper
+        '.another-element': {
+            backgroundColor: 'var(--md-surface)',
         },
     },
 });
@@ -165,15 +177,69 @@ const injectThemeStyles = (theme: CompiledTheme) => {
     }
     
     const cssRules = Object.entries(theme.cssSelectors || {})
-        .map(([selector, styles]) => {
-            const rules = Object.entries(styles)
-                .map(([prop, value]) => `${kebabCase(prop)}: ${value};`)
-                .join(' ');
-            return `${selector} { ${rules} }`;
+        .map(([selector, config]) => {
+            // Support both {style, class} and direct style object
+            const isConfigObject = config.style || config.class;
+            const styles = isConfigObject ? config.style : config;
+            const classes = isConfigObject ? config.class : '';
+            
+            let rules = '';
+            
+            // Add CSS properties
+            if (styles) {
+                const styleRules = Object.entries(styles)
+                    .map(([prop, value]) => `${kebabCase(prop)}: ${value};`)
+                    .join(' ');
+                rules = styleRules;
+            }
+            
+            // For classes, we'll apply them via a mutation observer
+            // or generate CSS rules that apply the same visual effect
+            if (classes) {
+                // This will be handled by applyClassesToSelectors()
+            }
+            
+            return rules ? `${selector} { ${rules} }` : '';
         })
+        .filter(Boolean)
         .join('\n');
     
     styleEl.textContent = cssRules;
+    
+    // Apply classes to matching elements
+    applyClassesToSelectors(theme.cssSelectors);
+};
+
+/**
+ * Apply classes to elements matching CSS selectors
+ * Uses MutationObserver to handle dynamically added elements
+ */
+const applyClassesToSelectors = (cssSelectors: Record<string, any>) => {
+    const applyClasses = () => {
+        Object.entries(cssSelectors).forEach(([selector, config]) => {
+            const isConfigObject = config.style || config.class;
+            const classes = isConfigObject ? config.class : '';
+            
+            if (!classes) return;
+            
+            document.querySelectorAll(selector).forEach(el => {
+                el.classList.add(...classes.split(' ').filter(Boolean));
+            });
+        });
+    };
+    
+    // Apply immediately
+    applyClasses();
+    
+    // Watch for DOM changes
+    const observer = new MutationObserver(applyClasses);
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+    
+    // Store observer for cleanup on theme switch
+    return observer;
 };
 ```
 
