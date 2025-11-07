@@ -5,7 +5,7 @@
  *
  * Exposed API mirrors existing pattern so integration stays minimal.
  */
-import { ref, watch, type Ref } from 'vue';
+import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
 import type { Thread, Project, Post } from '~/db';
 import {
     createDb,
@@ -329,6 +329,20 @@ export function useSidebarSearch(
     threadResults.value = threads.value;
     projectResults.value = projects.value;
     documentResults.value = documents.value.filter(isDocPost);
+
+    // Cleanup on component unmount
+    onBeforeUnmount(() => {
+        if (rebuildTimer) clearTimeout(rebuildTimer);
+        if (queryTimer) clearTimeout(queryTimer);
+    });
+
+    // HMR cleanup: clear timers on module disposal
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            if (rebuildTimer) clearTimeout(rebuildTimer);
+            if (queryTimer) clearTimeout(queryTimer);
+        });
+    }
 
     return {
         /** Reactive search query string */

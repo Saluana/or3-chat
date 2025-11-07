@@ -71,6 +71,16 @@ const registryState = g.__or3ToolRegistry as {
     persistDebounceTimer: NodeJS.Timeout | null;
 };
 
+// HMR cleanup: clear the debounce timer on module disposal
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        if (registryState.persistDebounceTimer) {
+            clearTimeout(registryState.persistDebounceTimer);
+            registryState.persistDebounceTimer = null;
+        }
+    });
+}
+
 /**
  * Load persisted enabled states from localStorage.
  */

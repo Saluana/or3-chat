@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue';
+import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
 import type { Thread } from '~/db';
 import {
     createDb,
@@ -99,11 +99,23 @@ export function useThreadSearch(threads: Ref<Thread[]>) {
         await runSearch();
     });
 
-    let debounceTimer: any;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     watch(query, () => {
-        clearTimeout(debounceTimer);
+        if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(runSearch, 120);
     });
+
+    // Cleanup on component unmount
+    onBeforeUnmount(() => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+    });
+
+    // HMR cleanup: clear timer on module disposal
+    if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+        });
+    }
 
     return { query, results, ready, busy, rebuild: ensureIndex, runSearch };
 }

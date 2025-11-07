@@ -454,5 +454,20 @@ export function createHookEngine(): HookEngine {
     return engine;
 }
 
+// HMR cleanup: prevent diagnostics from growing unbounded across reloads
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        // No need to clear the singleton hook engine itself (it's meant to persist),
+        // but we should prevent diagnostic arrays from growing unbounded.
+        // The global singleton is stored in plugins/hooks.client.ts as g.__NUXT_HOOKS__.
+        // We'll access and clear the diagnostics if it exists.
+        const g = globalThis as any;
+        if (g.__NUXT_HOOKS__?._diagnostics) {
+            g.__NUXT_HOOKS__._diagnostics.timings = {};
+            g.__NUXT_HOOKS__._diagnostics.errors = {};
+        }
+    });
+}
+
 // Convenience type for imports in .d.ts
 export type { AnyFn as HookFn };
