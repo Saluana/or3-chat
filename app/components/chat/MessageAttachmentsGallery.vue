@@ -43,7 +43,12 @@
             </div>
         </div>
         <button
-            class="col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]"
+            :class="[
+                'col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]',
+                (collapseButtonProps as any)?.class || ''
+            ]"
+            :data-theme-target="(collapseButtonProps as any)?.['data-theme-target']"
+            :data-theme-matches="(collapseButtonProps as any)?.['data-theme-matches']"
             type="button"
             @click="$emit('collapse')"
             aria-label="Hide attachments"
@@ -54,8 +59,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { reactive, watch, computed } from 'vue';
 import { getFileBlob, getFileMeta } from '~/db/files';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface ThumbState {
     status: 'loading' | 'ready' | 'error';
@@ -63,6 +69,18 @@ interface ThumbState {
 }
 const props = defineProps<{ hashes: string[] }>();
 defineEmits<{ (e: 'collapse'): void }>();
+
+// Theme overrides for collapse button
+const collapseButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.collapse-attachments',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
 
 // Reuse global caches so virtualization doesn't thrash
 const cache = ((globalThis as any).__or3ThumbCache ||= new Map<
