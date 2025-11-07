@@ -41,6 +41,7 @@ export function useActivePageId(): string | null {
 /**
  * Helper to switch to a specific page with built-in error handling.
  * Wraps the setActivePage method and returns false on any error instead of throwing.
+ * Logs errors in development mode for debugging.
  * 
  * @param pageId - The ID of the page to switch to
  * @returns True if the page was successfully switched, false if an error occurred
@@ -50,6 +51,9 @@ export async function useSwitchToPage(pageId: string): Promise<boolean> {
     try {
         return await setActivePage(pageId);
     } catch (error) {
+        if (import.meta.dev) {
+            console.error('[useSwitchToPage] Failed to switch to page:', pageId, error);
+        }
         return false;
     }
 }
@@ -57,6 +61,7 @@ export async function useSwitchToPage(pageId: string): Promise<boolean> {
 /**
  * Helper to reset to the default page with built-in error handling.
  * Wraps the resetToDefault method and returns false on any error instead of throwing.
+ * Logs errors in development mode for debugging.
  * 
  * @returns True if successfully reset to default page, false if an error occurred
  */
@@ -65,6 +70,9 @@ export async function useResetToDefaultPage(): Promise<boolean> {
     try {
         return await resetToDefault();
     } catch (error) {
+        if (import.meta.dev) {
+            console.error('[useResetToDefaultPage] Failed to reset to default page:', error);
+        }
         return false;
     }
 }

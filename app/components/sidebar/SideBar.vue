@@ -597,6 +597,7 @@ let subProjects: { unsubscribe: () => void } | null = null;
 
 // Calculate list height using specific element IDs for accuracy
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 function recomputeListHeight() {
     // Get the viewport height
@@ -616,34 +617,26 @@ function recomputeListHeight() {
     listHeight.value = available > 100 ? available : 100;
 }
 
-// Setup resize observer on window
-if (process.client) {
-    const resizeObserver = new ResizeObserver(() => {
+onMounted(() => {
+    if (!process.client) return;
+
+    // Create ResizeObserver in onMounted to ensure proper cleanup
+    resizeObserver = new ResizeObserver(() => {
         if (resizeTimeout) clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
             recomputeListHeight();
         }, 50);
     });
 
-    onMounted(() => {
-        // Observe the specific elements
-        const topHeader = document.getElementById('top-header');
-        const sideNavHeader = document.getElementById(
-            'side-nav-content-header'
-        );
-        if (topHeader) resizeObserver.observe(topHeader);
-        if (sideNavHeader) resizeObserver.observe(sideNavHeader);
+    // Observe the specific elements
+    const topHeader = document.getElementById('top-header');
+    const sideNavHeader = document.getElementById('side-nav-content-header');
+    if (topHeader) resizeObserver.observe(topHeader);
+    if (sideNavHeader) resizeObserver.observe(sideNavHeader);
 
-        // Also listen to window resize
-        window.addEventListener('resize', recomputeListHeight);
-
-        onUnmounted(() => {
-            resizeObserver.disconnect();
-            window.removeEventListener('resize', recomputeListHeight);
-        });
-    });
-}
-
+    // Also listen to window resize
+    window.addEventListener('resize', recomputeListHeight);
+});
 onMounted(async () => {
     await nextTick();
     recomputeListHeight();
@@ -699,6 +692,19 @@ watch([projects, expandedProjects, sidebarFooterActions], () => {
 // (Removed verbose debug watcher)
 
 onUnmounted(() => {
+    // Clean up timers
+    if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = null;
+    }
+    // Clean up ResizeObserver
+    if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+    }
+    // Clean up window listener
+    window.removeEventListener('resize', recomputeListHeight);
+    // Clean up database subscriptions
     sub?.unsubscribe();
     subProjects?.unsubscribe();
     subDocs?.unsubscribe();

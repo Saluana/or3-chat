@@ -5,7 +5,7 @@
  *
  * Exposed API mirrors existing pattern so integration stays minimal.
  */
-import { ref, watch, type Ref } from 'vue';
+import { ref, watch, onUnmounted, type Ref } from 'vue';
 import type { Thread, Project, Post } from '~/db';
 import {
     createDb,
@@ -176,6 +176,11 @@ export function useSidebarSearch(
         doc: ref<Record<string, Post>>({}),
     };
 
+    // Store cleanup functions for proper cleanup
+    const cleanupFns: Array<() => void> = [];
+    let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    let queryTimer: ReturnType<typeof setTimeout> | null = null;
+
     /**
      * Ensures the search index is built and up-to-date.
      * Rebuilds the index only when data has changed based on signature comparison.
@@ -305,8 +310,7 @@ export function useSidebarSearch(
     }
 
     // Rebuild index & rerun search on data change with debounce
-    let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
-    watch(
+    const stopDataWatch = watch(
         [threads, projects, documents],
         () => {
             if (rebuildTimer) clearTimeout(rebuildTimer);
@@ -317,12 +321,20 @@ export function useSidebarSearch(
         },
         { deep: false }
     );
+    cleanupFns.push(stopDataWatch);
 
     // Debounce query changes
-    let queryTimer: ReturnType<typeof setTimeout> | null = null;
-    watch(query, () => {
+    const stopQueryWatch = watch(query, () => {
         if (queryTimer) clearTimeout(queryTimer);
         queryTimer = setTimeout(runSearch, QUERY_DEBOUNCE_MS);
+    });
+    cleanupFns.push(stopQueryWatch);
+
+    // Cleanup on unmount to prevent memory leaks
+    onUnmounted(() => {
+        if (rebuildTimer) clearTimeout(rebuildTimer);
+        if (queryTimer) clearTimeout(queryTimer);
+        cleanupFns.forEach(fn => fn());
     });
 
     // Initial population (pass-through until first build completes)
