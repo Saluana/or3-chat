@@ -42,8 +42,8 @@ export function usePaneDocuments(
                 const prevState = useDocumentState(pane.documentId);
                 const hadPending = !!(
                     prevState &&
-                    ((prevState as any).pendingTitle !== undefined ||
-                        (prevState as any).pendingContent !== undefined)
+                    (prevState.pendingTitle !== undefined ||
+                        prevState.pendingContent !== undefined)
                 );
                 await flushDocument(pane.documentId);
                 // Central flush may emit saved; ensure at least one emission when tests simulate state outside real store.
@@ -71,7 +71,7 @@ export function usePaneDocuments(
                     newId,
                     pane,
                     oldId
-                )) as any;
+                )) as string | '' | false;
             } catch {}
             if (newId === false) return undefined; // veto
             pane.mode = 'doc';
@@ -104,7 +104,7 @@ export function usePaneDocuments(
                 requested,
                 pane,
                 oldId
-            )) as any;
+            )) as string | '' | false;
         } catch {}
         if (requested === false) return; // veto
         if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
@@ -112,8 +112,8 @@ export function usePaneDocuments(
                 const prevState = useDocumentState(pane.documentId);
                 const hadPending = !!(
                     prevState &&
-                    ((prevState as any).pendingTitle !== undefined ||
-                        (prevState as any).pendingContent !== undefined)
+                    (prevState.pendingTitle !== undefined ||
+                        prevState.pendingContent !== undefined)
                 );
                 await flushDocument(pane.documentId); // central flush may emit
                 if (hadPending) {

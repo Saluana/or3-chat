@@ -8,31 +8,41 @@ export function useDocumentsList(limit = 200) {
     // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
     const loading = ref(true);
     const error = ref<unknown>(null);
+    let activeRefresh: Promise<void> | null = null;
 
     async function refresh() {
+        // Prevent concurrent refreshes
+        if (activeRefresh) {
+            return activeRefresh;
+        }
+        
         loading.value = true;
         error.value = null;
-        try {
-            // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
-            const full = await listDocuments(limit);
-            docs.value = full.map((d: any) => ({
-                // Keep lightweight/meta fields
-                id: d.id,
-                title: d.title,
-                postType: d.postType,
-                created_at: d.created_at,
-                updated_at: d.updated_at,
-                deleted: d.deleted,
-                meta: d.meta,
-                // Drop large content string; empty string placeholder keeps type happy
-                content: '',
-            }));
-        } catch (e) {
-            error.value = e;
-            useToast().add({ color: 'error', title: 'Document: list failed' });
-        } finally {
-            loading.value = false;
-        }
+        
+        activeRefresh = (async () => {
+            try {
+                // Fetch full documents then strip heavy fields (content) for sidebar memory efficiency.
+                const full = await listDocuments(limit);
+                docs.value = full.map((d) => ({
+                    // Keep lightweight/meta fields
+                    id: d.id,
+                    title: d.title,
+                    created_at: d.created_at,
+                    updated_at: d.updated_at,
+                    deleted: d.deleted,
+                    // Drop large content string; empty string placeholder keeps type happy
+                    content: '',
+                }));
+            } catch (e) {
+                error.value = e;
+                useToast().add({ color: 'error', title: 'Document: list failed' });
+            } finally {
+                loading.value = false;
+                activeRefresh = null;
+            }
+        })();
+        
+        return activeRefresh;
     }
 
     // initial load + subscribe to document DB hook events (client only)

@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 interface Props {
     docmap: any;
@@ -94,7 +94,10 @@ watch(
     async (query) => {
         searchQuery.value = query || '';
 
-        if (searchTimeout) clearTimeout(searchTimeout);
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+            searchTimeout = null;
+        }
 
         if (!query || query.length < 2) {
             searchResults.value = [];
@@ -103,6 +106,7 @@ watch(
 
         searchTimeout = setTimeout(async () => {
             await performSearch(query);
+            searchTimeout = null;
         }, 120);
     }
 );
@@ -137,4 +141,12 @@ async function performSearch(query: string) {
 function handleNavigate(result: SearchResult) {
     emit('navigate', result.path);
 }
+
+// Cleanup timeout on unmount
+onBeforeUnmount(() => {
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+        searchTimeout = null;
+    }
+});
 </script>
