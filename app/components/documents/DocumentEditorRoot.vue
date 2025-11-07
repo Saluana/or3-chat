@@ -387,6 +387,20 @@ const statusText = computed(() => {
     font-family: 'IBM Plex Sans', system-ui !important;
 }
 
+.prose :deep(a) {
+    color: var(--md-primary);
+    text-decoration: underline;
+}
+
+.prose :deep(a:visited) {
+    color: var(--md-primary);
+}
+
+.dark .prose :deep(a),
+.dark .prose :deep(a:visited) {
+    color: var(--md-primary-fixed, var(--md-primary));
+}
+
 /* ProseMirror (TipTap) base styles */
 /* TipTap base */
 .prosemirror-host {

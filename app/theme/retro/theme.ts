@@ -439,6 +439,9 @@ export default defineTheme({
             class: 'retro-input',
             variant: 'outline',
             size: 'md',
+            ui: {
+                root: 'shadow-none! border-0! bg-transparent! rounded-[3px] px-2',
+            },
         },
 
         // Document search result cards

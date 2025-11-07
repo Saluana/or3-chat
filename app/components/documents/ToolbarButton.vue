@@ -1,18 +1,17 @@
 <template>
     <UTooltip :text="label" :placement="'bottom'">
-        <button
-            :class="buttonClasses"
+        <UButton
+            v-bind="toolbarButtonProps"
             :title="label"
             :aria-pressed="active ? 'true' : 'false'"
             :aria-label="computedAriaLabel"
-            type="button"
             @click="$emit('activate')"
         >
             <template v-if="text">{{ text }}</template>
             <template v-else-if="icon">
                 <UIcon :name="icon" class="w-4 h-4" />
             </template>
-        </button>
+        </UButton>
     </UTooltip>
 </template>
 
@@ -29,31 +28,59 @@ const props = defineProps<{
 defineEmits<{ (e: 'activate'): void }>();
 
 const computedAriaLabel = computed(() => props.text || props.label || '');
-const square = computed(
-    () => !props.text || (props.text && props.text.length <= 2)
-);
-
-// Theme integration for toolbar button
-const toolbarButtonOverrides = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'document',
-        identifier: 'document.toolbar',
-        isNuxtUI: false,
-    });
-    return overrides.value;
+const square = computed<boolean>(() => {
+    const text = props.text;
+    if (!text) return true;
+    return text.length <= 2;
 });
 
-// Compute final button classes with theme overrides
-const buttonClasses = computed(() => {
-    const themeClass = (toolbarButtonOverrides.value as any)?.class || '';
-    const baseClasses = 'h-[32px] md:h-[40px] py-0 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm leading-none';
-    const stateClasses = props.active
+// Theme integration for toolbar button
+const themeOverride = useThemeOverrides({
+    component: 'button',
+    context: 'document',
+    identifier: 'document.toolbar',
+    isNuxtUI: true,
+});
+
+const baseClasses =
+    'h-[32px] md:h-[40px] py-0 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm leading-none';
+
+const stateClasses = computed(() =>
+    props.active
         ? 'bg-primary/40 aria-[pressed=true]:outline'
-        : 'opacity-80 hover:opacity-100';
-    const sizeClasses = square.value ? 'w-[32px] md:w-[40px] p-0' : 'p-0';
-    
-    return `${themeClass} ${baseClasses} ${stateClasses} ${sizeClasses}`.trim();
+        : 'opacity-80 hover:opacity-100'
+);
+
+const sizeClasses = computed(() =>
+    square.value ? 'w-[32px] md:w-[40px] p-0' : 'p-0'
+);
+
+const toolbarButtonProps = computed(() => {
+    const overrideProps = (themeOverride.value || {}) as Record<
+        string,
+        unknown
+    >;
+    const {
+        class: overrideClass = '',
+        onClick: _unusedClick,
+        ...restOverrides
+    } = overrideProps ?? {};
+
+    return {
+        square: square.value,
+        size: 'sm' as const,
+        variant: 'ghost' as const,
+        type: 'button' as const,
+        ...restOverrides,
+        class: [
+            baseClasses,
+            stateClasses.value,
+            sizeClasses.value,
+            overrideClass as string,
+        ]
+            .filter(Boolean)
+            .join(' '),
+    };
 });
 </script>
 
