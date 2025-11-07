@@ -5,6 +5,7 @@ import type {
     AttributeMatcher,
     AttributeOperator,
 } from './types';
+import { KNOWN_THEME_CONTEXTS } from './contexts';
 
 /**
  * Compile override definitions into runtime-friendly structures.
@@ -93,18 +94,17 @@ function parseSelector(selector: string): ParsedSelector {
 function normalizeSelector(selector: string): string {
     let result = selector;
 
-    const knownContexts = ['chat', 'sidebar', 'dashboard', 'header', 'global'];
-    result = result.replace(
-        /(\w+)\.(\w+)(?=[:\[]|$)/g,
-        (match, component, context) => {
-            if (knownContexts.includes(context)) {
-                return `${component}[data-context="${context}"]`;
-            }
-            return match;
-        }
-    );
-
+    const knownContexts = KNOWN_THEME_CONTEXTS;
+    // Normalize identifiers first so dot-separated identifiers aren't treated as contexts
     result = result.replace(/(\w+)#([\w.-]+)(?=[:\[]|$)/g, '$1[data-id="$2"]');
+
+    const contextRegex = /(\w+)\.(\w+)(?=[:\[]|$)/g;
+    result = result.replace(contextRegex, (match, component, context) => {
+        if (knownContexts.includes(context)) {
+            return `${component}[data-context="${context}"]`;
+        }
+        return match;
+    });
 
     return result;
 }

@@ -4,6 +4,7 @@ import type {
     AttributeMatcher,
     AttributeOperator,
 } from '~/theme/_shared/types';
+import { KNOWN_THEME_CONTEXTS } from '~/theme/_shared/contexts';
 
 // Note: These functions need to be exported from theme.client.ts for testing
 // For now, we'll re-implement them here to demonstrate the test structure
@@ -63,7 +64,7 @@ function normalizeSelector(selector: string): string {
     let result = selector;
 
     // Convert .context to [data-context="context"]
-    const knownContexts = ['chat', 'sidebar', 'dashboard', 'header', 'global'];
+    const knownContexts = KNOWN_THEME_CONTEXTS;
     result = result.replace(
         /(\w+)\.(\w+)(?=[:\[]|$)/g,
         (match, component, context) => {

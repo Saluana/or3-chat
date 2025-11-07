@@ -340,6 +340,50 @@ export default defineTheme({
             size: 'sm',
         },
 
+        // Settings switches (all switches in settings context)
+        'switch.settings': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        'switch#settings.web-search': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        'switch#settings.thinking': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        // Tool switches (dynamic - will match any tool)
+        'switch#settings.tool-*': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        // Settings buttons
+        'button.settings': {
+            variant: 'ghost',
+            class: 'justify-between shadow-none!  px-1.5! text-(--md-inverse-surface) border-x-0! border-t-0! border-b-1! last:border-b-0! rounded-none! w-full',
+        },
+
+        'button#settings.system-prompts': {
+            variant: 'ghost',
+            block: true,
+            trailing: true,
+            trailingIcon: 'pixelarticons:script-text',
+            class: 'flex justify-between w-full items-center py-1 px-2 border-b',
+        },
+
+        'button#settings.model-catalog': {
+            variant: 'ghost',
+            block: true,
+            trailing: true,
+            trailingIcon: 'pixelarticons:android',
+            class: 'flex justify-between w-full items-center py-1 px-2 rounded-[3px]',
+        },
+
         // Dashboard buttons
         'button.dashboard': {
             class: 'retro-btn',

@@ -166,9 +166,12 @@ export class RuntimeResolver {
         }
 
         // Context must match (if specified in override)
+        // If override has a context, params MUST have the same context
         // If override has no context, it's a global override and matches any context
-        if (override.context && override.context !== params.context) {
-            return false;
+        if (override.context) {
+            if (!params.context || override.context !== params.context) {
+                return false;
+            }
         }
 
         // Identifier must match (if specified in override)
