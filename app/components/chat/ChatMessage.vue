@@ -475,9 +475,15 @@ function releaseThumb(hash: string) {
         if (state?.url) {
             try {
                 URL.revokeObjectURL(state.url);
-            } catch {}
+            } catch (e) {
+                if (import.meta.dev) {
+                    console.warn('[ChatMessage] Failed to revoke object URL', e);
+                }
+            }
         }
         thumbCache.delete(hash);
+        // Also remove from thumbLoadPromises if present to prevent memory leak
+        thumbLoadPromises.delete(hash);
     } else {
         thumbRefCounts.set(hash, prev - 1);
     }
@@ -606,7 +612,7 @@ async function hydrateInlineImages() {
         }
     });
 }
-// Consolidated hydration + thumbnail readiness effect
+// Consolidated hydration + thumbnail readiness effect with throttling
 const rafHydrate = useRafFn(
     async () => {
         // run once per frame, then pause until explicitly resumed
@@ -615,8 +621,22 @@ const rafHydrate = useRafFn(
     },
     { immediate: false }
 );
+
+// Throttle hydration checks to avoid excessive re-renders during streaming
+let lastHydrateCheck = 0;
+const HYDRATE_THROTTLE_MS = 200; // Only check every 200ms during streaming
+
 watchEffect(() => {
     if (props.message.role !== 'assistant') return; // only assistants hydrate
+    
+    // Throttle during streaming to reduce CPU load
+    const now = Date.now();
+    const isPending = (props.message as any).pending;
+    if (isPending && now - lastHydrateCheck < HYDRATE_THROTTLE_MS) {
+        return;
+    }
+    lastHydrateCheck = now;
+    
     // reactive deps: markdown text, hash list, thumb states
     void assistantMarkdown.value;
     void hashList.value.length;

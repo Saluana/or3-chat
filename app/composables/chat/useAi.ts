@@ -399,7 +399,11 @@ export function useChat(
                     },
                 });
             }
-        } catch {}
+        } catch (e) {
+            if (import.meta.dev) {
+                console.warn('[useChat] pane hook failed', e);
+            }
+        }
 
         loading.value = true;
         streamId.value = undefined;
@@ -676,8 +680,11 @@ export function useChat(
                             }
                         }
 
+                        // Batch writes: persist every 500ms OR every 50 chunks (whichever comes first)
+                        // to reduce DB pressure while maintaining progress safety
                         const now = Date.now();
-                        if (now - lastPersistAt >= WRITE_INTERVAL_MS) {
+                        const shouldPersist = now - lastPersistAt >= WRITE_INTERVAL_MS || chunkIndex % 50 === 0;
+                        if (shouldPersist) {
                             await persistAssistant({
                                 content: current.text,
                                 reasoning: current.reasoning_text ?? null,
@@ -870,10 +877,16 @@ export function useChat(
             if (aborted.value) {
                 if (tailAssistant.value?.pending)
                     (tailAssistant.value as any).pending = false;
-                await hooks.doAction('ai.chat.send:action:after', {
-                    threadId: threadIdRef.value,
-                    aborted: true,
-                });
+                try {
+                    await hooks.doAction('ai.chat.send:action:after', {
+                        threadId: threadIdRef.value,
+                        aborted: true,
+                    });
+                } catch (e) {
+                    if (import.meta.dev) {
+                        console.warn('[useChat] abort hook failed', e);
+                    }
+                }
                 if (tailAssistant.value?.id && !tailAssistant.value?.text) {
                     try {
                         await db.messages.delete(tailAssistant.value.id);
@@ -881,7 +894,11 @@ export function useChat(
                             (m) => m.id === tailAssistant.value!.id
                         );
                         if (idx >= 0) rawMessages.value.splice(idx, 1);
-                    } catch {}
+                    } catch (e) {
+                        if (import.meta.dev) {
+                            console.warn('[useChat] failed to delete empty assistant', e);
+                        }
+                    }
                 }
                 tailAssistant.value = null;
             } else {
@@ -928,7 +945,10 @@ export function useChat(
             }
         } finally {
             loading.value = false;
-            abortController.value = null;
+            // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
+            if (abortController.value) {
+                abortController.value = null;
+            }
             setTimeout(() => {
                 if (!loading.value && streamState.finalized) resetStream();
             }, 0);
@@ -1113,30 +1133,22 @@ export function useChat(
     }
 
     function clear() {
-        try {
-            if (abortController.value) {
-                aborted.value = true;
-                try {
-                    abortController.value.abort();
-                } catch {}
-                streamAcc.finalize({ aborted: true });
-                abortController.value = null;
+        // CRITICAL: Abort any active stream before clearing to prevent memory leaks
+        if (abortController.value) {
+            aborted.value = true;
+            try {
+                abortController.value.abort();
+            } catch (e) {
+                if (import.meta.dev) {
+                    console.warn('[useChat] abort controller cleanup failed', e);
+                }
             }
-        } catch {}
+            streamAcc.finalize({ aborted: true });
+            abortController.value = null;
+        }
+        
         rawMessages.value = [];
         messages.value = [];
-        if (
-            (rawMessages as any)._value &&
-            (rawMessages as any)._value.length > 1000
-        ) {
-            (rawMessages as any)._value = [];
-        }
-        if (
-            (messages as any)._value &&
-            (messages as any)._value.length > 1000
-        ) {
-            (messages as any)._value = [];
-        }
         streamAcc.reset();
     }
 

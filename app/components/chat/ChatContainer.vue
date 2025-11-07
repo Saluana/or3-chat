@@ -194,7 +194,11 @@ watch(
         // Free previous thread messages & abort any active stream before switching
         try {
             (chat.value as any)?.clear?.();
-        } catch {}
+        } catch (e) {
+            if (import.meta.dev) {
+                console.warn('[ChatContainer] clear failed during thread switch', e);
+            }
+        }
         chat.value = useChat(
             props.messageHistory,
             newId,
@@ -409,7 +413,11 @@ function onPendingPromptSelected(promptId: string | null) {
 function onStopStream() {
     try {
         (chat.value as any)?.abort?.();
-    } catch {}
+    } catch (e) {
+        if (import.meta.dev) {
+            console.warn('[ChatContainer] abort failed', e);
+        }
+    }
 }
 </script>
 
