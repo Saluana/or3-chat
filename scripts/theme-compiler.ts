@@ -309,7 +309,7 @@ export class ThemeCompiler {
 
         // Convert #identifier to [data-id="identifier"] first to preserve dot-separated identifiers
         result = result.replace(
-            /(\w+)#([\w.]+)(?=[:\[]|$)/g,
+            /(\w+)#([\w.-]+)(?=[:\[]|$)/g,
             '$1[data-id="$2"]'
         );
 

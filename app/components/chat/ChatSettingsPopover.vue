@@ -1,14 +1,16 @@
 <template>
     <div
         :class="['flex flex-col w-[320px]', (containerProps as any)?.class || '']"
-        :data-theme-target="(containerProps as any)?.[' data-theme-target']"
+        :data-theme-target="(containerProps as any)?.['data-theme-target']"
         :data-theme-matches="(containerProps as any)?.['data-theme-matches']"
     >
         <!-- Model Selector extracted -->
-        <div class="flex justify-between w-full items-center py-1 px-2">
+        <div
+            v-if="containerWidth && containerWidth < 400"
+            class="flex justify-between w-full items-center py-1 px-2"
+        >
             <LazyChatModelSelect
                 hydrate-on-interaction="focus"
-                v-if="containerWidth && containerWidth < 400"
                 v-model:model="selectedModel"
                 :loading="loading"
                 class="w-full!"
