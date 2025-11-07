@@ -89,7 +89,7 @@ const emit = defineEmits<{ error: [error: Error] }>();
 
 const showErrorMessage = ref(false);
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
-let isMounted = true;
+let isMounted = false;
 const renderKey = ref(0);
 
 // Show error after 5 seconds if editor hasn't loaded
