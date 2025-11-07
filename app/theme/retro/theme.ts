@@ -407,6 +407,125 @@ export default defineTheme({
             color: 'primary',
         },
 
+        // AI Page buttons
+        'button#dashboard.ai.save-prompt': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.ai.model-mode': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.ai.model-item': {
+            class: 'retro-btn',
+        },
+
+        'button#dashboard.ai.clear-model': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.ai.reset': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        // Theme Page buttons
+        'button#dashboard.theme.mode': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.preset': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.remove-layer': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.repeat': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.gradient': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.reset-all': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        // Workspace Backup buttons
+        'button#dashboard.workspace.export': {
+            class: 'retro-btn',
+            variant: 'light',
+        },
+
+        'button#dashboard.workspace.browse': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.workspace.clear-file': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+            color: 'error',
+        },
+
+        'button#dashboard.workspace.import-mode': {
+            class: '',
+            variant: 'ghost',
+            color: 'primary',
+        },
+
+        'button#dashboard.workspace.import': {
+            class: 'retro-btn',
+            variant: 'light',
+            color: 'primary',
+        },
+
+        // Dashboard navigation buttons
+        'button#dashboard.back': {
+            class: '',
+            variant: 'subtle',
+            color: 'primary',
+            size: 'sm',
+        },
+
+        'button#dashboard.landing-page': {
+            class: '',
+        },
+
+        'button#dashboard.plugin-icon': {
+            class: '',
+        },
+
+        // AI page input
+        'input#dashboard.ai.model-search': {
+            class: '',
+            type: 'text',
+        },
+
         // Document toolbar buttons
         'button#document.toolbar': {
             class: 'retro-btn',

@@ -62,8 +62,7 @@
             </div>
             <div class="flex items-center flex-wrap justify-between gap-3">
                 <UButton
-                    variant="light"
-                    class="retro-btn"
+                    v-bind="exportButtonProps"
                     :disabled="!canExport"
                     :loading="exporting"
                     @click="onExport"
@@ -130,9 +129,7 @@
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <UButton
-                                size="sm"
-                                variant="basic"
-                                class="retro-btn"
+                                v-bind="browseButtonProps"
                                 :disabled="importing || peeking"
                                 @click="onBrowse"
                             >
@@ -140,10 +137,7 @@
                             </UButton>
                             <UButton
                                 v-if="selectedFile"
-                                size="sm"
-                                color="error"
-                                variant="basic"
-                                class="retro-btn"
+                                v-bind="clearFileButtonProps"
                                 :disabled="importing || peeking"
                                 @click="clearSelection"
                             >
@@ -256,8 +250,7 @@
                             <UButton
                                 v-for="option in importModeOptions"
                                 :key="option.value"
-                                variant="ghost"
-                                color="primary"
+                                v-bind="importModeButtonProps"
                                 class="h-fit"
                                 :class="{
                                     'bg-primary/20 hover:bg-primary/20':
@@ -333,9 +326,7 @@
 
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <UButton
-                        color="primary"
-                        variant="light"
-                        class="retro-btn"
+                        v-bind="importButtonProps"
                         :disabled="!canImport"
                         :loading="importing"
                         @click="onImport"
@@ -362,6 +353,7 @@ import {
     type WorkspaceImportMode,
 } from '~/composables/core/useWorkspaceBackup';
 import { err, reportError, type AppError } from '~/utils/errors';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const docsHref =
     'https://github.com/Saluana/or3-chat/blob/main/docs/UI/workspace-backup.md';
@@ -396,6 +388,77 @@ type BadgeTone =
 function badgeToneClass(tone?: BadgeTone | null) {
     return tone ? `retro-badge--${tone}` : 'retro-badge--neutral';
 }
+
+// Theme overrides for buttons
+const exportButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.export',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'light' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const browseButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.browse',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const clearFileButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.clear-file',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        color: 'error' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const importModeButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.import-mode',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'ghost' as const,
+        color: 'primary' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const importButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.import',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'primary' as const,
+        variant: 'light' as const,
+        ...(overrides.value as any),
+    };
+});
 
 const importing = computed(() => state.isImporting.value);
 const exporting = computed(() => state.isExporting.value);

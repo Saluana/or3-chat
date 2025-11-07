@@ -36,9 +36,7 @@
                     >{{ local.masterPrompt.length }} chars</span
                 >
                 <UButton
-                    size="sm"
-                    variant="basic"
-                    class="retro-btn"
+                    v-bind="savePromptButtonProps"
                     @click="saveMasterPrompt"
                     :disabled="savingPrompt"
                 >
@@ -66,9 +64,7 @@
                     aria-label="Default model mode"
                 >
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-chip"
+                        v-bind="modelModeButtonProps"
                         :class="{
                             'bg-primary/50 hover:bg-primary/50':
                                 settings.defaultModelMode === 'lastSelected',
@@ -81,9 +77,7 @@
                         >Use last selected</UButton
                     >
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-chip"
+                        v-bind="modelModeButtonProps"
                         :class="{
                             'bg-primary/50 hover:bg-primary/50':
                                 settings.defaultModelMode === 'fixed',
@@ -104,8 +98,8 @@
                 <label class="text-xs" for="model-search">Search models</label>
                 <UInput
                     id="model-search"
+                    v-bind="modelSearchInputProps"
                     class="w-full"
-                    type="text"
                     placeholder="Search by name, id, or description"
                     v-model="searchQuery"
                     :disabled="modelsBusy"
@@ -119,8 +113,12 @@
                         v-for="m in limitedResults"
                         :key="m.id"
                         type="button"
-                        class="retro-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between"
-                        :class="m.id === settings.fixedModelId ? 'active' : ''"
+                        v-bind="modelItemButtonProps"
+                        :class="[
+                            'retro-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between',
+                            m.id === settings.fixedModelId ? 'active' : '',
+                            (modelItemButtonProps as any)?.class || '',
+                        ]"
                         @click="onPickModel(m.id)"
                         :aria-selected="m.id === settings.fixedModelId"
                         role="option"
@@ -150,9 +148,7 @@
                         }}</span>
                     </div>
                     <UButton
-                        size="sm"
-                        variant="basic"
-                        class="retro-btn"
+                        v-bind="clearModelButtonProps"
                         @click="clearModel"
                         :disabled="!settings.fixedModelId"
                         >Clear</UButton
@@ -177,9 +173,7 @@
                 Reset all AI settings back to defaults.
             </p>
             <UButton
-                size="sm"
-                variant="basic"
-                class="retro-btn"
+                v-bind="resetButtonProps"
                 @click="onReset"
                 >Reset to defaults</UButton
             >
@@ -192,6 +186,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/core/search/useModelSearch';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const liveStatus = ref<HTMLElement | null>(null);
 const { settings: settingsRef, set, reset } = useAiSettings();
@@ -245,6 +240,86 @@ function onReset() {
     if (liveStatus.value)
         liveStatus.value.textContent = 'AI settings reset to defaults';
 }
+
+// Theme overrides for buttons
+const savePromptButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.save-prompt',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const modelModeButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.model-mode',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const modelSearchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.model-search',
+        isNuxtUI: true,
+    });
+    return {
+        type: 'text' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const modelItemButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.model-item',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
+
+const clearModelButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.clear-model',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const resetButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.ai.reset',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
 </script>
 
 <style scoped>
