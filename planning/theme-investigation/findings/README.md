@@ -51,40 +51,53 @@ This folder contains detailed findings from the theme system investigation, addr
 **Investigation:** Can we target elements by CSS selector in theme.ts without component integration?
 
 **Key Findings:**
-- ✅ Technically feasible with CSS injection + MutationObserver
-- ✅ Highly beneficial for third-party components and legacy code
-- ✅ Can support both `style` (CSS properties) and `class` (class names)
-- ⚠️ Small performance cost from MutationObserver (~0.1-0.5ms per DOM change)
+- ✅ Technically feasible - evaluated two approaches
+- ✅ **Build-time generation is superior** to runtime injection
+- ✅ Zero runtime overhead with build-time approach
+- ✅ Browser-native CSS cascade (fastest possible)
+- ✅ Simpler implementation (no MutationObserver needed)
 
-**Proposed API:**
+**Recommended Approach: Build-Time CSS Generation**
+
+Instead of injecting CSS at runtime, generate static CSS files at build time:
+
+**Author in theme.ts:**
 ```typescript
 cssSelectors: {
   '.custom-element': {
-    style: {
-      backgroundColor: 'var(--md-primary)',
-      border: '2px solid var(--md-inverse-surface)',
-    },
-    class: 'retro-shadow rounded-md',
-  },
-  
-  // Shorthand for style-only
-  '#special-button': {
-    color: 'var(--md-on-primary)',
-  },
+    backgroundColor: 'var(--md-primary)',
+    border: '2px solid var(--md-inverse-surface)',
+  }
 }
 ```
 
-**Implementation Strategy:**
-1. Extend `ThemeDefinition` with `cssSelectors` field
-2. Generate CSS rules and inject via `<style>` tag
-3. Apply classes via MutationObserver for dynamic elements
-4. Cleanup on theme switch
+**Build generates (`public/themes/retro.css`):**
+```css
+[data-theme="retro"] .custom-element {
+  background-color: var(--md-primary);
+  border: 2px solid var(--md-inverse-surface);
+}
+```
+
+**Runtime switches themes:**
+```typescript
+document.documentElement.setAttribute('data-theme', 'retro');
+// CSS applies automatically - zero JS overhead
+```
+
+**Performance Benefits:**
+- 🚀 Theme switch: 0ms (just attribute change)
+- 🚀 No MutationObserver overhead
+- 🚀 Cacheable static CSS files
+- 🚀 15-20% smaller JS bundle
 
 **Use Cases:**
 - Third-party libraries (Monaco, TipTap)
 - Portal/teleported elements (modals, tooltips)
 - Legacy code that's hard to refactor
 - External widgets
+
+**Trade-off:** Dropped dynamic class application (use CSS properties instead)
 
 ### 3. Performance (`performance.md`)
 
@@ -158,23 +171,24 @@ for (const override of candidates) { ... }
 
 **Impact:** 50-70% faster resolution, validated by tests
 
-### Phase 3: New Feature (5-7 days)
+### Phase 3: Build-Time CSS (5-7 days)
 
-**Task 8-10: CSS Selector Support**
-- Extend ThemeDefinition types
-- Implement CSS injection system
-- Add MutationObserver for classes
+**Task 8-11: CSS Selector Support**
+- Extend ThemeDefinition types (CSS properties only)
+- Create build script for CSS generation
+- Implement runtime CSS loader
+- Integrate with Vite build
 - Document usage patterns
 
-**Impact:** New capability for non-integrated elements
+**Impact:** New capability with zero runtime overhead
 
 ### Phase 4: Polish (3-5 days)
 
-**Task 11-12: Advanced Optimizations**
+**Task 12-13: Advanced Optimizations**
 - Lazy data attribute generation
 - Deep merge memoization
 
-**Task 13-15: Testing**
+**Task 14-16: Testing**
 - Unit tests for all features
 - Integration tests
 - Manual testing

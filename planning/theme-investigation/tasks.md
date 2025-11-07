@@ -114,19 +114,14 @@ This document outlines actionable tasks for addressing the three theme system co
 - [ ] 8. Extend theme definition types
   - [ ] 8.1 Add `cssSelectors` field to ThemeDefinition
     ```typescript
-    interface CSSSelector {
-        style?: CSSProperties;
-        class?: string;
-    }
-    
     interface ThemeDefinition {
         // ... existing fields
-        cssSelectors?: Record<string, CSSSelector | CSSProperties>;
+        cssSelectors?: Record<string, CSSProperties>;
     }
     ```
   - [ ] 8.2 Add CSSProperties type with common CSS properties
   - [ ] 8.3 Update theme compiler to validate CSS selectors
-  - [ ] 8.4 Add example to retro theme with both style and class
+  - [ ] 8.4 Add example to retro theme
 
 **Requirements:** 2.2  
 **Files:**
@@ -136,31 +131,48 @@ This document outlines actionable tasks for addressing the three theme system co
 
 ---
 
-- [ ] 9. Implement CSS injection system
-  - [ ] 9.1 Create `injectThemeStyles` function in theme plugin
-  - [ ] 9.2 Generate CSS rules from cssSelectors (style property)
-  - [ ] 9.3 Implement `applyClassesToSelectors` for class application
-  - [ ] 9.4 Add MutationObserver for dynamic elements
-  - [ ] 9.5 Inject <style> tag with theme-specific ID
-  - [ ] 9.6 Update styles and classes on theme switch
-  - [ ] 9.7 Remove styles and cleanup observers when theme is unloaded
+- [ ] 9. Implement build-time CSS generation
+  - [ ] 9.1 Create `scripts/build-theme-css.ts` script
+  - [ ] 9.2 Generate scoped CSS with `[data-theme="name"]` prefix
+  - [ ] 9.3 Output CSS files to `public/themes/` directory
+  - [ ] 9.4 Generate manifest.json mapping theme names to CSS files
+  - [ ] 9.5 Integrate into Vite build process via theme compiler plugin
+  - [ ] 9.6 Add CSS linting (max 2 combinators, reject unsafe selectors)
 
 **Requirements:** 8.1-8.4  
 **Files:**
+- `scripts/build-theme-css.ts` (new)
+- `plugins/vite-theme-compiler.ts`
+- `public/themes/` (generated)
+
+---
+
+- [ ] 10. Implement runtime CSS loading
+  - [ ] 10.1 Create `composables/useThemeCSS.ts` for CSS file loading
+  - [ ] 10.2 Fetch manifest.json at app initialization
+  - [ ] 10.3 Load CSS file when theme is activated (if not cached)
+  - [ ] 10.4 Set `data-theme` attribute on document root
+  - [ ] 10.5 Add prefetch links for inactive themes
+  - [ ] 10.6 Integrate into `plugins/01.theme.client.ts`
+
+**Requirements:** 9.1-9.6  
+**Files:**
+- `app/composables/useThemeCSS.ts` (new)
 - `app/plugins/01.theme.client.ts`
 
 ---
 
-- [ ] 10. Add CSS targeting documentation
-  - [ ] 10.1 Document cssSelectors syntax (both style and class)
-  - [ ] 10.2 Provide examples of common use cases
-  - [ ] 10.3 Document performance considerations (MutationObserver impact)
-  - [ ] 10.4 Add migration guide for existing overrides
+- [ ] 11. Add CSS targeting documentation
+  - [ ] 11.1 Document cssSelectors syntax (CSS properties only)
+  - [ ] 11.2 Explain build-time generation and data-theme scoping
+  - [ ] 11.3 Provide examples of common use cases
+  - [ ] 11.4 Document performance characteristics (zero runtime overhead)
+  - [ ] 11.5 Add troubleshooting guide for selector specificity
 
-**Requirements:** 9.1-9.5  
+**Requirements:** 10.1-10.6  
 **Files:**
 - `app/theme/README.md`
-- `docs/theme-system.md` (if exists)
+- `planning/theme-investigation/findings/build-time-vs-runtime.md`
 
 ---
 
