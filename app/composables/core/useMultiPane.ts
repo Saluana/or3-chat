@@ -2,7 +2,7 @@
 // Keeps pane logic outside of UI components for easier testing & extension.
 
 import Dexie from 'dexie';
-import { ref, computed, nextTick, type Ref, type ComputedRef } from 'vue';
+import { ref, computed, nextTick, onScopeDispose, type Ref, type ComputedRef } from 'vue';
 import { db } from '~/db';
 import { useHooks } from '../../core/hooks/useHooks';
 
@@ -78,13 +78,10 @@ export interface UseMultiPaneApi {
     paneWidths: Ref<number[]>;
 }
 
-function genId() {
-    try {
-        if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-            // @ts-ignore
-            return crypto.randomUUID();
-        }
-    } catch {}
+function genId(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
     return 'pane-' + Math.random().toString(36).slice(2);
 }
 
@@ -225,9 +222,9 @@ export function useMultiPane(
 
             paneWidths.value = parsed.map((w) => clampWidth(w));
         } catch (e) {
-            if (import.meta.dev) {
-                console.warn('[useMultiPane] Failed to restore widths:', e);
-            }
+            console.warn('[useMultiPane] Failed to restore widths:', e);
+            // On error, fall back to percentage-based widths by not setting paneWidths
+            // getPaneWidth will return percentage when paneWidths is empty
         }
     }
 
@@ -239,9 +236,7 @@ export function useMultiPane(
         try {
             localStorage.setItem(storageKey, JSON.stringify(paneWidths.value));
         } catch (e) {
-            if (import.meta.dev) {
-                console.warn('[useMultiPane] Failed to persist widths:', e);
-            }
+            console.warn('[useMultiPane] Failed to persist widths:', e);
         }
     }
 
@@ -264,6 +259,7 @@ export function useMultiPane(
         }
 
         // Mismatch or no stored widths - fall back to equal distribution
+        if (paneCount <= 0) return '100%';
         return `${100 / paneCount}%`;
     }
 
@@ -778,6 +774,13 @@ export function useMultiPane(
     try {
         (globalThis as any).__or3MultiPaneApi = api;
     } catch {}
+
+    // Clean up global reference on scope disposal to prevent memory leaks
+    onScopeDispose(() => {
+        if ((globalThis as any).__or3MultiPaneApi === api) {
+            (globalThis as any).__or3MultiPaneApi = undefined;
+        }
+    });
 
     // Initialize widths on mount (client-side only)
     if (typeof window !== 'undefined') {

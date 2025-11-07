@@ -543,28 +543,24 @@ const displayThreads = computed(() =>
     sidebarQuery.value.trim() ? threadResults.value : items.value
 );
 // Filter projects + entries when query active
-// Remove references to deleted threads/docs from project data live
-const existingThreadIds = computed(
-    () => new Set(items.value.map((t: any) => t.id))
-);
-const existingDocIds = computed(
-    () => new Set(docs.value.map((d: any) => d.id))
-);
-const projectsFilteredByExistence = computed(() =>
-    projects.value.map((p) => {
+const projectsFilteredByExistence = computed(() => {
+    const threadSet = new Set(items.value.map((t: any) => t.id));
+    const docSet = new Set(docs.value.map((d: any) => d.id));
+    
+    return projects.value.map((p) => {
         const filteredEntries = p.data.filter((entry) => {
             const id = entry?.id;
             if (!id) return false;
             const kind = entry.kind ?? 'chat';
-            if (kind === 'chat') return existingThreadIds.value.has(id);
-            if (kind === 'doc') return existingDocIds.value.has(id);
-            return true;
+            return (kind === 'chat' && threadSet.has(id)) || 
+                   (kind === 'doc' && docSet.has(id)) ||
+                   (kind !== 'chat' && kind !== 'doc');
         });
         return filteredEntries.length === p.data.length
             ? p
             : { ...p, data: filteredEntries };
-    })
-);
+    });
+});
 
 const displayProjects = computed<SidebarProject[]>(() => {
     if (!sidebarQuery.value.trim()) return projectsFilteredByExistence.value;
@@ -597,6 +593,7 @@ let subProjects: { unsubscribe: () => void } | null = null;
 
 // Calculate list height using specific element IDs for accuracy
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 function recomputeListHeight() {
     // Get the viewport height
@@ -618,29 +615,36 @@ function recomputeListHeight() {
 
 // Setup resize observer on window
 if (process.client) {
-    const resizeObserver = new ResizeObserver(() => {
-        if (resizeTimeout) clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            recomputeListHeight();
-        }, 50);
+    onMounted(() => {
+        resizeObserver = new ResizeObserver(() => {
+            if (resizeTimeout) clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                recomputeListHeight();
+            }, 50);
+        });
+
+        try {
+            // Observe the specific elements
+            const topHeader = document.getElementById('top-header');
+            const sideNavHeader = document.getElementById('side-nav-content-header');
+            if (topHeader) resizeObserver.observe(topHeader);
+            if (sideNavHeader) resizeObserver.observe(sideNavHeader);
+
+            // Also listen to window resize
+            window.addEventListener('resize', recomputeListHeight);
+        } catch (err) {
+            console.error('[SideBar] Failed to setup resize observers:', err);
+        }
     });
 
-    onMounted(() => {
-        // Observe the specific elements
-        const topHeader = document.getElementById('top-header');
-        const sideNavHeader = document.getElementById(
-            'side-nav-content-header'
-        );
-        if (topHeader) resizeObserver.observe(topHeader);
-        if (sideNavHeader) resizeObserver.observe(sideNavHeader);
-
-        // Also listen to window resize
-        window.addEventListener('resize', recomputeListHeight);
-
-        onUnmounted(() => {
-            resizeObserver.disconnect();
-            window.removeEventListener('resize', recomputeListHeight);
-        });
+    onUnmounted(() => {
+        resizeObserver?.disconnect();
+        resizeObserver = null;
+        window.removeEventListener('resize', recomputeListHeight);
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = null;
+        }
     });
 }
 
