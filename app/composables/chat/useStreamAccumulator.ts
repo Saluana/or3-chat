@@ -71,6 +71,10 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     let microtaskToken: object | null = null;
     let _finalized = false;
     let emptyAppendWarnings = 0;
+    
+    // Track accumulated lengths to warn on excessive memory use
+    const MAX_REASONABLE_LENGTH = 100_000; // 100KB of text
+    let warnedAboutSize = false;
 
     function flush() {
         frame = null;
@@ -83,6 +87,19 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
             state.reasoningText += pendingReasoning.join('');
             pendingReasoning = [];
         }
+        
+        // Warn if accumulator grows too large (potential memory issue)
+        if (!warnedAboutSize && import.meta.dev) {
+            const totalLen = state.text.length + state.reasoningText.length;
+            if (totalLen > MAX_REASONABLE_LENGTH) {
+                console.warn('[stream] Accumulator exceeds 100KB', {
+                    textLen: state.text.length,
+                    reasoningLen: state.reasoningText.length,
+                });
+                warnedAboutSize = true;
+            }
+        }
+        
         state.version++;
     }
 
@@ -159,6 +176,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         pendingReasoning = [];
         _finalized = false;
         emptyAppendWarnings = 0;
+        warnedAboutSize = false; // Reset warning flag
         state.text = '';
         state.reasoningText = '';
         state.error = null;

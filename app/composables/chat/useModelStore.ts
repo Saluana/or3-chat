@@ -181,26 +181,38 @@ export function useModelStore() {
             } catch (err) {
                 console.warn('[models-cache] network fetch failed', err);
                 // On network failure, attempt to serve stale Dexie record (even if expired)
+                // BUT: max stale age is 7 days to prevent serving extremely outdated data
+                const MAX_STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
                 if (canUseDexie()) {
                     try {
                         const rec: any = await kv.get(MODELS_CACHE_KEY);
                         const raw = rec?.value;
-                        if (raw && typeof raw === 'string') {
+                        const updatedAtMs = rec?.updated_at ? rec.updated_at * 1000 : 0;
+                        const staleness = Date.now() - updatedAtMs;
+                        
+                        if (raw && typeof raw === 'string' && staleness < MAX_STALE_AGE_MS) {
                             try {
                                 const parsed = JSON.parse(raw);
                                 if (Array.isArray(parsed) && parsed.length) {
                                     console.warn(
                                         '[models-cache] network failed; serving stale cached models',
-                                        { count: parsed.length }
+                                        { count: parsed.length, staleDays: Math.floor(staleness / (24 * 60 * 60 * 1000)) }
                                     );
-                                    // Removed stale dexie fallback console.log
                                     return parsed;
                                 }
                             } catch (e) {
                                 // corrupted; best-effort delete
                                 try {
                                     await kv.delete(MODELS_CACHE_KEY);
-                                } catch {}
+                                } catch (e2) {
+                                    if (import.meta.dev) {
+                                        console.warn('[models-cache] failed to delete corrupt record', e2);
+                                    }
+                                }
+                            }
+                        } else if (staleness >= MAX_STALE_AGE_MS) {
+                            if (import.meta.dev) {
+                                console.warn('[models-cache] stale cache too old, not serving');
                             }
                         }
                     } catch (e) {
