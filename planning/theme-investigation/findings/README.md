@@ -53,21 +53,29 @@ This folder contains detailed findings from the theme system investigation, addr
 **Key Findings:**
 - ✅ Technically feasible - evaluated two approaches
 - ✅ **Build-time generation is superior** to runtime injection
+- ✅ **Hybrid approach preserves class support** for rapid prototyping
 - ✅ Zero runtime overhead with build-time approach
 - ✅ Browser-native CSS cascade (fastest possible)
 - ✅ Simpler implementation (no MutationObserver needed)
 
-**Recommended Approach: Build-Time CSS Generation**
+**Recommended Approach: Build-Time CSS Generation with Hybrid Class Support**
 
-Instead of injecting CSS at runtime, generate static CSS files at build time:
+Support both direct CSS properties AND Tailwind utility classes:
 
 **Author in theme.ts:**
 ```typescript
 cssSelectors: {
   '.custom-element': {
-    backgroundColor: 'var(--md-primary)',
-    border: '2px solid var(--md-inverse-surface)',
-  }
+    style: {
+      backgroundColor: 'var(--md-primary)',
+      border: '2px solid',
+    },
+    class: 'retro-shadow rounded-md hover:scale-105 dark:bg-surface',
+  },
+  
+  '.modal-overlay': {
+    class: 'fixed inset-0 bg-black/50 backdrop-blur-sm',
+  },
 }
 ```
 
@@ -75,7 +83,29 @@ cssSelectors: {
 ```css
 [data-theme="retro"] .custom-element {
   background-color: var(--md-primary);
-  border: 2px solid var(--md-inverse-surface);
+  border: 2px solid;
+}
+
+[data-theme="retro"] .custom-element {
+  @apply retro-shadow rounded-md hover:scale-105 dark:bg-surface;
+}
+```
+
+**PostCSS/Tailwind processes:**
+```css
+[data-theme="retro"] .custom-element {
+  background-color: var(--md-primary);
+  border: 2px solid;
+  box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+  border-radius: 0.375rem;
+}
+
+[data-theme="retro"] .custom-element:hover {
+  transform: scale(1.05);
+}
+
+.dark [data-theme="retro"] .custom-element {
+  background-color: var(--md-surface);
 }
 ```
 
@@ -90,14 +120,16 @@ document.documentElement.setAttribute('data-theme', 'retro');
 - 🚀 No MutationObserver overhead
 - 🚀 Cacheable static CSS files
 - 🚀 15-20% smaller JS bundle
+- 🚀 Full Tailwind support (dark:, hover:, responsive)
 
 **Use Cases:**
 - Third-party libraries (Monaco, TipTap)
 - Portal/teleported elements (modals, tooltips)
 - Legacy code that's hard to refactor
 - External widgets
+- **Rapid prototyping with Tailwind utilities**
 
-**Trade-off:** Dropped dynamic class application (use CSS properties instead)
+**Trade-off:** Classes processed at build time via @apply (not dynamically applied)
 
 ### 3. Performance (`performance.md`)
 

@@ -120,17 +120,20 @@ However, these selectors require:
 1. Components to use `useThemeOverrides` with matching parameters
 2. Manual integration at the component level
 
-#### Recommended Approach: Build-Time CSS Generation
+#### Recommended Approach: Build-Time CSS Generation with Hybrid Class Support
 
-**After evaluating both runtime injection and build-time generation, build-time is the superior approach.**
+**After evaluating runtime injection vs build-time generation, build-time is superior.**
 
-See [build-time-vs-runtime.md](./findings/build-time-vs-runtime.md) for detailed comparison.
+**NEW: Hybrid approach supports both CSS properties AND Tailwind classes for rapid prototyping.**
+
+See [build-time-vs-runtime.md](./findings/build-time-vs-runtime.md) and [hybrid-class-solution.md](./findings/hybrid-class-solution.md) for detailed analysis.
 
 **Key Benefits:**
 - ✅ Zero runtime overhead
 - ✅ No MutationObserver complexity
 - ✅ Browser-native CSS cascade
 - ✅ Cacheable static assets
+- ✅ **Full Tailwind class support via @apply**
 - ✅ Better developer experience
 
 **Example Extension:**
@@ -143,17 +146,26 @@ export default defineTheme({
     // CSS selector targeting (compiled at build time)
     cssSelectors: {
         '.custom-element': {
-            backgroundColor: 'var(--md-primary)',
-            border: '2px solid var(--md-inverse-surface)',
-            borderRadius: '3px',
+            // Direct CSS properties
+            style: {
+                backgroundColor: 'var(--md-primary)',
+                border: '2px solid var(--md-inverse-surface)',
+            },
+            // Tailwind utilities for rapid prototyping
+            class: 'retro-shadow rounded-md hover:scale-105 dark:bg-surface',
         },
+        
         '#special-button': {
-            color: 'var(--md-on-primary)',
-            padding: '8px 16px',
+            // Just styles
+            style: {
+                color: 'var(--md-on-primary)',
+                padding: '8px 16px',
+            },
         },
-        '.dialog-overlay': {
-            backdropFilter: 'blur(8px)',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        
+        '.modal-overlay': {
+            // Just classes (all Tailwind features work)
+            class: 'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
         },
     },
 });
@@ -163,38 +175,79 @@ export default defineTheme({
 
 ```typescript
 // scripts/build-theme-css.ts
-export async function buildThemeCSS(theme: ThemeDefinition): Promise<string> {
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
+
+export function buildThemeCSS(theme: ThemeDefinition): string {
     const blocks: string[] = [];
     const selectors = theme.cssSelectors || {};
     
-    for (const [selector, styles] of Object.entries(selectors)) {
-        const declarations = Object.entries(styles)
-            .map(([prop, value]) => `  ${toKebab(prop)}: ${value};`)
-            .join('\n');
+    for (const [selector, config] of Object.entries(selectors)) {
+        const scopedSelector = `[data-theme="${theme.name}"] ${selector}`;
         
-        if (declarations) {
-            // Scope with data-theme attribute for isolation
-            blocks.push(
-                `[data-theme="${theme.name}"] ${selector} {\n${declarations}\n}`
-            );
+        // Add direct CSS properties
+        if (config.style) {
+            const declarations = Object.entries(config.style)
+                .map(([prop, value]) => `  ${toKebab(prop)}: ${value};`)
+                .join('\n');
+            
+            blocks.push(`${scopedSelector} {\n${declarations}\n}`);
+        }
+        
+        // Add Tailwind classes via @apply directive
+        if (config.class) {
+            blocks.push(`${scopedSelector} {\n  @apply ${config.class};\n}`);
         }
     }
     
     return blocks.join('\n\n');
 }
+
+// Process through PostCSS to resolve @apply
+async function buildAllThemeCSS() {
+    const processor = postcss([tailwindcss()]);
+    
+    for (const theme of themes) {
+        const rawCSS = buildThemeCSS(theme);
+        const result = await processor.process(rawCSS, { from: undefined });
+        
+        writeFileSync(`public/themes/${theme.name}.css`, result.css, 'utf8');
+    }
+}
 ```
 
-**Generated CSS (retro.css):**
+**Generated CSS (after PostCSS processing):**
+
 ```css
+/* Direct properties */
 [data-theme="retro"] .custom-element {
   background-color: var(--md-primary);
   border: 2px solid var(--md-inverse-surface);
-  border-radius: 3px;
 }
 
-[data-theme="retro"] #special-button {
-  color: var(--md-on-primary);
-  padding: 8px 16px;
+/* Classes expanded by Tailwind */
+[data-theme="retro"] .custom-element {
+  box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+  border-radius: 0.375rem;
+}
+
+[data-theme="retro"] .custom-element:hover {
+  transform: scale(1.05);
+}
+
+.dark [data-theme="retro"] .custom-element {
+  background-color: var(--md-surface);
+}
+
+[data-theme="retro"] .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.dark [data-theme="retro"] .modal-overlay {
+  background-color: rgb(0 0 0 / 0.7);
 }
 ```
 
@@ -216,14 +269,16 @@ const setActiveTheme = async (themeName: string) => {
 
 **Performance Comparison:**
 
-| Metric | Runtime Injection | Build-Time | Improvement |
-|--------|------------------|------------|-------------|
+| Metric | Runtime Injection | Build-Time (Hybrid) | Improvement |
+|--------|------------------|---------------------|-------------|
 | Theme Switch | 1-2ms | 0ms | 100% |
 | Initial Load | 1-2ms | 0ms (preloaded) | 100% |
-| Memory/Theme | 2-4KB | 1KB | 50% |
+| Memory/Theme | 2-4KB | 1-2KB | 50-75% |
 | Bundle Size | Larger | Smaller | 15-20% |
+| Class Support | Dynamic (observer) | Build-time (@apply) | ✅ |
+| Dark/Hover | Limited | Full Support | ✅ |
 
-**Answer to Question 2:** Yes, we can and should target ID'd or classed elements in theme.ts using build-time CSS generation. This approach is faster, simpler, and more maintainable than runtime injection.
+**Answer to Question 2:** Yes, we can and should target ID'd or classed elements in theme.ts using build-time CSS generation with hybrid class support via @apply. This approach is faster, simpler, and more maintainable than runtime injection while preserving the flexibility of Tailwind utilities.
 
 ### 3. Performance and Memory Analysis
 

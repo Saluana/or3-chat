@@ -4,16 +4,21 @@
 
 **Question:** Can we target ID'd or classed non-Nuxt elements in theme.ts for styling? Would this be a good idea?
 
-**Answer:** **YES** to both questions. CSS selector targeting is technically feasible and highly beneficial. After evaluating runtime injection vs build-time generation, **build-time CSS generation is the superior approach**.
+**Answer:** **YES** to both questions. CSS selector targeting is technically feasible and highly beneficial. After evaluating runtime injection vs build-time generation, **build-time CSS generation with hybrid class support is the superior approach**.
 
 **Key Benefits:**
 - ✅ Zero runtime overhead (no JS execution for styling)
 - ✅ Browser-native CSS cascade
 - ✅ Cacheable static assets
 - ✅ Simpler implementation (no MutationObserver)
+- ✅ **Full Tailwind class support via @apply** (NEW - preserves rapid prototyping)
 - ✅ Better developer experience
 
-See [build-time-vs-runtime.md](./build-time-vs-runtime.md) for detailed comparison.
+**Hybrid Approach:** Support both direct CSS properties AND Tailwind utility classes:
+- `style` property → Direct CSS declarations
+- `class` property → Tailwind utilities via @apply directive (processed at build time)
+
+See [build-time-vs-runtime.md](./build-time-vs-runtime.md) and [hybrid-class-solution.md](./hybrid-class-solution.md) for detailed comparison.
 
 ## Current Capabilities
 
@@ -49,41 +54,50 @@ overrides: {
 
 ### API Design
 
+**Hybrid Approach - Support Both Styles and Classes:**
+
 ```typescript
 export default defineTheme({
   name: 'retro',
   // ... other config ...
   
   cssSelectors: {
-    // Direct CSS properties - no wrapper needed
+    // Mix of direct CSS properties and Tailwind classes
     '.custom-input': {
-      backgroundColor: 'var(--md-surface)',
-      border: '2px solid var(--md-inverse-surface)',
-      borderRadius: '3px',
-      padding: '8px 12px',
+      style: {
+        backgroundColor: 'var(--md-surface)',
+        border: '2px solid var(--md-inverse-surface)',
+      },
+      class: 'retro-shadow rounded-md', // Processed via @apply
     },
     
+    // Just direct CSS properties
     '#special-button': {
-      color: 'var(--md-primary)',
-      padding: '8px 16px',
-      fontWeight: '600',
+      style: {
+        color: 'var(--md-primary)',
+        padding: '8px 16px',
+      },
     },
     
-    '.dialog-overlay': {
-      backdropFilter: 'blur(8px)',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // Just Tailwind classes (for rapid prototyping)
+    '.modal-overlay': {
+      class: 'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
     },
     
-    // Pseudo-selectors work perfectly
-    '.retro-btn:hover': {
-      transform: 'translateY(-1px)',
-      boxShadow: '3px 3px 0 0 var(--md-inverse-surface)',
+    // Shorthand: CSS properties only (no wrapper)
+    '.another-element': {
+      padding: '8px',
+      borderRadius: '3px',
     },
     
-    // Complex selectors
-    '.chat-container > .message:not(.system)': {
-      margin: '8px 0',
-      borderLeft: '3px solid var(--md-primary)',
+    // Pseudo-selectors work with classes
+    '.interactive-card': {
+      class: 'bg-white dark:bg-gray-800 hover:scale-105 transition-transform',
+    },
+    
+    // Responsive utilities
+    '.responsive-grid': {
+      class: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4',
     },
   },
 });
@@ -131,7 +145,24 @@ export interface CSSProperties {
 }
 
 /**
- * Theme definition with CSS selector support
+ * CSS selector configuration with hybrid support
+ */
+export interface CSSSelectorConfig {
+  /** Direct CSS properties */
+  style?: CSSProperties;
+  /** Tailwind utility classes (processed via @apply at build time) */
+  class?: string;
+}
+
+/**
+ * CSS selectors can be:
+ * - CSSSelectorConfig with style and/or class
+ * - CSSProperties object (shorthand for { style: properties })
+ */
+export type CSSSelector = CSSSelectorConfig | CSSProperties;
+
+/**
+ * Theme definition with hybrid CSS selector support
  */
 export interface ThemeDefinition {
   name: string;
@@ -144,19 +175,24 @@ export interface ThemeDefinition {
   
   /**
    * Direct CSS targeting for elements via build-time generation
-   * Generates scoped CSS rules: [data-theme="name"] selector { ... }
+   * 
+   * Supports:
+   * - Direct CSS properties via `style`
+   * - Tailwind utilities via `class` (processed with @apply)
+   * 
+   * Generates scoped CSS: [data-theme="name"] selector { ... }
    * 
    * @example
    * ```typescript
    * cssSelectors: {
    *   '.my-element': {
-   *     color: 'red',
-   *     padding: '8px'
+   *     style: { color: 'red' },
+   *     class: 'px-4 hover:scale-105'
    *   }
    * }
    * ```
    */
-  cssSelectors?: Record<string, CSSProperties>;
+  cssSelectors?: Record<string, CSSSelector>;
 }
 ```
  * CSS properties supported in theme definitions

@@ -219,7 +219,6 @@ cssSelectors: {
             backgroundColor: 'var(--md-primary)',
             border: '2px solid',
         },
-        // These become CSS rules in build-time generated file
     }
 }
 ```
@@ -232,23 +231,102 @@ Generated CSS:
 }
 ```
 
-### For Classes: Drop or Simplify
+### For Classes: @apply Directive (Lightweight Hybrid)
 
-**Option A: Drop class support**
-- Keep it simple - only support CSS properties
-- Developers can add classes in their markup
+**NEW: Support Tailwind classes via @apply for rapid prototyping**
 
-**Option B: Compile classes to CSS**
-- Convert class names to equivalent CSS rules at build time
-- Example: `class: 'retro-shadow'` → lookup retro-shadow definition and inline it
+Since the project uses Tailwind CSS, we can leverage the `@apply` directive to include utility classes at build time:
 
-**Option C: Keep runtime application for classes only**
-- Use MutationObserver ONLY if theme has `class` properties
-- Most themes won't need it
+```typescript
+cssSelectors: {
+    '.custom-element': {
+        style: {
+            backgroundColor: 'var(--md-primary)',
+        },
+        class: 'retro-shadow rounded-md hover:scale-105 dark:bg-surface',
+    },
+    
+    '.modal-overlay': {
+        class: 'fixed inset-0 bg-black/50 backdrop-blur-sm',
+    },
+}
+```
+
+**Build Process:**
+1. Generate CSS with @apply directives
+2. Process through PostCSS/Tailwind (already in pipeline)
+3. Final CSS has utilities expanded
+
+**Generated CSS (after PostCSS):**
+```css
+[data-theme="retro"] .custom-element {
+    background-color: var(--md-primary);
+}
+
+[data-theme="retro"] .custom-element {
+    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+    border-radius: 0.375rem;
+}
+
+[data-theme="retro"] .custom-element:hover {
+    transform: scale(1.05);
+}
+
+.dark [data-theme="retro"] .custom-element {
+    background-color: var(--md-surface);
+}
+```
+
+**Benefits:**
+- ✅ **Zero runtime overhead** - All processed at build time
+- ✅ **Full Tailwind support** - dark:, hover:, responsive variants work
+- ✅ **Rapid prototyping** - Use familiar utility classes
+- ✅ **Simple implementation** - Leverages existing PostCSS pipeline
+- ✅ **Type safe** - Both style and class properties
+
+**Build Script Implementation:**
+
+```typescript
+function buildThemeCSSWithClasses(theme: ThemeDefinition): string {
+    const blocks: string[] = [];
+    const selectors = theme.cssSelectors || {};
+    
+    for (const [selector, config] of Object.entries(selectors)) {
+        const scopedSelector = `[data-theme="${theme.name}"] ${selector}`;
+        
+        // Add direct CSS properties
+        if (config.style) {
+            const declarations = Object.entries(config.style)
+                .map(([prop, value]) => `  ${toKebab(prop)}: ${value};`)
+                .join('\n');
+            blocks.push(`${scopedSelector} {\n${declarations}\n}`);
+        }
+        
+        // Add Tailwind classes via @apply
+        if (config.class) {
+            blocks.push(`${scopedSelector} {\n  @apply ${config.class};\n}`);
+        }
+    }
+    
+    return blocks.join('\n\n');
+}
+
+// Process through PostCSS to resolve @apply
+async function buildAllThemeCSS() {
+    const processor = postcss([tailwindcss()]);
+    
+    for (const theme of themes) {
+        const rawCSS = buildThemeCSSWithClasses(theme);
+        const result = await processor.process(rawCSS, { from: undefined });
+        
+        writeFileSync(`public/themes/${theme.name}.css`, result.css);
+    }
+}
+```
 
 ## Recommended Solution
 
-**Use Build-Time Generation with Option A (drop class support):**
+**Use Build-Time Generation with Hybrid Class Support:**
 
 ### Rationale
 
@@ -262,12 +340,18 @@ Generated CSS:
    - No runtime CSS generation
    - Clear separation: CSS at build, JS for logic
 
-3. **Developer Experience**: Better DX
+3. **Flexibility**: Support both styles AND classes
+   - Direct CSS properties for precise control
+   - Tailwind utilities via @apply for rapid prototyping
+   - Full support for dark:, hover:, responsive variants
+
+4. **Developer Experience**: Better DX
    - CSS files are inspectable in DevTools
    - Standard browser caching behavior
    - Predictable cascade rules
+   - Familiar Tailwind workflow
 
-4. **Scalability**: Better for production
+5. **Scalability**: Better for production
    - Cacheable static assets
    - CDN-friendly
    - Smaller JS bundle
@@ -276,10 +360,12 @@ Generated CSS:
 
 **Phase 1: Build Script**
 1. Create `scripts/build-theme-css.ts`
-2. Integrate into Vite build process
-3. Generate scoped CSS with `[data-theme="name"]`
-4. Output to `public/themes/` directory
-5. Generate manifest.json
+2. Support both `style` and `class` properties
+3. Use `@apply` directive for classes
+4. Integrate into Vite build process
+5. Process through PostCSS/Tailwind pipeline
+6. Output to `public/themes/` directory
+7. Generate manifest.json
 
 **Phase 2: Runtime Integration**
 1. Create `composables/useThemeCSS.ts` for loading
@@ -288,14 +374,15 @@ Generated CSS:
 4. Set `data-theme` attribute on theme switch
 
 **Phase 3: Documentation**
-1. Update design.md with build-time approach
+1. Update design.md with hybrid approach
 2. Document CSS generation process
-3. Provide examples without class support
-4. Add troubleshooting guide
+3. Document @apply usage and Tailwind support
+4. Provide examples for common patterns
+5. Add troubleshooting guide
 
 **Phase 4: Migration**
-1. Add deprecation notice for runtime injection plan
-2. Update task list with new approach
+1. Update type definitions for both style and class
+2. Update task list with hybrid approach
 3. Adjust performance targets (should improve)
 
 ### Code Changes Required
@@ -303,8 +390,10 @@ Generated CSS:
 **1. Update ThemeDefinition type:**
 ```typescript
 export interface CSSSelectorConfig {
-    // Only style support - no class
+    /** Direct CSS properties */
     style?: CSSProperties;
+    /** Tailwind utility classes (processed via @apply at build time) */
+    class?: string;
 }
 
 export type CSSSelector = CSSSelectorConfig | CSSProperties;
@@ -315,32 +404,71 @@ export type CSSSelector = CSSSelectorConfig | CSSProperties;
 {
     "scripts": {
         "build:theme-css": "tsx scripts/build-theme-css.ts"
+    },
+    "devDependencies": {
+        "postcss": "^8.4.0",
+        "tailwindcss": "^4.0.0"
     }
 }
 ```
 
-**3. Integrate with Vite:**
+**3. Build Script with Class Support:**
 ```typescript
-// In vite-theme-compiler.ts
-async function compileThemes(context: any) {
-    // ... existing compilation ...
+// scripts/build-theme-css.ts
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
+
+function buildThemeCSSWithClasses(theme: ThemeDefinition): string {
+    const blocks: string[] = [];
+    const selectors = theme.cssSelectors || {};
     
-    // Generate CSS files
-    await buildAllThemeCSS();
+    for (const [selector, config] of Object.entries(selectors)) {
+        const scopedSelector = `[data-theme="${theme.name}"] ${selector}`;
+        
+        // Direct CSS properties
+        if (config.style) {
+            const declarations = Object.entries(config.style)
+                .map(([prop, value]) => `  ${toKebab(prop)}: ${value};`)
+                .join('\n');
+            blocks.push(`${scopedSelector} {\n${declarations}\n}`);
+        }
+        
+        // Tailwind classes via @apply
+        if (config.class) {
+            blocks.push(`${scopedSelector} {\n  @apply ${config.class};\n}`);
+        }
+    }
+    
+    return blocks.join('\n\n');
+}
+
+async function buildAllThemeCSS() {
+    const processor = postcss([tailwindcss()]);
+    
+    for (const theme of themes) {
+        const rawCSS = buildThemeCSSWithClasses(theme);
+        const result = await processor.process(rawCSS, { from: undefined });
+        
+        writeFileSync(`public/themes/${theme.name}.css`, result.css);
+    }
 }
 ```
 
-### Performance Comparison
+### Performance Comparison (Updated)
 
-| Operation | Runtime Injection | Build-Time | Improvement |
-|-----------|------------------|------------|-------------|
-| Initial Load | 1-2ms | 0ms (preloaded) | 100% |
-| Theme Switch | 1-2ms | 0ms (attr change) | 100% |
-| First Load | 1-2ms | 5-20ms (network) | -300% |
-| Memory/Theme | 2-4KB | 1KB | 50% |
-| Mutation Cost | 0.1-0.5ms | 0ms | 100% |
+| Operation | Runtime Injection | Build-Time (No Classes) | Build-Time (Hybrid) | Improvement |
+|-----------|------------------|------------------------|---------------------|-------------|
+| Initial Load | 1-2ms | 0ms (preloaded) | 0ms (preloaded) | 100% |
+| Theme Switch | 1-2ms | 0ms (attr change) | 0ms (attr change) | 100% |
+| First Load | 1-2ms | 5-20ms (network) | 5-20ms (network) | -300%* |
+| Memory/Theme | 2-4KB | 1KB | 1-2KB | 50-75% |
+| Mutation Cost | 0.1-0.5ms | 0ms | 0ms | 100% |
+| Class Support | ✅ Dynamic | ❌ | ✅ Build-time | N/A |
+| Dark/Hover | Via observer | Via style only | ✅ Full support | N/A |
 
-**Note:** First-time load is slower but happens once per theme, then cached.
+*First-time load is slower but happens once per theme, then cached.
+
+**Note:** The hybrid approach adds minimal CSS size (~10-20% for typical class usage) while maintaining zero runtime overhead.
 
 ## Decision Matrix
 

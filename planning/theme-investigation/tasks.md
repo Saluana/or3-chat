@@ -114,14 +114,19 @@ This document outlines actionable tasks for addressing the three theme system co
 - [ ] 8. Extend theme definition types
   - [ ] 8.1 Add `cssSelectors` field to ThemeDefinition
     ```typescript
+    interface CSSSelectorConfig {
+        style?: CSSProperties;
+        class?: string; // Tailwind classes via @apply
+    }
+    
     interface ThemeDefinition {
         // ... existing fields
-        cssSelectors?: Record<string, CSSProperties>;
+        cssSelectors?: Record<string, CSSSelectorConfig | CSSProperties>;
     }
     ```
   - [ ] 8.2 Add CSSProperties type with common CSS properties
   - [ ] 8.3 Update theme compiler to validate CSS selectors
-  - [ ] 8.4 Add example to retro theme
+  - [ ] 8.4 Add example to retro theme with both style and class
 
 **Requirements:** 2.2  
 **Files:**
@@ -131,19 +136,23 @@ This document outlines actionable tasks for addressing the three theme system co
 
 ---
 
-- [ ] 9. Implement build-time CSS generation
+- [ ] 9. Implement build-time CSS generation with class support
   - [ ] 9.1 Create `scripts/build-theme-css.ts` script
   - [ ] 9.2 Generate scoped CSS with `[data-theme="name"]` prefix
-  - [ ] 9.3 Output CSS files to `public/themes/` directory
-  - [ ] 9.4 Generate manifest.json mapping theme names to CSS files
-  - [ ] 9.5 Integrate into Vite build process via theme compiler plugin
-  - [ ] 9.6 Add CSS linting (max 2 combinators, reject unsafe selectors)
+  - [ ] 9.3 Support `style` properties (direct CSS)
+  - [ ] 9.4 Support `class` properties (via @apply directive)
+  - [ ] 9.5 Integrate PostCSS/Tailwind processing
+  - [ ] 9.6 Output CSS files to `public/themes/` directory
+  - [ ] 9.7 Generate manifest.json mapping theme names to CSS files
+  - [ ] 9.8 Integrate into Vite build process via theme compiler plugin
+  - [ ] 9.9 Add CSS linting (max 2 combinators, validate selectors)
 
 **Requirements:** 8.1-8.4  
 **Files:**
 - `scripts/build-theme-css.ts` (new)
 - `plugins/vite-theme-compiler.ts`
 - `public/themes/` (generated)
+- `package.json` (add postcss dependency)
 
 ---
 
@@ -155,7 +164,7 @@ This document outlines actionable tasks for addressing the three theme system co
   - [ ] 10.5 Add prefetch links for inactive themes
   - [ ] 10.6 Integrate into `plugins/01.theme.client.ts`
 
-**Requirements:** 9.1-9.6  
+**Requirements:** 9.1-9.9  
 **Files:**
 - `app/composables/useThemeCSS.ts` (new)
 - `app/plugins/01.theme.client.ts`
@@ -163,16 +172,18 @@ This document outlines actionable tasks for addressing the three theme system co
 ---
 
 - [ ] 11. Add CSS targeting documentation
-  - [ ] 11.1 Document cssSelectors syntax (CSS properties only)
-  - [ ] 11.2 Explain build-time generation and data-theme scoping
-  - [ ] 11.3 Provide examples of common use cases
-  - [ ] 11.4 Document performance characteristics (zero runtime overhead)
-  - [ ] 11.5 Add troubleshooting guide for selector specificity
+  - [ ] 11.1 Document cssSelectors syntax (both style and class)
+  - [ ] 11.2 Explain build-time generation and @apply processing
+  - [ ] 11.3 Document data-theme scoping
+  - [ ] 11.4 Provide examples of common use cases (Tailwind utilities)
+  - [ ] 11.5 Document performance characteristics (zero runtime overhead)
+  - [ ] 11.6 Explain @apply limitations and workarounds
+  - [ ] 11.7 Add troubleshooting guide for selector specificity
 
 **Requirements:** 10.1-10.6  
 **Files:**
 - `app/theme/README.md`
-- `planning/theme-investigation/findings/build-time-vs-runtime.md`
+- `planning/theme-investigation/findings/hybrid-class-solution.md`
 
 ---
 
