@@ -365,7 +365,10 @@ export default defineTheme({
         // Settings buttons
         'button.settings': {
             variant: 'ghost',
-            class: 'justify-between shadow-none!  px-1.5! text-(--md-inverse-surface) border-x-0! border-t-0! border-b-1! last:border-b-0! rounded-none! w-full',
+            class: 'justify-between shadow-none! px-2! text-(--md-inverse-surface) border-x-0! border-t-0! border-b-1! last:border-b-0! rounded-none! w-full',
+            ui: {
+                trailingIcon: 'w-[20px] h-[20px] shrink-0',
+            },
         },
 
         'button#settings.system-prompts': {
