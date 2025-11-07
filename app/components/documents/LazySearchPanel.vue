@@ -5,7 +5,7 @@
                 <p class="text-sm text-[var(--md-error)] mb-2">
                     Failed to load search
                 </p>
-                <UButton size="sm" @click="retry">Retry</UButton>
+                <UButton v-bind="retryButtonProps" @click="retry">Retry</UButton>
             </div>
         </slot>
         <Suspense v-else>
@@ -27,7 +27,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineAsyncComponent, onErrorCaptured } from 'vue';
+import { ref, defineAsyncComponent, onErrorCaptured, computed } from 'vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Props {
     docmap: any;
@@ -41,6 +42,20 @@ defineEmits<{
 
 const error = ref(false);
 const retryKey = ref(0);
+
+// Theme integration for retry button
+const retryButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'document',
+        identifier: 'document.search-retry',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        ...(overrides.value as any),
+    };
+});
 
 // Lazy load the search panel implementation
 const SearchPanelRoot = defineAsyncComponent({

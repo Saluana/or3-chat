@@ -60,9 +60,8 @@
                                 Failed to load editor. Please try again.
                             </p>
                             <UButton
-                                size="md"
+                                v-bind="retryButtonProps"
                                 @click="retryLoad"
-                                class="retro-btn"
                             >
                                 Retry
                             </UButton>
@@ -81,8 +80,10 @@ import {
     onMounted,
     onBeforeUnmount,
     onErrorCaptured,
+    computed,
 } from 'vue';
 import DocumentEditorRoot from './DocumentEditorRoot.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{ documentId: string }>();
 const emit = defineEmits<{ error: [error: Error] }>();
@@ -91,6 +92,20 @@ const showErrorMessage = ref(false);
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let isMounted = true;
 const renderKey = ref(0);
+
+// Theme integration for retry button
+const retryButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'document',
+        identifier: 'document.retry',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        ...(overrides.value as any),
+    };
+});
 
 // Show error after 5 seconds if editor hasn't loaded
 function startErrorTimeout() {
