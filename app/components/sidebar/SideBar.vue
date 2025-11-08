@@ -2,7 +2,7 @@
     <div id="sidebar" class="flex flex-row w-full h-full">
         <SidebarSideNavContentCollapsed
             id="sidebar-content-collapsed"
-            class="border-r-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)]/5 backdrop-blur-xs"
+            class="border-r-2 border-(--md-inverse-surface) bg-(--md-surface)/5 backdrop-blur-xs"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"
@@ -59,11 +59,9 @@
 
     <!-- Rename modal -->
     <UModal
+        v-bind="renameModalProps"
         v-model:open="showRenameModal"
         :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-        :ui="{
-            footer: 'justify-end ',
-        }"
     >
         <template #body>
             <div class="space-y-4">
@@ -87,9 +85,9 @@
 
     <!-- Rename Project Modal -->
     <UModal
+        v-bind="renameProjectModalProps"
         v-model:open="showRenameProjectModal"
         title="Rename project"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #header><h3>Rename project?</h3></template>
         <template #body>
@@ -117,10 +115,9 @@
 
     <!-- Delete confirm modal -->
     <UModal
+        v-bind="deleteThreadModalProps"
         v-model:open="showDeleteModal"
         title="Delete thread"
-        :ui="{ footer: 'justify-end' }"
-        class="border-2"
     >
         <template #body>
             <p class="text-sm opacity-70">
@@ -137,10 +134,9 @@
 
     <!-- Delete document confirm modal -->
     <UModal
+        v-bind="deleteDocumentModalProps"
         v-model:open="showDeleteDocumentModal"
         title="Delete document"
-        :ui="{ footer: 'justify-end' }"
-        class="border-2"
     >
         <template #body>
             <p class="text-sm opacity-70">
@@ -157,10 +153,9 @@
 
     <!-- Delete project confirm modal -->
     <UModal
+        v-bind="deleteProjectModalProps"
         v-model:open="showDeleteProjectModal"
         title="Delete project"
-        :ui="{ footer: 'justify-end' }"
-        class="border-2"
     >
         <template #body>
             <p class="text-sm opacity-70">
@@ -178,9 +173,9 @@
 
     <!-- Create Project Modal -->
     <UModal
+        v-bind="createProjectModalProps"
         v-model:open="showCreateProjectModal"
         title="New Project"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #body>
             <div class="space-y-4">
@@ -235,9 +230,9 @@
 
     <!-- Add To Project Modal -->
     <UModal
+        v-bind="addToProjectModalProps"
         v-model:open="showAddToProjectModal"
         title="Add to project"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #body>
             <div class="space-y-4">
@@ -329,9 +324,9 @@
     </UModal>
     <!-- New Document Naming Modal -->
     <UModal
+        v-bind="createDocumentModalProps"
         v-model:open="showCreateDocumentModal"
         title="New Document"
-        :ui="{ footer: 'justify-end' }"
     >
         <template #body>
             <div class="space-y-4">
@@ -399,6 +394,7 @@ import {
     type ProjectEntry,
     type ProjectEntryKind,
 } from '~/utils/projects/normalizeProjectData';
+import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 // (Temporarily removed virtualization for chats — use simple list for now)
@@ -723,15 +719,47 @@ const renameTitle = ref('');
 const renameMetaKind = ref<'chat' | 'doc' | null>(null);
 const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
 
+const renameModalProps = createSidebarModalProps('sidebar.rename', {
+    ui: { footer: 'justify-end' },
+});
+
+const renameProjectModalProps = createSidebarModalProps(
+    'sidebar.rename-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
+
 const showDeleteModal = ref(false);
 const deleteId = ref<string | null>(null);
+const deleteThreadModalProps = createSidebarModalProps(
+    'sidebar.delete-thread',
+    {
+        ui: { footer: 'justify-end' },
+        class: 'border-2',
+    }
+);
 // Document delete state
 const showDeleteDocumentModal = ref(false);
 const deleteDocumentId = ref<string | null>(null);
+const deleteDocumentModalProps = createSidebarModalProps(
+    'sidebar.delete-document',
+    {
+        ui: { footer: 'justify-end' },
+        class: 'border-2',
+    }
+);
 
 // Project delete state
 const showDeleteProjectModal = ref(false);
 const deleteProjectId = ref<string | null>(null);
+const deleteProjectModalProps = createSidebarModalProps(
+    'sidebar.delete-project',
+    {
+        ui: { footer: 'justify-end' },
+        class: 'border-2',
+    }
+);
 
 async function openRename(target: any) {
     // Case 1: payload from project tree: { projectId, entryId, kind }
@@ -1022,6 +1050,12 @@ const createProjectState = ref<{ name: string; description: string }>({
     description: '',
 });
 const createProjectErrors = ref<{ name?: string }>({});
+const createProjectModalProps = createSidebarModalProps(
+    'sidebar.create-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateProject() {
     showCreateProjectModal.value = true;
@@ -1070,6 +1104,12 @@ const newProjectName = ref('');
 const newProjectDescription = ref('');
 const addingToProject = ref(false);
 const addToProjectError = ref<string | null>(null);
+const addToProjectModalProps = createSidebarModalProps(
+    'sidebar.add-to-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 const projectSelectOptions = computed(() =>
     projects.value.map((p) => ({ label: p.name, value: p.id }))
@@ -1173,6 +1213,12 @@ const showCreateDocumentModal = ref(false);
 const creatingDocument = ref(false);
 const newDocumentState = ref<{ title: string }>({ title: '' });
 const newDocumentErrors = ref<{ title?: string }>({});
+const createDocumentModalProps = createSidebarModalProps(
+    'sidebar.create-document',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateDocumentModal() {
     showCreateDocumentModal.value = true;

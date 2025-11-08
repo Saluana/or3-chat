@@ -54,11 +54,9 @@
 
         <!-- Rename modal -->
         <UModal
+            v-bind="renameModalProps"
             v-model:open="showRenameModal"
             :title="isRenamingDoc ? 'Rename document' : 'Rename thread'"
-            :ui="{
-                footer: 'justify-end ',
-            }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -82,9 +80,9 @@
 
         <!-- Rename Project Modal -->
         <UModal
+            v-bind="renameProjectModalProps"
             v-model:open="showRenameProjectModal"
             title="Rename project"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -111,9 +109,9 @@
 
         <!-- Create Project Modal -->
         <UModal
+            v-bind="createProjectModalProps"
             v-model:open="showCreateProjectModal"
             title="New project"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -170,9 +168,9 @@
 
         <!-- Add To Project Modal -->
         <UModal
+            v-bind="addToProjectModalProps"
             v-model:open="showAddToProjectModal"
             title="Add thread to project"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -268,9 +266,9 @@
 
         <!-- New Document Naming Modal -->
         <UModal
+            v-bind="createDocumentModalProps"
             v-model:open="showCreateDocumentModal"
             title="Name new document"
-            :ui="{ footer: 'justify-end' }"
         >
             <template #body>
                 <div class="space-y-4">
@@ -320,6 +318,7 @@
 import { ref, computed } from 'vue';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { createSidebarModalProps } from '~/components/sidebar/modalProps';
 
 const props = defineProps<{
     sidebarQuery: string;
@@ -447,6 +446,10 @@ const renameTitle = ref('');
 const renameMetaKind = ref<'chat' | 'doc' | null>(null);
 const isRenamingDoc = computed(() => renameMetaKind.value === 'doc');
 
+const renameModalProps = createSidebarModalProps('sidebar.rename', {
+    ui: { footer: 'justify-end' },
+});
+
 async function openRename(target: any) {
     emit('open-rename', target);
 }
@@ -467,6 +470,13 @@ async function saveRename() {
 const showRenameProjectModal = ref(false);
 const renameProjectId = ref<string | null>(null);
 const renameProjectName = ref('');
+
+const renameProjectModalProps = createSidebarModalProps(
+    'sidebar.rename-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 async function openRenameProject(projectId: string) {
     emit('open-rename-project', projectId);
@@ -494,6 +504,13 @@ const createProjectState = ref<{ name: string; description: string }>({
     description: '',
 });
 const createProjectErrors = ref<{ name?: string }>({});
+
+const createProjectModalProps = createSidebarModalProps(
+    'sidebar.create-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateProject() {
     showCreateProjectModal.value = true;
@@ -542,6 +559,13 @@ const projectSelectOptions = computed(() =>
     props.projects.map((p) => ({ label: p.name, value: p.id }))
 );
 
+const addToProjectModalProps = createSidebarModalProps(
+    'sidebar.add-to-project',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
+
 function openAddToProject(thread: any) {
     emit('add-to-project', thread);
 }
@@ -573,6 +597,13 @@ const showCreateDocumentModal = ref(false);
 const creatingDocument = ref(false);
 const newDocumentState = ref<{ title: string }>({ title: '' });
 const newDocumentErrors = ref<{ title?: string }>({});
+
+const createDocumentModalProps = createSidebarModalProps(
+    'sidebar.create-document',
+    {
+        ui: { footer: 'justify-end' },
+    }
+);
 
 function openCreateDocumentModal() {
     showCreateDocumentModal.value = true;

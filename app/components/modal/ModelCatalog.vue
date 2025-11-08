@@ -1,21 +1,21 @@
 <template>
     <UModal
+        v-bind="modelCatalogModalProps"
         v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-t-2',
-            body: 'p-0!',
-        }"
         title="Model settings"
         description="Browse and favorite models from the OpenRouter catalog."
-        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
         <template #body>
             <div class="model-catalog-shell flex flex-col h-full">
                 <div
                     class="model-catalog-header px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
                 >
-                    <div class="model-catalog-search flex items-center gap-3 w-full">
-                        <div class="model-catalog-search-input-wrapper relative w-full max-w-md">
+                    <div
+                        class="model-catalog-search flex items-center gap-3 w-full"
+                    >
+                        <div
+                            class="model-catalog-search-input-wrapper relative w-full max-w-md"
+                        >
                             <UInput
                                 v-model="searchQuery"
                                 v-bind="searchInputProps"
@@ -60,7 +60,10 @@
                         </UButton>
                     </div>
                 </div>
-                <div v-if="!searchReady" class="model-catalog-loading p-6 text-sm text-neutral-500">
+                <div
+                    v-if="!searchReady"
+                    class="model-catalog-loading p-6 text-sm text-neutral-500"
+                >
                     Indexing models…
                 </div>
                 <div v-else class="model-catalog-list flex-1 min-h-0">
@@ -84,7 +87,9 @@
                                 <div
                                     class="model-catalog-item__header flex items-start justify-between gap-2"
                                 >
-                                    <div class="model-catalog-item__title-area flex flex-col min-w-0">
+                                    <div
+                                        class="model-catalog-item__title-area flex flex-col min-w-0"
+                                    >
                                         <div
                                             class="model-catalog-item__title font-medium text-sm truncate"
                                             :title="m.canonical_slug"
@@ -114,7 +119,9 @@
                                 <div
                                     class="model-catalog-item__pricing mt-2 grid grid-cols-2 gap-1 text-xs leading-tight"
                                 >
-                                    <div class="model-catalog-item__pricing-vitals flex flex-col">
+                                    <div
+                                        class="model-catalog-item__pricing-vitals flex flex-col"
+                                    >
                                         <span
                                             class="text-neutral-500 dark:text-neutral-400"
                                             >Input</span
@@ -190,6 +197,49 @@ const emit = defineEmits<{ (e: 'update:showModal', value: boolean): void }>();
 const open = computed({
     get: () => props.showModal,
     set: (value: boolean) => emit('update:showModal', value),
+});
+
+const modelCatalogModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'modal',
+    identifier: 'modal.model-catalog',
+    isNuxtUI: true,
+});
+
+const modelCatalogModalProps = computed(() => {
+    const baseClass =
+        'border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
+    const baseUi = {
+        footer: 'justify-end border-t-2',
+        body: 'p-0!',
+    } as Record<string, unknown>;
+
+    const overrideValue =
+        (modelCatalogModalOverrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string'
+            ? (overrideValue.class as string)
+            : '';
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+    const mergedUi = { ...baseUi, ...overrideUi };
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    ) as Record<string, unknown>;
+
+    const result: Record<string, unknown> = {
+        ...rest,
+        ui: mergedUi,
+    };
+
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
+    if (mergedClass) {
+        result.class = mergedClass;
+    }
+
+    return result;
 });
 
 const modelCatalog = ref<OpenRouterModel[]>([]);

@@ -4,15 +4,9 @@
         v-bind="dashboardModalProps"
         v-model:open="open"
         :modal="false"
-        :ui="{
-            content: 'z-[10]',
-            footer: 'justify-end border-t-2',
-            body: 'overflow-hidden h-full flex-1 !p-0',
-        }"
         title="Dashboard"
         :dismissible="false"
         description="Browse all apps, plugins, and settings."
-        class="border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden"
     >
         <template #body>
             <!-- iOS style springboard grid: fixed icon cell width per breakpoint, centered, nice vertical rhythm -->
@@ -45,12 +39,12 @@
             >
                 <div
                     id="dashboard-page-header"
-                    class="flex h-[40px] shrink-0 items-center border-b-2 border-[var(--md-inverse-surface)] pr-2"
+                    class="flex h-10 shrink-0 items-center border-b-2 border-(--md-inverse-surface) pr-2"
                 >
                     <UButton
                         id="dashboard-back-button"
                         v-bind="backButtonProps"
-                        class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10"
+                        class="ml-2 text-[20px] gap-0.5 hover:bg-(--md-primary)/10"
                         @click="goBack()"
                     >
                         <UIcon
@@ -71,7 +65,7 @@
                 <div
                     v-if="state.error"
                     id="dashboard-page-error"
-                    class="mx-4 mt-3 rounded-md border-2 border-[var(--md-error)] bg-[var(--md-error-container)] px-3 py-2 text-xs text-[var(--md-on-error-container)]"
+                    class="mx-4 mt-3 rounded-md border-2 border-(--md-error) bg-(--md-error-container) px-3 py-2 text-xs text-(--md-on-error-container)"
                 >
                     {{ state.error.message }}
                 </div>
@@ -86,7 +80,7 @@
                         :key="p.id"
                         v-bind="landingPageButtonProps"
                         :class="[
-                            'dashboard-landing-item group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left',
+                            'dashboard-landing-item group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-(--md-outline-variant) hover:border-(--md-primary) hover:bg-(--md-primary)/5 transition-colors text-left',
                             (landingPageButtonProps as any)?.class || '',
                         ]"
                         @click="handleLandingPageClick(p.id)"
@@ -258,14 +252,48 @@ const handleLandingPageClick = (pageId: string) => {
 };
 
 // Theme overrides for Nuxt UI elements
+const dashboardModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'dashboard',
+    identifier: 'dashboard.shell',
+    isNuxtUI: true,
+});
+
 const dashboardModalProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'modal',
-        context: 'dashboard',
-        identifier: 'dashboard.shell',
-        isNuxtUI: true,
-    });
-    return overrides.value || {};
+    const baseClass =
+        'border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
+    const baseUi = {
+        content: 'z-[10]',
+        footer: 'justify-end border-t-2',
+        body: 'overflow-hidden h-full flex-1 !p-0',
+    } as Record<string, unknown>;
+
+    const overrideValue =
+        (dashboardModalOverrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string'
+            ? (overrideValue.class as string)
+            : '';
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+    const mergedUi = { ...baseUi, ...overrideUi };
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    ) as Record<string, unknown>;
+
+    const result: Record<string, unknown> = {
+        ...rest,
+        ui: mergedUi,
+    };
+
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
+    if (mergedClass) {
+        result.class = mergedClass;
+    }
+
+    return result;
 });
 
 const backButtonProps = computed(() => {

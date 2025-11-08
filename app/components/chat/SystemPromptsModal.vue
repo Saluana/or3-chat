@@ -1,13 +1,9 @@
 <template>
     <UModal
+        v-bind="systemPromptsModalProps"
         v-model:open="open"
-        :ui="{
-            footer: 'justify-end border-none',
-            body: 'p-0! border-b-0! overflow-hidden',
-        }"
         title="System Prompts"
         description="Manage and select system prompts to customize AI behavior."
-        class="sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden"
     >
         <template #body>
             <div class="flex flex-col h-full" @keydown="handleKeydown">
@@ -331,6 +327,49 @@ const currentActivePromptId = computed(() => {
     if (props.threadId) return threadSystemPromptId.value;
     // If no thread yet use pane-scoped pending first, else fall back to global active
     return pendingPromptId.value || activePromptId.value;
+});
+
+const systemPromptsModalOverrides = useThemeOverrides({
+    component: 'modal',
+    context: 'modal',
+    identifier: 'modal.system-prompts',
+    isNuxtUI: true,
+});
+
+const systemPromptsModalProps = computed(() => {
+    const baseClass =
+        'sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
+    const baseUi = {
+        footer: 'justify-end border-none',
+        body: 'p-0! border-b-0! overflow-hidden',
+    } as Record<string, unknown>;
+
+    const overrideValue =
+        (systemPromptsModalOverrides.value as Record<string, unknown>) || {};
+    const overrideClass =
+        typeof overrideValue.class === 'string'
+            ? (overrideValue.class as string)
+            : '';
+    const overrideUi =
+        (overrideValue.ui as Record<string, unknown> | undefined) || {};
+    const mergedUiEntries = { ...baseUi, ...overrideUi };
+    const rest = Object.fromEntries(
+        Object.entries(overrideValue).filter(
+            ([key]) => key !== 'class' && key !== 'ui'
+        )
+    ) as Record<string, unknown>;
+
+    const result: Record<string, unknown> = {
+        ...rest,
+        ui: mergedUiEntries,
+    };
+
+    const mergedClass = [baseClass, overrideClass].filter(Boolean).join(' ');
+    if (mergedClass) {
+        result.class = mergedClass;
+    }
+
+    return result;
 });
 
 // Theme overrides for modal buttons
