@@ -45,10 +45,10 @@
         <button
             :class="[
                 'col-span-full mt-1 justify-self-start text-xs underline text-[var(--md-primary)]',
-                (collapseButtonProps as any)?.class || ''
+                collapseButtonProps?.class || ''
             ]"
-            :data-theme-target="(collapseButtonProps as any)?.['data-theme-target']"
-            :data-theme-matches="(collapseButtonProps as any)?.['data-theme-matches']"
+            :data-theme-target="collapseButtonProps?.['data-theme-target']"
+            :data-theme-matches="collapseButtonProps?.['data-theme-matches']"
             type="button"
             @click="$emit('collapse')"
             aria-label="Hide attachments"

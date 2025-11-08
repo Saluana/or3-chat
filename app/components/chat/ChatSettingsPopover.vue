@@ -1,8 +1,8 @@
 <template>
     <div
-        :class="['flex flex-col w-[320px]', (containerProps as any)?.class || '']"
-        :data-theme-target="(containerProps as any)?.['data-theme-target']"
-        :data-theme-matches="(containerProps as any)?.['data-theme-matches']"
+        :class="['flex flex-col w-[320px]', containerProps?.class || '']"
+        :data-theme-target="containerProps?.['data-theme-target']"
+        :data-theme-matches="containerProps?.['data-theme-matches']"
     >
         <!-- Model Selector extracted -->
         <div

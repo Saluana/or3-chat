@@ -57,6 +57,7 @@ export interface ResolvedOverride {
  */
 export class RuntimeResolver {
     private overrides: CompiledOverride[];
+    private overrideIndex: Map<string, CompiledOverride[]>;
     private propMaps: PropClassMaps;
     private themeName: string;
 
@@ -70,6 +71,16 @@ export class RuntimeResolver {
         this.overrides = [...compiledTheme.overrides].sort(
             (a, b) => b.specificity - a.specificity
         );
+
+        // Build index by component type for fast lookup
+        this.overrideIndex = new Map();
+        for (const override of this.overrides) {
+            const key = override.component;
+            if (!this.overrideIndex.has(key)) {
+                this.overrideIndex.set(key, []);
+            }
+            this.overrideIndex.get(key)!.push(override);
+        }
 
         // Store prop-to-class mappings (merge with defaults)
         this.propMaps = {
@@ -90,10 +101,13 @@ export class RuntimeResolver {
      */
     resolve(params: ResolveParams): ResolvedOverride {
         try {
-            // Find all matching overrides
+            // Find all matching overrides using the index
             const matching: CompiledOverride[] = [];
-
-            for (const override of this.overrides) {
+            
+            // Only check overrides for this component type
+            const candidates = this.overrideIndex.get(params.component) || [];
+            
+            for (const override of candidates) {
                 if (this.matches(override, params)) {
                     matching.push(override);
                 }

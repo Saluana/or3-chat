@@ -2,10 +2,10 @@
     <div
         :class="[
             outerClass,
-            (messageContainerProps as any)?.class || '',
+            messageContainerProps?.class || '',
         ]"
-        :data-theme-target="(messageContainerProps as any)?.['data-theme-target']"
-        :data-theme-matches="(messageContainerProps as any)?.['data-theme-matches']"
+        :data-theme-target="messageContainerProps?.['data-theme-target']"
+        :data-theme-matches="messageContainerProps?.['data-theme-matches']"
         :style="{
             paddingRight:
                 props.message.role === 'user' && hashList.length && !expanded
@@ -17,10 +17,10 @@
         <!-- Compact thumb (collapsed state) -->
         <button
             v-if="props.message.role === 'user' && hashList.length && !expanded"
-            :class="(attachmentThumbButtonProps as any)?.class || ''"
-            :data-theme-target="(attachmentThumbButtonProps as any)?.['data-theme-target']"
-            :data-theme-matches="(attachmentThumbButtonProps as any)?.['data-theme-matches']"
-            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            :class="attachmentThumbButtonProps?.class || ''"
+            :data-theme-target="attachmentThumbButtonProps?.['data-theme-target']"
+            :data-theme-matches="attachmentThumbButtonProps?.['data-theme-matches']"
+            class="absolute -top-2 -right-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
             aria-label="Show attachments"

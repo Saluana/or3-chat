@@ -9,10 +9,10 @@
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
             loading ? 'opacity-90 pointer-events-auto' : '',
-            (containerProps as any)?.class || '',
+            containerProps?.class || '',
         ]"
-        :data-theme-target="(containerProps as any)?.['data-theme-target']"
-        :data-theme-matches="(containerProps as any)?.['data-theme-matches']"
+        :data-theme-target="containerProps?.['data-theme-target']"
+        :data-theme-matches="containerProps?.['data-theme-matches']"
     >
         <div class="flex flex-col gap-3.5 m-3.5">
             <!-- Main Input Area -->
@@ -20,17 +20,17 @@
                 <div
                     :class="[
                         'max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]',
-                        (editorProps as any)?.class || '',
+                        editorProps?.class || '',
                     ]"
-                    :data-theme-target="(editorProps as any)?.['data-theme-target']"
-                    :data-theme-matches="(editorProps as any)?.['data-theme-matches']"
+                    :data-theme-target="editorProps?.['data-theme-target']"
+                    :data-theme-matches="editorProps?.['data-theme-matches']"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
                         :editor="editor as Editor"
                         class="prosemirror-host"
-                        :data-theme-target="(editorProps as any)?.['data-theme-target']"
-                        :data-theme-matches="(editorProps as any)?.['data-theme-matches']"
+                        :data-theme-target="editorProps?.['data-theme-target']"
+                        :data-theme-matches="editorProps?.['data-theme-matches']"
                     ></EditorContent>
 
                     <div
