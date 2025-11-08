@@ -3,8 +3,9 @@
     Reusable reasoning display component.
     Requirements: R2 (display), R4 (streaming), R5 (reusable), NFR4 (accessible), NFR6 (no layout shift)
   -->
-    <div v-if="visible" class="reasoning-wrap">
+    <div id="reasoning-accordion-root" v-if="visible" class="reasoning-wrap">
         <button
+            id="btn-reasoning-toggle"
             :class="[
                 'reasoning-toggle',
                 toggleButtonProps?.class || ''

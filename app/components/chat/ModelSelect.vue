@@ -1,6 +1,7 @@
 <template>
-    <div v-if="show" class="inline-block">
+    <div id="model-select-root" v-if="show" class="model-select-container inline-block">
         <USelectMenu
+            id="model-select-menu"
             v-model="internalModel"
             :items="items"
             :value-key="'value'"

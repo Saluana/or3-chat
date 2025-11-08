@@ -317,7 +317,7 @@ export class ThemeCompiler {
         for (const context of this.knownContexts) {
             const escapedContext = this.escapeRegex(context);
             const regex = new RegExp(
-                `(\w+)\.${escapedContext}(?=[:\\[]|$)`,
+                '(\\w+)\\.' + escapedContext + '(?=[:\\[]|$)',
                 'g'
             );
             result = result.replace(regex, `$1[data-context="${context}"]`);
@@ -341,6 +341,7 @@ export class ThemeCompiler {
 
         while ((match = attrRegex.exec(selector)) !== null) {
             const attrName = match[1];
+            if (!attrName) continue;
 
             // Skip data-context and data-id (already handled)
             if (attrName === 'data-context' || attrName === 'data-id') continue;

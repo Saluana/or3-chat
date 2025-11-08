@@ -1,6 +1,7 @@
 <template>
     <div
-        id="bottom-nav-root"
+        v-bind="rootAttrs"
+        :id="attrs.id ?? 'bottom-nav-root'"
         class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-2 border-r-2 border-[var(--md-inverse-surface)] px-0.5"
     >
         <!-- MY INFO -->
@@ -115,8 +116,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, useAttrs } from 'vue';
 import { state } from '~/state/global';
+
+defineOptions({ inheritAttrs: false });
 
 const openrouter = useOpenRouterAuth();
 const orIsConnected = computed(() => state.value.openrouterKey);
@@ -126,6 +129,12 @@ onMounted(() => {
     hydrated.value = true;
 });
 const showSettingsModal = ref(false);
+const attrs = useAttrs();
+const rootAttrs = computed(() => {
+    return Object.fromEntries(
+        Object.entries(attrs).filter(([key]) => key !== 'id')
+    ) as Record<string, unknown>;
+});
 const connectionIndicatorClass = computed(() =>
     !hydrated.value
         ? 'hud-button__indicator--danger'

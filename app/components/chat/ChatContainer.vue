@@ -1,19 +1,32 @@
 <template>
     <main
         ref="containerRoot"
-        class="chat-container-root flex w-full flex-1 h-full flex-col overflow-hidden relative"
+        v-bind="containerProps"
+        :class="[
+            'chat-container-root flex w-full flex-1 h-full flex-col overflow-hidden relative',
+            containerProps?.class ?? '',
+        ]"
     >
         <!-- Scroll viewport -->
         <div
             ref="scrollParent"
-            class="chat-scroll-container w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            v-bind="scrollContainerProps"
+            :class="[
+                'chat-scroll-container w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars',
+                scrollContainerProps?.class ?? '',
+            ]"
             :style="scrollParentStyle"
         >
             <div
-                class="chat-message-list mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
+                v-bind="messageListProps"
+                :class="[
+                    'chat-message-list mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col',
+                    messageListProps?.class ?? '',
+                ]"
             >
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
+                    class="virtual-message-list"
                     :messages="stableMessages"
                     :item-size-estimation="520"
                     :overscan="5"
@@ -67,13 +80,17 @@
         </div>
         <!-- Input area overlay -->
         <div
-            class="chat-input-wrapper"
-            :class="inputWrapperClass"
+            v-bind="inputWrapperProps"
+            :class="['chat-input-wrapper', inputWrapperClass, inputWrapperProps?.class ?? '']"
             :style="inputWrapperStyle"
         >
             <div
-                class="chat-inner-input-container"
-                :class="innerInputContainerClass"
+                v-bind="innerInputContainerProps"
+                :class="[
+                    'chat-inner-input-container',
+                    innerInputContainerClass,
+                    innerInputContainerProps?.class ?? '',
+                ]"
             >
                 <lazy-chat-input-dropper
                     hydrate-on-idle
@@ -116,6 +133,7 @@ import VirtualMessageList from './VirtualMessageList.vue';
 import { useElementSize } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 // Removed onMounted/watchEffect (unused)
 
 // Debug utilities removed per request.
@@ -418,6 +436,42 @@ function onStopStream() {
         (chat.value as any)?.abort?.();
     } catch {}
 }
+
+// Theme overrides
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.container',
+    isNuxtUI: false,
+});
+
+const scrollContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.scroll-container',
+    isNuxtUI: false,
+});
+
+const messageListProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.message-list',
+    isNuxtUI: false,
+});
+
+const inputWrapperProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.input-wrapper',
+    isNuxtUI: false,
+});
+
+const innerInputContainerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.inner-input-container',
+    isNuxtUI: false,
+});
 </script>
 
 <style>

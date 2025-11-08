@@ -4,10 +4,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { defineTheme } from '../define-theme';
-import type { ThemeDefinition } from '../types';
 
 describe('defineTheme', () => {
-    let originalEnv: string | undefined;
+    let originalEnv: boolean | undefined;
 
     beforeEach(() => {
         originalEnv = import.meta.env.DEV;
@@ -25,6 +24,7 @@ describe('defineTheme', () => {
                 name: 'test',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
             });
@@ -65,6 +65,7 @@ describe('defineTheme', () => {
                 name: 'with-dark',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                     dark: {
                         primary: '#8dd29a',
@@ -82,6 +83,7 @@ describe('defineTheme', () => {
                 name: 'with-overrides',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
                 overrides: {
@@ -103,6 +105,7 @@ describe('defineTheme', () => {
                 name: 'with-ui',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
                 ui: {
@@ -123,6 +126,7 @@ describe('defineTheme', () => {
                 description: 'A theme with documentation',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
             });
@@ -147,6 +151,7 @@ describe('defineTheme', () => {
                 name: 'test',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
             });
@@ -164,6 +169,7 @@ describe('defineTheme', () => {
                 name: 'typed',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
                 overrides: {
@@ -186,6 +192,7 @@ describe('defineTheme', () => {
                 name: 'minimal',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
                 // These should all be optional
@@ -204,6 +211,7 @@ describe('defineTheme', () => {
                 name: 'test',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
             };
@@ -221,6 +229,7 @@ describe('defineTheme', () => {
                 description: 'A test theme',
                 colors: {
                     primary: '#3f8452',
+                    secondary: '#5a7b62',
                     surface: '#f5faf5',
                 },
                 overrides: {

@@ -1,8 +1,20 @@
 <template>
     <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" id="chat-message-list" class="chat-message-list flex flex-col min-w-0" :class="wrapperClass">
+    <div
+        ref="root"
+        v-bind="containerProps"
+        :class="[
+            'chat-message-list flex flex-col min-w-0',
+            containerProps?.class ?? '',
+            wrapperClass,
+        ]"
+    >
         <Virtualizer
-            class="chat-message-list-virtualizer"
+            v-bind="virtualizerProps"
+            :class="[
+                'chat-message-list-virtualizer',
+                virtualizerProps?.class ?? '',
+            ]"
             :data="messages"
             :itemSize="effectiveItemSize || undefined"
             :overscan="overscan"
@@ -53,6 +65,7 @@ import {
     useRafFn,
     useEventListener,
 } from '@vueuse/core';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface ChatMessage {
     id: string;
@@ -86,6 +99,20 @@ const emit = defineEmits<{
     (e: 'reached-bottom'): void;
     (e: 'scroll-state', state: { atBottom: boolean; stick: boolean }): void; // Task 5.1.2
 }>();
+
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.message-list',
+    isNuxtUI: false,
+});
+
+const virtualizerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.virtualizer',
+    isNuxtUI: false,
+});
 
 const root = ref<HTMLElement | null>(null);
 // Accept both HTMLElement and Ref<HTMLElement|null> for scrollParent prop

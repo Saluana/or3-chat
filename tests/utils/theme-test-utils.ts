@@ -4,6 +4,7 @@
  */
 
 import { ref, type Ref, type App } from 'vue';
+import { vi } from 'vitest';
 import type {
     ThemeDefinition,
     CompiledTheme,
@@ -109,17 +110,8 @@ export function createCompiledTheme(
         name: 'test-theme',
         displayName: 'Test Theme',
         description: 'Compiled theme for testing',
-        colors: {
-            primary: '#3f8452',
-            secondary: '#5a7b62',
-            tertiary: '#4a7c83',
-            surface: '#f5faf5',
-            success: '#4a9763',
-            warning: '#c8931d',
-            error: '#b5473c',
-        },
-        overrides: [],
         cssVariables: '',
+        overrides: [],
         ...overrides,
     };
 }

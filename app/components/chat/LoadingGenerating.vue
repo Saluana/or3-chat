@@ -1,5 +1,12 @@
 <template>
-    <div class="loading-generating animate-in retro-loader" aria-hidden="true">
+    <div
+        v-bind="containerProps"
+        :class="[
+            'loading-generating animate-in retro-loader',
+            containerProps?.class ?? '',
+        ]"
+        aria-hidden="true"
+    >
         <span class="rl-glow"></span>
         <span class="rl-scan"></span>
         <span class="rl-stripes"></span>
@@ -13,7 +20,14 @@
 </template>
 
 <script setup lang="ts">
-// Presentational loader component (shared)
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'chat',
+    identifier: 'chat.loading-generating',
+    isNuxtUI: false,
+});
 </script>
 
 <style scoped>

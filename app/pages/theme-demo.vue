@@ -139,7 +139,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { useNuxtApp } from '#app';
+import { useThemeResolver } from '~/composables/useThemeResolver';
+import type { ThemePlugin } from '~/plugins/01.theme.client';
 
 // Use theme resolver composable
 const { 
@@ -172,11 +175,12 @@ const switchTheme = async (themeName: string) => {
 
 // Debug info
 const nuxtApp = useNuxtApp();
-const hasThemePlugin = computed(() => !!nuxtApp.$theme);
+const themePlugin = computed(() => nuxtApp.$theme as ThemePlugin | undefined);
+const hasThemePlugin = computed(() => Boolean(themePlugin.value));
 const hasResolver = computed(() => {
-  if (!nuxtApp.$theme) return false;
-  const resolver = nuxtApp.$theme.getResolver(activeTheme.value);
-  return !!resolver;
+  const plugin = themePlugin.value;
+  if (!plugin) return false;
+  return Boolean(plugin.getResolver(activeTheme.value));
 });
 
 // Log on mount

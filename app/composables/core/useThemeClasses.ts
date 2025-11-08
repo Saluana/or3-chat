@@ -15,10 +15,22 @@
  */
 
 import { onMounted } from 'vue';
+import { useNuxtApp } from '#app';
 import { applyThemeClasses } from '~/theme/_shared/css-selector-runtime';
+import type { ThemePlugin } from '~/plugins/01.theme.client';
 
 export function useThemeClasses() {
-    const { activeTheme, loadTheme } = useTheme();
+    const nuxtApp = useNuxtApp();
+    const themePlugin = nuxtApp.$theme as ThemePlugin | undefined;
+
+    if (!themePlugin) {
+        if (import.meta.dev) {
+            console.warn('[useThemeClasses] Theme plugin is not available.');
+        }
+        return;
+    }
+
+    const { activeTheme, loadTheme } = themePlugin;
     
     onMounted(async () => {
         // Get current theme

@@ -1,12 +1,26 @@
 <template>
-    <div class="tool-call-indicator my-2 space-y-2">
+    <div
+        v-bind="containerProps"
+        :class="[
+            'tool-call-indicator my-2 space-y-2',
+            containerProps?.class ?? '',
+        ]"
+    >
         <details
             v-for="(call, index) in toolCalls"
             :key="call.id || `tool-${index}`"
-            class="tool-call-indicator-details rounded-[3px] border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] text-sm"
+            v-bind="detailsProps"
+            :class="[
+                'tool-call-indicator-details rounded-[3px] border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] text-sm',
+                detailsProps?.class ?? '',
+            ]"
         >
             <summary
-                class="tool-call-indicator-summary flex items-start gap-2 p-2 cursor-pointer hover:bg-[var(--md-surface-container)] select-none"
+                v-bind="summaryProps"
+                :class="[
+                    'tool-call-indicator-summary flex items-start gap-2 p-2 cursor-pointer hover:bg-[var(--md-surface-container)] select-none',
+                    summaryProps?.class ?? '',
+                ]"
             >
                 <!-- Icon -->
                 <div class="tool-call-indicator-summary-icon shrink-0 mt-0.5">
@@ -104,6 +118,8 @@
 </template>
 
 <script setup lang="ts">
+import { useThemeOverrides } from '~/composables/useThemeResolver';
+
 interface ToolCall {
     id?: string;
     name: string;
@@ -117,6 +133,27 @@ interface ToolCall {
 const props = defineProps<{
     toolCalls: ToolCall[];
 }>();
+
+const containerProps = useThemeOverrides({
+    component: 'div',
+    context: 'message',
+    identifier: 'message.tool-call-indicator',
+    isNuxtUI: false,
+});
+
+const detailsProps = useThemeOverrides({
+    component: 'details',
+    context: 'message',
+    identifier: 'message.tool-call-details',
+    isNuxtUI: false,
+});
+
+const summaryProps = useThemeOverrides({
+    component: 'summary',
+    context: 'message',
+    identifier: 'message.tool-call-summary',
+    isNuxtUI: false,
+});
 
 function formatArgs(args: string): string {
     try {
