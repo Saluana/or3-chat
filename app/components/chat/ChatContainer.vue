@@ -1,16 +1,16 @@
 <template>
     <main
         ref="containerRoot"
-        class="flex w-full flex-1 h-full flex-col overflow-hidden relative"
+        class="chat-container-root flex w-full flex-1 h-full flex-col overflow-hidden relative"
     >
         <!-- Scroll viewport -->
         <div
             ref="scrollParent"
-            class="w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
+            class="chat-scroll-container w-full overflow-y-auto overscroll-contain px-[3px] sm:pt-3.5 scrollbars"
             :style="scrollParentStyle"
         >
             <div
-                class="mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
+                class="chat-message-list mx-auto w-full px-1.5 sm:max-w-[768px] pb-8 sm:pb-10 pt-safe-offset-10 flex flex-col"
             >
                 <!-- Virtualized stable messages (Req 3.1) -->
                 <VirtualMessageList
@@ -21,12 +21,12 @@
                     :is-streaming="streamActive"
                     :editing-active="anyEditing"
                     @scroll-state="onScrollState"
-                    wrapper-class="flex flex-col"
+                    wrapper-class="virtual-message-list-wrapper flex flex-col"
                 >
                     <template #item="{ message, index }">
                         <div
                             :key="message.id || message.stream_id || index"
-                            class="group relative w-full max-w-full min-w-0 space-y-4 break-words"
+                            class="messages-container not-first:group relative w-full max-w-full min-w-0 space-y-4 break-words"
                             :data-msg-id="message.id"
                             :data-stream-id="message.stream_id"
                         >
@@ -46,7 +46,7 @@
                         <!-- Streaming tail appended (Req 3.2) -->
                         <div
                             v-if="streamingMessage"
-                            class=""
+                            class="streaming-tail"
                             style="overflow-anchor: none"
                             ref="tailWrapper"
                         >
@@ -66,8 +66,15 @@
             </div>
         </div>
         <!-- Input area overlay -->
-        <div :class="inputWrapperClass" :style="inputWrapperStyle">
-            <div :class="innerInputContainerClass">
+        <div
+            class="chat-input-wrapper"
+            :class="inputWrapperClass"
+            :style="inputWrapperStyle"
+        >
+            <div
+                class="chat-inner-input-container"
+                :class="innerInputContainerClass"
+            >
                 <lazy-chat-input-dropper
                     hydrate-on-idle
                     :loading="loading"
@@ -80,7 +87,7 @@
                     @stop-stream="onStopStream"
                     @pending-prompt-selected="onPendingPromptSelected"
                     @resize="onInputResize"
-                    class="pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
+                    class="chat-input pointer-events-auto w-full max-w-[780px] mx-auto mb-1 sm:mb-2"
                 />
             </div>
         </div>

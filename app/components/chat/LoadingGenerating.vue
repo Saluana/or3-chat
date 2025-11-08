@@ -1,5 +1,5 @@
 <template>
-    <div class="retro-loader animate-in" aria-hidden="true">
+    <div class="loading-generating animate-in retro-loader" aria-hidden="true">
         <span class="rl-glow"></span>
         <span class="rl-scan"></span>
         <span class="rl-stripes"></span>

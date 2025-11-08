@@ -41,9 +41,7 @@
                     class="flex h-[40px] shrink-0 items-center border-b-2 border-[var(--md-inverse-surface)] pr-2"
                 >
                     <UButton
-                        variant="subtle"
-                        color="primary"
-                        size="sm"
+                        v-bind="backButtonProps"
                         class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10"
                         @click="goBack()"
                     >
@@ -73,7 +71,11 @@
                     <button
                         v-for="p in landingPages"
                         :key="p.id"
-                        class="group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left"
+                        v-bind="landingPageButtonProps"
+                        :class="[
+                            'group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left',
+                            (landingPageButtonProps as any)?.class || '',
+                        ]"
                         @click="handleLandingPageClick(p.id)"
                     >
                         <div class="flex items-center gap-2">
@@ -130,6 +132,7 @@ import {
     registerDashboardPluginPage,
     type DashboardPlugin,
 } from '~/composables';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     showModal: boolean;
@@ -230,4 +233,30 @@ const handleLandingPageClick = (pageId: string) => {
     if (!pluginId) return;
     void openPage(pluginId, pageId);
 };
+
+// Theme overrides for buttons
+const backButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.back',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'subtle' as const,
+        color: 'primary' as const,
+        size: 'sm' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const landingPageButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.landing-page',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
 </script>

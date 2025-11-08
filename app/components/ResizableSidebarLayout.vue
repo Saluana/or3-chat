@@ -1,5 +1,6 @@
 <template>
     <div
+        id="page-container"
         class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
     >
         <!-- Backdrop on mobile when open -->
@@ -10,6 +11,7 @@
             leave-to-class="opacity-0"
         >
             <div
+                id="mobile-close"
                 v-if="!isDesktop && open"
                 class="absolute inset-0 bg-black/40 z-30 md:hidden"
                 @click="close()"
@@ -18,6 +20,7 @@
 
         <!-- Sidebar -->
         <aside
+            id="sidebar"
             :class="[
                 'z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex flex-col',
                 // width transition on desktop
@@ -52,7 +55,7 @@
             "
             @keydown.esc.stop.prevent="close()"
         >
-            <div class="h-full flex flex-col">
+            <div id="sidebar-container-outer" class="h-full flex flex-col">
                 <!-- Sidebar header -->
                 <SidebarHeader
                     :collapsed="collapsed"
@@ -69,7 +72,10 @@
                 </SidebarHeader>
 
                 <!-- Sidebar content -->
-                <div class="flex-1 overflow-auto overscroll-contain min-w-fit">
+                <div
+                    id="sidebar-container-expanded"
+                    class="flex-1 overflow-auto overscroll-contain min-w-fit"
+                >
                     <div v-show="!collapsed" class="flex-1 h-full">
                         <slot name="sidebar-expanded">
                             <div class="p-3 space-y-2 text-sm opacity-80">
@@ -86,7 +92,11 @@
                             </div>
                         </slot>
                     </div>
-                    <div v-if="collapsed" class="flex-1 h-full">
+                    <div
+                        id="sidebar-container-collapsed"
+                        v-if="collapsed"
+                        class="flex-1 h-full"
+                    >
                         <slot name="sidebar-collapsed">
                             <div class="p-3 space-y-2 text-sm opacity-80">
                                 <p>Add your nav here…</p>
@@ -119,8 +129,12 @@
         </aside>
 
         <!-- Main content -->
-        <div class="relative z-10 flex-1 h-full min-w-0 flex flex-col">
+        <div
+            id="main-content"
+            class="relative z-10 flex-1 h-full min-w-0 flex flex-col"
+        >
             <div
+                id="main-content-container"
                 class="flex-1 overflow-hidden content-bg"
                 :style="{
                     '--content-bg-size': props.patternSize + 'px',

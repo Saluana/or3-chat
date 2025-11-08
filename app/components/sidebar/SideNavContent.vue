@@ -1,11 +1,13 @@
 <template>
     <div
+        id="nav-content-container"
         ref="containerRef"
         class="flex flex-col w-full h-full relative overflow-hidden"
     >
         <!-- Header only shown for pages that use default header -->
         <ClientOnly>
             <SideNavHeader
+                id="nav-header"
                 v-if="activePageDef?.usesDefaultHeader"
                 ref="sideNavHeaderRef"
                 :sidebar-query="sidebarQuery"
@@ -27,6 +29,7 @@
         <!-- Dynamic page content with suspense and keepalive -->
         <ClientOnly>
             <div
+                id="nav-scroll-area"
                 ref="scrollAreaRef"
                 class="flex-1 min-h-0 h-full px-2 flex flex-col gap-3 overflow-hidden"
             >
@@ -35,6 +38,7 @@
                     <template #default>
                         <KeepAlive include="sidebar-home">
                             <component
+                                id="page-keepalive"
                                 v-if="activePageDef?.keepAlive"
                                 :is="activePageComponent"
                                 :key="`keepalive-${activePageId}`"
@@ -44,6 +48,7 @@
                                 v-on="forwardedEvents"
                             />
                             <component
+                                id="page-no-keepalive"
                                 v-else
                                 :is="activePageComponent"
                                 :key="`no-keepalive-${activePageId}`"
@@ -55,7 +60,10 @@
                         </KeepAlive>
                     </template>
                     <template #fallback>
-                        <div class="flex-1 flex items-center justify-center">
+                        <div
+                            id="page-loading-fallback"
+                            class="flex-1 flex items-center justify-center"
+                        >
                             <div class="text-sm opacity-70">
                                 Loading page...
                             </div>
@@ -65,30 +73,37 @@
             </div>
         </ClientOnly>
 
-        <div ref="bottomNavRef" class="shrink-0 flex flex-col gap-2">
+        <div
+            id="nav-bottom-section"
+            ref="bottomNavRef"
+            class="shrink-0 flex flex-col gap-2"
+        >
             <div
                 v-if="sidebarFooterActions.length"
-                class="flex flex-wrap gap-2"
+                class="footer-actions-wrapper flex flex-wrap gap-2"
             >
                 <UTooltip
                     v-for="entry in sidebarFooterActions"
                     :key="`sidebar-footer-${entry.action.id}`"
                     :delay-duration="0"
                     :text="entry.action.tooltip || entry.action.label"
+                    class="footer-action-item"
                 >
                     <UButton
-                        size="xs"
-                        variant="ghost"
+                        :id="`btn-footer-${entry.action.id}`"
+                        v-bind="footerActionButtonProps"
                         :color="(entry.action.color || 'neutral') as any"
                         :square="!entry.action.label"
                         :disabled="entry.disabled"
-                        class="pointer-events-auto"
                         @click="emit('sidebar-footer-action', entry)"
                     >
-                        <UIcon :name="entry.action.icon" class="w-4 h-4" />
+                        <UIcon
+                            :name="entry.action.icon"
+                            class="footer-icon w-4 h-4"
+                        />
                         <span
                             v-if="entry.action.label"
-                            class="ml-1 text-xs font-medium"
+                            class="footer-label ml-1 text-xs font-medium"
                         >
                             {{ entry.action.label }}
                         </span>
@@ -109,6 +124,7 @@ import {
     type SidebarPageControls,
     provideSidebarPageControls,
 } from '~/composables/sidebar/useSidebarEnvironment';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SideNavHeader from '~/components/sidebar/SideNavHeader.vue';
 import SidebarHomePage from '~/components/sidebar/SidebarHomePage.vue';
 import type { Post, Project } from '~/db';
@@ -201,6 +217,22 @@ const expandedProjectsRef = computed(() => props.expandedProjects);
 const activeThreadIdsRef = computed(() => props.activeThreadIds);
 const activeDocumentIdsRef = computed(() => props.activeDocumentIds);
 const footerActionsRef = computed(() => props.sidebarFooterActions);
+
+// Footer action button theme props
+const footerActionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.footer-action',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'xs' as const,
+        variant: 'ghost' as const,
+        class: 'pointer-events-auto',
+        ...(overrides.value as any),
+    };
+});
 
 // Create environment for child components
 const environment: SidebarEnvironment = {

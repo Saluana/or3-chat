@@ -57,6 +57,7 @@ export interface ResolvedOverride {
  */
 export class RuntimeResolver {
     private overrides: CompiledOverride[];
+    private overrideIndex: Map<string, CompiledOverride[]>;
     private propMaps: PropClassMaps;
     private themeName: string;
 
@@ -70,6 +71,16 @@ export class RuntimeResolver {
         this.overrides = [...compiledTheme.overrides].sort(
             (a, b) => b.specificity - a.specificity
         );
+
+        // Build index by component type for fast lookup
+        this.overrideIndex = new Map();
+        for (const override of this.overrides) {
+            const key = override.component;
+            if (!this.overrideIndex.has(key)) {
+                this.overrideIndex.set(key, []);
+            }
+            this.overrideIndex.get(key)!.push(override);
+        }
 
         // Store prop-to-class mappings (merge with defaults)
         this.propMaps = {
@@ -90,10 +101,13 @@ export class RuntimeResolver {
      */
     resolve(params: ResolveParams): ResolvedOverride {
         try {
-            // Find all matching overrides
+            // Find all matching overrides using the index
             const matching: CompiledOverride[] = [];
-
-            for (const override of this.overrides) {
+            
+            // Only check overrides for this component type
+            const candidates = this.overrideIndex.get(params.component) || [];
+            
+            for (const override of candidates) {
                 if (this.matches(override, params)) {
                     matching.push(override);
                 }
@@ -104,17 +118,25 @@ export class RuntimeResolver {
 
             if (import.meta.dev && matching.length > 0) {
                 const primarySelector = matching[0]?.selector;
+                
+                // Use getters for lazy evaluation - only allocate strings when accessed
                 if (
                     primarySelector &&
                     merged.props['data-theme-target'] === undefined
                 ) {
-                    merged.props['data-theme-target'] = primarySelector;
+                    Object.defineProperty(merged.props, 'data-theme-target', {
+                        get() { return primarySelector; },
+                        enumerable: true,
+                        configurable: true,
+                    });
                 }
 
                 if (merged.props['data-theme-matches'] === undefined) {
-                    merged.props['data-theme-matches'] = matching
-                        .map((override) => override.selector)
-                        .join(',');
+                    Object.defineProperty(merged.props, 'data-theme-matches', {
+                        get() { return matching.map(o => o.selector).join(','); },
+                        enumerable: true,
+                        configurable: true,
+                    });
                 }
             }
 
@@ -166,9 +188,12 @@ export class RuntimeResolver {
         }
 
         // Context must match (if specified in override)
+        // If override has a context, params MUST have the same context
         // If override has no context, it's a global override and matches any context
-        if (override.context && override.context !== params.context) {
-            return false;
+        if (override.context) {
+            if (!params.context || override.context !== params.context) {
+                return false;
+            }
         }
 
         // Identifier must match (if specified in override)

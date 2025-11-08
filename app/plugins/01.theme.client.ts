@@ -2,6 +2,11 @@ import { ref, type Ref } from 'vue';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme } from '~/theme/_shared/types';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
+import {
+    applyThemeClasses,
+    removeThemeClasses,
+    loadThemeCSS,
+} from '~/theme/_shared/css-selector-runtime';
 
 export interface ThemePlugin {
     set: (name: string) => void;
@@ -152,6 +157,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     overrides: compileOverridesRuntime(
                         definition.overrides || {}
                     ),
+                    cssSelectors: definition.cssSelectors,
                     ui: definition.ui,
                     propMaps: definition.propMaps,
                 };
@@ -257,13 +263,34 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             return;
         }
 
+        // Remove classes from previous theme
+        const previousTheme = themeRegistry.get(activeTheme.value);
+        if (previousTheme?.cssSelectors) {
+            removeThemeClasses(previousTheme.cssSelectors);
+        }
+
         activeTheme.value = target;
         localStorage.setItem(activeThemeStorageKey, target);
         writeActiveThemeCookie(target);
 
+        // Load CSS file and apply classes for new theme
         const theme = themeRegistry.get(target);
-        if (theme?.cssVariables) {
-            // TODO: Inject CSS variables into document
+        if (theme) {
+            // Load CSS file (build-time generated styles)
+            await loadThemeCSS(target);
+
+            // Set data-theme attribute (activates CSS selectors)
+            document.documentElement.setAttribute('data-theme', target);
+
+            // Apply runtime classes (Tailwind utilities)
+            if (theme.cssSelectors) {
+                applyThemeClasses(target, theme.cssSelectors);
+            }
+
+            // Inject CSS variables if present
+            if (theme.cssVariables) {
+                // TODO: Inject CSS variables into document
+            }
         }
     };
 
@@ -323,4 +350,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     nuxtApp.provide('theme', themeApi);
+
+    // Auto-apply theme classes on page navigation (for lazy-loaded components)
+    nuxtApp.hook('page:finish', () => {
+        if (import.meta.client) {
+            const theme = themeRegistry.get(activeTheme.value);
+            if (theme?.cssSelectors) {
+                // Use nextTick to ensure DOM is ready
+                import('vue').then(({ nextTick }) => {
+                    nextTick(() => {
+                        applyThemeClasses(
+                            activeTheme.value,
+                            theme.cssSelectors!
+                        );
+                    });
+                });
+            }
+        }
+    });
 });

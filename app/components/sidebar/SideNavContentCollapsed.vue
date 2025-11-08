@@ -1,9 +1,12 @@
 <template>
     <div
+        id="nav-collapsed-container"
         class="flex min-w-[64px] max-w-[64px] flex-col justify-between h-[calc(100dvh-49.818px)] relative"
     >
-        <div class="px-1 pt-2 flex flex-col space-y-2">
-            <div class="flex items-center justify-center w-full pr-0.5">
+        <div id="nav-top-section" class="px-1 pt-2 flex flex-col space-y-2">
+            <div
+                class="new-chat-wrapper flex items-center justify-center w-full pr-0.5"
+            >
                 <UTooltip
                     :delay-duration="0"
                     :content="{
@@ -13,6 +16,7 @@
                 >
                     <UButton
                         v-bind="newChatButtonProps"
+                        id="btn-new-chat"
                         class="flex item-center justify-center"
                         :ui="{
                             base: 'w-[38.5px]! h-[39px]',
@@ -23,6 +27,7 @@
                 </UTooltip>
             </div>
             <UTooltip
+                id="tooltip-search"
                 :delay-duration="0"
                 :content="{
                     side: 'right',
@@ -31,6 +36,7 @@
             >
                 <UButton
                     v-bind="searchButtonProps"
+                    id="btn-search"
                     class="flex item-center justify-center"
                     :ui="{
                         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
@@ -40,6 +46,7 @@
                 ></UButton>
             </UTooltip>
             <UTooltip
+                id="tooltip-doc"
                 :delay-duration="0"
                 :content="{
                     side: 'right',
@@ -48,6 +55,7 @@
             >
                 <UButton
                     v-bind="newDocButtonProps"
+                    id="btn-new-doc"
                     class="flex item-center justify-center"
                     :ui="{
                         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
@@ -57,6 +65,7 @@
                 />
             </UTooltip>
             <UTooltip
+                id="tooltip-project"
                 :delay-duration="0"
                 :content="{
                     side: 'right',
@@ -65,6 +74,7 @@
             >
                 <UButton
                     v-bind="newProjectButtonProps"
+                    id="btn-new-project"
                     class="flex item-center justify-center"
                     :ui="{
                         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
@@ -75,8 +85,12 @@
             </UTooltip>
 
             <ClientOnly>
-                <div class="pt-2 flex flex-col space-y-2 border-t-2">
+                <div
+                    id="nav-pages-section"
+                    class="pt-2 flex flex-col space-y-2 border-t-2"
+                >
                     <UTooltip
+                        id="tooltip-home"
                         :delay-duration="0"
                         :content="{
                             side: 'right',
@@ -84,6 +98,7 @@
                         text="Home"
                     >
                         <UButton
+                            id="btn-home"
                             size="md"
                             class="flex item-center justify-center"
                             icon="pixelarticons:home"
@@ -107,8 +122,10 @@
                         }"
                         :delay-duration="0"
                         :text="page.label"
+                        class="page-nav-item"
                     >
                         <UButton
+                            :id="`btn-page-${page.id}`"
                             size="md"
                             class="flex item-center justify-center"
                             :icon="page.icon || 'pixelarticons:view-grid'"
@@ -125,9 +142,13 @@
                 </div>
             </ClientOnly>
         </div>
-        <div class="px-1 pt-2 flex flex-col space-y-2 mb-2">
+        <div
+            id="nav-middle-section"
+            class="px-1 pt-2 flex flex-col space-y-2 mb-2"
+        >
             <UButton
                 v-bind="dashboardButtonProps"
+                id="btn-dashboard"
                 class="flex item-center justify-center"
                 :ui="{
                     base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
@@ -137,6 +158,7 @@
             ></UButton>
         </div>
         <div
+            id="nav-footer-section"
             v-if="sidebarFooterActions.length"
             class="px-1 pb-2 flex flex-col space-y-2"
         >
@@ -145,8 +167,10 @@
                 :key="`sidebar-collapsed-footer-${entry.action.id}`"
                 :delay-duration="0"
                 :text="entry.action.tooltip || entry.action.label"
+                class="footer-action-item"
             >
                 <UButton
+                    :id="`btn-footer-${entry.action.id}`"
                     size="md"
                     variant="ghost"
                     :color="(entry.action.color || 'neutral') as any"
@@ -161,15 +185,24 @@
                     "
                     @click="() => handleSidebarFooterAction(entry)"
                 >
-                    <UIcon :name="entry.action.icon" class="w-5 h-5" />
-                    <span v-if="entry.action.label" class="text-xs font-medium">
+                    <UIcon
+                        :name="entry.action.icon"
+                        class="footer-icon w-5 h-5"
+                    />
+                    <span
+                        v-if="entry.action.label"
+                        class="footer-label text-xs font-medium"
+                    >
                         {{ entry.action.label }}
                     </span>
                 </UButton>
             </UTooltip>
         </div>
         <ClientOnly>
-            <SideBottomNav @toggle-dashboard="emit('toggle-dashboard')" />
+            <SideBottomNav
+                id="bottom-nav"
+                @toggle-dashboard="emit('toggle-dashboard')"
+            />
         </ClientOnly>
     </div>
 </template>

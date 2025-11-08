@@ -277,9 +277,14 @@ export default defineTheme({
             variant: 'outline',
             size: 'md',
         },
+        'button#sidebar.footer-action': {
+            class: 'retro-btn pointer-events-auto',
+            variant: 'ghost',
+            size: 'xs',
+        },
 
         'button#chat.send': {
-            class: 'retro-btn',
+            class: 'retro-btn text-white! dark:text-black!',
             variant: 'solid',
             size: 'sm',
             color: 'primary',
@@ -326,6 +331,25 @@ export default defineTheme({
             class: 'retro-btn',
             variant: 'soft',
             size: 'sm',
+        },
+
+        // Model select menu (USelectMenu component)
+        'selectmenu#chat.model-select': {
+            class: 'h-[32px] retro-shadow border-2 border-(--md-inverse-surface) rounded-[3px] text-sm px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
+            ui: {
+                content:
+                    'border-2 border-(--md-inverse-surface) rounded-[3px] w-[320px]',
+                input: 'border-0 rounded-none!',
+                arrow: 'h-[18px] w-[18px]',
+                itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
+            },
+            searchInput: {
+                icon: 'pixelarticons:search',
+                ui: {
+                    base: 'border-0 border-b-1 rounded-none!',
+                    leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
+                },
+            },
         },
 
         // Message action buttons (all buttons in message context)
@@ -383,6 +407,16 @@ export default defineTheme({
             class: '',
         },
 
+        'button#message.reasoning-toggle': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'sm',
+        },
+
+        'button#message.collapse-attachments': {
+            class: 'text-xs underline',
+        },
+
         'div#message.user-container': {
             // User message container styling
             class: '',
@@ -391,6 +425,79 @@ export default defineTheme({
         'div#message.assistant-container': {
             // Assistant message container styling
             class: '',
+        },
+
+        // Modal buttons (System Prompts Modal)
+        'button.modal': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+        },
+
+        'button#modal.new-prompt': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+            color: 'primary',
+        },
+
+        'button#modal.clear-active': {
+            class: 'retro-btn',
+            variant: 'outline',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#modal.select-prompt': {
+            class: 'retro-btn',
+            size: 'sm',
+        },
+
+        // Settings switches (all switches in settings context)
+        'switch.settings': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        'switch#settings.web-search': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        'switch#settings.thinking': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        // Tool switches (dynamic - will match any tool)
+        'switch#settings.tool-*': {
+            color: 'primary',
+            class: 'w-full',
+        },
+
+        // Settings buttons
+        'button.settings': {
+            variant: 'ghost',
+            class: 'justify-between shadow-none! px-2! text-(--md-inverse-surface) border-x-0! border-t-0! border-b-1! last:border-b-0! rounded-none! w-full',
+            ui: {
+                trailingIcon: 'w-[20px] h-[20px] shrink-0',
+            },
+        },
+
+        'button#settings.system-prompts': {
+            variant: 'ghost',
+            block: true,
+            trailing: true,
+            trailingIcon: 'pixelarticons:script-text',
+            class: 'flex justify-between w-full items-center py-1 px-2 border-b',
+        },
+
+        'button#settings.model-catalog': {
+            variant: 'ghost',
+            block: true,
+            trailing: true,
+            trailingIcon: 'pixelarticons:android',
+            class: 'flex justify-between w-full items-center py-1 px-2 rounded-[3px]',
         },
 
         // Dashboard buttons
@@ -413,6 +520,125 @@ export default defineTheme({
             color: 'primary',
         },
 
+        // AI Page buttons
+        'button#dashboard.ai.save-prompt': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.ai.model-mode': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.ai.model-item': {
+            class: 'retro-btn',
+        },
+
+        'button#dashboard.ai.clear-model': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.ai.reset': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        // Theme Page buttons
+        'button#dashboard.theme.mode': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.preset': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.remove-layer': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.repeat': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.gradient': {
+            class: 'retro-chip',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.theme.reset-all': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        // Workspace Backup buttons
+        'button#dashboard.workspace.export': {
+            class: 'retro-btn',
+            variant: 'light',
+        },
+
+        'button#dashboard.workspace.browse': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+        },
+
+        'button#dashboard.workspace.clear-file': {
+            class: 'retro-btn',
+            variant: 'basic',
+            size: 'sm',
+            color: 'error',
+        },
+
+        'button#dashboard.workspace.import-mode': {
+            class: '',
+            variant: 'ghost',
+            color: 'primary',
+        },
+
+        'button#dashboard.workspace.import': {
+            class: 'retro-btn',
+            variant: 'light',
+            color: 'primary',
+        },
+
+        // Dashboard navigation buttons
+        'button#dashboard.back': {
+            class: '',
+            variant: 'subtle',
+            color: 'primary',
+            size: 'sm',
+        },
+
+        'button#dashboard.landing-page': {
+            class: '',
+        },
+
+        'button#dashboard.plugin-icon': {
+            class: '',
+        },
+
+        // AI page input
+        'input#dashboard.ai.model-search': {
+            class: '',
+            type: 'text',
+        },
+
         // Document toolbar buttons
         'button#document.toolbar': {
             class: 'retro-btn',
@@ -424,6 +650,35 @@ export default defineTheme({
             class: 'retro-btn',
             variant: 'soft',
             size: 'sm',
+        },
+
+        'button#document.retry': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'md',
+            color: 'primary',
+        },
+
+        'button#document.search-retry': {
+            class: 'retro-btn',
+            variant: 'solid',
+            size: 'sm',
+            color: 'primary',
+        },
+
+        // Document inputs
+        'input#document.title': {
+            class: 'retro-input',
+            variant: 'outline',
+            size: 'md',
+            ui: {
+                root: 'shadow-none! border-0! bg-transparent! rounded-[3px] px-2',
+            },
+        },
+
+        // Document search result cards
+        'card#document.search-result': {
+            class: 'cursor-pointer hover:border-[var(--md-primary)] transition-colors',
         },
 
         // Global input styling
@@ -465,5 +720,30 @@ export default defineTheme({
         'button[data-copy]': {
             class: 'retro-btn-copy',
         },
+    },
+
+    // CSS Selectors for direct DOM targeting
+    // These target elements that can't easily be integrated with the component override system
+    cssSelectors: {
+        // Example: Third-party Monaco editor styling
+        // '.monaco-editor': {
+        //     style: {
+        //         border: '2px solid var(--md-outline)',
+        //         borderRadius: '3px',
+        //     },
+        //     class: 'retro-shadow',
+        // },
+        // Example: TipTap editor styling
+        // '.tiptap': {
+        //     style: {
+        //         fontFamily: 'VT323, monospace',
+        //         fontSize: '20px',
+        //     },
+        //     class: 'prose prose-retro',
+        // },
+        // Example: Modal overlays
+        // '.modal-overlay': {
+        //     class: 'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
+        // },
     },
 });

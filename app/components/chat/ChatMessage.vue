@@ -1,11 +1,13 @@
 <template>
     <div
         :class="[
+            `cm-${roleVariant}`,
+            'chat-message-container',
             outerClass,
-            (messageContainerProps as any)?.class || '',
+            messageContainerProps?.class || '',
         ]"
-        :data-theme-target="(messageContainerProps as any)?.['data-theme-target']"
-        :data-theme-matches="(messageContainerProps as any)?.['data-theme-matches']"
+        :data-theme-target="messageContainerProps?.['data-theme-target']"
+        :data-theme-matches="messageContainerProps?.['data-theme-matches']"
         :style="{
             paddingRight:
                 props.message.role === 'user' && hashList.length && !expanded
@@ -17,10 +19,14 @@
         <!-- Compact thumb (collapsed state) -->
         <button
             v-if="props.message.role === 'user' && hashList.length && !expanded"
-            :class="(attachmentThumbButtonProps as any)?.class || ''"
-            :data-theme-target="(attachmentThumbButtonProps as any)?.['data-theme-target']"
-            :data-theme-matches="(attachmentThumbButtonProps as any)?.['data-theme-matches']"
-            class="absolute -top-2 -right-2 border-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            :class="attachmentThumbButtonProps?.class || ''"
+            :data-theme-target="
+                attachmentThumbButtonProps?.['data-theme-target']
+            "
+            :data-theme-matches="
+                attachmentThumbButtonProps?.['data-theme-matches']
+            "
+            class="attachment-thumb-button absolute -top-2 -right-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
             aria-label="Show attachments"
@@ -44,7 +50,7 @@
                 <img
                     :src="thumbnails[firstThumb!]?.url"
                     :alt="'attachment ' + firstThumb.slice(0, 6)"
-                    class="object-cover w-full h-full"
+                    class="attachment-thumb-image object-cover w-full h-full"
                     draggable="false"
                 />
             </template>
@@ -53,31 +59,46 @@
                     firstThumb && thumbnails[firstThumb]?.status === 'error'
                 "
             >
-                <span class="text-[10px] text-error">err</span>
+                <span class="attachment-thumb-error text-[10px] text-error"
+                    >err</span
+                >
             </template>
             <template v-else>
-                <span class="text-[10px] animate-pulse opacity-70">…</span>
+                <span
+                    class="attachment-thumb-loading text-[10px] animate-pulse opacity-70"
+                    >…</span
+                >
             </template>
             <span
                 v-if="hashList.length > 1"
-                class="absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
+                class="attachment-thumb-count absolute bottom-0 right-0 text-[14px] font-semibold bg-black/70 text-white px-1"
                 >+{{ hashList.length - 1 }}</span
             >
         </button>
 
-        <div v-if="!editing" :class="innerClass" ref="contentEl">
+        <div
+            v-if="!editing"
+            :class="[
+                'loading-wrapper',
+                `cm-content-${roleVariant}`,
+                innerClass,
+            ]"
+            ref="contentEl"
+        >
             <!-- Retro loader extracted to component -->
             <LoadingGenerating
                 v-if="props.message.role === 'assistant' && (props.message as any).pending && !hasContent && !message.reasoning_text"
-                class="animate-in"
+                class="loading-generating animate-in"
             />
             <div
+                class="reasoning-accordion-wrapper"
                 v-if="
                     props.message.role === 'assistant' &&
                     props.message.reasoning_text
                 "
             >
                 <LazyChatReasoningAccordion
+                    class="reasoning-accordion"
                     hydrate-on-visible
                     :content="props.message.reasoning_text"
                     :streaming="isStreamingReasoning as boolean"
@@ -97,11 +118,14 @@
 
             <div
                 v-if="hasContent"
-                class="message-body min-w-0 max-w-full overflow-x-hidden"
+                :class="[
+                    'message-body min-w-0 max-w-full overflow-x-hidden',
+                    `cm-body-${roleVariant}`,
+                ]"
             >
                 <div
                     v-if="props.message.role === 'user'"
-                    class="whitespace-pre-wrap relative"
+                    :class="['whitespace-pre-wrap relative', 'cm-text-user']"
                 >
                     <div
                         :class="{
@@ -124,7 +148,7 @@
                     v-else
                     :content="processedAssistantMarkdown"
                     :shiki-theme="currentShikiTheme"
-                    :class="streamMdClasses"
+                    :class="[streamMdClasses, 'cm-markdown-assistant']"
                     :allowed-image-prefixes="['data:image/']"
                     code-block-show-line-numbers
                     class="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0 prose-headings:first:mt-5!"
@@ -133,14 +157,18 @@
             </div>
         </div>
         <!-- Editing surface -->
-        <div v-else class="w-full" ref="editorRoot">
+        <div
+            v-else
+            :class="['w-full', `cm-editor-${roleVariant}`]"
+            ref="editorRoot"
+        >
             <LazyChatMessageEditor
                 hydrate-on-interaction="focus"
                 v-model="draft"
                 :autofocus="true"
                 :focus-delay="120"
             />
-            <div class="flex w-full justify-end gap-2 mt-2">
+            <div class="cm-editor-actions flex w-full justify-end gap-2 mt-2">
                 <UButton
                     v-bind="saveEditButtonProps"
                     @click="saveEdit"
@@ -165,14 +193,17 @@
         <!-- Action buttons: overlap bubble border half outside -->
         <div
             v-if="!editing"
-            class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap"
+            :class="[
+                'absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 flex z-10 whitespace-nowrap',
+                `cm-actions-${roleVariant}`,
+            ]"
         >
             <UButtonGroup
                 :class="{
                     'bg-primary': props.message.role === 'user',
                     'bg-white': props.message.role === 'assistant',
                 }"
-                class="rounded-[3px]"
+                class="cm-action-group rounded-[3px]"
             >
                 <UTooltip :delay-duration="0" text="Copy" :teleport="true">
                     <UButton
@@ -383,6 +414,10 @@ const messageContainerProps = computed(() => {
 
     return overrides.value;
 });
+
+const roleVariant = computed<'user' | 'assistant'>(() =>
+    props.message.role === 'user' ? 'user' : 'assistant'
+);
 
 const isStreamingReasoning = computed(() => {
     return props.message.reasoning_text && !hasContent.value;

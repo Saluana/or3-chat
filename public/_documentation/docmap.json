@@ -588,6 +588,12 @@
                     "path": "/themes/troubleshooting",
                     "category": "Guide",
                     "summary": "Comprehensive troubleshooting guide for OR3's refined theme system. Covers solutions for theme not applying, colors looking wrong, overrides not working, performance issues, TypeScript errors, CLI command failures, build errors, runtime errors, visual issues, browser compatibility problems, debugging techniques (enable debug logs, inspect resolver state, check CSS variables, test specificity), FAQ section, and bug reporting template."
+                },
+                {
+                    "name": "css-selectors.md",
+                    "path": "/themes/css-selectors",
+                    "category": "Reference",
+                    "summary": "In-depth reference for OR3's CSS-like selector syntax used in theming. Documents selector types (type, class, attribute, pseudo-class), combinators (descendant, child, adjacent sibling, general sibling), specificity calculation rules, examples of common patterns, limitations (no pseudo-elements, no complex selectors), and best practices for writing effective selectors."
                 }
             ]
         }
