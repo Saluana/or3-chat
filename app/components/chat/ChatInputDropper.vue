@@ -4,7 +4,7 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            'chat-input-main flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
@@ -14,28 +14,28 @@
         :data-theme-target="containerProps?.['data-theme-target']"
         :data-theme-matches="containerProps?.['data-theme-matches']"
     >
-        <div class="flex flex-col gap-3.5 m-3.5">
+        <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
             <!-- Main Input Area -->
             <div class="relative">
                 <div
-                    :class="[
-                        'max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]',
-                        editorProps?.class || '',
-                    ]"
+                    class="chat-input-editor-container max-h-[160px] md:max-h-96 w-full overflow-y-auto break-words min-h-[1rem] md:min-h-[3rem]"
+                    :class="editorProps?.class || ''"
                     :data-theme-target="editorProps?.['data-theme-target']"
                     :data-theme-matches="editorProps?.['data-theme-matches']"
                 >
                     <!-- TipTap Editor -->
                     <EditorContent
+                        class="chat-input-editor prosemirror-host"
                         :editor="editor as Editor"
-                        class="prosemirror-host"
                         :data-theme-target="editorProps?.['data-theme-target']"
-                        :data-theme-matches="editorProps?.['data-theme-matches']"
+                        :data-theme-matches="
+                            editorProps?.['data-theme-matches']
+                        "
                     ></EditorContent>
 
                     <div
+                        class="chat-input-loading-indicator absolute top-1 right-1 flex items-center gap-2"
                         v-if="loading"
-                        class="absolute top-1 right-1 flex items-center gap-2"
                     >
                         <UIcon
                             name="pixelarticons:loader"
@@ -46,12 +46,14 @@
             </div>
 
             <!-- Bottom Controls -->
-            <div class="flex gap-2.5 w-full items-center">
+            <div
+                class="chat-input-bottom-controls flex gap-2.5 w-full items-center"
+            >
                 <div
-                    class="relative flex-1 flex items-center gap-2 shrink min-w-0"
+                    class="chat-input-bottom-controls-left relative flex-1 flex items-center gap-2 shrink min-w-0"
                 >
                     <!-- Attachment Button -->
-                    <div class="relative shrink-0">
+                    <div class="chat-input-attachment-btn relative shrink-0">
                         <UButton
                             v-bind="attachButtonProps"
                             @click="triggerFileInput"
@@ -64,8 +66,8 @@
                     </div>
 
                     <!-- Settings Button (stub) -->
-                    <div class="relative shrink-0">
-                        <UPopover id="chat-input-settings-popover">
+                    <div class="chat-input-settings-btn relative shrink-0">
+                        <UPopover class="chat-input-settings-popover">
                             <UButton
                                 v-bind="settingsButtonProps"
                                 label="Open"
@@ -84,9 +86,15 @@
                                     :loading="loading"
                                     :streaming="props.streaming"
                                     v-model:model="selectedModel"
-                                    v-model:web-search-enabled="webSearchEnabled"
-                                    @open-system-prompts="showSystemPrompts = true"
-                                    @open-model-catalog="showModelCatalog = true"
+                                    v-model:web-search-enabled="
+                                        webSearchEnabled
+                                    "
+                                    @open-system-prompts="
+                                        showSystemPrompts = true
+                                    "
+                                    @open-model-catalog="
+                                        showModelCatalog = true
+                                    "
                                 />
                             </template>
                         </UPopover>
@@ -94,8 +102,8 @@
                 </div>
 
                 <div
+                    class="chat-input-composer-actions flex items-center gap-1 shrink-0"
                     v-if="composerActions.length"
-                    class="flex items-center gap-1 shrink-0"
                 >
                     <UTooltip
                         v-for="entry in composerActions"
@@ -136,8 +144,9 @@
                 />
 
                 <!-- Send / Stop Button -->
-                <div>
+                <div class="chat-input-bottom-controls-right">
                     <UButton
+                        class="chat-input-send-btn"
                         v-if="!props.streaming"
                         v-bind="sendButtonProps"
                         @click="handleSend"
@@ -151,6 +160,7 @@
                         <UIcon name="pixelarticons:arrow-up" class="w-4 h-4" />
                     </UButton>
                     <UButton
+                        class="chat-input-stop-btn"
                         v-else
                         v-bind="stopButtonProps"
                         @click="emit('stop-stream')"
@@ -166,7 +176,7 @@
         <!-- Attachment Thumbnails (Images + Large Text Blocks) -->
         <div
             v-if="uploadedImages.length > 0 || largeTextBlocks.length > 0"
-            class="mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+            class="chat-input-attachments mx-3.5 mb-3.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
         >
             <!-- Images -->
             <div
@@ -174,23 +184,23 @@
                     (att: any) => att.kind === 'image'
                 )"
                 :key="'img-' + index"
-                class="relative group aspect-square"
+                class="chat-input-attachment-image-container relative group aspect-square"
             >
                 <img
                     :src="image.url"
                     :alt="'Uploaded Image ' + (index + 1)"
-                    class="w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+                    class="chat-input-attachment-image w-full h-full object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                 />
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-image-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
                 >
                     <UIcon name="i-lucide:x" class="w-3.5 h-3.5" />
                 </button>
                 <div
-                    class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
+                    class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-200 rounded-b-lg"
                 >
                     {{ image.name }}
                 </div>
@@ -201,24 +211,24 @@
                     (att: any) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="chat-input-attachment-pdf-container relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
             >
                 <div
-                    class="flex flex-col items-center justify-center w-full h-full"
+                    class="chat-input-attachment-pdf-inner flex flex-col items-center justify-center w-full h-full"
                 >
                     <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        class="chat-input-attachment-pdf-inner-label text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
                         >PDF</span
                     >
                     <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        class="chat-input-attachment-pdf-inner-name text-[11px] leading-snug line-clamp-4 px-1 break-words"
                         :title="pdf.name"
                         >{{ pdf.name }}</span
                     >
                 </div>
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-pdf-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove PDF"
                     :disabled="loading"
                 >
@@ -229,28 +239,29 @@
             <div
                 v-for="(block, tIndex) in largeTextBlocks"
                 :key="'txt-' + block.id"
-                class="relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="chat-input-attachment-text-container relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
             >
                 <div
-                    class="flex flex-col items-center justify-center w-full h-full"
+                    class="chat-input-attachment-text-inner flex flex-col items-center justify-center w-full h-full"
                 >
                     <span
-                        class="text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
+                        class="chat-input-attachment-text-inner-label text-[10px] font-semibold tracking-wide uppercase bg-black text-white px-1 py-0.5 rounded mb-1"
                         >TXT</span
                     >
                     <span
-                        class="text-[11px] leading-snug line-clamp-4 px-1 break-words"
+                        class="chat-input-attachment-text-inner-name text-[11px] leading-snug line-clamp-4 px-1 wrap-break-word"
                         :title="block.previewFull"
                     >
                         {{ block.preview }}
                     </span>
-                    <span class="mt-1 text-[10px] opacity-70"
+                    <span
+                        class="chat-input-attachment-text-inner-wordcount mt-1 text-[10px] opacity-70"
                         >{{ block.wordCount }}w</span
                     >
                 </div>
                 <button
                     @click="removeTextBlock(tIndex)"
-                    class="absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-text-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove text block"
                     :disabled="loading"
                 >
@@ -262,7 +273,7 @@
         <!-- Drag and Drop Overlay -->
         <div
             v-if="isDragging"
-            class="absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+            class="chat-input-drag-and-drop-overlay absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
         >
             <div class="text-center">
                 <UIcon
@@ -317,7 +328,6 @@ const props = defineProps<{
     streaming?: boolean; // assistant response streaming
     paneId?: string; // provided by ChatContainer so the bridge can key this input
 }>();
-
 
 const { favoriteModels, getFavoriteModels } = useModelStore();
 const { settings: aiSettings } = useAiSettings();

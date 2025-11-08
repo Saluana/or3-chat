@@ -1,7 +1,8 @@
 <template>
     <!-- Wrapper around virtua's virtual list for messages -->
-    <div ref="root" class="flex flex-col min-w-0" :class="wrapperClass">
+    <div ref="root" id="chat-message-list" class="chat-message-list flex flex-col min-w-0" :class="wrapperClass">
         <Virtualizer
+            class="chat-message-list-virtualizer"
             :data="messages"
             :itemSize="effectiveItemSize || undefined"
             :overscan="overscan"

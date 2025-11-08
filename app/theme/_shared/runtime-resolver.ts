@@ -118,17 +118,25 @@ export class RuntimeResolver {
 
             if (import.meta.dev && matching.length > 0) {
                 const primarySelector = matching[0]?.selector;
+                
+                // Use getters for lazy evaluation - only allocate strings when accessed
                 if (
                     primarySelector &&
                     merged.props['data-theme-target'] === undefined
                 ) {
-                    merged.props['data-theme-target'] = primarySelector;
+                    Object.defineProperty(merged.props, 'data-theme-target', {
+                        get() { return primarySelector; },
+                        enumerable: true,
+                        configurable: true,
+                    });
                 }
 
                 if (merged.props['data-theme-matches'] === undefined) {
-                    merged.props['data-theme-matches'] = matching
-                        .map((override) => override.selector)
-                        .join(',');
+                    Object.defineProperty(merged.props, 'data-theme-matches', {
+                        get() { return matching.map(o => o.selector).join(','); },
+                        enumerable: true,
+                        configurable: true,
+                    });
                 }
             }
 

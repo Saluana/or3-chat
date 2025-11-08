@@ -17,19 +17,19 @@
             type="button"
         >
             <UIcon name="pixelarticons:lightbulb-on" class="mr-1" />
-            <span v-if="!pending || content">
+            <span class="reasoning-toggle-text" v-if="!pending || content">
                 {{
                     expanded
                         ? expandedLabel || 'Hide reasoning'
                         : collapsedLabel || 'Show reasoning'
                 }}
             </span>
-            <span v-else class="inline-flex items-center gap-1">
+            <span  v-else class="reasoning-toggle-loading inline-flex items-center gap-1">
                 <LoadingGenerating style="width: 120px; min-height: 28px" />
             </span>
             <span
                 v-if="!expanded && content && !streaming"
-                class="count text-xs opacity-70 ml-2"
+                class="reasoning-count count text-xs opacity-70 ml-2"
             >
                 ({{ charCount }} chars)
             </span>

@@ -1,13 +1,13 @@
 <template>
     <div
-        :class="['flex flex-col w-[320px]', containerProps?.class || '']"
+        :class="['chat-settings-popover flex flex-col w-[320px]', containerProps?.class || '']"
         :data-theme-target="containerProps?.['data-theme-target']"
         :data-theme-matches="containerProps?.['data-theme-matches']"
     >
         <!-- Model Selector extracted -->
         <div
             v-if="containerWidth && containerWidth < 400"
-            class="flex justify-between w-full items-center py-1 px-2"
+            class="chat-settings-popover-model-selector flex justify-between w-full items-center py-1 px-2"
         >
             <LazyChatModelSelect
                 hydrate-on-interaction="focus"
@@ -17,7 +17,7 @@
             />
         </div>
         <div
-            class="flex justify-between w-full items-center py-1 px-2 border-b"
+            class="chat-settings-popover-switch flex justify-between w-full items-center py-1 px-2 border-b"
         >
             <USwitch
                 v-bind="webSearchSwitchProps"
@@ -34,13 +34,13 @@
         </div>
 
         <!-- Tool Toggles Section -->
-        <div v-if="registeredTools.length > 0" class="border-b">
+        <div v-if="registeredTools.length > 0" class="chat-settings-popover-tools border-b">
             <div
                 v-for="tool in registeredTools"
                 :key="tool.name"
-                class="flex flex-col py-1 px-2"
+                class="chat-settings-popover-tool flex flex-col py-1 px-2"
             >
-                <div class="flex justify-between w-full items-center">
+                <div class="chat-settings-popover-tool-switch flex justify-between w-full items-center">
                     <USwitch
                         v-bind="getToolSwitchProps(tool.name)"
                         :label="
@@ -68,7 +68,7 @@
                         tool.definition.function.description
                     "
                     :id="`tool-desc-${tool.name}`"
-                    class="text-xs opacity-70 mt-0.5 px-1"
+                    class="chat-settings-popover-tool-description text-xs opacity-70 mt-0.5 px-1"
                 >
                     {{
                         tool.definition.ui?.descriptionHint ||
@@ -80,12 +80,14 @@
 
         <UButton
             v-bind="systemPromptsButtonProps"
+            class="chat-settings-popover-button"
             @click="$emit('open-system-prompts')"
         >
             <span class="px-1">System prompts</span>
         </UButton>
         <UButton
             v-bind="modelCatalogButtonProps"
+            class="chat-settings-popover-button"
             @click="$emit('open-model-catalog')"
         >
             <span class="px-1">Model Catalog</span>
