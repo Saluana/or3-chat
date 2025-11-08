@@ -116,16 +116,35 @@ export class RuntimeResolver {
             // Merge matching overrides by specificity
             const merged = this.merge(matching);
 
-            if (import.meta.dev && matching.length > 0) {
-                const primarySelector = matching[0]?.selector;
-                
-                // Use getters for lazy evaluation - only allocate strings when accessed
+            if (import.meta.dev) {
+                const fallbackSelectors: string[] = [];
+                if (params.identifier) {
+                    fallbackSelectors.push(
+                        `${params.component}#${params.identifier}`
+                    );
+                }
+                if (params.context) {
+                    fallbackSelectors.push(
+                        `${params.component}.${params.context}`
+                    );
+                }
+                fallbackSelectors.push(params.component);
+
+                const primarySelector =
+                    matching[0]?.selector || fallbackSelectors[0];
+                const matchesList =
+                    matching.length > 0
+                        ? matching.map((o) => o.selector)
+                        : fallbackSelectors;
+
                 if (
                     primarySelector &&
                     merged.props['data-theme-target'] === undefined
                 ) {
                     Object.defineProperty(merged.props, 'data-theme-target', {
-                        get() { return primarySelector; },
+                        get() {
+                            return primarySelector;
+                        },
                         enumerable: true,
                         configurable: true,
                     });
@@ -133,7 +152,9 @@ export class RuntimeResolver {
 
                 if (merged.props['data-theme-matches'] === undefined) {
                     Object.defineProperty(merged.props, 'data-theme-matches', {
-                        get() { return matching.map(o => o.selector).join(','); },
+                        get() {
+                            return matchesList.join(',');
+                        },
                         enumerable: true,
                         configurable: true,
                     });
