@@ -567,7 +567,7 @@ async function restoreSelected() {
             </h1>
             <div class="flex items-center gap-2">
                 <button
-                    class="retro-btn px-3 py-1 text-sm flex items-center gap-1"
+                    class="theme-btn px-3 py-1 text-sm flex items-center gap-1"
                     type="button"
                     data-test="trash-toggle"
                     :aria-pressed="trashMode"
@@ -585,7 +585,7 @@ async function restoreSelected() {
                     {{ trashMode ? 'Show library' : 'Show trash' }}
                 </button>
                 <button
-                    class="retro-btn px-3 py-1 text-sm flex items-center gap-1"
+                    class="theme-btn px-3 py-1 text-sm flex items-center gap-1"
                     type="button"
                     data-test="multi-toggle"
                     @click="toggleSelectionMode"
@@ -607,7 +607,7 @@ async function restoreSelected() {
                 class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-2"
             >
                 <button
-                    class="retro-btn px-3 py-1 text-sm"
+                    class="theme-btn px-3 py-1 text-sm"
                     type="button"
                     data-test="multi-toggle"
                     @click="toggleSelectionMode"
@@ -617,7 +617,7 @@ async function restoreSelected() {
                 </button>
                 <template v-if="trashMode">
                     <button
-                        class="retro-btn px-3 py-1 text-sm"
+                        class="theme-btn px-3 py-1 text-sm"
                         type="button"
                         :disabled="!canSelectAll || isMutating"
                         @click="selectAllVisible"
@@ -629,7 +629,7 @@ async function restoreSelected() {
                         }}
                     </button>
                     <button
-                        class="retro-btn px-3 py-1 text-sm"
+                        class="theme-btn px-3 py-1 text-sm"
                         type="button"
                         :disabled="!hasSelection || isMutating"
                         @click="restoreSelected"
@@ -641,7 +641,7 @@ async function restoreSelected() {
                         }}
                     </button>
                     <button
-                        class="retro-btn px-3 py-1 text-sm"
+                        class="theme-btn px-3 py-1 text-sm"
                         type="button"
                         :disabled="!hasSelection || isMutating"
                         data-test="delete-selected"
@@ -656,7 +656,7 @@ async function restoreSelected() {
                 </template>
                 <template v-else>
                     <button
-                        class="retro-btn px-3 py-1 text-sm"
+                        class="theme-btn px-3 py-1 text-sm"
                         type="button"
                         :disabled="!hasSelection || isMutating"
                         @click="clearSelection"
@@ -664,7 +664,7 @@ async function restoreSelected() {
                         Clear
                     </button>
                     <button
-                        class="retro-btn px-3 py-1 text-sm"
+                        class="theme-btn px-3 py-1 text-sm"
                         type="button"
                         :disabled="!hasSelection || isMutating"
                         data-test="delete-selected"

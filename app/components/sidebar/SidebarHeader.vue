@@ -65,11 +65,11 @@ const sidebarToggleOverrides = theme
     : computed(() => ({} as Record<string, unknown>));
 
 const sidebarToggleFallback = {
-    class: 'retro-btn',
+    class: 'theme-btn',
     variant: 'ghost',
     size: 'xs',
     color: 'neutral',
-    ui: { base: 'retro-btn' },
+    ui: { base: 'theme-btn' },
 } as const;
 
 const sidebarToggleButtonProps = computed(() => ({

@@ -68,7 +68,7 @@
                             <div
                                 v-for="prompt in filteredPrompts"
                                 :key="prompt.id"
-                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 retro-shadow"
+                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 theme-shadow"
                                 :data-active="
                                     prompt.id === currentActivePromptId
                                         ? 'true'
@@ -159,9 +159,9 @@
                                             "
                                             :square="true"
                                             :ui="{
-                                                base: 'retro-btn px-1! text-nowrap',
+                                                base: 'theme-btn px-1! text-nowrap',
                                             }"
-                                            class="retro-btn"
+                                            class="theme-btn"
                                             aria-label="Toggle default prompt"
                                             @click.stop="
                                                 toggleDefault(prompt.id)
@@ -384,7 +384,7 @@ const newPromptButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         color: 'primary' as const,
-        class: 'retro-btn',
+        class: 'theme-btn',
         ...(overrides.value as any),
     };
 });

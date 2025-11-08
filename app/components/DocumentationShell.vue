@@ -557,7 +557,7 @@ function useDocsButtonProps(
 const sidebarToggleButtonProps = useDocsButtonProps(
     'docs.sidebar-toggle',
     {
-        class: 'docs-sidebar-toggle-btn retro-btn',
+        class: 'docs-sidebar-toggle-btn theme-btn',
         variant: 'basic',
         size: 'sm',
         square: true,
@@ -565,7 +565,7 @@ const sidebarToggleButtonProps = useDocsButtonProps(
     }
 );
 const headerThemeButtonProps = useDocsButtonProps('docs.theme-toggle', {
-    class: 'docs-theme-toggle-btn retro-btn',
+    class: 'docs-theme-toggle-btn theme-btn',
     variant: 'basic',
     size: 'sm',
     square: true,

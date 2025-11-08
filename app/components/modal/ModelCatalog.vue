@@ -38,7 +38,7 @@
                         <UButton
                             v-bind="refreshButtonProps"
                             :disabled="refreshing"
-                            class="model-catalog-refresh-btn retro-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
+                            class="model-catalog-refresh-btn theme-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
                             aria-label="Refresh model catalog"
                             :title="
                                 refreshing
@@ -81,7 +81,7 @@
                             <div
                                 v-for="m in row"
                                 :key="m.id"
-                                class="model-catalog-item group relative mb-5 retro-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                                class="model-catalog-item group relative mb-5 theme-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
                                 :data-model-id="m.id"
                             >
                                 <div

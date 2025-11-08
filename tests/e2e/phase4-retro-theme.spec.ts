@@ -27,8 +27,8 @@ test.describe('Retro Theme Visual Verification', () => {
         });
         
         // Verify retro styles are applied
-        // Check if retro-btn class exists
-        const retroBtn = await page.locator('.retro-btn').first();
+        // Check if theme-btn class exists
+        const retroBtn = await page.locator('.theme-btn').first();
         if (await retroBtn.count() > 0) {
             await expect(retroBtn).toBeVisible();
             
@@ -93,7 +93,7 @@ test.describe('Retro Theme Visual Verification', () => {
 
     test('Retro shadow utility class works', async ({ page }) => {
         // Find an element with retro-shadow class
-        const shadowElement = await page.locator('.retro-shadow').first();
+        const shadowElement = await page.locator('.theme-shadow').first();
         
         if (await shadowElement.count() > 0) {
             const styles = await shadowElement.evaluate((el) => {

@@ -26,7 +26,7 @@
             :data-theme-matches="
                 attachmentThumbButtonProps?.['data-theme-matches']
             "
-            class="attachment-thumb-button absolute -top-2 -right-2 border-[var(--md-inverse-surface)] retro-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            class="attachment-thumb-button absolute -top-2 -right-2 border-[var(--md-inverse-surface)] theme-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
             aria-label="Show attachments"
@@ -369,7 +369,7 @@ const saveEditButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         color: 'success' as const,
-        class: 'retro-btn',
+        class: 'theme-btn',
         ...(overrides.value as any),
     };
 });
@@ -385,7 +385,7 @@ const cancelEditButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         color: 'error' as const,
-        class: 'retro-btn',
+        class: 'theme-btn',
         ...(overrides.value as any),
     };
 });
@@ -436,9 +436,9 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] retro-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
+    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] theme-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full retro-shadow backdrop-blur-sm min-w-0':
+    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full theme-shadow backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',
 }));
 
@@ -466,7 +466,7 @@ const processedAssistantMarkdown = computed(() => {
     return (assistantMarkdown.value || '').replace(
         FILE_HASH_IMG_RE,
         (_m, h) =>
-            `<span class=\"or3-img-ph inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] border-2 border-[var(--md-inverse-surface)] retro-shadow opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
+            `<span class=\"or3-img-ph inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] border-2 border-[var(--md-inverse-surface)] theme-shadow opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
     );
 });
 
@@ -930,7 +930,7 @@ const streamMdClasses = [
 <style scoped>
 @import '~/assets/css/or3-prose.css';
 
-.retro-shadow {
+.theme-shadow {
     box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
 }
 

@@ -102,7 +102,51 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 }
 
 /* Retro utility classes moved to ~/theme/retro/styles.css */
-/* active-element and retro-shadow are still loaded from retro theme */
+/* active-element and theme-shadow are still loaded from retro theme */
+.theme-input,
+.theme-btn,
+.theme-btn-copy {
+	box-sizing: border-box;
+	font-family: inherit;
+	text-transform: none;
+}
+.theme-input {
+	height: 32px;
+	padding: 0 6px;
+	font-size: 12px;
+	line-height: 1;
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	background: var(--md-surface);
+	color: var(--md-on-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.theme-input:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+.theme-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 3px;
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	transition: transform 80ms ease, box-shadow 80ms ease;
+	cursor: pointer;
+}
+.theme-btn-copy {
+	padding: 0 8px;
+	font-size: 10px;
+	line-height: 1;
+	border-radius: 3px;
+	background: color-mix(in oklab, var(--md-surface) 70%, var(--md-surface-variant) 30%);
+	color: var(--md-on-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+.theme-shadow {
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
 
 /* Global thin colored scrollbars (WebKit + Firefox) */
 /* Firefox */

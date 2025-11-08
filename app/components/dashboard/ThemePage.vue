@@ -97,7 +97,7 @@
                     />
                     <div class="flex items-center gap-2">
                         <input
-                            class="retro-input w-24"
+                            class="theme-input w-24"
                             type="text"
                             spellcheck="false"
                             maxlength="9"
@@ -109,7 +109,7 @@
                         />
                         <button
                             type="button"
-                            class="retro-btn-copy"
+                            class="theme-btn-copy"
                             @click="copyColor('palettePrimary' as any)"
                             :disabled="
                                 !(settings as any).paletteEnabled ||
@@ -138,7 +138,7 @@
                     />
                     <div class="flex items-center gap-2">
                         <input
-                            class="retro-input w-24"
+                            class="theme-input w-24"
                             type="text"
                             spellcheck="false"
                             maxlength="9"
@@ -150,7 +150,7 @@
                         />
                         <button
                             type="button"
-                            class="retro-btn-copy"
+                            class="theme-btn-copy"
                             @click="copyColor('paletteSecondary' as any)"
                             :disabled="
                                 !(settings as any).paletteEnabled ||
@@ -179,7 +179,7 @@
                     />
                     <div class="flex items-center gap-2">
                         <input
-                            class="retro-input w-24"
+                            class="theme-input w-24"
                             type="text"
                             spellcheck="false"
                             maxlength="9"
@@ -191,7 +191,7 @@
                         />
                         <button
                             type="button"
-                            class="retro-btn-copy"
+                            class="theme-btn-copy"
                             @click="copyColor('paletteError' as any)"
                             :disabled="
                                 !(settings as any).paletteEnabled ||
@@ -220,7 +220,7 @@
                     />
                     <div class="flex items-center gap-2">
                         <input
-                            class="retro-input w-24"
+                            class="theme-input w-24"
                             type="text"
                             spellcheck="false"
                             maxlength="9"
@@ -232,7 +232,7 @@
                         />
                         <button
                             type="button"
-                            class="retro-btn-copy"
+                            class="theme-btn-copy"
                             @click="copyColor('paletteSurfaceVariant' as any)"
                             :disabled="
                                 !(settings as any).paletteEnabled ||
@@ -261,7 +261,7 @@
                     />
                     <div class="flex items-center gap-2">
                         <input
-                            class="retro-input w-24"
+                            class="theme-input w-24"
                             type="text"
                             spellcheck="false"
                             maxlength="9"
@@ -273,7 +273,7 @@
                         />
                         <button
                             type="button"
-                            class="retro-btn-copy"
+                            class="theme-btn-copy"
                             @click="copyColor('paletteBorder' as any)"
                             :disabled="
                                 !(settings as any).paletteEnabled ||
@@ -302,7 +302,7 @@
                     />
                     <div class="flex items-center gap-2">
                         <input
-                            class="retro-input w-24"
+                            class="theme-input w-24"
                             type="text"
                             spellcheck="false"
                             maxlength="9"
@@ -314,7 +314,7 @@
                         />
                         <button
                             type="button"
-                            class="retro-btn-copy"
+                            class="theme-btn-copy"
                             @click="copyColor('paletteSurface' as any)"
                             :disabled="
                                 !(settings as any).paletteEnabled ||
@@ -552,7 +552,7 @@
                 />
                 <div class="flex items-center gap-2">
                     <input
-                        class="retro-input w-24"
+                        class="theme-input w-24"
                         type="text"
                         spellcheck="false"
                         maxlength="9"
@@ -564,7 +564,7 @@
                     />
                     <button
                         type="button"
-                        class="retro-btn-copy"
+                        class="theme-btn-copy"
                         @click="copyColor('contentBg1Color')"
                         :disabled="
                             !settings.customBgColorsEnabled ||
@@ -722,7 +722,7 @@
                 />
                 <div class="flex items-center gap-2">
                     <input
-                        class="retro-input w-24"
+                        class="theme-input w-24"
                         type="text"
                         spellcheck="false"
                         maxlength="9"
@@ -734,7 +734,7 @@
                     />
                     <button
                         type="button"
-                        class="retro-btn-copy"
+                        class="theme-btn-copy"
                         @click="copyColor('contentBg2Color')"
                         :disabled="
                             !settings.customBgColorsEnabled ||
@@ -889,7 +889,7 @@
                 />
                 <div class="flex items-center gap-2">
                     <input
-                        class="retro-input w-24"
+                        class="theme-input w-24"
                         type="text"
                         spellcheck="false"
                         maxlength="9"
@@ -901,7 +901,7 @@
                     />
                     <button
                         type="button"
-                        class="retro-btn-copy"
+                        class="theme-btn-copy"
                         @click="copyColor('sidebarBgColor')"
                         :disabled="
                             !settings.customBgColorsEnabled ||
@@ -991,7 +991,7 @@
                 />
                 <div class="flex items-center gap-2">
                     <input
-                        class="retro-input w-24"
+                        class="theme-input w-24"
                         type="text"
                         spellcheck="false"
                         maxlength="9"
@@ -1003,7 +1003,7 @@
                     />
                     <button
                         type="button"
-                        class="retro-btn-copy"
+                        class="theme-btn-copy"
                         @click="copyColor('headerBgColor')"
                         :disabled="
                             !settings.customBgColorsEnabled ||
@@ -1068,7 +1068,7 @@
                 />
                 <div class="flex items-center gap-2">
                     <input
-                        class="retro-input w-24"
+                        class="theme-input w-24"
                         type="text"
                         spellcheck="false"
                         maxlength="9"
@@ -1080,7 +1080,7 @@
                     />
                     <button
                         type="button"
-                        class="retro-btn-copy"
+                        class="theme-btn-copy"
                         @click="copyColor('bottomBarBgColor')"
                         :disabled="
                             !settings.customBgColorsEnabled ||
@@ -1735,7 +1735,7 @@ watch(
 .fallback-row > label {
     flex: 0 0 120px;
 }
-.fallback-row .retro-input {
+.fallback-row .theme-input {
     width: 92px;
 }
 @media (max-width: 560px) {
@@ -1746,7 +1746,7 @@ watch(
         width: 100%;
         margin-bottom: 4px;
     }
-    .fallback-row .retro-input {
+    .fallback-row .theme-input {
         width: 100px;
     }
 }
@@ -1798,7 +1798,7 @@ watch(
     image-rendering: pixelated;
 }
 
-.fallback-row .retro-input {
+.fallback-row .theme-input {
     width: 92px;
 }
 @media (prefers-reduced-motion: reduce) {

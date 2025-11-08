@@ -22,7 +22,6 @@
             <UTextarea
                 id="dashboard-ai-master-textarea"
                 v-bind="masterPromptTextareaProps"
-                class="w-full leading-snug focus:ring-0 focus:outline-0"
                 :value="local.masterPrompt"
                 @input="onPromptInput"
                 :aria-describedby="'ai-master-help ai-master-count'"
@@ -126,7 +125,7 @@
                         type="button"
                         v-bind="modelItemButtonProps"
                         :class="[
-                            'model-result-item retro-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between',
+                            'model-result-item theme-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between',
                             m.id === settings.fixedModelId ? 'active' : '',
                             (modelItemButtonProps as any)?.class || '',
                         ]"
@@ -333,14 +332,25 @@ const masterPromptTextareaProps = computed(() => {
     });
     const overridesValue = (overrides.value as Record<string, any>) || {};
     const overrideUi = (overridesValue.ui as Record<string, any>) || {};
+    const textareaClasses = [
+        'theme-input',
+        'w-full',
+        'leading-snug',
+        'focus:ring-0',
+        'focus:outline-0',
+        'min-h-40',
+        'my-3',
+        overrideUi.textarea,
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
     return {
         ...(overridesValue as any),
         ui: {
             ...overrideUi,
-            base: ['min-h-40 my-3', overrideUi.base]
-                .filter(Boolean)
-                .join(' ')
-                .trim(),
+            textarea: textareaClasses,
         },
     };
 });

@@ -238,7 +238,7 @@
             <div class="space-y-4">
                 <div class="flex gap-2 text-xs font-mono">
                     <button
-                        class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                        class="theme-btn px-2 py-1 rounded-[4px] border-2"
                         :class="
                             addMode === 'select'
                                 ? 'bg-primary/30'
@@ -249,7 +249,7 @@
                         Select Existing
                     </button>
                     <button
-                        class="retro-btn px-2 py-1 rounded-[4px] border-2"
+                        class="theme-btn px-2 py-1 rounded-[4px] border-2"
                         :class="
                             addMode === 'create'
                                 ? 'bg-primary/30'

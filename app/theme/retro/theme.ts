@@ -551,6 +551,13 @@ export default defineTheme({
             size: 'sm',
         },
 
+        'textarea#dashboard.ai.master-prompt': {
+            class: 'retro-input',
+            ui: {
+                textarea: 'retro-input',
+            },
+        },
+
         // Theme Page buttons
         'button#dashboard.theme.mode': {
             class: 'retro-chip',

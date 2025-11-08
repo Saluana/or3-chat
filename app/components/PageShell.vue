@@ -331,39 +331,39 @@ function useButtonThemeProps(
 }
 
 const sidebarToggleButtonProps = useButtonThemeProps('shell.sidebar-toggle', {
-    class: 'retro-btn',
+    class: 'theme-btn',
     variant: 'ghost',
     size: 'xs',
     color: 'neutral',
-    ui: { base: 'retro-btn' },
+    ui: { base: 'theme-btn' },
 });
 const newPaneButtonProps = useButtonThemeProps('shell.new-pane', {
-    class: 'retro-btn',
+    class: 'theme-btn',
     variant: 'ghost',
     size: 'xs',
     color: 'neutral',
-    ui: { base: 'retro-btn' },
+    ui: { base: 'theme-btn' },
 });
 const themeToggleButtonProps = useButtonThemeProps('shell.theme-toggle', {
-    class: 'retro-btn',
+    class: 'theme-btn',
     variant: 'ghost',
     size: 'xs',
     color: 'neutral',
-    ui: { base: 'retro-btn' },
+    ui: { base: 'theme-btn' },
 });
 const headerActionButtonProps = useButtonThemeProps('shell.header-action', {
-    class: 'retro-btn',
+    class: 'theme-btn',
     variant: 'ghost',
     size: 'xs',
-    ui: { base: 'retro-btn' },
+    ui: { base: 'theme-btn' },
 });
 const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {
-    class: 'retro-btn',
+    class: 'theme-btn',
     variant: 'ghost',
     size: 'xs',
     color: 'neutral',
     ui: {
-        base: 'retro-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+        base: 'theme-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
     },
 });
 

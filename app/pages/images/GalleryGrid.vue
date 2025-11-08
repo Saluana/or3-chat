@@ -277,7 +277,7 @@ defineExpose({ ensureUrl });
                     type="button"
                     size="sm"
                     square
-                    class="retro-btn absolute! z-[11] top-2 left-2 flex items-center justify-center"
+                    class="theme-btn absolute! z-[11] top-2 left-2 flex items-center justify-center"
                     :aria-pressed="isSelected(m.hash)"
                     role="checkbox"
                     :aria-checked="isSelected(m.hash)"

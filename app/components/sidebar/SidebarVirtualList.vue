@@ -24,7 +24,7 @@
                         <!-- Project Group (Root + Children) -->
                         <div
                             v-else-if="item.type === 'projectGroup'"
-                            class="mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow"
+                            class="mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-2 border-[var(--md-inverse-surface)] rounded-[3px] theme-shadow"
                         >
                             <!-- Project Root -->
                             <SidebarProjectRoot

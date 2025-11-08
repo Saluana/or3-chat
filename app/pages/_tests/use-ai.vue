@@ -20,7 +20,7 @@
                     <UButton
                         variant="basic"
                         size="md"
-                        class="retro-btn"
+                        class="theme-btn"
                         :loading="running"
                         :disabled="running"
                         @click="runTests"
@@ -28,7 +28,7 @@
                         Run all tests
                     </UButton>
                     <div
-                        class="border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow bg-[var(--md-inverse-surface)]/5 px-4 py-3 flex items-center gap-4 text-[15px]"
+                        class="border-2 border-[var(--md-inverse-surface)] rounded-[3px] theme-shadow bg-[var(--md-inverse-surface)]/5 px-4 py-3 flex items-center gap-4 text-[15px]"
                     >
                         <span class="uppercase tracking-[0.2em] text-[13px]">
                             Progress
@@ -56,7 +56,7 @@
                 <div
                     v-for="result in results"
                     :key="result.id"
-                    class="border-2 border-[var(--md-inverse-surface)] rounded-[3px] retro-shadow bg-[var(--md-inverse-surface)]/5 p-4 space-y-3"
+                    class="border-2 border-[var(--md-inverse-surface)] rounded-[3px] theme-shadow bg-[var(--md-inverse-surface)]/5 p-4 space-y-3"
                 >
                     <header class="flex items-start justify-between gap-3">
                         <div class="space-y-1">

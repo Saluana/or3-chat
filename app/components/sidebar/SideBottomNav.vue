@@ -195,11 +195,11 @@ function navigateToCredits() {
     );
 }
 /* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
-.retro-bar {
+.theme-bar {
     position: relative;
     isolation: isolate; /* contain blend */
 }
-.retro-bar::before {
+.theme-bar::before {
     /* Chrome gloss + bevel hint */
     content: '';
     position: absolute;
@@ -215,7 +215,7 @@ function navigateToCredits() {
     pointer-events: none;
     mix-blend-mode: soft-light;
 }
-.retro-bar::after {
+.theme-bar::after {
     /* Scanlines + speckle noise, extremely subtle */
     content: '';
     position: absolute;

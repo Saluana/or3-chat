@@ -107,7 +107,7 @@
                 first.
             </p>
             <div class="space-y-4">
-                <div class="retro-upload-panel">
+                <div class="theme-upload-panel">
                     <input
                         ref="fileInput"
                         type="file"
@@ -121,7 +121,7 @@
                         <div class="flex items-start gap-3 text-left">
                             <UIcon
                                 name="pixelarticons:cloud-upload"
-                                class="retro-upload-icon"
+                                class="theme-upload-icon"
                                 aria-hidden="true"
                             />
                             <div class="space-y-1">
@@ -157,7 +157,7 @@
                     <Transition name="fade">
                         <div
                             v-if="selectedFile"
-                            class="retro-file-card"
+                            class="theme-file-card"
                             aria-live="polite"
                         >
                             <div class="space-y-1">
@@ -172,7 +172,7 @@
                                 v-bind="badgeProps"
                                 icon="i-ph-file-duotone"
                                 :class="[
-                                    'retro-badge',
+                                    'theme-badge',
                                     badgeToneClass(fileBadgeColor),
                                 ]"
                             >
@@ -204,7 +204,7 @@
                 <Transition name="fade">
                     <div
                         v-if="backupMeta"
-                        class="retro-meta-panel"
+                        class="theme-meta-panel"
                         aria-live="polite"
                     >
                         <div class="flex items-center justify-between">
@@ -222,7 +222,7 @@
                             <UBadge
                                 icon="i-ph-database-duotone"
                                 :class="[
-                                    'retro-badge',
+                                    'theme-badge',
                                     badgeToneClass('primary'),
                                 ]"
                             >
@@ -231,14 +231,14 @@
                             </UBadge>
                         </div>
                         <div
-                            class="retro-meta-table"
+                            class="theme-meta-table"
                             role="list"
                             aria-label="Tables included in backup"
                         >
                             <div
                                 v-for="table in backupMeta.tables"
                                 :key="table.name"
-                                class="retro-meta-row"
+                                class="theme-meta-row"
                                 role="listitem"
                             >
                                 <span>{{ table.name }}</span>
@@ -274,7 +274,7 @@
                                 <div class="flex items-start gap-3 w-full">
                                     <UIcon
                                         :name="option.icon"
-                                        class="retro-choice-icon"
+                                        class="theme-choice-icon"
                                         aria-hidden="true"
                                     />
                                     <div class="space-y-1 text-left">
@@ -304,7 +304,7 @@
                         v-model="overwriteValuesModel"
                         size="sm"
                         :disabled="overwriteDisabled"
-                        class="retro-checkbox"
+                        class="theme-checkbox"
                         label="Overwrite records on key conflict"
                         description="When disabled, conflicting rows are skipped and reported."
                     />
@@ -401,7 +401,7 @@ type BadgeTone =
     | 'warning';
 
 function badgeToneClass(tone?: BadgeTone | null) {
-    return tone ? `retro-badge--${tone}` : 'retro-badge--neutral';
+    return tone ? `theme-badge--${tone}` : 'theme-badge--neutral';
 }
 
 // Theme overrides for buttons
@@ -997,5 +997,5 @@ defineExpose({
     }
 }
 
-/* All retro-* classes have been moved to app/theme/retro/styles.css */
+/* All theme-* classes have been moved to app/theme/retro/styles.css */
 </style>

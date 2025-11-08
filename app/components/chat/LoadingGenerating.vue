@@ -2,7 +2,7 @@
     <div
         v-bind="containerProps"
         :class="[
-            'loading-generating animate-in retro-loader',
+            'loading-generating animate-in theme-loader',
             containerProps?.class ?? '',
         ]"
         aria-hidden="true"
@@ -31,7 +31,7 @@ const containerProps = useThemeOverrides({
 </script>
 
 <style scoped>
-.retro-loader {
+.theme-loader {
     --rl-bg-a: var(--md-surface-container-low);
     --rl-bg-b: var(--md-surface-container-high);
     --rl-border: var(--md-inverse-surface);
@@ -55,19 +55,19 @@ const containerProps = useThemeOverrides({
     justify-content: center;
     isolation: isolate;
 }
-.retro-loader::before,
-.retro-loader::after {
+.theme-loader::before,
+.theme-loader::after {
     content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
 }
-.retro-loader::before {
+.theme-loader::before {
     border: 1px solid var(--rl-border);
     border-radius: 4px;
     mix-blend-mode: overlay;
 }
-.retro-loader::after {
+.theme-loader::after {
     background: radial-gradient(
         circle at 50% 55%,
         rgba(255, 255, 255, 0.12),

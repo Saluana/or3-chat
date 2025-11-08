@@ -156,8 +156,8 @@
                     :color="(entry.action.color || 'neutral') as any"
                     :square="!entry.action.label"
                     :disabled="entry.disabled"
-                    class="retro-btn pointer-events-auto flex items-center justify-center gap-1"
-                    :ui="{ base: 'retro-btn' }"
+                    class="theme-btn pointer-events-auto flex items-center justify-center gap-1"
+                    :ui="{ base: 'theme-btn' }"
                     :aria-label="
                         entry.action.tooltip ||
                         entry.action.label ||

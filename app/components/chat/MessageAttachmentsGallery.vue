@@ -5,7 +5,7 @@
                 v-for="(h, index) in hashes"
                 :key="h"
                 :id="`attachment-item-${index}`"
-                class="message-attachment-item relative aspect-square border-2 border-black rounded-[3px] retro-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
+                class="message-attachment-item relative aspect-square border-2 border-black rounded-[3px] theme-shadow overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
             >
                 <!-- PDF Placeholder if mime/kind indicates pdf -->
                 <template v-if="meta[h]?.kind === 'pdf'">

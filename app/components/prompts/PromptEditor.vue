@@ -180,7 +180,7 @@ const promptTitleInputProps = computed(() => {
         ...restOverrides
     } = overridesValue;
     const uiOverrides = (overrideUi as Record<string, any>) || {};
-    const baseUi = ['retro-shadow', uiOverrides.base]
+    const baseUi = ['theme-shadow', uiOverrides.base]
         .filter(Boolean)
         .join(' ')
         .trim();

@@ -4,7 +4,7 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'chat-input-main flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative retro-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            'chat-input-main flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative theme-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
@@ -193,7 +193,7 @@
                 />
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="chat-input-attachment-image-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-image-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] theme-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
                 >
@@ -211,7 +211,7 @@
                     (att: any) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
-                class="chat-input-attachment-pdf-container relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="chat-input-attachment-pdf-container relative group aspect-square border border-black theme-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
             >
                 <div
                     class="chat-input-attachment-pdf-inner flex flex-col items-center justify-center w-full h-full"
@@ -228,7 +228,7 @@
                 </div>
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="chat-input-attachment-pdf-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-pdf-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] theme-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove PDF"
                     :disabled="loading"
                 >
@@ -239,7 +239,7 @@
             <div
                 v-for="(block, tIndex) in largeTextBlocks"
                 :key="'txt-' + block.id"
-                class="chat-input-attachment-text-container relative group aspect-square border border-black retro-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="chat-input-attachment-text-container relative group aspect-square border border-black theme-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
             >
                 <div
                     class="chat-input-attachment-text-inner flex flex-col items-center justify-center w-full h-full"
@@ -261,7 +261,7 @@
                 </div>
                 <button
                     @click="removeTextBlock(tIndex)"
-                    class="chat-input-attachment-text-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] retro-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-text-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] theme-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove text block"
                     :disabled="loading"
                 >
@@ -543,7 +543,7 @@ const sendButtonProps = computed(() => {
         square: true,
         size: 'sm' as const,
         color: 'primary' as const,
-        class: 'retro-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
+        class: 'theme-btn disabled:opacity-40 text-white dark:text-black flex items-center justify-center',
         ...(overrides.value as any),
     };
 });
@@ -560,7 +560,7 @@ const stopButtonProps = computed(() => {
         square: true,
         size: 'sm' as const,
         color: 'error' as const,
-        class: 'retro-btn text-white dark:text-black flex items-center justify-center',
+        class: 'theme-btn text-white dark:text-black flex items-center justify-center',
         ...(overrides.value as any),
     };
 });
@@ -577,7 +577,7 @@ const attachButtonProps = computed(() => {
         square: true,
         size: 'sm' as const,
         color: 'info' as const,
-        class: 'retro-btn text-black dark:text-white flex items-center justify-center',
+        class: 'theme-btn text-black dark:text-white flex items-center justify-center',
         ...(overrides.value as any),
     };
 });
@@ -594,7 +594,7 @@ const settingsButtonProps = computed(() => {
         square: true,
         size: 'sm' as const,
         color: 'info' as const,
-        class: 'retro-btn text-black dark:text-white flex items-center justify-center',
+        class: 'theme-btn text-black dark:text-white flex items-center justify-center',
         ...(overrides.value as any),
     };
 });
@@ -610,8 +610,8 @@ const composerActionButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         variant: 'ghost' as const,
-        class: 'retro-btn pointer-events-auto flex items-center gap-1',
-        ui: { base: 'retro-btn' },
+        class: 'theme-btn pointer-events-auto flex items-center gap-1',
+        ui: { base: 'theme-btn' },
         ...(overrides.value as any),
     };
 });

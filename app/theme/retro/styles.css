@@ -26,7 +26,8 @@
 }
 
 /* Retro "chip" toggle button used across dashboard settings */
-.retro-chip {
+.retro-chip,
+.theme-chip {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -43,25 +44,30 @@
 	transition: background-color 120ms ease, color 120ms ease,
 		transform 80ms ease, box-shadow 80ms ease;
 }
-.retro-chip:hover {
+.retro-chip:hover,
+.theme-chip:hover {
 	background: var(--md-secondary-container);
 	color: var(--md-on-secondary-container);
 }
-.retro-chip:active {
+.retro-chip:active,
+.theme-chip:active {
 	transform: translate(2px, 2px);
 	box-shadow: 0 0 0 var(--md-inverse-surface);
 }
-.retro-chip.active {
+.retro-chip.active,
+.theme-chip.active {
 	background: var(--md-primary-container);
 	color: var(--md-on-primary-container);
 }
-.retro-chip:focus-visible {
+.retro-chip:focus-visible,
+.theme-chip:focus-visible {
 	outline: 2px solid var(--md-primary);
 	outline-offset: 2px;
 }
 
 /* Retro text inputs (text + number inputs share the same base look) */
-.retro-input {
+.retro-input,
+.theme-input {
 	height: 32px;
 	padding: 0 6px;
 	font-size: 12px;
@@ -73,23 +79,27 @@
 	border-radius: 3px;
 	box-shadow: 2px 2px 0 var(--md-inverse-surface);
 }
-.retro-input:focus-visible {
+.retro-input:focus-visible,
+.theme-input:focus-visible {
 	outline: 2px solid var(--md-primary);
 	outline-offset: 2px;
 }
-textarea.retro-input {
+textarea.retro-input,
+textarea.theme-input {
 	height: auto;
 	padding-top: 6px;
 	padding-bottom: 6px;
 	line-height: 1.25;
 }
-.retro-input:disabled {
+.retro-input:disabled,
+.theme-input:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }
 
 /* Primary retro button scaffold (used with Nuxt UI buttons) */
-.retro-btn {
+.retro-btn,
+.theme-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -100,28 +110,33 @@ textarea.retro-input {
 	box-shadow: 2px 2px 0 var(--md-inverse-surface);
 	transition: transform 80ms ease, box-shadow 80ms ease;
 }
-.retro-btn.aspect-square {
+.retro-btn.aspect-square,
+.theme-btn.aspect-square {
 	padding: 0;
 	place-items: center;
 }
-.retro-btn:active {
+.retro-btn:active,
+.theme-btn:active {
 	transform: translate(2px, 2px);
 	box-shadow: 0 0 0 var(--md-inverse-surface),
 		inset 0 2px 0 rgba(0, 0, 0, 0.25),
 		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
 }
-.retro-btn:focus-visible {
+.retro-btn:focus-visible,
+.theme-btn:focus-visible {
 	outline: 2px solid var(--md-primary);
 	outline-offset: 2px;
 }
-.retro-btn:disabled {
+.retro-btn:disabled,
+.theme-btn:disabled {
 	opacity: 0.45;
 	cursor: not-allowed;
 	box-shadow: 2px 2px 0 color-mix(in oklab, var(--md-inverse-surface) 70%, transparent 30%);
 }
 
 /* Iconic copy button variant used in theme palette rows */
-.retro-btn-copy {
+.retro-btn-copy,
+.theme-copy-btn {
 	height: 32px;
 	padding: 0 8px;
 	font-size: 10px;
@@ -135,21 +150,25 @@ textarea.retro-input {
 	transition: transform 80ms ease, box-shadow 80ms ease,
 		background-color 120ms ease, color 120ms ease;
 }
-.retro-btn-copy:disabled {
+.retro-btn-copy:disabled,
+.theme-copy-btn:disabled {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
-.retro-btn-copy:active:not(:disabled) {
+.retro-btn-copy:active:not(:disabled),
+.theme-copy-btn:active:not(:disabled) {
 	transform: translate(2px, 2px);
 	box-shadow: 0 0 0 var(--md-inverse-surface);
 }
-.retro-btn-copy:focus-visible {
+.retro-btn-copy:focus-visible,
+.theme-copy-btn:focus-visible {
 	outline: 2px solid var(--md-primary);
 	outline-offset: 2px;
 }
 
 /* Utility class for retro shadow (used globally) */
-.retro-shadow {
+.retro-shadow,
+.theme-shadow {
 	box-shadow: 2px 2px 0 var(--md-inverse-surface);
 }
 
@@ -161,7 +180,8 @@ textarea.retro-input {
 }
 
 /* Workspace backup component styles */
-.retro-upload-panel {
+.retro-upload-panel,
+.theme-upload-panel {
 	border: 2px dashed color-mix(in oklab, var(--md-outline-variant) 85%, transparent 15%);
 	border-radius: 6px;
 	padding: 1rem;
@@ -170,17 +190,20 @@ textarea.retro-input {
 	transition: border-color 150ms ease, background 150ms ease;
 }
 
-.retro-upload-panel:has(button:hover) {
+.retro-upload-panel:has(button:hover),
+.theme-upload-panel:has(button:hover) {
 	border-color: color-mix(in oklab, var(--md-primary) 60%, transparent 40%);
 }
 
-.retro-upload-icon {
+.retro-upload-icon,
+.theme-upload-icon {
 	font-size: 1.5rem;
 	color: var(--md-primary);
 	flex-shrink: 0;
 }
 
-.retro-file-card {
+.retro-file-card,
+.theme-file-card {
 	margin-top: 0.75rem;
 	display: flex;
 	justify-content: space-between;
@@ -192,7 +215,8 @@ textarea.retro-input {
 	box-shadow: 2px 2px 0 var(--md-inverse-surface);
 }
 
-.retro-meta-panel {
+.retro-meta-panel,
+.theme-meta-panel {
 	border: 2px solid var(--md-inverse-surface);
 	border-radius: 6px;
 	background: color-mix(in oklab, var(--md-surface) 95%, var(--md-surface-variant) 5%);
@@ -202,7 +226,8 @@ textarea.retro-input {
 	gap: 0.75rem;
 }
 
-.retro-meta-table {
+.retro-meta-table,
+.theme-meta-table {
 	max-height: 11rem;
 	overflow-y: auto;
 	border: 2px dashed color-mix(in oklab, var(--md-outline-variant) 75%, transparent 25%);
@@ -212,7 +237,8 @@ textarea.retro-input {
 	gap: 0.35rem;
 }
 
-.retro-meta-row {
+.retro-meta-row,
+.theme-meta-row {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -222,7 +248,8 @@ textarea.retro-input {
 	border-radius: 3px;
 }
 
-.retro-choice-btn {
+.retro-choice-btn,
+.theme-choice-btn {
 	border: 2px solid color-mix(in oklab, var(--md-inverse-surface) 92%, transparent 8%);
 	background: color-mix(in oklab, var(--md-surface) 96%, var(--md-surface-variant) 4%);
 	border-radius: 6px;
@@ -231,35 +258,41 @@ textarea.retro-input {
 	transition: box-shadow 120ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
-.retro-choice-btn:hover {
+.retro-choice-btn:hover,
+.theme-choice-btn:hover {
 	border-color: var(--md-primary);
 	background: color-mix(in oklab, var(--md-secondary-container) 70%, var(--md-surface) 30%);
 	box-shadow: 3px 3px 0 var(--md-inverse-surface);
 }
 
-.retro-choice-btn:focus-visible {
+.retro-choice-btn:focus-visible,
+.theme-choice-btn:focus-visible {
 	outline: 2px solid var(--md-primary);
 	outline-offset: 3px;
 }
 
-.retro-choice-btn--active {
+.retro-choice-btn--active,
+.theme-choice-btn--active {
 	background: color-mix(in oklab, var(--md-primary-container) 85%, var(--md-surface) 15%);
 	color: var(--md-on-primary-container);
 	border-color: var(--md-primary);
 	box-shadow: 3px 3px 0 color-mix(in oklab, var(--md-primary) 70%, var(--md-inverse-surface) 30%);
 }
 
-.retro-choice-icon {
+.retro-choice-icon,
+.theme-choice-icon {
 	font-size: 1.4rem;
 	color: currentColor;
 }
 
-.retro-checkbox {
+.retro-checkbox,
+.theme-checkbox {
 	--checkbox-border: color-mix(in oklab, var(--md-inverse-surface) 80%, transparent 20%);
 	padding: 0.5rem 0.25rem 0.5rem 0;
 }
 
-.retro-badge {
+.retro-badge,
+.theme-badge {
 	--retro-badge-bg: color-mix(in oklab, var(--md-surface) 96%, var(--md-surface-variant) 4%);
 	--retro-badge-fg: var(--md-on-surface);
 	display: inline-flex;
@@ -278,28 +311,34 @@ textarea.retro-input {
 	line-height: 1;
 }
 
-.retro-badge--neutral {
+.retro-badge--neutral,
+.theme-badge--neutral {
 	--retro-badge-bg: color-mix(in oklab, var(--md-surface) 95%, var(--md-surface-variant) 5%);
 	--retro-badge-fg: var(--md-on-surface);
 }
 
 .retro-badge--primary,
-.retro-badge--info {
+.retro-badge--info,
+.theme-badge--primary,
+.theme-badge--info {
 	--retro-badge-bg: color-mix(in oklab, var(--md-primary-container) 85%, var(--md-surface) 15%);
 	--retro-badge-fg: var(--md-on-primary-container);
 }
 
-.retro-badge--success {
+.retro-badge--success,
+.theme-badge--success {
 	--retro-badge-bg: color-mix(in oklab, var(--md-extended-color-success-color-container) 80%, var(--md-surface) 20%);
 	--retro-badge-fg: var(--md-extended-color-success-on-color-container);
 }
 
-.retro-badge--error {
+.retro-badge--error,
+.theme-badge--error {
 	--retro-badge-bg: color-mix(in oklab, var(--md-error-container) 85%, var(--md-surface) 15%);
 	--retro-badge-fg: var(--md-on-error-container);
 }
 
-.retro-badge--warning {
+.retro-badge--warning,
+.theme-badge--warning {
 	--retro-badge-bg: color-mix(in oklab, var(--md-extended-color-warning-color-container) 80%, var(--md-surface) 20%);
 	--retro-badge-fg: var(--md-extended-color-warning-on-color-container);
 }
@@ -307,12 +346,19 @@ textarea.retro-input {
 /* Shared motion reduction: keep retro UI snappy yet accessible */
 @media (prefers-reduced-motion: reduce) {
 	.retro-chip,
+	.theme-chip,
 	.retro-btn,
+	.theme-btn,
 	.retro-btn-copy,
+	.theme-copy-btn,
 	.retro-input,
+	.theme-input,
 	.retro-choice-btn,
+	.theme-choice-btn,
 	.retro-upload-panel,
-	.retro-file-card {
+	.theme-upload-panel,
+	.retro-file-card,
+	.theme-file-card {
 		transition: none;
 		transform: none;
 	}

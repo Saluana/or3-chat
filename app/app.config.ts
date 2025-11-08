@@ -7,7 +7,7 @@ export default defineAppConfig({
         tree: {
             slots: {
                 root: '',
-                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 retro-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                item: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
                 link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
             },
         },
@@ -27,7 +27,7 @@ export default defineAppConfig({
                 // Make base styles clearly different so it's obvious when applied
                 base: [
                     'transition-colors',
-                    'retro-btn dark:retro-btn cursor-pointer text-start',
+                    'theme-btn dark:theme-btn cursor-pointer text-start',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate uppercase tracking-wider',
@@ -38,7 +38,7 @@ export default defineAppConfig({
             },
             variants: {
                 variant: {
-                    light: 'retro-btn flex items-center justify-center bg-[var(--md-surface)] dark:bg-[var(--md-on-background)] dark:text-black dark:hover:bg-[var(--md-on-background)]/90 backdrop-blur-sm',
+                    light: 'theme-btn flex items-center justify-center bg-[var(--md-surface)] dark:bg-[var(--md-on-background)] dark:text-black dark:hover:bg-[var(--md-on-background)]/90 backdrop-blur-sm',
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
                     basic: 'border-2 shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)]',
                     popover:
@@ -100,7 +100,7 @@ export default defineAppConfig({
         // Make the toast close button md-sized by default
         toast: {
             slots: {
-                root: 'border border-2 retro-shadow rounded-[3px]',
+                root: 'border border-2 theme-shadow rounded-[3px]',
                 // Match our md button height (40px) and enforce perfect centering
                 close: 'inline-flex items-center justify-center leading-none h-[32px] w-[32px] p-0',
             },
