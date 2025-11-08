@@ -170,6 +170,113 @@ export default defineTheme({
             size: 'md',
         },
 
+        // Sidebar thread item actions
+        'button#sidebar.thread-rename': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#sidebar.thread-add-to-project': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#sidebar.thread-delete': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'error',
+        },
+
+        'button#sidebar.thread-extra-action': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        // Sidebar project actions
+        'button#sidebar.project-rename': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#sidebar.project-delete': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'error',
+        },
+
+        // Sidebar document item actions
+        'button#sidebar.document-rename': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#sidebar.document-add-to-project': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#sidebar.document-delete': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'error',
+        },
+
+        'button#sidebar.document-extra-action': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        // Sidebar project entry actions
+        'button#sidebar.project-entry-rename': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
+        'button#sidebar.project-entry-remove': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'error',
+        },
+
+        // Sidebar collapsed navigation
+        'button#sidebar.collapsed-search': {
+            class: 'retro-btn',
+            variant: 'ghost',
+            size: 'md',
+        },
+
+        'button#sidebar.collapsed-dashboard': {
+            class: 'retro-btn',
+            variant: 'soft',
+            size: 'md',
+        },
+
+        // Sidebar search input
+        'input#sidebar.search': {
+            class: 'retro-input',
+            variant: 'outline',
+            size: 'md',
+        },
         'button#sidebar.footer-action': {
             class: 'retro-btn pointer-events-auto',
             variant: 'ghost',

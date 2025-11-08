@@ -15,10 +15,9 @@
                     text="New chat"
                 >
                     <UButton
+                        v-bind="newChatButtonProps"
                         id="btn-new-chat"
-                        size="md"
                         class="flex item-center justify-center"
-                        icon="pixelarticons:message-plus"
                         :ui="{
                             base: 'w-[38.5px]! h-[39px]',
                             leadingIcon: 'w-5 h-5',
@@ -36,10 +35,9 @@
                 text="Search"
             >
                 <UButton
+                    v-bind="searchButtonProps"
                     id="btn-search"
-                    size="md"
                     class="flex item-center justify-center"
-                    icon="pixelarticons:search"
                     :ui="{
                         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
@@ -56,9 +54,9 @@
                 text="Create document"
             >
                 <UButton
+                    v-bind="newDocButtonProps"
                     id="btn-new-doc"
                     class="flex item-center justify-center"
-                    icon="pixelarticons:note-plus"
                     :ui="{
                         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
@@ -75,9 +73,9 @@
                 text="Create project"
             >
                 <UButton
+                    v-bind="newProjectButtonProps"
                     id="btn-new-project"
                     class="flex item-center justify-center"
-                    icon="pixelarticons:folder-plus"
                     :ui="{
                         base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
                         leadingIcon: 'w-5 h-5',
@@ -149,10 +147,9 @@
             class="px-1 pt-2 flex flex-col space-y-2 mb-2"
         >
             <UButton
+                v-bind="dashboardButtonProps"
                 id="btn-dashboard"
-                size="md"
                 class="flex item-center justify-center"
-                icon="pixelarticons:dashboard"
                 :ui="{
                     base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
                     leadingIcon: 'w-5 h-5',
@@ -219,12 +216,82 @@ import {
 import { useSidebarPages } from '~/composables/sidebar/useSidebarPages';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import SideBottomNav from './SideBottomNav.vue';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     activeThread?: string;
 }>();
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
+
+// Theme overrides for collapsed sidebar buttons
+const newChatButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.new-chat',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        icon: 'pixelarticons:message-plus' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const searchButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.collapsed-search',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        icon: 'pixelarticons:search' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const newDocButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.new-document',
+        isNuxtUI: true,
+    });
+    return {
+        icon: 'pixelarticons:note-plus' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const newProjectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.new-project',
+        isNuxtUI: true,
+    });
+    return {
+        icon: 'pixelarticons:folder-plus' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const dashboardButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.collapsed-dashboard',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        icon: 'pixelarticons:dashboard' as const,
+        ...(overrides.value as any),
+    };
+});
 
 const { listSidebarPages } = useSidebarPages();
 const { activePageId, setActivePage } = useActiveSidebarPage();

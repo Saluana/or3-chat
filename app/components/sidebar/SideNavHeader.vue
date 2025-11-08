@@ -5,22 +5,16 @@
                 <UInput
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
-                    icon="pixelarticons:search"
-                    size="md"
+                    v-bind="searchInputProps"
                     :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
-                    variant="outline"
-                    placeholder="Search..."
                     aria-label="Search"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
                 >
                     <template v-if="sidebarQuery.length > 0" #trailing>
                         <UButton
-                            color="neutral"
-                            variant="subtle"
-                            size="xs"
+                            v-bind="searchClearButtonProps"
                             class="flex items-center justify-center p-0"
-                            icon="pixelarticons:close-box"
                             aria-label="Clear input"
                             @click="sidebarQuery = ''"
                         />
@@ -29,11 +23,7 @@
             </div>
             <UPopover :content="{ side: 'bottom', align: 'end' }">
                 <UButton
-                    size="md"
-                    color="neutral"
-                    variant="ghost"
-                    icon="material-symbols:filter-alt-sharp"
-                    :square="true"
+                    v-bind="filterButtonProps"
                     aria-label="Filter sections"
                     :ui="{ base: 'shadow-none!' }"
                     class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[3px] border-3! bg-[var(--md-inverse-surface)]/5 backdrop-blur"
@@ -330,6 +320,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     sidebarQuery: string;
@@ -354,6 +345,56 @@ const emit = defineEmits<{
 
 const { createProject: createProjectCrud, renameProject: renameProjectCrud } =
     useProjectsCrud();
+
+// Theme overrides for interactive elements
+const searchInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'sidebar',
+        identifier: 'sidebar.search',
+        isNuxtUI: true,
+    });
+    return {
+        icon: 'pixelarticons:search' as const,
+        size: 'md' as const,
+        variant: 'outline' as const,
+        placeholder: 'Search...',
+        ...(overrides.value as any),
+    };
+});
+
+const searchClearButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.search-clear',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'subtle' as const,
+        size: 'xs' as const,
+        icon: 'pixelarticons:close-box' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const filterButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.filter',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'md' as const,
+        color: 'neutral' as const,
+        variant: 'ghost' as const,
+        icon: 'material-symbols:filter-alt-sharp' as const,
+        square: true,
+        ...(overrides.value as any),
+    };
+});
 
 // Section visibility (multi-select) defaults to all on
 const filterItems = [
