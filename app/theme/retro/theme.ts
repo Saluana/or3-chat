@@ -276,7 +276,7 @@ export default defineTheme({
             variant: 'outline',
             size: 'md',
             ui: {
-                root: 'shadow-none! border-0! bg-transparent! rounded-[3px] px-2',
+                root: 'shadow-none! border-0! bg-transparent! rounded-[3px]',
             },
         },
         'button#sidebar.footer-action': {
@@ -552,7 +552,7 @@ export default defineTheme({
         },
 
         'textarea#dashboard.ai.master-prompt': {
-            class: 'retro-input',
+            class: 'w-full',
             ui: {
                 textarea: 'retro-input',
             },
@@ -677,7 +677,6 @@ export default defineTheme({
 
         // Document inputs
         'input#document.title': {
-            class: 'retro-input',
             variant: 'outline',
             size: 'md',
             ui: {
@@ -692,33 +691,27 @@ export default defineTheme({
 
         // Global input styling
         input: {
-            class: 'retro-input',
             variant: 'outline',
             size: 'md',
         },
 
         // Sidebar inputs
         'input.sidebar': {
-            class: 'retro-input',
             size: 'md',
         },
 
         // Chat context inputs
         'input.chat': {
-            class: 'retro-input',
             size: 'sm',
         },
 
         // Dashboard inputs
         'input.dashboard': {
-            class: 'retro-input',
             size: 'sm',
         },
 
         // Textarea styling
-        textarea: {
-            class: 'retro-input',
-        },
+        textarea: {},
 
         // Chip/toggle buttons
         'button[data-chip]': {
