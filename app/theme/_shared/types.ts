@@ -1,6 +1,6 @@
 /**
  * Refined Theme System - Core Type Definitions
- * 
+ *
  * This file contains all the core TypeScript interfaces for the refined theme system.
  * It defines the structure of theme definitions, overrides, and compiled theme configs.
  */
@@ -59,13 +59,13 @@ export interface ColorPalette {
  * CSS attribute selector operators
  */
 export type AttributeOperator =
-    | 'exists'  // [attr]
-    | '='       // [attr="value"]
-    | '~='      // [attr~="value"] - contains word
-    | '|='      // [attr|="value"] - starts with word
-    | '^='      // [attr^="value"] - starts with
-    | '$='      // [attr$="value"] - ends with
-    | '*=';     // [attr*="value"] - contains
+    | 'exists' // [attr]
+    | '=' // [attr="value"]
+    | '~=' // [attr~="value"] - contains word
+    | '|=' // [attr|="value"] - starts with word
+    | '^=' // [attr^="value"] - starts with
+    | '$=' // [attr$="value"] - ends with
+    | '*='; // [attr*="value"] - contains
 
 /**
  * Attribute matcher for HTML attribute selectors
@@ -78,7 +78,7 @@ export interface AttributeMatcher {
 
 /**
  * Override props that can be applied to components
- * 
+ *
  * For Nuxt UI components: Props like variant, color, size are passed directly
  * For custom components: These props are mapped to CSS classes via prop-class-maps
  */
@@ -116,8 +116,20 @@ export interface PropClassMaps {
 }
 
 /**
+ * CSS Selector Configuration
+ * Allows targeting elements by CSS selector with either style properties or Tailwind classes
+ */
+export interface CSSelectorConfig {
+    /** Direct CSS properties to apply (compiled to CSS file at build time) */
+    style?: Record<string, string>;
+
+    /** Tailwind utility classes to apply (applied at runtime via classList) */
+    class?: string;
+}
+
+/**
  * Theme Definition (Author-facing DSL)
- * 
+ *
  * This is the interface that theme authors use to define new themes.
  * It uses a simplified, convention-based structure.
  */
@@ -134,9 +146,9 @@ export interface ThemeDefinition {
     /** Color palette (Material Design 3 tokens) */
     colors: ColorPalette;
 
-    /** 
+    /**
      * Component overrides using CSS selector syntax
-     * 
+     *
      * Examples:
      * - 'button': Global button overrides
      * - 'button.chat': Context-specific (auto-expanded to [data-context="chat"])
@@ -145,6 +157,19 @@ export interface ThemeDefinition {
      * - 'button[id="submit"]': HTML attribute targeting
      */
     overrides?: Record<string, OverrideProps>;
+
+    /**
+     * CSS Selectors for direct DOM targeting
+     *
+     * Use this for third-party libraries, legacy code, or rapid prototyping.
+     * Supports both direct CSS properties (build-time) and Tailwind classes (runtime).
+     *
+     * Examples:
+     * - '.monaco-editor': { style: { border: '2px solid var(--md-primary)' } }
+     * - '.custom-modal': { class: 'fixed inset-0 bg-black/50' }
+     * - '.tooltip': { style: { ... }, class: 'rounded-md shadow-lg' }
+     */
+    cssSelectors?: Record<string, CSSelectorConfig>;
 
     /** Nuxt UI config extensions */
     ui?: Record<string, unknown>;
@@ -175,7 +200,7 @@ export interface ParsedSelector {
 
 /**
  * Compiled override (Runtime format)
- * 
+ *
  * This is the optimized format used at runtime for override resolution.
  * The compiler transforms CSS selectors into this format.
  */
@@ -223,6 +248,9 @@ export interface CompiledTheme {
 
     /** Compiled overrides (sorted by specificity) */
     overrides: CompiledOverride[];
+
+    /** CSS selectors for direct DOM targeting */
+    cssSelectors?: Record<string, CSSelectorConfig>;
 
     /** Nuxt UI config */
     ui?: Record<string, unknown>;

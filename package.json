@@ -17,7 +17,8 @@
         "type-check": "nuxt typecheck",
         "theme:validate": "tsx scripts/cli/validate-theme.ts",
         "theme:create": "tsx scripts/cli/create-theme.ts",
-        "theme:switch": "tsx scripts/cli/switch-theme.ts"
+        "theme:switch": "tsx scripts/cli/switch-theme.ts",
+        "theme:build-css": "bun run scripts/build-theme-css.ts"
     },
     "dependencies": {
         "@nuxt/ui": "^3.3.2",

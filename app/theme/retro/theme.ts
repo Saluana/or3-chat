@@ -608,4 +608,29 @@ export default defineTheme({
             class: 'retro-btn-copy',
         },
     },
+
+    // CSS Selectors for direct DOM targeting
+    // These target elements that can't easily be integrated with the component override system
+    cssSelectors: {
+        // Example: Third-party Monaco editor styling
+        // '.monaco-editor': {
+        //     style: {
+        //         border: '2px solid var(--md-outline)',
+        //         borderRadius: '3px',
+        //     },
+        //     class: 'retro-shadow',
+        // },
+        // Example: TipTap editor styling
+        // '.tiptap': {
+        //     style: {
+        //         fontFamily: 'VT323, monospace',
+        //         fontSize: '20px',
+        //     },
+        //     class: 'prose prose-retro',
+        // },
+        // Example: Modal overlays
+        // '.modal-overlay': {
+        //     class: 'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
+        // },
+    },
 });
