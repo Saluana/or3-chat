@@ -405,7 +405,7 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: var(--app-content-bg-1, url('/bg-repeat.webp'));
+    background-image: var(--app-content-bg-1, none);
     background-repeat: var(
         --app-content-bg-1-repeat,
         var(--app-content-bg-repeat, repeat)
@@ -433,7 +433,7 @@ const toggleAria = computed(() =>
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: var(--app-content-bg-2, url('/bg-repeat-2.webp'));
+    background-image: var(--app-content-bg-2, none);
     background-repeat: var(
         --app-content-bg-2-repeat,
         var(--app-content-bg-repeat, repeat)
@@ -450,7 +450,7 @@ const toggleAria = computed(() =>
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern {
     background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x.webp');
+    background-image: var(--app-header-gradient, none);
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;
@@ -462,7 +462,7 @@ aside::before {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: var(--app-sidebar-bg-1, url('/sidebar-repeater.webp'));
+    background-image: var(--app-sidebar-bg-1, none);
     background-repeat: var(--app-sidebar-bg-repeat, repeat);
     background-position: top left;
     background-size: var(--sidebar-rep-size) var(--sidebar-rep-size);

@@ -21,9 +21,24 @@ graph TD
     ThemePlugin -->|setActiveTheme| BgApplier[applyThemeBackgrounds]
     BgApplier --> CSSVars[document.documentElement.style]
     ThemeSettings -->|user overrides| BgApplier
-    CSSVars --> SidebarLayout[ResizableSidebarLayout CSS]
-    CSSVars --> HeaderGradients[Header & Bottom Nav styles]
+CSSVars --> SidebarLayout[ResizableSidebarLayout CSS]
+CSSVars --> HeaderGradients[Header & Bottom Nav styles]
 ```
+
+## Baseline Inventory
+
+| Asset | Locations | Purpose |
+|---|---|---|
+| `/bg-repeat.webp` | `app/core/theme/theme-defaults.ts`, `app/components/dashboard/ThemePage.vue` defaults, `ResizableSidebarLayout` via `--app-content-bg-1` | Primary content background layer for the main viewport. |
+| `/bg-repeat-2.webp` | `app/core/theme/theme-defaults.ts`, `ThemePage.vue`, `ResizableSidebarLayout` `--app-content-bg-2` overlay | Secondary pattern that layers on top of the base content background. |
+| `/sidebar-repeater.webp` | `app/core/theme/theme-defaults.ts` and `ResizableSidebarLayout` `--app-sidebar-bg-1` | Sidebar texture whose intensity/size are managed by CSS variables. |
+| `/gradient-x.webp` | Theme settings defaults (`ThemeSettings`) and `applyThemeBackgrounds` helper, used by header and bottom-nav gradients | Provides the brushed gradient stripes for the dashboard chrome. |
+| `/gradient-x-sm.webp` | Previously referenced from `app/assets/css/main.css` for `.header-pattern` | Replaced with `--app-header-gradient`/`--app-bottomnav-gradient` so themes control it directly. |
+
+## Theme Settings Hooks
+
+- The dashboard theme settings already drive the same CSS variables we plan to reuse (`--app-content-bg-1/2`, `--app-sidebar-bg-1`, `--app-header-gradient`, and `--app-bottomnav-gradient`). `applyThemeBackgrounds` (see `app/core/theme/backgrounds.ts`) now centralizes the token resolution and CSS-var updates, and `applyToRoot` simply forwards the `ThemeSettings` values through this helper (`app/core/theme/theme-apply.ts`). This keeps per-layer repeat/size/opacities aligned with the new DSL.
+- Because those CSS variable names already exist in `ResizableSidebarLayout.vue` and the sidebar/header styles, switching themes or dashboard overrides updates the actual visuals without extra DOM watchers.
 
 ## Components & Interfaces
 

@@ -1,7 +1,10 @@
 <template>
     <div
         v-bind="rootAttrs"
-        :id="attrs.id ?? 'bottom-nav-root'"
+        :id="
+            (typeof attrs.id === 'string' ? attrs.id : null) ??
+            'bottom-nav-root'
+        "
         class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-2 border-r-2 border-[var(--md-inverse-surface)] px-0.5"
     >
         <!-- MY INFO -->
@@ -244,7 +247,7 @@ function navigateToCredits() {
 }
 /* Use theme variable for gradient stripes (flipped header style) */
 .header-pattern-flipped {
-    background-image: var(--app-bottomnav-gradient, url('/gradient-x.webp'));
+    background-image: var(--app-bottomnav-gradient, none);
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;

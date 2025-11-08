@@ -56,6 +56,36 @@ export interface ColorPalette {
 }
 
 /**
+ * Valid repeat options for background layers
+ */
+export type BackgroundRepeat = 'repeat' | 'no-repeat' | 'repeat-x' | 'repeat-y';
+
+/**
+ * Background layer configuration
+ */
+export interface ThemeBackgroundLayer {
+    image?: string | null;
+    color?: string;
+    opacity?: number;
+    repeat?: BackgroundRepeat;
+    size?: string;
+    fit?: 'cover' | 'contain';
+}
+
+/**
+ * Named background slots exposed through the theme DSL
+ */
+export interface ThemeBackgrounds {
+    content?: {
+        base?: ThemeBackgroundLayer;
+        overlay?: ThemeBackgroundLayer;
+    };
+    sidebar?: ThemeBackgroundLayer;
+    headerGradient?: ThemeBackgroundLayer;
+    bottomNavGradient?: ThemeBackgroundLayer;
+}
+
+/**
  * CSS attribute selector operators
  */
 export type AttributeOperator =
@@ -176,6 +206,9 @@ export interface ThemeDefinition {
 
     /** Custom prop-to-class mappings for this theme */
     propMaps?: PropClassMaps;
+
+    /** Background descriptions that map to CSS variables */
+    backgrounds?: ThemeBackgrounds;
 }
 
 /**
@@ -257,6 +290,9 @@ export interface CompiledTheme {
 
     /** Prop-to-class mappings */
     propMaps?: PropClassMaps;
+
+    /** Theme background metadata (optional) */
+    backgrounds?: ThemeBackgrounds;
 }
 
 /**

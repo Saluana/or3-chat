@@ -85,10 +85,7 @@ function onToggle() {
 <style scoped>
 /* Gradient already supplied by global pattern image; we just ensure better dark base */
 .header-pattern {
-    background-image: var(
-        --app-header-gradient,
-        url('/gradient-x.webp')
-    ) !important;
+    background-image: var(--app-header-gradient, none) !important;
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;

@@ -39,16 +39,16 @@
 	/* Theme customization variables (defaults mirror shipped design) */
 	--app-font-size-root: 20px; /* base font size */
 	/* Content background layer 1 */
-	--app-content-bg-1: url('/bg-repeat.webp');
-	--app-content-bg-1-opacity: 0.08;
+	--app-content-bg-1: none;
+	--app-content-bg-1-opacity: 1;
 	/* Content background layer 2 (overlay) */
-	--app-content-bg-2: url('/bg-repeat-2.webp');
-	--app-content-bg-2-opacity: 0.125;
+	--app-content-bg-2: none;
+	--app-content-bg-2-opacity: 1;
 	/* Repeat flag for content layers */
 	--app-content-bg-repeat: repeat;
 	/* Sidebar background */
-	--app-sidebar-bg-1: url('/sidebar-repeater.webp');
-	--app-sidebar-bg-1-opacity: 0.1;
+	--app-sidebar-bg-1: none;
+	--app-sidebar-bg-1-opacity: 1;
 	--app-sidebar-bg-repeat: repeat;
 }
 
@@ -180,7 +180,7 @@ html {
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern-flipped {
     background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
+    background-image: var(--app-header-gradient, none);
     rotate: 180deg;
     background-repeat: repeat-x;
     background-position: left center;
@@ -190,7 +190,7 @@ html {
 /* Hardcoded header pattern repeating horizontally */
 .header-pattern {
     background-color: var(--md-surface-variant);
-    background-image: url('/gradient-x-sm.webp');
+    background-image: var(--app-header-gradient, none);
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;

@@ -85,6 +85,39 @@ export default defineTheme({
         },
     },
 
+    backgrounds: {
+        content: {
+            base: {
+                image: '/bg-repeat.webp',
+                opacity: 0.08,
+                repeat: 'repeat',
+                size: '150px',
+            },
+            overlay: {
+                image: '/bg-repeat-2.webp',
+                opacity: 0.125,
+                repeat: 'repeat',
+                size: '380px',
+            },
+        },
+        sidebar: {
+            image: '/sidebar-repeater.webp',
+            opacity: 0.1,
+            repeat: 'repeat',
+            size: '240px',
+        },
+        headerGradient: {
+            image: '/gradient-x.webp',
+            repeat: 'repeat',
+            size: 'auto 100%',
+        },
+        bottomNavGradient: {
+            image: '/gradient-x.webp',
+            repeat: 'repeat',
+            size: 'auto 100%',
+        },
+    },
+
     // Component overrides using the new selector syntax
     // These provide default styling for all retro-themed components
     overrides: {

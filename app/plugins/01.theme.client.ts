@@ -7,6 +7,10 @@ import {
     removeThemeClasses,
     loadThemeCSS,
 } from '~/theme/_shared/css-selector-runtime';
+import {
+    applyThemeBackgrounds,
+    createThemeBackgroundTokenResolver,
+} from '~/core/theme/backgrounds';
 
 export interface ThemePlugin {
     set: (name: string) => void;
@@ -36,6 +40,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const activeThemeStorageKey = 'activeTheme';
     const activeThemeCookieKey = 'or3_active_theme';
     const root = document.documentElement;
+    const themeBackgroundTokenResolver = createThemeBackgroundTokenResolver();
 
     const getSystemPref = () =>
         window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -123,9 +128,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
      *
      * Security: themeName is validated against available themes to prevent path traversal
      */
-    const loadTheme = async (
-        themeName: string
-    ): Promise<CompiledTheme | null> => {
+const loadTheme = async (
+    themeName: string
+): Promise<CompiledTheme | null> => {
         try {
             // Validate theme name to prevent path traversal attacks
             // Only allow alphanumeric characters and hyphens
@@ -160,6 +165,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     cssSelectors: definition.cssSelectors,
                     ui: definition.ui,
                     propMaps: definition.propMaps,
+                    backgrounds: definition.backgrounds,
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
@@ -291,6 +297,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             if (theme.cssVariables) {
                 // TODO: Inject CSS variables into document
             }
+
+            await applyThemeBackgrounds(theme.backgrounds, {
+                resolveToken: themeBackgroundTokenResolver,
+            });
         }
     };
 

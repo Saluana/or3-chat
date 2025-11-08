@@ -6,7 +6,11 @@
  * selector syntax is correct.
  */
 
-import type { ThemeDefinition, ValidationError } from './types';
+import type {
+    ThemeDefinition,
+    ThemeBackgroundLayer,
+    ValidationError,
+} from './types';
 
 /**
  * Validation result
@@ -139,7 +143,53 @@ export function validateThemeDefinition(config: ThemeDefinition): ValidationResu
             }
         }
     }
-    
+
+    // Validate background definitions if present
+    if (config.backgrounds) {
+        const repeatOptions = new Set(['repeat', 'no-repeat', 'repeat-x', 'repeat-y']);
+        const validateLayer = (
+            layer: ThemeBackgroundLayer | undefined,
+            location: string
+        ) => {
+            if (!layer) return;
+            if (layer.opacity !== undefined) {
+                if (layer.opacity < 0 || layer.opacity > 1) {
+                    warnings.push({
+                        severity: 'warning',
+                        code: 'THEME_011',
+                        message: `Background layer "${location}" uses opacity ${layer.opacity}, which should be between 0 and 1`,
+                        file: 'theme.ts',
+                        suggestion: 'Use a value between 0 and 1 (e.g., 0.25)',
+                    });
+                }
+            }
+            if (layer.repeat && !repeatOptions.has(layer.repeat)) {
+                warnings.push({
+                    severity: 'warning',
+                    code: 'THEME_012',
+                    message: `Background layer "${location}" uses an unsupported repeat value "${layer.repeat}"`,
+                    file: 'theme.ts',
+                    suggestion: `Use one of: ${[...repeatOptions].join(', ')}`,
+                });
+            }
+            if (layer.fit && layer.fit !== 'cover' && layer.fit !== 'contain') {
+                warnings.push({
+                    severity: 'warning',
+                    code: 'THEME_013',
+                    message: `Background layer "${location}" uses an unsupported fit value "${layer.fit}"`,
+                    file: 'theme.ts',
+                    suggestion: 'Use either "cover" or "contain"',
+                });
+            }
+        };
+
+        validateLayer(config.backgrounds.content?.base, 'backgrounds.content.base');
+        validateLayer(config.backgrounds.content?.overlay, 'backgrounds.content.overlay');
+        validateLayer(config.backgrounds.sidebar, 'backgrounds.sidebar');
+        validateLayer(config.backgrounds.headerGradient, 'backgrounds.headerGradient');
+        validateLayer(config.backgrounds.bottomNavGradient, 'backgrounds.bottomNavGradient');
+    }
+
     // Validate propMaps if present
     if (config.propMaps) {
         for (const [propType, mappings] of Object.entries(config.propMaps)) {
