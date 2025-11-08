@@ -9,12 +9,39 @@ export interface UserThemeOverrides {
     colors?: {
         /** Master toggle for palette overrides */
         enabled?: boolean;
+        // Primary
         primary?: string;
+        onPrimary?: string;
+        primaryContainer?: string;
+        onPrimaryContainer?: string;
+        // Secondary
         secondary?: string;
+        onSecondary?: string;
+        secondaryContainer?: string;
+        onSecondaryContainer?: string;
+        // Tertiary
+        tertiary?: string;
+        onTertiary?: string;
+        tertiaryContainer?: string;
+        onTertiaryContainer?: string;
+        // Error
         error?: string;
-        surfaceVariant?: string;
-        border?: string;
+        onError?: string;
+        errorContainer?: string;
+        onErrorContainer?: string;
+        // Surface
         surface?: string;
+        onSurface?: string;
+        surfaceVariant?: string;
+        onSurfaceVariant?: string;
+        inverseSurface?: string;
+        inverseOnSurface?: string;
+        // Outline
+        outline?: string;
+        outlineVariant?: string;
+        // Semantic (app-specific)
+        success?: string;
+        warning?: string;
     };
 
     /** Background layer overrides */

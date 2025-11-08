@@ -54,7 +54,7 @@
         <!-- Color Palette Overrides -->
         <section
             id="dashboard-theme-palette-section"
-            class="section-card space-y-3"
+            class="section-card space-y-4"
             role="group"
             aria-labelledby="theme-section-palette"
         >
@@ -65,288 +65,73 @@
                 Color Palette
             </h2>
             <p class="supporting-text">
-                Override core Material colors for this mode. Toggle off to use
-                the theme's defaults.
+                Override Material Design 3 colors for this mode. Toggle off to
+                use theme defaults.
             </p>
             <label class="flex items-center gap-2 cursor-pointer select-none">
                 <input
                     type="checkbox"
                     :checked="overrides.colors?.enabled ?? false"
-                    @change="
-                        set({
-                            colors: {
-                                enabled: !(overrides.colors?.enabled ?? false),
-                            },
-                        })
-                    "
+                    @change="togglePaletteOverrides"
                 />
                 <span class="text-xs">Enable palette overrides</span>
             </label>
-            <div class="space-y-3 pt-1">
-                <div class="flex items-center gap-4">
-                    <label class="w-32 text-xs">Primary</label>
-                    <UColorPicker
-                        v-bind="paletteColorPickerProps"
-                        :disabled="!(overrides.colors?.enabled ?? false)"
-                        :model-value="
-                            (overrides.colors?.enabled ?? false) &&
-                            String(overrides.colors?.primary || '').startsWith(
-                                '#'
-                            )
-                                ? overrides.colors?.primary
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ colors: { primary: c } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
+
+            <div
+                v-for="group in colorGroups"
+                :key="group.label"
+                class="space-y-2 pt-2"
+            >
+                <h3 class="text-xs font-semibold opacity-70">
+                    {{ group.label }}
+                </h3>
+                <div class="space-y-2 pl-2">
+                    <div
+                        v-for="color in group.colors"
+                        :key="color.key"
+                        class="flex items-center gap-3"
+                    >
+                        <label class="w-40 text-xs">{{ color.label }}</label>
+                        <UColorPicker
+                            v-bind="paletteColorPickerProps"
+                            :disabled="!(overrides.colors?.enabled ?? false)"
+                            :model-value="
+                                (overrides.colors?.enabled ?? false) &&
+                                String((overrides.colors as any)?.[color.key] || '').startsWith('#')
+                                    ? (overrides.colors as any)[color.key]
+                                    : undefined
+                            "
+                            @update:model-value="(c: string | undefined) => {
+                                if (c) {
+                                    console.log('[ThemePage] Color picker update:', color.key, '=', c);
+                                    set({ colors: { [color.key]: c } } as any);
+                                }
+                            }"
+                            class="scale-60 origin-left"
+                        />
                         <input
-                            class="theme-input w-24"
+                            class="theme-input w-24 text-xs"
                             type="text"
                             spellcheck="false"
                             maxlength="9"
                             placeholder="#RRGGBB"
-                            v-model="localHex.palettePrimary"
-                            @input="onHexInput('palettePrimary')"
+                            :value="(localHex as any)[color.key]"
+                            @input="(e: Event) => {
+                                (localHex as any)[color.key] = (e.target as HTMLInputElement).value;
+                                onHexInput(color.key as any);
+                            }"
                             :disabled="!(overrides.colors?.enabled ?? false)"
-                            aria-label="Primary hex color"
+                            :aria-label="`${color.label} hex color`"
                         />
                         <button
                             type="button"
-                            class="theme-btn-copy"
-                            @click="copyColor('palettePrimary')"
+                            class="theme-btn-copy text-xs"
+                            @click="copyColor(color.key as any)"
                             :disabled="
                                 !(overrides.colors?.enabled ?? false) ||
-                                !String(
-                                    overrides.colors?.primary || ''
-                                ).startsWith('#')
+                                !String((overrides.colors as any)?.[color.key] || '').startsWith('#')
                             "
-                            aria-label="Copy primary color"
-                            title="Copy"
-                        >
-                            Copy
-                        </button>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <label class="w-32 text-xs">Secondary</label>
-                    <UColorPicker
-                        v-bind="paletteColorPickerProps"
-                        :disabled="!(overrides.colors?.enabled ?? false)"
-                        :model-value="
-                            (overrides.colors?.enabled ?? false) &&
-                            String(
-                                overrides.colors?.secondary || ''
-                            ).startsWith('#')
-                                ? overrides.colors?.secondary
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ colors: { secondary: c } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <input
-                            class="theme-input w-24"
-                            type="text"
-                            spellcheck="false"
-                            maxlength="9"
-                            placeholder="#RRGGBB"
-                            v-model="localHex.paletteSecondary"
-                            @input="onHexInput('paletteSecondary')"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            aria-label="Secondary hex color"
-                        />
-                        <button
-                            type="button"
-                            class="theme-btn-copy"
-                            @click="copyColor('paletteSecondary')"
-                            :disabled="
-                                !(overrides.colors?.enabled ?? false) ||
-                                !String(
-                                    overrides.colors?.secondary || ''
-                                ).startsWith('#')
-                            "
-                            aria-label="Copy secondary color"
-                            title="Copy"
-                        >
-                            Copy
-                        </button>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <label class="w-32 text-xs">Error</label>
-                    <UColorPicker
-                        v-bind="paletteColorPickerProps"
-                        :disabled="!(overrides.colors?.enabled ?? false)"
-                        :model-value="
-                            (overrides.colors?.enabled ?? false) &&
-                            String(overrides.colors?.error || '').startsWith(
-                                '#'
-                            )
-                                ? overrides.colors?.error
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ colors: { error: c } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <input
-                            class="theme-input w-24"
-                            type="text"
-                            spellcheck="false"
-                            maxlength="9"
-                            placeholder="#RRGGBB"
-                            v-model="localHex.paletteError"
-                            @input="onHexInput('paletteError')"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            aria-label="Error hex color"
-                        />
-                        <button
-                            type="button"
-                            class="theme-btn-copy"
-                            @click="copyColor('paletteError')"
-                            :disabled="
-                                !(overrides.colors?.enabled ?? false) ||
-                                !String(
-                                    overrides.colors?.error || ''
-                                ).startsWith('#')
-                            "
-                            aria-label="Copy error color"
-                            title="Copy"
-                        >
-                            Copy
-                        </button>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <label class="w-32 text-xs">Surface Variant</label>
-                    <UColorPicker
-                        v-bind="paletteColorPickerProps"
-                        :disabled="!(overrides.colors?.enabled ?? false)"
-                        :model-value="
-                            (overrides.colors?.enabled ?? false) &&
-                            String(
-                                overrides.colors?.surfaceVariant || ''
-                            ).startsWith('#')
-                                ? overrides.colors?.surfaceVariant
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ colors: { surfaceVariant: c } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <input
-                            class="theme-input w-24"
-                            type="text"
-                            spellcheck="false"
-                            maxlength="9"
-                            placeholder="#RRGGBB"
-                            v-model="localHex.paletteSurfaceVariant"
-                            @input="onHexInput('paletteSurfaceVariant')"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            aria-label="Surface Variant hex color"
-                        />
-                        <button
-                            type="button"
-                            class="theme-btn-copy"
-                            @click="copyColor('paletteSurfaceVariant')"
-                            :disabled="
-                                !(overrides.colors?.enabled ?? false) ||
-                                !String(
-                                    overrides.colors?.surfaceVariant || ''
-                                ).startsWith('#')
-                            "
-                            aria-label="Copy surface variant color"
-                            title="Copy"
-                        >
-                            Copy
-                        </button>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <label class="w-32 text-xs">Border</label>
-                    <UColorPicker
-                        v-bind="paletteColorPickerProps"
-                        :disabled="!(overrides.colors?.enabled ?? false)"
-                        :model-value="
-                            (overrides.colors?.enabled ?? false) &&
-                            String(overrides.colors?.border || '').startsWith(
-                                '#'
-                            )
-                                ? overrides.colors?.border
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ colors: { border: c } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <input
-                            class="theme-input w-24"
-                            type="text"
-                            spellcheck="false"
-                            maxlength="9"
-                            placeholder="#RRGGBB"
-                            v-model="localHex.paletteBorder"
-                            @input="onHexInput('paletteBorder')"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            aria-label="Border hex color"
-                        />
-                        <button
-                            type="button"
-                            class="theme-btn-copy"
-                            @click="copyColor('paletteBorder')"
-                            :disabled="
-                                !(overrides.colors?.enabled ?? false) ||
-                                !String(
-                                    overrides.colors?.border || ''
-                                ).startsWith('#')
-                            "
-                            aria-label="Copy border color"
-                            title="Copy"
-                        >
-                            Copy
-                        </button>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <label class="w-32 text-xs">Surface</label>
-                    <UColorPicker
-                        v-bind="paletteColorPickerProps"
-                        :disabled="!(overrides.colors?.enabled ?? false)"
-                        :model-value="
-                            (overrides.colors?.enabled ?? false) &&
-                            String(overrides.colors?.surface || '').startsWith(
-                                '#'
-                            )
-                                ? overrides.colors?.surface
-                                : undefined
-                        "
-                        @update:model-value="(c: string | undefined)=> c && set({ colors: { surface: c } })"
-                        class="scale-60 origin-left"
-                    />
-                    <div class="flex items-center gap-2">
-                        <input
-                            class="theme-input w-24"
-                            type="text"
-                            spellcheck="false"
-                            maxlength="9"
-                            placeholder="#RRGGBB"
-                            v-model="localHex.paletteSurface"
-                            @input="onHexInput('paletteSurface')"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            aria-label="Surface hex color"
-                        />
-                        <button
-                            type="button"
-                            class="theme-btn-copy"
-                            @click="copyColor('paletteSurface')"
-                            :disabled="
-                                !(overrides.colors?.enabled ?? false) ||
-                                !String(
-                                    overrides.colors?.surface || ''
-                                ).startsWith('#')
-                            "
-                            aria-label="Copy surface color"
+                            :aria-label="`Copy ${color.label}`"
                             title="Copy"
                         >
                             Copy
@@ -485,7 +270,7 @@
                     <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
                 </div>
                 <span
-                    class="text-xs truncate max-w-[160px]"
+                    class="text-xs truncate max-w-40"
                     :title="displayName(contentBg1Url)"
                 >
                     {{ contentBg1Url ? displayName(contentBg1Url) : 'None' }}
@@ -652,7 +437,7 @@
                     <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
                 </div>
                 <span
-                    class="text-xs truncate max-w-[160px]"
+                    class="text-xs truncate max-w-40"
                     :title="displayName(contentBg2Url)"
                 >
                     {{
@@ -821,7 +606,7 @@
                     <span class="dz-hint" aria-hidden="true">Drop / Tap</span>
                 </div>
                 <span
-                    class="text-xs truncate max-w-[160px]"
+                    class="text-xs truncate max-w-40"
                     :title="displayName(sidebarBgUrl)"
                 >
                     {{ sidebarBgUrl ? displayName(sidebarBgUrl) : 'None' }}
@@ -974,94 +759,6 @@
             </label>
         </section>
 
-        <!-- Navigation Header -->
-        <section
-            id="dashboard-theme-header-section"
-            class="section-card space-y-4"
-            role="group"
-            aria-labelledby="theme-section-header"
-        >
-            <h2
-                id="theme-section-header"
-                class="font-heading text-base uppercase tracking-wide group-heading"
-            >
-                Navigation Header
-            </h2>
-            <div class="flex items-center gap-3 text-xs">
-                <span class="opacity-70">Gradient:</span>
-                <UButton
-                    v-bind="gradientButtonProps"
-                    :disabled="showHeaderGradient"
-                    @click="
-                        set({
-                            backgrounds: { headerGradient: { enabled: true } },
-                        })
-                    "
-                    >Default</UButton
-                >
-                <UButton
-                    v-bind="gradientButtonProps"
-                    :disabled="!showHeaderGradient"
-                    @click="
-                        set({
-                            backgrounds: { headerGradient: { enabled: false } },
-                        })
-                    "
-                    >Remove</UButton
-                >
-                <span class="opacity-60"
-                    >Current:
-                    {{ showHeaderGradient ? 'Default' : 'Removed' }}</span
-                >
-            </div>
-        </section>
-
-        <!-- Navigation Footer -->
-        <section
-            id="dashboard-theme-footer-section"
-            class="section-card space-y-4"
-            role="group"
-            aria-labelledby="theme-section-footer"
-        >
-            <h2
-                id="theme-section-footer"
-                class="font-heading text-base uppercase tracking-wide group-heading"
-            >
-                Navigation Footer
-            </h2>
-            <div class="flex items-center gap-3 text-xs">
-                <span class="opacity-70">Gradient:</span>
-                <UButton
-                    v-bind="gradientButtonProps"
-                    :disabled="showBottomBarGradient"
-                    @click="
-                        set({
-                            backgrounds: {
-                                bottomNavGradient: { enabled: true },
-                            },
-                        })
-                    "
-                    >Default</UButton
-                >
-                <UButton
-                    v-bind="gradientButtonProps"
-                    :disabled="!showBottomBarGradient"
-                    @click="
-                        set({
-                            backgrounds: {
-                                bottomNavGradient: { enabled: false },
-                            },
-                        })
-                    "
-                    >Remove</UButton
-                >
-                <span class="opacity-60"
-                    >Current:
-                    {{ showBottomBarGradient ? 'Default' : 'Removed' }}</span
-                >
-            </div>
-        </section>
-
         <!-- Reset -->
         <section
             id="dashboard-theme-reset-section"
@@ -1105,6 +802,95 @@ const reapply = themeApi.reapply;
 const activeMode = themeApi.activeMode;
 const switchMode = themeApi.switchMode;
 
+// Helper to get current color from CSS variables (base theme)
+function getCurrentThemeColor(cssVar: string): string {
+    if (!isBrowser()) return '';
+    const computed = getComputedStyle(document.documentElement);
+    const value = computed.getPropertyValue(cssVar).trim();
+    // Convert rgb(r, g, b) or rgb(r g b) to hex
+    if (value.startsWith('rgb')) {
+        // Handle both "rgb(r, g, b)" and "rgb(r g b)" formats
+        const match = value.match(/rgb\((\d+)[,\s]+(\d+)[,\s]+(\d+)\)/);
+        if (match && match[1] && match[2] && match[3]) {
+            const r = parseInt(match[1], 10);
+            const g = parseInt(match[2], 10);
+            const b = parseInt(match[3], 10);
+            return (
+                '#' +
+                ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)
+            );
+        }
+    }
+    return value.startsWith('#') ? value : '';
+}
+
+const isBrowser = () => typeof window !== 'undefined';
+
+// Color groups for organized UI
+const colorGroups = [
+    {
+        label: 'Primary Colors',
+        colors: [
+            { key: 'primary', label: 'Primary' },
+            { key: 'onPrimary', label: 'On Primary' },
+            { key: 'primaryContainer', label: 'Primary Container' },
+            { key: 'onPrimaryContainer', label: 'On Primary Container' },
+        ],
+    },
+    {
+        label: 'Secondary Colors',
+        colors: [
+            { key: 'secondary', label: 'Secondary' },
+            { key: 'onSecondary', label: 'On Secondary' },
+            { key: 'secondaryContainer', label: 'Secondary Container' },
+            { key: 'onSecondaryContainer', label: 'On Secondary Container' },
+        ],
+    },
+    {
+        label: 'Tertiary Colors',
+        colors: [
+            { key: 'tertiary', label: 'Tertiary' },
+            { key: 'onTertiary', label: 'On Tertiary' },
+            { key: 'tertiaryContainer', label: 'Tertiary Container' },
+            { key: 'onTertiaryContainer', label: 'On Tertiary Container' },
+        ],
+    },
+    {
+        label: 'Error Colors',
+        colors: [
+            { key: 'error', label: 'Error' },
+            { key: 'onError', label: 'On Error' },
+            { key: 'errorContainer', label: 'Error Container' },
+            { key: 'onErrorContainer', label: 'On Error Container' },
+        ],
+    },
+    {
+        label: 'Surface Colors',
+        colors: [
+            { key: 'surface', label: 'Surface' },
+            { key: 'onSurface', label: 'On Surface' },
+            { key: 'surfaceVariant', label: 'Surface Variant' },
+            { key: 'onSurfaceVariant', label: 'On Surface Variant' },
+            { key: 'inverseSurface', label: 'Inverse Surface' },
+            { key: 'inverseOnSurface', label: 'Inverse On Surface' },
+        ],
+    },
+    {
+        label: 'Outline',
+        colors: [
+            { key: 'outline', label: 'Outline' },
+            { key: 'outlineVariant', label: 'Outline Variant' },
+        ],
+    },
+    {
+        label: 'Semantic Colors',
+        colors: [
+            { key: 'success', label: 'Success' },
+            { key: 'warning', label: 'Warning' },
+        ],
+    },
+];
+
 // Computed helpers for cleaner template bindings
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
 const contentBg1Url = computed(
@@ -1142,12 +928,6 @@ const sidebarBgFit = computed(
 );
 const sidebarBgColor = computed(
     () => overrides.value.backgrounds?.sidebar?.color || ''
-);
-const showHeaderGradient = computed(
-    () => overrides.value.backgrounds?.headerGradient?.enabled ?? true
-);
-const showBottomBarGradient = computed(
-    () => overrides.value.backgrounds?.bottomNavGradient?.enabled ?? true
 );
 
 // Theme overrides for buttons
@@ -1198,20 +978,6 @@ const repeatButtonProps = computed(() => {
         component: 'button',
         context: 'dashboard',
         identifier: 'dashboard.theme.repeat',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'sm' as const,
-        variant: 'basic' as const,
-        ...(overrides.value as any),
-    };
-});
-
-const gradientButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.theme.gradient',
         isNuxtUI: true,
     });
     return {
@@ -1285,32 +1051,112 @@ const localHex = reactive({
     ).startsWith('#')
         ? String(overrides.value.backgrounds?.sidebar?.color)
         : '',
-    // palette hex boxes
-    palettePrimary: String(overrides.value.colors?.primary || '').startsWith(
-        '#'
-    )
+    // Material Design palette hex boxes (expanded to support all MD3 colors)
+    primary: String(overrides.value.colors?.primary || '').startsWith('#')
         ? String(overrides.value.colors?.primary)
         : '',
-    paletteSecondary: String(
-        overrides.value.colors?.secondary || ''
+    onPrimary: String(overrides.value.colors?.onPrimary || '').startsWith('#')
+        ? String(overrides.value.colors?.onPrimary)
+        : '',
+    primaryContainer: String(
+        overrides.value.colors?.primaryContainer || ''
     ).startsWith('#')
+        ? String(overrides.value.colors?.primaryContainer)
+        : '',
+    onPrimaryContainer: String(
+        overrides.value.colors?.onPrimaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onPrimaryContainer)
+        : '',
+    secondary: String(overrides.value.colors?.secondary || '').startsWith('#')
         ? String(overrides.value.colors?.secondary)
         : '',
-    paletteError: String(overrides.value.colors?.error || '').startsWith('#')
+    onSecondary: String(overrides.value.colors?.onSecondary || '').startsWith(
+        '#'
+    )
+        ? String(overrides.value.colors?.onSecondary)
+        : '',
+    secondaryContainer: String(
+        overrides.value.colors?.secondaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.secondaryContainer)
+        : '',
+    onSecondaryContainer: String(
+        overrides.value.colors?.onSecondaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onSecondaryContainer)
+        : '',
+    tertiary: String(overrides.value.colors?.tertiary || '').startsWith('#')
+        ? String(overrides.value.colors?.tertiary)
+        : '',
+    onTertiary: String(overrides.value.colors?.onTertiary || '').startsWith('#')
+        ? String(overrides.value.colors?.onTertiary)
+        : '',
+    tertiaryContainer: String(
+        overrides.value.colors?.tertiaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.tertiaryContainer)
+        : '',
+    onTertiaryContainer: String(
+        overrides.value.colors?.onTertiaryContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onTertiaryContainer)
+        : '',
+    error: String(overrides.value.colors?.error || '').startsWith('#')
         ? String(overrides.value.colors?.error)
         : '',
-    paletteBorder: String(overrides.value.colors?.border || '').startsWith('#')
-        ? String(overrides.value.colors?.border)
+    onError: String(overrides.value.colors?.onError || '').startsWith('#')
+        ? String(overrides.value.colors?.onError)
         : '',
-    paletteSurfaceVariant: String(
+    errorContainer: String(
+        overrides.value.colors?.errorContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.errorContainer)
+        : '',
+    onErrorContainer: String(
+        overrides.value.colors?.onErrorContainer || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onErrorContainer)
+        : '',
+    surface: String(overrides.value.colors?.surface || '').startsWith('#')
+        ? String(overrides.value.colors?.surface)
+        : '',
+    onSurface: String(overrides.value.colors?.onSurface || '').startsWith('#')
+        ? String(overrides.value.colors?.onSurface)
+        : '',
+    surfaceVariant: String(
         overrides.value.colors?.surfaceVariant || ''
     ).startsWith('#')
         ? String(overrides.value.colors?.surfaceVariant)
         : '',
-    paletteSurface: String(overrides.value.colors?.surface || '').startsWith(
-        '#'
-    )
-        ? String(overrides.value.colors?.surface)
+    onSurfaceVariant: String(
+        overrides.value.colors?.onSurfaceVariant || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.onSurfaceVariant)
+        : '',
+    inverseSurface: String(
+        overrides.value.colors?.inverseSurface || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.inverseSurface)
+        : '',
+    inverseOnSurface: String(
+        overrides.value.colors?.inverseOnSurface || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.inverseOnSurface)
+        : '',
+    outline: String(overrides.value.colors?.outline || '').startsWith('#')
+        ? String(overrides.value.colors?.outline)
+        : '',
+    outlineVariant: String(
+        overrides.value.colors?.outlineVariant || ''
+    ).startsWith('#')
+        ? String(overrides.value.colors?.outlineVariant)
+        : '',
+    success: String(overrides.value.colors?.success || '').startsWith('#')
+        ? String(overrides.value.colors?.success)
+        : '',
+    warning: String(overrides.value.colors?.warning || '').startsWith('#')
+        ? String(overrides.value.colors?.warning)
         : '',
 });
 
@@ -1678,6 +1524,55 @@ function onResetCurrent() {
     }
 }
 
+function togglePaletteOverrides() {
+    const currentlyEnabled = overrides.value.colors?.enabled ?? false;
+
+    if (!currentlyEnabled) {
+        // Enabling: Initialize with current theme colors
+        const colorMap: Array<[string, string]> = [
+            ['primary', '--md-primary'],
+            ['onPrimary', '--md-on-primary'],
+            ['primaryContainer', '--md-primary-container'],
+            ['onPrimaryContainer', '--md-on-primary-container'],
+            ['secondary', '--md-secondary'],
+            ['onSecondary', '--md-on-secondary'],
+            ['secondaryContainer', '--md-secondary-container'],
+            ['onSecondaryContainer', '--md-on-secondary-container'],
+            ['tertiary', '--md-tertiary'],
+            ['onTertiary', '--md-on-tertiary'],
+            ['tertiaryContainer', '--md-tertiary-container'],
+            ['onTertiaryContainer', '--md-on-tertiary-container'],
+            ['error', '--md-error'],
+            ['onError', '--md-on-error'],
+            ['errorContainer', '--md-error-container'],
+            ['onErrorContainer', '--md-on-error-container'],
+            ['surface', '--md-surface'],
+            ['onSurface', '--md-on-surface'],
+            ['surfaceVariant', '--md-surface-variant'],
+            ['onSurfaceVariant', '--md-on-surface-variant'],
+            ['inverseSurface', '--md-inverse-surface'],
+            ['inverseOnSurface', '--md-inverse-on-surface'],
+            ['outline', '--md-outline'],
+            ['outlineVariant', '--md-outline-variant'],
+            ['success', '--md-extended-color-success-color'],
+            ['warning', '--md-extended-color-warning-color'],
+        ];
+
+        const initialColors: any = { enabled: true };
+        for (const [key, cssVar] of colorMap) {
+            const color = getCurrentThemeColor(cssVar);
+            if (color) {
+                initialColors[key] = color;
+            }
+        }
+
+        set({ colors: initialColors });
+    } else {
+        // Disabling: Just toggle off
+        set({ colors: { enabled: false } });
+    }
+}
+
 // Hex handling helpers
 function isValidHex(v: string) {
     return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(
@@ -1692,30 +1587,44 @@ function onHexInput(key: keyof typeof localHex) {
     if (!raw) return; // allow clearing without committing
     const candidate = ensureHash(raw.trim());
     if (isValidHex(candidate)) {
-        set({ [key]: candidate.toLowerCase() } as any);
+        // Map background color keys
+        if (key === 'contentBg1Color') {
+            set({
+                backgrounds: {
+                    content: { base: { color: candidate.toLowerCase() } },
+                },
+            });
+        } else if (key === 'contentBg2Color') {
+            set({
+                backgrounds: {
+                    content: { overlay: { color: candidate.toLowerCase() } },
+                },
+            });
+        } else if (key === 'sidebarBgColor') {
+            set({
+                backgrounds: { sidebar: { color: candidate.toLowerCase() } },
+            });
+        } else {
+            // All other keys are palette colors - map directly
+            set({ colors: { [key]: candidate.toLowerCase() } } as any);
+        }
     }
 }
 async function copyColor(key: keyof typeof localHex) {
-    // Map to override paths
     let val = '';
-    if (key === 'palettePrimary') val = overrides.value.colors?.primary || '';
-    else if (key === 'paletteSecondary')
-        val = overrides.value.colors?.secondary || '';
-    else if (key === 'paletteError') val = overrides.value.colors?.error || '';
-    else if (key === 'paletteSurfaceVariant')
-        val = overrides.value.colors?.surfaceVariant || '';
-    else if (key === 'paletteBorder')
-        val = overrides.value.colors?.border || '';
-    else if (key === 'paletteSurface')
-        val = overrides.value.colors?.surface || '';
-    else if (key === 'contentBg1Color')
+    // Map to override paths
+    if (key === 'contentBg1Color') {
         val = String(overrides.value.backgrounds?.content?.base?.color || '');
-    else if (key === 'contentBg2Color')
+    } else if (key === 'contentBg2Color') {
         val = String(
             overrides.value.backgrounds?.content?.overlay?.color || ''
         );
-    else if (key === 'sidebarBgColor')
+    } else if (key === 'sidebarBgColor') {
         val = String(overrides.value.backgrounds?.sidebar?.color || '');
+    } else {
+        // All other keys are palette colors
+        val = (overrides.value.colors as any)?.[key] || '';
+    }
 
     if (!val || !val.startsWith('#')) return;
     try {
@@ -1738,7 +1647,7 @@ watch(
         local.contentBg1SizePx = o.backgrounds?.content?.base?.sizePx || 240;
         local.contentBg2SizePx = o.backgrounds?.content?.overlay?.sizePx || 240;
         local.sidebarBgSizePx = o.backgrounds?.sidebar?.sizePx || 240;
-        // sync hex boxes (only show hex values)
+        // sync hex boxes (only show hex values) - backgrounds
         localHex.contentBg1Color = String(
             o.backgrounds?.content?.base?.color || ''
         ).startsWith('#')
@@ -1754,32 +1663,112 @@ watch(
         ).startsWith('#')
             ? String(o.backgrounds?.sidebar?.color)
             : '';
-        // palette hex boxes
-        localHex.palettePrimary = String(o.colors?.primary || '').startsWith(
-            '#'
-        )
+        // sync all palette hex boxes
+        localHex.primary = String(o.colors?.primary || '').startsWith('#')
             ? String(o.colors?.primary)
             : '';
-        localHex.paletteSecondary = String(
-            o.colors?.secondary || ''
+        localHex.onPrimary = String(o.colors?.onPrimary || '').startsWith('#')
+            ? String(o.colors?.onPrimary)
+            : '';
+        localHex.primaryContainer = String(
+            o.colors?.primaryContainer || ''
         ).startsWith('#')
+            ? String(o.colors?.primaryContainer)
+            : '';
+        localHex.onPrimaryContainer = String(
+            o.colors?.onPrimaryContainer || ''
+        ).startsWith('#')
+            ? String(o.colors?.onPrimaryContainer)
+            : '';
+        localHex.secondary = String(o.colors?.secondary || '').startsWith('#')
             ? String(o.colors?.secondary)
             : '';
-        localHex.paletteError = String(o.colors?.error || '').startsWith('#')
+        localHex.onSecondary = String(o.colors?.onSecondary || '').startsWith(
+            '#'
+        )
+            ? String(o.colors?.onSecondary)
+            : '';
+        localHex.secondaryContainer = String(
+            o.colors?.secondaryContainer || ''
+        ).startsWith('#')
+            ? String(o.colors?.secondaryContainer)
+            : '';
+        localHex.onSecondaryContainer = String(
+            o.colors?.onSecondaryContainer || ''
+        ).startsWith('#')
+            ? String(o.colors?.onSecondaryContainer)
+            : '';
+        localHex.tertiary = String(o.colors?.tertiary || '').startsWith('#')
+            ? String(o.colors?.tertiary)
+            : '';
+        localHex.onTertiary = String(o.colors?.onTertiary || '').startsWith('#')
+            ? String(o.colors?.onTertiary)
+            : '';
+        localHex.tertiaryContainer = String(
+            o.colors?.tertiaryContainer || ''
+        ).startsWith('#')
+            ? String(o.colors?.tertiaryContainer)
+            : '';
+        localHex.onTertiaryContainer = String(
+            o.colors?.onTertiaryContainer || ''
+        ).startsWith('#')
+            ? String(o.colors?.onTertiaryContainer)
+            : '';
+        localHex.error = String(o.colors?.error || '').startsWith('#')
             ? String(o.colors?.error)
             : '';
-        localHex.paletteSurfaceVariant = String(
+        localHex.onError = String(o.colors?.onError || '').startsWith('#')
+            ? String(o.colors?.onError)
+            : '';
+        localHex.errorContainer = String(
+            o.colors?.errorContainer || ''
+        ).startsWith('#')
+            ? String(o.colors?.errorContainer)
+            : '';
+        localHex.onErrorContainer = String(
+            o.colors?.onErrorContainer || ''
+        ).startsWith('#')
+            ? String(o.colors?.onErrorContainer)
+            : '';
+        localHex.surface = String(o.colors?.surface || '').startsWith('#')
+            ? String(o.colors?.surface)
+            : '';
+        localHex.onSurface = String(o.colors?.onSurface || '').startsWith('#')
+            ? String(o.colors?.onSurface)
+            : '';
+        localHex.surfaceVariant = String(
             o.colors?.surfaceVariant || ''
         ).startsWith('#')
             ? String(o.colors?.surfaceVariant)
             : '';
-        localHex.paletteBorder = String(o.colors?.border || '').startsWith('#')
-            ? String(o.colors?.border)
+        localHex.onSurfaceVariant = String(
+            o.colors?.onSurfaceVariant || ''
+        ).startsWith('#')
+            ? String(o.colors?.onSurfaceVariant)
             : '';
-        localHex.paletteSurface = String(o.colors?.surface || '').startsWith(
-            '#'
-        )
-            ? String(o.colors?.surface)
+        localHex.inverseSurface = String(
+            o.colors?.inverseSurface || ''
+        ).startsWith('#')
+            ? String(o.colors?.inverseSurface)
+            : '';
+        localHex.inverseOnSurface = String(
+            o.colors?.inverseOnSurface || ''
+        ).startsWith('#')
+            ? String(o.colors?.inverseOnSurface)
+            : '';
+        localHex.outline = String(o.colors?.outline || '').startsWith('#')
+            ? String(o.colors?.outline)
+            : '';
+        localHex.outlineVariant = String(
+            o.colors?.outlineVariant || ''
+        ).startsWith('#')
+            ? String(o.colors?.outlineVariant)
+            : '';
+        localHex.success = String(o.colors?.success || '').startsWith('#')
+            ? String(o.colors?.success)
+            : '';
+        localHex.warning = String(o.colors?.warning || '').startsWith('#')
+            ? String(o.colors?.warning)
             : '';
     },
     { deep: true }
@@ -1875,8 +1864,8 @@ watch(
     border: 2px solid var(--md-inverse-surface);
     box-shadow: 2px 2px 0 var(--md-inverse-surface);
     background-color: var(--md-surface-variant);
-    background-size: 32px 32px;
     image-rendering: pixelated;
+    /* Background image applied via inline styles will override background-color */
 }
 
 .fallback-row .theme-input {

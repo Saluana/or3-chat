@@ -69,25 +69,84 @@ export async function applyMergedTheme(
     // 2. Apply color palette overrides
     if (overrides.colors?.enabled) {
         const colorMap: Array<[keyof typeof overrides.colors, string]> = [
+            // Primary colors
             ['primary', '--md-primary'],
+            ['onPrimary', '--md-on-primary'],
+            ['primaryContainer', '--md-primary-container'],
+            ['onPrimaryContainer', '--md-on-primary-container'],
+            // Secondary colors
             ['secondary', '--md-secondary'],
+            ['onSecondary', '--md-on-secondary'],
+            ['secondaryContainer', '--md-secondary-container'],
+            ['onSecondaryContainer', '--md-on-secondary-container'],
+            // Tertiary colors
+            ['tertiary', '--md-tertiary'],
+            ['onTertiary', '--md-on-tertiary'],
+            ['tertiaryContainer', '--md-tertiary-container'],
+            ['onTertiaryContainer', '--md-on-tertiary-container'],
+            // Error colors
             ['error', '--md-error'],
-            ['surfaceVariant', '--md-surface-variant'],
-            ['border', '--md-inverse-surface'],
+            ['onError', '--md-on-error'],
+            ['errorContainer', '--md-error-container'],
+            ['onErrorContainer', '--md-on-error-container'],
+            // Surface colors
             ['surface', '--md-surface'],
+            ['onSurface', '--md-on-surface'],
+            ['surfaceVariant', '--md-surface-variant'],
+            ['onSurfaceVariant', '--md-on-surface-variant'],
+            ['inverseSurface', '--md-inverse-surface'],
+            ['inverseOnSurface', '--md-inverse-on-surface'],
+            // Outline colors
+            ['outline', '--md-outline'],
+            ['outlineVariant', '--md-outline-variant'],
         ];
         for (const [key, cssVar] of colorMap) {
             const val = overrides.colors[key];
             if (val && typeof val === 'string') r.setProperty(cssVar, val);
         }
+
+        // Handle semantic colors separately (they use extended color tokens)
+        if (overrides.colors.success) {
+            r.setProperty(
+                '--md-extended-color-success-color',
+                overrides.colors.success
+            );
+        }
+        if (overrides.colors.warning) {
+            r.setProperty(
+                '--md-extended-color-warning-color',
+                overrides.colors.warning
+            );
+        }
     } else {
         // Remove overrides to let base theme values cascade
         r.removeProperty('--md-primary');
+        r.removeProperty('--md-on-primary');
+        r.removeProperty('--md-primary-container');
+        r.removeProperty('--md-on-primary-container');
         r.removeProperty('--md-secondary');
+        r.removeProperty('--md-on-secondary');
+        r.removeProperty('--md-secondary-container');
+        r.removeProperty('--md-on-secondary-container');
+        r.removeProperty('--md-tertiary');
+        r.removeProperty('--md-on-tertiary');
+        r.removeProperty('--md-tertiary-container');
+        r.removeProperty('--md-on-tertiary-container');
         r.removeProperty('--md-error');
-        r.removeProperty('--md-surface-variant');
-        r.removeProperty('--md-inverse-surface');
+        r.removeProperty('--md-on-error');
+        r.removeProperty('--md-error-container');
+        r.removeProperty('--md-on-error-container');
         r.removeProperty('--md-surface');
+        r.removeProperty('--md-on-surface');
+        r.removeProperty('--md-surface-variant');
+        r.removeProperty('--md-on-surface-variant');
+        r.removeProperty('--md-inverse-surface');
+        r.removeProperty('--md-inverse-on-surface');
+        r.removeProperty('--md-outline');
+        r.removeProperty('--md-outline-variant');
+        // Semantic colors (extended color tokens)
+        r.removeProperty('--md-extended-color-success-color');
+        r.removeProperty('--md-extended-color-warning-color');
     }
 
     // 3. Build merged backgrounds
