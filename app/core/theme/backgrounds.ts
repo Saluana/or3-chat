@@ -1,5 +1,8 @@
-import type { ThemeBackgroundLayer, ThemeBackgrounds } from '~/theme/_shared/types';
-import { getFileBlob } from '~/db/files';
+import type {
+    ThemeBackgroundLayer,
+    ThemeBackgrounds,
+} from '../../theme/_shared/types';
+import { getFileBlob } from '../../db/files';
 
 const CACHE_KEY = '__or3ThemeBackgroundTokenCache';
 const DEFAULT_REPEAT = 'repeat';
@@ -15,6 +18,25 @@ function getCache(): Map<string, string> {
         g[CACHE_KEY] = new Map<string, string>();
     }
     return g[CACHE_KEY];
+}
+
+export function revokeBackgroundBlobs() {
+    const cache = getCache();
+    for (const url of cache.values()) {
+        if (url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+        }
+    }
+    cache.clear();
+}
+
+export function invalidateBackgroundToken(hash: string) {
+    const cache = getCache();
+    const url = cache.get(hash);
+    if (url?.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+    }
+    cache.delete(hash);
 }
 
 export function createThemeBackgroundTokenResolver() {
@@ -36,7 +58,11 @@ export function createThemeBackgroundTokenResolver() {
             return url;
         } catch (error) {
             if (import.meta.dev) {
-                console.warn('[theme] Failed to resolve internal token', token, error);
+                console.warn(
+                    '[theme] Failed to resolve internal token',
+                    token,
+                    error
+                );
             }
             return null;
         }
@@ -54,7 +80,10 @@ function normalizeRepeat(value?: string): string {
     return DEFAULT_REPEAT;
 }
 
-function determineSize(layer: ThemeBackgroundLayer | undefined, fallback: string): string {
+function determineSize(
+    layer: ThemeBackgroundLayer | undefined,
+    fallback: string
+): string {
     if (!layer) return fallback;
     if (layer.fit === 'cover') return 'cover';
     if (layer.fit === 'contain') return 'contain';
@@ -105,13 +134,33 @@ export async function applyThemeBackgrounds(
 ) {
     if (!isBrowser()) return;
     await Promise.all([
-        applyLayer('--app-content-bg-1', backgrounds?.content?.base, options.resolveToken),
-        applyLayer('--app-content-bg-2', backgrounds?.content?.overlay, options.resolveToken),
-        applyLayer('--app-sidebar-bg-1', backgrounds?.sidebar, options.resolveToken),
+        applyLayer(
+            '--app-content-bg-1',
+            backgrounds?.content?.base,
+            options.resolveToken
+        ),
+        applyLayer(
+            '--app-content-bg-2',
+            backgrounds?.content?.overlay,
+            options.resolveToken
+        ),
+        applyLayer(
+            '--app-sidebar-bg-1',
+            backgrounds?.sidebar,
+            options.resolveToken
+        ),
     ]);
     await Promise.all([
-        applyGradient('--app-header-gradient', backgrounds?.headerGradient, options.resolveToken),
-        applyGradient('--app-bottomnav-gradient', backgrounds?.bottomNavGradient, options.resolveToken),
+        applyGradient(
+            '--app-header-gradient',
+            backgrounds?.headerGradient,
+            options.resolveToken
+        ),
+        applyGradient(
+            '--app-bottomnav-gradient',
+            backgrounds?.bottomNavGradient,
+            options.resolveToken
+        ),
     ]);
 }
 

@@ -4,82 +4,82 @@ This document provides a detailed checklist of tasks required to migrate the The
 
 ---
 
-## Phase 1: Core Infrastructure (3-5 days)
+## Phase 1: Core Infrastructure (3-5 days) ✅ COMPLETED
 
-### 1. Create User Override Types
+### 1. Create User Override Types ✅
 
 **Requirements**: 1.1
 
-- [ ] 1.1 Create `app/core/theme/user-overrides-types.ts`
-  - [ ] Define `UserThemeOverrides` interface
-  - [ ] Define `ThemeBackgroundLayer` interface
-  - [ ] Export `EMPTY_USER_OVERRIDES` constant
-  - [ ] Add JSDoc comments for all types
+- [x] 1.1 Create `app/core/theme/user-overrides-types.ts`
+  - [x] Define `UserThemeOverrides` interface
+  - [x] Define `ThemeBackgroundLayer` interface
+  - [x] Export `EMPTY_USER_OVERRIDES` constant
+  - [x] Add JSDoc comments for all types
 
-### 2. Implement User Overrides Composable
+### 2. Implement User Overrides Composable ✅
 
 **Requirements**: 1.1, 1.2, 1.3
 
-- [ ] 2.1 Create `app/core/theme/useUserThemeOverrides.ts`
-  - [ ] Set up HMR-safe singleton store with light/dark refs
-  - [ ] Implement `detectModeFromHtml()` helper
-  - [ ] Implement `loadFromStorage()` with error handling
-  - [ ] Implement `saveToStorage()` with error handling
-- [ ] 2.2 Implement core composable functions
-  - [ ] `set()` - deep merge user patches with existing overrides
-  - [ ] `reset()` - clear overrides for specified mode
-  - [ ] `resetAll()` - clear overrides for both modes
-  - [ ] `switchMode()` - toggle between light/dark and apply
-  - [ ] `reapply()` - force theme reapplication
-- [ ] 2.3 Set up reactive watchers
-  - [ ] Watch light overrides and persist on change
-  - [ ] Watch dark overrides and persist on change
-  - [ ] Watch html class mutations to detect external mode changes
-- [ ] 2.4 Implement initialization logic
-  - [ ] Check for legacy data and migrate if present
-  - [ ] Load stored overrides from localStorage
-  - [ ] Detect initial mode from html classes
-  - [ ] Apply merged theme on first load
+- [x] 2.1 Create `app/core/theme/useUserThemeOverrides.ts`
+  - [x] Set up HMR-safe singleton store with light/dark refs
+  - [x] Implement `detectModeFromHtml()` helper
+  - [x] Implement `loadFromStorage()` with error handling
+  - [x] Implement `saveToStorage()` with error handling
+- [x] 2.2 Implement core composable functions
+  - [x] `set()` - deep merge user patches with existing overrides
+  - [x] `reset()` - clear overrides for specified mode
+  - [x] `resetAll()` - clear overrides for both modes
+  - [x] `switchMode()` - toggle between light/dark and apply
+  - [x] `reapply()` - force theme reapplication
+- [x] 2.3 Set up reactive watchers
+  - [x] Watch light overrides and persist on change
+  - [x] Watch dark overrides and persist on change
+  - [x] Watch html class mutations to detect external mode changes
+- [x] 2.4 Implement initialization logic
+  - [x] Check for legacy data and migrate if present
+  - [x] Load stored overrides from localStorage
+  - [x] Detect initial mode from html classes
+  - [x] Apply merged theme on first load
 
-### 3. Implement Theme Merging & Application
+### 3. Implement Theme Merging & Application ✅
 
 **Requirements**: 2.1, 2.2, 2.3
 
-- [ ] 3.1 Create `app/core/theme/apply-merged-theme.ts`
-  - [ ] Implement `applyMergedTheme()` main function
-  - [ ] Apply typography overrides (baseFontPx, useSystemFont)
-  - [ ] Apply color palette overrides (primary, secondary, error, etc.)
-  - [ ] Build merged backgrounds from base theme + user overrides
-  - [ ] Call `applyThemeBackgrounds()` with merged data
-  - [ ] Apply background color overrides (if enabled)
-  - [ ] Handle gradient visibility (headerGradient, bottomNavGradient)
-  - [ ] Implement high-contrast pattern opacity clamping
-- [ ] 3.2 Implement helper functions
-  - [ ] `buildMergedBackgrounds()` - merge base theme backgrounds with overrides
-  - [ ] `convertLayerToThemeFormat()` - convert UserOverrides layer to ThemeBackgrounds format
-  - [ ] `isHighContrastActive()` - detect high-contrast mode
-  - [ ] `clampBackgroundOpacities()` - reduce opacity for high-contrast
+- [x] 3.1 Create `app/core/theme/apply-merged-theme.ts`
+  - [x] Implement `applyMergedTheme()` main function
+  - [x] Apply typography overrides (baseFontPx, useSystemFont)
+  - [x] Apply color palette overrides (primary, secondary, error, etc.)
+  - [x] Build merged backgrounds from base theme + user overrides
+  - [x] Call `applyThemeBackgrounds()` with merged data
+  - [x] Apply background color overrides (if enabled)
+  - [x] Handle gradient visibility (headerGradient, bottomNavGradient)
+  - [x] Implement high-contrast pattern opacity clamping
+- [x] 3.2 Implement helper functions
+  - [x] `buildMergedBackgrounds()` - merge base theme backgrounds with overrides
+  - [x] `convertLayerToThemeFormat()` - convert UserOverrides layer to ThemeBackgrounds format
+  - [x] `isHighContrastActive()` - detect high-contrast mode
+  - [x] `clampBackgroundOpacities()` - reduce opacity for high-contrast
 
-### 4. Implement Legacy Data Migration
+### 4. Implement Legacy Data Migration ✅
 
 **Requirements**: 1.4
 
-- [ ] 4.1 Create `app/core/theme/migrate-legacy-settings.ts`
-  - [ ] Implement `migrateFromLegacy()` function
-  - [ ] Check if new format already exists (skip migration)
-  - [ ] Load legacy data from localStorage (light/dark/combined keys)
-  - [ ] Implement `convertToOverrides()` - map ThemeSettings → UserThemeOverrides
-  - [ ] Delete legacy localStorage keys after successful migration
-  - [ ] Add error handling and logging
-- [ ] 4.2 Create field mapping
-  - [ ] Map `paletteEnabled` → `colors.enabled`
-  - [ ] Map palette colors (primary, secondary, error, surfaceVariant, border, surface)
-  - [ ] Map `customBgColorsEnabled` → `backgrounds.enabled`
-  - [ ] Map content background layers (contentBg1/contentBg2 → content.base/overlay)
-  - [ ] Map sidebar background (sidebarBg → sidebar)
-  - [ ] Map gradient settings (showHeaderGradient, showBottomBarGradient)
-  - [ ] Map typography settings (baseFontPx, useSystemFont)
-  - [ ] Map UI settings (reducePatternsInHighContrast)
+- [x] 4.1 Create `app/core/theme/migrate-legacy-settings.ts`
+  - [x] Implement `migrateFromLegacy()` function
+  - [x] Check if new format already exists (skip migration)
+  - [x] Load legacy data from localStorage (light/dark/combined keys)
+  - [x] Implement `convertToOverrides()` - map ThemeSettings → UserThemeOverrides
+  - [x] Delete legacy localStorage keys after successful migration
+  - [x] Add error handling and logging
+- [x] 4.2 Create field mapping
+  - [x] Map `paletteEnabled` → `colors.enabled`
+  - [x] Map palette colors (primary, secondary, error, surfaceVariant, border, surface)
+  - [x] Map `customBgColorsEnabled` → `backgrounds.enabled`
+  - [x] Map content background layers (contentBg1/contentBg2 → content.base/overlay)
+  - [x] Map sidebar background (sidebarBg → sidebar)
+  - [x] Map gradient settings (showHeaderGradient, showBottomBarGradient)
+  - [x] Map typography settings (baseFontPx, useSystemFont)
+  - [x] Map UI settings (reducePatternsInHighContrast)
 
 ---
 
