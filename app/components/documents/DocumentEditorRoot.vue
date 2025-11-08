@@ -1,93 +1,105 @@
 <template>
     <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+        class="document-editor-root flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
         <div
-            class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
+            class="document-editor-header flex items-center justify-between sm:justify-center px-3 pt-2 pb-2"
         >
             <UInput
                 v-bind="titleInputProps"
                 v-model="titleDraft"
-                class="flex-1 max-w-[60%]"
+                class="document-title-input flex-1 max-w-[60%]"
                 @update:model-value="onTitleChange"
             />
             <div class="flex items-center gap-1">
                 <UTooltip :text="statusText">
                     <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
+                        class="document-title-status text-xs opacity-70 w-16 text-right select-none"
                         >{{ statusText }}</span
                     >
                 </UTooltip>
             </div>
         </div>
         <div
-            class="flex flex-row items-stretch border-b-2 border-[var(--md-inverse-surface)] px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
+            class="document-editor-toolbar flex flex-row items-stretch border-b-2 border-[var(--md-inverse-surface)] px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
         >
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="carbon:text-bold"
                 :active="isActive('bold')"
                 label="Bold (⌘B)"
                 @activate="cmd('toggleBold')"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="carbon:text-italic"
                 :active="isActive('italic')"
                 label="Italic (⌘I)"
                 @activate="cmd('toggleItalic')"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="pixelarticons:code"
                 :active="isActive('code')"
                 label="Code"
                 @activate="cmd('toggleCode')"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 text="H1"
                 :active="isActiveHeading(1)"
                 label="H1"
                 @activate="toggleHeading(1)"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 text="H2"
                 :active="isActiveHeading(2)"
                 label="H2"
                 @activate="toggleHeading(2)"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 text="H3"
                 :active="isActiveHeading(3)"
                 label="H3"
                 @activate="toggleHeading(3)"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="pixelarticons:list"
                 :active="isActive('bulletList')"
                 label="Bullet list"
                 @activate="cmd('toggleBulletList')"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="carbon:list-numbered"
                 :active="isActive('orderedList')"
                 label="Ordered list"
                 @activate="cmd('toggleOrderedList')"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="pixelarticons:minus"
                 label="Horizontal Rule"
                 @activate="cmd('setHorizontalRule')"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="pixelarticons:undo"
                 label="Undo"
                 @activate="cmd('undo')"
             />
             <ToolbarButton
+                class="document-toolbar-button-instance"
                 icon="pixelarticons:redo"
                 label="Redo"
                 @activate="cmd('redo')"
             />
             <!-- Plugin-registered toolbar buttons -->
             <ToolbarButton
+                class="document-toolbar-button-instance document-toolbar-plugin-button"
                 v-for="btn in pluginButtons"
                 :key="btn.id"
                 :icon="btn.icon"
@@ -96,14 +108,14 @@
                 @activate="handleButtonClick(btn)"
             />
         </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
+        <div class="document-editor-content flex-1 min-h-0 overflow-y-auto">
             <div
-                class="w-full max-w-[820px] mx-auto p-8 pb-24"
+                class="document-editor-viewport w-full max-w-[820px] mx-auto p-8 pb-24"
                 @mousedown="handleContainerClick"
             >
                 <div
                     ref="editorMountEl"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    class="document-editor-mount prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
                 ></div>
             </div>
         </div>

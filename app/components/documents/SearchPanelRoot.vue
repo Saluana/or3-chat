@@ -1,7 +1,10 @@
 <template>
-    <div class="search-results">
+    <div class="search-results document-search-results">
         <!-- Search Results -->
-        <div v-if="searchQuery && searchResults.length > 0" class="space-y-2">
+        <div
+            v-if="searchQuery && searchResults.length > 0"
+            class="space-y-2 document-search-results-list"
+        >
             <UCard
                 v-for="result in searchResults"
                 :key="result.id"
@@ -18,7 +21,7 @@
         </div>
         <div
             v-else-if="searchQuery && !isSearching"
-            class="text-sm text-[var(--md-on-surface-variant)] p-4 text-center"
+            class="text-sm text-[var(--md-on-surface-variant)] p-4 text-center document-search-empty-message"
         >
             No results found
         </div>
@@ -60,9 +63,18 @@ const searchResultCardProps = computed(() => {
         identifier: 'document.search-result',
         isNuxtUI: true,
     });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const overrideClass = (overridesValue.class as string) || '';
+    const { class: _omit, ...restOverrides } = overridesValue;
     return {
-        class: 'cursor-pointer hover:border-[var(--md-primary)] transition-colors',
-        ...(overrides.value as any),
+        class: [
+            'document-search-result-card',
+            'cursor-pointer hover:border-[var(--md-primary)] transition-colors',
+            overrideClass,
+        ]
+            .filter(Boolean)
+            .join(' '),
+        ...restOverrides,
     };
 });
 

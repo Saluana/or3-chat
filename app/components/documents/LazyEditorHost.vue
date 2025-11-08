@@ -1,5 +1,5 @@
 <template>
-    <div class="flex flex-col h-full w-full min-h-0">
+    <div class="document-lazy-editor-host flex flex-col h-full w-full min-h-0">
         <Suspense @resolve="handleEditorResolved">
             <template #default>
                 <DocumentEditorRoot
@@ -9,38 +9,38 @@
             </template>
             <template #fallback>
                 <div
-                    class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+                    class="document-editor-skeleton flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
                 >
                     <!-- Skeleton Header -->
                     <div
-                        class="flex items-center justify-between sm:justify-center px-3 pt-2 pb-2 gap-2"
+                        class="document-editor-skeleton-header flex items-center justify-between sm:justify-center px-3 pt-2 pb-2 gap-2"
                     >
                         <div
-                            class="flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
+                            class="document-editor-skeleton-title flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
                         ></div>
                         <div
-                            class="w-16 h-6 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
+                            class="document-editor-skeleton-status w-16 h-6 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
                         ></div>
                     </div>
 
                     <!-- Skeleton Toolbar -->
                     <div
-                        class="flex gap-2 px-3 py-2 border-b border-neutral-200/20 dark:border-neutral-800/20"
+                        class="document-editor-skeleton-toolbar flex gap-2 px-3 py-2 border-b border-neutral-200/20 dark:border-neutral-800/20"
                     >
                         <div
                             v-for="i in 8"
                             :key="i"
-                            class="w-8 h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded-sm animate-pulse"
+                            class="document-editor-skeleton-toolbar-item w-8 h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded-sm animate-pulse"
                         ></div>
                     </div>
 
                     <!-- Skeleton Content -->
-                    <div class="flex-1 overflow-hidden px-8 py-4">
+                    <div class="document-editor-skeleton-content flex-1 overflow-hidden px-8 py-4">
                         <div class="space-y-3 max-w-[820px] mx-auto">
                             <div
                                 v-for="i in 5"
                                 :key="`line-${i}`"
-                                class="h-4 bg-neutral-300/30 dark:bg-neutral-700/30 rounded"
+                                class="document-editor-skeleton-line h-4 bg-neutral-300/30 dark:bg-neutral-700/30 rounded"
                                 :style="{
                                     width: `${85 + Math.random() * 15}%`,
                                 }"
@@ -51,12 +51,14 @@
                     <!-- Error & Retry (shown after timeout) -->
                     <div
                         v-if="showErrorMessage"
-                        class="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                        class="document-editor-error-overlay absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
                     >
                         <div
-                            class="bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-md text-center"
+                            class="document-editor-error-card bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-md text-center"
                         >
-                            <p class="text-red-600 dark:text-red-400 mb-4">
+                            <p
+                                class="document-editor-error-text text-red-600 dark:text-red-400 mb-4"
+                            >
                                 Failed to load editor. Please try again.
                             </p>
                             <UButton
@@ -101,9 +103,15 @@ const retryButtonProps = computed(() => {
         identifier: 'document.retry',
         isNuxtUI: true,
     });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const overrideClass = (overridesValue.class as string) || '';
+    const { class: _omit, ...restOverrides } = overridesValue;
     return {
         size: 'md' as const,
-        ...(overrides.value as any),
+        ...restOverrides,
+        class: ['document-editor-retry-button', overrideClass]
+            .filter(Boolean)
+            .join(' '),
     };
 });
 

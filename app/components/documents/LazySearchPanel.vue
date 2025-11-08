@@ -1,11 +1,13 @@
 <template>
-    <div class="search-panel">
+    <div class="search-panel document-search-panel">
         <slot v-if="error" name="error">
-            <div class="p-4 text-center">
-                <p class="text-sm text-[var(--md-error)] mb-2">
+            <div class="p-4 text-center document-search-error">
+                <p class="text-sm text-[var(--md-error)] mb-2 document-search-error-text">
                     Failed to load search
                 </p>
-                <UButton v-bind="retryButtonProps" @click="retry">Retry</UButton>
+                <UButton v-bind="retryButtonProps" @click="retry">
+                    Retry
+                </UButton>
             </div>
         </slot>
         <Suspense v-else>
@@ -16,8 +18,8 @@
                 @navigate="$emit('navigate', $event)"
             />
             <template #fallback>
-                <div class="p-4 text-center">
-                    <div class="text-sm text-[var(--md-on-surface-variant)]">
+                <div class="p-4 text-center document-search-loading">
+                    <div class="text-sm text-[var(--md-on-surface-variant)] document-search-loading-text">
                         Loading search...
                     </div>
                 </div>
@@ -51,9 +53,15 @@ const retryButtonProps = computed(() => {
         identifier: 'document.search-retry',
         isNuxtUI: true,
     });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const overrideClass = (overridesValue.class as string) || '';
+    const { class: _omit, ...restOverrides } = overridesValue;
     return {
         size: 'sm' as const,
-        ...(overrides.value as any),
+        ...restOverrides,
+        class: ['document-search-retry-button', overrideClass]
+            .filter(Boolean)
+            .join(' '),
     };
 });
 

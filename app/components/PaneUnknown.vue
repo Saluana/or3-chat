@@ -1,5 +1,8 @@
 <template>
-    <div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+    <div
+        class="pane-unknown flex-1 flex flex-col items-center justify-center p-8 text-center"
+        :data-pane-mode="mode"
+    >
         <div class="max-w-md space-y-4">
             <div class="text-6xl opacity-50">
                 <UIcon name="pixelarticons:alert" class="w-16 h-16 mx-auto" />

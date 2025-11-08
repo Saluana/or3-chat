@@ -1,5 +1,9 @@
 <template>
-    <div v-if="capabilities.length > 0" class="plugin-capabilities">
+    <div
+        v-if="capabilities.length > 0"
+        id="dashboard-plugin-capabilities"
+        class="plugin-capabilities"
+    >
         <div class="capabilities-header">
             <UIcon name="pixelarticons:shield" class="w-4 h-4" />
             <span class="font-semibold">Capabilities</span>
@@ -15,7 +19,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{
     capabilities?: string[];

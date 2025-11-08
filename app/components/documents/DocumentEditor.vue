@@ -1,5 +1,11 @@
 <template>
-    <LazyEditorHost :document-id="documentId" @error="handleError" />
+    <div class="document-editor-shell">
+        <LazyEditorHost
+            class="document-editor-shell__host"
+            :document-id="documentId"
+            @error="handleError"
+        />
+    </div>
 </template>
 
 <script setup lang="ts">

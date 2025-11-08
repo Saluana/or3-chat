@@ -1,52 +1,45 @@
 <template>
     <div
-        class="flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
+        class="prompt-editor-shell flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
         <div
-            class="flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
+            class="prompt-editor-header flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
         >
             <UButton
+                v-bind="backButtonProps"
                 @click="emit('back')"
-                variant="outline"
-                class="flex items-center justify-center h-[40px] w-[40px] mr-3"
-                color="neutral"
                 icon="pixelarticons:arrow-left"
                 aria-label="Back to list"
             />
             <UInput
                 v-model="titleDraft"
-                placeholder="Untitled Prompt"
-                label="Prompt Title"
-                size="md"
-                :ui="{
-                    base: 'retro-shadow',
-                }"
-                class="flex-1"
+                v-bind="promptTitleInputProps"
+                class="prompt-editor-title-input flex-1"
                 @update:model-value="onTitleChange"
             />
-            <div class="flex items-center gap-1">
+            <div class="prompt-editor-status-wrapper flex items-center gap-1">
                 <UTooltip :text="statusText">
                     <span
-                        class="text-xs opacity-70 w-16 text-right select-none"
+                        class="prompt-editor-status text-xs opacity-70 w-16 text-right select-none"
                         >{{ statusText }}</span
                     >
                 </UTooltip>
             </div>
         </div>
-        <div class="flex-1 min-h-0 overflow-y-auto">
-            <div v-if="loading" class="p-6 text-sm text-neutral-500">
+        <div class="prompt-editor-body flex-1 min-h-0 overflow-y-auto">
+            <div v-if="loading" class="prompt-editor-loading p-6 text-sm text-neutral-500">
                 Loading…
             </div>
-            <div v-else-if="!record" class="p-6 text-sm text-error">
+            <div v-else-if="!record" class="prompt-editor-missing p-6 text-sm text-error">
                 Prompt not found.
             </div>
             <div
                 v-else
-                class="w-full max-h-[70dvh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
+                class="prompt-editor-body-shell w-full max-h-[70dvh] overflow-auto max-w-[820px] mx-auto p-8 pb-24"
             >
                 <EditorContent
                     :editor="editor as Editor"
-                    class="prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    class="prompt-editor-content prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
                 />
             </div>
         </div>
@@ -59,6 +52,7 @@ import { Editor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import { getPrompt, updatePrompt, type PromptRecord } from '~/db/prompts';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const props = defineProps<{ promptId: string }>();
 const emit = defineEmits<{ (e: 'back'): void }>();
@@ -170,6 +164,62 @@ watch(
 onBeforeUnmount(() => {
     editor.value?.destroy();
     if (saveTimer.value) clearTimeout(saveTimer.value);
+});
+
+const promptTitleInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'prompt',
+        identifier: 'prompt.title',
+        isNuxtUI: true,
+    });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const {
+        class: overrideClass = '',
+        ui: overrideUi = {},
+        ...restOverrides
+    } = overridesValue;
+    const uiOverrides = (overrideUi as Record<string, any>) || {};
+    const baseUi = ['retro-shadow', uiOverrides.base]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    return {
+        placeholder: 'Untitled Prompt',
+        label: 'Prompt Title',
+        size: 'md' as const,
+        ...restOverrides,
+        ui: {
+            ...uiOverrides,
+            base: baseUi,
+        },
+        class: ['prompt-editor-title-input-base', overrideClass]
+            .filter(Boolean)
+            .join(' '),
+    };
+});
+
+const backButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'prompt',
+        identifier: 'prompt.back',
+        isNuxtUI: true,
+    });
+    const overridesValue = (overrides.value as Record<string, any>) || {};
+    const { class: overrideClass = '', ...restOverrides } = overridesValue;
+    return {
+        variant: 'outline' as const,
+        color: 'neutral' as const,
+        size: 'md' as const,
+        ...restOverrides,
+        class: [
+            'prompt-editor-back-btn flex items-center justify-center h-[40px] w-[40px] mr-3',
+            overrideClass,
+        ]
+            .filter(Boolean)
+            .join(' '),
+    };
 });
 
 const statusText = computed(() => {

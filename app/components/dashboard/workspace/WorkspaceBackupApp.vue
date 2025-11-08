@@ -1,8 +1,12 @@
 <template>
-    <div class="px-4 py-4 space-y-10 text-sm">
+    <div
+        id="dashboard-workspace-backup-container"
+        class="px-4 py-4 space-y-10 text-sm"
+    >
         <p ref="liveRegion" class="sr-only" aria-live="polite"></p>
 
         <section
+            id="dashboard-workspace-guidance-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="workspace-backup-guidance"
@@ -25,6 +29,7 @@
                 <div></div>
             </div>
             <UAlert
+                v-bind="alertProps"
                 color="warning"
                 variant="subtle"
                 icon="pixelarticons:warning-box"
@@ -34,6 +39,7 @@
         </section>
 
         <section
+            id="dashboard-workspace-export-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="workspace-backup-export"
@@ -54,6 +60,7 @@
             </p>
             <div class="space-y-2">
                 <UProgress
+                    v-bind="progressProps"
                     v-if="exporting"
                     size="xs"
                     :value="state.progress"
@@ -78,6 +85,7 @@
         </section>
 
         <section
+            id="dashboard-workspace-import-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="workspace-backup-import"
@@ -161,6 +169,7 @@
                                 </p>
                             </div>
                             <UBadge
+                                v-bind="badgeProps"
                                 icon="i-ph-file-duotone"
                                 :class="[
                                     'retro-badge',
@@ -174,6 +183,7 @@
                 </div>
 
                 <UAlert
+                    v-bind="alertProps"
                     v-if="peeking"
                     color="primary"
                     variant="subtle"
@@ -182,6 +192,7 @@
                     title="Validating backup metadata…"
                 />
                 <UAlert
+                    v-bind="alertProps"
                     v-if="peekErrorMessage"
                     color="error"
                     variant="subtle"
@@ -289,6 +300,7 @@
                     </div>
 
                     <UCheckbox
+                        v-bind="importCheckboxProps"
                         v-model="overwriteValuesModel"
                         size="sm"
                         :disabled="overwriteDisabled"
@@ -299,6 +311,7 @@
                 </div>
 
                 <UAlert
+                    v-bind="alertProps"
                     v-if="importWarningMessage"
                     color="warning"
                     variant="subtle"
@@ -307,6 +320,7 @@
                     :title="importWarningMessage"
                 />
                 <UAlert
+                    v-bind="alertProps"
                     v-if="importErrorMessage"
                     color="error"
                     variant="subtle"
@@ -317,6 +331,7 @@
 
                 <div class="space-y-2">
                     <UProgress
+                        v-bind="progressProps"
                         v-if="importing"
                         size="xs"
                         :value="state.progress"
@@ -458,6 +473,46 @@ const importButtonProps = computed(() => {
         variant: 'light' as const,
         ...(overrides.value as any),
     };
+});
+
+const alertProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'alert',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.alert',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
+const progressProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'progress',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.progress',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
+const badgeProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'badge',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.badge',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
+const importCheckboxProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'checkbox',
+        context: 'dashboard',
+        identifier: 'dashboard.workspace.checkbox',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
 });
 
 const importing = computed(() => state.isImporting.value);

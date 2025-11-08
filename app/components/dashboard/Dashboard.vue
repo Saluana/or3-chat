@@ -1,5 +1,7 @@
 <template>
     <UModal
+        id="dashboard-modal-shell"
+        v-bind="dashboardModalProps"
         v-model:open="open"
         :modal="false"
         :ui="{
@@ -16,14 +18,17 @@
             <!-- iOS style springboard grid: fixed icon cell width per breakpoint, centered, nice vertical rhythm -->
             <div
                 v-if="state.view === 'dashboard'"
+                id="dashboard-grid-view"
                 class="p-4 flex justify-center"
             >
                 <div
-                    class="grid gap-y-6 gap-x-4 place-items-center grid-cols-4 xs:grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8"
+                    id="dashboard-plugin-grid"
+                    class="dashboard-plugin-grid grid gap-y-6 gap-x-4 place-items-center grid-cols-4 xs:grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8"
                 >
                     <plugin-icons
                         v-for="item in dashboardItems"
                         :key="item.id"
+                        class="dashboard-plugin-icon-item"
                         :icon="item.icon"
                         :label="item.label"
                         :size="74"
@@ -35,12 +40,15 @@
             </div>
             <div
                 v-if="state.view === 'page'"
+                id="dashboard-page-view"
                 class="h-full flex flex-col min-h-0"
             >
                 <div
+                    id="dashboard-page-header"
                     class="flex h-[40px] shrink-0 items-center border-b-2 border-[var(--md-inverse-surface)] pr-2"
                 >
                     <UButton
+                        id="dashboard-back-button"
                         v-bind="backButtonProps"
                         class="ml-2 text-[20px] gap-0.5 hover:bg-[var(--md-primary)]/10"
                         @click="goBack()"
@@ -50,7 +58,10 @@
                             :name="'pixelarticons:chevron-left'"
                         />
                     </UButton>
-                    <div class="ml-2 font-semibold text-sm truncate">
+                    <div
+                        id="dashboard-page-breadcrumb"
+                        class="ml-2 font-semibold text-sm truncate"
+                    >
                         {{ headerPluginLabel }}
                         <span v-if="activePageTitle" class="opacity-60"
                             >/ {{ activePageTitle }}</span
@@ -59,6 +70,7 @@
                 </div>
                 <div
                     v-if="state.error"
+                    id="dashboard-page-error"
                     class="mx-4 mt-3 rounded-md border-2 border-[var(--md-error)] bg-[var(--md-error-container)] px-3 py-2 text-xs text-[var(--md-on-error-container)]"
                 >
                     {{ state.error.message }}
@@ -66,6 +78,7 @@
                 <!-- Landing list if multiple pages and none chosen -->
                 <div
                     v-if="!state.activePageId && landingPages.length > 1"
+                    id="dashboard-landing-grid"
                     class="p-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
                 >
                     <button
@@ -73,7 +86,7 @@
                         :key="p.id"
                         v-bind="landingPageButtonProps"
                         :class="[
-                            'group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left',
+                            'dashboard-landing-item group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-[var(--md-outline-variant)] hover:border-[var(--md-primary)] hover:bg-[var(--md-primary)]/5 transition-colors text-left',
                             (landingPageButtonProps as any)?.class || '',
                         ]"
                         @click="handleLandingPageClick(p.id)"
@@ -97,9 +110,14 @@
                     </button>
                 </div>
                 <!-- Single page or chosen page -->
-                <div v-else class="flex-1 min-h-0 overflow-y-auto">
+                <div
+                    v-else
+                    id="dashboard-page-content"
+                    class="flex-1 min-h-0 overflow-y-auto"
+                >
                     <div
                         v-if="state.loadingPage"
+                        id="dashboard-page-loading"
                         class="text-sm opacity-70 p-4"
                     >
                         Loading…
@@ -112,11 +130,16 @@
                         v-else-if="
                             !state.activePageId && landingPages.length === 1
                         "
+                        id="dashboard-single-landing-placeholder"
                         class="text-xs opacity-60"
                     >
                         Preparing page…
                     </div>
-                    <div v-else-if="!landingPages.length" class="text-xs">
+                    <div
+                        v-else-if="!landingPages.length"
+                        id="dashboard-empty-placeholder"
+                        class="text-xs"
+                    >
                         No pages registered for this plugin.
                     </div>
                 </div>
@@ -234,7 +257,17 @@ const handleLandingPageClick = (pageId: string) => {
     void openPage(pluginId, pageId);
 };
 
-// Theme overrides for buttons
+// Theme overrides for Nuxt UI elements
+const dashboardModalProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'modal',
+        context: 'dashboard',
+        identifier: 'dashboard.shell',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
 const backButtonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',

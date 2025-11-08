@@ -1,10 +1,14 @@
 <template>
     <!-- Root no longer forces full height or its own scroll; parent provides scroll container -->
-    <div class="px-4 py-4 space-y-12 text-sm">
+    <div
+        id="dashboard-theme-page-container"
+        class="px-4 py-4 space-y-12 text-sm"
+    >
         <!-- Accessible live region for status updates -->
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
         <!-- Mode Toggle -->
         <section
+            id="dashboard-theme-mode-section"
             class="section-card space-y-2"
             role="group"
             aria-labelledby="theme-section-mode"
@@ -49,6 +53,7 @@
         </section>
         <!-- Color Palette Overrides -->
         <section
+            id="dashboard-theme-palette-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="theme-section-palette"
@@ -79,6 +84,7 @@
                 <div class="flex items-center gap-4">
                     <label class="w-32 text-xs">Primary</label>
                     <UColorPicker
+                        v-bind="paletteColorPickerProps"
                         :disabled="!(settings as any).paletteEnabled"
                         :model-value="
                             (settings as any).paletteEnabled &&
@@ -119,6 +125,7 @@
                 <div class="flex items-center gap-4">
                     <label class="w-32 text-xs">Secondary</label>
                     <UColorPicker
+                        v-bind="paletteColorPickerProps"
                         :disabled="!(settings as any).paletteEnabled"
                         :model-value="
                             (settings as any).paletteEnabled &&
@@ -159,6 +166,7 @@
                 <div class="flex items-center gap-4">
                     <label class="w-32 text-xs">Error</label>
                     <UColorPicker
+                        v-bind="paletteColorPickerProps"
                         :disabled="!(settings as any).paletteEnabled"
                         :model-value="
                             (settings as any).paletteEnabled &&
@@ -199,6 +207,7 @@
                 <div class="flex items-center gap-4">
                     <label class="w-32 text-xs">Surface Variant</label>
                     <UColorPicker
+                        v-bind="paletteColorPickerProps"
                         :disabled="!(settings as any).paletteEnabled"
                         :model-value="
                             (settings as any).paletteEnabled &&
@@ -239,6 +248,7 @@
                 <div class="flex items-center gap-4">
                     <label class="w-32 text-xs">Border</label>
                     <UColorPicker
+                        v-bind="paletteColorPickerProps"
                         :disabled="!(settings as any).paletteEnabled"
                         :model-value="
                             (settings as any).paletteEnabled &&
@@ -279,6 +289,7 @@
                 <div class="flex items-center gap-4">
                     <label class="w-32 text-xs">Surface</label>
                     <UColorPicker
+                        v-bind="paletteColorPickerProps"
                         :disabled="!(settings as any).paletteEnabled"
                         :model-value="
                             (settings as any).paletteEnabled &&
@@ -320,6 +331,7 @@
         </section>
         <!-- Custom Background Colors Master Toggle -->
         <section
+            id="dashboard-theme-custom-backgrounds-section"
             class="section-card space-y-2"
             role="group"
             aria-labelledby="theme-section-custom-bg"
@@ -358,6 +370,7 @@
         </section>
         <!-- Typography -->
         <section
+            id="dashboard-theme-typography-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="theme-section-typography"
@@ -396,6 +409,7 @@
 
         <!-- Content Background Layer 1 -->
         <section
+            id="dashboard-theme-content-layer1-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="theme-section-content1"
@@ -525,6 +539,7 @@
             <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
+                    v-bind="backgroundColorPickerProps"
                     :disabled="!settings.customBgColorsEnabled"
                     :model-value="
                         settings.customBgColorsEnabled &&
@@ -566,6 +581,7 @@
 
         <!-- Content Background Layer 2 -->
         <section
+            id="dashboard-theme-content-layer2-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="theme-section-content2"
@@ -693,6 +709,7 @@
             <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
+                    v-bind="backgroundColorPickerProps"
                     :disabled="!settings.customBgColorsEnabled"
                     :model-value="
                         settings.customBgColorsEnabled &&
@@ -734,6 +751,7 @@
 
         <!-- Sidebar Background -->
         <section
+            id="dashboard-theme-sidebar-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="theme-section-sidebar"
@@ -858,6 +876,7 @@
             <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
+                    v-bind="backgroundColorPickerProps"
                     :disabled="!settings.customBgColorsEnabled"
                     :model-value="
                         settings.customBgColorsEnabled &&
@@ -899,6 +918,7 @@
 
         <!-- Accessibility -->
         <section
+            id="dashboard-theme-accessibility-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="theme-section-accessibility"
@@ -923,6 +943,7 @@
 
         <!-- Navigation Header -->
         <section
+            id="dashboard-theme-header-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="theme-section-header"
@@ -957,6 +978,7 @@
             <div class="flex items-center gap-4">
                 <label class="w-32 text-xs">Background Color</label>
                 <UColorPicker
+                    v-bind="backgroundColorPickerProps"
                     :disabled="!settings.customBgColorsEnabled"
                     :model-value="
                         settings.customBgColorsEnabled &&
@@ -998,6 +1020,7 @@
 
         <!-- Navigation Footer -->
         <section
+            id="dashboard-theme-footer-section"
             class="section-card space-y-4"
             role="group"
             aria-labelledby="theme-section-footer"
@@ -1032,6 +1055,7 @@
             <div class="flex items-center gap-4">
                 <label class="w-32 text-xs">Background Color</label>
                 <UColorPicker
+                    v-bind="backgroundColorPickerProps"
                     :disabled="!settings.customBgColorsEnabled"
                     :model-value="
                         settings.customBgColorsEnabled &&
@@ -1073,6 +1097,7 @@
 
         <!-- Reset -->
         <section
+            id="dashboard-theme-reset-section"
             class="section-card space-y-3"
             role="group"
             aria-labelledby="theme-section-reset"
@@ -1182,6 +1207,26 @@ const gradientButtonProps = computed(() => {
         variant: 'basic' as const,
         ...(overrides.value as any),
     };
+});
+
+const paletteColorPickerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'color-picker',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.palette-picker',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
+});
+
+const backgroundColorPickerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'color-picker',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.background-picker',
+        isNuxtUI: true,
+    });
+    return overrides.value || {};
 });
 
 const resetAllButtonProps = computed(() => {

@@ -1,7 +1,7 @@
 <template>
     <div
         id="page-container"
-        class="relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+        class="resizable-sidebar-layout relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
     >
         <!-- Backdrop on mobile when open -->
         <Transition
@@ -22,7 +22,7 @@
         <aside
             id="sidebar"
             :class="[
-                'z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex flex-col',
+                'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col',
                 // width transition on desktop
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
@@ -55,7 +55,10 @@
             "
             @keydown.esc.stop.prevent="close()"
         >
-            <div id="sidebar-container-outer" class="h-full flex flex-col">
+            <div
+                id="sidebar-container-outer"
+                class="resizable-sidebar-container h-full flex flex-col"
+            >
                 <!-- Sidebar header -->
                 <SidebarHeader
                     :collapsed="collapsed"
@@ -129,10 +132,10 @@
         </aside>
 
         <!-- Main content -->
-        <div
-            id="main-content"
-            class="relative z-10 flex-1 h-full min-w-0 flex flex-col"
-        >
+            <div
+                id="main-content"
+                class="resizable-main-content relative z-10 flex-1 h-full min-w-0 flex flex-col"
+            >
             <div
                 id="main-content-container"
                 class="flex-1 overflow-hidden content-bg"

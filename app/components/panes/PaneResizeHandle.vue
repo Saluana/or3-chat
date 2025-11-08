@@ -2,6 +2,7 @@
     <div
         v-if="isDesktop && paneCount > 1"
         class="pane-resize-handle absolute top-0 bottom-0 w-1 cursor-col-resize select-none group z-20 -right-0.5"
+        :data-pane-index="paneIndex"
         @pointerdown="onPointerDown"
         @mouseenter="isHovered = true"
         @mouseleave="isHovered = false"
@@ -15,7 +16,7 @@
     >
         <!-- Invisible hit area that extends 2px on each side -->
         <div
-            class="absolute inset-y-0 -left-[2px] -right-[2px] pointer-events-auto"
+            class="pane-resize-handle__hit-area absolute inset-y-0 -left-[2px] -right-[2px] pointer-events-auto"
         ></div>
         
         <!-- Visible indicator (only on hover or focus) -->
@@ -26,6 +27,7 @@
                     ? 'w-1.5 bg-[var(--md-primary)] opacity-100'
                     : 'w-0 opacity-0'
             ]"
+            class="pane-resize-handle__indicator"
         ></div>
     </div>
 </template>
