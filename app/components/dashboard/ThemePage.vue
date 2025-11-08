@@ -71,11 +71,13 @@
             <label class="flex items-center gap-2 cursor-pointer select-none">
                 <input
                     type="checkbox"
-                    :checked="(settings as any).paletteEnabled"
+                    :checked="overrides.colors?.enabled ?? false"
                     @change="
                         set({
-                            paletteEnabled: !(settings as any).paletteEnabled,
-                        } as any)
+                            colors: {
+                                enabled: !(overrides.colors?.enabled ?? false),
+                            },
+                        })
                     "
                 />
                 <span class="text-xs">Enable palette overrides</span>
@@ -85,14 +87,16 @@
                     <label class="w-32 text-xs">Primary</label>
                     <UColorPicker
                         v-bind="paletteColorPickerProps"
-                        :disabled="!(settings as any).paletteEnabled"
+                        :disabled="!(overrides.colors?.enabled ?? false)"
                         :model-value="
-                            (settings as any).paletteEnabled &&
-                            String((settings as any).palettePrimary || '').startsWith('#')
-                                ? (settings as any).palettePrimary
+                            (overrides.colors?.enabled ?? false) &&
+                            String(overrides.colors?.primary || '').startsWith(
+                                '#'
+                            )
+                                ? overrides.colors?.primary
                                 : undefined
                         "
-                        @update:model-value="(c: string | undefined)=> c && set({ palettePrimary: c } as any)"
+                        @update:model-value="(c: string | undefined)=> c && set({ colors: { primary: c } })"
                         class="scale-60 origin-left"
                     />
                     <div class="flex items-center gap-2">
@@ -102,18 +106,20 @@
                             spellcheck="false"
                             maxlength="9"
                             placeholder="#RRGGBB"
-                            v-model="(localHex as any).palettePrimary"
-                            @input="onHexInput('palettePrimary' as any)"
-                            :disabled="!(settings as any).paletteEnabled"
+                            v-model="localHex.palettePrimary"
+                            @input="onHexInput('palettePrimary')"
+                            :disabled="!(overrides.colors?.enabled ?? false)"
                             aria-label="Primary hex color"
                         />
                         <button
                             type="button"
                             class="theme-btn-copy"
-                            @click="copyColor('palettePrimary' as any)"
+                            @click="copyColor('palettePrimary')"
                             :disabled="
-                                !(settings as any).paletteEnabled ||
-                                !String((settings as any).palettePrimary || '').startsWith('#')
+                                !(overrides.colors?.enabled ?? false) ||
+                                !String(
+                                    overrides.colors?.primary || ''
+                                ).startsWith('#')
                             "
                             aria-label="Copy primary color"
                             title="Copy"
@@ -126,14 +132,16 @@
                     <label class="w-32 text-xs">Secondary</label>
                     <UColorPicker
                         v-bind="paletteColorPickerProps"
-                        :disabled="!(settings as any).paletteEnabled"
+                        :disabled="!(overrides.colors?.enabled ?? false)"
                         :model-value="
-                            (settings as any).paletteEnabled &&
-                            String((settings as any).paletteSecondary || '').startsWith('#')
-                                ? (settings as any).paletteSecondary
+                            (overrides.colors?.enabled ?? false) &&
+                            String(
+                                overrides.colors?.secondary || ''
+                            ).startsWith('#')
+                                ? overrides.colors?.secondary
                                 : undefined
                         "
-                        @update:model-value="(c: string | undefined)=> c && set({ paletteSecondary: c } as any)"
+                        @update:model-value="(c: string | undefined)=> c && set({ colors: { secondary: c } })"
                         class="scale-60 origin-left"
                     />
                     <div class="flex items-center gap-2">
@@ -143,18 +151,20 @@
                             spellcheck="false"
                             maxlength="9"
                             placeholder="#RRGGBB"
-                            v-model="(localHex as any).paletteSecondary"
-                            @input="onHexInput('paletteSecondary' as any)"
-                            :disabled="!(settings as any).paletteEnabled"
+                            v-model="localHex.paletteSecondary"
+                            @input="onHexInput('paletteSecondary')"
+                            :disabled="!(overrides.colors?.enabled ?? false)"
                             aria-label="Secondary hex color"
                         />
                         <button
                             type="button"
                             class="theme-btn-copy"
-                            @click="copyColor('paletteSecondary' as any)"
+                            @click="copyColor('paletteSecondary')"
                             :disabled="
-                                !(settings as any).paletteEnabled ||
-                                !String((settings as any).paletteSecondary || '').startsWith('#')
+                                !(overrides.colors?.enabled ?? false) ||
+                                !String(
+                                    overrides.colors?.secondary || ''
+                                ).startsWith('#')
                             "
                             aria-label="Copy secondary color"
                             title="Copy"
@@ -167,14 +177,16 @@
                     <label class="w-32 text-xs">Error</label>
                     <UColorPicker
                         v-bind="paletteColorPickerProps"
-                        :disabled="!(settings as any).paletteEnabled"
+                        :disabled="!(overrides.colors?.enabled ?? false)"
                         :model-value="
-                            (settings as any).paletteEnabled &&
-                            String((settings as any).paletteError || '').startsWith('#')
-                                ? (settings as any).paletteError
+                            (overrides.colors?.enabled ?? false) &&
+                            String(overrides.colors?.error || '').startsWith(
+                                '#'
+                            )
+                                ? overrides.colors?.error
                                 : undefined
                         "
-                        @update:model-value="(c: string | undefined)=> c && set({ paletteError: c } as any)"
+                        @update:model-value="(c: string | undefined)=> c && set({ colors: { error: c } })"
                         class="scale-60 origin-left"
                     />
                     <div class="flex items-center gap-2">
@@ -184,18 +196,20 @@
                             spellcheck="false"
                             maxlength="9"
                             placeholder="#RRGGBB"
-                            v-model="(localHex as any).paletteError"
-                            @input="onHexInput('paletteError' as any)"
-                            :disabled="!(settings as any).paletteEnabled"
+                            v-model="localHex.paletteError"
+                            @input="onHexInput('paletteError')"
+                            :disabled="!(overrides.colors?.enabled ?? false)"
                             aria-label="Error hex color"
                         />
                         <button
                             type="button"
                             class="theme-btn-copy"
-                            @click="copyColor('paletteError' as any)"
+                            @click="copyColor('paletteError')"
                             :disabled="
-                                !(settings as any).paletteEnabled ||
-                                !String((settings as any).paletteError || '').startsWith('#')
+                                !(overrides.colors?.enabled ?? false) ||
+                                !String(
+                                    overrides.colors?.error || ''
+                                ).startsWith('#')
                             "
                             aria-label="Copy error color"
                             title="Copy"
@@ -208,14 +222,16 @@
                     <label class="w-32 text-xs">Surface Variant</label>
                     <UColorPicker
                         v-bind="paletteColorPickerProps"
-                        :disabled="!(settings as any).paletteEnabled"
+                        :disabled="!(overrides.colors?.enabled ?? false)"
                         :model-value="
-                            (settings as any).paletteEnabled &&
-                            String((settings as any).paletteSurfaceVariant || '').startsWith('#')
-                                ? (settings as any).paletteSurfaceVariant
+                            (overrides.colors?.enabled ?? false) &&
+                            String(
+                                overrides.colors?.surfaceVariant || ''
+                            ).startsWith('#')
+                                ? overrides.colors?.surfaceVariant
                                 : undefined
                         "
-                        @update:model-value="(c: string | undefined)=> c && set({ paletteSurfaceVariant: c } as any)"
+                        @update:model-value="(c: string | undefined)=> c && set({ colors: { surfaceVariant: c } })"
                         class="scale-60 origin-left"
                     />
                     <div class="flex items-center gap-2">
@@ -225,18 +241,20 @@
                             spellcheck="false"
                             maxlength="9"
                             placeholder="#RRGGBB"
-                            v-model="(localHex as any).paletteSurfaceVariant"
-                            @input="onHexInput('paletteSurfaceVariant' as any)"
-                            :disabled="!(settings as any).paletteEnabled"
+                            v-model="localHex.paletteSurfaceVariant"
+                            @input="onHexInput('paletteSurfaceVariant')"
+                            :disabled="!(overrides.colors?.enabled ?? false)"
                             aria-label="Surface Variant hex color"
                         />
                         <button
                             type="button"
                             class="theme-btn-copy"
-                            @click="copyColor('paletteSurfaceVariant' as any)"
+                            @click="copyColor('paletteSurfaceVariant')"
                             :disabled="
-                                !(settings as any).paletteEnabled ||
-                                !String((settings as any).paletteSurfaceVariant || '').startsWith('#')
+                                !(overrides.colors?.enabled ?? false) ||
+                                !String(
+                                    overrides.colors?.surfaceVariant || ''
+                                ).startsWith('#')
                             "
                             aria-label="Copy surface variant color"
                             title="Copy"
@@ -249,14 +267,16 @@
                     <label class="w-32 text-xs">Border</label>
                     <UColorPicker
                         v-bind="paletteColorPickerProps"
-                        :disabled="!(settings as any).paletteEnabled"
+                        :disabled="!(overrides.colors?.enabled ?? false)"
                         :model-value="
-                            (settings as any).paletteEnabled &&
-                            String((settings as any).paletteBorder || '').startsWith('#')
-                                ? (settings as any).paletteBorder
+                            (overrides.colors?.enabled ?? false) &&
+                            String(overrides.colors?.border || '').startsWith(
+                                '#'
+                            )
+                                ? overrides.colors?.border
                                 : undefined
                         "
-                        @update:model-value="(c: string | undefined)=> c && set({ paletteBorder: c } as any)"
+                        @update:model-value="(c: string | undefined)=> c && set({ colors: { border: c } })"
                         class="scale-60 origin-left"
                     />
                     <div class="flex items-center gap-2">
@@ -266,18 +286,20 @@
                             spellcheck="false"
                             maxlength="9"
                             placeholder="#RRGGBB"
-                            v-model="(localHex as any).paletteBorder"
-                            @input="onHexInput('paletteBorder' as any)"
-                            :disabled="!(settings as any).paletteEnabled"
+                            v-model="localHex.paletteBorder"
+                            @input="onHexInput('paletteBorder')"
+                            :disabled="!(overrides.colors?.enabled ?? false)"
                             aria-label="Border hex color"
                         />
                         <button
                             type="button"
                             class="theme-btn-copy"
-                            @click="copyColor('paletteBorder' as any)"
+                            @click="copyColor('paletteBorder')"
                             :disabled="
-                                !(settings as any).paletteEnabled ||
-                                !String((settings as any).paletteBorder || '').startsWith('#')
+                                !(overrides.colors?.enabled ?? false) ||
+                                !String(
+                                    overrides.colors?.border || ''
+                                ).startsWith('#')
                             "
                             aria-label="Copy border color"
                             title="Copy"
@@ -290,14 +312,16 @@
                     <label class="w-32 text-xs">Surface</label>
                     <UColorPicker
                         v-bind="paletteColorPickerProps"
-                        :disabled="!(settings as any).paletteEnabled"
+                        :disabled="!(overrides.colors?.enabled ?? false)"
                         :model-value="
-                            (settings as any).paletteEnabled &&
-                            String((settings as any).paletteSurface || '').startsWith('#')
-                                ? (settings as any).paletteSurface
+                            (overrides.colors?.enabled ?? false) &&
+                            String(overrides.colors?.surface || '').startsWith(
+                                '#'
+                            )
+                                ? overrides.colors?.surface
                                 : undefined
                         "
-                        @update:model-value="(c: string | undefined)=> c && set({ paletteSurface: c } as any)"
+                        @update:model-value="(c: string | undefined)=> c && set({ colors: { surface: c } })"
                         class="scale-60 origin-left"
                     />
                     <div class="flex items-center gap-2">
@@ -307,18 +331,20 @@
                             spellcheck="false"
                             maxlength="9"
                             placeholder="#RRGGBB"
-                            v-model="(localHex as any).paletteSurface"
-                            @input="onHexInput('paletteSurface' as any)"
-                            :disabled="!(settings as any).paletteEnabled"
+                            v-model="localHex.paletteSurface"
+                            @input="onHexInput('paletteSurface')"
+                            :disabled="!(overrides.colors?.enabled ?? false)"
                             aria-label="Surface hex color"
                         />
                         <button
                             type="button"
                             class="theme-btn-copy"
-                            @click="copyColor('paletteSurface' as any)"
+                            @click="copyColor('paletteSurface')"
                             :disabled="
-                                !(settings as any).paletteEnabled ||
-                                !String((settings as any).paletteSurface || '').startsWith('#')
+                                !(overrides.colors?.enabled ?? false) ||
+                                !String(
+                                    overrides.colors?.surface || ''
+                                ).startsWith('#')
                             "
                             aria-label="Copy surface color"
                             title="Copy"
@@ -345,11 +371,14 @@
             <label class="flex items-center gap-2 cursor-pointer select-none">
                 <input
                     type="checkbox"
-                    :checked="settings.customBgColorsEnabled"
+                    :checked="overrides.backgrounds?.enabled ?? false"
                     @change="
                         set({
-                            customBgColorsEnabled:
-                                !settings.customBgColorsEnabled,
+                            backgrounds: {
+                                enabled: !(
+                                    overrides.backgrounds?.enabled ?? false
+                                ),
+                            },
                         });
                         reapply();
                     "
@@ -360,7 +389,7 @@
             </label>
             <p
                 class="text-xs opacity-70"
-                v-if="!settings.customBgColorsEnabled"
+                v-if="!(overrides.backgrounds?.enabled ?? false)"
             >
                 Disabled: system/theme background colors shown.
             </p>
@@ -400,8 +429,16 @@
             >
                 <input
                     type="checkbox"
-                    :checked="settings.useSystemFont"
-                    @change="set({ useSystemFont: !settings.useSystemFont })"
+                    :checked="overrides.typography?.useSystemFont ?? false"
+                    @change="
+                        set({
+                            typography: {
+                                useSystemFont: !(
+                                    overrides.typography?.useSystemFont ?? false
+                                ),
+                            },
+                        })
+                    "
                 />
                 <span class="text-xs">Use system font for body & headings</span>
             </label>
@@ -429,7 +466,7 @@
                 <div
                     class="pattern-thumb drop-zone"
                     :class="[
-                        !settings.contentBg1 || local.contentBg1Opacity === 0
+                        !contentBg1Url || local.contentBg1Opacity === 0
                             ? 'opacity-30'
                             : '',
                         dragOver.contentBg1 ? 'is-dragover' : '',
@@ -449,13 +486,9 @@
                 </div>
                 <span
                     class="text-xs truncate max-w-[160px]"
-                    :title="displayName(settings.contentBg1)"
+                    :title="displayName(contentBg1Url)"
                 >
-                    {{
-                        settings.contentBg1
-                            ? displayName(settings.contentBg1)
-                            : 'None'
-                    }}
+                    {{ contentBg1Url ? displayName(contentBg1Url) : 'None' }}
                 </span>
             </div>
             <div class="flex flex-wrap gap-2 items-center">
@@ -486,19 +519,23 @@
                 <UButton
                     v-bind="repeatButtonProps"
                     @click="toggleRepeat('contentBg1Repeat')"
-                    :aria-pressed="settings.contentBg1Repeat === 'repeat'"
+                    :aria-pressed="contentBg1Repeat === 'repeat'"
                 >
                     Repeat:
-                    {{ settings.contentBg1Repeat === 'repeat' ? 'On' : 'Off' }}
+                    {{ contentBg1Repeat === 'repeat' ? 'On' : 'Off' }}
                 </UButton>
                 <label
                     class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
                 >
                     <input
                         type="checkbox"
-                        :checked="settings.contentBg1Fit"
+                        :checked="contentBg1Fit"
                         @change="
-                            set({ contentBg1Fit: !settings.contentBg1Fit })
+                            set({
+                                backgrounds: {
+                                    content: { base: { fit: !contentBg1Fit } },
+                                },
+                            })
                         "
                     />
                     Fit
@@ -525,29 +562,26 @@
                     type="range"
                     min="8"
                     max="1200"
-                    :disabled="settings.contentBg1Fit"
+                    :disabled="contentBg1Fit"
                     :value="local.contentBg1SizePx"
                     @input="onSizeRange($event, 'contentBg1SizePx')"
                     class="flex-1"
                 />
                 <span class="w-16 text-right tabular-nums text-xs">{{
-                    settings.contentBg1Fit
-                        ? 'cover'
-                        : local.contentBg1SizePx + 'px'
+                    contentBg1Fit ? 'cover' : local.contentBg1SizePx + 'px'
                 }}</span>
             </div>
             <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
                     v-bind="backgroundColorPickerProps"
-                    :disabled="!settings.customBgColorsEnabled"
+                    :disabled="!bgEnabled"
                     :model-value="
-                        settings.customBgColorsEnabled &&
-                        settings.contentBg1Color.startsWith('#')
-                            ? settings.contentBg1Color
+                        bgEnabled && contentBg1Color.startsWith('#')
+                            ? contentBg1Color
                             : undefined
                     "
-                    @update:model-value="(c: string | undefined)=> c && set({ contentBg1Color: c })"
+                    @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { base: { color: c } } } })"
                     class="scale-60 origin-left"
                 />
                 <div class="flex items-center gap-2">
@@ -559,7 +593,7 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.contentBg1Color"
                         @input="onHexInput('contentBg1Color')"
-                        :disabled="!settings.customBgColorsEnabled"
+                        :disabled="!bgEnabled"
                         aria-label="Content layer 1 fallback hex color"
                     />
                     <button
@@ -567,8 +601,7 @@
                         class="theme-btn-copy"
                         @click="copyColor('contentBg1Color')"
                         :disabled="
-                            !settings.customBgColorsEnabled ||
-                            !settings.contentBg1Color.startsWith('#')
+                            !bgEnabled || !contentBg1Color.startsWith('#')
                         "
                         aria-label="Copy content layer 1 color"
                         title="Copy"
@@ -600,7 +633,7 @@
                 <div
                     class="pattern-thumb drop-zone"
                     :class="[
-                        !settings.contentBg2 || local.contentBg2Opacity === 0
+                        !contentBg2Url || local.contentBg2Opacity === 0
                             ? 'opacity-30'
                             : '',
                         dragOver.contentBg2 ? 'is-dragover' : '',
@@ -620,12 +653,10 @@
                 </div>
                 <span
                     class="text-xs truncate max-w-[160px]"
-                    :title="displayName(settings.contentBg2)"
+                    :title="displayName(contentBg2Url)"
                 >
                     {{
-                        settings.contentBg2
-                            ? displayName(settings.contentBg2)
-                            : 'Disabled'
+                        contentBg2Url ? displayName(contentBg2Url) : 'Disabled'
                     }}
                 </span>
             </div>
@@ -656,19 +687,25 @@
                 <UButton
                     v-bind="repeatButtonProps"
                     @click="toggleRepeat('contentBg2Repeat')"
-                    :aria-pressed="settings.contentBg2Repeat === 'repeat'"
+                    :aria-pressed="contentBg2Repeat === 'repeat'"
                 >
                     Repeat:
-                    {{ settings.contentBg2Repeat === 'repeat' ? 'On' : 'Off' }}
+                    {{ contentBg2Repeat === 'repeat' ? 'On' : 'Off' }}
                 </UButton>
                 <label
                     class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
                 >
                     <input
                         type="checkbox"
-                        :checked="settings.contentBg2Fit"
+                        :checked="contentBg2Fit"
                         @change="
-                            set({ contentBg2Fit: !settings.contentBg2Fit })
+                            set({
+                                backgrounds: {
+                                    content: {
+                                        overlay: { fit: !contentBg2Fit },
+                                    },
+                                },
+                            })
                         "
                     />
                     Fit
@@ -695,29 +732,26 @@
                     type="range"
                     min="8"
                     max="1200"
-                    :disabled="settings.contentBg2Fit"
+                    :disabled="contentBg2Fit"
                     :value="local.contentBg2SizePx"
                     @input="onSizeRange($event, 'contentBg2SizePx')"
                     class="flex-1"
                 />
                 <span class="w-16 text-right tabular-nums text-xs">{{
-                    settings.contentBg2Fit
-                        ? 'cover'
-                        : local.contentBg2SizePx + 'px'
+                    contentBg2Fit ? 'cover' : local.contentBg2SizePx + 'px'
                 }}</span>
             </div>
             <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
                     v-bind="backgroundColorPickerProps"
-                    :disabled="!settings.customBgColorsEnabled"
+                    :disabled="!bgEnabled"
                     :model-value="
-                        settings.customBgColorsEnabled &&
-                        settings.contentBg2Color.startsWith('#')
-                            ? settings.contentBg2Color
+                        bgEnabled && contentBg2Color.startsWith('#')
+                            ? contentBg2Color
                             : undefined
                     "
-                    @update:model-value="(c: string | undefined)=> c && set({ contentBg2Color: c })"
+                    @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { overlay: { color: c } } } })"
                     class="scale-60 origin-left"
                 />
                 <div class="flex items-center gap-2">
@@ -729,7 +763,7 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.contentBg2Color"
                         @input="onHexInput('contentBg2Color')"
-                        :disabled="!settings.customBgColorsEnabled"
+                        :disabled="!bgEnabled"
                         aria-label="Content layer 2 fallback hex color"
                     />
                     <button
@@ -737,8 +771,7 @@
                         class="theme-btn-copy"
                         @click="copyColor('contentBg2Color')"
                         :disabled="
-                            !settings.customBgColorsEnabled ||
-                            !settings.contentBg2Color.startsWith('#')
+                            !bgEnabled || !contentBg2Color.startsWith('#')
                         "
                         aria-label="Copy content layer 2 color"
                         title="Copy"
@@ -769,7 +802,7 @@
                 <div
                     class="pattern-thumb drop-zone"
                     :class="[
-                        !settings.sidebarBg || local.sidebarBgOpacity === 0
+                        !sidebarBgUrl || local.sidebarBgOpacity === 0
                             ? 'opacity-30'
                             : '',
                         dragOver.sidebarBg ? 'is-dragover' : '',
@@ -789,13 +822,9 @@
                 </div>
                 <span
                     class="text-xs truncate max-w-[160px]"
-                    :title="displayName(settings.sidebarBg)"
+                    :title="displayName(sidebarBgUrl)"
                 >
-                    {{
-                        settings.sidebarBg
-                            ? displayName(settings.sidebarBg)
-                            : 'None'
-                    }}
+                    {{ sidebarBgUrl ? displayName(sidebarBgUrl) : 'None' }}
                 </span>
             </div>
             <div class="flex flex-wrap gap-2 items-center">
@@ -825,18 +854,24 @@
                 <UButton
                     v-bind="repeatButtonProps"
                     @click="toggleRepeat('sidebarRepeat')"
-                    :aria-pressed="settings.sidebarRepeat === 'repeat'"
+                    :aria-pressed="sidebarRepeat === 'repeat'"
                 >
                     Repeat:
-                    {{ settings.sidebarRepeat === 'repeat' ? 'On' : 'Off' }}
+                    {{ sidebarRepeat === 'repeat' ? 'On' : 'Off' }}
                 </UButton>
                 <label
                     class="flex items-center gap-1 text-[10px] cursor-pointer select-none"
                 >
                     <input
                         type="checkbox"
-                        :checked="settings.sidebarBgFit"
-                        @change="set({ sidebarBgFit: !settings.sidebarBgFit })"
+                        :checked="sidebarBgFit"
+                        @change="
+                            set({
+                                backgrounds: {
+                                    sidebar: { fit: !sidebarBgFit },
+                                },
+                            })
+                        "
                     />
                     Fit
                 </label>
@@ -862,29 +897,26 @@
                     type="range"
                     min="8"
                     max="1200"
-                    :disabled="settings.sidebarBgFit"
+                    :disabled="sidebarBgFit"
                     :value="local.sidebarBgSizePx"
                     @input="onSizeRange($event, 'sidebarBgSizePx')"
                     class="flex-1"
                 />
                 <span class="w-16 text-right tabular-nums text-xs">{{
-                    settings.sidebarBgFit
-                        ? 'cover'
-                        : local.sidebarBgSizePx + 'px'
+                    sidebarBgFit ? 'cover' : local.sidebarBgSizePx + 'px'
                 }}</span>
             </div>
             <div class="flex items-center gap-4 fallback-row">
                 <label class="w-32 text-xs">Fallback Color</label>
                 <UColorPicker
                     v-bind="backgroundColorPickerProps"
-                    :disabled="!settings.customBgColorsEnabled"
+                    :disabled="!bgEnabled"
                     :model-value="
-                        settings.customBgColorsEnabled &&
-                        settings.sidebarBgColor.startsWith('#')
-                            ? settings.sidebarBgColor
+                        bgEnabled && sidebarBgColor.startsWith('#')
+                            ? sidebarBgColor
                             : undefined
                     "
-                    @update:model-value="(c: string | undefined)=> c && set({ sidebarBgColor: c })"
+                    @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { sidebar: { color: c } } })"
                     class="scale-60 origin-left"
                 />
                 <div class="flex items-center gap-2">
@@ -896,7 +928,7 @@
                         placeholder="#RRGGBB"
                         v-model="localHex.sidebarBgColor"
                         @input="onHexInput('sidebarBgColor')"
-                        :disabled="!settings.customBgColorsEnabled"
+                        :disabled="!bgEnabled"
                         aria-label="Sidebar fallback hex color"
                     />
                     <button
@@ -904,8 +936,7 @@
                         class="theme-btn-copy"
                         @click="copyColor('sidebarBgColor')"
                         :disabled="
-                            !settings.customBgColorsEnabled ||
-                            !settings.sidebarBgColor.startsWith('#')
+                            !bgEnabled || !sidebarBgColor.startsWith('#')
                         "
                         aria-label="Copy sidebar color"
                         title="Copy"
@@ -932,7 +963,9 @@
             <label class="flex items-center gap-2 cursor-pointer select-none">
                 <input
                     type="checkbox"
-                    :checked="settings.reducePatternsInHighContrast"
+                    :checked="
+                        overrides.ui?.reducePatternsInHighContrast ?? false
+                    "
                     @change="toggleReduceHighContrast"
                 />
                 <span class="text-xs"
@@ -958,63 +991,28 @@
                 <span class="opacity-70">Gradient:</span>
                 <UButton
                     v-bind="gradientButtonProps"
-                    :disabled="settings.showHeaderGradient"
-                    @click="set({ showHeaderGradient: true })"
+                    :disabled="showHeaderGradient"
+                    @click="
+                        set({
+                            backgrounds: { headerGradient: { enabled: true } },
+                        })
+                    "
                     >Default</UButton
                 >
                 <UButton
                     v-bind="gradientButtonProps"
-                    :disabled="!settings.showHeaderGradient"
-                    @click="set({ showHeaderGradient: false })"
+                    :disabled="!showHeaderGradient"
+                    @click="
+                        set({
+                            backgrounds: { headerGradient: { enabled: false } },
+                        })
+                    "
                     >Remove</UButton
                 >
                 <span class="opacity-60"
                     >Current:
-                    {{
-                        settings.showHeaderGradient ? 'Default' : 'Removed'
-                    }}</span
+                    {{ showHeaderGradient ? 'Default' : 'Removed' }}</span
                 >
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32 text-xs">Background Color</label>
-                <UColorPicker
-                    v-bind="backgroundColorPickerProps"
-                    :disabled="!settings.customBgColorsEnabled"
-                    :model-value="
-                        settings.customBgColorsEnabled &&
-                        settings.headerBgColor.startsWith('#')
-                            ? settings.headerBgColor
-                            : undefined
-                    "
-                    @update:model-value="(c: string | undefined)=> c && set({ headerBgColor: c })"
-                    class="scale-60 origin-left"
-                />
-                <div class="flex items-center gap-2">
-                    <input
-                        class="theme-input w-24"
-                        type="text"
-                        spellcheck="false"
-                        maxlength="9"
-                        placeholder="#RRGGBB"
-                        v-model="localHex.headerBgColor"
-                        @input="onHexInput('headerBgColor')"
-                        :disabled="!settings.customBgColorsEnabled"
-                        aria-label="Header background hex color"
-                    />
-                    <button
-                        type="button"
-                        class="theme-btn-copy"
-                        @click="copyColor('headerBgColor')"
-                        :disabled="
-                            !settings.customBgColorsEnabled ||
-                            !settings.headerBgColor.startsWith('#')
-                        "
-                        aria-label="Copy header color"
-                        title="Copy"
-                    >
-                        Copy
-                    </button>
-                </div>
             </div>
         </section>
 
@@ -1035,63 +1033,32 @@
                 <span class="opacity-70">Gradient:</span>
                 <UButton
                     v-bind="gradientButtonProps"
-                    :disabled="settings.showBottomBarGradient"
-                    @click="set({ showBottomBarGradient: true })"
+                    :disabled="showBottomBarGradient"
+                    @click="
+                        set({
+                            backgrounds: {
+                                bottomNavGradient: { enabled: true },
+                            },
+                        })
+                    "
                     >Default</UButton
                 >
                 <UButton
                     v-bind="gradientButtonProps"
-                    :disabled="!settings.showBottomBarGradient"
-                    @click="set({ showBottomBarGradient: false })"
+                    :disabled="!showBottomBarGradient"
+                    @click="
+                        set({
+                            backgrounds: {
+                                bottomNavGradient: { enabled: false },
+                            },
+                        })
+                    "
                     >Remove</UButton
                 >
                 <span class="opacity-60"
                     >Current:
-                    {{
-                        settings.showBottomBarGradient ? 'Default' : 'Removed'
-                    }}</span
+                    {{ showBottomBarGradient ? 'Default' : 'Removed' }}</span
                 >
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32 text-xs">Background Color</label>
-                <UColorPicker
-                    v-bind="backgroundColorPickerProps"
-                    :disabled="!settings.customBgColorsEnabled"
-                    :model-value="
-                        settings.customBgColorsEnabled &&
-                        settings.bottomBarBgColor.startsWith('#')
-                            ? settings.bottomBarBgColor
-                            : undefined
-                    "
-                    @update:model-value="(c: string | undefined)=> c && set({ bottomBarBgColor: c })"
-                    class="scale-60 origin-left"
-                />
-                <div class="flex items-center gap-2">
-                    <input
-                        class="theme-input w-24"
-                        type="text"
-                        spellcheck="false"
-                        maxlength="9"
-                        placeholder="#RRGGBB"
-                        v-model="localHex.bottomBarBgColor"
-                        @input="onHexInput('bottomBarBgColor')"
-                        :disabled="!settings.customBgColorsEnabled"
-                        aria-label="Bottom bar background hex color"
-                    />
-                    <button
-                        type="button"
-                        class="theme-btn-copy"
-                        @click="copyColor('bottomBarBgColor')"
-                        :disabled="
-                            !settings.customBgColorsEnabled ||
-                            !settings.bottomBarBgColor.startsWith('#')
-                        "
-                        aria-label="Copy bottom bar color"
-                        title="Copy"
-                    >
-                        Copy
-                    </button>
-                </div>
             </div>
         </section>
 
@@ -1123,20 +1090,65 @@
 import { reactive, watch, onBeforeUnmount, ref, computed } from 'vue';
 import { createOrRefFile } from '~/db/files';
 import { getFileBlob } from '~/db/files';
-// Relative import (no alias friction inside /app)
-import { useThemeSettings } from '~/core/theme/useThemeSettings';
-import type { ThemeSettings } from '~/core/theme/theme-types';
+// Import new user overrides composable
+import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
+import type { UserThemeOverrides } from '~/core/theme/user-overrides-types';
 import type { Ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
-const themeApi = useThemeSettings();
-const settings = themeApi.settings as Ref<ThemeSettings>; // active mode settings
+const themeApi = useUserThemeOverrides();
+const overrides = themeApi.overrides as Ref<UserThemeOverrides>; // active mode overrides
 const set = themeApi.set;
 const reset = themeApi.reset; // resets active mode by default
 const resetAll = themeApi.resetAll;
 const reapply = themeApi.reapply;
 const activeMode = themeApi.activeMode;
 const switchMode = themeApi.switchMode;
+
+// Computed helpers for cleaner template bindings
+const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
+const contentBg1Url = computed(
+    () => overrides.value.backgrounds?.content?.base?.url || null
+);
+const contentBg1Repeat = computed(
+    () => overrides.value.backgrounds?.content?.base?.repeat || 'no-repeat'
+);
+const contentBg1Fit = computed(
+    () => overrides.value.backgrounds?.content?.base?.fit ?? false
+);
+const contentBg1Color = computed(
+    () => overrides.value.backgrounds?.content?.base?.color || ''
+);
+const contentBg2Url = computed(
+    () => overrides.value.backgrounds?.content?.overlay?.url || null
+);
+const contentBg2Repeat = computed(
+    () => overrides.value.backgrounds?.content?.overlay?.repeat || 'no-repeat'
+);
+const contentBg2Fit = computed(
+    () => overrides.value.backgrounds?.content?.overlay?.fit ?? false
+);
+const contentBg2Color = computed(
+    () => overrides.value.backgrounds?.content?.overlay?.color || ''
+);
+const sidebarBgUrl = computed(
+    () => overrides.value.backgrounds?.sidebar?.url || null
+);
+const sidebarRepeat = computed(
+    () => overrides.value.backgrounds?.sidebar?.repeat || 'no-repeat'
+);
+const sidebarBgFit = computed(
+    () => overrides.value.backgrounds?.sidebar?.fit ?? false
+);
+const sidebarBgColor = computed(
+    () => overrides.value.backgrounds?.sidebar?.color || ''
+);
+const showHeaderGradient = computed(
+    () => overrides.value.backgrounds?.headerGradient?.enabled ?? true
+);
+const showBottomBarGradient = computed(
+    () => overrides.value.backgrounds?.bottomNavGradient?.enabled ?? true
+);
 
 // Theme overrides for buttons
 const themeModeButtonProps = computed(() => {
@@ -1245,62 +1257,60 @@ const resetAllButtonProps = computed(() => {
 
 // Local mutable copy for debounced slider interactions
 const local = reactive({
-    baseFontPx: settings.value.baseFontPx,
-    contentBg1Opacity: settings.value.contentBg1Opacity,
-    contentBg2Opacity: settings.value.contentBg2Opacity,
-    sidebarBgOpacity: settings.value.sidebarBgOpacity,
-    contentBg1SizePx: settings.value.contentBg1SizePx,
-    contentBg2SizePx: settings.value.contentBg2SizePx,
-    sidebarBgSizePx: (settings.value as any).sidebarBgSizePx || 240,
+    baseFontPx: overrides.value.typography?.baseFontPx || 20,
+    contentBg1Opacity: overrides.value.backgrounds?.content?.base?.opacity || 0,
+    contentBg2Opacity:
+        overrides.value.backgrounds?.content?.overlay?.opacity || 0,
+    sidebarBgOpacity: overrides.value.backgrounds?.sidebar?.opacity || 0,
+    contentBg1SizePx: overrides.value.backgrounds?.content?.base?.sizePx || 240,
+    contentBg2SizePx:
+        overrides.value.backgrounds?.content?.overlay?.sizePx || 240,
+    sidebarBgSizePx: overrides.value.backgrounds?.sidebar?.sizePx || 240,
 });
 
 // Local hex color text boxes (so user can type partial values without reverting)
 const localHex = reactive({
-    contentBg1Color: settings.value.contentBg1Color.startsWith('#')
-        ? settings.value.contentBg1Color
+    contentBg1Color: String(
+        overrides.value.backgrounds?.content?.base?.color || ''
+    ).startsWith('#')
+        ? String(overrides.value.backgrounds?.content?.base?.color)
         : '',
-    contentBg2Color: settings.value.contentBg2Color.startsWith('#')
-        ? settings.value.contentBg2Color
+    contentBg2Color: String(
+        overrides.value.backgrounds?.content?.overlay?.color || ''
+    ).startsWith('#')
+        ? String(overrides.value.backgrounds?.content?.overlay?.color)
         : '',
-    sidebarBgColor: settings.value.sidebarBgColor.startsWith('#')
-        ? settings.value.sidebarBgColor
-        : '',
-    headerBgColor: settings.value.headerBgColor.startsWith('#')
-        ? settings.value.headerBgColor
-        : '',
-    bottomBarBgColor: settings.value.bottomBarBgColor.startsWith('#')
-        ? settings.value.bottomBarBgColor
+    sidebarBgColor: String(
+        overrides.value.backgrounds?.sidebar?.color || ''
+    ).startsWith('#')
+        ? String(overrides.value.backgrounds?.sidebar?.color)
         : '',
     // palette hex boxes
-    palettePrimary: String(
-        (settings.value as any).palettePrimary || ''
-    ).startsWith('#')
-        ? String((settings.value as any).palettePrimary)
-        : '',
-    paletteSecondary: String(
-        (settings.value as any).paletteSecondary || ''
-    ).startsWith('#')
-        ? String((settings.value as any).paletteSecondary)
-        : '',
-    paletteError: String((settings.value as any).paletteError || '').startsWith(
+    palettePrimary: String(overrides.value.colors?.primary || '').startsWith(
         '#'
     )
-        ? String((settings.value as any).paletteError)
+        ? String(overrides.value.colors?.primary)
         : '',
-    paletteBorder: String(
-        (settings.value as any).paletteBorder || ''
+    paletteSecondary: String(
+        overrides.value.colors?.secondary || ''
     ).startsWith('#')
-        ? String((settings.value as any).paletteBorder)
+        ? String(overrides.value.colors?.secondary)
+        : '',
+    paletteError: String(overrides.value.colors?.error || '').startsWith('#')
+        ? String(overrides.value.colors?.error)
+        : '',
+    paletteBorder: String(overrides.value.colors?.border || '').startsWith('#')
+        ? String(overrides.value.colors?.border)
         : '',
     paletteSurfaceVariant: String(
-        (settings.value as any).paletteSurfaceVariant || ''
+        overrides.value.colors?.surfaceVariant || ''
     ).startsWith('#')
-        ? String((settings.value as any).paletteSurfaceVariant)
+        ? String(overrides.value.colors?.surfaceVariant)
         : '',
-    paletteSurface: String(
-        (settings.value as any).paletteSurface || ''
-    ).startsWith('#')
-        ? String((settings.value as any).paletteSurface)
+    paletteSurface: String(overrides.value.colors?.surface || '').startsWith(
+        '#'
+    )
+        ? String(overrides.value.colors?.surface)
         : '',
 });
 
@@ -1313,10 +1323,25 @@ function debounce<T extends (...args: any[]) => void>(fn: T, wait: number) {
     };
 }
 
-const commitFontSize = debounce((v: number) => set({ baseFontPx: v }), 70);
-const commitOpacity = debounce((key: keyof ThemeSettings, v: number) => {
-    set({ [key]: v } as any);
-}, 70);
+const commitFontSize = debounce(
+    (v: number) => set({ typography: { baseFontPx: v } }),
+    70
+);
+const commitOpacity = debounce(
+    (
+        key: 'contentBg1Opacity' | 'contentBg2Opacity' | 'sidebarBgOpacity',
+        v: number
+    ) => {
+        if (key === 'contentBg1Opacity') {
+            set({ backgrounds: { content: { base: { opacity: v } } } });
+        } else if (key === 'contentBg2Opacity') {
+            set({ backgrounds: { content: { overlay: { opacity: v } } } });
+        } else if (key === 'sidebarBgOpacity') {
+            set({ backgrounds: { sidebar: { opacity: v } } });
+        }
+    },
+    70
+);
 
 function onFontSizeRange(e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
@@ -1339,16 +1364,39 @@ function toggleRepeat(
         | 'contentBg1Repeat'
         | 'contentBg2Repeat'
 ) {
-    const current = (settings.value as any)[key];
-    const next = current === 'repeat' ? 'no-repeat' : 'repeat';
-    set({ [key]: next } as any);
+    // Map old keys to new structure
+    if (key === 'contentBg1Repeat') {
+        const current =
+            overrides.value.backgrounds?.content?.base?.repeat || 'no-repeat';
+        const next = current === 'repeat' ? 'no-repeat' : 'repeat';
+        set({ backgrounds: { content: { base: { repeat: next } } } });
+    } else if (key === 'contentBg2Repeat') {
+        const current =
+            overrides.value.backgrounds?.content?.overlay?.repeat ||
+            'no-repeat';
+        const next = current === 'repeat' ? 'no-repeat' : 'repeat';
+        set({ backgrounds: { content: { overlay: { repeat: next } } } });
+    } else if (key === 'sidebarRepeat') {
+        const current =
+            overrides.value.backgrounds?.sidebar?.repeat || 'no-repeat';
+        const next = current === 'repeat' ? 'no-repeat' : 'repeat';
+        set({ backgrounds: { sidebar: { repeat: next } } });
+    }
 }
 
 const commitSize = debounce(
     (
         key: 'contentBg1SizePx' | 'contentBg2SizePx' | 'sidebarBgSizePx',
         v: number
-    ) => set({ [key]: v } as any),
+    ) => {
+        if (key === 'contentBg1SizePx') {
+            set({ backgrounds: { content: { base: { sizePx: v } } } });
+        } else if (key === 'contentBg2SizePx') {
+            set({ backgrounds: { content: { overlay: { sizePx: v } } } });
+        } else if (key === 'sidebarBgSizePx') {
+            set({ backgrounds: { sidebar: { sizePx: v } } });
+        }
+    },
     70
 );
 function onSizeRange(
@@ -1362,18 +1410,20 @@ function onSizeRange(
 
 function removeLayer(which: 'contentBg1' | 'contentBg2' | 'sidebarBg') {
     if (which === 'contentBg1') {
-        set({ contentBg1: null, contentBg1Opacity: 0 });
+        set({ backgrounds: { content: { base: { url: null, opacity: 0 } } } });
     } else if (which === 'contentBg2') {
-        set({ contentBg2: null, contentBg2Opacity: 0 });
+        set({
+            backgrounds: { content: { overlay: { url: null, opacity: 0 } } },
+        });
     } else if (which === 'sidebarBg') {
-        set({ sidebarBg: null, sidebarBgOpacity: 0 });
+        set({ backgrounds: { sidebar: { url: null, opacity: 0 } } });
     }
 }
 
 function toggleReduceHighContrast() {
+    const current = overrides.value.ui?.reducePatternsInHighContrast ?? false;
     set({
-        reducePatternsInHighContrast:
-            !settings.value.reducePatternsInHighContrast,
+        ui: { reducePatternsInHighContrast: !current },
     });
     reapply();
 }
@@ -1394,11 +1444,11 @@ function applyPreset(
     opacity: number
 ) {
     if (which === 'contentBg1')
-        set({ contentBg1: src, contentBg1Opacity: opacity });
+        set({ backgrounds: { content: { base: { url: src, opacity } } } });
     else if (which === 'contentBg2')
-        set({ contentBg2: src, contentBg2Opacity: opacity });
+        set({ backgrounds: { content: { overlay: { url: src, opacity } } } });
     else if (which === 'sidebarBg')
-        set({ sidebarBg: src, sidebarBgOpacity: opacity });
+        set({ backgrounds: { sidebar: { url: src, opacity } } });
 }
 
 // Cache of resolved object URLs for internal-file tokens
@@ -1438,21 +1488,21 @@ const resolvedSidebarBg = ref<string | null>(null);
 
 async function refreshResolved() {
     resolvedContentBg1.value = await resolveInternalPath(
-        settings.value.contentBg1 || null
+        overrides.value.backgrounds?.content?.base?.url || null
     );
     resolvedContentBg2.value = await resolveInternalPath(
-        settings.value.contentBg2 || null
+        overrides.value.backgrounds?.content?.overlay?.url || null
     );
     resolvedSidebarBg.value = await resolveInternalPath(
-        settings.value.sidebarBg || null
+        overrides.value.backgrounds?.sidebar?.url || null
     );
 }
 
 watch(
     () => [
-        settings.value.contentBg1,
-        settings.value.contentBg2,
-        settings.value.sidebarBg,
+        overrides.value.backgrounds?.content?.base?.url,
+        overrides.value.backgrounds?.content?.overlay?.url,
+        overrides.value.backgrounds?.sidebar?.url,
     ],
     () => {
         refreshResolved();
@@ -1461,8 +1511,9 @@ watch(
 );
 
 const contentBg1PreviewStyle = computed(() => {
-    const fit = !!settings.value.contentBg1Fit;
-    const repeatEnabled = settings.value.contentBg1Repeat === 'repeat' && !fit;
+    const fit = !!overrides.value.backgrounds?.content?.base?.fit;
+    const repeatEnabled =
+        overrides.value.backgrounds?.content?.base?.repeat === 'repeat' && !fit;
     return {
         backgroundImage: resolvedContentBg1.value
             ? `url(${resolvedContentBg1.value})`
@@ -1473,8 +1524,10 @@ const contentBg1PreviewStyle = computed(() => {
     } as const;
 });
 const contentBg2PreviewStyle = computed(() => {
-    const fit = !!settings.value.contentBg2Fit;
-    const repeatEnabled = settings.value.contentBg2Repeat === 'repeat' && !fit;
+    const fit = !!overrides.value.backgrounds?.content?.overlay?.fit;
+    const repeatEnabled =
+        overrides.value.backgrounds?.content?.overlay?.repeat === 'repeat' &&
+        !fit;
     return {
         backgroundImage: resolvedContentBg2.value
             ? `url(${resolvedContentBg2.value})`
@@ -1485,8 +1538,9 @@ const contentBg2PreviewStyle = computed(() => {
     } as const;
 });
 const sidebarBgPreviewStyle = computed(() => {
-    const fit = !!settings.value.sidebarBgFit;
-    const repeatEnabled = settings.value.sidebarRepeat === 'repeat' && !fit;
+    const fit = !!overrides.value.backgrounds?.sidebar?.fit;
+    const repeatEnabled =
+        overrides.value.backgrounds?.sidebar?.repeat === 'repeat' && !fit;
     return {
         backgroundImage: resolvedSidebarBg.value
             ? `url(${resolvedSidebarBg.value})`
@@ -1501,7 +1555,15 @@ function isPresetActive(
     which: 'contentBg1' | 'contentBg2' | 'sidebarBg',
     src: string
 ) {
-    return (settings.value as any)[which] === src ? 'active' : '';
+    let currentUrl = '';
+    if (which === 'contentBg1') {
+        currentUrl = overrides.value.backgrounds?.content?.base?.url || '';
+    } else if (which === 'contentBg2') {
+        currentUrl = overrides.value.backgrounds?.content?.overlay?.url || '';
+    } else if (which === 'sidebarBg') {
+        currentUrl = overrides.value.backgrounds?.sidebar?.url || '';
+    }
+    return currentUrl === src ? 'active' : '';
 }
 
 // Object URL lifecycle tracking
@@ -1590,9 +1652,12 @@ async function onUpload(
         const meta = await createOrRefFile(file, file.name || 'upload');
         // Store as synthetic scheme so we can resolve later
         const token = `internal-file://${meta.hash}`;
-        if (which === 'contentBg1') set({ contentBg1: token });
-        else if (which === 'contentBg2') set({ contentBg2: token });
-        else if (which === 'sidebarBg') set({ sidebarBg: token });
+        if (which === 'contentBg1')
+            set({ backgrounds: { content: { base: { url: token } } } });
+        else if (which === 'contentBg2')
+            set({ backgrounds: { content: { overlay: { url: token } } } });
+        else if (which === 'sidebarBg')
+            set({ backgrounds: { sidebar: { url: token } } });
         notify('Background image saved', meta.hash.slice(0, 8));
     } catch (e: any) {
         notify('Upload failed', e?.message || 'unknown error');
@@ -1631,7 +1696,27 @@ function onHexInput(key: keyof typeof localHex) {
     }
 }
 async function copyColor(key: keyof typeof localHex) {
-    const val = (settings.value as any)[key];
+    // Map to override paths
+    let val = '';
+    if (key === 'palettePrimary') val = overrides.value.colors?.primary || '';
+    else if (key === 'paletteSecondary')
+        val = overrides.value.colors?.secondary || '';
+    else if (key === 'paletteError') val = overrides.value.colors?.error || '';
+    else if (key === 'paletteSurfaceVariant')
+        val = overrides.value.colors?.surfaceVariant || '';
+    else if (key === 'paletteBorder')
+        val = overrides.value.colors?.border || '';
+    else if (key === 'paletteSurface')
+        val = overrides.value.colors?.surface || '';
+    else if (key === 'contentBg1Color')
+        val = String(overrides.value.backgrounds?.content?.base?.color || '');
+    else if (key === 'contentBg2Color')
+        val = String(
+            overrides.value.backgrounds?.content?.overlay?.color || ''
+        );
+    else if (key === 'sidebarBgColor')
+        val = String(overrides.value.backgrounds?.sidebar?.color || '');
+
     if (!val || !val.startsWith('#')) return;
     try {
         await navigator.clipboard.writeText(val);
@@ -1643,62 +1728,58 @@ async function copyColor(key: keyof typeof localHex) {
 
 // Keep local reactive sliders synced if external reset or future import occurs
 watch(
-    settings,
-    (s) => {
-        if (!s) return;
-        local.baseFontPx = s.baseFontPx;
-        local.contentBg1Opacity = s.contentBg1Opacity;
-        local.contentBg2Opacity = s.contentBg2Opacity;
-        local.sidebarBgOpacity = s.sidebarBgOpacity;
-        local.contentBg1SizePx = s.contentBg1SizePx;
-        local.contentBg2SizePx = s.contentBg2SizePx;
-        local.sidebarBgSizePx = (s as any).sidebarBgSizePx || 240;
+    overrides,
+    (o) => {
+        if (!o) return;
+        local.baseFontPx = o.typography?.baseFontPx || 20;
+        local.contentBg1Opacity = o.backgrounds?.content?.base?.opacity || 0;
+        local.contentBg2Opacity = o.backgrounds?.content?.overlay?.opacity || 0;
+        local.sidebarBgOpacity = o.backgrounds?.sidebar?.opacity || 0;
+        local.contentBg1SizePx = o.backgrounds?.content?.base?.sizePx || 240;
+        local.contentBg2SizePx = o.backgrounds?.content?.overlay?.sizePx || 240;
+        local.sidebarBgSizePx = o.backgrounds?.sidebar?.sizePx || 240;
         // sync hex boxes (only show hex values)
-        localHex.contentBg1Color = s.contentBg1Color.startsWith('#')
-            ? s.contentBg1Color
+        localHex.contentBg1Color = String(
+            o.backgrounds?.content?.base?.color || ''
+        ).startsWith('#')
+            ? String(o.backgrounds?.content?.base?.color)
             : '';
-        localHex.contentBg2Color = s.contentBg2Color.startsWith('#')
-            ? s.contentBg2Color
+        localHex.contentBg2Color = String(
+            o.backgrounds?.content?.overlay?.color || ''
+        ).startsWith('#')
+            ? String(o.backgrounds?.content?.overlay?.color)
             : '';
-        localHex.sidebarBgColor = s.sidebarBgColor.startsWith('#')
-            ? s.sidebarBgColor
-            : '';
-        localHex.headerBgColor = s.headerBgColor.startsWith('#')
-            ? s.headerBgColor
-            : '';
-        localHex.bottomBarBgColor = s.bottomBarBgColor.startsWith('#')
-            ? s.bottomBarBgColor
+        localHex.sidebarBgColor = String(
+            o.backgrounds?.sidebar?.color || ''
+        ).startsWith('#')
+            ? String(o.backgrounds?.sidebar?.color)
             : '';
         // palette hex boxes
-        (localHex as any).palettePrimary = String(
-            (s as any).palettePrimary || ''
-        ).startsWith('#')
-            ? String((s as any).palettePrimary)
+        localHex.palettePrimary = String(o.colors?.primary || '').startsWith(
+            '#'
+        )
+            ? String(o.colors?.primary)
             : '';
-        (localHex as any).paletteSecondary = String(
-            (s as any).paletteSecondary || ''
+        localHex.paletteSecondary = String(
+            o.colors?.secondary || ''
         ).startsWith('#')
-            ? String((s as any).paletteSecondary)
+            ? String(o.colors?.secondary)
             : '';
-        (localHex as any).paletteError = String(
-            (s as any).paletteError || ''
-        ).startsWith('#')
-            ? String((s as any).paletteError)
+        localHex.paletteError = String(o.colors?.error || '').startsWith('#')
+            ? String(o.colors?.error)
             : '';
-        (localHex as any).paletteSurfaceVariant = String(
-            (s as any).paletteSurfaceVariant || ''
+        localHex.paletteSurfaceVariant = String(
+            o.colors?.surfaceVariant || ''
         ).startsWith('#')
-            ? String((s as any).paletteSurfaceVariant)
+            ? String(o.colors?.surfaceVariant)
             : '';
-        (localHex as any).paletteBorder = String(
-            (s as any).paletteBorder || ''
-        ).startsWith('#')
-            ? String((s as any).paletteBorder)
+        localHex.paletteBorder = String(o.colors?.border || '').startsWith('#')
+            ? String(o.colors?.border)
             : '';
-        (localHex as any).paletteSurface = String(
-            (s as any).paletteSurface || ''
-        ).startsWith('#')
-            ? String((s as any).paletteSurface)
+        localHex.paletteSurface = String(o.colors?.surface || '').startsWith(
+            '#'
+        )
+            ? String(o.colors?.surface)
             : '';
     },
     { deep: true }
