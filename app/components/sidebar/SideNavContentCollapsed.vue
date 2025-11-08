@@ -18,10 +18,6 @@
                         v-bind="newChatButtonProps"
                         id="btn-new-chat"
                         class="flex item-center justify-center"
-                        :ui="{
-                            base: 'w-[38.5px]! h-[39px]',
-                            leadingIcon: 'w-5 h-5',
-                        }"
                         @click="emit('new-chat')"
                     ></UButton>
                 </UTooltip>
@@ -38,10 +34,6 @@
                     v-bind="searchButtonProps"
                     id="btn-search"
                     class="flex item-center justify-center"
-                    :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-                        leadingIcon: 'w-5 h-5',
-                    }"
                     @click="emit('focus-search')"
                 ></UButton>
             </UTooltip>
@@ -57,10 +49,6 @@
                     v-bind="newDocButtonProps"
                     id="btn-new-doc"
                     class="flex item-center justify-center"
-                    :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-                        leadingIcon: 'w-5 h-5',
-                    }"
                     @click="emit('new-document')"
                 />
             </UTooltip>
@@ -76,10 +64,6 @@
                     v-bind="newProjectButtonProps"
                     id="btn-new-project"
                     class="flex item-center justify-center"
-                    :ui="{
-                        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
-                        leadingIcon: 'w-5 h-5',
-                    }"
                     @click="emit('new-project')"
                 />
             </UTooltip>
@@ -150,10 +134,6 @@
                 v-bind="dashboardButtonProps"
                 id="btn-dashboard"
                 class="flex item-center justify-center"
-                :ui="{
-                    base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-                    leadingIcon: 'w-5 h-5',
-                }"
                 @click="emit('toggle-dashboard')"
             ></UButton>
         </div>
@@ -232,10 +212,19 @@ const newChatButtonProps = computed(() => {
         identifier: 'sidebar.new-chat',
         isNuxtUI: true,
     });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+    const componentUi = {
+        base: 'w-[38.5px]! h-[39px]',
+        leadingIcon: 'w-5 h-5',
+    };
+    const mergedUi = { ...themeUi, ...componentUi };
+
     return {
         size: 'md' as const,
         icon: 'pixelarticons:message-plus' as const,
         ...(overrides.value as any),
+        ui: mergedUi,
     };
 });
 
@@ -246,10 +235,19 @@ const searchButtonProps = computed(() => {
         identifier: 'sidebar.collapsed-search',
         isNuxtUI: true,
     });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+    const componentUi = {
+        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+        leadingIcon: 'w-5 h-5',
+    };
+    const mergedUi = { ...themeUi, ...componentUi };
+
     return {
         size: 'md' as const,
         icon: 'pixelarticons:search' as const,
         ...(overrides.value as any),
+        ui: mergedUi,
     };
 });
 
@@ -260,9 +258,18 @@ const newDocButtonProps = computed(() => {
         identifier: 'sidebar.new-document',
         isNuxtUI: true,
     });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+    const componentUi = {
+        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+        leadingIcon: 'w-5 h-5',
+    };
+    const mergedUi = { ...themeUi, ...componentUi };
+
     return {
         icon: 'pixelarticons:note-plus' as const,
         ...(overrides.value as any),
+        ui: mergedUi,
     };
 });
 
@@ -273,9 +280,18 @@ const newProjectButtonProps = computed(() => {
         identifier: 'sidebar.new-project',
         isNuxtUI: true,
     });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+    const componentUi = {
+        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+        leadingIcon: 'w-5 h-5',
+    };
+    const mergedUi = { ...themeUi, ...componentUi };
+
     return {
         icon: 'pixelarticons:folder-plus' as const,
         ...(overrides.value as any),
+        ui: mergedUi,
     };
 });
 
@@ -286,10 +302,19 @@ const dashboardButtonProps = computed(() => {
         identifier: 'sidebar.collapsed-dashboard',
         isNuxtUI: true,
     });
+
+    const themeUi = (overrides.value as any)?.ui || {};
+    const componentUi = {
+        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
+        leadingIcon: 'w-5 h-5',
+    };
+    const mergedUi = { ...themeUi, ...componentUi };
+
     return {
         size: 'md' as const,
         icon: 'pixelarticons:dashboard' as const,
         ...(overrides.value as any),
+        ui: mergedUi,
     };
 });
 

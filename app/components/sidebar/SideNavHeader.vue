@@ -1,12 +1,11 @@
 <template>
     <div id="side-nav-content-header" class="px-2 pt-2 flex flex-col space-y-2">
         <div class="flex w-full items-center gap-2 mb-1">
-            <div class="relative flex-1 ml-[1px]">
+            <div class="relative flex-1">
                 <UInput
                     ref="searchInputWrapper"
                     v-model="sidebarQuery"
                     v-bind="searchInputProps"
-                    :ui="{ leadingIcon: 'h-[20px] w-[20px]' }"
                     aria-label="Search"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
@@ -354,12 +353,19 @@ const searchInputProps = computed(() => {
         identifier: 'sidebar.search',
         isNuxtUI: true,
     });
+
+    // Merge theme UI with component-specific UI
+    const themeUi = (overrides.value as any)?.ui || {};
+    const componentUi = { leadingIcon: 'h-[20px] w-[20px]' };
+    const mergedUi = { ...themeUi, ...componentUi };
+
     return {
         icon: 'pixelarticons:search' as const,
         size: 'md' as const,
         variant: 'outline' as const,
         placeholder: 'Search...',
         ...(overrides.value as any),
+        ui: mergedUi,
     };
 });
 

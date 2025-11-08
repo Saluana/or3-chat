@@ -273,9 +273,11 @@ export default defineTheme({
 
         // Sidebar search input
         'input#sidebar.search': {
-            class: 'retro-input',
             variant: 'outline',
             size: 'md',
+            ui: {
+                root: 'shadow-none! border-0! bg-transparent! rounded-[3px] px-2',
+            },
         },
         'button#sidebar.footer-action': {
             class: 'retro-btn pointer-events-auto',
