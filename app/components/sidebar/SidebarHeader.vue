@@ -9,7 +9,7 @@
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">
-                <div class="flex items-center space-x-2">
+                <div id="header-content" class="flex items-center space-x-2">
                     <div
                         class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
                     >

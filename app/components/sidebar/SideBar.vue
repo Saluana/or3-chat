@@ -1,6 +1,7 @@
 <template>
-    <div class="flex flex-row w-full h-full">
+    <div id="sidebar" class="flex flex-row w-full h-full">
         <SidebarSideNavContentCollapsed
+            id="sidebar-content-collapsed"
             class="border-r-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)]/5 backdrop-blur-xs"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
@@ -12,6 +13,7 @@
         />
         <SidebarSideNavContent
             ref="sideNavContentRef"
+            id="sidebar-content-expanded"
             class="w-full"
             :active-thread="props.activeThread"
             :items="items"

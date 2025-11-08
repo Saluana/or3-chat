@@ -170,6 +170,12 @@ export default defineTheme({
             size: 'md',
         },
 
+        'button#sidebar.footer-action': {
+            class: 'retro-btn pointer-events-auto',
+            variant: 'ghost',
+            size: 'xs',
+        },
+
         'button#chat.send': {
             class: 'retro-btn text-white! dark:text-black!',
             variant: 'solid',
