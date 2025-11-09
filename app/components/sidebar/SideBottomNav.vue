@@ -13,16 +13,16 @@
                 side: 'right',
             }"
         >
-            <button type="button" aria-label="My Info" class="hud-button">
+            <button type="button" aria-label="My Info" class="hud-button retro-hud-button">
                 <span class="hud-button__icon">
                     <UIcon
                         name="pixelarticons:user"
                         class="h-[18px] w-[18px]"
                     ></UIcon>
                 </span>
-                <span class="hud-button__divider" aria-hidden="true"></span>
+                <span class="hud-button__divider retro-hud-button__divider" aria-hidden="true"></span>
                 <span class="hud-button__label">INFO</span>
-                <span class="hud-button__indicator" aria-hidden="true"></span>
+                <span class="hud-button__indicator retro-hud-button__indicator" aria-hidden="true"></span>
             </button>
             <template #content>
                 <div class="flex flex-col items-start w-[140px]">
@@ -51,6 +51,8 @@
         <!-- Connect -->
         <button
             type="button"
+            aria-label="Connect"
+            class="hud-button retro-hud-button hud-button--connect"
             @click="onConnectButtonClick"
             :aria-label="
                 hydrated
@@ -59,7 +61,6 @@
                         : 'Connect to OpenRouter'
                     : 'Connect to OpenRouter'
             "
-            class="hud-button hud-button--connect"
         >
             <span class="hud-button__icon">
                 <svg
@@ -87,7 +88,7 @@
                     </g>
                 </svg>
             </span>
-            <span class="hud-button__divider" aria-hidden="true"></span>
+            <span class="hud-button__divider retro-hud-button__divider" aria-hidden="true"></span>
             <span class="hud-button__label hud-button__label--wide">
                 <template v-if="hydrated">
                     {{ orIsConnected ? 'Disconnect' : 'Connect' }}
@@ -95,7 +96,7 @@
                 <template v-else>Connect</template>
             </span>
             <span
-                class="hud-button__indicator"
+                class="hud-button__indicator retro-hud-button__indicator"
                 :class="connectionIndicatorClass"
                 aria-hidden="true"
             ></span>
@@ -105,8 +106,9 @@
         <button
             @click="emit('toggleDashboard')"
             type="button"
+            aria-label="Help"
+            class="hud-button retro-hud-button"
             aria-label="Dashboard"
-            class="hud-button"
         >
             <span class="hud-button__icon">
                 <UIcon
@@ -114,11 +116,11 @@
                     name="pixelarticons:dashboard"
                 ></UIcon>
             </span>
-            <span class="hud-button__divider" aria-hidden="true"></span>
+            <span class="hud-button__divider retro-hud-button__divider" aria-hidden="true"></span>
             <span class="hud-button__label hud-button__label--wide">
                 Dashboard
             </span>
-            <span class="hud-button__indicator" aria-hidden="true"></span>
+            <span class="hud-button__indicator retro-hud-button__indicator" aria-hidden="true"></span>
         </button>
     </div>
     <lazy-modal-model-catalog
@@ -284,10 +286,6 @@ function navigateToCredits() {
     align-items: center;
     gap: 4px;
     padding: 6px 8px 7px;
-    border-radius: 6px;
-    border: 2px solid var(--md-outline);
-    outline: 2px solid var(--md-outline-variant);
-    outline-offset: -2px;
     cursor: pointer;
     background: linear-gradient(
         180deg,
@@ -302,24 +300,10 @@ function navigateToCredits() {
     letter-spacing: 0.05px;
     font-size: 9px;
     line-height: 1;
-    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.14),
-        inset 0 -2px 0 rgba(0, 0, 0, 0.12);
-    transition: transform 120ms ease, box-shadow 120ms ease,
-        background 160ms ease;
 }
 
 .hud-button::before {
-    content: '';
-    position: absolute;
-    inset: 2px;
-    border-radius: 4px;
-    background: linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.26),
-        rgba(255, 255, 255, 0) 55%
-    );
-    pointer-events: none;
-    mix-blend-mode: screen;
+    /* Removed decorative styles - now in retro theme */
 }
 
 .dark .hud-button {
@@ -333,13 +317,11 @@ function navigateToCredits() {
 }
 
 .hud-button:active {
-    transform: translateY(1px);
-    box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25);
+    /* Removed decorative styles - now in retro theme */
 }
 
 .hud-button:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 0;
+    /* Removed decorative styles - now in retro theme */
 }
 
 .hud-button__icon,
@@ -360,7 +342,6 @@ function navigateToCredits() {
 .hud-button__divider {
     width: 54%;
     height: 1px;
-    border-radius: 1px;
     background: currentColor;
     opacity: 0.2;
 }
@@ -383,7 +364,6 @@ function navigateToCredits() {
     margin-top: auto;
     width: 54%;
     height: 2px;
-    border-radius: 2px;
     background: currentColor;
     opacity: 0.52;
 }

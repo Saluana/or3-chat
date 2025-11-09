@@ -14,7 +14,7 @@
                         class="text-[14px] pb-1 flex items-end justify-center tracking-wide"
                     >
                         <div
-                            class="text-[20px] flex items-end font-bold font-ps2 header-title"
+                            class="text-[20px] flex items-end font-bold font-ps2 header-title retro-header-title"
                         >
                             <div>Or</div>
                             <div class="text-[17px]">3</div>
@@ -106,20 +106,16 @@ function onToggle() {
 /* Retro logo title: pixel shadow + underline accent (no stroke) */
 .header-title {
     font-family: 'Press Start 2P', monospace;
-
     letter-spacing: 1px;
     color: var(--md-primary);
-    text-shadow: 2px 2px 0 var(--md-inverse-surface); /* hard offset retro shadow */
     padding: 2px 4px 3px 4px; /* subtle padding for readability */
 }
 
 .dark .header-title {
     color: var(--md-on-primary-container);
-    text-shadow: 2px 2px 0 var(--md-primary);
 }
 .dark .header-title::after {
     background: var(--md-on-primary-container);
-    box-shadow: 2px 2px 0 var(--md-primary);
 }
 
 /* Logo rendering tweaks */
