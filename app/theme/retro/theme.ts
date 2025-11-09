@@ -691,9 +691,14 @@ export default defineTheme({
 
         // Document toolbar buttons
         'button#document.toolbar': {
-            class: 'retro-btn',
             variant: 'ghost',
             size: 'sm',
+            activeClass:
+                'bg-primary/60 hover:bg-primary-60 text-(--md-on-surface) ring-2 ring-primary/30 shadow-md',
+
+            ui: {
+                base: 'border-0! shadow-none! rounded-[3px] p-1! text-(--md-on-surface)! hover:bg-(--md-surface-variant)/50',
+            },
         },
 
         'button#document.search': {

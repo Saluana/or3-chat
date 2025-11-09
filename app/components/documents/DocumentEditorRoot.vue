@@ -25,77 +25,13 @@
         >
             <ToolbarButton
                 class="document-toolbar-button-instance"
-                icon="carbon:text-bold"
-                :active="isActive('bold')"
-                label="Bold (⌘B)"
-                @activate="cmd('toggleBold')"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                icon="carbon:text-italic"
-                :active="isActive('italic')"
-                label="Italic (⌘I)"
-                @activate="cmd('toggleItalic')"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                icon="pixelarticons:code"
-                :active="isActive('code')"
-                label="Code"
-                @activate="cmd('toggleCode')"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                text="H1"
-                :active="isActiveHeading(1)"
-                label="H1"
-                @activate="toggleHeading(1)"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                text="H2"
-                :active="isActiveHeading(2)"
-                label="H2"
-                @activate="toggleHeading(2)"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                text="H3"
-                :active="isActiveHeading(3)"
-                label="H3"
-                @activate="toggleHeading(3)"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                icon="pixelarticons:list"
-                :active="isActive('bulletList')"
-                label="Bullet list"
-                @activate="cmd('toggleBulletList')"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                icon="carbon:list-numbered"
-                :active="isActive('orderedList')"
-                label="Ordered list"
-                @activate="cmd('toggleOrderedList')"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                icon="pixelarticons:minus"
-                label="Horizontal Rule"
-                @activate="cmd('setHorizontalRule')"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                icon="pixelarticons:undo"
-                label="Undo"
-                @activate="cmd('undo')"
-            />
-            <ToolbarButton
-                class="document-toolbar-button-instance"
-                icon="pixelarticons:redo"
-                label="Redo"
-                @activate="cmd('redo')"
+                v-for="button in toolbarButtons"
+                :key="button.id"
+                :icon="button.icon"
+                :text="button.text"
+                :active="button.getActive?.()"
+                :label="button.label"
+                @activate="button.onActivate"
             />
             <!-- Plugin-registered toolbar buttons -->
             <ToolbarButton
@@ -184,6 +120,87 @@ let didUnmount = false;
 
 // Get plugin-registered toolbar buttons
 const pluginButtons = useEditorToolbarButtons(editor as Ref<Editor | null>);
+
+// Define core toolbar buttons
+const toolbarButtons = computed(() => [
+    {
+        id: 'bold',
+        icon: 'carbon:text-bold',
+        label: 'Bold (⌘B)',
+        getActive: () => isActive('bold'),
+        onActivate: () => cmd('toggleBold'),
+    },
+    {
+        id: 'italic',
+        icon: 'carbon:text-italic',
+        label: 'Italic (⌘I)',
+        getActive: () => isActive('italic'),
+        onActivate: () => cmd('toggleItalic'),
+    },
+    {
+        id: 'code',
+        icon: 'pixelarticons:code',
+        label: 'Code',
+        getActive: () => isActive('code'),
+        onActivate: () => cmd('toggleCode'),
+    },
+    {
+        id: 'h1',
+        text: 'H1',
+        label: 'H1',
+        getActive: () => isActiveHeading(1),
+        onActivate: () => toggleHeading(1),
+    },
+    {
+        id: 'h2',
+        text: 'H2',
+        label: 'H2',
+        getActive: () => isActiveHeading(2),
+        onActivate: () => toggleHeading(2),
+    },
+    {
+        id: 'h3',
+        text: 'H3',
+        label: 'H3',
+        getActive: () => isActiveHeading(3),
+        onActivate: () => toggleHeading(3),
+    },
+    {
+        id: 'bulletList',
+        icon: 'pixelarticons:list',
+        label: 'Bullet list',
+        getActive: () => isActive('bulletList'),
+        onActivate: () => cmd('toggleBulletList'),
+    },
+    {
+        id: 'orderedList',
+        icon: 'carbon:list-numbered',
+        label: 'Ordered list',
+        getActive: () => isActive('orderedList'),
+        onActivate: () => cmd('toggleOrderedList'),
+    },
+    {
+        id: 'horizontalRule',
+        icon: 'pixelarticons:minus',
+        label: 'Horizontal Rule',
+        getActive: () => false,
+        onActivate: () => cmd('setHorizontalRule'),
+    },
+    {
+        id: 'undo',
+        icon: 'pixelarticons:undo',
+        label: 'Undo',
+        getActive: () => false,
+        onActivate: () => cmd('undo'),
+    },
+    {
+        id: 'redo',
+        icon: 'pixelarticons:redo',
+        label: 'Redo',
+        getActive: () => false,
+        onActivate: () => cmd('redo'),
+    },
+]);
 
 // Theme integration for title input
 const titleInputProps = computed(() => {
