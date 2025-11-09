@@ -70,6 +70,42 @@ export default defineNuxtConfig({
         prerender: {
             routes: ['/openrouter-callback', '/documentation'],
         },
+        routeRules: {
+            '/_nuxt/**': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
+            '/_fonts/**': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
+            '/**/*.webp': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.png': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.svg': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.woff2': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+        },
     },
     // PWA configuration
     pwa: {

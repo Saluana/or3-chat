@@ -90,20 +90,20 @@ export default defineTheme({
     backgrounds: {
         content: {
             base: {
-                image: '/bg-repeat.webp',
+                image: '/bg-repeat.v2.webp',
                 opacity: 0.08,
                 repeat: 'repeat',
                 size: '150px',
             },
             overlay: {
-                image: '/bg-repeat-2.webp',
+                image: '/bg-repeat-2.v2.webp',
                 opacity: 0.125,
                 repeat: 'repeat',
                 size: '380px',
             },
         },
         sidebar: {
-            image: '/sidebar-repeater.webp',
+            image: '/sidebar-repeater.v2.webp',
             opacity: 0.1,
             repeat: 'repeat',
             size: '240px',

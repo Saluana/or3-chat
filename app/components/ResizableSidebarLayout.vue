@@ -132,10 +132,10 @@
         </aside>
 
         <!-- Main content -->
-            <div
-                id="main-content"
-                class="resizable-main-content relative z-10 flex-1 h-full min-w-0 flex flex-col"
-            >
+        <div
+            id="main-content"
+            class="resizable-main-content relative z-10 flex-1 h-full min-w-0 flex flex-col"
+        >
             <div
                 id="main-content-container"
                 class="flex-1 overflow-hidden content-bg"
@@ -162,7 +162,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import {
+    ref,
+    computed,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+    nextTick,
+} from 'vue';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
 
@@ -198,15 +205,12 @@ const clamp = (w: number) =>
 
 // open state (controlled or uncontrolled)
 // Hydration note:
-// We intentionally start CLOSED for both SSR and initial client render to avoid
-// class / node mismatches between server HTML (which cannot know viewport width)
-// and the hydrated client (which previously opened immediately on desktop).
-// After mount we detect desktop and apply defaultOpen. This removes the
-// hydration warnings about missing backdrop / translate-x-0 classes.
+// Always start closed for SSR consistency. On desktop, we'll open after hydration
+// using a CSS-first approach to minimize CLS (width reserved via CSS, then transition enabled).
 const openState = ref<boolean>(
     (() => {
         if (props.modelValue !== undefined) return props.modelValue;
-        return false; // unified deterministic initial state
+        return false; // unified initial state for SSR + client
     })()
 );
 const open = computed({
@@ -251,15 +255,18 @@ const initialized = ref(false);
 onMounted(() => {
     updateMq();
     mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-    // Apply defaultOpen only AFTER we know if we're on desktop so SSR & first client
-    // render remain consistent.
+    // Apply defaultOpen on desktop after hydration to prevent mismatch
+    // Use nextTick to ensure DOM is hydrated before changing state
     if (
         props.modelValue === undefined &&
         isDesktop.value &&
         props.defaultOpen &&
         !openState.value
     ) {
-        openState.value = true;
+        // Delay state change until after hydration is complete
+        nextTick(() => {
+            openState.value = true;
+        });
     }
     requestAnimationFrame(() => (initialized.value = true));
 });
