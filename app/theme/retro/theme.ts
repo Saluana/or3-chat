@@ -676,7 +676,7 @@ export default defineTheme({
         },
 
         'button#dashboard.landing-page': {
-            class: '',
+            class: 'border-2 border-[var(--md-inverse-surface)] retro-shadow hover:border-[var(--md-primary)] hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
         },
 
         'button#dashboard.plugin-icon': {

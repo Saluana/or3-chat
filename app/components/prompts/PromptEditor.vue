@@ -3,7 +3,7 @@
         class="prompt-editor-shell flex flex-col h-full w-full bg-white/10 dark:bg-black/10 backdrop-blur-sm"
     >
         <div
-            class="prompt-editor-header flex items-center border-b-2 border-[var(--md-inverse-surface)] pb-5"
+            class="prompt-editor-header flex items-center pb-5"
         >
             <UButton
                 v-bind="backButtonProps"
