@@ -26,20 +26,20 @@
             :data-theme-matches="
                 attachmentThumbButtonProps?.['data-theme-matches']
             "
-            class="attachment-thumb-button absolute -top-2 -right-2 border-[var(--md-inverse-surface)] theme-shadow rounded-[4px] overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
+            class="attachment-thumb-button absolute -top-2 -right-2 retro-attachment-thumb overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
             aria-label="Show attachments"
         >
             <template v-if="firstThumb && pdfMeta[firstThumb]">
-                <div class="pdf-thumb w-full h-full">
+                <div class="pdf-thumb retro-pdf-thumb w-full h-full">
                     <div
                         class="h-full line-clamp-2 flex items-center justify-center text-xs text-black dark:text-white"
                     >
                         {{ pdfDisplayName }}
                     </div>
 
-                    <div class="pdf-thumb__ext" aria-hidden="true">PDF</div>
+                    <div class="pdf-thumb__ext retro-pdf-thumb-ext" aria-hidden="true">PDF</div>
                 </div>
             </template>
             <template
@@ -203,7 +203,7 @@
                     'bg-primary': props.message.role === 'user',
                     'bg-white': props.message.role === 'assistant',
                 }"
-                class="cm-action-group rounded-[3px]"
+                class="cm-action-group retro-message-action-group"
             >
                 <UTooltip :delay-duration="0" text="Copy" :teleport="true">
                     <UButton
@@ -436,9 +436,9 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black border-2 px-4 border-[var(--md-inverse-surface)] theme-shadow backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
+    'bg-primary text-white dark:text-black retro-message-user px-4 backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 border-2 border-[var(--md-inverse-surface)] w-full theme-shadow backdrop-blur-sm min-w-0':
+    'bg-white/5 retro-message-assistant w-full backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',
 }));
 
@@ -466,7 +466,7 @@ const processedAssistantMarkdown = computed(() => {
     return (assistantMarkdown.value || '').replace(
         FILE_HASH_IMG_RE,
         (_m, h) =>
-            `<span class=\"or3-img-ph inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] border-2 border-[var(--md-inverse-surface)] theme-shadow opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
+            `<span class=\"or3-img-ph retro-inline-image-placeholder inline-block w-[120px] h-[120px] bg-[var(--md-surface-container-lowest)] opacity-60\" data-file-hash=\"${h}\" aria-label=\"generated image\"></span>`
     );
 });
 
@@ -930,10 +930,6 @@ const streamMdClasses = [
 <style scoped>
 @import '~/assets/css/or3-prose.css';
 
-.theme-shadow {
-    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
-}
-
 .line-clamp-6 {
     display: -webkit-box;
     -webkit-line-clamp: 6;
@@ -956,8 +952,6 @@ const streamMdClasses = [
     width: 100%;
     height: 100%;
     padding: 2px 2px 3px;
-    box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
-        2px 2px 0 0 var(--md-inverse-surface);
     font-family: 'VT323', monospace;
 }
 .pdf-thumb__icon {
@@ -994,7 +988,6 @@ const streamMdClasses = [
     font-weight: 700;
     padding: 1px 3px;
     letter-spacing: 0.5px;
-    box-shadow: 1px 1px 0 0 #000;
 }
 .pdf-thumb::after {
     content: '';
@@ -1009,13 +1002,9 @@ const streamMdClasses = [
         var(--md-surface-container-high) 100%
     );
     clip-path: polygon(0 0, 100% 0, 100% 100%);
-    box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
 }
 /* Safety net for table layout */
 .message-body :deep([data-streamdown='table-wrapper']) {
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 3px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
     margin-top: 32px !important;
     margin-bottom: 32px;
     margin-right: 4px; /* Space for shadow */
