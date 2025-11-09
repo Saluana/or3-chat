@@ -423,6 +423,12 @@ onMounted(async () => {
 
         editor.value = new Editor({
             extensions,
+            editorProps: {
+                attributes: {
+                    'aria-label': 'Message input',
+                    role: 'textbox',
+                },
+            },
             onUpdate: ({ editor: ed }) => {
                 promptText.value = ed.getText();
                 autoResize();
