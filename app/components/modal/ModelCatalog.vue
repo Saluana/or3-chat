@@ -8,7 +8,7 @@
         <template #body>
             <div class="model-catalog-shell flex flex-col h-full">
                 <div
-                    class="model-catalog-header px-6 border-b-2 border-black h-[50px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
+                    class="model-catalog-header px-6 h-[50px] bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center"
                 >
                     <div
                         class="model-catalog-search flex items-center gap-3 w-full"
@@ -81,7 +81,7 @@
                             <div
                                 v-for="m in row"
                                 :key="m.id"
-                                class="model-catalog-item group relative mb-5 theme-shadow flex flex-col justify-between rounded-xl border-2 border-black/90 dark:border-white/90 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm shadow-sm hover:shadow-md transition overflow-hidden h-[170px] px-4 py-5"
+                                class="model-catalog-item group relative mb-5 flex flex-col justify-between px-4 py-5 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 backdrop-blur-sm overflow-hidden h-[170px]"
                                 :data-model-id="m.id"
                             >
                                 <div

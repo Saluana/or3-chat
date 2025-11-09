@@ -17,6 +17,7 @@
                     <UButton
                         v-bind="newChatButtonProps"
                         id="btn-new-chat"
+                        aria-label="New chat"
                         class="flex item-center justify-center"
                         @click="emit('new-chat')"
                     ></UButton>
@@ -33,6 +34,7 @@
                 <UButton
                     v-bind="searchButtonProps"
                     id="btn-search"
+                    aria-label="Search"
                     class="flex item-center justify-center"
                     @click="emit('focus-search')"
                 ></UButton>
@@ -48,6 +50,7 @@
                 <UButton
                     v-bind="newDocButtonProps"
                     id="btn-new-doc"
+                    aria-label="Create document"
                     class="flex item-center justify-center"
                     @click="emit('new-document')"
                 />
@@ -63,6 +66,7 @@
                 <UButton
                     v-bind="newProjectButtonProps"
                     id="btn-new-project"
+                    aria-label="Create project"
                     class="flex item-center justify-center"
                     @click="emit('new-project')"
                 />
@@ -133,6 +137,7 @@
             <UButton
                 v-bind="dashboardButtonProps"
                 id="btn-dashboard"
+                aria-label="Toggle dashboard"
                 class="flex item-center justify-center"
                 @click="emit('toggle-dashboard')"
             ></UButton>

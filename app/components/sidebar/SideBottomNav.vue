@@ -27,14 +27,18 @@
             <template #content>
                 <div class="flex flex-col items-start w-[140px]">
                     <button
+                        type="button"
                         class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                        aria-label="View activity on OpenRouter"
                         @click="navigateToActivity"
                     >
                         <UIcon name="pixelarticons:human-run" class="mr-1.5" />
                         Activity
                     </button>
                     <button
+                        type="button"
                         class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
+                        aria-label="View account credits on OpenRouter"
                         @click="navigateToCredits"
                     >
                         <UIcon name="pixelarticons:coin" class="mr-1.5" />
@@ -46,11 +50,17 @@
 
         <!-- Connect -->
         <button
-            label="Open"
-            @click="onConnectButtonClick"
             type="button"
             aria-label="Connect"
             class="hud-button retro-hud-button hud-button--connect"
+            @click="onConnectButtonClick"
+            :aria-label="
+                hydrated
+                    ? orIsConnected
+                        ? 'Disconnect from OpenRouter'
+                        : 'Connect to OpenRouter'
+                    : 'Connect to OpenRouter'
+            "
         >
             <span class="hud-button__icon">
                 <svg
@@ -98,6 +108,7 @@
             type="button"
             aria-label="Help"
             class="hud-button retro-hud-button"
+            aria-label="Dashboard"
         >
             <span class="hud-button__icon">
                 <UIcon

@@ -10,7 +10,7 @@
             :class="[
                 'dashboard-plugin-icon-button group relative flex items-center justify-center overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--md-primary)] focus-visible:ring-offset-[var(--md-surface)]',
                 retro
-                    ? ' shadow-[0_0_0_2px_var(--md-outline),0_2px_0_0_#000,0_2px_0_2px_var(--md-outline)] active:shadow-[0_0_0_2px_var(--md-outline),0_1px_0_0_#000,0_1px_0_1px_var(--md-outline)] transition-all duration-150 bg-[linear-gradient(145deg,var(--md-surface-container-high)_0%,var(--md-surface-container)_60%,var(--md-surface)_100%)]'
+                    ? 'retro-style transition-all duration-150 bg-[linear-gradient(145deg,var(--md-surface-container-high)_0%,var(--md-surface-container)_60%,var(--md-surface)_100%)]'
                     : ' ring-1 ring-black/5 dark:ring-white/10 bg-gradient-to-br from-gray-800/40 to-gray-700/20 backdrop-blur-sm shadow',
                 (iconButtonProps as any)?.class || '',
             ]"

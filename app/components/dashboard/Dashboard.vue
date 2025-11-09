@@ -80,7 +80,7 @@
                         :key="p.id"
                         v-bind="landingPageButtonProps"
                         :class="[
-                            'dashboard-landing-item group flex flex-col items-start gap-2 p-3 rounded-md border-2 border-(--md-outline-variant) hover:border-(--md-primary) hover:bg-(--md-primary)/5 transition-colors text-left',
+                            'dashboard-landing-item group flex flex-col items-start gap-2 p-3 text-left',
                             (landingPageButtonProps as any)?.class || '',
                         ]"
                         @click="handleLandingPageClick(p.id)"

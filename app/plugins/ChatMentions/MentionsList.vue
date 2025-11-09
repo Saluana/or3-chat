@@ -1,6 +1,6 @@
 <template>
     <div
-        class="w-[85dvw] sm:w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col rounded-[3px] border-2 border-[var(--md-inverse-surface)] theme-shadow"
+        class="w-[85dvw] sm:w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col retro-mentions-list"
     >
         <!-- Search & Filters Header -->
         <div

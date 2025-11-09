@@ -23,12 +23,12 @@
             id="sidebar"
             :class="[
                 'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col',
-                // width transition on desktop
-                initialized
-                    ? 'md:transition-[width] md:duration-200 md:ease-out'
-                    : 'hidden',
                 'md:relative md:h-full md:shrink-0 md:border-r-2',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
+                // CLS fix: Only enable width transition after initial layout to prevent shift
+                initialized
+                    ? 'md:transition-[width] md:duration-200 md:ease-out'
+                    : '',
                 // mobile overlay behavior
                 !isDesktop
                     ? [
@@ -132,10 +132,10 @@
         </aside>
 
         <!-- Main content -->
-            <div
-                id="main-content"
-                class="resizable-main-content relative z-10 flex-1 h-full min-w-0 flex flex-col"
-            >
+        <div
+            id="main-content"
+            class="resizable-main-content relative z-10 flex-1 h-full min-w-0 flex flex-col"
+        >
             <div
                 id="main-content-container"
                 class="flex-1 overflow-hidden content-bg"
@@ -162,7 +162,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import {
+    ref,
+    computed,
+    onMounted,
+    onBeforeUnmount,
+    watch,
+    nextTick,
+} from 'vue';
 import SidebarHeader from './sidebar/SidebarHeader.vue';
 import ResizeHandle from './sidebar/ResizeHandle.vue';
 
@@ -197,16 +204,20 @@ const clamp = (w: number) =>
     Math.min(props.maxWidth, Math.max(props.minWidth, w));
 
 // open state (controlled or uncontrolled)
-// Hydration note:
-// We intentionally start CLOSED for both SSR and initial client render to avoid
-// class / node mismatches between server HTML (which cannot know viewport width)
-// and the hydrated client (which previously opened immediately on desktop).
-// After mount we detect desktop and apply defaultOpen. This removes the
-// hydration warnings about missing backdrop / translate-x-0 classes.
+// Hydration CLS fix: detect desktop state synchronously during setup (client-side only)
+// to prevent sidebar from opening post-mount and shifting content
 const openState = ref<boolean>(
     (() => {
         if (props.modelValue !== undefined) return props.modelValue;
-        return false; // unified deterministic initial state
+        // On client, check if desktop BEFORE first render to avoid CLS
+        if (import.meta.client) {
+            const isDesktopNow =
+                window.matchMedia('(min-width: 768px)').matches;
+            if (isDesktopNow && props.defaultOpen) {
+                return true; // Open immediately for desktop to reserve space
+            }
+        }
+        return false; // SSR or mobile: start closed
     })()
 );
 const open = computed({
@@ -245,23 +256,22 @@ const updateMq = () => {
     isDesktop.value = mq.matches;
 };
 
-// Defer enabling transitions until after first paint so restored width doesn't animate
+// CLS fix: Start with transitions DISABLED to prevent animated width changes during initial render
+// After first paint, enable transitions for smooth user interactions
 const initialized = ref(false);
 
 onMounted(() => {
     updateMq();
     mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-    // Apply defaultOpen only AFTER we know if we're on desktop so SSR & first client
-    // render remain consistent.
-    if (
-        props.modelValue === undefined &&
-        isDesktop.value &&
-        props.defaultOpen &&
-        !openState.value
-    ) {
-        openState.value = true;
-    }
-    requestAnimationFrame(() => (initialized.value = true));
+    // No need to adjust openState here - it's already set correctly in setup
+    // to prevent CLS from sidebar opening post-mount
+    // Enable transitions after a delay to allow initial layout to settle
+    // Use double rAF to ensure layout is fully painted before transitions activate
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            initialized.value = true;
+        });
+    });
 });
 
 onBeforeUnmount(() => {
@@ -299,8 +309,38 @@ function toggleCollapse() {
 // Resize logic (desktop only)
 let startX = 0;
 let startWidth = 0;
+let pendingWidthUpdate: number | null = null;
+let widthRafId: number | null = null;
+
+function applyPendingWidth() {
+    if (pendingWidthUpdate === null) return;
+    width.value = pendingWidthUpdate;
+    pendingWidthUpdate = null;
+}
+
+function cancelWidthRaf() {
+    if (widthRafId === null) return;
+    cancelAnimationFrame(widthRafId);
+    widthRafId = null;
+}
+
+function scheduleWidthUpdate(value: number) {
+    pendingWidthUpdate = value;
+    if (widthRafId !== null) return;
+    widthRafId = requestAnimationFrame(() => {
+        widthRafId = null;
+        applyPendingWidth();
+    });
+}
+
+function flushWidthUpdates() {
+    cancelWidthRaf();
+    applyPendingWidth();
+}
+
 function onPointerDown(e: PointerEvent) {
     if (!isDesktop.value || collapsed.value) return;
+    flushWidthUpdates();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     startX = e.clientX;
     startWidth = width.value;
@@ -310,10 +350,11 @@ function onPointerDown(e: PointerEvent) {
 function onPointerMove(e: PointerEvent) {
     const dx = e.clientX - startX;
     const delta = props.side === 'right' ? -dx : dx;
-    width.value = clamp(startWidth + delta);
+    scheduleWidthUpdate(clamp(startWidth + delta));
 }
 function onPointerUp() {
     window.removeEventListener('pointermove', onPointerMove);
+    flushWidthUpdates();
 }
 
 // Keyboard a11y for the resize handle

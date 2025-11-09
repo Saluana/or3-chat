@@ -44,7 +44,10 @@
                     >
                         <span
                             class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                            role="button"
+                            tabindex="0"
                             @click.stop
+                            @keydown="handlePopoverTriggerKey"
                             :aria-label="
                                 level === 0
                                     ? 'Project actions'
@@ -288,6 +291,15 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
         } catch {}
         console.error('Project tree action error', action.id, e);
     }
+}
+
+function handlePopoverTriggerKey(event: KeyboardEvent) {
+    const key = event.key;
+    if (key !== 'Enter' && key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget as HTMLElement | null;
+    target?.click();
 }
 </script>
 

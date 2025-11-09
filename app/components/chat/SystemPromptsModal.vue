@@ -68,7 +68,7 @@
                             <div
                                 v-for="prompt in filteredPrompts"
                                 :key="prompt.id"
-                                class="group flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 rounded-lg border-2 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70 theme-shadow"
+                                class="group retro-system-prompt-item flex flex-col sm:flex-row sm:items-start items-start justify-between p-4 border-black/80 dark:border-white/50 bg-white/80 not-odd:bg-primary/5 dark:bg-neutral-900/70"
                                 :data-active="
                                     prompt.id === currentActivePromptId
                                         ? 'true'
@@ -338,7 +338,7 @@ const systemPromptsModalOverrides = useThemeOverrides({
 
 const systemPromptsModalProps = computed(() => {
     const baseClass =
-        'sp-modal border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
+        'sp-modal retro-modal-container w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
     const baseUi = {
         footer: 'justify-end border-none',
         body: 'p-0! border-b-0! overflow-hidden',
