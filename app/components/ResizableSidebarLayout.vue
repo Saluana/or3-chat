@@ -1,9 +1,9 @@
 <template>
     <div
         id="page-container"
-        class="resizable-sidebar-layout relative w-full h-[100dvh] border border-[var(--md-outline-variant)] overflow-hidden bg-[var(--md-surface)] text-[var(--md-on-surface)] flex overflow-x-hidden"
+        class="resizable-sidebar-layout relative w-full h-dvh border border-(--md-outline-variant) overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
     >
-        <!-- Backdrop on mobile when open -->
+        <!-- Backdrop (mobile) -->
         <Transition
             enter-active-class="transition-opacity duration-150"
             leave-active-class="transition-opacity duration-150"
@@ -11,8 +11,8 @@
             leave-to-class="opacity-0"
         >
             <div
+                v-show="!isDesktop && open"
                 id="mobile-close"
-                v-if="!isDesktop && open"
                 class="absolute inset-0 bg-black/40 z-30 md:hidden"
                 @click="close()"
             />
@@ -25,41 +25,33 @@
                 'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col',
                 'md:relative md:h-full md:shrink-0 md:border-r-2',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
-                // CLS fix: Only enable width transition after initial layout to prevent shift
+                // Mobile overlay responsive classes (static for SSR parity)
+                'max-md:absolute max-md:inset-0 max-md:w-full max-md:shadow-xl',
+                'max-md:transition-transform max-md:duration-200 max-md:ease-out',
+                side === 'right' ? 'max-md:right-0' : 'max-md:left-0',
+                // Only apply slide-away transforms AFTER hydration to avoid SSR mismatch
+                hydrated
+                    ? !open
+                        ? side === 'right'
+                            ? 'max-md:translate-x-full'
+                            : 'max-md:-translate-x-full'
+                        : ''
+                    : '',
                 initialized
                     ? 'md:transition-[width] md:duration-200 md:ease-out'
                     : '',
-                // mobile overlay behavior
-                !isDesktop
-                    ? [
-                          'absolute inset-0 w-full shadow-xl',
-                          // animated slide
-                          'transition-transform duration-200 ease-out',
-                          side === 'right'
-                              ? 'right-0 translate-x-full'
-                              : 'left-0 -translate-x-full',
-                          open ? 'translate-x-0' : '',
-                      ]
-                    : '',
             ]"
-            :style="
-                Object.assign(
-                    isDesktop ? { width: computedWidth + 'px' } : {},
-                    {
-                        '--sidebar-rep-size': props.sidebarPatternSize + 'px',
-                        '--sidebar-rep-opacity': String(
-                            props.sidebarPatternOpacity
-                        ),
-                    }
-                )
-            "
+            :style="{
+                width: computedWidth + 'px',
+                '--sidebar-rep-size': props.sidebarPatternSize + 'px',
+                '--sidebar-rep-opacity': String(props.sidebarPatternOpacity),
+            }"
             @keydown.esc.stop.prevent="close()"
         >
             <div
                 id="sidebar-container-outer"
                 class="resizable-sidebar-container h-full flex flex-col"
             >
-                <!-- Sidebar header -->
                 <SidebarHeader
                     :collapsed="collapsed"
                     :toggle-icon="toggleIcon"
@@ -74,7 +66,6 @@
                     </template>
                 </SidebarHeader>
 
-                <!-- Sidebar content -->
                 <div
                     id="sidebar-container-expanded"
                     class="flex-1 overflow-auto overscroll-contain min-w-fit"
@@ -87,7 +78,7 @@
                                     <li
                                         v-for="i in 10"
                                         :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                        class="px-2 py-1 rounded hover:bg-(--md-secondary-container) hover:text-(--md-on-secondary-container) cursor-pointer"
                                     >
                                         Item {{ i }}
                                     </li>
@@ -96,8 +87,8 @@
                         </slot>
                     </div>
                     <div
-                        id="sidebar-container-collapsed"
                         v-if="collapsed"
+                        id="sidebar-container-collapsed"
                         class="flex-1 h-full"
                     >
                         <slot name="sidebar-collapsed">
@@ -107,7 +98,7 @@
                                     <li
                                         v-for="i in 10"
                                         :key="i"
-                                        class="px-2 py-1 rounded hover:bg-[var(--md-secondary-container)] hover:text-[var(--md-on-secondary-container)] cursor-pointer"
+                                        class="px-2 py-1 rounded hover:bg-(--md-secondary-container) hover:text-(--md-on-secondary-container) cursor-pointer"
                                     >
                                         Item {{ i }}
                                     </li>
@@ -118,8 +109,9 @@
                 </div>
             </div>
 
-            <!-- Resize handle (desktop only) -->
+            <!-- Resize handle -->
             <ResizeHandle
+                v-show="isDesktop && !collapsed"
                 :is-desktop="isDesktop"
                 :collapsed="collapsed"
                 :side="side"
@@ -203,23 +195,8 @@ const emit = defineEmits<{
 const clamp = (w: number) =>
     Math.min(props.maxWidth, Math.max(props.minWidth, w));
 
-// open state (controlled or uncontrolled)
-// Hydration CLS fix: detect desktop state synchronously during setup (client-side only)
-// to prevent sidebar from opening post-mount and shifting content
-const openState = ref<boolean>(
-    (() => {
-        if (props.modelValue !== undefined) return props.modelValue;
-        // On client, check if desktop BEFORE first render to avoid CLS
-        if (import.meta.client) {
-            const isDesktopNow =
-                window.matchMedia('(min-width: 768px)').matches;
-            if (isDesktopNow && props.defaultOpen) {
-                return true; // Open immediately for desktop to reserve space
-            }
-        }
-        return false; // SSR or mobile: start closed
-    })()
-);
+// open state: force closed initially for SSR/client parity, then open after mount if rules say so
+const openState = ref<boolean>(false);
 const open = computed({
     get: () =>
         props.modelValue === undefined ? openState.value : props.modelValue,
@@ -233,21 +210,17 @@ const open = computed({
 const collapsed = ref(false);
 const lastExpandedWidth = ref(props.defaultWidth);
 
-// width state with persistence
-const width = ref<number>(props.defaultWidth);
+// width state with persistence (clamp to avoid SSR/client mismatch if default < minWidth)
+const width = ref<number>(
+    Math.min(props.maxWidth, Math.max(props.minWidth, props.defaultWidth))
+);
 const computedWidth = computed(() =>
     collapsed.value ? props.collapsedWidth : width.value
 );
 
-// Attempt early (pre-mount) restoration to avoid post-mount jank
-if (import.meta.client) {
-    try {
-        const saved = localStorage.getItem(props.storageKey);
-        if (saved) width.value = clamp(parseInt(saved, 10));
-    } catch {}
-}
+// Do NOT restore from localStorage before hydration to keep SSR/client markup identical
 
-// responsive
+// responsive: assume mobile on SSR; determine real value on client
 const isDesktop = ref(false);
 let mq: MediaQueryList | undefined;
 const updateMq = () => {
@@ -259,12 +232,21 @@ const updateMq = () => {
 // CLS fix: Start with transitions DISABLED to prevent animated width changes during initial render
 // After first paint, enable transitions for smooth user interactions
 const initialized = ref(false);
+const hydrated = ref(false);
 
 onMounted(() => {
+    hydrated.value = true;
     updateMq();
     mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-    // No need to adjust openState here - it's already set correctly in setup
-    // to prevent CLS from sidebar opening post-mount
+    // Open if defaultOpen & desktop
+    if (props.defaultOpen && isDesktop.value) {
+        openState.value = true;
+    }
+    // Restore persisted width (after hydration for parity)
+    try {
+        const saved = localStorage.getItem(props.storageKey);
+        if (saved) width.value = clamp(parseInt(saved, 10));
+    } catch {}
     // Enable transitions after a delay to allow initial layout to settle
     // Use double rAF to ensure layout is fully painted before transitions activate
     requestAnimationFrame(() => {

@@ -11,18 +11,18 @@
 import { defineTheme } from '../_shared/define-theme';
 
 export default defineTheme({
-    name: 'retro',
-    displayName: 'Retro',
+    name: 'pro',
+    displayName: 'pro (Default)',
     description:
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
-    isDefault: false,
+    isDefault: true,
     stylesheets: ['~/theme/retro/styles.css'],
 
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
     colors: {
         // Primary colors
-        primary: '#4ecdc4',
+        primary: '#ffffff',
         onPrimary: '#ffffff',
         primaryContainer: '#b2f5ea',
         onPrimaryContainer: '#002020',
