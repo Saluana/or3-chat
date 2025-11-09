@@ -7,7 +7,7 @@
         <button
             id="btn-reasoning-toggle"
             :class="[
-                'reasoning-toggle',
+                'reasoning-toggle retro-reasoning-toggle',
                 toggleButtonProps?.class || ''
             ]"
             :data-theme-target="toggleButtonProps?.['data-theme-target']"
@@ -99,14 +99,11 @@ const toggleButtonProps = computed(() => {
 
     font-size: 16px;
     padding: 4px 8px;
-    border: 2px solid var(--md-inverse-surface);
     background: linear-gradient(
         180deg,
         var(--md-surface-container-high),
         var(--md-surface-container-low)
     );
-    border-radius: 4px;
-    box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
     min-height: 32px;
     cursor: pointer;
     transition: all 0.2s ease;
