@@ -52,6 +52,9 @@
                 <div
                     ref="editorMountEl"
                     class="document-editor-mount prose prosemirror-host max-w-none dark:text-white/95 dark:prose-headings:text-white/95 dark:prose-strong:text-white/95 w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-h2:text-[24px] prose-h3:text-[20px]"
+                    role="textbox"
+                    aria-label="Document body"
+                    aria-multiline="true"
                 ></div>
             </div>
         </div>

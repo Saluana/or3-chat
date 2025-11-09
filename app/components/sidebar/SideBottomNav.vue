@@ -96,7 +96,7 @@
         <button
             @click="emit('toggleDashboard')"
             type="button"
-            aria-label="Help"
+            aria-label="Dashboard"
             class="hud-button"
         >
             <span class="hud-button__icon">
