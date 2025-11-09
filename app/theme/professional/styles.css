@@ -7,10 +7,24 @@
  * - Thin, subtle borders (1px)
  * - Contemporary color system
  * - Smooth, refined interactions
+ * - Professional typography (IBM Plex Sans)
  *
  * This file contains the visual foundation for the professional theme.
  * All styles use CSS custom properties from the MD3 color system.
  */
+
+/* Override root CSS variables with professional-specific values when theme is active */
+:root {
+	/* Professional font settings */
+	--font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+	--app-font-sans-current: var(--font-sans);
+	--app-font-heading-current: var(--font-heading);
+	
+	/* Professional UI styling */
+	--ui-radius: 8px;
+	--app-font-size-root: 16px;
+}
 
 /* Screen-reader only helper (follows inclusive components pattern) */
 .sr-only {
