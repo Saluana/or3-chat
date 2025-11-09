@@ -343,6 +343,40 @@ textarea.theme-input {
 	--retro-badge-fg: var(--md-extended-color-warning-on-color-container);
 }
 
+/* Document editor component styles */
+.retro-document-toolbar,
+.theme-document-toolbar {
+	border-bottom: 2px solid var(--md-inverse-surface);
+}
+
+.retro-document-toolbar-button,
+.theme-document-toolbar-button {
+	border: 2px solid;
+	border-radius: 4px;
+}
+
+.retro-document-skeleton-item,
+.theme-document-skeleton-item {
+	border-radius: 3px;
+}
+
+.retro-document-skeleton-item--sm,
+.theme-document-skeleton-item--sm {
+	border-radius: 2px;
+}
+
+.retro-document-skeleton-toolbar,
+.theme-document-skeleton-toolbar {
+	border-bottom: 1px solid;
+}
+
+.retro-document-error-card,
+.theme-document-error-card {
+	border-radius: 6px;
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
 /* Shared motion reduction: keep retro UI snappy yet accessible */
 @media (prefers-reduced-motion: reduce) {
 	.retro-chip,
@@ -358,7 +392,9 @@ textarea.theme-input {
 	.retro-upload-panel,
 	.theme-upload-panel,
 	.retro-file-card,
-	.theme-file-card {
+	.theme-file-card,
+	.retro-document-skeleton-item,
+	.theme-document-skeleton-item {
 		transition: none;
 		transform: none;
 	}

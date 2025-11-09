@@ -16,21 +16,21 @@
                         class="document-editor-skeleton-header flex items-center justify-between sm:justify-center px-3 pt-2 pb-2 gap-2"
                     >
                         <div
-                            class="document-editor-skeleton-title flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
+                            class="document-editor-skeleton-title retro-document-skeleton-item flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 animate-pulse"
                         ></div>
                         <div
-                            class="document-editor-skeleton-status w-16 h-6 bg-neutral-300/30 dark:bg-neutral-700/30 rounded animate-pulse"
+                            class="document-editor-skeleton-status retro-document-skeleton-item flex-1 max-w-[60%] h-8 bg-neutral-300/30 dark:bg-neutral-700/30 animate-pulse"
                         ></div>
                     </div>
 
                     <!-- Skeleton Toolbar -->
                     <div
-                        class="document-editor-skeleton-toolbar flex gap-2 px-3 py-2 border-b border-neutral-200/20 dark:border-neutral-800/20"
+                        class="document-editor-skeleton-toolbar retro-document-skeleton-toolbar flex gap-2 px-3 py-2"
                     >
                         <div
                             v-for="i in 8"
                             :key="i"
-                            class="document-editor-skeleton-toolbar-item w-8 h-8 bg-neutral-300/30 dark:bg-neutral-700/30 rounded-sm animate-pulse"
+                            class="document-editor-skeleton-toolbar-item retro-document-skeleton-item--sm w-8 h-8 bg-neutral-300/30 dark:bg-neutral-700/30 animate-pulse"
                         ></div>
                     </div>
 
@@ -40,7 +40,7 @@
                             <div
                                 v-for="i in 5"
                                 :key="`line-${i}`"
-                                class="document-editor-skeleton-line h-4 bg-neutral-300/30 dark:bg-neutral-700/30 rounded"
+                                class="document-editor-skeleton-line retro-document-skeleton-item h-4 bg-neutral-300/30 dark:bg-neutral-700/30"
                                 :style="{
                                     width: `${85 + Math.random() * 15}%`,
                                 }"
@@ -54,7 +54,7 @@
                         class="document-editor-error-overlay absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm"
                     >
                         <div
-                            class="document-editor-error-card bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-md text-center"
+                            class="document-editor-error-card retro-document-error-card bg-white dark:bg-neutral-900 p-6 max-w-md text-center"
                         >
                             <p
                                 class="document-editor-error-text text-red-600 dark:text-red-400 mb-4"

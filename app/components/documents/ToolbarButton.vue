@@ -43,7 +43,7 @@ const themeOverride = useThemeOverrides({
 });
 
 const baseClasses =
-    'document-toolbar-button h-[32px] md:h-[40px] py-0 flex items-center justify-center gap-1 border-2 rounded-[4px] text-sm leading-none';
+    'document-toolbar-button retro-document-toolbar-button h-[32px] md:h-[40px] py-0 flex items-center justify-center gap-1 text-sm leading-none';
 
 const stateClasses = computed(() =>
     props.active

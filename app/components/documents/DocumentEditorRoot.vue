@@ -21,7 +21,7 @@
             </div>
         </div>
         <div
-            class="document-editor-toolbar flex flex-row items-stretch border-b-2 border-[var(--md-inverse-surface)] px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
+            class="document-editor-toolbar retro-document-toolbar flex flex-row items-stretch px-3 md:px-2 py-1 gap-2 md:gap-1 flex-wrap pb-2"
         >
             <ToolbarButton
                 class="document-toolbar-button-instance"
