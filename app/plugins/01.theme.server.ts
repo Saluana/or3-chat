@@ -58,8 +58,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     overrides: compileOverridesRuntime(
                         definition.overrides || {}
                     ),
+                    cssSelectors: definition.cssSelectors,
                     ui: definition.ui,
                     propMaps: definition.propMaps,
+                    backgrounds: definition.backgrounds,
                 };
 
                 themeRegistry.set(themeName, compiledTheme);
