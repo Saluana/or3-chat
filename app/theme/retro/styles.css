@@ -373,6 +373,10 @@ textarea.theme-input {
 .retro-document-error-card,
 .theme-document-error-card {
 	border-radius: 6px;
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
 /* Chat component decorative styles */
 .retro-message-container,
 .theme-message-container {
