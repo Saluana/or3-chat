@@ -123,7 +123,8 @@ export default defineNuxtConfig({
             },
             '/**/*.woff2': {
                 headers: {
-                    'cache-control': 'public,max-age=31536000,immutable',
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
                 },
             },
             // CSS files from Nuxt build

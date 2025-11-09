@@ -409,6 +409,7 @@ textarea.theme-input {
 .dark .retro-header-title::after,
 .dark .theme-header-title::after {
 	box-shadow: 2px 2px 0 var(--md-primary);
+}
 /* Document editor component styles */
 .retro-document-toolbar,
 .theme-document-toolbar {
@@ -602,27 +603,27 @@ textarea.theme-input {
 
 /* Shared motion reduction: keep retro UI snappy yet accessible */
 @media (prefers-reduced-motion: reduce) {
-	.retro-chip,
-	.theme-chip,
-	.retro-btn,
-	.theme-btn,
-	.retro-btn-copy,
-	.theme-copy-btn,
-	.retro-input,
-	.theme-input,
-	.retro-choice-btn,
-	.theme-choice-btn,
-	.retro-upload-panel,
-	.theme-upload-panel,
-	.retro-file-card,
-	.theme-file-card,
-	.retro-hud-button,
-	.theme-hud-button {
-	.retro-document-skeleton-item,
-	.theme-document-skeleton-item {
-		transition: none;
-		transform: none;
-	}
+    .retro-chip,
+    .theme-chip,
+    .retro-btn,
+    .theme-btn,
+    .retro-btn-copy,
+    .theme-copy-btn,
+    .retro-input,
+    .theme-input,
+    .retro-choice-btn,
+    .theme-choice-btn,
+    .retro-upload-panel,
+    .theme-upload-panel,
+    .retro-file-card,
+    .theme-file-card,
+    .retro-hud-button,
+    .theme-hud-button,
+    .retro-document-skeleton-item,
+    .theme-document-skeleton-item {
+        transition: none !important;
+        transform: none !important;
+    }
 }
 
 /* Retro Decorative Styles
@@ -791,9 +792,8 @@ textarea.theme-input {
     opacity: 0.85;
 }
 
-.theme-checkbox {
-    /* Checkbox styling can be left to Nuxt UI; placeholder for future needs */
-}
+/* .theme-checkbox intentionally left without rules; reserved for theme-specific overrides.
+   Keeping as a comment-only placeholder to satisfy linters and document intent. */
 
 /* Dashboard Landing Page Buttons */
 .dashboard-landing-item {

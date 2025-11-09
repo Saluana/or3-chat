@@ -13,16 +13,26 @@
                 side: 'right',
             }"
         >
-            <button type="button" aria-label="My Info" class="hud-button retro-hud-button">
+            <button
+                type="button"
+                aria-label="My Info"
+                class="hud-button retro-hud-button"
+            >
                 <span class="hud-button__icon">
                     <UIcon
                         name="pixelarticons:user"
                         class="h-[18px] w-[18px]"
                     ></UIcon>
                 </span>
-                <span class="hud-button__divider retro-hud-button__divider" aria-hidden="true"></span>
+                <span
+                    class="hud-button__divider retro-hud-button__divider"
+                    aria-hidden="true"
+                ></span>
                 <span class="hud-button__label">INFO</span>
-                <span class="hud-button__indicator retro-hud-button__indicator" aria-hidden="true"></span>
+                <span
+                    class="hud-button__indicator retro-hud-button__indicator"
+                    aria-hidden="true"
+                ></span>
             </button>
             <template #content>
                 <div class="flex flex-col items-start w-[140px]">
@@ -51,7 +61,6 @@
         <!-- Connect -->
         <button
             type="button"
-            aria-label="Connect"
             class="hud-button retro-hud-button hud-button--connect"
             @click="onConnectButtonClick"
             :aria-label="
@@ -88,7 +97,10 @@
                     </g>
                 </svg>
             </span>
-            <span class="hud-button__divider retro-hud-button__divider" aria-hidden="true"></span>
+            <span
+                class="hud-button__divider retro-hud-button__divider"
+                aria-hidden="true"
+            ></span>
             <span class="hud-button__label hud-button__label--wide">
                 <template v-if="hydrated">
                     {{ orIsConnected ? 'Disconnect' : 'Connect' }}
@@ -102,13 +114,12 @@
             ></span>
         </button>
 
-        <!-- HELP -->
+        <!-- DASHBOARD -->
         <button
             @click="emit('toggleDashboard')"
             type="button"
-            aria-label="Help"
-            class="hud-button retro-hud-button"
             aria-label="Dashboard"
+            class="hud-button retro-hud-button"
         >
             <span class="hud-button__icon">
                 <UIcon
@@ -116,11 +127,17 @@
                     name="pixelarticons:dashboard"
                 ></UIcon>
             </span>
-            <span class="hud-button__divider retro-hud-button__divider" aria-hidden="true"></span>
+            <span
+                class="hud-button__divider retro-hud-button__divider"
+                aria-hidden="true"
+            ></span>
             <span class="hud-button__label hud-button__label--wide">
                 Dashboard
             </span>
-            <span class="hud-button__indicator retro-hud-button__indicator" aria-hidden="true"></span>
+            <span
+                class="hud-button__indicator retro-hud-button__indicator"
+                aria-hidden="true"
+            ></span>
         </button>
     </div>
     <lazy-modal-model-catalog
@@ -302,9 +319,7 @@ function navigateToCredits() {
     line-height: 1;
 }
 
-.hud-button::before {
-    /* Removed decorative styles - now in retro theme */
-}
+/* Decorative styles moved to retro theme file; pseudo removed here */
 
 .dark .hud-button {
     color: var(--md-on-surface);
@@ -316,13 +331,9 @@ function navigateToCredits() {
     );
 }
 
-.hud-button:active {
-    /* Removed decorative styles - now in retro theme */
-}
+/* Active state visuals handled by retro theme styles */
 
-.hud-button:focus-visible {
-    /* Removed decorative styles - now in retro theme */
-}
+/* Focus-visible outline handled by retro theme styles */
 
 .hud-button__icon,
 .hud-button__label,
