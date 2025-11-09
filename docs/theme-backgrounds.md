@@ -6,11 +6,11 @@ The theme system supports custom background textures and gradients through the `
 
 Backgrounds are configured in `theme.ts` files and automatically applied when themes are switched. The system supports:
 
-- Content area backgrounds (base layer + overlay)
-- Sidebar backgrounds
-- Header and bottom nav gradients
-- Public image URLs or user-uploaded files via internal tokens
-- Per-layer opacity, repeat, and size controls
+-   Content area backgrounds (base layer + overlay)
+-   Sidebar backgrounds
+-   Header and bottom nav gradients
+-   Public image URLs or user-uploaded files via internal tokens
+-   Per-layer opacity, repeat, and size controls
 
 ## Theme DSL
 
@@ -54,7 +54,7 @@ export default defineTheme({
     name: 'retro',
     displayName: 'Retro (Default)',
     // ...colors, overrides, etc.
-    
+
     backgrounds: {
         content: {
             base: {
@@ -113,8 +113,10 @@ Use gradients but skip content patterns:
 export default defineTheme({
     name: 'hybrid',
     displayName: 'Hybrid',
-    colors: { /* ... */ },
-    
+    colors: {
+        /* ... */
+    },
+
     backgrounds: {
         headerGradient: {
             image: '/subtle-gradient.webp',
@@ -129,13 +131,13 @@ export default defineTheme({
 
 The theme system applies backgrounds by setting CSS custom properties on `document.documentElement`:
 
-| Background Slot | CSS Variables |
-|---|---|
-| `content.base` | `--app-content-bg-1`, `--app-content-bg-1-opacity`, `--app-content-bg-1-repeat`, `--app-content-bg-1-size` |
-| `content.overlay` | `--app-content-bg-2`, `--app-content-bg-2-opacity`, `--app-content-bg-2-repeat`, `--app-content-bg-2-size` |
-| `sidebar` | `--app-sidebar-bg-1`, `--app-sidebar-bg-1-opacity`, `--app-sidebar-bg-1-repeat`, `--app-sidebar-bg-1-size` |
-| `headerGradient` | `--app-header-gradient` |
-| `bottomNavGradient` | `--app-bottomnav-gradient` |
+| Background Slot     | CSS Variables                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `content.base`      | `--app-content-bg-1`, `--app-content-bg-1-opacity`, `--app-content-bg-1-repeat`, `--app-content-bg-1-size` |
+| `content.overlay`   | `--app-content-bg-2`, `--app-content-bg-2-opacity`, `--app-content-bg-2-repeat`, `--app-content-bg-2-size` |
+| `sidebar`           | `--app-sidebar-bg-1`, `--app-sidebar-bg-1-opacity`, `--app-sidebar-bg-1-repeat`, `--app-sidebar-bg-1-size` |
+| `headerGradient`    | `--app-header-gradient`                                                                                    |
+| `bottomNavGradient` | `--app-bottomnav-gradient`                                                                                 |
 
 Components like `ResizableSidebarLayout` and sidebar headers consume these variables automatically—no additional wiring required.
 
@@ -153,11 +155,11 @@ This mechanism allows dashboard theme customization to layer on top of theme def
 
 Theme backgrounds serve as **defaults**. The dashboard theme settings UI can override any layer:
 
-- When a user selects a texture, it replaces the theme default for that slot.
-- When a user clears a texture, the theme default is restored.
-- User overrides persist across theme switches (stored separately).
+-   When a user selects a texture, it replaces the theme default for that slot.
+-   When a user clears a texture, the theme default is restored.
+-   User overrides persist across theme switches (stored separately).
 
-The `buildBackgroundsFromSettings` helper converts legacy `ThemeSettings` into the new `ThemeBackgrounds` structure so both systems coexist during migration.
+The dashboard merges these user selections through `useUserThemeOverrides()`, which combines stored overrides with the active theme definition during startup.
 
 ## Best Practices
 
@@ -170,20 +172,23 @@ The `buildBackgroundsFromSettings` helper converts legacy `ThemeSettings` into t
 
 ## Troubleshooting
 
-**Backgrounds not appearing after theme switch:**  
-- Verify the theme plugin is wired to call `applyThemeBackgrounds` on `setActiveTheme`.
-- Check browser console for token resolution errors (e.g., missing files).
+**Backgrounds not appearing after theme switch:**
 
-**Textures look stretched or squashed:**  
-- Ensure `size` matches the source image dimensions.
-- Use `fit: 'cover'` or `fit: 'contain'` instead of explicit pixel sizes if you want responsive scaling.
+-   Verify the theme plugin is wired to call `applyThemeBackgrounds` on `setActiveTheme`.
+-   Check browser console for token resolution errors (e.g., missing files).
 
-**User overrides ignored:**  
-- Confirm `applyToRoot` (dashboard settings) invokes `applyThemeBackgrounds` after the theme defaults are set.
-- Check local storage keys for persisted user settings.
+**Textures look stretched or squashed:**
+
+-   Ensure `size` matches the source image dimensions.
+-   Use `fit: 'cover'` or `fit: 'contain'` instead of explicit pixel sizes if you want responsive scaling.
+
+**User overrides ignored:**
+
+-   Confirm `applyToRoot` (dashboard settings) invokes `applyThemeBackgrounds` after the theme defaults are set.
+-   Check local storage keys for persisted user settings.
 
 ## Related Documentation
 
-- [Refined Theme System](./refined-theme-system/README.md)
-- [Theme DSL Reference](./theme-dsl-reference.md)
-- [Dashboard Theme Settings](./UI/theme-settings.md)
+-   [Refined Theme System](./refined-theme-system/README.md)
+-   [Theme DSL Reference](./theme-dsl-reference.md)
+-   [Dashboard Theme Settings](./UI/theme-settings.md)

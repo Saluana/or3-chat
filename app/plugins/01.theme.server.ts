@@ -196,6 +196,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         setActiveTheme,
         getResolver,
         loadTheme,
+        getTheme: (themeName: string) => themeRegistry.get(themeName) || null,
     };
 
     nuxtApp.provide('theme', themeApi);

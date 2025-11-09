@@ -1,117 +1,116 @@
-# Theme Settings Composable (useThemeSettings)
+# User Theme Overrides Composable (`useUserThemeOverrides`)
 
-The `useThemeSettings` composable manages the app's theme profiles (light/dark), persists changes to localStorage, and applies CSS variables to the document root.
+`useUserThemeOverrides` manages the light and dark customization profiles that sit on top of the compiled theme definitions. It handles persistence, legacy migration, and applies merged overrides to the document so backgrounds, typography, and palette adjustments take effect globally.
 
-It is safe to use from components and client plugins. On SSR it no-ops DOM writes and will initialize when running in the browser.
+Because the composable is HMR-safe and only touches the DOM in the browser, it can be safely imported from components, composables, and client-side plugins.
 
-## What it provides
+## Returned API
 
--   `settings` — a computed ref of the active profile (`ThemeSettings`)
--   `light`, `dark` — refs holding the full theme profiles
--   `activeMode` — ref<'light' | 'dark'> with current mode
--   `set(patch)` — merge a partial patch into the active profile (clamped/sanitized)
--   `setForMode(mode, patch)` — update a specific profile regardless of active
--   `reset(mode?)` — reset the current or specified profile to defaults
--   `resetAll()` — reset both light and dark to defaults
--   `load()` — re-load the active profile from localStorage (if present) and apply
--   `reapply()` — re-apply current settings to the DOM (useful after class changes)
--   `switchMode(mode)` — switch the active profile and apply
--   `applyToRoot(settings)` — low-level function to apply any `ThemeSettings` to CSS vars
+| Property / Method  | Description                                                         |
+| ------------------ | ------------------------------------------------------------------- |
+| `overrides`        | Computed ref of the active mode (`UserThemeOverrides`).             |
+| `light`, `dark`    | Refs containing the persisted overrides for each mode.              |
+| `activeMode`       | Ref<'light' \| 'dark'> reflecting the HTML class list.              |
+| `set(patch)`       | Deep merges a partial patch into the active mode (with validation). |
+| `reset(mode?)`     | Clears overrides for the provided mode (or the active one).         |
+| `resetAll()`       | Clears light and dark overrides.                                    |
+| `switchMode(mode)` | Switches active mode and reapplies overrides.                       |
+| `reapply()`        | Re-runs `applyMergedTheme()` for the current mode.                  |
 
-It also re-exports:
+Internally the composable also performs:
 
--   `DEFAULT_THEME_SETTINGS_LIGHT`, `DEFAULT_THEME_SETTINGS_DARK`
--   `THEME_SETTINGS_STORAGE_KEY(_LIGHT|_DARK)`
+-   Legacy `ThemeSettings` migration via `migrateFromLegacy()`.
+-   Storage round-trips using `or3:user-theme-overrides:light|dark` keys.
+-   Mutation observation on `<html class="...">` so external toggles stay in sync.
 
-Types live in `app/composables/theme-types.ts` and defaults/keys in `app/composables/theme-defaults.ts`.
+## Usage Example
 
-## Quick usage in a component
-
-```ts
+```vue
 <script setup lang="ts">
-import { useThemeSettings } from '~/composables/useThemeSettings';
+import { computed } from 'vue';
+import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 
-const { settings, set, switchMode, activeMode } = useThemeSettings();
+const theme = useUserThemeOverrides();
+const baseFont = computed(
+    () => theme.overrides.value.typography?.baseFontPx ?? 20
+);
 
-function bigger() {
-  set({ baseFontPx: settings.value.baseFontPx + 1 });
+function increaseFont() {
+    theme.set({ typography: { baseFontPx: Math.min(baseFont.value + 1, 24) } });
 }
 
 function toggleMode() {
-  switchMode(activeMode.value === 'light' ? 'dark' : 'light');
+    theme.switchMode(theme.activeMode.value === 'light' ? 'dark' : 'light');
 }
 </script>
 
 <template>
-  <div class="flex gap-2 items-center">
-    <button @click="bigger">A+</button>
-    <button @click="toggleMode">Toggle {{ activeMode }}</button>
-  </div>
+    <div class="flex gap-3">
+        <UButton @click="increaseFont">Font +</UButton>
+        <UButton @click="toggleMode"
+            >Switch to
+            {{ theme.activeMode.value === 'light' ? 'dark' : 'light' }}</UButton
+        >
+    </div>
 </template>
 ```
 
-## Backgrounds, colors, and palette
+## Background Layers and Palette
 
--   Background images accept absolute URLs, data URLs, `blob:` URLs, or `internal-file://<hash>` tokens. Internal tokens are resolved to object URLs automatically via IndexedDB.
--   Opacity values are clamped 0..1. If a layer has no image, its effective opacity becomes `1` so solid colors show.
--   When `reducePatternsInHighContrast` is true and the document has a `*-high-contrast` class, background opacities are clamped to <= 0.04.
--   If `customBgColorsEnabled` is true, the following color vars are set: `contentBg1Color`, `contentBg2Color`, `sidebarBgColor`, `headerBgColor`, `bottomBarBgColor`.
--   If `paletteEnabled` is true, the following CSS vars are set: `--md-primary`, `--md-secondary`, `--md-error`, `--md-surface-variant`, `--md-inverse-surface`, `--md-surface`.
+-   Background layers support public URLs, `blob:` URLs, `data:` URLs, and `internal-file://<hash>` tokens. Internal tokens are resolved with IndexedDB lookups inside `applyThemeBackgrounds()`.
+-   Opacity values are clamped to `[0, 1]`. When a layer is cleared, the system writes `none` to the CSS variable and resets opacity to `1` so fallback colors show.
+-   The `reducePatternsInHighContrast` flag lowers active opacities to ≤ `0.04` whenever a `*-high-contrast` class is present on `<html>`.
+-   Palette overrides only apply when `colors.enabled` is true. Each provided token maps to the Material Design CSS variables (`--md-primary`, `--md-on-primary`, etc.).
+-   Custom background colors write to `--app-content-bg-1-color`, `--app-content-bg-2-color`, and `--app-sidebar-bg-color` when `backgrounds.enabled` is true.
 
-## Using from a client plugin
+## Plugin Integration
 
-Plugins can react to app events or provide UI to tweak the theme. The simplest pattern is to register a small UI action or run side effects on app start.
-
-Example: add a keyboard shortcut to toggle theme mode.
+Client plugins can consume the composable to react to startup events or expose shortcuts. Example: reapply overrides after the Nuxt app mounts (this is how the main app hydrates defaults):
 
 ```ts
-// app/plugins/theme-toggle.client.ts
-export default defineNuxtPlugin(() => {
-    if (process.server) return;
-    const { switchMode, activeMode } = useThemeSettings();
-    const onKey = (e: KeyboardEvent) => {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
-            e.preventDefault();
-            switchMode(activeMode.value === 'light' ? 'dark' : 'light');
-        }
-    };
-    window.addEventListener('keydown', onKey);
-    if (import.meta.hot)
-        import.meta.hot.dispose(() =>
-            window.removeEventListener('keydown', onKey)
-        );
+// app/plugins/theme-overrides.client.ts
+export default defineNuxtPlugin((nuxtApp) => {
+    if (import.meta.server) return;
+    const overrides = useUserThemeOverrides();
+    nuxtApp.hook('app:mounted', () => overrides.reapply());
 });
 ```
 
-Example: a Message Action that bumps font size by +1.
+Example: register a quick action to enable a textured overlay.
 
 ```ts
-// app/plugins/examples/message-theme-actions.client.ts
-import { registerMessageAction } from '~/plugins/message-actions.client';
-
 export default defineNuxtPlugin(() => {
-    const { set, settings } = useThemeSettings();
-    registerMessageAction({
-        id: 'theme:font-plus',
-        icon: 'i-lucide-type',
-        tooltip: 'Increase base font size',
-        showOn: 'both',
-        order: 300,
-        async handler() {
-            set({ baseFontPx: Math.min(24, settings.value.baseFontPx + 1) });
-        },
+    if (import.meta.server) return;
+    const { set } = useUserThemeOverrides();
+    window.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === '8') {
+            event.preventDefault();
+            set({
+                backgrounds: {
+                    content: {
+                        overlay: {
+                            url: '/textures/scanline.webp',
+                            opacity: 0.12,
+                            repeat: 'repeat',
+                            sizePx: 160,
+                        },
+                    },
+                },
+            });
+        }
     });
 });
 ```
 
-## Persistence and migration
+## Persistence & Migration Notes
 
--   Each profile persists to its own key: `theme:settings:v1:light` and `theme:settings:v1:dark`.
--   A legacy combined key `theme:settings:v1` is still read/written for backward compatibility (migration pre-populates the light profile on first run if only the legacy key exists).
+-   Overrides persist in separate light/dark entries under `or3:user-theme-overrides:*`.
+-   On first load the composable migrates any legacy `ThemeSettings` keys, stores the converted overrides, and removes the deprecated entries to keep storage clean.
+-   Because the composable is a singleton, state is shared across all consumers. Hot Module Replacement clears background blobs to avoid leaking `blob:` URLs.
 
-## Gotchas and tips
+## Tips
 
--   DOM writes only happen in the browser. On SSR or tests, the composable initializes state without touching `document`.
--   If you manually add or remove classes like `dark-high-contrast` on `<html>`, call `reapply()` to force CSS var updates under the new state.
--   When providing custom backgrounds via internal files, ensure the file blob exists in the DB; missing hashes will safely no-op.
--   For larger integrations, prefer `setForMode('light'|'dark', patch)` so you don’t clobber the currently active profile unexpectedly.
+-   `set()` performs a deep merge, so you can supply minimal patches such as `{ colors: { primary: '#ff00aa' } }`.
+-   Call `reapply()` after manually toggling `.light`/`.dark`/contrast classes outside of the theme plugin.
+-   Use `reset(mode)` for UI buttons that revert only the visible mode, and `resetAll()` for “factory reset” flows.
+-   For performance-sensitive flows debounce rapid calls to `set()` (sliders, opacity inputs) before writing to storage.
