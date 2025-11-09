@@ -946,28 +946,7 @@ defineExpose({
 </script>
 
 <style scoped>
-/* Component-specific styles (non-retro, only used in this component) */
-.section-card {
-    position: relative;
-    padding: 1.25rem 1rem 1rem 1rem;
-    border: 2px solid var(--md-inverse-surface);
-    background: linear-gradient(
-        0deg,
-        color-mix(
-            in oklab,
-            var(--md-surface) 94%,
-            var(--md-surface-variant) 6%
-        ),
-        color-mix(
-            in oklab,
-            var(--md-surface) 90%,
-            var(--md-surface-variant) 10%
-        )
-    );
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-
+/* Component-specific layout and typography (non-decorative) */
 .group-heading {
     margin-top: -0.25rem;
     letter-spacing: 0.08em;
@@ -990,12 +969,4 @@ defineExpose({
 .fade-leave-to {
     opacity: 0;
 }
-
-@media (prefers-reduced-motion: reduce) {
-    .section-card {
-        transition: none;
-    }
-}
-
-/* All theme-* classes have been moved to app/theme/retro/styles.css */
 </style>

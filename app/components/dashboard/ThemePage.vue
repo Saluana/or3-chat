@@ -1831,18 +1831,7 @@ watch(
 </script>
 
 <style scoped>
-.section-card {
-    position: relative;
-    padding: 1.25rem 1rem 1rem 1rem; /* MD3 dense card spacing */
-    border: 2px solid var(--md-inverse-surface);
-    background: linear-gradient(
-        var(--md-surface) 0%,
-        var(--md-surface-variant) 140%
-    );
-    border-radius: 6px;
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-/* Removed previous focus-within outline on entire section */
+/* Component-specific layout and typography (non-decorative) */
 .group-heading {
     margin-top: -0.25rem; /* optical align */
     letter-spacing: 0.08em;
@@ -1873,63 +1862,6 @@ watch(
     }
     .fallback-row .theme-input {
         width: 100px;
-    }
-}
-.drop-zone {
-    position: relative;
-    overflow: hidden;
-    cursor: pointer;
-}
-.drop-zone:focus-visible {
-    outline: 2px solid var(--md-primary);
-    outline-offset: 2px;
-}
-.drop-zone.is-dragover {
-    outline: 2px dashed var(--md-primary);
-    outline-offset: 2px;
-}
-.drop-zone .dz-hint {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    font-weight: 600;
-    /* Stronger scrim for readability over any image */
-    background: linear-gradient(rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.58));
-    color: #fff;
-    opacity: 0;
-    transition: opacity 0.18s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.9);
-    -webkit-text-stroke: 0.25px rgba(0, 0, 0, 0.6);
-    backdrop-filter: brightness(0.85) saturate(0.9) contrast(1.15);
-    /* Fallback if backdrop-filter unsupported */
-    mix-blend-mode: normal;
-}
-.drop-zone:is(:hover, :focus-visible, .is-dragover) .dz-hint {
-    opacity: 1;
-}
-
-.pattern-thumb {
-    width: 150px;
-    height: 150px;
-    border: 2px solid var(--md-inverse-surface);
-    box-shadow: 2px 2px 0 var(--md-inverse-surface);
-    background-color: var(--md-surface-variant);
-    image-rendering: pixelated;
-    /* Background image applied via inline styles will override background-color */
-}
-
-.fallback-row .theme-input {
-    width: 92px;
-}
-@media (prefers-reduced-motion: reduce) {
-    .section-card,
-    .drop-zone .dz-hint {
-        transition: none;
     }
 }
 </style>

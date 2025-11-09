@@ -26,7 +26,7 @@
         </div>
         <pre
             v-if="detailsOpen"
-            class="fatal-error-details mt-2 max-w-full overflow-auto text-left text-xs p-2 border-2 border-[var(--md-inverse-surface)] rounded-[3px] bg-black/5 dark:bg-white/5"
+            class="fatal-error-details mt-2 max-w-full overflow-auto text-left text-xs p-2 bg-black/5 dark:bg-white/5"
             >{{ fatal?.code }}: {{ fatal?.message }}
 </pre
         >
