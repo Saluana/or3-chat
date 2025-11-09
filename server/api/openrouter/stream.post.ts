@@ -37,9 +37,15 @@ export default defineEventHandler(async (event) => {
     const ac = new AbortController();
 
     // Listen for client disconnect
-    event.node?.req?.on?.('close', () => {
-        ac.abort();
-    });
+    if (event.node?.req?.on) {
+        event.node.req.on('close', () => {
+            ac.abort();
+        });
+    } else if (import.meta.dev) {
+        console.warn(
+            '[openrouter/stream] event.node.req not available for abort handling'
+        );
+    }
 
     // Req 2: Proxy POST to OpenRouter with Accept: text/event-stream
     let upstream: Response;

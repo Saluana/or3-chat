@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { ref, nextTick, type Ref } from 'vue';
 import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import type { CompiledTheme } from '~/theme/_shared/types';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
@@ -364,20 +364,29 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     nuxtApp.provide('theme', themeApi);
 
     // Auto-apply theme classes on page navigation (for lazy-loaded components)
-    nuxtApp.hook('page:finish', () => {
-        if (import.meta.client) {
-            const theme = themeRegistry.get(activeTheme.value);
-            if (theme?.cssSelectors) {
-                // Use nextTick to ensure DOM is ready
-                import('vue').then(({ nextTick }) => {
+    // Use a global flag to ensure hook is only registered once (prevents memory leak on HMR)
+    const HOOK_REGISTERED_KEY = '__or3_theme_page_finish_registered';
+    if (!(globalThis as any)[HOOK_REGISTERED_KEY]) {
+        (globalThis as any)[HOOK_REGISTERED_KEY] = true;
+
+        nuxtApp.hook('page:finish', () => {
+            if (import.meta.client) {
+                const nuxtApp = (globalThis as any).useNuxtApp?.();
+                const themePlugin = nuxtApp?.$theme as ThemePlugin | undefined;
+                if (!themePlugin) return;
+
+                const theme = themePlugin.getTheme?.(
+                    themePlugin.activeTheme.value
+                );
+                if (theme?.cssSelectors) {
                     nextTick(() => {
                         applyThemeClasses(
-                            activeTheme.value,
+                            themePlugin.activeTheme.value,
                             theme.cssSelectors!
                         );
                     });
-                });
+                }
             }
-        }
-    });
+        });
+    }
 });
