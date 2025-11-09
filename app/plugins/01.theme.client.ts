@@ -22,6 +22,7 @@ export interface ThemePlugin {
     setActiveTheme: (themeName: string) => Promise<void>;
     getResolver: (themeName: string) => RuntimeResolver | null;
     loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
+    getTheme: (themeName: string) => CompiledTheme | null;
 }
 
 export default defineNuxtPlugin(async (nuxtApp) => {
@@ -128,9 +129,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
      *
      * Security: themeName is validated against available themes to prevent path traversal
      */
-const loadTheme = async (
-    themeName: string
-): Promise<CompiledTheme | null> => {
+    const loadTheme = async (
+        themeName: string
+    ): Promise<CompiledTheme | null> => {
         try {
             // Validate theme name to prevent path traversal attacks
             // Only allow alphanumeric characters and hyphens
@@ -357,6 +358,7 @@ const loadTheme = async (
         setActiveTheme, // Function to switch themes
         getResolver, // Function to get resolver for a theme
         loadTheme, // Function to dynamically load a theme
+        getTheme: (themeName: string) => themeRegistry.get(themeName) || null, // Get cached theme
     };
 
     nuxtApp.provide('theme', themeApi);

@@ -25,10 +25,17 @@ export async function applyMergedTheme(
     }
 
     const activeThemeName = themePlugin.activeTheme.value;
-    const theme = await themePlugin.loadTheme(activeThemeName);
+
+    // Prefer cached theme to avoid redundant dynamic imports
+    let theme = themePlugin.getTheme?.(activeThemeName) ?? null;
+
+    // Fallback: ensure theme is loaded once if cache missed (e.g. on app boot)
+    if (!theme) {
+        theme = (await themePlugin.loadTheme(activeThemeName)) ?? null;
+    }
 
     if (!theme) {
-        console.warn('[apply-merged-theme] Failed to load theme');
+        console.warn('[apply-merged-theme] Failed to resolve theme');
         return;
     }
 

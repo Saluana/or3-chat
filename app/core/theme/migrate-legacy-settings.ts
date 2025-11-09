@@ -65,7 +65,6 @@ function convertToOverrides(legacy: any): UserThemeOverrides {
             secondary: legacy.paletteSecondary ?? undefined,
             error: legacy.paletteError ?? undefined,
             surfaceVariant: legacy.paletteSurfaceVariant ?? undefined,
-            border: legacy.paletteBorder ?? undefined,
             surface: legacy.paletteSurface ?? undefined,
         },
         backgrounds: {
