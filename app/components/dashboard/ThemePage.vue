@@ -85,57 +85,61 @@
                 <h3 class="text-xs font-semibold opacity-70">
                     {{ group.label }}
                 </h3>
-                <div class="space-y-2 pl-2">
+                <div class="space-y-3 pl-2">
                     <div
                         v-for="color in group.colors"
                         :key="color.key"
-                        class="flex items-center gap-3"
+                        class="flex items-start gap-2 flex-wrap sm:flex-nowrap sm:items-center"
                     >
-                        <label class="w-40 text-xs">{{ color.label }}</label>
-                        <UColorPicker
-                            v-bind="paletteColorPickerProps"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            :model-value="
-                                (overrides.colors?.enabled ?? false) &&
-                                String((overrides.colors as any)?.[color.key] || '').startsWith('#')
-                                    ? (overrides.colors as any)[color.key]
-                                    : undefined
-                            "
-                            @update:model-value="(c: string | undefined) => {
-                                if (c) {
-                                    console.log('[ThemePage] Color picker update:', color.key, '=', c);
-                                    set({ colors: { [color.key]: c } } as any);
-                                }
-                            }"
-                            class="scale-60 origin-left"
-                        />
-                        <input
-                            class="theme-input w-24 text-xs"
-                            type="text"
-                            spellcheck="false"
-                            maxlength="9"
-                            placeholder="#RRGGBB"
-                            :value="(localHex as any)[color.key]"
-                            @input="(e: Event) => {
-                                (localHex as any)[color.key] = (e.target as HTMLInputElement).value;
-                                onHexInput(color.key as any);
-                            }"
-                            :disabled="!(overrides.colors?.enabled ?? false)"
-                            :aria-label="`${color.label} hex color`"
-                        />
-                        <button
-                            type="button"
-                            class="theme-btn-copy text-xs"
-                            @click="copyColor(color.key as any)"
-                            :disabled="
-                                !(overrides.colors?.enabled ?? false) ||
-                                !String((overrides.colors as any)?.[color.key] || '').startsWith('#')
-                            "
-                            :aria-label="`Copy ${color.label}`"
-                            title="Copy"
+                        <label class="w-full sm:w-40 text-xs pt-2 sm:pt-0">{{
+                            color.label
+                        }}</label>
+                        <div
+                            class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto"
                         >
-                            Copy
-                        </button>
+                            <UColorPicker
+                                v-bind="paletteColorPickerProps"
+                                :disabled="
+                                    !(overrides.colors?.enabled ?? false)
+                                "
+                                :model-value="
+                                    (overrides.colors?.enabled ?? false) &&
+                                    String((overrides.colors as any)?.[color.key] || '').startsWith('#')
+                                        ? (overrides.colors as any)[color.key]
+                                        : undefined
+                                "
+                                @update:model-value="(c: string | undefined) => { if (c) set({ colors: { [color.key]: c } } as any); }"
+                                class="scale-60 origin-left shrink-0"
+                            />
+                            <!-- Hex input + copy button row (inline both mobile & desktop) -->
+                            <div
+                                class="flex items-center gap-2 w-full sm:w-auto"
+                            >
+                                <UInput
+                                    v-bind="hexInputProps"
+                                    class="flex-1 sm:w-24 h-8"
+                                    type="text"
+                                    :placeholder="'#RRGGBB'"
+                                    :model-value="(localHex as any)[color.key]"
+                                    @update:model-value="(v: any) => { (localHex as any)[color.key] = String(v ?? ''); onHexInput(color.key as any); }"
+                                    :disabled="
+                                        !(overrides.colors?.enabled ?? false)
+                                    "
+                                    :aria-label="`${color.label} hex color`"
+                                />
+                                <UButton
+                                    v-bind="copyButtonProps"
+                                    class="shrink-0"
+                                    :disabled="
+                                        !(overrides.colors?.enabled ?? false) ||
+                                        !String((overrides.colors as any)?.[color.key] || '').startsWith('#')
+                                    "
+                                    :aria-label="`Copy ${color.label}`"
+                                    :title="`Copy ${color.label}`"
+                                    @click="copyColor(color.key as any)"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -356,43 +360,42 @@
                     contentBg1Fit ? 'cover' : local.contentBg1SizePx + 'px'
                 }}</span>
             </div>
-            <div class="flex items-center gap-4 fallback-row">
-                <label class="w-32 text-xs">Fallback Color</label>
-                <UColorPicker
-                    v-bind="backgroundColorPickerProps"
-                    :disabled="!bgEnabled"
-                    :model-value="
-                        bgEnabled && contentBg1Color.startsWith('#')
-                            ? contentBg1Color
-                            : undefined
-                    "
-                    @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { base: { color: c } } } })"
-                    class="scale-60 origin-left"
-                />
-                <div class="flex items-center gap-2">
-                    <input
-                        class="theme-input w-24"
-                        type="text"
-                        spellcheck="false"
-                        maxlength="9"
-                        placeholder="#RRGGBB"
-                        v-model="localHex.contentBg1Color"
-                        @input="onHexInput('contentBg1Color')"
+            <div class="flex items-start gap-4 fallback-row">
+                <label class="w-32 text-xs pt-2">Fallback Color</label>
+                <div class="flex flex-col gap-2 w-full sm:w-auto">
+                    <UColorPicker
+                        v-bind="backgroundColorPickerProps"
                         :disabled="!bgEnabled"
-                        aria-label="Content layer 1 fallback hex color"
-                    />
-                    <button
-                        type="button"
-                        class="theme-btn-copy"
-                        @click="copyColor('contentBg1Color')"
-                        :disabled="
-                            !bgEnabled || !contentBg1Color.startsWith('#')
+                        :model-value="
+                            bgEnabled && contentBg1Color.startsWith('#')
+                                ? contentBg1Color
+                                : undefined
                         "
-                        aria-label="Copy content layer 1 color"
-                        title="Copy"
-                    >
-                        Copy
-                    </button>
+                        @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { base: { color: c } } } })"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <UInput
+                            v-bind="hexInputProps"
+                            class="flex-1 sm:w-24 h-8"
+                            type="text"
+                            :placeholder="'#RRGGBB'"
+                            :model-value="localHex.contentBg1Color"
+                            @update:model-value="(v:any)=>{ localHex.contentBg1Color = String(v ?? ''); onHexInput('contentBg1Color'); }"
+                            :disabled="!bgEnabled"
+                            aria-label="Content layer 1 fallback hex color"
+                        />
+                        <UButton
+                            v-bind="copyButtonProps"
+                            class="shrink-0"
+                            @click="copyColor('contentBg1Color')"
+                            :disabled="
+                                !bgEnabled || !contentBg1Color.startsWith('#')
+                            "
+                            aria-label="Copy content layer 1 color"
+                            title="Copy content layer 1 color"
+                        />
+                    </div>
                 </div>
             </div>
         </section>
@@ -526,43 +529,42 @@
                     contentBg2Fit ? 'cover' : local.contentBg2SizePx + 'px'
                 }}</span>
             </div>
-            <div class="flex items-center gap-4 fallback-row">
-                <label class="w-32 text-xs">Fallback Color</label>
-                <UColorPicker
-                    v-bind="backgroundColorPickerProps"
-                    :disabled="!bgEnabled"
-                    :model-value="
-                        bgEnabled && contentBg2Color.startsWith('#')
-                            ? contentBg2Color
-                            : undefined
-                    "
-                    @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { overlay: { color: c } } } })"
-                    class="scale-60 origin-left"
-                />
-                <div class="flex items-center gap-2">
-                    <input
-                        class="theme-input w-24"
-                        type="text"
-                        spellcheck="false"
-                        maxlength="9"
-                        placeholder="#RRGGBB"
-                        v-model="localHex.contentBg2Color"
-                        @input="onHexInput('contentBg2Color')"
+            <div class="flex items-start gap-4 fallback-row">
+                <label class="w-32 text-xs pt-2">Fallback Color</label>
+                <div class="flex flex-col gap-2 w-full sm:w-auto">
+                    <UColorPicker
+                        v-bind="backgroundColorPickerProps"
                         :disabled="!bgEnabled"
-                        aria-label="Content layer 2 fallback hex color"
-                    />
-                    <button
-                        type="button"
-                        class="theme-btn-copy"
-                        @click="copyColor('contentBg2Color')"
-                        :disabled="
-                            !bgEnabled || !contentBg2Color.startsWith('#')
+                        :model-value="
+                            bgEnabled && contentBg2Color.startsWith('#')
+                                ? contentBg2Color
+                                : undefined
                         "
-                        aria-label="Copy content layer 2 color"
-                        title="Copy"
-                    >
-                        Copy
-                    </button>
+                        @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { content: { overlay: { color: c } } } })"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <UInput
+                            v-bind="hexInputProps"
+                            class="flex-1 sm:w-24 h-8"
+                            type="text"
+                            :placeholder="'#RRGGBB'"
+                            :model-value="localHex.contentBg2Color"
+                            @update:model-value="(v:any)=>{ localHex.contentBg2Color = String(v ?? ''); onHexInput('contentBg2Color'); }"
+                            :disabled="!bgEnabled"
+                            aria-label="Content layer 2 fallback hex color"
+                        />
+                        <UButton
+                            v-bind="copyButtonProps"
+                            class="shrink-0"
+                            @click="copyColor('contentBg2Color')"
+                            :disabled="
+                                !bgEnabled || !contentBg2Color.startsWith('#')
+                            "
+                            aria-label="Copy content layer 2 color"
+                            title="Copy content layer 2 color"
+                        />
+                    </div>
                 </div>
             </div>
         </section>
@@ -691,43 +693,42 @@
                     sidebarBgFit ? 'cover' : local.sidebarBgSizePx + 'px'
                 }}</span>
             </div>
-            <div class="flex items-center gap-4 fallback-row">
-                <label class="w-32 text-xs">Fallback Color</label>
-                <UColorPicker
-                    v-bind="backgroundColorPickerProps"
-                    :disabled="!bgEnabled"
-                    :model-value="
-                        bgEnabled && sidebarBgColor.startsWith('#')
-                            ? sidebarBgColor
-                            : undefined
-                    "
-                    @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { sidebar: { color: c } } })"
-                    class="scale-60 origin-left"
-                />
-                <div class="flex items-center gap-2">
-                    <input
-                        class="theme-input w-24"
-                        type="text"
-                        spellcheck="false"
-                        maxlength="9"
-                        placeholder="#RRGGBB"
-                        v-model="localHex.sidebarBgColor"
-                        @input="onHexInput('sidebarBgColor')"
+            <div class="flex items-start gap-4 fallback-row">
+                <label class="w-32 text-xs pt-2">Fallback Color</label>
+                <div class="flex flex-col gap-2 w-full sm:w-auto">
+                    <UColorPicker
+                        v-bind="backgroundColorPickerProps"
                         :disabled="!bgEnabled"
-                        aria-label="Sidebar fallback hex color"
-                    />
-                    <button
-                        type="button"
-                        class="theme-btn-copy"
-                        @click="copyColor('sidebarBgColor')"
-                        :disabled="
-                            !bgEnabled || !sidebarBgColor.startsWith('#')
+                        :model-value="
+                            bgEnabled && sidebarBgColor.startsWith('#')
+                                ? sidebarBgColor
+                                : undefined
                         "
-                        aria-label="Copy sidebar color"
-                        title="Copy"
-                    >
-                        Copy
-                    </button>
+                        @update:model-value="(c: string | undefined)=> c && set({ backgrounds: { sidebar: { color: c } } })"
+                        class="scale-60 origin-left"
+                    />
+                    <div class="flex items-center gap-2">
+                        <UInput
+                            v-bind="hexInputProps"
+                            class="flex-1 sm:w-24 h-8"
+                            type="text"
+                            :placeholder="'#RRGGBB'"
+                            :model-value="localHex.sidebarBgColor"
+                            @update:model-value="(v:any)=>{ localHex.sidebarBgColor = String(v ?? ''); onHexInput('sidebarBgColor'); }"
+                            :disabled="!bgEnabled"
+                            aria-label="Sidebar fallback hex color"
+                        />
+                        <UButton
+                            v-bind="copyButtonProps"
+                            class="shrink-0"
+                            @click="copyColor('sidebarBgColor')"
+                            :disabled="
+                                !bgEnabled || !sidebarBgColor.startsWith('#')
+                            "
+                            aria-label="Copy sidebar color"
+                            title="Copy sidebar color"
+                        />
+                    </div>
                 </div>
             </div>
         </section>
@@ -1017,6 +1018,38 @@ const resetAllButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         variant: 'basic' as const,
+        ...(overrides.value as any),
+    };
+});
+
+const copyButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.copy-color',
+        isNuxtUI: true,
+    });
+    return {
+        size: 'sm' as const,
+        variant: 'ghost' as const,
+        icon: 'pixelarticons:copy' as const,
+        square: true,
+        ...(overrides.value as any),
+    };
+});
+
+// Hex input styling via theme system (Nuxt UI input component)
+const hexInputProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'input',
+        context: 'dashboard',
+        identifier: 'dashboard.theme.hex-input',
+        isNuxtUI: true,
+    });
+    // Provide minimal defaults; theme can override class/variant/size
+    return {
+        size: 'sm' as const,
+        variant: 'outline' as const,
         ...(overrides.value as any),
     };
 });

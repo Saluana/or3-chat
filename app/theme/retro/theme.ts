@@ -128,6 +128,12 @@ export default defineTheme({
             size: 'md',
         },
 
+        // Theme Settings: copy color button in palette/background sections
+        'button#dashboard.theme.copy-color': {
+            variant: 'ghost',
+            size: 'sm',
+        },
+
         // Shell/PageShell specific buttons
         'button#shell.sidebar-toggle': {
             class: 'retro-btn',
