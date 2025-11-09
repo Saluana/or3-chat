@@ -827,6 +827,25 @@ function getCurrentThemeColor(cssVar: string): string {
 
 const isBrowser = () => typeof window !== 'undefined';
 
+// Helper to read url(...) from CSS custom properties and normalize to an absolute path
+function getCssVarUrl(cssVar: string): string | null {
+    if (!isBrowser()) return null;
+    const computed = getComputedStyle(document.documentElement);
+    const value = computed.getPropertyValue(cssVar).trim();
+    if (!value) return null;
+    // Match url("/path") or url(/path) or url(../path)
+    const m = value.match(/url\((['"]?)(.*?)\1\)/);
+    const raw = m?.[2];
+    if (!raw) return null;
+    try {
+        const u = new URL(raw, window.location.origin);
+        return u.pathname + u.search + u.hash;
+    } catch {
+        // Fallback to raw when URL constructor fails (should still work for absolute paths)
+        return raw;
+    }
+}
+
 // Color groups for organized UI
 const colorGroups = [
     {
@@ -898,7 +917,7 @@ const contentBg1Url = computed(
     () => overrides.value.backgrounds?.content?.base?.url || null
 );
 const contentBg1Repeat = computed(
-    () => overrides.value.backgrounds?.content?.base?.repeat || 'no-repeat'
+    () => overrides.value.backgrounds?.content?.base?.repeat || 'repeat'
 );
 const contentBg1Fit = computed(
     () => overrides.value.backgrounds?.content?.base?.fit ?? false
@@ -910,7 +929,7 @@ const contentBg2Url = computed(
     () => overrides.value.backgrounds?.content?.overlay?.url || null
 );
 const contentBg2Repeat = computed(
-    () => overrides.value.backgrounds?.content?.overlay?.repeat || 'no-repeat'
+    () => overrides.value.backgrounds?.content?.overlay?.repeat || 'repeat'
 );
 const contentBg2Fit = computed(
     () => overrides.value.backgrounds?.content?.overlay?.fit ?? false
@@ -922,7 +941,7 @@ const sidebarBgUrl = computed(
     () => overrides.value.backgrounds?.sidebar?.url || null
 );
 const sidebarRepeat = computed(
-    () => overrides.value.backgrounds?.sidebar?.repeat || 'no-repeat'
+    () => overrides.value.backgrounds?.sidebar?.repeat || 'repeat'
 );
 const sidebarBgFit = computed(
     () => overrides.value.backgrounds?.sidebar?.fit ?? false
@@ -1366,15 +1385,18 @@ const resolvedContentBg2 = ref<string | null>(null);
 const resolvedSidebarBg = ref<string | null>(null);
 
 async function refreshResolved() {
-    resolvedContentBg1.value = await resolveInternalPath(
-        overrides.value.backgrounds?.content?.base?.url || null
-    );
-    resolvedContentBg2.value = await resolveInternalPath(
-        overrides.value.backgrounds?.content?.overlay?.url || null
-    );
-    resolvedSidebarBg.value = await resolveInternalPath(
-        overrides.value.backgrounds?.sidebar?.url || null
-    );
+    // Try overrides first; if absent, fall back to base theme CSS variables
+    const o1 = overrides.value.backgrounds?.content?.base?.url || null;
+    const r1 = await resolveInternalPath(o1);
+    resolvedContentBg1.value = r1 || getCssVarUrl('--app-content-bg-1');
+
+    const o2 = overrides.value.backgrounds?.content?.overlay?.url || null;
+    const r2 = await resolveInternalPath(o2);
+    resolvedContentBg2.value = r2 || getCssVarUrl('--app-content-bg-2');
+
+    const os = overrides.value.backgrounds?.sidebar?.url || null;
+    const rs = await resolveInternalPath(os);
+    resolvedSidebarBg.value = rs || getCssVarUrl('--app-sidebar-bg-1');
 }
 
 watch(
