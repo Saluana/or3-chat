@@ -297,6 +297,9 @@ export interface CompiledTheme {
     /** CSS selectors for direct DOM targeting */
     cssSelectors?: Record<string, CSSelectorConfig>;
 
+    /** Indicates if cssSelectors include style blocks that require static CSS */
+    hasStyleSelectors?: boolean;
+
     /** Nuxt UI config */
     ui?: Record<string, unknown>;
 

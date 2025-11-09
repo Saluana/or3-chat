@@ -4,6 +4,7 @@ import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import type { CompiledTheme } from '~/theme/_shared/types';
 import type { ThemePlugin } from './01.theme.client';
+import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
 import {
     loadThemeManifest,
     loadThemeStylesheets,
@@ -30,6 +31,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         manifestEntries.find((entry) => entry.isDefault)?.name ??
         manifestEntries[0]?.name ??
         'retro';
+
+    // Read previous default from cookie to detect default changes across deploys
+    const PREVIOUS_DEFAULT_COOKIE = 'or3_previous_default_theme';
+    const previousDefault = readActiveThemeCookie(
+        nuxtApp.ssrContext?.event.node.req.headers.cookie,
+        PREVIOUS_DEFAULT_COOKIE
+    );
 
     const availableThemes = new Set(themeManifest.keys());
 
@@ -90,7 +98,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     stylesheets: manifestEntry.stylesheets,
                     displayName: definition.displayName,
                     description: definition.description,
-                    cssVariables: '',
+                    cssVariables: generateThemeCssVariables(definition),
                     overrides: compileOverridesRuntime(
                         definition.overrides || {}
                     ),
@@ -185,7 +193,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         )
     );
 
-    if (cookieTheme && cookieTheme !== DEFAULT_THEME) {
+    // If previous default changed and the cookie theme equals the previous default,
+    // prefer the new DEFAULT_THEME (treat as a default migration rather than an explicit user choice).
+    const shouldMigrateDefault =
+        previousDefault &&
+        previousDefault !== DEFAULT_THEME &&
+        cookieTheme === previousDefault;
+
+    if (!shouldMigrateDefault && cookieTheme && cookieTheme !== DEFAULT_THEME) {
         try {
             const available = await ensureThemeLoaded(cookieTheme);
 
@@ -205,6 +220,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             }
         }
     }
+
+    // Persist current default into the response cookies for future comparisons
+    try {
+        nuxtApp.ssrContext?.event.node.res.setHeader(
+            'Set-Cookie',
+            `${PREVIOUS_DEFAULT_COOKIE}=${encodeURIComponent(
+                DEFAULT_THEME
+            )}; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=Lax`
+        );
+    } catch {}
 
     const setActiveTheme = async (themeName: string) => {
         let target = sanitizeThemeName(themeName);

@@ -22,9 +22,9 @@ export default defineTheme({
     // These will generate CSS variables for both light and dark modes
     colors: {
         // Primary colors
-        primary: '#4ecdc4',
+        primary: '#2C638B',
         onPrimary: '#ffffff',
-        primaryContainer: '#b2f5ea',
+        primaryContainer: '#2C638B',
         onPrimaryContainer: '#002020',
 
         // Secondary colors
@@ -320,10 +320,18 @@ export default defineTheme({
                 root: 'shadow-none! border-0! bg-transparent! rounded-[3px]',
             },
         },
+        // Sidebar footer action buttons
         'button#sidebar.footer-action': {
             class: 'retro-btn pointer-events-auto',
             variant: 'ghost',
             size: 'xs',
+        },
+
+        // UI Glass Button (used in sidebar items)
+        'button#ui.glass-button': {
+            class: 'w-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/15 active:bg-[var(--md-primary)]/25 backdrop-blur-sm text-[var(--md-on-surface)]',
+            variant: 'ghost',
+            size: 'md',
         },
 
         'button#chat.send': {
@@ -360,6 +368,10 @@ export default defineTheme({
             size: 'sm',
         },
 
+        'div#chat.input-main-container': {
+            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+        },
+
         'div#chat.input-container': {
             // Container styling can be customized here
             class: '',
@@ -368,6 +380,22 @@ export default defineTheme({
         'div#chat.editor': {
             // Editor wrapper styling can be customized here
             class: '',
+        },
+
+        'div#chat.attachment-pdf-container': {
+            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+        },
+
+        'div#chat.attachment-text-container': {
+            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+        },
+
+        'button#chat.attachment-remove-btn': {
+            class: 'rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+        },
+
+        'div#chat.drag-overlay': {
+            class: 'border-2 border-dashed rounded-2xl',
         },
 
         'button#chat.model-select': {
@@ -446,8 +474,11 @@ export default defineTheme({
         },
 
         'button#message.attachment-thumb': {
-            // Attachment thumbnail button styling
-            class: '',
+            class: 'rounded-[4px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+        },
+
+        'div#message.attachment-item': {
+            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'button#message.reasoning-toggle': {

@@ -1,11 +1,24 @@
 <template>
-    <div id="message-attachments-gallery-root" v-if="hashes.length" class="mt-3">
-        <div class="message-attachments-gallery-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+    <div
+        id="message-attachments-gallery-root"
+        v-if="hashes.length"
+        class="mt-3"
+    >
+        <div
+            class="message-attachments-gallery-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"
+        >
             <div
                 v-for="(h, index) in hashes"
                 :key="h"
                 :id="`attachment-item-${index}`"
-                class="message-attachment-item retro-attachment-item relative aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]"
+                :class="[
+                    'message-attachment-item relative aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]',
+                    attachmentItemProps?.class || '',
+                ]"
+                :data-theme-target="attachmentItemProps?.['data-theme-target']"
+                :data-theme-matches="
+                    attachmentItemProps?.['data-theme-matches']
+                "
             >
                 <!-- PDF Placeholder if mime/kind indicates pdf -->
                 <template v-if="meta[h]?.kind === 'pdf'">
@@ -82,6 +95,13 @@ const collapseButtonProps = useThemeOverrides({
     component: 'button',
     context: 'message',
     identifier: 'message.collapse-attachments',
+    isNuxtUI: false,
+});
+
+const attachmentItemProps = useThemeOverrides({
+    component: 'div',
+    context: 'message',
+    identifier: 'message.attachment-item',
     isNuxtUI: false,
 });
 

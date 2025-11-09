@@ -1,18 +1,19 @@
 <template>
     <div
+        id="chat-input-main"
         @dragover.prevent="onDragOver"
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'chat-input-main retro-input-container flex flex-col bg-[var(--md-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative hover:shadow-xl focus-within:shadow-xl cursor-text z-10',
+            'chat-input-main flex flex-col bg-[var(--md-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative hover:shadow-xl focus-within:shadow-xl cursor-text z-10',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
             loading ? 'opacity-90 pointer-events-auto' : '',
-            containerProps?.class || '',
+            mainContainerProps?.class || '',
         ]"
-        :data-theme-target="containerProps?.['data-theme-target']"
-        :data-theme-matches="containerProps?.['data-theme-matches']"
+        :data-theme-target="mainContainerProps?.['data-theme-target']"
+        :data-theme-matches="mainContainerProps?.['data-theme-matches']"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
             <!-- Main Input Area -->
@@ -193,7 +194,16 @@
                 />
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="chat-input-attachment-image-remove-btn retro-attachment-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    :class="[
+                        'chat-input-attachment-image-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75',
+                        attachmentRemoveBtnProps?.class || '',
+                    ]"
+                    :data-theme-target="
+                        attachmentRemoveBtnProps?.['data-theme-target']
+                    "
+                    :data-theme-matches="
+                        attachmentRemoveBtnProps?.['data-theme-matches']
+                    "
                     aria-label="Remove image"
                     :disabled="loading"
                 >
@@ -211,7 +221,16 @@
                     (att: any) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
-                class="chat-input-attachment-pdf-container retro-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                :class="[
+                    'chat-input-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center',
+                    attachmentPdfContainerProps?.class || '',
+                ]"
+                :data-theme-target="
+                    attachmentPdfContainerProps?.['data-theme-target']
+                "
+                :data-theme-matches="
+                    attachmentPdfContainerProps?.['data-theme-matches']
+                "
             >
                 <div
                     class="chat-input-attachment-pdf-inner flex flex-col items-center justify-center w-full h-full"
@@ -228,7 +247,16 @@
                 </div>
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="chat-input-attachment-pdf-remove-btn retro-attachment-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    :class="[
+                        'chat-input-attachment-pdf-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75',
+                        attachmentRemoveBtnProps?.class || '',
+                    ]"
+                    :data-theme-target="
+                        attachmentRemoveBtnProps?.['data-theme-target']
+                    "
+                    :data-theme-matches="
+                        attachmentRemoveBtnProps?.['data-theme-matches']
+                    "
                     aria-label="Remove PDF"
                     :disabled="loading"
                 >
@@ -239,7 +267,16 @@
             <div
                 v-for="(block, tIndex) in largeTextBlocks"
                 :key="'txt-' + block.id"
-                class="chat-input-attachment-text-container retro-attachment-text-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                :class="[
+                    'chat-input-attachment-text-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center',
+                    attachmentTextContainerProps?.class || '',
+                ]"
+                :data-theme-target="
+                    attachmentTextContainerProps?.['data-theme-target']
+                "
+                :data-theme-matches="
+                    attachmentTextContainerProps?.['data-theme-matches']
+                "
             >
                 <div
                     class="chat-input-attachment-text-inner flex flex-col items-center justify-center w-full h-full"
@@ -261,7 +298,16 @@
                 </div>
                 <button
                     @click="removeTextBlock(tIndex)"
-                    class="chat-input-attachment-text-remove-btn retro-attachment-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    :class="[
+                        'chat-input-attachment-text-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75',
+                        attachmentRemoveBtnProps?.class || '',
+                    ]"
+                    :data-theme-target="
+                        attachmentRemoveBtnProps?.['data-theme-target']
+                    "
+                    :data-theme-matches="
+                        attachmentRemoveBtnProps?.['data-theme-matches']
+                    "
                     aria-label="Remove text block"
                     :disabled="loading"
                 >
@@ -273,7 +319,12 @@
         <!-- Drag and Drop Overlay -->
         <div
             v-if="isDragging"
-            class="chat-input-drag-and-drop-overlay retro-drag-overlay absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-blue-500 flex items-center justify-center z-50"
+            :class="[
+                'chat-input-drag-and-drop-overlay absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-blue-500 flex items-center justify-center z-50',
+                dragOverlayProps?.class || '',
+            ]"
+            :data-theme-target="dragOverlayProps?.['data-theme-target']"
+            :data-theme-matches="dragOverlayProps?.['data-theme-matches']"
         >
             <div class="text-center">
                 <UIcon
@@ -622,6 +673,17 @@ const composerActionButtonProps = computed(() => {
     };
 });
 
+const mainContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.input-main-container',
+        isNuxtUI: false,
+    });
+
+    return overrides.value;
+});
+
 const containerProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'div',
@@ -641,6 +703,46 @@ const editorProps = computed(() => {
         isNuxtUI: false,
     });
 
+    return overrides.value;
+});
+
+const attachmentPdfContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.attachment-pdf-container',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
+
+const attachmentTextContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.attachment-text-container',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
+
+const attachmentRemoveBtnProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'chat',
+        identifier: 'chat.attachment-remove-btn',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
+
+const dragOverlayProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'chat',
+        identifier: 'chat.drag-overlay',
+        isNuxtUI: false,
+    });
     return overrides.value;
 });
 

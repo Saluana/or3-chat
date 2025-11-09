@@ -51,6 +51,8 @@ export interface ThemeManifestEntry {
     stylesheets: string[];
     /** Whether the theme marked itself as default */
     isDefault: boolean;
+    /** Whether cssSelectors include style blocks (requires static CSS) */
+    hasCssSelectorStyles: boolean;
 }
 
 /**
@@ -80,6 +82,7 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
                 loader: entry.loader,
                 stylesheets: definition.stylesheets ?? [],
                 isDefault: Boolean(definition.isDefault),
+                hasCssSelectorStyles: containsStyleSelectors(definition),
             });
         } catch (error) {
             if (import.meta.dev) {
@@ -176,4 +179,17 @@ export function updateManifestEntry(
     entry.definition = definition;
     entry.stylesheets = definition.stylesheets ?? [];
     entry.isDefault = Boolean(definition.isDefault);
+    entry.hasCssSelectorStyles = containsStyleSelectors(definition);
+}
+
+function containsStyleSelectors(definition: ThemeDefinition): boolean {
+    const selectors = definition.cssSelectors;
+    if (!selectors) {
+        return false;
+    }
+
+    return Object.values(selectors).some((config) => {
+        const style = config?.style;
+        return style !== undefined && Object.keys(style).length > 0;
+    });
 }

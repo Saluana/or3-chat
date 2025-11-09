@@ -19,14 +19,16 @@
         <!-- Compact thumb (collapsed state) -->
         <button
             v-if="props.message.role === 'user' && hashList.length && !expanded"
-            :class="attachmentThumbButtonProps?.class || ''"
+            :class="[
+                'attachment-thumb-button absolute -top-2 -right-2 overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group',
+                attachmentThumbButtonProps?.class || '',
+            ]"
             :data-theme-target="
                 attachmentThumbButtonProps?.['data-theme-target']
             "
             :data-theme-matches="
                 attachmentThumbButtonProps?.['data-theme-matches']
             "
-            class="attachment-thumb-button absolute -top-2 -right-2 retro-attachment-thumb overflow-hidden w-14 h-14 bg-[var(--md-surface-container-lowest)] flex items-center justify-center group"
             @click="toggleExpanded"
             type="button"
             aria-label="Show attachments"

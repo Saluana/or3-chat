@@ -6,6 +6,7 @@ import {
     applyThemeClasses,
     removeThemeClasses,
     loadThemeCSS,
+    unloadThemeCSS,
 } from '~/theme/_shared/css-selector-runtime';
 import {
     applyThemeBackgrounds,
@@ -17,6 +18,7 @@ import {
     updateManifestEntry,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
+import { generateThemeCssVariables } from '~/theme/_shared/generate-css-variables';
 
 export interface ThemePlugin {
     set: (name: string) => void;
@@ -53,16 +55,73 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         );
     }
 
+    // Determine current default theme from manifest
     const DEFAULT_THEME =
         manifestEntries.find((entry) => entry.isDefault)?.name ??
         manifestEntries[0]?.name ??
         'retro';
 
+    // Previous default theme persistence keys
+    const previousDefaultStorageKey = 'previousDefaultTheme';
+    const previousDefaultCookieKey = 'or3_previous_default_theme';
+    // Active theme persistence keys (declared early for migration logic)
+    const activeThemeStorageKey = 'activeTheme';
+    const activeThemeCookieKey = 'or3_active_theme';
+
+    const readPreviousDefaultCookie = () => {
+        const match = document.cookie.match(
+            new RegExp(`(?:^|; )${previousDefaultCookieKey}=([^;]*)`)
+        );
+        return match && match[1] ? decodeURIComponent(match[1]) : null;
+    };
+
+    const writePreviousDefaultCookie = (themeName: string) => {
+        document.cookie = `${previousDefaultCookieKey}=${encodeURIComponent(
+            themeName
+        )}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+    };
+
+    const previousDefaultStored =
+        localStorage.getItem(previousDefaultStorageKey) ||
+        readPreviousDefaultCookie();
+
+    // Auto-migrate if the default theme changed and user never explicitly chose a different theme
+    // Conditions for migration:
+    // 1. previousDefaultStored exists and is different from current DEFAULT_THEME
+    // 2. activeTheme/localStorage choice equals previousDefaultStored OR is missing
+    // 3. stored theme not explicitly set by user (heuristic: if activeTheme === previous default or no stored theme)
+    // This prevents forcing a user off a theme they picked manually.
+
+    const rawStoredActiveTheme = localStorage.getItem(activeThemeStorageKey);
+    const shouldMigrateDefault =
+        previousDefaultStored &&
+        previousDefaultStored !== DEFAULT_THEME &&
+        (!rawStoredActiveTheme ||
+            rawStoredActiveTheme === previousDefaultStored);
+
+    if (shouldMigrateDefault) {
+        if (import.meta.dev) {
+            console.info(
+                `[theme] Default theme changed from "${previousDefaultStored}" to "${DEFAULT_THEME}". Auto-migrating user to new default.`
+            );
+        }
+        // Clear any persisted active theme that matches old default so initialization uses new default
+        if (rawStoredActiveTheme === previousDefaultStored) {
+            localStorage.removeItem(activeThemeStorageKey);
+        }
+    }
+
+    // Persist new default for future migration comparisons
+    try {
+        localStorage.setItem(previousDefaultStorageKey, DEFAULT_THEME);
+        writePreviousDefaultCookie(DEFAULT_THEME);
+    } catch (_) {
+        // Ignore storage errors silently
+    }
+
     const availableThemes = new Set(themeManifest.keys());
 
     const storageKey = 'theme';
-    const activeThemeStorageKey = 'activeTheme';
-    const activeThemeCookieKey = 'or3_active_theme';
     const root = document.documentElement;
     const themeBackgroundTokenResolver = createThemeBackgroundTokenResolver();
 
@@ -179,17 +238,20 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     definition.stylesheets
                 );
 
+                const hasStyleSelectors = manifestEntry.hasCssSelectorStyles;
+
                 const compiledTheme: CompiledTheme = {
                     name: definition.name,
                     isDefault: manifestEntry.isDefault,
                     stylesheets: manifestEntry.stylesheets,
                     displayName: definition.displayName,
                     description: definition.description,
-                    cssVariables: '',
+                    cssVariables: generateThemeCssVariables(definition),
                     overrides: compileOverridesRuntime(
                         definition.overrides || {}
                     ),
                     cssSelectors: definition.cssSelectors,
+                    hasStyleSelectors,
                     ui: definition.ui,
                     propMaps: definition.propMaps,
                     backgrounds: definition.backgrounds,
@@ -321,6 +383,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         if (previousTheme?.cssSelectors) {
             removeThemeClasses(previousTheme.cssSelectors);
         }
+        if (previousTheme?.hasStyleSelectors) {
+            unloadThemeCSS(previousTheme.name);
+        }
 
         activeTheme.value = target;
         localStorage.setItem(activeThemeStorageKey, target);
@@ -330,7 +395,11 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         const theme = themeRegistry.get(target);
         if (theme) {
             // Load CSS file (build-time generated styles)
-            await loadThemeCSS(target);
+            if (theme.hasStyleSelectors) {
+                await loadThemeCSS(target);
+            } else {
+                unloadThemeCSS(target);
+            }
 
             // Set data-theme attribute (activates CSS selectors)
             document.documentElement.setAttribute('data-theme', target);
@@ -342,7 +411,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
             // Inject CSS variables if present
             if (theme.cssVariables) {
-                // TODO: Inject CSS variables into document
+                injectThemeVariables(target, theme.cssVariables);
             }
 
             await applyThemeBackgrounds(theme.backgrounds, {
@@ -362,17 +431,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const sanitizedStoredTheme = sanitizeThemeName(storedTheme);
 
-    if (sanitizedStoredTheme && sanitizedStoredTheme !== DEFAULT_THEME) {
+    // If we migrated default, treat sanitizedStoredTheme as null so we adopt new default automatically
+    const effectiveStoredTheme = shouldMigrateDefault
+        ? null
+        : sanitizedStoredTheme;
+
+    if (effectiveStoredTheme && effectiveStoredTheme !== DEFAULT_THEME) {
         try {
-            const available = await ensureThemeLoaded(sanitizedStoredTheme);
+            const available = await ensureThemeLoaded(effectiveStoredTheme);
 
             if (available) {
-                activeTheme.value = sanitizedStoredTheme;
+                activeTheme.value = effectiveStoredTheme;
                 localStorage.setItem(
                     activeThemeStorageKey,
-                    sanitizedStoredTheme
+                    effectiveStoredTheme
                 );
-                writeActiveThemeCookie(sanitizedStoredTheme);
+                writeActiveThemeCookie(effectiveStoredTheme);
             } else {
                 if (import.meta.dev) {
                     console.warn(
@@ -394,7 +468,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             localStorage.setItem(activeThemeStorageKey, DEFAULT_THEME);
             writeActiveThemeCookie(DEFAULT_THEME);
         }
-    } else if (rawStoredTheme && !sanitizedStoredTheme && import.meta.dev) {
+    } else if (rawStoredTheme && !effectiveStoredTheme && import.meta.dev) {
         console.warn(
             `[theme] Ignoring stored theme "${rawStoredTheme}" because it is not registered.`
         );
@@ -417,6 +491,23 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     };
 
     nuxtApp.provide('theme', themeApi);
+
+    // Ensure the determined active theme is applied on first load
+    try {
+        const currentAttr = document.documentElement.getAttribute('data-theme');
+        if (activeTheme.value && currentAttr !== activeTheme.value) {
+            await themeApi.setActiveTheme(activeTheme.value);
+        } else if (!currentAttr) {
+            await themeApi.setActiveTheme(activeTheme.value || DEFAULT_THEME);
+        }
+    } catch (e) {
+        if (import.meta.dev) {
+            console.warn(
+                '[theme] Failed to auto-apply active theme on init',
+                e
+            );
+        }
+    }
 
     // Auto-apply theme classes on page navigation (for lazy-loaded components)
     // Use a global flag to ensure hook is only registered once (prevents memory leak on HMR)
@@ -445,3 +536,17 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         });
     }
 });
+
+// Maintain one <style> element per theme for CSS vars
+const THEME_STYLE_ID_PREFIX = 'or3-theme-vars-';
+function injectThemeVariables(themeName: string, css: string) {
+    const id = THEME_STYLE_ID_PREFIX + themeName;
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    if (!style) {
+        style = document.createElement('style');
+        style.id = id;
+        style.setAttribute('data-theme-style', themeName);
+        document.head.appendChild(style);
+    }
+    style.textContent = css;
+}
