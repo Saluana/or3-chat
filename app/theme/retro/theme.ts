@@ -90,20 +90,20 @@ export default defineTheme({
     backgrounds: {
         content: {
             base: {
-                image: '/bg-repeat.webp',
+                image: '/bg-repeat.v2.webp',
                 opacity: 0.08,
                 repeat: 'repeat',
                 size: '150px',
             },
             overlay: {
-                image: '/bg-repeat-2.webp',
+                image: '/bg-repeat-2.v2.webp',
                 opacity: 0.125,
                 repeat: 'repeat',
                 size: '380px',
             },
         },
         sidebar: {
-            image: '/sidebar-repeater.webp',
+            image: '/sidebar-repeater.v2.webp',
             opacity: 0.1,
             repeat: 'repeat',
             size: '240px',
@@ -691,9 +691,14 @@ export default defineTheme({
 
         // Document toolbar buttons
         'button#document.toolbar': {
-            class: 'retro-btn',
             variant: 'ghost',
             size: 'sm',
+            activeClass:
+                'bg-primary/60 hover:bg-primary-60 text-(--md-on-surface) ring-2 ring-primary/30 shadow-md',
+
+            ui: {
+                base: 'border-0! shadow-none! rounded-[3px] p-1! text-(--md-on-surface)! hover:bg-(--md-surface-variant)/50',
+            },
         },
 
         'button#document.search': {

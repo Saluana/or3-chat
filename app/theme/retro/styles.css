@@ -343,6 +343,197 @@ textarea.theme-input {
 	--retro-badge-fg: var(--md-extended-color-warning-on-color-container);
 }
 
+/* Document editor component styles */
+.retro-document-toolbar,
+.theme-document-toolbar {
+	border-bottom: 2px solid var(--md-inverse-surface);
+}
+
+.retro-document-toolbar-button,
+.theme-document-toolbar-button {
+	border: 2px solid;
+	border-radius: 4px;
+}
+
+.retro-document-skeleton-item,
+.theme-document-skeleton-item {
+	border-radius: 3px;
+}
+
+.retro-document-skeleton-item--sm,
+.theme-document-skeleton-item--sm {
+	border-radius: 2px;
+}
+
+.retro-document-skeleton-toolbar,
+.theme-document-skeleton-toolbar {
+	border-bottom: 1px solid;
+}
+
+.retro-document-error-card,
+.theme-document-error-card {
+	border-radius: 6px;
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Chat component decorative styles */
+.retro-message-container,
+.theme-message-container {
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	border-radius: 0.375rem; /* 6px */
+}
+
+.retro-message-user,
+.theme-message-user {
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-message-assistant,
+.theme-message-assistant {
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-message-action-group,
+.theme-message-action-group {
+	border-radius: 3px;
+}
+
+.retro-attachment-thumb,
+.theme-attachment-thumb {
+	border-radius: 4px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-attachment-item,
+.theme-attachment-item {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-input-container,
+.theme-input-container {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-attachment-remove-btn,
+.theme-attachment-remove-btn {
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-attachment-pdf-container,
+.theme-attachment-pdf-container {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-attachment-text-container,
+.theme-attachment-text-container {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-drag-overlay,
+.theme-drag-overlay {
+	border: 2px dashed;
+	border-radius: 1rem; /* 16px */
+}
+
+.retro-reasoning-toggle,
+.theme-reasoning-toggle {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 4px;
+	box-shadow: 2px 2px 0 0 var(--md-inverse-surface);
+}
+
+.retro-loader,
+.theme-loader {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 6px;
+	box-shadow: 0 0 0 1px #000 inset, 0 0 6px -1px var(--rl-accent-soft),
+		0 0 22px -8px var(--rl-accent);
+}
+
+.retro-pdf-thumb,
+.theme-pdf-thumb {
+	box-shadow: 0 0 0 1px var(--md-inverse-surface) inset,
+		2px 2px 0 0 var(--md-inverse-surface);
+}
+
+.retro-pdf-thumb-ext,
+.theme-pdf-thumb-ext {
+	box-shadow: 1px 1px 0 0 #000;
+}
+
+.retro-pdf-thumb-corner,
+.theme-pdf-thumb-corner {
+	box-shadow: -1px 1px 0 0 var(--md-inverse-surface);
+}
+
+.retro-tool-call-details,
+.theme-tool-call-details {
+	border-radius: 3px;
+	border: 2px solid;
+}
+
+.retro-tool-call-content,
+.theme-tool-call-content {
+	border-radius: 3px;
+	border: 1px solid;
+}
+
+.retro-system-prompt-item,
+.theme-system-prompt-item {
+	border: 2px solid;
+	border-radius: 0.5rem; /* 8px */
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-modal-container,
+.theme-modal-container {
+	border: 2px solid;
+}
+
+.retro-settings-item,
+.theme-settings-item {
+	border-radius: 3px;
+}
+
+.retro-model-select-content,
+.theme-model-select-content {
+	border: 2px solid;
+	border-radius: 3px;
+}
+
+.retro-inline-image-placeholder,
+.theme-inline-image-placeholder {
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-table-wrapper,
+.theme-table-wrapper {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+.retro-mentions-list,
+.theme-mentions-list {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
 /* Shared motion reduction: keep retro UI snappy yet accessible */
 @media (prefers-reduced-motion: reduce) {
 	.retro-chip,
@@ -358,7 +549,9 @@ textarea.theme-input {
 	.retro-upload-panel,
 	.theme-upload-panel,
 	.retro-file-card,
-	.theme-file-card {
+	.theme-file-card,
+	.retro-document-skeleton-item,
+	.theme-document-skeleton-item {
 		transition: none;
 		transform: none;
 	}
@@ -642,4 +835,54 @@ button.dashboard-landing-item:focus-visible {
     .dashboard-plugin-icon-button.retro-style {
         transition: none;
     }
+}
+/* Safety net for table layout */
+.message-body [data-streamdown='table-wrapper'] {
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    margin-top: 32px !important;
+    margin-bottom: 32px;
+    overflow-x: auto;
+    width: 100%;
+}
+
+.message-body [data-streamdown='table'] {
+    margin-bottom: 0px;
+    margin-top: 0px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    border-left: none;
+    border-right: none;
+    width: auto;
+    min-width: min-content;
+}
+
+.message-body [data-streamdown='th'] {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--md-inverse-surface);
+    font-weight: 600;
+    border-top: none;
+    white-space: nowrap;
+}
+
+.message-body [data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:first-child,
+.message-body [data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:first-child {
+    border-left: 0;
+}
+.message-body [data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:last-child,
+.message-body [data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:last-child {
+    border-right: 0;
+}
+
+/* Zebra striping for table body rows (every 2nd data row) */
+.message-body [data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even) {
+    background: var(--md-surface-container-low);
+}
+.message-body [data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd) {
+    background: var(--md-surface-container-lowest);
+}
+/* Optional hover highlight */
+.message-body [data-streamdown='tbody'] [data-streamdown='tr']:hover {
+    background: var(--md-surface-container-high);
 }

@@ -1327,13 +1327,13 @@ function toggleReduceHighContrast() {
 }
 
 const presetsContent1 = [
-    { label: 'Default', src: '/bg-repeat.webp', opacity: 0.08 },
+    { label: 'Default', src: '/bg-repeat.v2.webp', opacity: 0.08 },
 ];
 const presetsContent2 = [
-    { label: 'Default', src: '/bg-repeat-2.webp', opacity: 0.125 },
+    { label: 'Default', src: '/bg-repeat-2.v2.webp', opacity: 0.125 },
 ];
 const presetsSidebar = [
-    { label: 'Default', src: '/sidebar-repeater.webp', opacity: 0.1 },
+    { label: 'Default', src: '/sidebar-repeater.v2.webp', opacity: 0.1 },
 ];
 
 function applyPreset(

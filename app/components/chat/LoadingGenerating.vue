@@ -2,7 +2,7 @@
     <div
         v-bind="containerProps"
         :class="[
-            'loading-generating animate-in theme-loader',
+            'loading-generating animate-in theme-loader retro-loader',
             containerProps?.class ?? '',
         ]"
         aria-hidden="true"
@@ -43,11 +43,7 @@ const containerProps = useThemeOverrides({
     width: 100%;
     min-height: 58px;
     margin: 2px 0 6px;
-    border: 2px solid var(--rl-border);
-    border-radius: 6px;
     background: linear-gradient(180deg, var(--rl-bg-b) 0%, var(--rl-bg-a) 100%);
-    box-shadow: 0 0 0 1px #000 inset, 0 0 6px -1px var(--rl-accent-soft),
-        0 0 22px -8px var(--rl-accent);
     overflow: hidden;
     font-family: 'VT323', 'IBM Plex Mono', monospace;
     display: flex;

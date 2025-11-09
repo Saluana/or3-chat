@@ -11,7 +11,7 @@
             :key="call.id || `tool-${index}`"
             v-bind="detailsProps"
             :class="[
-                'tool-call-indicator-details rounded-[3px] border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] text-sm',
+                'tool-call-indicator-details retro-tool-call-details border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] text-sm',
                 detailsProps?.class ?? '',
             ]"
         >
@@ -80,7 +80,7 @@
                 <div v-if="call.args" class="tool-call-arguments text-xs opacity-80 mb-2">
                     <div class="opacity-70 mb-1">Arguments:</div>
                     <pre
-                        class="p-2 bg-[var(--md-surface)] rounded-[3px] overflow-x-auto text-[10px] border border-[var(--md-outline-variant)]"
+                        class="p-2 retro-tool-call-content bg-[var(--md-surface)] overflow-x-auto text-[10px] border-[var(--md-outline-variant)]"
                         >{{ formatArgs(call.args) }}</pre
                     >
                 </div>
@@ -92,7 +92,7 @@
                 >
                     <div class="tool-call-result-label opacity-70 mb-1">Result:</div>
                     <div
-                        class="tool-call-result-content-outer p-2 bg-[var(--md-surface)] rounded-[3px] border border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
+                        class="tool-call-result-content-outer retro-tool-call-content p-2 bg-[var(--md-surface)] border-[var(--md-outline-variant)] max-h-32 overflow-y-auto"
                     >
                         <pre class="tool-call-result-content whitespace-pre-wrap text-[10px]">{{
                             formatResult(call.result)
@@ -107,7 +107,7 @@
                 >
                     <div class="tool-call-error-label opacity-70 mb-1">Error:</div>
                     <div
-                        class="tool-call-error-content p-2 bg-[var(--md-surface)] rounded-[3px] border border-[var(--md-error)]"
+                        class="tool-call-error-content retro-tool-call-content p-2 bg-[var(--md-surface)] border-[var(--md-error)]"
                     >
                         {{ call.error }}
                     </div>
