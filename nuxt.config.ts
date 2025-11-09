@@ -72,16 +72,19 @@ export default defineNuxtConfig({
             routes: ['/openrouter-callback', '/documentation'],
         },
         routeRules: {
+            // Hashed Nuxt chunks - immutable forever
             '/_nuxt/**': {
                 headers: {
                     'cache-control': 'public,max-age=31536000,immutable',
                 },
             },
+            // Font files - immutable forever
             '/_fonts/**': {
                 headers: {
                     'cache-control': 'public,max-age=31536000,immutable',
                 },
             },
+            // Static images with versioning - cache for 1 week
             '/**/*.webp': {
                 headers: {
                     'cache-control':
@@ -100,10 +103,33 @@ export default defineNuxtConfig({
                         'public,max-age=604800,stale-while-revalidate=86400',
                 },
             },
-            '/**/*.woff2': {
+            '/**/*.jpg': {
                 headers: {
                     'cache-control':
                         'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            '/**/*.jpeg': {
+                headers: {
+                    'cache-control':
+                        'public,max-age=604800,stale-while-revalidate=86400',
+                },
+            },
+            // Font files (both woff and woff2)
+            '/**/*.woff': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
+            '/**/*.woff2': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
+                },
+            },
+            // CSS files from Nuxt build
+            '/**/*.css': {
+                headers: {
+                    'cache-control': 'public,max-age=31536000,immutable',
                 },
             },
         },
