@@ -21,9 +21,6 @@
 /* Generic prose styles (theme-agnostic, renamed from prose-retro) */
 @import "./or3-prose.css";
 
-/* Retro decorative styles (borders, shadows, cards) */
-@import "./retro-decorative.css";
-
 /* mentions.css removed: .mention styles live in ChatInputDropper.vue */
 
 /* Font setup: body uses VT323, headings use Press Start 2P */

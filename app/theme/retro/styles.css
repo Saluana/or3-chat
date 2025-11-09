@@ -363,3 +363,283 @@ textarea.theme-input {
 		transform: none;
 	}
 }
+
+/* Retro Decorative Styles
+ * Centralized retro-themed borders, shadows, and decorative elements.
+ * These styles were previously hardcoded in individual components.
+ * Keep color references using the MD3 theme system (--md-* variables).
+ */
+
+/* Section Card - Used in Dashboard pages (ThemePage, AiPage, WorkspaceBackupApp) */
+.section-card {
+    position: relative;
+    padding: 1.25rem 1rem 1rem 1rem;
+    border: 2px solid var(--md-inverse-surface);
+    background: linear-gradient(
+        0deg,
+        color-mix(in oklab, var(--md-surface) 94%, var(--md-surface-variant) 6%),
+        color-mix(in oklab, var(--md-surface) 90%, var(--md-surface-variant) 10%)
+    );
+    border-radius: 6px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Pattern Thumbnail - Used in ThemePage for background previews */
+.pattern-thumb {
+    width: 150px;
+    height: 150px;
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    background-color: var(--md-surface-variant);
+    image-rendering: pixelated;
+}
+
+/* Drop Zone - Used in ThemePage for drag-and-drop upload areas */
+.drop-zone {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.drop-zone:focus-visible {
+    outline: 2px solid var(--md-primary);
+    outline-offset: 2px;
+}
+
+.drop-zone.is-dragover {
+    outline: 2px dashed var(--md-primary);
+    outline-offset: 2px;
+}
+
+.drop-zone .dz-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    background: linear-gradient(rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.58));
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.9);
+    -webkit-text-stroke: 0.25px rgba(0, 0, 0, 0.6);
+    backdrop-filter: brightness(0.85) saturate(0.9) contrast(1.15);
+    mix-blend-mode: normal;
+}
+
+.drop-zone:is(:hover, :focus-visible, .is-dragover) .dz-hint {
+    opacity: 1;
+}
+
+/* Workspace Backup App - Theme-specific components */
+.theme-upload-panel {
+    padding: 1.25rem;
+    border: 2px dashed var(--md-outline-variant);
+    border-radius: 6px;
+    background: var(--md-surface-container-low);
+}
+
+.theme-file-card {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 6px;
+    background: var(--md-surface-container);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.theme-meta-panel {
+    padding: 1rem;
+    border: 2px solid var(--md-outline);
+    border-radius: 6px;
+    background: var(--md-surface-variant);
+    box-shadow: 2px 2px 0 var(--md-outline);
+}
+
+.theme-meta-table {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.theme-meta-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    border-radius: 3px;
+    background: var(--md-surface-container-low);
+    font-size: 0.875rem;
+}
+
+.theme-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 3px;
+}
+
+.theme-badge--neutral {
+    background: var(--md-surface-variant);
+    color: var(--md-on-surface-variant);
+}
+
+.theme-badge--primary {
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+}
+
+.theme-badge--success {
+    background: var(--md-extended-color-success-color-container);
+    color: var(--md-extended-color-success-on-color-container);
+}
+
+.theme-badge--error {
+    background: var(--md-error-container);
+    color: var(--md-on-error-container);
+}
+
+.theme-badge--warning {
+    background: var(--md-extended-color-warning-color-container);
+    color: var(--md-extended-color-warning-on-color-container);
+}
+
+.theme-badge--info {
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+}
+
+.theme-upload-icon {
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.theme-choice-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+
+.theme-checkbox {
+    /* Checkbox styling can be left to Nuxt UI; placeholder for future needs */
+}
+
+/* Dashboard Landing Page Buttons */
+.dashboard-landing-item {
+	border-radius: 6px;
+	/* Stronger default to match retro controls */
+	border: 2px solid var(--md-inverse-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, transform 80ms ease;
+}
+
+.dashboard-landing-item:hover {
+    border-color: var(--md-primary);
+    box-shadow: 2px 2px 0 var(--md-primary);
+}
+
+/* Press and focus states to align with .retro-btn behavior */
+button.dashboard-landing-item:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+		inset 0 2px 0 rgba(0, 0, 0, 0.25),
+		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+button.dashboard-landing-item:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+/* Model Catalog Item Cards */
+.model-catalog-item {
+    border-radius: 12px;
+    border: 2px solid var(--md-inverse-surface);
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+    transition: box-shadow 0.15s ease;
+}
+
+.model-catalog-item:hover {
+    box-shadow: 3px 3px 0 var(--md-inverse-surface);
+}
+
+/* Model Catalog Header */
+.model-catalog-header {
+    border-bottom: 2px solid var(--md-inverse-surface);
+}
+
+/* Plugin Icon - Retro shadow and border effects */
+.dashboard-plugin-icon-button.retro-style {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 6px;
+	background: var(--md-surface);
+	color: var(--md-on-surface);
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+	transition: transform 80ms ease,
+		box-shadow 120ms ease,
+		background-color 120ms ease,
+		color 120ms ease,
+		border-color 120ms ease;
+}
+
+.dashboard-plugin-icon-button.retro-style:hover {
+	background: var(--md-secondary-container);
+	color: var(--md-on-secondary-container);
+	border-color: var(--md-primary);
+	box-shadow: 3px 3px 0 var(--md-inverse-surface);
+}
+
+.dashboard-plugin-icon-button.retro-style:active {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--md-inverse-surface),
+		inset 0 2px 0 rgba(0, 0, 0, 0.25),
+		inset 0 -2px 0 rgba(255, 255, 255, 0.12);
+}
+
+.dashboard-plugin-icon-button.retro-style:focus-visible {
+	outline: 2px solid var(--md-primary);
+	outline-offset: 2px;
+}
+
+.dashboard-plugin-icon-button.retro-style:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	box-shadow: 2px 2px 0 color-mix(in oklab, var(--md-inverse-surface) 70%, transparent 30%);
+}
+
+/* Prompt Editor Header */
+.prompt-editor-header {
+    border-bottom: 2px solid var(--md-inverse-surface);
+}
+
+/* Fatal Error Details */
+.fatal-error-details {
+    border: 2px solid var(--md-inverse-surface);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .section-card,
+    .drop-zone .dz-hint,
+    .dashboard-landing-item,
+    .model-catalog-item,
+    .dashboard-plugin-icon-button.retro-style {
+        transition: none;
+    }
+}
