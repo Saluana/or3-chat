@@ -39,7 +39,12 @@
                         {{ pdfDisplayName }}
                     </div>
 
-                    <div class="pdf-thumb__ext retro-pdf-thumb-ext" aria-hidden="true">PDF</div>
+                    <div
+                        class="pdf-thumb__ext retro-pdf-thumb-ext"
+                        aria-hidden="true"
+                    >
+                        PDF
+                    </div>
                 </div>
             </template>
             <template
@@ -923,7 +928,6 @@ async function runExtraAction(action: ChatMessageAction) {
 // Classes applied to <StreamMarkdown> (joined string for TS friendliness)
 const streamMdClasses = [
     'w-full min-w-full prose prose-pre:font-mono or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto',
-    'prose-table:!w-auto prose-table:table-auto',
 ].join(' ');
 </script>
 
