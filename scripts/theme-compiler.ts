@@ -87,7 +87,8 @@ export class ThemeCompiler {
      * Discover all theme files
      */
     private async discoverThemes(): Promise<string[]> {
-        const { readdir } = await import('fs/promises');
+        const { readdir, access } = await import('fs/promises');
+        const { constants } = await import('fs');
         const { join } = await import('path');
 
         const themeDir = join(process.cwd(), 'app/theme');
@@ -97,7 +98,16 @@ export class ThemeCompiler {
         for (const entry of entries) {
             if (entry.isDirectory() && !entry.name.startsWith('_')) {
                 const themePath = join(themeDir, entry.name, 'theme.ts');
-                themes.push(themePath);
+                try {
+                    await access(themePath, constants.F_OK);
+                    themes.push(themePath);
+                } catch (error) {
+                    if (process.env.NODE_ENV !== 'test') {
+                        console.warn(
+                            `[theme-compiler] Skipping directory "${entry.name}" (no theme.ts)`
+                        );
+                    }
+                }
             }
         }
 

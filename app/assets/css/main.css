@@ -18,9 +18,6 @@
 /* Map Material variables to Nuxt UI tokens (loads last to win cascade) */
 @import "~/assets/css/nuxt-ui-map.css";
 
-/* Retro theme styles - now loaded conditionally via theme system */
-@import "~/theme/retro/styles.css";
-
 /* Generic prose styles (theme-agnostic, renamed from prose-retro) */
 @import "./or3-prose.css";
 

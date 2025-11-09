@@ -5,7 +5,6 @@ import type {
 } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
 import { applyMergedTheme } from './apply-merged-theme';
-import { migrateFromLegacy } from './migrate-legacy-settings';
 import { revokeBackgroundBlobs } from './backgrounds';
 
 // Storage keys
@@ -91,13 +90,8 @@ export function useUserThemeOverrides() {
 
     // Initialize on first use
     if (!store.loaded && isBrowser()) {
-        // Check for legacy data and migrate if present
-        const { lightOverrides, darkOverrides } = migrateFromLegacy();
-
-        // Load or use migrated data
-        const loadedLight = loadFromStorage('light') || lightOverrides;
-        const loadedDark = loadFromStorage('dark') || darkOverrides;
-
+        const loadedLight = loadFromStorage('light');
+        const loadedDark = loadFromStorage('dark');
         if (loadedLight) store.light.value = loadedLight;
         if (loadedDark) store.dark.value = loadedDark;
 

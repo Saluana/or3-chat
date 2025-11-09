@@ -4,10 +4,34 @@ import { RuntimeResolver } from '~/theme/_shared/runtime-resolver';
 import { compileOverridesRuntime } from '~/theme/_shared/runtime-compile';
 import type { CompiledTheme } from '~/theme/_shared/types';
 import type { ThemePlugin } from './01.theme.client';
+import {
+    loadThemeManifest,
+    loadThemeStylesheets,
+    updateManifestEntry,
+    type ThemeManifestEntry,
+} from '~/theme/_shared/theme-manifest';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
-    const DEFAULT_THEME = 'retro';
     const ACTIVE_THEME_COOKIE = 'or3_active_theme';
+
+    const manifestEntries = await loadThemeManifest();
+    const themeManifest = new Map<string, ThemeManifestEntry>();
+    for (const entry of manifestEntries) {
+        themeManifest.set(entry.name, entry);
+    }
+
+    if (manifestEntries.length === 0 && import.meta.dev) {
+        console.warn(
+            '[theme] No theme definitions discovered. Falling back to "retro".'
+        );
+    }
+
+    const DEFAULT_THEME =
+        manifestEntries.find((entry) => entry.isDefault)?.name ??
+        manifestEntries[0]?.name ??
+        'retro';
+
+    const availableThemes = new Set(themeManifest.keys());
 
     // SSR-safe light/dark tracking (defaults to light)
     const current = ref<'light' | 'dark'>(
@@ -29,29 +53,41 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const sanitizeThemeName = (themeName: string | null) => {
         if (!themeName) return null;
-        return /^[a-z0-9-]+$/i.test(themeName) ? themeName : null;
+        if (!/^[a-z0-9-]+$/i.test(themeName)) return null;
+        if (!availableThemes.has(themeName)) return null;
+        return themeName;
     };
 
     const loadTheme = async (
         themeName: string
     ): Promise<CompiledTheme | null> => {
         try {
-            if (!/^[a-z0-9-]+$/i.test(themeName)) {
+            const manifestEntry = themeManifest.get(themeName);
+
+            if (!manifestEntry) {
                 if (import.meta.dev) {
-                    console.warn(`[theme] Invalid theme name: "${themeName}"`);
+                    console.warn(
+                        `[theme] Theme "${themeName}" is not registered.`
+                    );
                 }
                 return null;
             }
 
-            const themeModule = await import(
-                `~/theme/${themeName}/theme.ts`
-            ).catch(() => null);
+            const themeModule = await manifestEntry.loader();
 
             if (themeModule?.default) {
                 const definition = themeModule.default;
+                updateManifestEntry(manifestEntry, definition);
+
+                await loadThemeStylesheets(
+                    manifestEntry,
+                    definition.stylesheets
+                );
 
                 const compiledTheme: CompiledTheme = {
                     name: definition.name,
+                    isDefault: manifestEntry.isDefault,
+                    stylesheets: manifestEntry.stylesheets,
                     displayName: definition.displayName,
                     description: definition.description,
                     cssVariables: '',
@@ -171,7 +207,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     }
 
     const setActiveTheme = async (themeName: string) => {
-        const target = sanitizeThemeName(themeName) || DEFAULT_THEME;
+        let target = sanitizeThemeName(themeName);
+
+        if (!target) {
+            if (themeManifest.has(DEFAULT_THEME)) {
+                target = DEFAULT_THEME;
+            } else if (manifestEntries[0]) {
+                target = manifestEntries[0].name;
+            } else {
+                if (import.meta.dev) {
+                    console.warn(
+                        '[theme] No available themes to activate during SSR.'
+                    );
+                }
+                return;
+            }
+        }
 
         const available = await ensureThemeLoaded(target);
 
@@ -181,7 +232,16 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                     `[theme] Failed to load theme "${target}" during SSR. Falling back to "${DEFAULT_THEME}".`
                 );
             }
-            activeTheme.value = DEFAULT_THEME;
+
+            const fallback = themeManifest.has(DEFAULT_THEME)
+                ? DEFAULT_THEME
+                : manifestEntries.find((entry) => entry.name !== target)?.name;
+
+            if (!fallback) {
+                return;
+            }
+
+            activeTheme.value = fallback;
             return;
         }
 

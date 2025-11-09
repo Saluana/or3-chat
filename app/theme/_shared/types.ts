@@ -173,6 +173,9 @@ export interface ThemeDefinition {
     /** Theme description */
     description?: string;
 
+    /** Marks this theme as the default selection */
+    isDefault?: boolean;
+
     /** Color palette (Material Design 3 tokens) */
     colors: ColorPalette;
 
@@ -200,6 +203,9 @@ export interface ThemeDefinition {
      * - '.tooltip': { style: { ... }, class: 'rounded-md shadow-lg' }
      */
     cssSelectors?: Record<string, CSSelectorConfig>;
+
+    /** CSS stylesheets to load automatically when the theme is available */
+    stylesheets?: string[];
 
     /** Nuxt UI config extensions */
     ui?: Record<string, unknown>;
@@ -269,6 +275,12 @@ export interface CompiledOverride {
 export interface CompiledTheme {
     /** Theme name */
     name: string;
+
+    /** Indicates if this theme is the default choice */
+    isDefault?: boolean;
+
+    /** Stylesheets that were requested by the theme definition */
+    stylesheets?: string[];
 
     /** Display name */
     displayName?: string;
