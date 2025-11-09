@@ -4,7 +4,7 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'chat-input-main flex flex-col bg-[var(--md-surface)]  border-2 border-[var(--md-inverse-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative theme-shadow hover:shadow-xl focus-within:shadow-xl cursor-text z-10 rounded-[3px]',
+            'chat-input-main retro-input-container flex flex-col bg-[var(--md-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative hover:shadow-xl focus-within:shadow-xl cursor-text z-10',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
@@ -193,7 +193,7 @@
                 />
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(image))"
-                    class="chat-input-attachment-image-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] theme-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-image-remove-btn retro-attachment-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove image"
                     :disabled="loading"
                 >
@@ -211,7 +211,7 @@
                     (att: any) => att.kind === 'pdf'
                 )"
                 :key="'pdf-' + index"
-                class="chat-input-attachment-pdf-container relative group aspect-square border border-black theme-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="chat-input-attachment-pdf-container retro-attachment-pdf-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
             >
                 <div
                     class="chat-input-attachment-pdf-inner flex flex-col items-center justify-center w-full h-full"
@@ -228,7 +228,7 @@
                 </div>
                 <button
                     @click="() => removeImage(uploadedImages.indexOf(pdf))"
-                    class="chat-input-attachment-pdf-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] theme-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-pdf-remove-btn retro-attachment-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove PDF"
                     :disabled="loading"
                 >
@@ -239,7 +239,7 @@
             <div
                 v-for="(block, tIndex) in largeTextBlocks"
                 :key="'txt-' + block.id"
-                class="chat-input-attachment-text-container relative group aspect-square border border-black theme-shadow rounded-[3px] overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
+                class="chat-input-attachment-text-container retro-attachment-text-container relative group aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-low)] p-2 text-center"
             >
                 <div
                     class="chat-input-attachment-text-inner flex flex-col items-center justify-center w-full h-full"
@@ -261,7 +261,7 @@
                 </div>
                 <button
                     @click="removeTextBlock(tIndex)"
-                    class="chat-input-attachment-text-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] theme-shadow bg-error border-black border bg-opacity-60 text-white opacity-0 rounded-[3px] hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
+                    class="chat-input-attachment-text-remove-btn retro-attachment-remove-btn absolute flex item-center justify-center top-1 right-1 h-[22px] w-[22px] bg-error border-black border bg-opacity-60 text-white opacity-0 hover:bg-error/80 transition-opacity duration-200 hover:bg-opacity-75"
                     aria-label="Remove text block"
                     :disabled="loading"
                 >
@@ -273,7 +273,7 @@
         <!-- Drag and Drop Overlay -->
         <div
             v-if="isDragging"
-            class="chat-input-drag-and-drop-overlay absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center z-50"
+            class="chat-input-drag-and-drop-overlay retro-drag-overlay absolute inset-0 bg-blue-50 dark:bg-blue-900/20 border-blue-500 flex items-center justify-center z-50"
         >
             <div class="text-center">
                 <UIcon
@@ -972,30 +972,54 @@ const handlePromptModalClosed = () => {
     /* modal closed */
 };
 
-// Emit live height via ResizeObserver (debounced with rAF)
-let __resizeRaf: number | null = null;
-// Flattened observer setup (avoids build transform splitting issues)
+// Emit live height via ResizeObserver using provided measurements to avoid extra layout passes
 if (process.client && 'ResizeObserver' in window) {
     let ro: ResizeObserver | null = null;
+    let lastHeight: number | null = null;
+
+    const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
+        const target = entry.target as HTMLElement;
+        const borderSize = Array.isArray(entry.borderBoxSize)
+            ? entry.borderBoxSize[0]
+            : entry.borderBoxSize;
+        if (borderSize && typeof borderSize.blockSize === 'number') {
+            return borderSize.blockSize;
+        }
+        if (entry.contentRect && typeof entry.contentRect.height === 'number') {
+            return entry.contentRect.height;
+        }
+        // Fallback – should rarely run, but keeps behavior consistent if box sizes unavailable
+        return target?.offsetHeight ?? null;
+    };
+
+    const handleEntries = (entries: ResizeObserverEntry[]) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const nextHeight = readEntryHeight(entry);
+        if (nextHeight == null) return;
+        // Round to whole px so we don't emit micro-deltas that cause extra renders
+        const normalized = Math.round(nextHeight);
+        if (lastHeight === normalized) return;
+        lastHeight = normalized;
+        emit('resize', { height: normalized });
+    };
+
     onMounted(() => {
         const inst = getCurrentInstance();
         const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
         if (!rootEl) return;
-        ro = new ResizeObserver(() => {
-            if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
-            __resizeRaf = requestAnimationFrame(() => {
-                emit('resize', { height: rootEl.offsetHeight });
-            });
-        });
+        ro = new ResizeObserver(handleEntries);
         ro.observe(rootEl);
     });
+
     const dispose = () => {
         try {
             ro?.disconnect();
         } catch {}
-        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
         ro = null;
+        lastHeight = null;
     };
+
     onBeforeUnmount(dispose);
     if (import.meta.hot) import.meta.hot.dispose(dispose);
 }

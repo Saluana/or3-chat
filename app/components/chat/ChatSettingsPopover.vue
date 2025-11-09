@@ -221,7 +221,7 @@ const modelCatalogButtonProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        class: 'flex justify-between w-full items-center py-1 px-2 rounded-[3px]',
+        class: 'flex justify-between w-full items-center py-1 px-2 retro-settings-item',
         variant: 'ghost',
         block: true,
         trailing: true,

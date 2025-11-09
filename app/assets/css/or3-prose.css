@@ -190,18 +190,22 @@ font-family: "VT323", monospace !important;
     max-width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
+    table-layout: auto;
 }
 
-.or3-prose :deep(th),
-.or3-prose :deep(td) {
+.or3-prose :deep(th) {
     border: 2px solid var(--md-inverse-surface);
     padding: 0.5rem 0.75rem;
     text-align: left;
     font-size: 16px;
     white-space: nowrap;
-}
-
-.or3-prose :deep(th) {
     background: var(--md-primary-container);
     font-weight: bold;
+}
+
+.or3-prose :deep(td) {
+    border: 2px solid var(--md-inverse-surface);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 16px;
 }

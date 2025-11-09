@@ -299,8 +299,38 @@ function toggleCollapse() {
 // Resize logic (desktop only)
 let startX = 0;
 let startWidth = 0;
+let pendingWidthUpdate: number | null = null;
+let widthRafId: number | null = null;
+
+function applyPendingWidth() {
+    if (pendingWidthUpdate === null) return;
+    width.value = pendingWidthUpdate;
+    pendingWidthUpdate = null;
+}
+
+function cancelWidthRaf() {
+    if (widthRafId === null) return;
+    cancelAnimationFrame(widthRafId);
+    widthRafId = null;
+}
+
+function scheduleWidthUpdate(value: number) {
+    pendingWidthUpdate = value;
+    if (widthRafId !== null) return;
+    widthRafId = requestAnimationFrame(() => {
+        widthRafId = null;
+        applyPendingWidth();
+    });
+}
+
+function flushWidthUpdates() {
+    cancelWidthRaf();
+    applyPendingWidth();
+}
+
 function onPointerDown(e: PointerEvent) {
     if (!isDesktop.value || collapsed.value) return;
+    flushWidthUpdates();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     startX = e.clientX;
     startWidth = width.value;
@@ -310,10 +340,11 @@ function onPointerDown(e: PointerEvent) {
 function onPointerMove(e: PointerEvent) {
     const dx = e.clientX - startX;
     const delta = props.side === 'right' ? -dx : dx;
-    width.value = clamp(startWidth + delta);
+    scheduleWidthUpdate(clamp(startWidth + delta));
 }
 function onPointerUp() {
     window.removeEventListener('pointermove', onPointerMove);
+    flushWidthUpdates();
 }
 
 // Keyboard a11y for the resize handle

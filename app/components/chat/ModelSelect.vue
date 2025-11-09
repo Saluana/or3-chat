@@ -42,7 +42,7 @@ const selectMenuProps = computed(() => {
         // Default props
         class: 'h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
         ui: {
-            content: 'border-[2px] border-black rounded-[3px] w-[320px]',
+            content: 'retro-model-select-content border-black w-[320px]',
             input: 'border-0 rounded-none!',
             arrow: 'h-[18px] w-[18px]',
             itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
