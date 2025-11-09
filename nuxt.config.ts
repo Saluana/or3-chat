@@ -30,7 +30,8 @@ export default defineNuxtConfig({
     // Use the "app" folder as the source directory (where app.vue, pages/, layouts/, etc. live)
     srcDir: 'app',
     // Load Tailwind + theme variables globally
-    css: ['~/assets/css/main.css'],
+    // font-display-fix.css loads after main.css to override @nuxt/fonts for CLS prevention
+    css: ['~/assets/css/main.css', '~/assets/css/font-display-fix.css'],
     fonts: {
         defaults: {
             // Only emit the latin subset + normal style to keep the global font CSS lightweight

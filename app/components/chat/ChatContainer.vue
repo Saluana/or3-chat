@@ -81,7 +81,11 @@
         <!-- Input area overlay -->
         <div
             v-bind="inputWrapperProps"
-            :class="['chat-input-wrapper', inputWrapperClass, inputWrapperProps?.class ?? '']"
+            :class="[
+                'chat-input-wrapper',
+                inputWrapperClass,
+                inputWrapperProps?.class ?? '',
+            ]"
             :style="inputWrapperStyle"
         >
             <div
@@ -93,7 +97,6 @@
                 ]"
             >
                 <lazy-chat-input-dropper
-                    hydrate-on-idle
                     :loading="loading"
                     :streaming="loading"
                     :container-width="containerWidth"
@@ -146,8 +149,13 @@ const containerRoot: Ref<HTMLElement | null> = ref(null);
 const { width: containerWidth } = useElementSize(containerRoot);
 // Live height emitted directly from component for more precise padding (especially during dynamic editor growth)
 const emittedInputHeight = ref<number | null>(null);
-// Rely on emitted height; fallback to a conservative default when unavailable
-const effectiveInputHeight = computed(() => emittedInputHeight.value ?? 140);
+// CLS fix: use a stable default height that matches typical input to prevent shift during initial render
+// Conservative estimate for chat input (single line + padding + controls)
+const DEFAULT_INPUT_HEIGHT = 140;
+// Rely on emitted height; fallback to stable default when unavailable
+const effectiveInputHeight = computed(
+    () => emittedInputHeight.value ?? DEFAULT_INPUT_HEIGHT
+);
 // Extra scroll padding so list content isn't hidden behind input; add a little more on mobile
 const bottomPad = computed(() => {
     const base = Math.round(effectiveInputHeight.value + 16); // Add 16px buffer
@@ -162,13 +170,18 @@ const scrollParentStyle = computed<CSSProperties>(() => ({
 
 // Mobile fixed wrapper classes/styles
 // Use fixed positioning on both mobile & desktop so top bars / multi-pane layout shifts don't push input off viewport.
+// CLS fix: Reserve stable height to prevent layout shift when lazy input hydrates
 const inputWrapperClass = computed(() =>
     isMobile.value
         ? 'pointer-events-none fixed inset-x-0 bottom-0 z-40'
         : // Desktop: keep input scoped to its pane container
           'pointer-events-none absolute inset-x-0 bottom-0 z-10'
 );
-const inputWrapperStyle = computed(() => ({}));
+const inputWrapperStyle = computed<CSSProperties>(() => ({
+    minHeight: `${DEFAULT_INPUT_HEIGHT}px`, // Reserve space to prevent CLS
+    // Prevent child content from changing wrapper height during hydration
+    contain: 'layout' as const,
+}));
 const innerInputContainerClass = computed(() =>
     isMobile.value
         ? 'pointer-events-none flex justify-center sm:pr-[11px] px-1 pb-[calc(env(safe-area-inset-bottom)+6px)]'

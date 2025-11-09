@@ -23,12 +23,12 @@
             id="sidebar"
             :class="[
                 'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col',
-                // width transition on desktop
-                initialized
-                    ? 'md:transition-[width] md:duration-200 md:ease-out'
-                    : 'hidden',
                 'md:relative md:h-full md:shrink-0 md:border-r-2',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
+                // CLS fix: Only enable width transition after initial layout to prevent shift
+                initialized
+                    ? 'md:transition-[width] md:duration-200 md:ease-out'
+                    : '',
                 // mobile overlay behavior
                 !isDesktop
                     ? [
@@ -204,13 +204,20 @@ const clamp = (w: number) =>
     Math.min(props.maxWidth, Math.max(props.minWidth, w));
 
 // open state (controlled or uncontrolled)
-// Hydration note:
-// Always start closed for SSR consistency. On desktop, we'll open after hydration
-// using a CSS-first approach to minimize CLS (width reserved via CSS, then transition enabled).
+// Hydration CLS fix: detect desktop state synchronously during setup (client-side only)
+// to prevent sidebar from opening post-mount and shifting content
 const openState = ref<boolean>(
     (() => {
         if (props.modelValue !== undefined) return props.modelValue;
-        return false; // unified initial state for SSR + client
+        // On client, check if desktop BEFORE first render to avoid CLS
+        if (import.meta.client) {
+            const isDesktopNow =
+                window.matchMedia('(min-width: 768px)').matches;
+            if (isDesktopNow && props.defaultOpen) {
+                return true; // Open immediately for desktop to reserve space
+            }
+        }
+        return false; // SSR or mobile: start closed
     })()
 );
 const open = computed({
@@ -249,26 +256,22 @@ const updateMq = () => {
     isDesktop.value = mq.matches;
 };
 
-// Defer enabling transitions until after first paint so restored width doesn't animate
+// CLS fix: Start with transitions DISABLED to prevent animated width changes during initial render
+// After first paint, enable transitions for smooth user interactions
 const initialized = ref(false);
 
 onMounted(() => {
     updateMq();
     mq?.addEventListener('change', () => (isDesktop.value = !!mq?.matches));
-    // Apply defaultOpen on desktop after hydration to prevent mismatch
-    // Use nextTick to ensure DOM is hydrated before changing state
-    if (
-        props.modelValue === undefined &&
-        isDesktop.value &&
-        props.defaultOpen &&
-        !openState.value
-    ) {
-        // Delay state change until after hydration is complete
-        nextTick(() => {
-            openState.value = true;
+    // No need to adjust openState here - it's already set correctly in setup
+    // to prevent CLS from sidebar opening post-mount
+    // Enable transitions after a delay to allow initial layout to settle
+    // Use double rAF to ensure layout is fully painted before transitions activate
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            initialized.value = true;
         });
-    }
-    requestAnimationFrame(() => (initialized.value = true));
+    });
 });
 
 onBeforeUnmount(() => {
