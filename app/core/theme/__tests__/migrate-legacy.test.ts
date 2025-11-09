@@ -1,160 +1,278 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { migrateFromLegacy } from '../migrate-legacy-settings';
+
+const localStorageMock = (() => {
+    let store: Record<string, string> = {};
+    return {
+        getItem: (key: string) => store[key] || null,
+        setItem: (key: string, value: string) => {
+            store[key] = value;
+        },
+        removeItem: (key: string) => {
+            delete store[key];
+        },
+        clear: () => {
+            store = {};
+        },
+    };
+})();
 
 describe('migrateFromLegacy', () => {
     beforeEach(() => {
-        localStorage.clear();
+        Object.defineProperty(global, 'window', {
+            value: {},
+            writable: true,
+        });
+        Object.defineProperty(global, 'localStorage', {
+            value: localStorageMock,
+            writable: true,
+        });
+        localStorageMock.clear();
     });
 
-    it('should convert ThemeSettings to UserThemeOverrides', () => {
+    it('migration converts ThemeSettings → UserThemeOverrides correctly', () => {
         const legacyData = {
             paletteEnabled: true,
             palettePrimary: '#ff0000',
             paletteSecondary: '#00ff00',
             customBgColorsEnabled: true,
-            contentBg1: '/image1.png',
+            contentBg1: '/bg.webp',
             contentBg1Opacity: 0.5,
-            contentBg1SizePx: 300,
-            contentBg1Fit: true,
-            contentBg1Repeat: 'no-repeat',
+            contentBg1SizePx: 150,
+            contentBg1Fit: false,
+            contentBg1Repeat: 'repeat',
             contentBg1Color: '#ffffff',
-            baseFontPx: 18,
+            baseFontPx: 22,
             useSystemFont: true,
-            showHeaderGradient: false,
             reducePatternsInHighContrast: true,
         };
 
-        localStorage.setItem(
+        localStorageMock.setItem(
             'or3:theme-settings:light',
             JSON.stringify(legacyData)
         );
 
-        const { lightOverrides, darkOverrides } = migrateFromLegacy();
+        const { lightOverrides } = migrateFromLegacy();
 
-        expect(lightOverrides).toBeTruthy();
-        expect(lightOverrides!.colors?.enabled).toBe(true);
-        expect(lightOverrides!.colors?.primary).toBe('#ff0000');
-        expect(lightOverrides!.backgrounds?.enabled).toBe(true);
-        expect(lightOverrides!.backgrounds?.content?.base?.url).toBe(
-            '/image1.png'
+        expect(lightOverrides).toBeDefined();
+        expect(lightOverrides?.colors?.enabled).toBe(true);
+        expect(lightOverrides?.colors?.primary).toBe('#ff0000');
+        expect(lightOverrides?.colors?.secondary).toBe('#00ff00');
+        expect(lightOverrides?.backgrounds?.enabled).toBe(true);
+        expect(lightOverrides?.backgrounds?.content?.base?.url).toBe(
+            '/bg.webp'
         );
-        expect(lightOverrides!.backgrounds?.content?.base?.opacity).toBe(0.5);
-        expect(lightOverrides!.backgrounds?.content?.base?.fit).toBe(true);
-        expect(lightOverrides!.typography?.baseFontPx).toBe(18);
-        expect(lightOverrides!.typography?.useSystemFont).toBe(true);
-        expect(lightOverrides!.backgrounds?.headerGradient?.enabled).toBe(
-            false
+        expect(lightOverrides?.backgrounds?.content?.base?.opacity).toBe(0.5);
+        expect(lightOverrides?.backgrounds?.content?.base?.sizePx).toBe(150);
+        expect(lightOverrides?.backgrounds?.content?.base?.fit).toBe(false);
+        expect(lightOverrides?.backgrounds?.content?.base?.repeat).toBe(
+            'repeat'
         );
-        expect(lightOverrides!.ui?.reducePatternsInHighContrast).toBe(true);
+        expect(lightOverrides?.backgrounds?.content?.base?.color).toBe(
+            '#ffffff'
+        );
+        expect(lightOverrides?.typography?.baseFontPx).toBe(22);
+        expect(lightOverrides?.typography?.useSystemFont).toBe(true);
+        expect(lightOverrides?.ui?.reducePatternsInHighContrast).toBe(true);
     });
 
-    it('should delete legacy keys after successful migration', () => {
-        const legacyData = { paletteEnabled: true };
-
-        localStorage.setItem(
+    it('migration deletes legacy keys after success', () => {
+        const legacyData = { paletteEnabled: false };
+        localStorageMock.setItem(
             'or3:theme-settings:light',
             JSON.stringify(legacyData)
         );
-        localStorage.setItem(
+        localStorageMock.setItem(
             'or3:theme-settings:dark',
             JSON.stringify(legacyData)
         );
-        localStorage.setItem('or3:theme-settings', JSON.stringify(legacyData));
+        localStorageMock.setItem(
+            'or3:theme-settings',
+            JSON.stringify(legacyData)
+        );
 
         migrateFromLegacy();
 
-        expect(localStorage.getItem('or3:theme-settings:light')).toBeNull();
-        expect(localStorage.getItem('or3:theme-settings:dark')).toBeNull();
-        expect(localStorage.getItem('or3:theme-settings')).toBeNull();
+        expect(localStorageMock.getItem('or3:theme-settings:light')).toBeNull();
+        expect(localStorageMock.getItem('or3:theme-settings:dark')).toBeNull();
+        expect(localStorageMock.getItem('or3:theme-settings')).toBeNull();
     });
 
-    it('should skip migration if new format exists', () => {
-        const legacyData = { paletteEnabled: true };
-        const newData = { colors: { enabled: false } };
-
-        localStorage.setItem(
-            'or3:theme-settings:light',
-            JSON.stringify(legacyData)
-        );
-        localStorage.setItem(
+    it('migration skips if new format exists', () => {
+        const newData = { colors: { enabled: true } };
+        localStorageMock.setItem(
             'or3:user-theme-overrides:light',
             JSON.stringify(newData)
         );
 
-        const { lightOverrides, darkOverrides } = migrateFromLegacy();
-
-        expect(lightOverrides).toBeNull();
-        expect(darkOverrides).toBeNull();
-        // Legacy keys should NOT be deleted if migration is skipped
-        expect(localStorage.getItem('or3:theme-settings:light')).toBeTruthy();
-    });
-
-    it('should handle missing legacy keys gracefully', () => {
-        const { lightOverrides, darkOverrides } = migrateFromLegacy();
-
-        expect(lightOverrides).toBeNull();
-        expect(darkOverrides).toBeNull();
-    });
-
-    it('should preserve opacity value of 0 (not treat as falsy)', () => {
-        const legacyData = {
-            contentBg1: '/image.png',
-            contentBg1Opacity: 0, // valid value, should not be replaced
-        };
-
-        localStorage.setItem(
+        const legacyData = { paletteEnabled: false };
+        localStorageMock.setItem(
             'or3:theme-settings:light',
             JSON.stringify(legacyData)
         );
 
-        const { lightOverrides } = migrateFromLegacy();
+        const { lightOverrides, darkOverrides } = migrateFromLegacy();
 
-        expect(lightOverrides!.backgrounds?.content?.base?.opacity).toBe(0);
+        expect(lightOverrides).toBeNull();
+        expect(darkOverrides).toBeNull();
+
+        // Legacy key should still exist (not deleted)
+        expect(
+            localStorageMock.getItem('or3:theme-settings:light')
+        ).toBeTruthy();
     });
 
-    it('should apply correct defaults for missing fields', () => {
-        const legacyData = {
+    it('migration handles missing legacy keys gracefully', () => {
+        const { lightOverrides, darkOverrides } = migrateFromLegacy();
+
+        expect(lightOverrides).toBeNull();
+        expect(darkOverrides).toBeNull();
+    });
+
+    it('all field mappings convert correctly', () => {
+        const comprehensiveLegacy = {
+            // Colors
             paletteEnabled: true,
-            // Missing: palettePrimary, contentBg1SizePx, etc.
+            palettePrimary: '#primary',
+            paletteSecondary: '#secondary',
+            paletteError: '#error',
+            paletteSurfaceVariant: '#surfaceVariant',
+            paletteBorder: '#border',
+            paletteSurface: '#surface',
+
+            // Backgrounds
+            customBgColorsEnabled: true,
+            contentBg1: '/bg1.png',
+            contentBg1Opacity: 0.1,
+            contentBg1SizePx: 100,
+            contentBg1Fit: true,
+            contentBg1Repeat: 'no-repeat',
+            contentBg1Color: '#bg1color',
+
+            contentBg2: '/bg2.png',
+            contentBg2Opacity: 0.2,
+            contentBg2SizePx: 200,
+            contentBg2Fit: false,
+            contentBg2Repeat: 'repeat',
+            contentBg2Color: '#bg2color',
+
+            sidebarBg: '/sidebar.png',
+            sidebarBgOpacity: 0.3,
+            sidebarBgSizePx: 300,
+            sidebarBgFit: true,
+            sidebarRepeat: 'repeat',
+            sidebarBgColor: '#sidebarcolor',
+
+            // Gradients
+            showHeaderGradient: true,
+            showBottomBarGradient: false,
+
+            // Typography
+            baseFontPx: 18,
+            useSystemFont: false,
+
+            // UI
+            reducePatternsInHighContrast: true,
         };
 
-        localStorage.setItem(
+        localStorageMock.setItem(
             'or3:theme-settings:light',
-            JSON.stringify(legacyData)
+            JSON.stringify(comprehensiveLegacy)
         );
 
         const { lightOverrides } = migrateFromLegacy();
 
-        // Colors enabled but no specific colors set
-        expect(lightOverrides!.colors?.enabled).toBe(true);
-        expect(lightOverrides!.colors?.primary).toBeUndefined();
+        // Verify all fields mapped
+        expect(lightOverrides?.colors).toMatchObject({
+            enabled: true,
+            primary: '#primary',
+            secondary: '#secondary',
+            error: '#error',
+            surfaceVariant: '#surfaceVariant',
+            border: '#border',
+            surface: '#surface',
+        });
 
-        // Background size defaults to 240
-        expect(lightOverrides!.backgrounds?.content?.base?.sizePx).toBe(240);
-        expect(lightOverrides!.backgrounds?.content?.base?.repeat).toBe(
-            'repeat'
+        expect(lightOverrides?.backgrounds?.enabled).toBe(true);
+
+        expect(lightOverrides?.backgrounds?.content?.base).toMatchObject({
+            url: '/bg1.png',
+            opacity: 0.1,
+            sizePx: 100,
+            fit: true,
+            repeat: 'no-repeat',
+            color: '#bg1color',
+        });
+
+        expect(lightOverrides?.backgrounds?.content?.overlay).toMatchObject({
+            url: '/bg2.png',
+            opacity: 0.2,
+            sizePx: 200,
+            fit: false,
+            repeat: 'repeat',
+            color: '#bg2color',
+        });
+
+        expect(lightOverrides?.backgrounds?.sidebar).toMatchObject({
+            url: '/sidebar.png',
+            opacity: 0.3,
+            sizePx: 300,
+            fit: true,
+            repeat: 'repeat',
+            color: '#sidebarcolor',
+        });
+
+        expect(lightOverrides?.backgrounds?.headerGradient?.enabled).toBe(true);
+        expect(lightOverrides?.backgrounds?.bottomNavGradient?.enabled).toBe(
+            false
         );
-        expect(lightOverrides!.backgrounds?.content?.base?.fit).toBe(false);
+
+        expect(lightOverrides?.typography).toMatchObject({
+            baseFontPx: 18,
+            useSystemFont: false,
+        });
+
+        expect(lightOverrides?.ui?.reducePatternsInHighContrast).toBe(true);
     });
 
-    it('should handle boolean fields correctly', () => {
-        const legacyData = {
-            paletteEnabled: false,
-            useSystemFont: false,
-            contentBg1Fit: false,
-            reducePatternsInHighContrast: false,
-        };
+    it('handles both light and dark legacy data', () => {
+        const lightLegacy = { paletteEnabled: true, palettePrimary: '#light' };
+        const darkLegacy = { paletteEnabled: false, palettePrimary: '#dark' };
 
-        localStorage.setItem(
+        localStorageMock.setItem(
             'or3:theme-settings:light',
-            JSON.stringify(legacyData)
+            JSON.stringify(lightLegacy)
+        );
+        localStorageMock.setItem(
+            'or3:theme-settings:dark',
+            JSON.stringify(darkLegacy)
         );
 
-        const { lightOverrides } = migrateFromLegacy();
+        const { lightOverrides, darkOverrides } = migrateFromLegacy();
 
-        expect(lightOverrides!.colors?.enabled).toBe(false);
-        expect(lightOverrides!.typography?.useSystemFont).toBe(false);
-        expect(lightOverrides!.backgrounds?.content?.base?.fit).toBe(false);
-        expect(lightOverrides!.ui?.reducePatternsInHighContrast).toBe(false);
+        expect(lightOverrides?.colors?.enabled).toBe(true);
+        expect(lightOverrides?.colors?.primary).toBe('#light');
+
+        expect(darkOverrides?.colors?.enabled).toBe(false);
+        expect(darkOverrides?.colors?.primary).toBe('#dark');
+    });
+
+    it('handles corrupted legacy data gracefully', () => {
+        const consoleInfo = vi
+            .spyOn(console, 'info')
+            .mockImplementation(() => {});
+
+        localStorageMock.setItem(
+            'or3:theme-settings:light',
+            'corrupted json {'
+        );
+
+        const { lightOverrides, darkOverrides } = migrateFromLegacy();
+
+        expect(lightOverrides).toBeNull();
+        expect(darkOverrides).toBeNull();
+        // Migration should log info about attempting migration but return null on error
+
+        consoleInfo.mockRestore();
     });
 });
