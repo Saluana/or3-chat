@@ -972,30 +972,54 @@ const handlePromptModalClosed = () => {
     /* modal closed */
 };
 
-// Emit live height via ResizeObserver (debounced with rAF)
-let __resizeRaf: number | null = null;
-// Flattened observer setup (avoids build transform splitting issues)
+// Emit live height via ResizeObserver using provided measurements to avoid extra layout passes
 if (process.client && 'ResizeObserver' in window) {
     let ro: ResizeObserver | null = null;
+    let lastHeight: number | null = null;
+
+    const readEntryHeight = (entry: ResizeObserverEntry): number | null => {
+        const target = entry.target as HTMLElement;
+        const borderSize = Array.isArray(entry.borderBoxSize)
+            ? entry.borderBoxSize[0]
+            : entry.borderBoxSize;
+        if (borderSize && typeof borderSize.blockSize === 'number') {
+            return borderSize.blockSize;
+        }
+        if (entry.contentRect && typeof entry.contentRect.height === 'number') {
+            return entry.contentRect.height;
+        }
+        // Fallback – should rarely run, but keeps behavior consistent if box sizes unavailable
+        return target?.offsetHeight ?? null;
+    };
+
+    const handleEntries = (entries: ResizeObserverEntry[]) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const nextHeight = readEntryHeight(entry);
+        if (nextHeight == null) return;
+        // Round to whole px so we don't emit micro-deltas that cause extra renders
+        const normalized = Math.round(nextHeight);
+        if (lastHeight === normalized) return;
+        lastHeight = normalized;
+        emit('resize', { height: normalized });
+    };
+
     onMounted(() => {
         const inst = getCurrentInstance();
         const rootEl = (inst?.proxy?.$el as HTMLElement) || null;
         if (!rootEl) return;
-        ro = new ResizeObserver(() => {
-            if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
-            __resizeRaf = requestAnimationFrame(() => {
-                emit('resize', { height: rootEl.offsetHeight });
-            });
-        });
+        ro = new ResizeObserver(handleEntries);
         ro.observe(rootEl);
     });
+
     const dispose = () => {
         try {
             ro?.disconnect();
         } catch {}
-        if (__resizeRaf) cancelAnimationFrame(__resizeRaf);
         ro = null;
+        lastHeight = null;
     };
+
     onBeforeUnmount(dispose);
     if (import.meta.hot) import.meta.hot.dispose(dispose);
 }
