@@ -493,6 +493,13 @@ textarea.theme-input {
 	box-shadow: 2px 2px 0 var(--md-inverse-surface);
 }
 
+.retro-mentions-list,
+.theme-mentions-list {
+	border: 2px solid var(--md-inverse-surface);
+	border-radius: 3px;
+	box-shadow: 2px 2px 0 var(--md-inverse-surface);
+}
+
 /* Shared motion reduction: keep retro UI snappy yet accessible */
 @media (prefers-reduced-motion: reduce) {
 	.retro-chip,
