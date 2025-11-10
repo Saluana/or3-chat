@@ -5,7 +5,7 @@
             (typeof attrs.id === 'string' ? attrs.id : null) ??
             'bottom-nav-root'
         "
-        class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-2 border-r-2 border-[var(--md-inverse-surface)] px-0.5"
+        class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[var(--md-inverse-surface)] px-0.5"
     >
         <!-- MY INFO -->
         <UPopover
@@ -38,7 +38,7 @@
                 <div class="flex flex-col items-start w-[140px]">
                     <button
                         type="button"
-                        class="flex items-center justify-start px-2 py-1 border-b-2 w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                        class="flex items-center justify-start px-2 py-1 border-b-[var(--md-border-width)] w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
                         aria-label="View activity on OpenRouter"
                         @click="navigateToActivity"
                     >

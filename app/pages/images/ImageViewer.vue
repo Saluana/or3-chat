@@ -35,7 +35,7 @@ const imageViewerModalOverrides = useThemeOverrides({
 
 const imageViewerModalProps = computed(() => {
     const baseUi = {
-        footer: 'justify-end border-t-2',
+        footer: 'justify-end border-t-[var(--md-border-width)]',
         body: 'overflow-hidden flex-1 p-0! h-[100dvh] w-[100dvw]',
     } as Record<string, unknown>;
 
@@ -152,7 +152,7 @@ watch(
             <div class="fixed inset-x-0 top-0 z-1200 px-2 pt-2">
                 <div
                     @click.stop.prevent
-                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-2 border-(--md-outline-variant) bg-(--md-surface-container-highest)/95 p-1 backdrop-blur"
+                    class="mx-auto flex max-w-[min(540px,90vw)] flex-wrap items-center justify-between gap-2 rounded-md border-[var(--md-border-width)] border-(--md-outline-variant) bg-(--md-surface-container-highest)/95 p-1 backdrop-blur"
                 >
                     <div class="flex items-center">
                         <UButtonGroup v-if="!props.trashMode">

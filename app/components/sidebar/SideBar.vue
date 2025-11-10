@@ -2,7 +2,7 @@
     <div id="sidebar" class="flex flex-row w-full h-full">
         <SidebarSideNavContentCollapsed
             id="sidebar-content-collapsed"
-            class="border-r-2 border-(--md-inverse-surface) bg-(--md-surface)/5 backdrop-blur-xs"
+            class="border-r-[var(--md-border-width)] border-(--md-inverse-surface) bg-(--md-surface)/5 backdrop-blur-xs"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"
@@ -200,7 +200,7 @@
                         </UFormField>
                         <UFormField label="Description" name="description">
                             <UTextarea
-                                class="w-full border-2 rounded-[6px]"
+                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
                                 v-model="createProjectState.description"
                                 :rows="3"
                                 placeholder="Optional description"
@@ -238,7 +238,7 @@
             <div class="space-y-4">
                 <div class="flex gap-2 text-xs font-mono">
                     <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-2"
+                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                         :class="
                             addMode === 'select'
                                 ? 'bg-primary/30'
@@ -249,7 +249,7 @@
                         Select Existing
                     </button>
                     <button
-                        class="theme-btn px-2 py-1 rounded-[4px] border-2"
+                        class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                         :class="
                             addMode === 'create'
                                 ? 'bg-primary/30'
@@ -291,7 +291,7 @@
                             v-model="newProjectDescription"
                             :rows="3"
                             placeholder="Optional description"
-                            class="w-full border-2 rounded-[6px]"
+                            class="w-full border-[var(--md-border-width)] rounded-[6px]"
                         />
                     </UFormField>
                     <p v-if="addToProjectError" class="text-error text-xs">
@@ -736,7 +736,7 @@ const deleteThreadModalProps = createSidebarModalProps(
     'sidebar.delete-thread',
     {
         ui: { footer: 'justify-end' },
-        class: 'border-2',
+        class: 'border-[var(--md-border-width)]',
     }
 );
 // Document delete state
@@ -746,7 +746,7 @@ const deleteDocumentModalProps = createSidebarModalProps(
     'sidebar.delete-document',
     {
         ui: { footer: 'justify-end' },
-        class: 'border-2',
+        class: 'border-[var(--md-border-width)]',
     }
 );
 
@@ -757,7 +757,7 @@ const deleteProjectModalProps = createSidebarModalProps(
     'sidebar.delete-project',
     {
         ui: { footer: 'justify-end' },
-        class: 'border-2',
+        class: 'border-[var(--md-border-width)]',
     }
 );
 

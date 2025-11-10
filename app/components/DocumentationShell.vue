@@ -4,7 +4,7 @@
     >
         <!-- Header -->
         <header
-            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
+            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-[var(--md-border-width)] border-[var(--md-inverse-surface)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
         >
             <div class="flex w-full items-center gap-3 md:w-[250px]">
                 <UButton
@@ -82,7 +82,7 @@
                             v-if="sidebarOpen"
                             ref="mobileSidebarRef"
                             :id="sidebarId"
-                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-2 border-[var(--md-inverse-surface)] shadow-lg overflow-y-auto scrollbars"
+                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[var(--md-border-width)] border-[var(--md-inverse-surface)] shadow-lg overflow-y-auto scrollbars"
                             @keydown="onSidebarKeydown"
                         >
                             <h2 :id="sidebarLabelId" class="sr-only">
@@ -301,7 +301,7 @@
                             <!-- Mobile TOC (collapsible) -->
                             <div
                                 v-if="computedShowToc && tocList.length > 0"
-                                class="lg:hidden mb-6 border-2 border-[var(--md-inverse-surface)] rounded-[3px] bg-[var(--md-surface)]/40"
+                                class="lg:hidden mb-6 border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/40"
                             >
                                 <button
                                     type="button"
@@ -319,7 +319,7 @@
                                 <Transition name="collapsible">
                                     <div
                                         v-if="mobileTocOpen"
-                                        class="px-4 py-3 border-t-2 border-[var(--md-inverse-surface)]"
+                                        class="px-4 py-3 border-t-[var(--md-border-width)] border-[var(--md-inverse-surface)]"
                                     >
                                         <TocListView
                                             :toc="tocList"
@@ -353,7 +353,7 @@
             <!-- Table of Contents (Right Sidebar) -->
             <aside
                 v-if="computedShowToc && tocList.length > 0"
-                class="docs-toc flex-shrink-0 w-64 border-l-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
+                class="docs-toc flex-shrink-0 w-64 border-l-[var(--md-border-width)] border-[var(--md-inverse-surface)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
             >
                 <nav class="p-4 sticky top-0">
                     <h3
@@ -464,7 +464,7 @@ const TocListView = defineComponent({
                             {
                                 href: `#${heading.id}`,
                                 class: [
-                                    'block py-1 px-2 text-[var(--md-on-surface)] transition-colors rounded-[3px] hover:text-[var(--md-primary)] hover:bg-[var(--md-primary)]/5',
+                                    'block py-1 px-2 text-[var(--md-on-surface)] transition-colors rounded-[var(--md-border-radius)] hover:text-[var(--md-primary)] hover:bg-[var(--md-primary)]/5',
                                     heading.level === 3
                                         ? 'pl-4'
                                         : heading.level === 4

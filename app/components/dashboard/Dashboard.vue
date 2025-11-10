@@ -39,7 +39,7 @@
             >
                 <div
                     id="dashboard-page-header"
-                    class="flex h-10 shrink-0 items-center border-b-2 border-(--md-inverse-surface) pr-2"
+                    class="flex h-10 shrink-0 items-center border-b-[var(--md-border-width)] border-(--md-inverse-surface) pr-2"
                 >
                     <UButton
                         id="dashboard-back-button"
@@ -65,7 +65,7 @@
                 <div
                     v-if="state.error"
                     id="dashboard-page-error"
-                    class="mx-4 mt-3 rounded-md border-2 border-(--md-error) bg-(--md-error-container) px-3 py-2 text-xs text-(--md-on-error-container)"
+                    class="mx-4 mt-3 rounded-md border-[var(--md-border-width)] border-(--md-error) bg-(--md-error-container) px-3 py-2 text-xs text-(--md-on-error-container)"
                 >
                     {{ state.error.message }}
                 </div>
@@ -261,10 +261,10 @@ const dashboardModalOverrides = useThemeOverrides({
 
 const dashboardModalProps = computed(() => {
     const baseClass =
-        'border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
+        'border-[var(--md-border-width)] w-[98dvw] h-[98dvh] sm:min-w-[720px] sm:min-h-[90dvh] sm:max-h-[90dvh] overflow-hidden';
     const baseUi = {
         content: 'z-[10]',
-        footer: 'justify-end border-t-2',
+        footer: 'justify-end border-t-[var(--md-border-width)]',
         body: 'overflow-hidden h-full flex-1 !p-0',
     } as Record<string, unknown>;
 

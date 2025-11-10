@@ -9,7 +9,12 @@
  * - Offset shadows (2px 2px)
  * - 3px border radius
  * - Pixel-perfect press animations
+ * 
+ * All styles are scoped to [data-theme="retro"] to prevent conflicts with other themes.
  */
+
+/* Wrap all retro styles in the theme selector to prevent global leakage */
+[data-theme="retro"] {
 
 /* Screen-reader only helper (follows inclusive components pattern) */
 .sr-only {
@@ -136,7 +141,8 @@ textarea.theme-input {
 
 /* Iconic copy button variant used in theme palette rows */
 .retro-btn-copy,
-.theme-copy-btn {
+.theme-copy-btn,
+.theme-btn-copy {
 	height: 32px;
 	padding: 0 8px;
 	font-size: 10px;
@@ -151,17 +157,20 @@ textarea.theme-input {
 		background-color 120ms ease, color 120ms ease;
 }
 .retro-btn-copy:disabled,
-.theme-copy-btn:disabled {
+.theme-copy-btn:disabled,
+.theme-btn-copy:disabled {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
 .retro-btn-copy:active:not(:disabled),
-.theme-copy-btn:active:not(:disabled) {
+.theme-copy-btn:active:not(:disabled),
+.theme-btn-copy:active:not(:disabled) {
 	transform: translate(2px, 2px);
 	box-shadow: 0 0 0 var(--md-inverse-surface);
 }
 .retro-btn-copy:focus-visible,
-.theme-copy-btn:focus-visible {
+.theme-copy-btn:focus-visible,
+.theme-btn-copy:focus-visible {
 	outline: 2px solid var(--md-primary);
 	outline-offset: 2px;
 }
@@ -954,3 +963,5 @@ button.dashboard-landing-item:focus-visible {
 .message-body [data-streamdown='tbody'] [data-streamdown='tr']:hover {
     background: var(--md-surface-container-high);
 }
+
+} /* End [data-theme="retro"] */

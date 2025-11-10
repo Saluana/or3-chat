@@ -265,7 +265,7 @@ defineExpose({ ensureUrl });
             class="mb-4 break-inside-avoid"
         >
             <div
-                class="group relative w-full overflow-hidden rounded-md border-2 transition duration-150"
+                class="group relative w-full overflow-hidden rounded-md border-[var(--md-border-width)] transition duration-150"
                 :class="
                     props.selectionMode && isSelected(m.hash)
                         ? 'border-[var(--md-primary)] shadow-[2px_2px_0_var(--md-primary)]'

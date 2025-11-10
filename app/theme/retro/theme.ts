@@ -259,6 +259,13 @@ export default defineTheme({
             color: 'error',
         },
 
+        'button#sidebar.project-extra-action': {
+            class: 'retro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
         // Sidebar document item actions
         'button#sidebar.document-rename': {
             class: 'retro-btn',
@@ -321,7 +328,7 @@ export default defineTheme({
             variant: 'outline',
             size: 'md',
             ui: {
-                root: 'shadow-none! border-0! bg-transparent! rounded-[3px]',
+                root: 'shadow-none! border-0! bg-transparent! rounded-[var(--md-border-radius)]',
             },
         },
         // Sidebar footer action buttons
@@ -329,6 +336,10 @@ export default defineTheme({
             class: 'retro-btn pointer-events-auto',
             variant: 'ghost',
             size: 'xs',
+        },
+
+        'div#sidebar.project-group-container': {
+            class: 'shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         // UI Glass Button (used in sidebar items)
@@ -373,7 +384,7 @@ export default defineTheme({
         },
 
         'div#chat.input-main-container': {
-            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'div#chat.input-container': {
@@ -387,19 +398,19 @@ export default defineTheme({
         },
 
         'div#chat.attachment-pdf-container': {
-            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'div#chat.attachment-text-container': {
-            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'button#chat.attachment-remove-btn': {
-            class: 'rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'div#chat.drag-overlay': {
-            class: 'border-2 border-dashed rounded-2xl',
+            class: 'border-[var(--md-border-width)] border-dashed rounded-2xl',
         },
 
         'button#chat.model-select': {
@@ -410,10 +421,10 @@ export default defineTheme({
 
         // Model select menu (USelectMenu component)
         'selectmenu#chat.model-select': {
-            class: 'h-[32px] retro-shadow border-2 border-(--md-inverse-surface) rounded-[3px] text-sm px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
+            class: 'h-[32px] retro-shadow border-[var(--md-border-width)] border-(--md-inverse-surface) rounded-[var(--md-border-radius)] text-sm px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
             ui: {
                 content:
-                    'border-2 border-(--md-inverse-surface) rounded-[3px] w-[320px]',
+                    'border-[var(--md-border-width)] border-(--md-inverse-surface) rounded-[var(--md-border-radius)] w-[320px]',
                 input: 'border-0 rounded-none!',
                 arrow: 'h-[18px] w-[18px]',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
@@ -482,7 +493,7 @@ export default defineTheme({
         },
 
         'div#message.attachment-item': {
-            class: 'border-2 border-[var(--md-inverse-surface)] rounded-[3px] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'button#message.reasoning-toggle': {
@@ -575,7 +586,7 @@ export default defineTheme({
             block: true,
             trailing: true,
             trailingIcon: 'pixelarticons:android',
-            class: 'flex justify-between w-full items-center py-1 px-2 rounded-[3px]',
+            class: 'flex justify-between w-full items-center py-1 px-2 rounded-[var(--md-border-radius)]',
         },
 
         // Dashboard buttons
@@ -711,7 +722,7 @@ export default defineTheme({
         },
 
         'button#dashboard.landing-page': {
-            class: 'border-2 border-[var(--md-inverse-surface)] retro-shadow hover:border-[var(--md-primary)] hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
+            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] retro-shadow hover:border-[var(--md-primary)] hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
         },
 
         'button#dashboard.plugin-icon': {
@@ -732,7 +743,7 @@ export default defineTheme({
                 'bg-primary/60 hover:bg-primary-60 text-(--md-on-surface) ring-2 ring-primary/30 shadow-md',
 
             ui: {
-                base: 'border-0! shadow-none! rounded-[3px] p-1! text-(--md-on-surface)! hover:bg-(--md-surface-variant)/50',
+                base: 'border-0! shadow-none! rounded-[var(--md-border-radius)] p-1! text-(--md-on-surface)! hover:bg-(--md-surface-variant)/50',
             },
         },
 
@@ -761,7 +772,7 @@ export default defineTheme({
             variant: 'outline',
             size: 'md',
             ui: {
-                root: 'shadow-none! border-0! bg-transparent! rounded-[3px] px-2',
+                root: 'shadow-none! border-0! bg-transparent! rounded-[var(--md-border-radius)] px-2',
             },
         },
 

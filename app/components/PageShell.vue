@@ -29,7 +29,7 @@
             <div
                 id="top-nav"
                 :class="{
-                    'border-(--md-inverse-surface) border-b-2 bg-(--md-surface-variant)/20 backdrop-blur-sm':
+                    'border-(--md-inverse-surface) border-b-[var(--md-border-width)] bg-(--md-surface-variant)/20 backdrop-blur-sm':
                         panes.length > 1 || isMobile,
                     [legacyCompatClasses.borderInverse]:
                         panes.length > 1 || isMobile,
@@ -146,7 +146,7 @@
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
-                    class="relative flex flex-col border-l-2 first:border-l-0 outline-none focus-visible:ring-0"
+                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0"
                     :style="{ width: getPaneWidth(i) }"
                     :class="[
                         ...(i === activePaneIndex && panes.length > 1

@@ -239,6 +239,13 @@ export default defineTheme({
             color: 'error',
         },
 
+        'button#sidebar.project-extra-action': {
+            class: 'pro-btn',
+            variant: 'popover',
+            size: 'sm',
+            color: 'neutral',
+        },
+
         // Sidebar document item actions
         'button#sidebar.document-rename': {
             class: 'pro-btn',
@@ -296,18 +303,14 @@ export default defineTheme({
             size: 'md',
         },
 
-        // Sidebar search input
-        'input#sidebar.search': {
-            variant: 'outline',
-            size: 'md',
-            ui: {
-                root: 'shadow-none! border-0! bg-transparent! rounded-lg',
-            },
-        },
         'button#sidebar.footer-action': {
             class: ' pointer-events-auto',
             variant: 'ghost',
             size: 'xs',
+        },
+
+        'div#sidebar.project-group-container': {
+            class: '',
         },
 
         'button#chat.send': {
@@ -723,6 +726,7 @@ export default defineTheme({
         input: {
             variant: 'outline',
             size: 'md',
+            class: 'border-[var(--md-border-width)] rounded-[var(--md-border-radius)]',
         },
 
         // Sidebar inputs

@@ -7,7 +7,7 @@ export default defineNuxtPlugin(() => {
     const ExampleSidebarSection = {
         name: 'ExampleSidebarSection',
         template: `
-            <div class="border-2 border-dashed border-[var(--md-outline-variant)] rounded-md px-3 py-2 text-xs leading-relaxed bg-[var(--md-surface-container-low)]/70">
+            <div class="border-[var(--md-border-width)] border-dashed border-[var(--md-outline-variant)] rounded-md px-3 py-2 text-xs leading-relaxed bg-[var(--md-surface-container-low)]/70">
                 <p class="font-semibold mb-1">Plugin Extension Slot</p>
                 <p class="opacity-70">
                     This card is contributed via <code>useSidebarSections</code>.

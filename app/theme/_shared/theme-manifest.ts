@@ -9,7 +9,7 @@ import type { ThemeDefinition } from './types';
 
 type ThemeModuleLoader = () => Promise<{ default: ThemeDefinition }>;
 
-type StylesheetModuleLoader = () => Promise<unknown>;
+type StylesheetModuleLoader = () => Promise<string>;
 
 interface RawThemeEntry {
     path: string;
@@ -22,10 +22,14 @@ const themeModules = import.meta.glob('../*/theme.ts') as Record<
     ThemeModuleLoader
 >;
 
-const stylesheetModules = import.meta.glob('../*/**/*.css') as Record<
-    string,
-    StylesheetModuleLoader
->;
+// Stylesheet asset loaders. These are resolved lazily so the CSS is only
+// fetched when the corresponding theme becomes active. Using `as: 'url'`
+// keeps the CSS out of the main bundle while still letting Vite emit an
+// asset that can be referenced at runtime.
+const stylesheetModules = import.meta.glob('../**/*.css', {
+    query: '?url',
+    import: 'default',
+}) as Record<string, StylesheetModuleLoader>;
 
 const rawThemeEntries: RawThemeEntry[] = Object.entries(themeModules).map(
     ([path, loader]) => {
@@ -97,76 +101,77 @@ export async function loadThemeManifest(): Promise<ThemeManifestEntry[]> {
     return manifest;
 }
 
-function normalizeStylesheetTargets(
-    entry: ThemeManifestEntry,
-    stylesheets: string[]
-): string[] {
-    return stylesheets.map((sheet) => {
-        const trimmed = sheet.trim();
-        if (trimmed.startsWith('~/')) {
-            return trimmed.replace(/^~\//, '');
-        }
-        if (trimmed.startsWith('./')) {
-            return `theme/${entry.dirName}/${trimmed.slice(2)}`;
-        }
-        if (trimmed.startsWith('/')) {
-            return trimmed.replace(/^\//, '');
-        }
-        return `theme/${entry.dirName}/${trimmed}`;
-    });
-}
-
-function findStylesheetLoader(target: string): StylesheetModuleLoader | null {
-    const candidates = [target];
-
-    const withoutThemePrefix = target.startsWith('theme/')
-        ? target.slice('theme/'.length)
-        : target;
-
-    candidates.push(withoutThemePrefix);
-
-    const segments = withoutThemePrefix.split('/');
-    if (segments.length > 1) {
-        candidates.push(segments.slice(1).join('/'));
-    }
-
-    for (const candidate of candidates) {
-        for (const [key, loader] of Object.entries(stylesheetModules)) {
-            if (key.endsWith(candidate)) {
-                return loader;
-            }
-        }
-    }
-
-    return null;
-}
-
 /**
- * Ensure stylesheet modules declared by a theme are loaded.
+ * Dynamically load theme stylesheets via <link> tags.
+ * This ensures CSS is only loaded when the theme is active, not bundled into main CSS.
  */
 export async function loadThemeStylesheets(
     entry: ThemeManifestEntry,
     overrideList?: string[]
 ): Promise<void> {
-    const pending = normalizeStylesheetTargets(
-        entry,
-        overrideList ?? entry.stylesheets
-    );
+    const stylesheets = overrideList ?? entry.stylesheets;
 
-    for (const target of pending) {
-        const loader = findStylesheetLoader(target);
-        if (!loader) {
-            if (import.meta.dev) {
-                console.warn(
-                    `[theme] Stylesheet "${target}" could not be resolved. ` +
-                        'Ensure the path is correct relative to the theme directory or uses the ~/ alias.'
-                );
-            }
-            continue;
+    if (!stylesheets || stylesheets.length === 0) {
+        return;
+    }
+
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    const doc = document;
+
+    // Convert theme-relative paths to absolute URLs
+    const promises = stylesheets.map(async (stylesheet) => {
+        const href = await resolveThemeStylesheetHref(stylesheet, entry);
+        if (!href) {
+            return;
         }
 
-        await loader();
+        const existingLink = doc.querySelector(
+            `link[data-theme-stylesheet="${entry.name}"][href="${href}"]`
+        );
+
+        if (existingLink) {
+            return;
+        }
+
+        return new Promise<void>((resolve) => {
+            const link = doc.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.setAttribute('data-theme-stylesheet', entry.name);
+
+            link.onload = () => resolve();
+            link.onerror = () => {
+                if (import.meta.dev) {
+                    console.warn(
+                        `[theme] Failed to load stylesheet "${stylesheet}" (resolved to "${href}") for theme "${entry.name}".`
+                    );
+                }
+                resolve();
+            };
+
+            doc.head.appendChild(link);
+        });
+    });
+
+    await Promise.all(promises);
+}
+
+/**
+ * Unload theme stylesheets by removing their <link> tags
+ */
+export function unloadThemeStylesheets(themeName: string): void {
+    if (typeof document === 'undefined') {
+        return;
     }
+
+    const links = document.querySelectorAll(
+        `link[data-theme-stylesheet="${themeName}"]`
+    );
+
+    links.forEach((link) => link.remove());
 }
 
 /**
@@ -192,4 +197,65 @@ function containsStyleSelectors(definition: ThemeDefinition): boolean {
         const style = config?.style;
         return style !== undefined && Object.keys(style).length > 0;
     });
+}
+
+async function resolveThemeStylesheetHref(
+    stylesheet: string,
+    entry: ThemeManifestEntry
+): Promise<string | null> {
+    const trimmed = stylesheet.trim();
+    const isExternal =
+        /^(?:[a-z]+:)?\/\//i.test(trimmed) ||
+        trimmed.startsWith('data:') ||
+        trimmed.startsWith('blob:');
+
+    // Try resolving via emitted asset URL first
+    const moduleKeyCandidates = new Set<string>();
+
+    if (trimmed.startsWith('~/theme/')) {
+        moduleKeyCandidates.add(`../${trimmed.slice('~/theme/'.length)}`);
+    }
+
+    if (trimmed.startsWith('./')) {
+        moduleKeyCandidates.add(`../${entry.dirName}/${trimmed.slice(2)}`);
+    }
+
+    if (
+        !isExternal &&
+        !trimmed.startsWith('~/') &&
+        !trimmed.startsWith('./') &&
+        !trimmed.startsWith('../')
+    ) {
+        moduleKeyCandidates.add(`../${entry.dirName}/${trimmed}`);
+    }
+
+    for (const key of moduleKeyCandidates) {
+        const loader = stylesheetModules[key];
+        if (loader) {
+            try {
+                const href = await loader();
+                if (typeof href === 'string' && href.length > 0) {
+                    return href;
+                }
+            } catch (error) {
+                if (import.meta.dev) {
+                    console.warn(
+                        `[theme] Failed to resolve stylesheet module "${key}" for theme "${entry.name}".`,
+                        error
+                    );
+                }
+            }
+        }
+    }
+
+    // Fallback to path-based resolution for assets placed under /public
+    if (trimmed.startsWith('~/')) {
+        return trimmed.replace(/^~\//, '/');
+    }
+
+    if (trimmed.startsWith('./')) {
+        return `/theme/${entry.dirName}/${trimmed.slice(2)}`;
+    }
+
+    return trimmed;
 }

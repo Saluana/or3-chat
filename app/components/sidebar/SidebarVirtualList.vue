@@ -24,7 +24,20 @@
                         <!-- Project Group (Root + Children) -->
                         <div
                             v-else-if="item.type === 'projectGroup'"
-                            class="mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-2 border-[var(--md-inverse-surface)] rounded-[3px] theme-shadow"
+                            :class="[
+                                'project-group-container mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)]',
+                                projectGroupContainerProps?.class || '',
+                            ]"
+                            :data-theme-target="
+                                projectGroupContainerProps?.[
+                                    'data-theme-target'
+                                ]
+                            "
+                            :data-theme-matches="
+                                projectGroupContainerProps?.[
+                                    'data-theme-matches'
+                                ]
+                            "
                         >
                             <!-- Project Root -->
                             <SidebarProjectRoot
@@ -117,6 +130,7 @@ import {
     type ProjectEntry,
 } from '~/utils/projects/normalizeProjectData';
 import type { Thread } from '~/db';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface Project {
     id: string;
@@ -185,6 +199,17 @@ const emit = defineEmits<(e: string, ...args: any[]) => void>();
 
 // Scroll container ref for Virtualizer
 const scrollContainerRef = ref<HTMLElement | null>(null);
+
+// Theme overrides for project group container
+const projectGroupContainerProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'div',
+        context: 'sidebar',
+        identifier: 'sidebar.project-group-container',
+        isNuxtUI: false,
+    });
+    return overrides.value;
+});
 
 // Lightweight docs mapping (strip heavy fields like content)
 const lightweightDocs = computed<DocLite[]>(() =>

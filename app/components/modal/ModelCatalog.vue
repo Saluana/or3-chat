@@ -38,7 +38,7 @@
                         <UButton
                             v-bind="refreshButtonProps"
                             :disabled="refreshing"
-                            class="model-catalog-refresh-btn theme-btn border-2 dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
+                            class="model-catalog-refresh-btn theme-btn border-[var(--md-border-width)] dark:border-white/70 border-black/80 flex items-center justify-center min-w-[34px]"
                             aria-label="Refresh model catalog"
                             :title="
                                 refreshing
@@ -208,9 +208,9 @@ const modelCatalogModalOverrides = useThemeOverrides({
 
 const modelCatalogModalProps = computed(() => {
     const baseClass =
-        'border-2 w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
+        'border-[var(--md-border-width)] w-[98dvw] h-[98dvh] sm:min-w-[720px]! sm:min-h-[80dvh] sm:max-h-[80dvh] overflow-hidden';
     const baseUi = {
-        footer: 'justify-end border-t-2',
+        footer: 'justify-end border-t-[var(--md-border-width)]',
         body: 'p-0!',
     } as Record<string, unknown>;
 

@@ -114,7 +114,7 @@
                 />
                 <div
                     id="dashboard-ai-model-results"
-                    class="max-h-56 overflow-auto border-2 rounded-[3px] p-1 space-y-1"
+                    class="max-h-56 overflow-auto border-[var(--md-border-width)] rounded-[var(--md-border-radius)] p-1 space-y-1"
                     role="listbox"
                     aria-label="Model results"
                 >

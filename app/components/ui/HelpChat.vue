@@ -10,7 +10,7 @@
         >
             <div v-if="isExpanded" :class="panelClass">
                 <div
-                    class="flex h-10 items-center justify-between border-b-2 border-[var(--md-inverse-surface)] px-3"
+                    class="flex h-10 items-center justify-between border-b-[var(--md-border-width)] border-[var(--md-inverse-surface)] px-3"
                 >
                     <span class="text-sm font-medium uppercase tracking-wide"
                         >Help Chat</span
@@ -60,9 +60,9 @@
                         )"
                         :key="msg.id"
                         :class="[
-                            'rounded-[3px] flex flex-col px-3 py-2 leading-relaxed text-sm break-words',
+                            'rounded-[var(--md-border-radius)] flex flex-col px-3 py-2 leading-relaxed text-sm break-words',
                             msg.role === 'user'
-                                ? 'border-2 border-[var(--md-inverse-surface)] theme-shadow ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)] w-fit max-w-[85%]'
+                                ? 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] theme-shadow ml-auto text-left bg-[var(--md-primary)]/15 text-[var(--md-on-primary-container)] w-fit max-w-[85%]'
                                 : 'w-full max-w-full px-2',
                             msg.kind === 'error'
                                 ? 'bg-[var(--md-error-container)] text-[var(--md-on-error-container)]'
@@ -262,7 +262,7 @@ const panelClass = computed(() => {
         base.push('fixed inset-0 z-50 h-full w-full border-0 rounded-none');
     } else {
         base.push(
-            'absolute bottom-0 right-0 border-2 border-[var(--md-inverse-surface)] rounded-[3px]'
+            'absolute bottom-0 right-0 border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)]'
         );
         base.push(
             isFullscreen.value
@@ -280,7 +280,7 @@ const chatBodyClass = computed(() => [
 ]);
 
 const formClass = computed(() => [
-    'border-t-2 border-[var(--md-inverse-surface)] bg-[var(--md-surface)]',
+    'border-t-[var(--md-border-width)] border-[var(--md-inverse-surface)] bg-[var(--md-surface)]',
     isMobile.value ? 'px-4 pt-3' : 'px-3 py-3',
 ]);
 

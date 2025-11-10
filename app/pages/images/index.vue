@@ -601,7 +601,7 @@ async function restoreSelected() {
         </p>
         <div
             v-if="selectionMode"
-            class="fixed inset-x-0 bottom-0 z-[1000] border-t-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
+            class="fixed inset-x-0 bottom-0 z-[1000] border-t-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container-high)]/80 backdrop-blur-md"
         >
             <div
                 class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-2"

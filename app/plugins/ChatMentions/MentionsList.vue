@@ -4,7 +4,7 @@
     >
         <!-- Search & Filters Header -->
         <div
-            class="sticky top-0 bg-[var(--md-surface)] border-b-2 border-[var(--md-inverse-surface)] p-3 z-10"
+            class="sticky top-0 bg-[var(--md-surface)] border-b-[var(--md-border-width)] border-[var(--md-inverse-surface)] p-3 z-10"
         >
             <UInput
                 v-model="searchTerm"
@@ -56,7 +56,7 @@
                     v-if="section.items.length"
                     class="py-2"
                     :class="{
-                        'border-t-2 border-[var(--md-inverse-surface)] mt-2':
+                        'border-t-[var(--md-border-width)] border-[var(--md-inverse-surface)] mt-2':
                             section.key !== sections[0]?.key,
                     }"
                 >

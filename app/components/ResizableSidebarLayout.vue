@@ -23,7 +23,7 @@
             id="sidebar"
             :class="[
                 'resizable-sidebar flex z-40 bg-(--md-surface) text-(--md-on-surface) border-(--md-inverse-surface) flex-col',
-                'md:relative md:h-full md:shrink-0 md:border-r-2',
+                'md:relative md:h-full md:shrink-0 md:border-r-[var(--md-border-width)]',
                 side === 'right' ? 'md:border-l md:border-r-0' : '',
                 // Mobile overlay responsive classes (static for SSR parity)
                 'max-md:absolute max-md:inset-0 max-md:w-full max-md:shadow-xl',

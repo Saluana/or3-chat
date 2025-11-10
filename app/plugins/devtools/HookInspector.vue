@@ -74,7 +74,7 @@
         <!-- Summary Cards -->
         <div class="grid sm:grid-cols-3 gap-4">
             <div
-                class="p-4 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Actions</div>
                 <div class="text-2xl font-bold tracking-tight">
@@ -82,7 +82,7 @@
                 </div>
             </div>
             <div
-                class="p-4 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Filters</div>
                 <div class="text-2xl font-bold tracking-tight">
@@ -90,7 +90,7 @@
                 </div>
             </div>
             <div
-                class="p-4 rounded-md border-2 border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
+                class="p-4 rounded-md border-[var(--md-border-width)] border-[var(--md-outline-variant)] bg-[var(--md-surface-container)]"
             >
                 <div class="text-xs opacity-60 mb-1">Total Errors</div>
                 <div

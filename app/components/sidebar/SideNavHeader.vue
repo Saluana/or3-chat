@@ -25,7 +25,7 @@
                     v-bind="filterButtonProps"
                     aria-label="Filter sections"
                     :ui="{ base: 'shadow-none!' }"
-                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[3px] border-3! bg-[var(--md-inverse-surface)]/5 backdrop-blur"
+                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[var(--md-border-radius)] border-[var(--md-border-width)] bg-[var(--md-inverse-surface)]/5 backdrop-blur"
                 />
                 <template #content>
                     <div class="p-2 space-y-1 min-w-[140px]">
@@ -136,7 +136,7 @@
                             </UFormField>
                             <UFormField label="Description" name="description">
                                 <UTextarea
-                                    class="w-full border-2 rounded-[6px]"
+                                    class="w-full border-[var(--md-border-width)] rounded-[6px]"
                                     v-model="createProjectState.description"
                                     :rows="3"
                                     placeholder="Optional description"
@@ -176,7 +176,7 @@
                 <div class="space-y-4">
                     <div class="flex gap-2 text-xs font-mono">
                         <button
-                            class="theme-btn px-2 py-1 rounded-[4px] border-2"
+                            class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                             :class="
                                 addMode === 'select'
                                     ? 'bg-primary/30'
@@ -187,7 +187,7 @@
                             Select Existing
                         </button>
                         <button
-                            class="theme-btn px-2 py-1 rounded-[4px] border-2"
+                            class="theme-btn px-2 py-1 rounded-[4px] border-[var(--md-border-width)]"
                             :class="
                                 addMode === 'create'
                                     ? 'bg-primary/30'
@@ -230,7 +230,7 @@
                                 v-model="newProjectDescription"
                                 :rows="3"
                                 placeholder="Optional description"
-                                class="w-full border-2 rounded-[6px]"
+                                class="w-full border-[var(--md-border-width)] rounded-[6px]"
                             />
                         </UFormField>
                         <p v-if="addToProjectError" class="text-error text-xs">

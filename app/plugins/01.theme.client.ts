@@ -15,6 +15,7 @@ import {
 import {
     loadThemeManifest,
     loadThemeStylesheets,
+    unloadThemeStylesheets,
     updateManifestEntry,
     type ThemeManifestEntry,
 } from '~/theme/_shared/theme-manifest';
@@ -378,13 +379,18 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             return;
         }
 
-        // Remove classes from previous theme
+        // Remove classes and stylesheets from previous theme
         const previousTheme = themeRegistry.get(activeTheme.value);
         if (previousTheme?.cssSelectors) {
             removeThemeClasses(previousTheme.cssSelectors);
         }
         if (previousTheme?.hasStyleSelectors) {
             unloadThemeCSS(previousTheme.name);
+        }
+        // Unload theme-specific stylesheets
+        const previousManifest = themeManifest.get(activeTheme.value);
+        if (previousManifest) {
+            unloadThemeStylesheets(previousManifest.name);
         }
 
         activeTheme.value = target;
@@ -393,8 +399,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
         // Load CSS file and apply classes for new theme
         const theme = themeRegistry.get(target);
-        if (theme) {
-            // Load CSS file (build-time generated styles)
+        const manifest = themeManifest.get(target);
+
+        if (theme && manifest) {
+            // Load theme-specific stylesheets (from stylesheets array)
+            await loadThemeStylesheets(manifest);
+
+            // Load CSS file (build-time generated styles from cssSelectors)
             if (theme.hasStyleSelectors) {
                 await loadThemeCSS(target);
             } else {

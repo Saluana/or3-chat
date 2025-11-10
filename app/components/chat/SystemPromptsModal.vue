@@ -9,7 +9,7 @@
             <div class="flex flex-col h-full" @keydown="handleKeydown">
                 <div
                     v-show="!editingPrompt"
-                    class="px-4 border-b-2 border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
+                    class="px-4 border-b-[var(--md-border-width)] border-black min-h-[50px] max-h-[100px] dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 backdrop-blur-sm flex items-center justify-between flex-col-reverse sm:flex-row sticky top-0 z-10"
                 >
                     <div
                         class="flex w-full justify-end sm:justify-start items-center gap-2 pb-2 sm:pb-0"

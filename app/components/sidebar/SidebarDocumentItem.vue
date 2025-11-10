@@ -10,7 +10,7 @@
         }}</span>
         <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
             <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-[3px] hover:bg-black/10 active:bg-black/20"
+                class="inline-flex items-center justify-center w-5 h-5 rounded-[var(--md-border-radius)] hover:bg-black/10 active:bg-black/20"
                 role="button"
                 tabindex="0"
                 @click.stop

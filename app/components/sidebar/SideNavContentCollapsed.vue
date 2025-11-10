@@ -75,7 +75,7 @@
             <ClientOnly>
                 <div
                     id="nav-pages-section"
-                    class="pt-2 flex flex-col space-y-2 border-t-2"
+                    class="pt-2 flex flex-col space-y-2 border-t-[var(--md-border-width)]"
                 >
                     <UTooltip
                         id="tooltip-home"
