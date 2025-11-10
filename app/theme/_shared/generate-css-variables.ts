@@ -6,7 +6,7 @@ import type { ThemeDefinition, ColorPalette } from './types';
  */
 export function generateThemeCssVariables(def: ThemeDefinition): string {
     const light = buildPalette(def.colors);
-    
+
     // Add border styling if defined
     if (def.borderWidth) {
         light['--md-border-width'] = def.borderWidth;
@@ -14,11 +14,11 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     if (def.borderRadius) {
         light['--md-border-radius'] = def.borderRadius;
     }
-    
+
     const darkOverrides = def.colors.dark
         ? buildPalette(def.colors.dark as ColorPalette, true)
         : {};
-    
+
     // Add border styling to dark mode as well (same values)
     if (def.borderWidth && Object.keys(darkOverrides).length > 0) {
         darkOverrides['--md-border-width'] = def.borderWidth;
