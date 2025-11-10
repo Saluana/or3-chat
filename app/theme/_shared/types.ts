@@ -185,6 +185,9 @@ export interface ThemeDefinition {
     /** Default border radius (e.g., '3px', '8px') - generates --md-border-radius */
     borderRadius?: string;
 
+    /** Default border color - generates --md-border-color */
+    borderColor?: string;
+
     /**
      * Component overrides using CSS selector syntax
      *

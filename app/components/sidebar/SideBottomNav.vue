@@ -5,7 +5,7 @@
             (typeof attrs.id === 'string' ? attrs.id : null) ??
             'bottom-nav-root'
         "
-        class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[var(--md-inverse-surface)] px-0.5"
+        class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] px-0.5"
     >
         <!-- MY INFO -->
         <UPopover

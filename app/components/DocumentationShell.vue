@@ -4,7 +4,7 @@
     >
         <!-- Header -->
         <header
-            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-[var(--md-border-width)] border-[var(--md-inverse-surface)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
+            class="docs-header flex-shrink-0 flex flex-col gap-3 px-4 py-3 border-b-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] z-10 md:flex-row md:items-center md:justify-between md:gap-0"
         >
             <div class="flex w-full items-center gap-3 md:w-[250px]">
                 <UButton
@@ -34,7 +34,9 @@
             </div>
 
             <!-- Search -->
-            <div class="docs-header-search w-full md:mx-4 md:flex-1 md:max-w-md">
+            <div
+                class="docs-header-search w-full md:mx-4 md:flex-1 md:max-w-md"
+            >
                 <UInput
                     v-bind="searchInputProps"
                     v-model="searchQuery"
@@ -46,10 +48,7 @@
             <div
                 class="hidden w-full items-center justify-end md:flex md:w-[250px]"
             >
-                <UButton
-                    v-bind="headerThemeButtonProps"
-                    @click="toggleTheme"
-                />
+                <UButton v-bind="headerThemeButtonProps" @click="toggleTheme" />
             </div>
         </header>
 
@@ -82,7 +81,7 @@
                             v-if="sidebarOpen"
                             ref="mobileSidebarRef"
                             :id="sidebarId"
-                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[var(--md-border-width)] border-[var(--md-inverse-surface)] shadow-lg overflow-y-auto scrollbars"
+                            class="docs-mobile-sidebar relative z-[61] h-full w-[min(80vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] shadow-lg overflow-y-auto scrollbars"
                             @keydown="onSidebarKeydown"
                         >
                             <h2 :id="sidebarLabelId" class="sr-only">
@@ -104,7 +103,7 @@
                                             <div
                                                 v-for="group in category.groups"
                                                 :key="`${category.label}-${group.label}`"
-                                                class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[var(--md-inverse-surface)]/40"
+                                                class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[color:var(--md-border-color)] border-opacity-40"
                                             >
                                                 <button
                                                     type="button"
@@ -199,7 +198,7 @@
                                 <div
                                     v-for="group in category.groups"
                                     :key="`${category.label}-${group.label}`"
-                                    class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[var(--md-inverse-surface)]/40"
+                                    class="docs-nav-group rounded-md bg-[var(--md-surface)]/40 border border-[color:var(--md-border-color)] border-opacity-40"
                                 >
                                     <button
                                         type="button"
@@ -301,7 +300,7 @@
                             <!-- Mobile TOC (collapsible) -->
                             <div
                                 v-if="computedShowToc && tocList.length > 0"
-                                class="lg:hidden mb-6 border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/40"
+                                class="lg:hidden mb-6 border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/40"
                             >
                                 <button
                                     type="button"
@@ -319,7 +318,7 @@
                                 <Transition name="collapsible">
                                     <div
                                         v-if="mobileTocOpen"
-                                        class="px-4 py-3 border-t-[var(--md-border-width)] border-[var(--md-inverse-surface)]"
+                                        class="px-4 py-3 border-t-[var(--md-border-width)] border-[color:var(--md-border-color)]"
                                     >
                                         <TocListView
                                             :toc="tocList"
@@ -353,7 +352,7 @@
             <!-- Table of Contents (Right Sidebar) -->
             <aside
                 v-if="computedShowToc && tocList.length > 0"
-                class="docs-toc flex-shrink-0 w-64 border-l-[var(--md-border-width)] border-[var(--md-inverse-surface)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
+                class="docs-toc flex-shrink-0 w-64 border-l-[var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] overflow-y-auto scrollbars hidden lg:block"
             >
                 <nav class="p-4 sticky top-0">
                     <h3
@@ -554,16 +553,13 @@ function useDocsButtonProps(
     }));
 }
 
-const sidebarToggleButtonProps = useDocsButtonProps(
-    'docs.sidebar-toggle',
-    {
-        class: 'docs-sidebar-toggle-btn theme-btn',
-        variant: 'basic',
-        size: 'sm',
-        square: true,
-        color: 'neutral',
-    }
-);
+const sidebarToggleButtonProps = useDocsButtonProps('docs.sidebar-toggle', {
+    class: 'docs-sidebar-toggle-btn theme-btn',
+    variant: 'basic',
+    size: 'sm',
+    square: true,
+    color: 'neutral',
+});
 const headerThemeButtonProps = useDocsButtonProps('docs.theme-toggle', {
     class: 'docs-theme-toggle-btn theme-btn',
     variant: 'basic',
@@ -580,8 +576,11 @@ const searchInputProps = computed(() => {
         isNuxtUI: true,
     });
     const overridesValue = (overrides.value as Record<string, any>) || {};
-    const { class: overrideClass = '', ui: overrideUi = {}, ...rest } =
-        overridesValue;
+    const {
+        class: overrideClass = '',
+        ui: overrideUi = {},
+        ...rest
+    } = overridesValue;
     const uiOverrides = (overrideUi as Record<string, any>) || {};
     const baseUi = ['w-full', uiOverrides.base]
         .filter(Boolean)
@@ -596,9 +595,7 @@ const searchInputProps = computed(() => {
             ...uiOverrides,
             base: baseUi,
         },
-        class: ['docs-search-input', overrideClass]
-            .filter(Boolean)
-            .join(' '),
+        class: ['docs-search-input', overrideClass].filter(Boolean).join(' '),
     };
 });
 

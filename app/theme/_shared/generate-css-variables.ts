@@ -14,6 +14,9 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     if (def.borderRadius) {
         light['--md-border-radius'] = def.borderRadius;
     }
+    if (def.borderColor) {
+        light['--md-border-color'] = def.borderColor;
+    }
 
     const darkOverrides = def.colors.dark
         ? buildPalette(def.colors.dark as ColorPalette, true)
@@ -25,6 +28,9 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     }
     if (def.borderRadius && Object.keys(darkOverrides).length > 0) {
         darkOverrides['--md-border-radius'] = def.borderRadius;
+    }
+    if (def.borderColor && Object.keys(darkOverrides).length > 0) {
+        darkOverrides['--md-border-color'] = def.borderColor;
     }
 
     const lightBlock = toCssBlock(def.name, light, false);

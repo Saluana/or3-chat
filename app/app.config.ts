@@ -7,14 +7,14 @@ export default defineAppConfig({
         tree: {
             slots: {
                 root: '',
-                item: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
+                item: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] mb-2 theme-shadow bg-[var(--md-inverse-surface)]/5  backdrop-blur-sm text-[var(--md-on-surface)]',
                 link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
             },
         },
         modal: {
             slots: {
                 content:
-                    'fixed border-[var(--md-border-width)] border-[var(--md-inverse-surface)] divide-y divide-default flex flex-col focus:outline-none',
+                    'fixed border-[var(--md-border-width)] border-[color:var(--md-border-color)] divide-y divide-default flex flex-col focus:outline-none',
                 body: 'border-y-[var(--md-border-width)] border-y-[var(--md-inverse-surface)]',
                 header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
                 title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
@@ -40,7 +40,7 @@ export default defineAppConfig({
                 variant: {
                     light: 'theme-btn flex items-center justify-center bg-[var(--md-surface)] dark:bg-[var(--md-on-background)] dark:text-black dark:hover:bg-[var(--md-on-background)]/90 backdrop-blur-sm',
                     subtle: 'border-none! shadow-none! bg-transparent! ring-0!',
-                    basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[var(--md-inverse-surface)] text-[var(--md-on-surface)]',
+                    basic: 'border-[var(--md-border-width)] shadow-none! drop-shadow-none!  hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[color:var(--md-border-color)] text-[var(--md-on-surface)]',
                     popover:
                         'flex items-center! hover:bg-[var(--md-primary)]/5 active:bg-[var(--md-primary)]/10 justify-start!',
                 },
@@ -68,7 +68,7 @@ export default defineAppConfig({
         },
         input: {
             slots: {
-                base: 'mt-0 rounded-[var(--md-border-radius)] border-[var(--md-border-width)] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+                base: 'mt-0 rounded-[var(--md-border-radius)] border-[var(--md-border-width)] border-[color:var(--md-border-color)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
             variants: {
                 // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
@@ -127,7 +127,7 @@ export default defineAppConfig({
         },
         textarea: {
             slots: {
-                base: 'mt-0 rounded-md border-[2px] border-[var(--md-inverse-surface)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
+                base: 'mt-0 rounded-md border-[2px] border-[color:var(--md-border-color)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
         },
     },

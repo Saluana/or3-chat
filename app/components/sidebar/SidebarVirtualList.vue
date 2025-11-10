@@ -25,7 +25,7 @@
                         <div
                             v-else-if="item.type === 'projectGroup'"
                             :class="[
-                                'project-group-container mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)]',
+                                'project-group-container mb-2 mx-0.5 bg-[var(--md-inverse-surface)]/5 backdrop-blur border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)]',
                                 projectGroupContainerProps?.class || '',
                             ]"
                             :data-theme-target="

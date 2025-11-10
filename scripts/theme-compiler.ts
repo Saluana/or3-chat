@@ -146,7 +146,8 @@ export class ThemeCompiler {
         const cssVariables = this.generateCSSVariables(
             definition.colors,
             definition.borderWidth,
-            definition.borderRadius
+            definition.borderRadius,
+            definition.borderColor
         );
 
         // Compile overrides
@@ -187,7 +188,8 @@ export class ThemeCompiler {
     private generateCSSVariables(
         colors: ThemeDefinition['colors'],
         borderWidth?: string,
-        borderRadius?: string
+        borderRadius?: string,
+        borderColor?: string
     ): string {
         let css = '';
 
@@ -199,6 +201,9 @@ export class ThemeCompiler {
         }
         if (borderRadius) {
             css += `  --md-border-radius: ${borderRadius};\n`;
+        }
+        if (borderColor) {
+            css += `  --md-border-color: ${borderColor};\n`;
         }
         css += '}\n\n';
 
@@ -214,6 +219,9 @@ export class ThemeCompiler {
             }
             if (borderRadius) {
                 css += `  --md-border-radius: ${borderRadius};\n`;
+            }
+            if (borderColor) {
+                css += `  --md-border-color: ${borderColor};\n`;
             }
             css += '}\n';
         }

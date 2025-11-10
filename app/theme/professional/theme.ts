@@ -24,6 +24,7 @@ export default defineTheme({
     // Professional theme styling defaults
     borderWidth: '1px',
     borderRadius: '8px',
+    borderColor: '#C9CBD2',
 
     // Modern color palette - refined and sophisticated
     // These will generate CSS variables for both light and dark modes
@@ -31,66 +32,67 @@ export default defineTheme({
         // Primary colors - modern blue
         primary: '#0066cc',
         onPrimary: '#ffffff',
-        primaryContainer: '#e6f0ff',
-        onPrimaryContainer: '#003d99',
+        primaryContainer: '#d6e9ff',
+        onPrimaryContainer: '#003a75',
 
-        // Secondary colors - modern slate
-        secondary: '#5a6b7c',
+        // Secondary colors - cool slate accent
+        secondary: '#4a5a72',
         onSecondary: '#ffffff',
-        secondaryContainer: '#e8eef5',
-        onSecondaryContainer: '#1a2533',
+        secondaryContainer: '#e1e7f1',
+        onSecondaryContainer: '#233047',
 
-        // Tertiary colors - modern teal accent
-        tertiary: '#0d9488',
+        // Tertiary colors - teal accent
+        tertiary: '#1b9aaa',
         onTertiary: '#ffffff',
-        tertiaryContainer: '#ccf3ed',
-        onTertiaryContainer: '#004d45',
+        tertiaryContainer: '#c7f4f7',
+        onTertiaryContainer: '#003f47',
 
         // Surface colors - light, clean backgrounds
-        surface: '#fafbfc',
-        onSurface: '#1a1d22',
-        surfaceVariant: '#eaeef5',
-        onSurfaceVariant: '#474d55',
-        inverseSurface: '#2c3139',
-        inverseOnSurface: '#f1f5fa',
+        surface: '#f6f8fb',
+        onSurface: '#151924',
+        surfaceVariant: '#dde3ee',
+        onSurfaceVariant: '#424a5a',
+        inverseSurface: '#293040',
+        inverseOnSurface: '#f1f4f9',
 
         // Outline
-        outline: '#73777f',
+        outline: '#8c94a3',
 
         // Semantic colors
-        success: '#059669',
-        warning: '#d97706',
-        error: '#dc2626',
+        success: '#2e9c6a',
+        warning: '#d9914f',
+        error: '#cf5b60',
+        info: '#1b9aaa',
 
         // Dark mode overrides - modern dark
         dark: {
-            primary: '#60a5fa',
-            onPrimary: '#0f172a',
-            primaryContainer: '#1e3a8a',
-            onPrimaryContainer: '#bfdbfe',
+            primary: '#67b1ff',
+            onPrimary: '#08203a',
+            primaryContainer: '#0c3f73',
+            onPrimaryContainer: '#c5defc',
 
-            secondary: '#cbd5e1',
-            onSecondary: '#0f172a',
-            secondaryContainer: '#334155',
-            onSecondaryContainer: '#e2e8f0',
+            secondary: '#b4c0d4',
+            onSecondary: '#0f1a2c',
+            secondaryContainer: '#2f3a51',
+            onSecondaryContainer: '#dce3f1',
 
-            tertiary: '#2dd4bf',
-            onTertiary: '#0f172a',
-            tertiaryContainer: '#134e4a',
-            onTertiaryContainer: '#ccf3ed',
+            tertiary: '#55d1d7',
+            onTertiary: '#012326',
+            tertiaryContainer: '#114b52',
+            onTertiaryContainer: '#c8f6f9',
 
-            surface: '#0f1419',
-            onSurface: '#f1f5fa',
-            surfaceVariant: '#27292f',
-            onSurfaceVariant: '#cad2db',
-            inverseSurface: '#f1f5fa',
-            inverseOnSurface: '#1a1d22',
+            surface: '#0f141f',
+            onSurface: '#e6e9f2',
+            surfaceVariant: '#333b4c',
+            onSurfaceVariant: '#c2c9d7',
+            inverseSurface: '#e6e9f2',
+            inverseOnSurface: '#131a26',
 
-            outline: '#92a0ad',
+            outline: '#7c8494',
 
-            success: '#10b981',
-            warning: '#f59e0b',
-            error: '#ef4444',
+            success: '#3bc183',
+            warning: '#e0a366',
+            error: '#f17074',
         },
     },
 
@@ -365,10 +367,10 @@ export default defineTheme({
 
         // Model select menu (USelectMenu component)
         'selectmenu#chat.model-select': {
-            class: 'h-[32px] shadow-sm border border-(--md-outline) rounded-lg text-sm px-3 bg-white dark:bg-slate-900 w-full min-w-[100px] max-w-[320px]',
+            class: 'h-[32px] shadow-sm border border-(--md-border-color) rounded-lg text-sm px-3 bg-white dark:bg-slate-900 w-full min-w-[100px] max-w-[320px]',
             ui: {
                 content:
-                    'border border-(--md-outline) rounded-lg w-[320px] shadow-md',
+                    'border border-(--md-border-color) rounded-lg w-[320px] shadow-md',
                 input: 'border-0 rounded-none!',
                 arrow: 'h-[18px] w-[18px]',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
@@ -376,7 +378,7 @@ export default defineTheme({
             searchInput: {
                 icon: 'pixelarticons:search',
                 ui: {
-                    base: 'border-0 border-b border-(--md-outline)!',
+                    base: 'border-0 border-b border-(--md-border-color)!',
                     leadingIcon: 'shrink-0 w-[18px] h-[18px] pr-2 text-dimmed',
                 },
             },
@@ -412,6 +414,13 @@ export default defineTheme({
         },
 
         'button#message.edit': {
+            class: 'pro-btn flex items-center justify-center',
+            variant: 'soft',
+            size: 'sm',
+            color: 'secondary',
+        },
+
+        'button#message.plugin-action': {
             class: 'pro-btn flex items-center justify-center',
             variant: 'soft',
             size: 'sm',
@@ -663,7 +672,7 @@ export default defineTheme({
         },
 
         'button#dashboard.landing-page': {
-            class: 'border border-[var(--md-outline)] pro-shadow hover:border-[var(--md-primary)] hover:shadow-md transition-all rounded-lg',
+            class: 'border border-[var(--md-border-color)] pro-shadow hover:border-[var(--md-primary)] hover:shadow-md transition-all rounded-lg',
         },
 
         'button#dashboard.plugin-icon': {
@@ -764,7 +773,7 @@ export default defineTheme({
         // Example: Third-party Monaco editor styling
         // '.monaco-editor': {
         //     style: {
-        //         border: '2px solid var(--md-outline)',
+        //         border: '2px solid var(--md-border-color)',
         //         borderRadius: '3px',
         //     },
         //     class: 'pro-shadow',

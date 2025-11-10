@@ -15,8 +15,8 @@
   /* success/info/warning/error from extended colors */
   --ui-success: var(--md-extended-color-success-color);
   --ui-color-success-500: var(--md-extended-color-success-color);
-  --ui-info: var(--md-primary-container);
-  --ui-color-info-500: var(--md-primary-container);
+  --ui-info: var(--md-info);
+  --ui-color-info-500: var(--md-info);
   --ui-warning: var(--md-extended-color-warning-color);
   --ui-color-warning-500: var(--md-extended-color-warning-color);
   --ui-error: var(--md-error);
@@ -52,8 +52,8 @@
 
   --ui-success: var(--md-extended-color-success-color);
   --ui-color-success-500: var(--md-extended-color-success-color);
-  --ui-info: var(--md-primary-container);
-  --ui-color-info-500: var(--md-primary-container);
+  --ui-info: var(--md-info);
+  --ui-color-info-500: var(--md-info);
   --ui-warning: var(--md-extended-color-warning-color);
   --ui-color-warning-500: var(--md-extended-color-warning-color);
   --ui-error: var(--md-error);

@@ -21,6 +21,7 @@ export default defineTheme({
     // Retro theme styling defaults
     borderWidth: '2px',
     borderRadius: '3px',
+    borderColor: 'var(--md-inverse-surface)',
 
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
@@ -384,7 +385,7 @@ export default defineTheme({
         },
 
         'div#chat.input-main-container': {
-            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'div#chat.input-container': {
@@ -398,11 +399,11 @@ export default defineTheme({
         },
 
         'div#chat.attachment-pdf-container': {
-            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'div#chat.attachment-text-container': {
-            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'button#chat.attachment-remove-btn': {
@@ -493,7 +494,7 @@ export default defineTheme({
         },
 
         'div#message.attachment-item': {
-            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'button#message.reasoning-toggle': {
@@ -722,7 +723,7 @@ export default defineTheme({
         },
 
         'button#dashboard.landing-page': {
-            class: 'border-[var(--md-border-width)] border-[var(--md-inverse-surface)] retro-shadow hover:border-[var(--md-primary)] hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
+            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] retro-shadow hover:border-[var(--md-primary)] hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
         },
 
         'button#dashboard.plugin-icon': {

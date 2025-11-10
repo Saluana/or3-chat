@@ -5,7 +5,7 @@
             'px-3 justify-between': !collapsed,
         }"
         id="top-header"
-        class="flex items-center min-h-[48px] max-h-[48px] header-pattern py-2 border-b-[var(--md-border-width)] border-[var(--md-inverse-surface)]"
+        class="flex items-center min-h-[48px] max-h-[48px] header-pattern py-2 border-b-[var(--md-border-width)] border-[color:var(--md-border-color)]"
     >
         <div v-show="!collapsed">
             <slot name="sidebar-header">

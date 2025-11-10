@@ -206,11 +206,7 @@
             ]"
         >
             <UButtonGroup
-                :class="{
-                    'bg-primary': props.message.role === 'user',
-                    'bg-white': props.message.role === 'assistant',
-                }"
-                class="cm-action-group retro-message-action-group"
+                class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group retro-message-action-group"
             >
                 <UTooltip :delay-duration="0" text="Copy" :teleport="true">
                     <UButton
@@ -249,10 +245,8 @@
                         :teleport="true"
                     >
                         <UButton
+                            v-bind="pluginActionButtonProps"
                             :icon="action.icon"
-                            color="info"
-                            size="sm"
-                            class="text-black dark:text-white/95 flex items-center justify-center"
                             @click="() => runExtraAction(action)"
                         ></UButton>
                     </UTooltip>
@@ -365,6 +359,22 @@ const editButtonProps = computed(() => {
     };
 });
 
+const pluginActionButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'message',
+        identifier: 'message.plugin-action',
+        isNuxtUI: true,
+    });
+
+    return {
+        color: 'info' as const,
+        size: 'sm' as const,
+        class: 'text-black dark:text-white/95 flex items-center justify-center',
+        ...(overrides.value as any),
+    };
+});
+
 const saveEditButtonProps = computed(() => {
     const overrides = useThemeOverrides({
         component: 'button',
@@ -451,7 +461,7 @@ const outerClass = computed(() => ({
 
 const innerClass = computed(() => ({
     // Added Tailwind Typography per-element utilities for tables (no custom CSS)
-    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-[var(--md-border-width)] prose-pre:border-[var(--md-inverse-surface)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
+    'prose max-w-none dark:text-white/95 dark:prose-headings:text-white/95! w-full leading-[1.5] prose-p:leading-normal prose-li:leading-normal prose-li:my-1 prose-ol:pl-5 prose-ul:pl-5 prose-headings:leading-tight prose-strong:font-semibold prose-h1:text-[28px] prose-pre:bg-[var(--md-surface-container)]/80 prose-pre:border-[var(--md-border-width)] prose-pre:border-[color:var(--md-border-color)] prose-pre:text-[var(--md-on-surface)] prose-code:text-[var(--md-on-surface)] prose-code:font-[inherit] prose-pre:font-[inherit] prose-h2:text-[24px] prose-h3:text-[20px] p-1 sm:p-5 prose-':
         props.message.role === 'assistant',
 }));
 
