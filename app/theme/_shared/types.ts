@@ -179,6 +179,12 @@ export interface ThemeDefinition {
     /** Color palette (Material Design 3 tokens) */
     colors: ColorPalette;
 
+    /** Default border width (e.g., '2px', '1px') - generates --md-border-width */
+    borderWidth?: string;
+
+    /** Default border radius (e.g., '3px', '8px') - generates --md-border-radius */
+    borderRadius?: string;
+
     /**
      * Component overrides using CSS selector syntax
      *

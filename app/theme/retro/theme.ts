@@ -18,6 +18,10 @@ export default defineTheme({
     isDefault: false,
     stylesheets: ['~/theme/retro/styles.css'],
 
+    // Retro theme styling defaults
+    borderWidth: '2px',
+    borderRadius: '3px',
+
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
     colors: {

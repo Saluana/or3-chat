@@ -143,7 +143,11 @@ export class ThemeCompiler {
         }
 
         // Generate CSS variables
-        const cssVariables = this.generateCSSVariables(definition.colors);
+        const cssVariables = this.generateCSSVariables(
+            definition.colors,
+            definition.borderWidth,
+            definition.borderRadius
+        );
 
         // Compile overrides
         const compiledOverrides = this.compileOverrides(
@@ -180,12 +184,22 @@ export class ThemeCompiler {
     /**
      * Generate CSS variables from color palette
      */
-    private generateCSSVariables(colors: ThemeDefinition['colors']): string {
+    private generateCSSVariables(
+        colors: ThemeDefinition['colors'],
+        borderWidth?: string,
+        borderRadius?: string
+    ): string {
         let css = '';
 
         // Light mode variables
         css += '.light {\n';
         css += this.generateColorVars(colors);
+        if (borderWidth) {
+            css += `  --md-border-width: ${borderWidth};\n`;
+        }
+        if (borderRadius) {
+            css += `  --md-border-radius: ${borderRadius};\n`;
+        }
         css += '}\n\n';
 
         // Dark mode variables
@@ -195,6 +209,12 @@ export class ThemeCompiler {
             const { dark, ...baseColors } = colors;
             const darkColors = { ...baseColors, ...dark };
             css += this.generateColorVars(darkColors);
+            if (borderWidth) {
+                css += `  --md-border-width: ${borderWidth};\n`;
+            }
+            if (borderRadius) {
+                css += `  --md-border-radius: ${borderRadius};\n`;
+            }
             css += '}\n';
         }
 

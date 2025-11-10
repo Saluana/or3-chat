@@ -21,6 +21,10 @@ export default defineTheme({
     isDefault: true,
     stylesheets: ['~/theme/professional/styles.css'],
 
+    // Professional theme styling defaults
+    borderWidth: '1px',
+    borderRadius: '8px',
+
     // Modern color palette - refined and sophisticated
     // These will generate CSS variables for both light and dark modes
     colors: {
