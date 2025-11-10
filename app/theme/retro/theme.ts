@@ -21,7 +21,6 @@ export default defineTheme({
     // Retro theme styling defaults
     borderWidth: '2px',
     borderRadius: '3px',
-    borderColor: '#000000',
 
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
@@ -52,17 +51,19 @@ export default defineTheme({
         inverseSurface: '#2f3033',
         inverseOnSurface: '#f1f0f4',
 
-        // Outline
+        // Outline & borders
         outline: '#73777f',
+        borderColor: '#000000',
 
         // Semantic colors
         success: '#51cf66',
         warning: '#ffa94d',
         error: '#ff6b6b',
+        info: '#8BAECC',
 
         // Dark mode overrides
         dark: {
-            primary: '#4ecdc4',
+            primary: '#2C638B',
             onPrimary: '#003735',
             primaryContainer: '#00504e',
             onPrimaryContainer: '#b2f5ea',
@@ -85,6 +86,7 @@ export default defineTheme({
             inverseOnSurface: '#2f3033',
 
             outline: '#8d9199',
+            borderColor: '#8d9199',
 
             success: '#51cf66',
             warning: '#ffa94d',
@@ -329,7 +331,7 @@ export default defineTheme({
             variant: 'outline',
             size: 'md',
             ui: {
-                root: 'shadow-none! border-0! bg-transparent! rounded-[var(--md-border-radius)]',
+                root: 'shadow-none! bg-transparent! border-[var(--md-border-width)]! border-[var(--md-border-color)]! rounded-[var(--md-border-radius)]',
             },
         },
         // Sidebar footer action buttons
@@ -744,7 +746,7 @@ export default defineTheme({
                 'bg-primary/60 hover:bg-primary-60 text-(--md-on-surface) ring-2 ring-primary/30 shadow-md',
 
             ui: {
-                base: 'border-0! shadow-none! rounded-[var(--md-border-radius)] p-1! text-(--md-on-surface)! hover:bg-(--md-surface-variant)/50',
+                root: '!shadow-none bg-transparent !border-[var(--md-border-width)] border-[var(--md-border-color)] rounded-[var(--md-border-radius)]',
             },
         },
 

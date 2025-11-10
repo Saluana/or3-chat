@@ -46,6 +46,9 @@ export interface ColorPalette {
     outline?: string;
     outlineVariant?: string;
 
+    // Border color (light/dark palettes can override)
+    borderColor?: string;
+
     // App-specific tokens
     success?: string;
     warning?: string;
@@ -184,9 +187,6 @@ export interface ThemeDefinition {
 
     /** Default border radius (e.g., '3px', '8px') - generates --md-border-radius */
     borderRadius?: string;
-
-    /** Default border color - generates --md-border-color */
-    borderColor?: string;
 
     /**
      * Component overrides using CSS selector syntax

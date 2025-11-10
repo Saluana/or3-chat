@@ -24,7 +24,6 @@ export default defineTheme({
     // Professional theme styling defaults
     borderWidth: '1px',
     borderRadius: '8px',
-    borderColor: '#C9CBD2',
 
     // Modern color palette - refined and sophisticated
     // These will generate CSS variables for both light and dark modes
@@ -55,8 +54,9 @@ export default defineTheme({
         inverseSurface: '#293040',
         inverseOnSurface: '#f1f4f9',
 
-        // Outline
+        // Outline & borders
         outline: '#8c94a3',
+        borderColor: '#C9CBD2',
 
         // Semantic colors
         success: '#2e9c6a',
@@ -89,6 +89,7 @@ export default defineTheme({
             inverseOnSurface: '#131a26',
 
             outline: '#7c8494',
+            borderColor: '#7c8494',
 
             success: '#3bc183',
             warning: '#e0a366',
