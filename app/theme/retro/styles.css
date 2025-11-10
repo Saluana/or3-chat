@@ -9,7 +9,21 @@
  * - Offset shadows (2px 2px)
  * - 3px border radius
  * - Pixel-perfect press animations
+ * - Retro fonts (VT323, Press Start 2P)
  */
+
+/* Override root CSS variables with retro-specific values when theme is active */
+:root {
+	/* Retro font settings */
+	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+	--app-font-sans-current: var(--font-sans);
+	--app-font-heading-current: var(--font-heading);
+	
+	/* Retro UI styling */
+	--ui-radius: 3px;
+	--app-font-size-root: 20px;
+}
 
 /* Screen-reader only helper (follows inclusive components pattern) */
 .sr-only {

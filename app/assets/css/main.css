@@ -27,15 +27,16 @@
 /* Font setup: body uses VT323, headings use Press Start 2P */
 :root {
 	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
+	/* Default to professional theme fonts (IBM Plex Sans) */
+	--font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-heading: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
 	/* Dynamic current font choices (updated by theme settings) */
 	--app-font-sans-current: var(--font-sans);
 	--app-font-heading-current: var(--font-heading);
-    --ui-radius: 3px;
+    --ui-radius: 8px; /* Professional theme default (retro overrides to 3px) */
 
-	/* Theme customization variables (defaults mirror shipped design) */
-	--app-font-size-root: 20px; /* base font size */
+	/* Theme customization variables (defaults to professional theme) */
+	--app-font-size-root: 16px; /* Modern base font size (retro overrides to 20px) */
 	/* Content background layer 1 */
 	--app-content-bg-1: none;
 	--app-content-bg-1-opacity: 1;
@@ -99,52 +100,13 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 	font-family: var(--app-font-heading-current, var(--font-heading)) !important;
 }
 
-/* Retro utility classes moved to ~/theme/retro/styles.css */
-/* active-element and theme-shadow are still loaded from retro theme */
-.theme-input,
-.theme-btn,
-.theme-btn-copy {
-	box-sizing: border-box;
-	font-family: inherit;
-	text-transform: none;
-}
-.theme-input {
-	height: 32px;
-	padding: 0 6px;
-	font-size: 12px;
-	line-height: 1;
-	border: 2px solid var(--md-inverse-surface);
-	border-radius: 3px;
-	background: var(--md-surface);
-	color: var(--md-on-surface);
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-.theme-input:focus-visible {
-	outline: 2px solid var(--md-primary);
-	outline-offset: 2px;
-}
-.theme-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	border-radius: 3px;
-	border: 2px solid var(--md-inverse-surface);
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-	transition: transform 80ms ease, box-shadow 80ms ease;
-	cursor: pointer;
-}
-.theme-btn-copy {
-	padding: 0 8px;
-	font-size: 10px;
-	line-height: 1;
-	border-radius: 3px;
-	background: color-mix(in oklab, var(--md-surface) 70%, var(--md-surface-variant) 30%);
-	color: var(--md-on-surface);
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
-.theme-shadow {
-	box-shadow: 2px 2px 0 var(--md-inverse-surface);
-}
+/* Theme-specific utility classes are loaded from their respective theme stylesheets:
+ * - Retro theme: ~/theme/retro/styles.css (defines .retro-* classes)
+ * - Professional theme: ~/theme/professional/styles.css (defines .pro-* classes)
+ * 
+ * Fallback .theme-* classes are defined in each theme's styles.css file.
+ * This ensures proper isolation and prevents style conflicts between themes.
+ */
 
 /* Global thin colored scrollbars (WebKit + Firefox) */
 /* Firefox */
