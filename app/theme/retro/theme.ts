@@ -15,13 +15,13 @@ export default defineTheme({
     displayName: 'Retro',
     description:
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
-    isDefault: false,
+    isDefault: true,
     stylesheets: ['~/theme/retro/styles.css'],
 
     // Retro theme styling defaults
     borderWidth: '2px',
     borderRadius: '3px',
-    borderColor: 'var(--md-inverse-surface)',
+    borderColor: '#000000',
 
     // Material Design 3 color palette for retro theme
     // These will generate CSS variables for both light and dark modes
@@ -340,7 +340,7 @@ export default defineTheme({
         },
 
         'div#sidebar.project-group-container': {
-            class: 'shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[length:var(--md-border-width)]! border-(--md-border-color)! rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-border-color)]',
         },
 
         // UI Glass Button (used in sidebar items)
@@ -385,7 +385,7 @@ export default defineTheme({
         },
 
         'div#chat.input-main-container': {
-            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: '',
         },
 
         'div#chat.input-container': {
@@ -399,11 +399,11 @@ export default defineTheme({
         },
 
         'div#chat.attachment-pdf-container': {
-            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'div#chat.attachment-text-container': {
-            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'button#chat.attachment-remove-btn': {
@@ -411,7 +411,7 @@ export default defineTheme({
         },
 
         'div#chat.drag-overlay': {
-            class: 'border-[var(--md-border-width)] border-dashed rounded-2xl',
+            class: 'border-[length:var(--md-border-width)] border-dashed rounded-2xl',
         },
 
         'button#chat.model-select': {
@@ -422,10 +422,10 @@ export default defineTheme({
 
         // Model select menu (USelectMenu component)
         'selectmenu#chat.model-select': {
-            class: 'h-[32px] retro-shadow border-[var(--md-border-width)] border-(--md-inverse-surface) rounded-[var(--md-border-radius)] text-sm px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
+            class: 'h-[32px] retro-shadow border-[length:var(--md-border-width)] border-(--md-inverse-surface) rounded-(--md-border-radius) text-sm px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
             ui: {
                 content:
-                    'border-[var(--md-border-width)] border-(--md-inverse-surface) rounded-[var(--md-border-radius)] w-[320px]',
+                    'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) w-[320px]',
                 input: 'border-0 rounded-none!',
                 arrow: 'h-[18px] w-[18px]',
                 itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
@@ -494,7 +494,7 @@ export default defineTheme({
         },
 
         'div#message.attachment-item': {
-            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow-[2px_2px_0_var(--md-inverse-surface)]',
+            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) rounded-(--md-border-radius) shadow-[2px_2px_0_var(--md-inverse-surface)]',
         },
 
         'button#message.reasoning-toggle': {
@@ -723,7 +723,7 @@ export default defineTheme({
         },
 
         'button#dashboard.landing-page': {
-            class: 'border-[var(--md-border-width)] border-[color:var(--md-border-color)] retro-shadow hover:border-[var(--md-primary)] hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
+            class: 'border-[length:var(--md-border-width)] border-(--md-border-color) retro-shadow hover:border-(--md-primary) hover:shadow-[2px_2px_0_var(--md-primary)] transition-all',
         },
 
         'button#dashboard.plugin-icon': {

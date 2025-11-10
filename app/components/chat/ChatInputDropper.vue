@@ -5,7 +5,7 @@
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         :class="[
-            'chat-input-main flex flex-col bg-[var(--md-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative hover:shadow-xl focus-within:shadow-xl cursor-text z-10',
+            'chat-input-main flex flex-col bg-[var(--md-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative cursor-text z-10',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',

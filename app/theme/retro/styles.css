@@ -963,5 +963,23 @@ button.dashboard-landing-item:focus-visible {
 .message-body [data-streamdown='tbody'] [data-streamdown='tr']:hover {
     background: var(--md-surface-container-high);
 }
+#chat-input-main {
+	border-radius: var(--md-border-radius);
+	border-width: var(--md-border-width);
+	border-color: var(--md-border-color);
+}
+
+#chat-input-main:hover {
+	border-color: var(--md-primary);
+}
+
+#chat-input-main:focus-within {
+	border-color: var(--md-primary);
+	box-shadow: 0 0 0 2px var(--md-primary-container);
+}
+
+#sidebar-container-outer {
+	border-right: 2px solid var(--md-border-color);
+}
 
 } /* End [data-theme="retro"] */

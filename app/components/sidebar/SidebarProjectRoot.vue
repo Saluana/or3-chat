@@ -1,6 +1,6 @@
 <template>
     <div
-        class="project-root-container rounded-[var(--md-border-radius)] bg-[var(--md-inverse-surface)]/5 text-[var(--md-on-surface)] cursor-pointer group/project-root h-[40px]!"
+        class="project-root-container cursor-pointer group/project-root h-[40px]!"
     >
         <button
             type="button"

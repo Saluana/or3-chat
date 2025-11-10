@@ -18,7 +18,7 @@ export default defineTheme({
     displayName: 'Professional (Default)',
     description:
         'Clean, modern professional aesthetic with refined interactions',
-    isDefault: true,
+    isDefault: false,
     stylesheets: ['~/theme/professional/styles.css'],
 
     // Professional theme styling defaults
