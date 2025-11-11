@@ -8,6 +8,11 @@ const SidebarPopoverButtonConfig = {
 };
 
 export const sidebarOverrides = {
+    /* --- core --- */
+    'button.sidebar': {
+        class: 'font-[IBM_Plex_Sans] text-xs uppercase tracking-wide hover:bg-primary/10 active:bg-primary/20',
+    },
+
     /* --- Sidebar header --- */
     'button[data-id="sidebar.filter"]': {
         class: 'shadow',
@@ -20,10 +25,6 @@ export const sidebarOverrides = {
         },
     },
 
-    'button.sidebar': {
-        class: 'font-[IBM_Plex_Sans] text-xs uppercase tracking-wide hover:bg-primary/10 active:bg-primary/20',
-    },
-
     /* --- Sidenav content --- */
 
     // Sidebar item buttons
@@ -34,8 +35,11 @@ export const sidebarOverrides = {
     'div#sidebar.project-group-container': {
         class: 'font-[IBM_Plex_Sans] text-[12px] font-light border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20',
     },
+    'button#sidebar.new-chat': {
+        class: 'hover:bg-primary/90',
+    },
 
-    //Sidebar popover buttons
+    //Sidebar popover buttons for threads, documents, projects
     'button#sidebar.thread-rename': SidebarPopoverButtonConfig,
     'button#sidebar.thread-add-to-project': SidebarPopoverButtonConfig,
     'button#sidebar.thread-delete': SidebarPopoverButtonConfig,
