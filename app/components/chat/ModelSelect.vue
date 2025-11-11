@@ -1,5 +1,9 @@
 <template>
-    <div id="model-select-root" v-if="show" class="model-select-container inline-block">
+    <div
+        id="model-select-root"
+        v-if="show"
+        class="model-select-container inline-block"
+    >
         <USelectMenu
             id="model-select-menu"
             v-model="internalModel"
@@ -40,13 +44,7 @@ const selectMenuProps = computed(() => {
 
     return {
         // Default props
-        class: 'h-[32px] text-sm rounded-md border px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
-        ui: {
-            content: 'retro-model-select-content border-black w-[320px]',
-            input: 'border-0 rounded-none!',
-            arrow: 'h-[18px] w-[18px]',
-            itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
-        },
+        class: 'h-[32px] text-sm rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]',
         searchInput: {
             icon: 'pixelarticons:search',
             autofocus: !isMobile.value,

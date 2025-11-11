@@ -127,7 +127,6 @@ export default defineTheme({
                 },
             },
         },
-
         ...chatOverrides,
         ...sidebarOverrides,
     },

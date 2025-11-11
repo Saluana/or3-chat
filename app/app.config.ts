@@ -130,5 +130,15 @@ export default defineAppConfig({
                 base: 'mt-0 rounded-md border-[2px] border-[color:var(--md-border-color)]  focus:border-[var(--md-primary)] focus:ring-1 focus:ring-[var(--md-primary)]',
             },
         },
+        selectMenu: {
+            slots: {
+                base: 'rounded-[var(--md-border-radius)] border-[var(--md-border-width)] border-[color:var(--md-border-color)]',
+                content:
+                    'ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)]',
+                input: 'border-0 rounded-none!',
+                arrow: 'h-[18px] w-[18px]',
+                itemTrailingIcon: 'shrink-0 w-[18px] h-[18px] text-dimmed',
+            },
+        },
     },
 });

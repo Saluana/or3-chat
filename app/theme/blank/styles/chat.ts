@@ -11,4 +11,7 @@ export const chatOverrides = {
     },
     'button#chat.attach': chatInputButtonConfig,
     'button#chat.settings': chatInputButtonConfig,
+    'selectmenu#chat.model-select': {
+        class: 'h-[32px] text-sm rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px] ring-0! hover:ring-1! focus-visible:ring-1! cursor-pointer focus-visible:ring-[color:var(--md-primary)]!',
+    },
 };
