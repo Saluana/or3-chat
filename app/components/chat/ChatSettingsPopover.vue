@@ -1,6 +1,9 @@
 <template>
     <div
-        :class="['chat-settings-popover flex flex-col w-[320px]', containerProps?.class || '']"
+        :class="[
+            'chat-settings-popover flex flex-col w-[320px]',
+            containerProps?.class || '',
+        ]"
         :data-theme-target="containerProps?.['data-theme-target']"
         :data-theme-matches="containerProps?.['data-theme-matches']"
     >
@@ -17,7 +20,7 @@
             />
         </div>
         <div
-            class="chat-settings-popover-switch flex justify-between w-full items-center py-1 px-2 border-b"
+            class="chat-settings-popover-switch flex justify-between w-full items-center py-1 px-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
             <USwitch
                 v-bind="webSearchSwitchProps"
@@ -27,20 +30,25 @@
             <UIcon name="pixelarticons:visible" class="w-4 h-4" />
         </div>
         <div
-            class="flex justify-between w-full items-center py-1 px-2 border-b"
+            class="flex justify-between w-full items-center py-1 px-2 border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
         >
             <USwitch v-bind="thinkingSwitchProps" class="w-full"></USwitch>
             <UIcon name="pixelarticons:lightbulb-on" class="w-4 h-4" />
         </div>
 
         <!-- Tool Toggles Section -->
-        <div v-if="registeredTools.length > 0" class="chat-settings-popover-tools border-b">
+        <div
+            v-if="registeredTools.length > 0"
+            class="chat-settings-popover-tools border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)]"
+        >
             <div
                 v-for="tool in registeredTools"
                 :key="tool.name"
                 class="chat-settings-popover-tool flex flex-col py-1 px-2"
             >
-                <div class="chat-settings-popover-tool-switch flex justify-between w-full items-center">
+                <div
+                    class="chat-settings-popover-tool-switch flex justify-between w-full items-center"
+                >
                     <USwitch
                         v-bind="getToolSwitchProps(tool.name)"
                         :label="
@@ -203,7 +211,7 @@ const systemPromptsButtonProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        class: 'flex justify-between w-full items-center py-1 px-2 border-b',
+        class: 'flex justify-between w-full items-center py-1 px-2 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
         variant: 'ghost',
         block: true,
         trailing: true,

@@ -2,6 +2,14 @@
   border-right: var(--md-border-width) solid var(--md-border-color);
 }
 
+[data-theme="pog"] .chat-container-root:not(:last-child) {
+  border-right: var(--md-border-width) solid var(--md-border-color);
+}
+
+[data-theme="pog"] .chat-container-root:not(:first-child) {
+  border-top: var(--md-border-width) solid var(--md-border-color) !important;
+}
+
 [data-theme="pog"] .sidenav-header-separator {
   border-bottom: var(--md-border-width) solid var(--md-border-color);
 }

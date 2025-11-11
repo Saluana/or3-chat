@@ -140,13 +140,13 @@
             <div
                 :class="[
                     showTopOffset ? 'pt-[46px]' : 'pt-0',
-                    ' h-full flex flex-row gap-0 items-stretch w-full overflow-hidden pane-container',
+                    ' h-full flex flex-row gap-0 items-stretch w-full pane-container',
                 ]"
             >
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
-                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0"
+                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-hidden"
                     :style="{ width: getPaneWidth(i) }"
                     :class="[
                         ...(i === activePaneIndex && panes.length > 1
@@ -1062,23 +1062,17 @@ if (process.client) {
 }
 .pane-active {
     position: relative;
-    transition: box-shadow 0.4s ease, background-color 0.3s ease;
 }
-.pane-active::after {
+.pane-active::before {
     content: '';
     pointer-events: none;
     position: absolute;
-    inset: 0;
-    border: 1px solid var(--md-primary);
-    box-shadow: inset 0 0 0 1px var(--md-primary),
-        inset 0 0 3px 1px var(--md-primary), inset 0 0 6px 2px var(--md-primary);
-    mix-blend-mode: normal;
-    opacity: 0.6;
-    animation: panePulse 3.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .pane-active::after {
-        animation: none;
-    }
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    box-shadow: inset 0 0 0 2px var(--md-primary);
+    z-index: 100;
+    transition: opacity 0.2s ease;
 }
 </style>
