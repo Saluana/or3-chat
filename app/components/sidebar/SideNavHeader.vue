@@ -57,7 +57,9 @@
             </UPopover>
         </div>
 
-        <div class="border-b-3 border-primary/50 pb-2"></div>
+        <div
+            class="border-b-3 border-primary/50 pb-2 sidenav-header-separator"
+        ></div>
 
         <!-- Rename modal -->
         <UModal

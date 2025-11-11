@@ -65,13 +65,21 @@ export const sidebarOverrides = {
         color: 'neutral',
     },
 
-    'button#sidebar.bottom-nav.activity': {
-        class: 'justify-start text-sm',
-        variant: 'ghost',
-    },
+    'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
 
-    'button#sidebar.bottom-nav.credits': {
-        class: 'justify-start text-sm',
-        variant: 'ghost',
+    'button#sidebar.bottom-nav.credits': SidebarPopoverButtonConfig,
+
+    /* --- Collapsed sidebar buttons --- */
+    'button#sidebar.collapsed-page': {
+        ui: {
+            base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+            leadingIcon: 'w-5 h-5',
+        },
+    },
+    'button#sidebar.collapsed-page:active': {
+        ui: {
+            base: 'border-[length:var(--md-border-width)] bg-[var(--md-primary)]/10 border-[color:var(--md-border-color)] active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
+            leadingIcon: 'w-5 h-5',
+        },
     },
 };

@@ -216,8 +216,8 @@ const activityButtonProps = computed(() => {
     });
     return {
         variant: 'ghost' as const,
+        color: 'neutral' as const,
         block: true,
-        class: 'justify-start border-b-[var(--md-border-width)]',
         ...(overrides.value as any),
     };
 });
@@ -231,8 +231,8 @@ const creditsButtonProps = computed(() => {
     });
     return {
         variant: 'ghost' as const,
+        color: 'neutral' as const,
         block: true,
-        class: 'justify-start',
         ...(overrides.value as any),
     };
 });

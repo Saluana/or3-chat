@@ -86,13 +86,16 @@
                         text="Home"
                     >
                         <UButton
+                            v-bind="
+                                activePageId === DEFAULT_PAGE_ID
+                                    ? pageButtonActiveProps
+                                    : pageButtonProps
+                            "
                             id="btn-home"
-                            size="md"
                             class="flex item-center justify-center"
                             icon="pixelarticons:home"
                             :aria-pressed="activePageId === DEFAULT_PAGE_ID"
                             aria-label="Home"
-                            :ui="pageButtonUi(activePageId === DEFAULT_PAGE_ID)"
                             @click="() => handlePageSelect(DEFAULT_PAGE_ID)"
                             @keydown.enter="
                                 () => handlePageSelect(DEFAULT_PAGE_ID)
@@ -113,13 +116,16 @@
                         class="page-nav-item"
                     >
                         <UButton
+                            v-bind="
+                                activePageId === page.id
+                                    ? pageButtonActiveProps
+                                    : pageButtonProps
+                            "
                             :id="`btn-page-${page.id}`"
-                            size="md"
                             class="flex item-center justify-center"
                             :icon="page.icon || 'pixelarticons:view-grid'"
                             :aria-pressed="activePageId === page.id"
                             :aria-label="page.label"
-                            :ui="pageButtonUi(activePageId === page.id)"
                             @click="() => handlePageSelect(page.id)"
                             @keydown.enter="() => handlePageSelect(page.id)"
                             @keydown.space.prevent="
@@ -323,6 +329,47 @@ const dashboardButtonProps = computed(() => {
     };
 });
 
+const collapsedPageButtonUiDefaults = {
+    default: {
+        base: 'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]',
+        leadingIcon: 'w-5 h-5',
+    },
+    active: {
+        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
+        leadingIcon: 'w-5 h-5',
+    },
+} as const;
+
+function createCollapsedPageButtonProps(state?: 'active') {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.collapsed-page',
+        state,
+        isNuxtUI: true,
+    });
+
+    const stateKey = state === 'active' ? 'active' : 'default';
+
+    return computed(() => {
+        const overrideValue = (overrides.value as any) || {};
+        const { ui: themeUi = {}, ...restOverrides } = overrideValue;
+        const mergedUi = {
+            ...collapsedPageButtonUiDefaults[stateKey],
+            ...(themeUi as Record<string, unknown>),
+        };
+
+        return {
+            size: 'md' as const,
+            ...restOverrides,
+            ui: mergedUi,
+        };
+    });
+}
+
+const pageButtonProps = createCollapsedPageButtonProps();
+const pageButtonActiveProps = createCollapsedPageButtonProps('active');
+
 const { listSidebarPages } = useSidebarPages();
 const { activePageId, setActivePage } = useActiveSidebarPage();
 
@@ -411,15 +458,6 @@ async function handlePageSelect(pageId: string) {
             color: 'error',
         });
     }
-}
-
-function pageButtonUi(isActive: boolean) {
-    const base =
-        'bg-transparent hover:bg-[var(--md-inverse-surface)]/10 active:bg-[var(--md-inverse-surface)]/20 border-0! shadow-none! text-[var(--md-on-surface)]';
-    if (!isActive) return { base };
-    return {
-        base: 'bg-[var(--md-surface-variant)] hover:bg-[var(--md-surface-variant)]/80 active:bg-[var(--md-surface-variant)]/90 text-[var(--md-on-surface)]',
-    };
 }
 
 const emit = defineEmits<{
