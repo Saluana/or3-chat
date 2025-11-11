@@ -4,7 +4,7 @@
     >
         <button
             type="button"
-            class="project-root-toggle relative group w-full flex items-center hover:bg-primary/10 px-2.5 gap-1.5 text-[15px] rounded-[4px] h-[40px]"
+            class="project-root-toggle relative group w-full flex items-center hover:bg-primary/10 px-2.5 gap-1.5 h-[40px]"
             @click="emit('toggle-expand')"
         >
             <UIcon

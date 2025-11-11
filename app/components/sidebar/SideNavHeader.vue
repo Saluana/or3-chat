@@ -24,8 +24,7 @@
                 <UButton
                     v-bind="filterButtonProps"
                     aria-label="Filter sections"
-                    :ui="{ base: 'shadow-none!' }"
-                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[var(--md-border-radius)] border-[var(--md-border-width)] bg-[var(--md-inverse-surface)]/5 backdrop-blur"
+                    class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5 backdrop-blur"
                 />
                 <template #content>
                     <div class="p-2 space-y-1 min-w-[140px]">

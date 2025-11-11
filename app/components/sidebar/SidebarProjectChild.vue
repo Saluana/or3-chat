@@ -4,7 +4,7 @@
     >
         <button
             type="button"
-            class="project-child-toggle relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 text-[13px] rounded-r-[4px] py-1"
+            class="project-child-toggle relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 rounded-r-[4px] py-1"
             :class="{ 'bg-primary/25 hover:bg-primary/25': active }"
             @click="emit('select')"
         >
@@ -17,7 +17,7 @@
                 class="project-child-icon shrink-0 size-4"
             />
             <span
-                class="project-child-label truncate text-start text-[15px] flex-1 min-w-0"
+                class="project-child-label truncate text-start flex-1 min-w-0"
                 >{{ child.name || '(untitled)' }}</span
             >
             <span

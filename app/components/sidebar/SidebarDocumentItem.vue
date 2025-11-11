@@ -5,9 +5,11 @@
         @click="emit('select', doc.id)"
         @mouseenter="onHoverDoc()"
     >
-        <span class="truncate flex-1 text-[15px] min-w-0" :title="doc.title">{{
-            doc.title
-        }}</span>
+        <span
+            class="sidebar-item-label truncate flex-1 min-w-0"
+            :title="doc.title"
+            >{{ doc.title }}</span
+        >
         <UPopover :content="{ side: 'right', align: 'start', sideOffset: 6 }">
             <span
                 class="inline-flex items-center justify-center w-5 h-5 rounded-[var(--md-border-radius)] hover:bg-black/10 active:bg-black/20"

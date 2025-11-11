@@ -11,7 +11,7 @@
                 class="shrink-0"
             />
             <span
-                class="truncate text-[15px] flex-1 min-w-0"
+                class="sidebar-item-label truncate flex-1 min-w-0"
                 :title="thread.title || 'New Thread'"
                 >{{ thread.title || 'New Thread' }}</span
             >

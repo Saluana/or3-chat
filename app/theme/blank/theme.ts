@@ -9,6 +9,7 @@
  */
 
 import { defineTheme } from '../_shared/define-theme';
+import { sidebarOverrides } from './styles/sidebar';
 
 export default defineTheme({
     name: 'pog',
@@ -101,46 +102,35 @@ export default defineTheme({
     // Component overrides using the new selector syntax
     // These provide default styling for all retro-themed components
     overrides: {
-        'button#ui.glass-button': {
-            activeClass: 'bg-blue-500',
-            class: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] bg-[var(--md-surface)]/30 text-[var(--md-on-surface)] hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20',
+        // Global input overrides
+        input: {
+            ui: {
+                variants: {
+                    variant: {
+                        outline:
+                            'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)]',
+                    },
+                },
+            },
+        },
+        // Global button overrides
+        button: {
+            ui: {
+                variants: {
+                    size: {
+                        xs: { base: 'h-[24px] w-[24px] !px-0 !text-[14px]' },
+                        sm: { base: 'h-[32px] !px-[12px] !text-[14px]' },
+                        md: { base: 'h-[40px] !px-[16px] !text-[14px]' },
+                        lg: { base: 'h-[56px] !px-[24px] !text-[20px]' },
+                    },
+                },
+            },
         },
 
         'div#chat.input-main-container': {
             class: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus-within:border-[color:var(--md-primary)] focus-within:ring-1 focus-within:ring-[color:var(--md-primary)] shadow-lg',
         },
-
-        // Sidebar bottom navigation buttons
-        'button.sidebar': {
-            class: 'font-[IBM_Plex_Sans] text-xs uppercase tracking-wide hover:bg-primary/10 active:bg-primary/20',
-        },
-
-        'button#sidebar.bottom-nav.info': {
-            class: 'min-h-[44px] flex flex-col items-center gap-1 py-1.5',
-            variant: 'soft',
-            color: 'neutral',
-        },
-
-        'button#sidebar.bottom-nav.connect': {
-            class: 'min-h-[44px] flex flex-col items-center gap-1 py-1.5',
-            variant: 'soft',
-        },
-
-        'button#sidebar.bottom-nav.dashboard': {
-            class: 'min-h-[44px] flex flex-col items-center gap-1 py-1.5',
-            variant: 'soft',
-            color: 'neutral',
-        },
-
-        'button#sidebar.bottom-nav.activity': {
-            class: 'justify-start text-sm',
-            variant: 'ghost',
-        },
-
-        'button#sidebar.bottom-nav.credits': {
-            class: 'justify-start text-sm',
-            variant: 'ghost',
-        },
+        ...sidebarOverrides,
     },
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system
