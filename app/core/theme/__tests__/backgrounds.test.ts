@@ -15,16 +15,20 @@ describe('Theme Backgrounds', () => {
 
         // Create minimal DOM mock
         const mockStyle = new Map<string, string>();
+        const styleApi = {
+            setProperty: vi.fn((key: string, value: string) => {
+                mockStyle.set(key, value);
+            }),
+            getPropertyValue: vi.fn((key: string) => mockStyle.get(key) || ''),
+            removeProperty: vi.fn((key: string) => {
+                mockStyle.delete(key);
+                return '';
+            }),
+        };
+
         global.document = {
             documentElement: {
-                style: {
-                    setProperty: vi.fn((key: string, value: string) => {
-                        mockStyle.set(key, value);
-                    }),
-                    getPropertyValue: vi.fn(
-                        (key: string) => mockStyle.get(key) || ''
-                    ),
-                },
+                style: styleApi,
             },
         } as any;
     });
@@ -210,5 +214,117 @@ describe('Theme Backgrounds', () => {
                 'repeat'
             );
         });
+
+        it('should set color variables when provided by the theme', async () => {
+            const backgrounds: ThemeBackgrounds = {
+                content: {
+                    base: {
+                        color: '#123456',
+                    },
+                    overlay: {
+                        color: '#654321',
+                    },
+                },
+                sidebar: {
+                    color: '#abcdef',
+                },
+            };
+
+            await applyThemeBackgrounds(backgrounds, {
+                resolveToken: mockResolveToken,
+            });
+
+            const setProperty = document.documentElement.style
+                .setProperty as any;
+            expect(setProperty).toHaveBeenCalledWith(
+                '--app-content-bg-1-color',
+                '#123456'
+            );
+            expect(setProperty).toHaveBeenCalledWith(
+                '--app-content-bg-2-color',
+                '#654321'
+            );
+            expect(setProperty).toHaveBeenCalledWith(
+                '--app-sidebar-bg-color',
+                '#abcdef'
+            );
+        });
+
+        it('should remove color variables when a layer omits color', async () => {
+            const removeProperty = document.documentElement.style
+                .removeProperty as any;
+
+            await applyThemeBackgrounds(
+                {
+                    content: {
+                        base: {},
+                    },
+                    sidebar: {},
+                },
+                {
+                    resolveToken: mockResolveToken,
+                }
+            );
+
+            expect(removeProperty).toHaveBeenCalledWith(
+                '--app-content-bg-1-color'
+            );
+            expect(removeProperty).toHaveBeenCalledWith(
+                '--app-sidebar-bg-color'
+            );
+        });
+    });
+});
+
+const identityResolver = async (token: string) => token;
+
+describe('applyThemeBackgrounds', () => {
+    beforeEach(() => {
+        document.documentElement.style.cssText = '';
+    });
+
+    it('sets color variables when a layer provides a color', async () => {
+        await applyThemeBackgrounds(
+            {
+                content: {
+                    base: { color: '#123456' },
+                },
+                sidebar: { color: '#abcdef' },
+            },
+            { resolveToken: identityResolver }
+        );
+
+        expect(
+            document.documentElement.style.getPropertyValue(
+                '--app-content-bg-1-color'
+            )
+        ).toBe('#123456');
+        expect(
+            document.documentElement.style.getPropertyValue(
+                '--app-sidebar-bg-color'
+            )
+        ).toBe('#abcdef');
+    });
+
+    it('removes color variables when a layer omits color', async () => {
+        document.documentElement.style.setProperty(
+            '--app-content-bg-1-color',
+            '#ffffff'
+        );
+
+        await applyThemeBackgrounds(
+            {
+                content: {
+                    base: {},
+                },
+            },
+            { resolveToken: identityResolver }
+        );
+
+        expect(
+            document.documentElement.style.getPropertyValue(
+                '--app-content-bg-1-color'
+            )
+        ).toBe('');
     });
 });

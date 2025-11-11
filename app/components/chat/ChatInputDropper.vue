@@ -8,7 +8,7 @@
             'chat-input-main flex flex-col bg-[var(--md-surface)] mx-2 md:mx-0 items-stretch transition-all duration-300 relative cursor-text z-10',
             isDragging
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'hover:border-[var(--md-primary)] focus-within:border-[var(--md-primary)] dark:focus-within:border-gray-600',
+                : 'hover:border-[color:var(--md-primary)] focus-within:border-[color:var(--md-primary)] dark:focus-within:border-gray-600',
             loading ? 'opacity-90 pointer-events-auto' : '',
             mainContainerProps?.class || '',
         ]"

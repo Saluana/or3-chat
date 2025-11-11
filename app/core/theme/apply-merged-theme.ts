@@ -166,6 +166,10 @@ export async function applyMergedTheme(
     });
 
     // 4. Apply background color overrides (if enabled)
+    const themeBaseColor = mergedBackgrounds.content?.base?.color;
+    const themeOverlayColor = mergedBackgrounds.content?.overlay?.color;
+    const themeSidebarColor = mergedBackgrounds.sidebar?.color;
+
     if (overrides.backgrounds?.enabled) {
         const bgColorMap: Array<[string, string]> = [
             [
@@ -185,9 +189,15 @@ export async function applyMergedTheme(
             if (color) r.setProperty(cssVar, color);
         }
     } else {
-        r.removeProperty('--app-content-bg-1-color');
-        r.removeProperty('--app-content-bg-2-color');
-        r.removeProperty('--app-sidebar-bg-color');
+        if (!hasColor(themeBaseColor)) {
+            r.removeProperty('--app-content-bg-1-color');
+        }
+        if (!hasColor(themeOverlayColor)) {
+            r.removeProperty('--app-content-bg-2-color');
+        }
+        if (!hasColor(themeSidebarColor)) {
+            r.removeProperty('--app-sidebar-bg-color');
+        }
     }
 
     // 5. Handle gradient visibility (UI-specific)
@@ -208,6 +218,10 @@ export async function applyMergedTheme(
     if (overrides.ui?.reducePatternsInHighContrast && isHighContrastActive()) {
         clampBackgroundOpacities();
     }
+}
+
+function hasColor(value: string | null | undefined): boolean {
+    return typeof value === 'string' && value.trim().length > 0;
 }
 
 function buildMergedBackgrounds(

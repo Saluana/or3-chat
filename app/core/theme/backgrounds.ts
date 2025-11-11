@@ -7,7 +7,6 @@ import { getFileBlob } from '../../db/files';
 const CACHE_KEY = '__or3ThemeBackgroundTokenCache';
 const DEFAULT_REPEAT = 'repeat';
 const DEFAULT_SIZE = '150px';
-const GRADIENT_FALLBACK_SIZE = 'auto 100%';
 
 const isBrowser = () =>
     typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -98,7 +97,25 @@ async function applyLayer(
 ) {
     if (!isBrowser()) return;
     const style = document.documentElement.style;
-    if (!layer || !layer.image) {
+    const colorVar = getColorVar(cssVar);
+
+    if (colorVar) {
+        if (layer?.color && layer.color.trim().length > 0) {
+            style.setProperty(colorVar, layer.color);
+        } else {
+            style.removeProperty(colorVar);
+        }
+    }
+
+    if (!layer) {
+        style.setProperty(cssVar, 'none');
+        style.setProperty(`${cssVar}-opacity`, '1');
+        style.setProperty(`${cssVar}-repeat`, DEFAULT_REPEAT);
+        style.setProperty(`${cssVar}-size`, DEFAULT_SIZE);
+        return;
+    }
+
+    if (!layer.image) {
         style.setProperty(cssVar, 'none');
         style.setProperty(`${cssVar}-opacity`, '1');
         style.setProperty(`${cssVar}-repeat`, DEFAULT_REPEAT);
@@ -126,6 +143,19 @@ async function applyGradient(
     }
     const url = await resolveToken(layer.image);
     style.setProperty(cssVar, url ? `url("${url}")` : 'none');
+}
+
+function getColorVar(cssVar: string): string | null {
+    switch (cssVar) {
+        case '--app-content-bg-1':
+            return '--app-content-bg-1-color';
+        case '--app-content-bg-2':
+            return '--app-content-bg-2-color';
+        case '--app-sidebar-bg-1':
+            return '--app-sidebar-bg-color';
+        default:
+            return null;
+    }
 }
 
 export async function applyThemeBackgrounds(

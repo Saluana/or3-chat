@@ -5,7 +5,7 @@
             (typeof attrs.id === 'string' ? attrs.id : null) ??
             'bottom-nav-root'
         "
-        class="hud bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] px-0.5"
+        class="bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] px-0.5"
     >
         <!-- MY INFO -->
         <UPopover
@@ -13,55 +13,47 @@
                 side: 'right',
             }"
         >
-            <button
+            <UButton
+                v-bind="infoButtonProps"
                 type="button"
                 aria-label="My Info"
-                class="hud-button retro-hud-button"
             >
-                <span class="hud-button__icon">
-                    <UIcon
-                        name="pixelarticons:user"
-                        class="h-[18px] w-[18px]"
-                    ></UIcon>
-                </span>
-                <span
-                    class="hud-button__divider retro-hud-button__divider"
-                    aria-hidden="true"
-                ></span>
-                <span class="hud-button__label">INFO</span>
-                <span
-                    class="hud-button__indicator retro-hud-button__indicator"
-                    aria-hidden="true"
-                ></span>
-            </button>
+                <template #default>
+                    <span class="flex flex-col items-center gap-1 w-full">
+                        <UIcon
+                            name="pixelarticons:user"
+                            class="h-[18px] w-[18px]"
+                        />
+                        <span class="text-[7px] uppercase tracking-wider"
+                            >INFO</span
+                        >
+                    </span>
+                </template>
+            </UButton>
             <template #content>
                 <div class="flex flex-col items-start w-[140px]">
-                    <button
-                        type="button"
-                        class="flex items-center justify-start px-2 py-1 border-b-[var(--md-border-width)] w-full text-start hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
-                        aria-label="View activity on OpenRouter"
+                    <UButton
+                        v-bind="activityButtonProps"
                         @click="navigateToActivity"
                     >
                         <UIcon name="pixelarticons:human-run" class="mr-1.5" />
                         Activity
-                    </button>
-                    <button
-                        type="button"
-                        class="flex items-center justify-start px-2 py-1 w-full hover:bg-black/10 text-start dark:hover:bg-white/10 cursor-pointer"
-                        aria-label="View account credits on OpenRouter"
+                    </UButton>
+                    <UButton
+                        v-bind="creditsButtonProps"
                         @click="navigateToCredits"
                     >
                         <UIcon name="pixelarticons:coin" class="mr-1.5" />
                         Credits
-                    </button>
+                    </UButton>
                 </div>
             </template>
         </UPopover>
 
         <!-- Connect -->
-        <button
+        <UButton
+            v-bind="connectButtonProps"
             type="button"
-            class="hud-button retro-hud-button hud-button--connect"
             @click="onConnectButtonClick"
             :aria-label="
                 hydrated
@@ -71,74 +63,70 @@
                     : 'Connect to OpenRouter'
             "
         >
-            <span class="hud-button__icon">
-                <svg
-                    class="w-[18px] h-[18px]"
-                    viewBox="0 0 512 512"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="currentColor"
-                    stroke="currentColor"
-                >
-                    <g>
-                        <path
-                            d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
-                            stroke-width="90"
-                        />
-                        <path
-                            d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
-                        />
-                        <path
-                            d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
-                            stroke-width="90"
-                        />
-                        <path
-                            d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
-                        />
-                    </g>
-                </svg>
-            </span>
-            <span
-                class="hud-button__divider retro-hud-button__divider"
-                aria-hidden="true"
-            ></span>
-            <span class="hud-button__label hud-button__label--wide">
-                <template v-if="hydrated">
-                    {{ orIsConnected ? 'Disconnect' : 'Connect' }}
-                </template>
-                <template v-else>Connect</template>
-            </span>
-            <span
-                class="hud-button__indicator retro-hud-button__indicator"
-                :class="connectionIndicatorClass"
-                aria-hidden="true"
-            ></span>
-        </button>
+            <template #default>
+                <span class="flex flex-col items-center gap-1 w-full">
+                    <svg
+                        class="w-[18px] h-[18px]"
+                        viewBox="0 0 512 512"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="currentColor"
+                        stroke="currentColor"
+                    >
+                        <g>
+                            <path
+                                d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
+                                stroke-width="90"
+                            />
+                            <path
+                                d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
+                            />
+                            <path
+                                d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
+                                stroke-width="90"
+                            />
+                            <path
+                                d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
+                            />
+                        </g>
+                    </svg>
+                    <span class="text-[7px] uppercase tracking-wider">
+                        <template v-if="hydrated">
+                            {{ orIsConnected ? 'Disconnect' : 'Connect' }}
+                        </template>
+                        <template v-else>Connect</template>
+                    </span>
+                    <span
+                        class="w-[54%] h-[3px] opacity-50"
+                        :class="
+                            orIsConnected
+                                ? 'bg-[var(--md-success)] opacity-100'
+                                : 'bg-[var(--md-error)]'
+                        "
+                        aria-hidden="true"
+                    ></span>
+                </span>
+            </template>
+        </UButton>
 
         <!-- DASHBOARD -->
-        <button
+        <UButton
+            v-bind="dashboardButtonProps"
             @click="emit('toggleDashboard')"
             type="button"
             aria-label="Dashboard"
-            class="hud-button retro-hud-button"
         >
-            <span class="hud-button__icon">
-                <UIcon
-                    class="w-[18px] h-[18px]"
-                    name="pixelarticons:dashboard"
-                ></UIcon>
-            </span>
-            <span
-                class="hud-button__divider retro-hud-button__divider"
-                aria-hidden="true"
-            ></span>
-            <span class="hud-button__label hud-button__label--wide">
-                Dashboard
-            </span>
-            <span
-                class="hud-button__indicator retro-hud-button__indicator"
-                aria-hidden="true"
-            ></span>
-        </button>
+            <template #default>
+                <span class="flex flex-col items-center gap-1 w-full">
+                    <UIcon
+                        class="w-[18px] h-[18px]"
+                        name="pixelarticons:dashboard"
+                    />
+                    <span class="text-[7px] uppercase tracking-wider"
+                        >Dashboard</span
+                    >
+                </span>
+            </template>
+        </UButton>
     </div>
     <lazy-modal-model-catalog
         hydrate-on-visible
@@ -149,6 +137,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, useAttrs } from 'vue';
 import { state } from '~/state/global';
+import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 defineOptions({ inheritAttrs: false });
 
@@ -166,15 +155,87 @@ const rootAttrs = computed(() => {
         Object.entries(attrs).filter(([key]) => key !== 'id')
     ) as Record<string, unknown>;
 });
-const connectionIndicatorClass = computed(() =>
-    !hydrated.value
-        ? 'hud-button__indicator--danger'
-        : orIsConnected.value
-        ? 'hud-button__indicator--success'
-        : 'hud-button__indicator--danger'
-);
 
 const emit = defineEmits(['toggleDashboard']);
+
+// Theme-integrated button props
+const infoButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.bottom-nav.info',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'soft' as const,
+        color: 'neutral' as const,
+        block: true,
+        ...(overrides.value as any),
+    };
+});
+
+const connectButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.bottom-nav.connect',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'soft' as const,
+        color: orIsConnected.value
+            ? ('success' as const)
+            : ('neutral' as const),
+        block: true,
+        ...(overrides.value as any),
+    };
+});
+
+const dashboardButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.bottom-nav.dashboard',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'soft' as const,
+        color: 'neutral' as const,
+        block: true,
+        ...(overrides.value as any),
+    };
+});
+
+// Popover menu buttons
+const activityButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.bottom-nav.activity',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'ghost' as const,
+        block: true,
+        class: 'justify-start border-b-[var(--md-border-width)]',
+        ...(overrides.value as any),
+    };
+});
+
+const creditsButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.bottom-nav.credits',
+        isNuxtUI: true,
+    });
+    return {
+        variant: 'ghost' as const,
+        block: true,
+        class: 'justify-start',
+        ...(overrides.value as any),
+    };
+});
 
 function onConnectButtonClick() {
     if (orIsConnected.value) {
@@ -209,203 +270,11 @@ function navigateToCredits() {
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
     background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
 }
+
 .dark .bottomnav-root {
     background-color: var(
         --app-bottomnav-bg-color,
         var(--md-surface-container-low)
     );
-}
-
-.bottomnav-bar {
-    background-color: var(--app-bottomnav-bg-color, var(--md-surface));
-}
-.dark .bottomnav-bar {
-    background-color: var(
-        --app-bottomnav-bg-color,
-        var(--md-surface-container-low)
-    );
-}
-/* Retro bar overlay: scanlines + soft gloss + subtle noise (doesn't touch the top gradient) */
-.theme-bar {
-    position: relative;
-    isolation: isolate; /* contain blend */
-}
-.theme-bar::before {
-    /* Chrome gloss + bevel hint */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background: linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.18),
-        rgba(255, 255, 255, 0.06) 28%,
-        rgba(0, 0, 0, 0) 40%,
-        rgba(0, 0, 0, 0.1) 100%
-    );
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-.theme-bar::after {
-    /* Scanlines + speckle noise, extremely subtle */
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1; /* render under content */
-    background-image: repeating-linear-gradient(
-            0deg,
-            rgba(255, 255, 255, 0.045) 0px,
-            rgba(255, 255, 255, 0.045) 1px,
-            rgba(0, 0, 0, 0) 1px,
-            rgba(0, 0, 0, 0) 3px
-        ),
-        radial-gradient(
-            1px 1px at 12% 18%,
-            rgba(255, 255, 255, 0.04),
-            transparent 100%
-        ),
-        radial-gradient(
-            1px 1px at 64% 62%,
-            rgba(0, 0, 0, 0.04),
-            transparent 100%
-        );
-    opacity: 0.25;
-    pointer-events: none;
-    mix-blend-mode: soft-light;
-}
-/* Use theme variable for gradient stripes (flipped header style) */
-.header-pattern-flipped {
-    background-image: var(--app-bottomnav-gradient, none);
-    background-repeat: repeat-x;
-    background-position: left center;
-    background-size: auto 100%;
-    transform: scaleY(-1);
-    background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
-}
-
-.dark .header-pattern-flipped {
-    background-color: var(
-        --app-bottomnav-bg-color,
-        var(--md-surface-container-low)
-    );
-}
-
-.ibm-font {
-    font-family: 'IBM Plex Sans', sans-serif;
-}
-
-.hud-button {
-    position: relative;
-    width: 100%;
-    min-height: 44px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 8px 7px;
-    cursor: pointer;
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-highest) 0%,
-        var(--md-surface-container-high) 55%,
-        var(--md-surface) 100%
-    );
-    color: var(--md-on-surface);
-    text-transform: uppercase;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 500;
-    letter-spacing: 0.05px;
-    font-size: 9px;
-    line-height: 1;
-}
-
-/* Decorative styles moved to retro theme file; pseudo removed here */
-
-.dark .hud-button {
-    color: var(--md-on-surface);
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-high) 0%,
-        var(--md-surface-container) 55%,
-        var(--md-surface-container-low) 100%
-    );
-}
-
-/* Active state visuals handled by retro theme styles */
-
-/* Focus-visible outline handled by retro theme styles */
-
-.hud-button__icon,
-.hud-button__label,
-.hud-button__divider,
-.hud-button__indicator {
-    position: relative;
-    z-index: 1;
-    color: currentColor;
-}
-
-.hud-button__icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.hud-button__divider {
-    width: 54%;
-    height: 1px;
-    background: currentColor;
-    opacity: 0.2;
-}
-
-.hud-button__label {
-    display: block;
-    font-size: 7px;
-    letter-spacing: 0.082em;
-    text-align: center;
-    line-height: 1.06;
-    white-space: nowrap;
-}
-
-.hud-button__label--wide {
-    font-size: 7px;
-    letter-spacing: 0.068em;
-}
-
-.hud-button__indicator {
-    margin-top: auto;
-    width: 54%;
-    height: 2px;
-    background: currentColor;
-    opacity: 0.52;
-}
-
-.hud-button:active .hud-button__indicator {
-    opacity: 0.75;
-}
-
-.hud-button--connect .hud-button__indicator {
-    height: 3px;
-}
-
-.hud-button--connect .hud-button__label {
-    letter-spacing: 0.06em;
-}
-
-.hud-button__indicator--danger {
-    background: var(--md-error, #d14343);
-    opacity: 0.52;
-}
-
-.hud-button__indicator--success {
-    background: var(--md-success, #28a745);
-    opacity: 1;
-}
-
-.dark .hud-button__indicator--danger {
-    background: #f87171;
-}
-
-.dark .hud-button__indicator--success {
-    background: #50fa7b;
 }
 </style>

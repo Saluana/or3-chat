@@ -37,8 +37,19 @@ describe('applyMergedTheme', () => {
             name: 'retro',
             backgrounds: {
                 content: {
-                    base: { image: '/base.png', opacity: 0.2 },
-                    overlay: { image: '/overlay.png', opacity: 0.1 },
+                    base: {
+                        image: '/base.png',
+                        opacity: 0.2,
+                        color: '#ffffff',
+                    },
+                    overlay: {
+                        image: '/overlay.png',
+                        opacity: 0.1,
+                        color: '#f5f5f5',
+                    },
+                },
+                sidebar: {
+                    color: '#fafafa',
                 },
             },
         });
@@ -178,6 +189,29 @@ describe('applyMergedTheme', () => {
         expect(style.getPropertyValue('--app-content-bg-1-color')).toBe(
             '#123456'
         );
+    });
+
+    it('should preserve theme background colors when overrides are disabled', async () => {
+        const baselineColor = '#ffffff';
+        document.documentElement.style.setProperty(
+            '--app-content-bg-1-color',
+            baselineColor
+        );
+
+        const overrides: UserThemeOverrides = {
+            backgrounds: { enabled: false },
+            colors: { enabled: false },
+            typography: {},
+            ui: {},
+        };
+
+        await applyMergedTheme('light', overrides);
+
+        expect(
+            document.documentElement.style.getPropertyValue(
+                '--app-content-bg-1-color'
+            )
+        ).toBe(baselineColor);
     });
 
     it('should handle gradient visibility toggles', async () => {

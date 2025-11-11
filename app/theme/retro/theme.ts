@@ -15,7 +15,7 @@ export default defineTheme({
     displayName: 'Retro',
     description:
         'Classic retro aesthetic with pixel-perfect styling and nostalgic vibes',
-    isDefault: true,
+    isDefault: false,
     stylesheets: ['~/theme/retro/styles.css'],
 
     // Retro theme styling defaults
