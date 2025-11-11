@@ -10,6 +10,7 @@
 
 import { defineTheme } from '../_shared/define-theme';
 import { sidebarOverrides } from './styles/sidebar';
+import { chatOverrides } from './styles/chat';
 
 export default defineTheme({
     name: 'pog',
@@ -127,9 +128,7 @@ export default defineTheme({
             },
         },
 
-        'div#chat.input-main-container': {
-            class: 'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] hover:border-[color:var(--md-primary)] focus-within:border-[color:var(--md-primary)] focus-within:ring-1 focus-within:ring-[color:var(--md-primary)] shadow-lg',
-        },
+        ...chatOverrides,
         ...sidebarOverrides,
     },
     // CSS Selectors for direct DOM targeting
