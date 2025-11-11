@@ -27,23 +27,31 @@
                     class="filter-trigger flex items-center justify-center h-[40px] w-[40px] rounded-[var(--md-border-radius)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-inverse-surface)]/5 backdrop-blur"
                 />
                 <template #content>
-                    <div class="p-2 space-y-1 min-w-[140px]">
-                        <button
-                            v-for="item in filterItems"
-                            :key="item.key"
-                            class="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted rounded-[4px] transition-colors"
-                            @click="toggleSection(item.key)"
+                    <div class="space-y-2 min-w-[140px]">
+                        <div
+                            class="px-2 pb-1 border-b border-[color:var(--md-border-color)]"
                         >
-                            <UIcon
-                                :name="
+                            <span
+                                class="text-xs font-medium text-[color:var(--md-on-surface)]/60 tracking-wide"
+                            >
+                                Toggle sections
+                            </span>
+                        </div>
+                        <div class="space-y-1">
+                            <UButton
+                                v-for="item in filterItems"
+                                :key="item.key"
+                                v-bind="filterItemButtonProps"
+                                :leading-icon="
                                     activeSections[item.key]
                                         ? 'pixelarticons:eye'
                                         : 'pixelarticons:eye-closed'
                                 "
-                                class="w-4 h-4"
-                            />
-                            <span>{{ item.label }}</span>
-                        </button>
+                                @click="toggleSection(item.key)"
+                            >
+                                {{ item.label }}
+                            </UButton>
+                        </div>
                     </div>
                 </template>
             </UPopover>
@@ -396,6 +404,22 @@ const filterButtonProps = computed(() => {
         variant: 'ghost' as const,
         icon: 'material-symbols:filter-alt-sharp' as const,
         square: true,
+        ...(overrides.value as any),
+    };
+});
+
+const filterItemButtonProps = computed(() => {
+    const overrides = useThemeOverrides({
+        component: 'button',
+        context: 'sidebar',
+        identifier: 'sidebar.filter-item',
+        isNuxtUI: true,
+    });
+    return {
+        color: 'neutral' as const,
+        variant: 'ghost' as const,
+        size: 'sm' as const,
+        block: true,
         ...(overrides.value as any),
     };
 });

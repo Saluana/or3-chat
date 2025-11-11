@@ -30,7 +30,7 @@ export default defineAppConfig({
                     'theme-btn dark:theme-btn cursor-pointer text-start',
                 ],
                 // Label tweaks are rarely overridden by variants, good to verify
-                label: 'truncate uppercase tracking-wider',
+                label: 'truncate tracking-wider',
                 leadingIcon: 'shrink-0',
                 leadingAvatar: 'shrink-0',
                 leadingAvatarSize: '',
@@ -108,7 +108,7 @@ export default defineAppConfig({
         popover: {
             slots: {
                 content:
-                    'bg-white dark:bg-black rounded-[var(--md-border-radius)] border-black border-[var(--md-border-width)] p-0.5',
+                    'bg-white ring-0 dark:bg-black rounded-[var(--md-border-radius)] border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] p-0.5',
             },
         },
         tooltip: {
