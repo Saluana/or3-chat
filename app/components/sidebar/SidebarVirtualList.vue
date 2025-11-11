@@ -57,33 +57,42 @@
                             />
 
                             <!-- Project Children Container -->
-                            <div
-                                v-if="item.children.length > 0"
-                                class="pl-2 mt-1 space-y-1"
+                            <Transition
+                                name="project-expand"
+                                @enter="onEnter"
+                                @leave="onLeave"
                             >
-                                <SidebarProjectChild
-                                    v-for="child in item.children"
-                                    :key="`${item.project.id}:${child.id}`"
-                                    :child="child"
-                                    :parent-id="item.project.id"
-                                    :active="isProjectChildActive(child)"
-                                    @select="onProjectChildSelect(child)"
-                                    @rename="
-                                        emit('renameEntry', {
-                                            projectId: item.project.id,
-                                            entryId: child.id,
-                                            kind: child.kind,
-                                        })
+                                <div
+                                    v-if="
+                                        item.children.length > 0 &&
+                                        expandedProjectsSet.has(item.project.id)
                                     "
-                                    @remove="
-                                        emit('removeFromProject', {
-                                            projectId: item.project.id,
-                                            entryId: child.id,
-                                            kind: child.kind,
-                                        })
-                                    "
-                                />
-                            </div>
+                                    class="pl-2 mt-1 space-y-1 overflow-hidden"
+                                >
+                                    <SidebarProjectChild
+                                        v-for="child in item.children"
+                                        :key="`${item.project.id}:${child.id}`"
+                                        :child="child"
+                                        :parent-id="item.project.id"
+                                        :active="isProjectChildActive(child)"
+                                        @select="onProjectChildSelect(child)"
+                                        @rename="
+                                            emit('renameEntry', {
+                                                projectId: item.project.id,
+                                                entryId: child.id,
+                                                kind: child.kind,
+                                            })
+                                        "
+                                        @remove="
+                                            emit('removeFromProject', {
+                                                projectId: item.project.id,
+                                                entryId: child.id,
+                                                kind: child.kind,
+                                            })
+                                        "
+                                    />
+                                </div>
+                            </Transition>
                         </div>
 
                         <!-- Thread Item -->
@@ -349,4 +358,42 @@ function onProjectChildSelect(child: ProjectEntry) {
         emit('documentSelected', child.id);
     }
 }
+
+// Transition handlers for smooth expand/collapse
+function onEnter(el: Element) {
+    const element = el as HTMLElement;
+    element.style.height = '0';
+    // Force reflow
+    void element.offsetHeight;
+    // Delay measurement to ensure margins are settled
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const height = element.scrollHeight;
+            element.style.height = `${height}px`;
+        });
+    });
+}
+
+function onLeave(el: Element) {
+    const element = el as HTMLElement;
+    const height = element.scrollHeight;
+    element.style.height = `${height}px`;
+    // Force reflow
+    void element.offsetHeight;
+    requestAnimationFrame(() => {
+        element.style.height = '0';
+    });
+}
 </script>
+
+<style scoped>
+.project-expand-enter-active,
+.project-expand-leave-active {
+    transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.project-expand-enter-from,
+.project-expand-leave-to {
+    height: 0;
+}
+</style>

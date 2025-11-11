@@ -335,8 +335,10 @@ const treeItems = computed<TreeItem[]>(() =>
 const ui = {
     // Remove internal scrolling; let the parent sidebar container handle overflow
     root: 'pr-1',
-    link: 'group/addchat text-[13px] rounded-[var(--md-border-radius)] py-1',
-    item: 'cursor-pointer ',
+    link: 'group/addchat text-[13px] rounded-[var(--md-border-radius)] py-1 transition-colors',
+    item: 'cursor-pointer',
+    // Add smooth transitions for expand/collapse
+    children: 'transition-all duration-200 ease-out overflow-hidden',
 };
 
 // Plugin project tree actions
@@ -372,5 +374,40 @@ function handlePopoverTriggerKey(event: KeyboardEvent) {
 :deep(ul[role='tree']) {
     max-height: none !important;
     overflow: visible !important;
+}
+
+/* Smooth expand/collapse animation for tree children using grid-template-rows */
+:deep(li[role='treeitem']) {
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+:deep(ul[role='group']) {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* When parent is collapsed, hide children */
+:deep(
+        li[role='treeitem']:not(:has(button[aria-expanded='true']))
+            > ul[role='group']
+    ) {
+    grid-template-rows: 0fr;
+}
+
+/* Inner wrapper for overflow */
+:deep(ul[role='group'] > li) {
+    overflow: hidden;
+}
+
+/* Enhanced chevron rotation */
+:deep([data-slot='link-trailing-icon']) {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth hover transitions */
+:deep([data-slot='link']) {
+    transition: background-color 0.15s ease-out;
 }
 </style>

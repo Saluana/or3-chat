@@ -1,10 +1,10 @@
 <template>
     <div
-        class="project-child-container border-l-[3px]! my-0.5 border-primary-500 h-[40px]"
+        class="project-child-container border-l-[3px]! my-0.5 border-primary-500 h-[40px] transition-all duration-150 ease-out"
     >
         <button
             type="button"
-            class="project-child-toggle relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 rounded-r-[4px] py-1"
+            class="project-child-toggle relative group w-full flex items-center h-full bg-[var(--md-inverse-surface)]/5 hover:bg-primary/10 backdrop-blur-md px-2.5 gap-1.5 rounded-r-[4px] py-1 transition-colors duration-150"
             :class="{ 'bg-primary/25 hover:bg-primary/25': active }"
             @click="emit('select')"
         >

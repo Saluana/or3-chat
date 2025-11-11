@@ -9,7 +9,7 @@
         >
             <UIcon
                 :name="expanded ? 'i-lucide:folder-open' : 'i-lucide:folder'"
-                class="project-icon shrink-0 size-4"
+                class="project-icon shrink-0 size-4 transition-transform duration-200"
             />
             <span class="project-label truncate text-start flex-1 min-w-0">{{
                 project.name
