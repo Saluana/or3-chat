@@ -206,7 +206,7 @@
             ]"
         >
             <UButtonGroup
-                class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group retro-message-action-group"
+                class="bg-[var(--md-surface)] rounded-[var(--md-border-radius)] cm-action-group"
             >
                 <UTooltip :delay-duration="0" text="Copy" :teleport="true">
                     <UButton

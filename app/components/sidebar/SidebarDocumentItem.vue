@@ -1,7 +1,10 @@
 <template>
     <RetroGlassBtn
-        class="w-full flex items-center justify-between text-left"
-        :class="{ 'active-element bg-primary/25 hover:bg-primary/25': active }"
+        class="w-full flex items-center justify-between text-left mx-0.5"
+        :class="{
+            'active-element bg-primary/25 ring-1 ring-primary/50 hover:bg-primary/25':
+                active,
+        }"
         @click="emit('select', doc.id)"
         @mouseenter="onHoverDoc()"
     >

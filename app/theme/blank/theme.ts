@@ -9,8 +9,8 @@
  */
 
 import { defineTheme } from '../_shared/define-theme';
-import { sidebarOverrides } from './styles/sidebar';
-import { chatOverrides } from './styles/chat';
+import { sidebarOverrides, sidebarCssSelectors } from './styles/sidebar';
+import { chatOverrides, chatCssSelectors } from './styles/chat';
 
 export default defineTheme({
     name: 'pog',
@@ -58,7 +58,7 @@ export default defineTheme({
         success: '#51cf66',
         warning: '#ffa94d',
         error: '#ff6b6b',
-        info: '#8BAECC',
+        info: '#E8F1F8',
 
         // Dark mode overrides
         dark: {
@@ -133,22 +133,8 @@ export default defineTheme({
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system
     cssSelectors: {
-        '.hud-button': {
-            style: {
-                background:
-                    'color-mix(in srgb, var(--md-surface) 30%, transparent)',
-                border: 'var(--md-border-width) solid var(--md-border-color)',
-                borderRadius: 'var(--md-border-radius)',
-                boxShadow:
-                    '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-            },
-        },
-        '#sidebar-container-outer': {
-            style: {
-                borderRight:
-                    'var(--md-border-width) solid var(--md-border-color)',
-            },
-        },
+        ...sidebarCssSelectors,
+        ...chatCssSelectors,
         // Example: Third-party Monaco editor styling
         // '.monaco-editor': {
         //     style: {

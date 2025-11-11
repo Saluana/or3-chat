@@ -8,7 +8,7 @@
             id="btn-reasoning-toggle"
             :class="[
                 'reasoning-toggle retro-reasoning-toggle',
-                toggleButtonProps?.class || ''
+                toggleButtonProps?.class || '',
             ]"
             :data-theme-target="toggleButtonProps?.['data-theme-target']"
             :data-theme-matches="toggleButtonProps?.['data-theme-matches']"
@@ -25,7 +25,10 @@
                         : collapsedLabel || 'Show reasoning'
                 }}
             </span>
-            <span  v-else class="reasoning-toggle-loading inline-flex items-center gap-1">
+            <span
+                v-else
+                class="reasoning-toggle-loading inline-flex items-center gap-1"
+            >
                 <LoadingGenerating style="width: 120px; min-height: 28px" />
             </span>
             <span
@@ -99,11 +102,7 @@ const toggleButtonProps = computed(() => {
 
     font-size: 16px;
     padding: 4px 8px;
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-high),
-        var(--md-surface-container-low)
-    );
+
     min-height: 32px;
     cursor: pointer;
     transition: all 0.2s ease;
