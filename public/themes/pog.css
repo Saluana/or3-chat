@@ -93,3 +93,11 @@
 [data-theme="pog"] .theme-btn:active {
   background-color: rgba(8, 109, 184, 0.2);
 }
+
+[data-theme="pog"] #top-nav .theme-btn {
+  border: none !important;
+}
+
+[data-theme="pog"] #top-header .theme-btn {
+  border: none !important;
+}

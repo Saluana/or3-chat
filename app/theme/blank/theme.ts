@@ -177,6 +177,16 @@ export default defineTheme({
                 backgroundColor: 'rgba(8, 109, 184, 0.2)',
             },
         },
+        '#top-nav .theme-btn': {
+            style: {
+                border: 'none !important',
+            },
+        },
+        '#top-header .theme-btn': {
+            style: {
+                border: 'none !important',
+            },
+        },
         // Example: Third-party Monaco editor styling
         // '.monaco-editor': {
         //     style: {
