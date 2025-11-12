@@ -25,10 +25,7 @@ export default defineAppConfig({
         button: {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
-                base: [
-                    'transition-colors',
-                    'theme-btn dark:theme-btn cursor-pointer text-start',
-                ],
+                base: ['transition-colors', 'cursor-pointer text-start'],
                 // Label tweaks are rarely overridden by variants, good to verify
                 label: 'truncate tracking-wider',
                 leadingIcon: 'shrink-0',

@@ -7,6 +7,9 @@ const chatInputButtonConfig = {
 
 export const chatOverrides = {
     /* --- Chat Content --- */
+    'button#shell.pane-close': {
+        class: 'backdrop-blur!',
+    },
     // All ChatMessage action buttons (copy/retry/branch/edit/etc.)
     'button.message': {
         class: 'flex items-center justify-center bg-info text-[var(--md-on-surface)]/90 hover:bg-primary/10 active:bg-[var(--md-info)]/80',

@@ -363,7 +363,7 @@ const paneCloseButtonProps = useButtonThemeProps('shell.pane-close', {
     size: 'xs',
     color: 'neutral',
     ui: {
-        base: 'theme-btn bg-[var(--md-surface-variant)]/60 backdrop-blur-sm',
+        base: 'theme-btn bg-[var(--md-surface-variant)]/60',
     },
 });
 
