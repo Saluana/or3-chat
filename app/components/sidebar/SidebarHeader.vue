@@ -89,18 +89,6 @@ function onToggle() {
     background-repeat: repeat-x;
     background-position: left center;
     background-size: auto 100%;
-    /* Use user-selected color (falls back by theme). Important to override legacy utility classes */
-    background-color: var(
-        --app-header-bg-color,
-        var(--md-surface-variant)
-    ) !important;
-}
-/* Dark mode still honors custom color */
-.dark .header-pattern {
-    background-color: var(
-        --app-header-bg-color,
-        var(--md-surface-container-low)
-    ) !important;
 }
 
 /* Retro logo title: pixel shadow + underline accent (no stroke) */

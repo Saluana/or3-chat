@@ -72,4 +72,9 @@ export const chatCssSelectors = {
                 'var(--md-border-width) solid var(--md-border-color) !important',
         },
     },
+    '.cm-assistant': {
+        style: {
+            backgroundColor: 'transparent',
+        },
+    },
 };

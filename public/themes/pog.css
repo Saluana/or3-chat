@@ -13,6 +13,14 @@
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
+[data-theme="pog"] #top-header {
+  background-color: var(--md-surface);
+}
+
+[data-theme="pog"] #bottom-nav {
+  background-color: var(--md-surface);
+}
+
 [data-theme="pog"] #btn-reasoning-toggle {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
@@ -41,6 +49,10 @@
 
 [data-theme="pog"] .chat-container-root:not(:first-child) {
   border-top: var(--md-border-width) solid var(--md-border-color) !important;
+}
+
+[data-theme="pog"] .cm-assistant {
+  background-color: transparent;
 }
 
 [data-theme="pog"] .dashboard-plugin-icon-label {

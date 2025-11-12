@@ -453,7 +453,7 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-black retro-message-user px-4 backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
+    'bg-primary text-white dark:text-white/95 retro-message-user px-4 backdrop-blur-sm w-fit self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
     'bg-white/5 retro-message-assistant w-full backdrop-blur-sm min-w-0':
         props.message.role === 'assistant',

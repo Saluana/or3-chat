@@ -2,7 +2,7 @@
     <div id="sidebar" class="flex flex-row w-full h-full">
         <SidebarSideNavContentCollapsed
             id="sidebar-content-collapsed"
-            class="border-r-[var(--md-border-width)] border-(--md-inverse-surface) bg-(--md-surface)/5 backdrop-blur-xs"
+            class="bg-[color:var(--md-surface)]/5 dark:bg-transparent backdrop-blur-xs"
             :active-thread="props.activeThread"
             @new-chat="onNewChat"
             @new-document="openCreateDocumentModal"

@@ -78,16 +78,17 @@ export default defineTheme({
             tertiaryContainer: '#554600',
             onTertiaryContainer: '#fff9c4',
 
-            surface: '#ffffff',
+            surface: '#000000',
             onSurface: '#e2e2e6',
-            surfaceVariant: '#43474e',
+            surfaceVariant: '#000000',
             onSurfaceVariant: '#c3c7cf',
             inverseSurface: '#e2e2e6',
             inverseOnSurface: '#2f3033',
 
             outline: '#8d9199',
-            borderColor: '#8d9199',
+            borderColor: '#3A4A57',
 
+            info: '#2F80A8',
             success: '#51cf66',
             warning: '#ffa94d',
             error: '#ffb3b3',
@@ -96,7 +97,7 @@ export default defineTheme({
 
     backgrounds: {
         content: {
-            base: { color: '#ffffff' },
+            base: { color: 'var(--md-surface)' },
         },
         sidebar: {},
     },
