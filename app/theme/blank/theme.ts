@@ -11,6 +11,7 @@
 import { defineTheme } from '../_shared/define-theme';
 import { sidebarOverrides, sidebarCssSelectors } from './styles/sidebar';
 import { chatOverrides, chatCssSelectors } from './styles/chat';
+import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
 
 export default defineTheme({
     name: 'pog',
@@ -140,7 +141,7 @@ export default defineTheme({
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-inverse-surface)]/70 rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)] ',
+                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)] py-0!',
                 header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
                 title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
                 description: 'hidden',
@@ -149,12 +150,33 @@ export default defineTheme({
         },
         ...chatOverrides,
         ...sidebarOverrides,
+        ...dashboardOverrides,
     },
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system
     cssSelectors: {
         ...sidebarCssSelectors,
         ...chatCssSelectors,
+        ...dashboardStyles,
+        '.theme-btn': {
+            style: {
+                border: 'var(--md-border-width) solid var(--md-border-color)',
+                borderRadius: 'var(--md-border-radius)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            },
+        },
+        '.theme-btn:hover': {
+            style: {
+                backgroundColor: 'rgba(8, 109, 184, 0.1)',
+            },
+        },
+        '.theme-btn:active': {
+            style: {
+                backgroundColor: 'rgba(8, 109, 184, 0.2)',
+            },
+        },
         // Example: Third-party Monaco editor styling
         // '.monaco-editor': {
         //     style: {

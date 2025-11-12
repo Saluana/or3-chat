@@ -395,6 +395,11 @@ export class RuntimeResolver {
         const entries = Object.entries(override.props || {});
 
         for (const [key, value] of entries) {
+            if (key === 'ui') {
+                // ui props only apply to Nuxt UI components; skip for native elements
+                continue;
+            }
+
             // Try to map semantic prop to class
             const mappedClass = this.tryMapPropToClass(key, value);
             if (mappedClass) {

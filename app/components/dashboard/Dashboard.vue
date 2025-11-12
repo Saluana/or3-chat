@@ -26,7 +26,6 @@
                         :icon="item.icon"
                         :label="item.label"
                         :size="74"
-                        :retro="true"
                         :radius="3"
                         @click="handlePluginClick(item.id)"
                     />
@@ -44,7 +43,7 @@
                     <UButton
                         id="dashboard-back-button"
                         v-bind="backButtonProps"
-                        class="ml-2 text-[20px] gap-0.5 hover:bg-(--md-primary)/10"
+                        class="ml-2 text-[20px] gap-0.5"
                         @click="goBack()"
                     >
                         <UIcon
