@@ -11,7 +11,7 @@ export default defineAppConfig({
                 link: 'h-[40px] text-[17px]! hover:bg-black/5 dark:hover:bg-white/5',
             },
         },
-        modal: {
+        /*modal: {
             slots: {
                 content:
                     'fixed border-[var(--md-border-width)] border-[color:var(--md-border-color)] divide-y divide-default flex flex-col focus:outline-none',
@@ -21,7 +21,7 @@ export default defineAppConfig({
                 description: 'hidden',
                 close: 'top-0 end-0 flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white dark:text-black  dark:hover:bg-white/80',
             },
-        },
+        },*/
         button: {
             slots: {
                 // Make base styles clearly different so it's obvious when applied
@@ -74,11 +74,11 @@ export default defineAppConfig({
                 // When using leading/trailing icons, bump padding so text/placeholder doesn't overlap the icon
                 leading: { true: 'ps-10!' },
                 trailing: { true: 'pe-10!' },
-                size: {
+                /*size: {
                     sm: { base: 'h-[32px] px-[12px]! text-[16px]' },
                     md: { base: 'h-[40px] px-[16px]! text-[17px]' },
                     lg: { base: 'h-[56px] px-[24px]! text-[24px]' },
-                },
+                },*/
             },
         },
         formField: {

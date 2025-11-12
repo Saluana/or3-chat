@@ -106,10 +106,16 @@ export default defineTheme({
         // Global input overrides
         input: {
             ui: {
+                root: 'font-[IBM_Plex_Sans]!',
                 variants: {
                     variant: {
                         outline:
                             'text-highlighted bg-default ring-0 focus-visible:ring-1 focus-visible:ring-[color:var(--md-primary)]',
+                    },
+                    size: {
+                        sm: { base: 'h-[32px] text-[12px]!' },
+                        md: { base: 'h-[40px] text-[14px]!' },
+                        lg: { base: 'h-[48px] text-[16px]!' },
                     },
                 },
             },
@@ -125,6 +131,20 @@ export default defineTheme({
                         lg: { base: 'h-[56px] !px-[24px] !text-[20px]' },
                     },
                 },
+            },
+        },
+        // Global modal overrides
+        modal: {
+            ui: {
+                overlay:
+                    'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
+                content:
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-inverse-surface)]/70 rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
+                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)] ',
+                header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
+                title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
+                description: 'hidden',
+                close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white! hover:bg-white/90! active:bg-white/80! dark:text-black dark:hover:bg-white/80!',
             },
         },
         ...chatOverrides,
