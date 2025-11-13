@@ -68,6 +68,7 @@ export default defineTheme({
         error: '#ff6b6b',
         info: '#E8F1F8',
         infoHover: '#DCEAF4',
+        infoActive: '#C6DDEE',
         onInfo: '#000000',
 
         // Dark mode overrides
@@ -93,6 +94,7 @@ export default defineTheme({
             onTertiaryContainer: '#fff9c4',
 
             surface: '#000000',
+            surfaceHover: '#121212',
             onSurface: '#e2e2e6',
             surfaceVariant: '#000000',
             onSurfaceVariant: '#c3c7cf',

@@ -5,7 +5,7 @@
             (typeof attrs.id === 'string' ? attrs.id : null) ??
             'bottom-nav-root'
         "
-        class="bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] px-0.5"
+        class="bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] px-1 flex flex-col items-center justify-between"
     >
         <!-- MY INFO -->
         <UPopover
@@ -55,6 +55,7 @@
             v-bind="connectButtonProps"
             type="button"
             @click="onConnectButtonClick"
+            :data-connection-state="connectionState"
             :aria-label="
                 hydrated
                     ? orIsConnected
@@ -174,20 +175,30 @@ const infoButtonProps = computed(() => {
     };
 });
 
-const connectButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
+const connectionState = computed(() =>
+    hydrated.value
+        ? orIsConnected.value
+            ? 'connected'
+            : 'disconnected'
+        : 'loading'
+);
+
+const connectOverrideParams = computed(() => ({
         component: 'button',
         context: 'sidebar',
         identifier: 'sidebar.bottom-nav.connect',
+        state: connectionState.value,
         isNuxtUI: true,
-    });
+}));
+
+const connectOverrides = useThemeOverrides(connectOverrideParams);
+
+const connectButtonProps = computed(() => {
     return {
         variant: 'soft' as const,
-        color: orIsConnected.value
-            ? ('success' as const)
-            : ('neutral' as const),
+        color: 'neutral' as const,
         block: true,
-        ...(overrides.value as any),
+        ...(connectOverrides.value as any),
     };
 });
 
@@ -260,21 +271,9 @@ function navigateToCredits() {
 <style scoped>
 /* Root area background uses configurable bottom nav color */
 .bottomnav-root {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
     justify-content: flex-start;
     gap: 4px; /* MD3 vertical spacing unit */
-    padding: 8px 2px 12px;
     /* Respect device safe areas so the bottom button never collides with OS UI */
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
-    background-color: var(--app-bottomnav-bg-color, var(--md-surface-variant));
-}
-
-.dark .bottomnav-root {
-    background-color: var(
-        --app-bottomnav-bg-color,
-        var(--md-surface-container-low)
-    );
 }
 </style>

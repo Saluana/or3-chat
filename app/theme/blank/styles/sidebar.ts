@@ -60,19 +60,23 @@ export const sidebarOverrides = {
 
     /* --- Sidebar bottom nav buttons --- */
     'button#sidebar.bottom-nav.info': {
-        class: 'min-h-[44px] flex flex-col items-center gap-1 py-1.5',
+        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]!',
         variant: 'soft',
-        color: 'neutral',
     },
     'button#sidebar.bottom-nav.connect': {
-        class: 'min-h-[44px] flex flex-col items-center gap-1 py-1.5',
+        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] transition-colors duration-150',
         variant: 'soft',
+    },
+    'button#sidebar.bottom-nav.connect:connected': {
+        class: 'bg-[var(--md-success)]/20 hover:border-[color:var(--md-error)]! hover:bg-[var(--md-error)]/30! active:bg-[var(--md-error)]/40! text-[color:var(--md-on-surface)]',
+    },
+    'button#sidebar.bottom-nav.connect:disconnected': {
+        class: 'hover:bg-[var(--md-success)]/15! active:bg-[var(--md-success)]/25',
     },
 
     'button#sidebar.bottom-nav.dashboard': {
-        class: 'min-h-[44px] flex flex-col items-center gap-1 py-1.5',
+        class: 'h-[54px] w-[54px] flex flex-col items-center gap-1 py-1.5 bg-transparent border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)] hover:bg-[var(--md-info-hover)]! active:bg-[var(--md-info-active)]! ',
         variant: 'soft',
-        color: 'neutral',
     },
 
     'button#sidebar.bottom-nav.activity': SidebarPopoverButtonConfig,
