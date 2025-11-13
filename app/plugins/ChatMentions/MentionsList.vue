@@ -1,10 +1,10 @@
 <template>
     <div
-        class="w-[85dvw] sm:w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col retro-mentions-list"
+        class="w-[85dvw] sm:w-[480px] max-h-[60dvh] bg-[var(--md-surface)] flex flex-col border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] shadow"
     >
         <!-- Search & Filters Header -->
         <div
-            class="sticky top-0 bg-[var(--md-surface)] border-b-[var(--md-border-width)] border-[color:var(--md-border-color)] p-3 z-10"
+            class="sticky top-0 bg-[var(--md-surface)] border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-t-[var(--md-border-radius)] p-3 z-10"
         >
             <UInput
                 v-model="searchTerm"

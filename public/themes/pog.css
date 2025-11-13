@@ -22,8 +22,13 @@
 }
 
 [data-theme="pog"] #btn-reasoning-toggle {
+  background-color: var(--md-surface) !important;
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius);
+}
+
+[data-theme="pog"] #btn-reasoning-toggle:hover {
+  background-color: var(--md-surface-hover) !important;
 }
 
 [data-theme="pog"] .reasoning-box {
@@ -88,6 +93,18 @@
   border: var(--md-border-width) solid var(--md-border-color) !important;
   border-radius: var(--md-border-radius) !important;
   padding: 20px 16px;
+}
+
+[data-theme="pog"] .document-editor-toolbar {
+  border-bottom: var(--md-border-width) solid var(--md-border-color);
+}
+
+[data-theme="pog"] .document-editor-shell:not(:last-child) {
+  border-right: var(--md-border-width) solid var(--md-border-color);
+}
+
+[data-theme="pog"] .document-editor-shell:not(:first-child) {
+  border-top: var(--md-border-width) solid var(--md-border-color) !important;
 }
 
 [data-theme="pog"] .theme-btn {

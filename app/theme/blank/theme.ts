@@ -28,6 +28,8 @@ export default defineTheme({
     colors: {
         // Primary colors
         primary: '#086DB8',
+        primaryTint: '#2A8FD6',
+        primaryShade: '#064F89',
         onPrimary: '#ffffff',
         primaryContainer: '#2C638B',
         onPrimaryContainer: '#002020',
@@ -71,6 +73,8 @@ export default defineTheme({
         // Dark mode overrides
         dark: {
             primary: '#2C638B',
+            primaryTint: '#4E8FBC',
+            primaryShade: '#204968',
             onPrimary: '#FFFFFF',
             primaryContainer: '#00504e',
             onPrimaryContainer: '#b2f5ea',
@@ -154,7 +158,7 @@ export default defineTheme({
                 overlay:
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
-                    'border-[length:var(--md-border-width)] border-[color:var(--md-inverse-surface)]/70 rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
                 body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)] py-0!',
                 header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
                 title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
