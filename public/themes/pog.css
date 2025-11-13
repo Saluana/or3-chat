@@ -68,12 +68,12 @@
 [data-theme="pog"] .dashboard-plugin-icon-button {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius) !important;
-  background-color: var(--md-surface);
-  color: var(--md-on-surface);
+  background-color: var(--md-info);
+  color: var(--md-on-info);
 }
 
 [data-theme="pog"] .dashboard-plugin-icon-button:hover {
-  background-color: rgba(8, 109, 184, 0.1);
+  background-color: var(--md-info-hover);
 }
 
 [data-theme="pog"] .dashboard-landing-item {
@@ -85,7 +85,7 @@
 }
 
 [data-theme="pog"] .dashboard-landing-item:hover {
-  background-color: rgba(8, 109, 184, 0.1);
+  background-color: var(--md-info-hover);
 }
 
 [data-theme="pog"] .section-card {

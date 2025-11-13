@@ -160,8 +160,8 @@ export default defineTheme({
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
                 body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)] py-0!',
-                header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-white',
-                title: 'text-white dark:text-black font-semibold text-xs sm:text-sm',
+                header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
+                title: 'text-[var(--md-on-primary)] font-semibold text-xs sm:text-sm',
                 description: 'hidden',
                 close: 'relative! top-auto! end-auto! flex items-center justify-center leading-none h-[32px] w-[32px] p-0 bg-white! hover:bg-white/90! active:bg-white/80! dark:text-black dark:hover:bg-white/80!',
             },
