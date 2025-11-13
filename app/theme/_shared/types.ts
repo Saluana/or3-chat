@@ -9,7 +9,9 @@
  * Material Design 3 Color Palette
  * Defines all the color tokens used in a theme.
  */
-export interface ColorPalette {
+type CustomColorTokens = Record<string, string | undefined>;
+
+interface BaseColorPalette {
     // Primary colors
     primary: string;
     onPrimary?: string; // Auto-calculated if omitted
@@ -54,8 +56,20 @@ export interface ColorPalette {
     warning?: string;
     info?: string;
 
+}
+
+export interface ColorPalette extends BaseColorPalette {
     // Dark mode overrides (optional)
-    dark?: Partial<Omit<ColorPalette, 'dark'>>;
+    dark?: Partial<BaseColorPalette> & CustomColorTokens;
+
+    /**
+     * Additional custom tokens.
+     * Any camelCase key automatically maps to a CSS variable --md-${kebab-case(key)}.
+     */
+    [customToken: string]:
+        | string
+        | undefined
+        | (Partial<BaseColorPalette> & CustomColorTokens);
 }
 
 /**

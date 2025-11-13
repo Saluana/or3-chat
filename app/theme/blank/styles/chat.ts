@@ -12,7 +12,10 @@ export const chatOverrides = {
     },
     // All ChatMessage action buttons (copy/retry/branch/edit/etc.)
     'button.message': {
-        class: 'flex items-center justify-center bg-info text-[var(--md-on-surface)]/90 hover:bg-primary/10 active:bg-[var(--md-info)]/80',
+        class: 'flex items-center justify-center bg-info text-[var(--md-on-info)] hover:bg-[var(--md-info-hover)] active:bg-[var(--md-info)]/80',
+    },
+    'button#message.reasoning-toggle': {
+        class: 'flex items-center justify-center bg-info/20 text-[var(--md-on-surface)]/90 hover:bg-[var(--md-info-hover)]/30 active:bg-[var(--md-info)]/80',
     },
     /* --- Chat Input --- */
     'div#chat.editor': {
@@ -34,8 +37,14 @@ export const chatOverrides = {
 export const chatCssSelectors = {
     '#btn-reasoning-toggle': {
         style: {
+            backgroundColor: 'var(--md-surface) !important',
             border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--md-border-radius)',
+        },
+    },
+    '#btn-reasoning-toggle:hover': {
+        style: {
+            backgroundColor: 'var(--md-surface-hover) !important',
         },
     },
     '.reasoning-box': {

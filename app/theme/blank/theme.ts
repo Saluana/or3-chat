@@ -30,6 +30,9 @@ export default defineTheme({
         onPrimary: '#ffffff',
         primaryContainer: '#2C638B',
         onPrimaryContainer: '#002020',
+        primaryBorder: '#0A5D99',
+        primaryHover: '#0A7FD1',
+        primaryActive: '#075A8F',
 
         // Secondary colors
         secondary: '#ff6b6b',
@@ -45,6 +48,7 @@ export default defineTheme({
 
         // Surface colors
         surface: '#ffffff',
+        surfaceHover: '#f0f0f0',
         onSurface: '#022344',
         surfaceVariant: '#ffffff',
         onSurfaceVariant: '#43474e',
@@ -60,13 +64,18 @@ export default defineTheme({
         warning: '#ffa94d',
         error: '#ff6b6b',
         info: '#E8F1F8',
+        infoHover: '#DCEAF4',
+        onInfo: '#000000',
 
         // Dark mode overrides
         dark: {
             primary: '#2C638B',
-            onPrimary: '#003735',
+            onPrimary: '#FFFFFF',
             primaryContainer: '#00504e',
             onPrimaryContainer: '#b2f5ea',
+            primaryBorder: '#234E6D',
+            primaryHover: '#3978A4',
+            primaryActive: '#234C67',
 
             secondary: '#ffb3b3',
             onSecondary: '#5f1314',
@@ -88,7 +97,10 @@ export default defineTheme({
             outline: '#8d9199',
             borderColor: '#3A4A57',
 
-            info: '#2F80A8',
+            info: '#111417',
+            infoHover: '#1A1F23',
+            infoActive: '#0C0E10',
+            onInfo: '#DDE3E8',
             success: '#51cf66',
             warning: '#ffa94d',
             error: '#ffb3b3',

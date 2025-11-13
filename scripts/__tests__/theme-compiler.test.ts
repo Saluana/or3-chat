@@ -277,6 +277,23 @@ describe('ThemeCompiler', () => {
 
             expect(css).toContain('--md-on-primary: #ffffff');
         });
+
+        it('should generate CSS variables for custom camelCase tokens', () => {
+            const colors = {
+                primary: '#111111',
+                infoHover: '#222222',
+                surfaceActive: '#333333',
+                dark: {
+                    infoHover: '#999999',
+                },
+            };
+
+            const css = (compiler as any).generateCSSVariables(colors);
+
+            expect(css).toContain('--md-info-hover: #222222');
+            expect(css).toContain('--md-surface-active: #333333');
+            expect(css).toMatch(/\.dark[\s\S]*--md-info-hover: #999999/);
+        });
     });
 
     describe('override compilation', () => {

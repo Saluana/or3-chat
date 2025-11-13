@@ -42,7 +42,7 @@
 
 .or3-prose :deep(h1) {
     font-size: 1.875rem;
-    border-bottom: 2px solid var(--md-inverse-surface);
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
 }
@@ -80,8 +80,8 @@
 
 .or3-prose :deep(pre) {
     padding: 1rem;
-    border-radius: 3px;
-    border: 2px solid var(--md-inverse-surface);
+    border-radius: var(--md-border-radius);
+    border: var(--md-border-width) solid var(--md-border-color);
     overflow-x: auto;
     margin: 1rem 0;
     font-weight: 505;
@@ -97,8 +97,8 @@
 /* Streamdown code blocks */
 .or3-prose :deep([data-streamdown='code-block']) {
     margin: 1rem 0;
-    border: 2px solid var(--md-inverse-surface);
-    border-radius: 3px;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
     overflow: hidden;
 }
 
@@ -117,15 +117,15 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 1rem;
-    background: var(--md-primary-container);
-    border-bottom: 2px solid var(--md-inverse-surface);
+    background: var(--md-primary);
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
     font-family: 'Press Start 2P', monospace;
     font-size: 16px;
 }
 
 .or3-prose :deep([data-streamdown='code-lang']) {
     text-transform: uppercase;
-    color: var(--md-primary);
+    color: var(--md-on-primary);
     letter-spacing: 0.5px;
     font-size: 10px !important;
 }
@@ -151,8 +151,8 @@ font-family: "VT323", monospace !important;
     padding: 0.25rem 0.5rem;
     background: var(--md-primary);
     color: white;
-    border: 1px solid var(--md-inverse-surface);
-    border-radius: 3px;
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
     cursor: pointer;
     font-size: 0.75rem;
     transition: background 0.2s;
@@ -160,11 +160,6 @@ font-family: "VT323", monospace !important;
 
 .or3-prose :deep([data-streamdown='copy-button']:hover) {
     background: var(--md-primary-variant);
-}
-
-.or3-prose :deep([data-streamdown='table-wrapper']) {
-    overflow-x: auto;
-    border-radius: 3px;
 }
 
 .or3-prose :deep(blockquote) {
@@ -184,19 +179,13 @@ font-family: "VT323", monospace !important;
     margin: 0.5rem 0;
 }
 
-.or3-prose :deep(table) {
-    width: auto;
-    min-width: min-content;
-    max-width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    table-layout: auto;
-}
+
 
 .or3-prose :deep(th) {
-    border: 2px solid var(--md-inverse-surface);
+    border-right: var(--md-border-width) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
+    color: var(--md-on-primary);
     font-size: 16px;
     white-space: nowrap;
     background: var(--md-primary-container);
@@ -204,8 +193,71 @@ font-family: "VT323", monospace !important;
 }
 
 .or3-prose :deep(td) {
-    border: 2px solid var(--md-inverse-surface);
+    border: var(--md-border-width) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
     font-size: 16px;
+}
+
+
+/* Safety net for table layout */
+[data-streamdown='table-wrapper'] {
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
+    margin-top: 32px !important;
+    margin-bottom: 32px;
+    margin-right: 4px; /* Space for shadow */
+    overflow-x: auto;
+    width: fit-content;
+    max-width: calc(100% - 4px); /* Account for shadow space */
+}
+
+
+
+[data-streamdown='table'] {
+    margin-bottom: 0px;
+    margin-top: 0px;
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    border-left: none;
+    border-right: none;
+    width: auto;
+    min-width: min-content;
+}
+
+[data-streamdown='th'] {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: var(--md-border-width) solid var(--md-border-color);
+    font-weight: 600;
+    border-top: none;
+    white-space: nowrap;
+}
+
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:first-child,
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:first-child {
+    border-left: 0;
+}
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='th']:last-child,
+[data-streamdown='table'] [data-streamdown='tr'] > [data-streamdown='td']:last-child {
+    border-right: 0;
+}
+
+/* Zebra striping for table body rows (every 2nd data row) */
+[data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even) {
+    background: var(--md-surface-container-low);
+}
+[data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd) {
+    background: var(--md-surface-container-lowest);
+}
+/* Optional hover highlight */
+[data-streamdown='tbody'] [data-streamdown='tr']:hover {
+    background: var(--md-surface-container-high);
+}
+
+.or3-prose :deep([data-streamdown='code-line-number']) {
+    margin-right: 12px;
+    padding: 20px;
+}
+.or3-prose :deep(pre) {
+    padding-left: 0;
 }

@@ -258,13 +258,32 @@ export class ThemeCompiler {
             info: '--md-info',
         };
 
+        const emittedKeys = new Set<string>();
+
         for (const [key, cssVar] of Object.entries(colorMap)) {
-            if (colors[key]) {
-                css += `  ${cssVar}: ${colors[key]};\n`;
+            const value = colors[key];
+            if (typeof value === 'string') {
+                css += `  ${cssVar}: ${value};\n`;
+                emittedKeys.add(key);
             }
         }
 
+        // Emit any additional custom tokens (camelCase → kebab-case)
+        for (const [key, value] of Object.entries(colors)) {
+            if (key === 'dark' || emittedKeys.has(key)) continue;
+            if (typeof value !== 'string') continue;
+            const cssVar = `--md-${this.toKebabCase(key)}`;
+            css += `  ${cssVar}: ${value};\n`;
+        }
+
         return css;
+    }
+
+    private toKebabCase(value: string): string {
+        return value
+            .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+            .replace(/[\s_]+/g, '-')
+            .toLowerCase();
     }
 
     /**

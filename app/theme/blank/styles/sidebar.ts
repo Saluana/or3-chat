@@ -39,7 +39,7 @@ export const sidebarOverrides = {
     'button#sidebar.new-chat': {
         variant: 'solid',
         color: 'primary',
-        class: 'text-[color:var(--md-on-primary)] hover:bg-primary/90! active:bg-primary/90!',
+        class: 'text-[color:var(--md-on-primary)] hover:bg-[var(--md-primary-hover)]! active:bg-[var(--md-primary-active)]!',
         ui: {
             base: 'bg-primary text-[color:var(--md-on-primary)] hover:bg-primary! active:bg-primary/90!',
         },

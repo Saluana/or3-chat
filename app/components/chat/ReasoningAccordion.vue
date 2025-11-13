@@ -42,7 +42,7 @@
         <pre
             :id="`reasoning-${id}`"
             :class="[
-                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-center p-1 border-(--md-inverse-surface) rounded-sm',
+                'reasoning-box text-black dark:text-white font-[inherit] text-wrap overflow-x-hidden flex flex-col items-start gap-1 bg-(--md-surface-container-low) text-start p-1 border-(--md-inverse-surface) rounded-sm',
                 'transition-all duration-200 ease-in-out',
                 expanded
                     ? 'opacity-100 max-h-72 mt-2 overflow-y-auto px-3'
@@ -99,26 +99,11 @@ const toggleButtonProps = computed(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-
     font-size: 16px;
     padding: 4px 8px;
-
     min-height: 32px;
     cursor: pointer;
     transition: all 0.2s ease;
-}
-
-.reasoning-toggle:hover {
-    background: linear-gradient(
-        180deg,
-        var(--md-surface-container-low),
-        var(--md-surface-container-high)
-    );
-}
-
-.reasoning-toggle:focus {
-    outline: 2px solid var(--md-inverse-primary);
-    outline-offset: 2px;
 }
 
 .pulse {
