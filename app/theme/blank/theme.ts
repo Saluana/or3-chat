@@ -12,6 +12,7 @@ import { defineTheme } from '../_shared/define-theme';
 import { sidebarOverrides, sidebarCssSelectors } from './styles/sidebar';
 import { chatOverrides, chatCssSelectors } from './styles/chat';
 import { dashboardOverrides, dashboardStyles } from './styles/dashboard';
+import { documentsOverrides, documentsStyles } from './styles/documents';
 
 export default defineTheme({
     name: 'pog',
@@ -164,6 +165,7 @@ export default defineTheme({
         ...chatOverrides,
         ...sidebarOverrides,
         ...dashboardOverrides,
+        ...documentsOverrides,
     },
     // CSS Selectors for direct DOM targeting
     // These target elements that can't easily be integrated with the component override system
@@ -171,6 +173,7 @@ export default defineTheme({
         ...sidebarCssSelectors,
         ...chatCssSelectors,
         ...dashboardStyles,
+        ...documentsStyles,
         '.theme-btn': {
             style: {
                 border: 'var(--md-border-width) solid var(--md-border-color)',
