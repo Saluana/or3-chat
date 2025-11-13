@@ -146,7 +146,8 @@ export class ThemeCompiler {
         const cssVariables = this.generateCSSVariables(
             definition.colors,
             definition.borderWidth,
-            definition.borderRadius
+            definition.borderRadius,
+            definition.fonts
         );
 
         // Compile overrides
@@ -187,13 +188,15 @@ export class ThemeCompiler {
     private generateCSSVariables(
         colors: ThemeDefinition['colors'],
         borderWidth?: string,
-        borderRadius?: string
+        borderRadius?: string,
+        fonts?: ThemeDefinition['fonts']
     ): string {
         let css = '';
 
         // Light mode variables
         css += '.light {\n';
         css += this.generateColorVars(colors);
+        css += this.generateFontVars(fonts);
         if (borderWidth) {
             css += `  --md-border-width: ${borderWidth};\n`;
         }
@@ -203,12 +206,14 @@ export class ThemeCompiler {
         css += '}\n\n';
 
         // Dark mode variables
-        if (colors.dark) {
+        const hasDarkBlock = Boolean(colors.dark || fonts?.dark);
+        if (hasDarkBlock) {
             css += '.dark {\n';
             // Create merged object without dark property
             const { dark, ...baseColors } = colors;
             const darkColors = { ...baseColors, ...dark };
             css += this.generateColorVars(darkColors);
+            css += this.generateFontVars(fonts?.dark);
             if (borderWidth) {
                 css += `  --md-border-width: ${borderWidth};\n`;
             }
@@ -276,6 +281,23 @@ export class ThemeCompiler {
             css += `  ${cssVar}: ${value};\n`;
         }
 
+        return css;
+    }
+
+    private generateFontVars(fonts?: ThemeDefinition['fonts']): string {
+        if (!fonts) return '';
+        let css = '';
+        const fontMap: Record<string, string> = {
+            sans: '--font-sans',
+            heading: '--font-heading',
+            mono: '--font-mono',
+        };
+        for (const [key, cssVar] of Object.entries(fontMap)) {
+            const value = fonts[key as keyof typeof fontMap];
+            if (typeof value === 'string' && value.length > 0) {
+                css += `  ${cssVar}: ${value};\n`;
+            }
+        }
         return css;
     }
 

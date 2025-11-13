@@ -238,6 +238,19 @@ export interface ThemeDefinition {
 
     /** Background descriptions that map to CSS variables */
     backgrounds?: ThemeBackgrounds;
+
+    /** Font family tokens for this theme */
+    fonts?: ThemeFonts;
+}
+
+export interface ThemeFontSet {
+    sans?: string;
+    heading?: string;
+    mono?: string;
+}
+
+export interface ThemeFonts extends ThemeFontSet {
+    dark?: ThemeFontSet;
 }
 
 /**

@@ -127,6 +127,11 @@ export default defineTheme({
         },
     },
 
+    fonts: {
+        sans: '"VT323", ui-sans-serif, system-ui, sans-serif',
+        heading: '"Press Start 2P", ui-sans-serif, system-ui, sans-serif',
+    },
+
     // Component overrides using the new selector syntax
     // These provide default styling for all retro-themed components
     overrides: {

@@ -25,16 +25,23 @@
 /* Theme-specific styles are loaded dynamically by the theme system via loadThemeStylesheets() */
 /* DO NOT import theme styles here - they should only load when their theme is active */
 
-/* mentions.css removed: .mention styles live in ChatInputDropper.vue */
-
 /* Font setup: body uses VT323, headings use Press Start 2P */
 :root {
-	/* Tailwind v4 token vars (optional for font utilities) */
-	--font-sans: "VT323", ui-sans-serif, system-ui, sans-serif;
-	--font-heading: "Press Start 2P", ui-sans-serif, system-ui, sans-serif;
 	/* Dynamic current font choices (updated by theme settings) */
-	--app-font-sans-current: var(--font-sans);
-	--app-font-heading-current: var(--font-heading);
+	--app-font-sans-current: var(
+		--font-sans,
+		"VT323",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	);
+	--app-font-heading-current: var(
+		--font-heading,
+		"Press Start 2P",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	);
     --ui-radius: 3px;
 
 	/* Theme customization variables (defaults mirror shipped design) */
@@ -54,11 +61,23 @@
 }
 
 .font-ps2 {
-	font-family: var(--font-heading) !important;
+	font-family: var(
+		--font-heading,
+		"Press Start 2P",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	) !important;
 }
 
 .font-vt323 {
-	font-family: var(--font-sans) !important;
+	font-family: var(
+		--font-sans,
+		"VT323",
+		ui-sans-serif,
+		system-ui,
+		sans-serif
+	) !important;
 }
 
 html, body {

@@ -121,6 +121,11 @@ export default defineTheme({
         sidebar: {},
     },
 
+    fonts: {
+        sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+        heading: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+    },
+
     // Component overrides using the new selector syntax
     // These provide default styling for all retro-themed components
     overrides: {

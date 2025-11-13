@@ -294,6 +294,32 @@ describe('ThemeCompiler', () => {
             expect(css).toContain('--md-surface-active: #333333');
             expect(css).toMatch(/\.dark[\s\S]*--md-info-hover: #999999/);
         });
+
+        it('should generate font variables when fonts provided', () => {
+            const colors = {
+                primary: '#3f8452',
+                secondary: '#5a7b62',
+                surface: '#f5faf5',
+            };
+            const fonts = {
+                sans: '"Inter", sans-serif',
+                heading: '"Space Grotesk", sans-serif',
+                dark: {
+                    heading: '"Space Grotesk", sans-serif',
+                },
+            };
+
+            const css = (compiler as any).generateCSSVariables(
+                colors,
+                undefined,
+                undefined,
+                fonts
+            );
+
+            expect(css).toContain('--font-sans: "Inter", sans-serif');
+            expect(css).toContain('--font-heading: "Space Grotesk", sans-serif');
+            expect(css).toMatch(/\.dark[\s\S]*--font-heading: "Space Grotesk", sans-serif/);
+        });
     });
 
     describe('override compilation', () => {

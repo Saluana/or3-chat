@@ -1,4 +1,8 @@
-import type { ThemeDefinition, ColorPalette } from './types';
+import type {
+    ThemeDefinition,
+    ColorPalette,
+    ThemeFontSet,
+} from './types';
 
 /**
  * Generate CSS variable declarations from theme color palette.
@@ -6,6 +10,7 @@ import type { ThemeDefinition, ColorPalette } from './types';
  */
 export function generateThemeCssVariables(def: ThemeDefinition): string {
     const light = buildPalette(def.colors);
+    applyFontVars(light, def.fonts);
 
     // Add border styling if defined
     if (def.borderWidth) {
@@ -18,6 +23,7 @@ export function generateThemeCssVariables(def: ThemeDefinition): string {
     const darkOverrides = def.colors.dark
         ? buildPalette(def.colors.dark as ColorPalette, true)
         : {};
+    applyFontVars(darkOverrides, def.fonts?.dark);
 
     // Add border styling to dark mode as well (same values)
     if (def.borderWidth && Object.keys(darkOverrides).length > 0) {
@@ -48,6 +54,22 @@ function buildPalette(
         entries[varName] = value;
     }
     return entries;
+}
+
+function applyFontVars(
+    target: Record<string, string>,
+    fonts?: ThemeFontSet
+): void {
+    if (!fonts) return;
+    if (fonts.sans) {
+        target['--font-sans'] = fonts.sans;
+    }
+    if (fonts.heading) {
+        target['--font-heading'] = fonts.heading;
+    }
+    if (fonts.mono) {
+        target['--font-mono'] = fonts.mono;
+    }
 }
 
 function toCssBlock(

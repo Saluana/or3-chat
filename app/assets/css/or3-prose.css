@@ -188,7 +188,7 @@ font-family: "VT323", monospace !important;
     color: var(--md-on-primary);
     font-size: 16px;
     white-space: nowrap;
-    background: var(--md-primary-container);
+    background: var(--md-primary);
     font-weight: bold;
 }
 
