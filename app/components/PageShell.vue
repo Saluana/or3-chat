@@ -146,7 +146,7 @@
                 <div
                     v-for="(pane, i) in panes"
                     :key="pane.id"
-                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-hidden"
+                    class="relative flex flex-col border-l-[var(--md-border-width)] first:border-l-0 outline-none focus-visible:ring-0 overflow-visible"
                     :style="{ width: getPaneWidth(i) }"
                     :class="[
                         ...(i === activePaneIndex && panes.length > 1
