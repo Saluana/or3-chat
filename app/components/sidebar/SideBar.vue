@@ -39,6 +39,7 @@
             @add-to-project="openAddToProject"
             @add-document-to-project="openAddDocumentToProject"
             @add-chat-to-project="handleAddChatToProject"
+            @add-document-to-project-root="handleAddDocumentToProject"
             @rename-project="openRenameProject"
             @delete-project="confirmDeleteProject"
             @rename-entry="handleRenameEntry"

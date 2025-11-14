@@ -129,11 +129,11 @@
 }
 
 [data-theme="pog"] .theme-btn:hover {
-  background-color: rgba(8, 109, 184, 0.1);
+  background-color: var(--md-surface-hover);
 }
 
 [data-theme="pog"] .theme-btn:active {
-  background-color: rgba(8, 109, 184, 0.2);
+  background-color: var(--md-surface-active);
 }
 
 [data-theme="pog"] #top-nav .theme-btn {
@@ -142,4 +142,8 @@
 
 [data-theme="pog"] #top-header .theme-btn {
   border: none !important;
+}
+
+[data-theme="pog"] #top-header .theme-btn:hover {
+  background-color: var(--md-surface-hover);
 }

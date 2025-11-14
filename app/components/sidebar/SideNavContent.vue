@@ -23,6 +23,9 @@
                 @add-document-to-project="
                     emit('add-document-to-project', $event)
                 "
+                @add-document-to-project-root="
+                    emit('add-document-to-project-root', $event)
+                "
             />
         </ClientOnly>
 
@@ -185,6 +188,7 @@ const emit = defineEmits([
     'rename-document',
     'delete-document',
     'add-document-to-project-from-list',
+    'add-document-to-project-root',
     'sidebar-footer-action',
 ]);
 
@@ -327,6 +331,7 @@ const forwardedEvents = computed(() => {
         'rename-document',
         'delete-document',
         'add-document-to-project-from-list',
+        'add-document-to-project-root',
         'sidebar-footer-action',
     ];
 

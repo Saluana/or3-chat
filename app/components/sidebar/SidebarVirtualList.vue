@@ -50,7 +50,10 @@
                                 "
                                 @add-chat="emit('addChat', item.project.id)"
                                 @add-document="
-                                    emit('addDocument', item.project.id)
+                                    emit(
+                                        'addDocumentToProjectRoot',
+                                        item.project.id
+                                    )
                                 "
                                 @rename="emit('renameProject', item.project.id)"
                                 @delete="emit('deleteProject', item.project.id)"

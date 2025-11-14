@@ -225,12 +225,12 @@ export default defineTheme({
         },
         '.theme-btn:hover': {
             style: {
-                backgroundColor: 'rgba(8, 109, 184, 0.1)',
+                backgroundColor: 'var(--md-surface-hover)',
             },
         },
         '.theme-btn:active': {
             style: {
-                backgroundColor: 'rgba(8, 109, 184, 0.2)',
+                backgroundColor: 'var(--md-surface-active)',
             },
         },
         '#top-nav .theme-btn': {
