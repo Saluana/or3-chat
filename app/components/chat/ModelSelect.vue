@@ -2,7 +2,7 @@
     <div
         id="model-select-root"
         v-if="show"
-        class="model-select-container inline-block"
+        class="model-select-container inline-flex w-full justify-end min-w-0 max-w-full"
     >
         <USelectMenu
             id="model-select-menu"
@@ -50,7 +50,7 @@ const selectMenuProps = computed(() => {
     } = overrideValue;
 
     const baseClass =
-        'h-[32px] text-[14px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px]';
+        'h-[32px] text-[14px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-full truncate whitespace-nowrap';
     const mergedClass = [baseClass, themeClass].filter(Boolean).join(' ');
 
     const defaultSearchInput = {

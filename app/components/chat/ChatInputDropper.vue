@@ -48,7 +48,7 @@
 
             <!-- Bottom Controls -->
             <div
-                class="chat-input-bottom-controls flex gap-2.5 w-full items-center"
+                class="chat-input-bottom-controls flex flex-wrap gap-2.5 w-full items-center"
             >
                 <div
                     class="chat-input-bottom-controls-left relative flex-1 flex items-center gap-2 shrink min-w-0"
@@ -136,13 +136,17 @@
                 </div>
 
                 <!-- Model Selector extracted -->
-                <LazyChatModelSelect
-                    hydrate-on-interaction="focus"
+                <div
                     v-if="!isMobile && containerWidth && containerWidth > 400"
-                    v-model:model="selectedModel"
-                    :loading="loading"
-                    class="shrink-0 hidden sm:block"
-                />
+                    class="chat-input-model-select hidden sm:block sm:flex-1 min-w-0 sm:min-w-[200px] sm:max-w-full"
+                >
+                    <LazyChatModelSelect
+                        hydrate-on-interaction="focus"
+                        v-model:model="selectedModel"
+                        :loading="loading"
+                        class="w-full min-w-0 max-w-full"
+                    />
+                </div>
 
                 <!-- Send / Stop Button -->
                 <div class="chat-input-bottom-controls-right">
