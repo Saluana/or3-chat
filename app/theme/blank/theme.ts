@@ -51,7 +51,8 @@ export default defineTheme({
 
         // Surface colors
         surface: '#ffffff',
-        surfaceHover: '#f0f0f0',
+        surfaceHover: '#F2F7FC',
+        surfaceActive: '#EBF3FB',
         onSurface: '#022344',
         surfaceVariant: '#ffffff',
         onSurfaceVariant: '#43474e',
@@ -94,7 +95,8 @@ export default defineTheme({
             onTertiaryContainer: '#fff9c4',
 
             surface: '#000000',
-            surfaceHover: '#121212',
+            surfaceHover: '#172332',
+            surfaceActive: '#223344',
             onSurface: '#e2e2e6',
             surfaceVariant: '#000000',
             onSurfaceVariant: '#c3c7cf',
@@ -124,6 +126,15 @@ export default defineTheme({
     fonts: {
         sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
         heading: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+    },
+
+    ui: {
+        tooltip: {
+            slots: {
+                content:
+                    'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]! ring-0 rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[var(--md-on-surface)] shadow-lg p-2 text-sm',
+            },
+        },
     },
 
     // Component overrides using the new selector syntax
@@ -166,7 +177,7 @@ export default defineTheme({
                     'fixed inset-0 bg-black/50 backdrop-blur-sm dark:bg-black/70',
                 content:
                     'border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] ring-0 fixed divide-y divide-default flex flex-col focus:outline-none',
-                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)] py-0!',
+                body: 'border-y-[length:var(--md-border-width)] border-y-[color:var(--md-border-color)]  py-0! px-0!',
                 header: 'border-none bg-primary px-2! sm:px-3! py-0 sm:p-0 min-h-[50px] w-full justify-between flex items-center text-[var(--md-on-primary)]!',
                 title: 'text-[var(--md-on-primary)] font-semibold text-xs sm:text-sm',
                 description: 'hidden',

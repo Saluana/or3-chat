@@ -38,7 +38,7 @@
             >
                 <div
                     id="dashboard-page-header"
-                    class="flex h-10 shrink-0 items-center border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] pr-2"
+                    class="flex h-10 shrink-0 items-center border-b-[length:var(--md-border-width)] border-[color:var(--md-border-color)] pr-2 px-4"
                 >
                     <UButton
                         id="dashboard-back-button"

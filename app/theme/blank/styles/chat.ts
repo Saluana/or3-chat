@@ -2,7 +2,7 @@
 const chatInputButtonConfig = {
     variant: 'soft' as const,
     size: 'sm' as const,
-    class: 'min-h-[32px] w-[32px] text-primary flex items-center justify-center p-0 rounded-[var(--md-border-radius)] hover:bg-[var(--md-primary)]/10 active:bg-[var(--md-primary)]/20 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
+    class: 'min-h-[32px] w-[32px] text-primary flex items-center justify-center p-0 rounded-[var(--md-border-radius)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]',
 };
 
 export const chatOverrides = {

@@ -107,12 +107,12 @@ export default defineAppConfig({
                 content:
                     'bg-white ring-0 dark:bg-black rounded-[var(--md-border-radius)] border-[color:var(--md-border-color)] border-[length:var(--md-border-width)] p-0.5',
             },
-        },
+        } /*
         tooltip: {
             slots: {
-                content: 'border-[var(--md-border-width)] text-[18px]!',
+                content: 'border-[var(--md-border-width)] text-[18px]',
             },
-        },
+        },*/,
         switch: {
             // Retro styled switch theme (square, hard borders, pixel shadow)
             slots: {

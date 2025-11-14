@@ -1,8 +1,6 @@
 <template>
     <div v-if="projects.length" class="space-y-1">
-        <h1 class="text-xs uppercase opacity-70 px-1 py-3 select-none">
-            Projects
-        </h1>
+        <h1 class="sidebar-section-heading px-1 py-3 select-none">Projects</h1>
         <UTree
             v-model:expanded="internalExpanded"
             :items="treeItems"

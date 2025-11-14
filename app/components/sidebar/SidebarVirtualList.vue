@@ -16,7 +16,7 @@
                         <!-- Section Header -->
                         <h1
                             v-if="item.type === 'sectionHeader'"
-                            class="text-xs uppercase tracking-wide opacity-70 px-1 py-3 select-none"
+                            class="sidebar-section-heading px-1 py-3 select-none"
                         >
                             {{ item.label }}
                         </h1>

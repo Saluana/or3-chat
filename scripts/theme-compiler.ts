@@ -16,6 +16,7 @@ import type {
     ValidationError,
     AttributeMatcher,
     AttributeOperator,
+    ThemeFontSet,
 } from '../app/theme/_shared/types';
 import { validateThemeDefinition } from '../app/theme/_shared/validate-theme';
 import { KNOWN_THEME_CONTEXTS } from '../app/theme/_shared/contexts';
@@ -292,8 +293,11 @@ export class ThemeCompiler {
             heading: '--font-heading',
             mono: '--font-mono',
         };
-        for (const [key, cssVar] of Object.entries(fontMap)) {
-            const value = fonts[key as keyof typeof fontMap];
+        const fontEntries = Object.entries(fontMap) as Array<
+            [keyof ThemeFontSet, string]
+        >;
+        for (const [key, cssVar] of fontEntries) {
+            const value = fonts[key];
             if (typeof value === 'string' && value.length > 0) {
                 css += `  ${cssVar}: ${value};\n`;
             }

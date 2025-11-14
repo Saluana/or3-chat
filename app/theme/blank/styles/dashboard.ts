@@ -18,13 +18,18 @@ export const dashboardStyles = {
         style: {
             border: 'var(--md-border-width) solid var(--md-border-color)',
             borderRadius: 'var(--md-border-radius) !important',
-            backgroundColor: 'var(--md-info)',
-            color: 'var(--md-on-info)',
+            backgroundColor: 'var(--md-surface)',
+            color: 'var(--md-on-surface)',
         },
     },
     '.dashboard-plugin-icon-button:hover': {
         style: {
-            backgroundColor: 'var(--md-info-hover)',
+            backgroundColor: 'var(--md-surface-hover)',
+        },
+    },
+    '.dashboard-plugin-icon-button:active': {
+        style: {
+            backgroundColor: 'var(--md-surface-active)',
         },
     },
     '.dashboard-landing-item': {
@@ -38,7 +43,7 @@ export const dashboardStyles = {
     },
     '.dashboard-landing-item:hover': {
         style: {
-            backgroundColor: 'var(--md-info-hover)',
+            backgroundColor: 'var(--md-surface-hover)',
         },
     },
     '.section-card': {

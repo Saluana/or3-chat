@@ -21,6 +21,15 @@
   background-color: var(--md-surface);
 }
 
+[data-theme="pog"] .sidebar-section-heading {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--md-on-surface)/70%;
+}
+
 [data-theme="pog"] #btn-reasoning-toggle {
   background-color: var(--md-surface) !important;
   border: var(--md-border-width) solid var(--md-border-color);
@@ -68,12 +77,16 @@
 [data-theme="pog"] .dashboard-plugin-icon-button {
   border: var(--md-border-width) solid var(--md-border-color);
   border-radius: var(--md-border-radius) !important;
-  background-color: var(--md-info);
-  color: var(--md-on-info);
+  background-color: var(--md-surface);
+  color: var(--md-on-surface);
 }
 
 [data-theme="pog"] .dashboard-plugin-icon-button:hover {
-  background-color: var(--md-info-hover);
+  background-color: var(--md-surface-hover);
+}
+
+[data-theme="pog"] .dashboard-plugin-icon-button:active {
+  background-color: var(--md-surface-active);
 }
 
 [data-theme="pog"] .dashboard-landing-item {
@@ -85,7 +98,7 @@
 }
 
 [data-theme="pog"] .dashboard-landing-item:hover {
-  background-color: var(--md-info-hover);
+  background-color: var(--md-surface-hover);
 }
 
 [data-theme="pog"] .section-card {

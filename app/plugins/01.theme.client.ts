@@ -56,6 +56,17 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         );
     }
 
+    const appConfig = useAppConfig() as any;
+    const baseUiConfig = cloneUiConfig(appConfig.ui || {});
+
+    const applyThemeUiConfig = (theme?: CompiledTheme | null) => {
+        const mergedUi = mergeUiConfig(
+            cloneUiConfig(baseUiConfig),
+            theme?.ui as Record<string, any> | undefined
+        );
+        appConfig.ui = mergedUi;
+    };
+
     // Determine current default theme from manifest
     const DEFAULT_THEME =
         manifestEntries.find((entry) => entry.isDefault)?.name ??
@@ -376,6 +387,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             localStorage.setItem(activeThemeStorageKey, fallback);
             writeActiveThemeCookie(fallback);
             await ensureThemeLoaded(fallback);
+            applyThemeUiConfig(themeRegistry.get(fallback) || null);
             return;
         }
 
@@ -400,6 +412,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         // Load CSS file and apply classes for new theme
         const theme = themeRegistry.get(target);
         const manifest = themeManifest.get(target);
+        applyThemeUiConfig(theme ?? null);
 
         if (theme && manifest) {
             // Load theme-specific stylesheets (from stylesheets array)
@@ -560,4 +573,51 @@ function injectThemeVariables(themeName: string, css: string) {
         document.head.appendChild(style);
     }
     style.textContent = css;
+}
+
+function cloneUiConfig(
+    config: Record<string, any> | undefined
+): Record<string, any> {
+    if (!config) {
+        return {};
+    }
+
+    if (typeof globalThis.structuredClone === 'function') {
+        try {
+            return globalThis.structuredClone(config);
+        } catch {
+            // Fallback to JSON if structuredClone fails (non-cloneable values)
+        }
+    }
+
+    return JSON.parse(JSON.stringify(config));
+}
+
+function mergeUiConfig(
+    base: Record<string, any>,
+    patch?: Record<string, any>
+): Record<string, any> {
+    if (!patch) {
+        return base;
+    }
+
+    for (const [key, value] of Object.entries(patch)) {
+        if (
+            value &&
+            typeof value === 'object' &&
+            !Array.isArray(value)
+        ) {
+            const current = base[key];
+            base[key] = mergeUiConfig(
+                current && typeof current === 'object' && !Array.isArray(current)
+                    ? current
+                    : {},
+                value as Record<string, any>
+            );
+        } else if (value !== undefined) {
+            base[key] = value;
+        }
+    }
+
+    return base;
 }
