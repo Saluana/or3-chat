@@ -241,6 +241,8 @@ export default defineTheme({
         '#top-header .theme-btn': {
             style: {
                 border: 'none !important',
+                minHeight: '24px',
+                minWidth: '24px',
             },
         },
         // Example: Third-party Monaco editor styling

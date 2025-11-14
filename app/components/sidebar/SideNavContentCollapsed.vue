@@ -1,7 +1,7 @@
 <template>
     <div
         id="nav-collapsed-container"
-        class="flex min-w-[64px] max-w-[64px] flex-col justify-between h-[calc(100dvh-49.818px)] relative"
+        class="flex min-w-[63.8px] max-w-[63.8px] flex-col justify-between h-[calc(100dvh-49.818px)] relative bg-[color:var(--md-surface)]/5 dark:bg-transparent backdrop-blur-xs"
     >
         <div id="nav-top-section" class="px-1 pt-2 flex flex-col space-y-2">
             <div

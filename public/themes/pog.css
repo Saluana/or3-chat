@@ -142,8 +142,6 @@
 
 [data-theme="pog"] #top-header .theme-btn {
   border: none !important;
-}
-
-[data-theme="pog"] #top-header .theme-btn:hover {
-  background-color: var(--md-surface-hover);
+  min-height: 24px;
+  min-width: 24px;
 }

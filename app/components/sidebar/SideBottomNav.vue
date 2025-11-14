@@ -5,7 +5,7 @@
             (typeof attrs.id === 'string' ? attrs.id : null) ??
             'bottom-nav-root'
         "
-        class="bottomnav-root absolute bottom-0 w-[64px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] px-1 flex flex-col items-center justify-between"
+        class="bottomnav-root absolute bottom-0 w-[63.5px] border-t-[var(--md-border-width)] border-r-[var(--md-border-width)] border-[color:var(--md-border-color)] px-1 flex flex-col items-center justify-between"
     >
         <!-- MY INFO -->
         <UPopover
@@ -184,11 +184,11 @@ const connectionState = computed(() =>
 );
 
 const connectOverrideParams = computed(() => ({
-        component: 'button',
-        context: 'sidebar',
-        identifier: 'sidebar.bottom-nav.connect',
-        state: connectionState.value,
-        isNuxtUI: true,
+    component: 'button',
+    context: 'sidebar',
+    identifier: 'sidebar.bottom-nav.connect',
+    state: connectionState.value,
+    isNuxtUI: true,
 }));
 
 const connectOverrides = useThemeOverrides(connectOverrideParams);

@@ -50,7 +50,7 @@ const selectMenuProps = computed(() => {
     } = overrideValue;
 
     const baseClass =
-        'h-[32px] text-[14px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px] max-w-[320px]';
+        'h-[32px] text-[14px] rounded-md border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] px-2 bg-white dark:bg-gray-800 w-full min-w-[100px]';
     const mergedClass = [baseClass, themeClass].filter(Boolean).join(' ');
 
     const defaultSearchInput = {

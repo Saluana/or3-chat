@@ -14,6 +14,7 @@
         <template #sidebar-collapsed>
             <lazy-sidebar-side-nav-content-collapsed
                 :active-thread="activeChatThreadId"
+                class="w-[65px]"
                 @new-chat="onNewChat"
                 @new-document="openCollapsedCreateDocumentModal"
                 @new-project="openCollapsedCreateProjectModal"

@@ -1,8 +1,8 @@
 <template>
     <div
         :class="{
-            'px-0 justify-center': collapsed,
-            'px-3 justify-between': !collapsed,
+            'px-0 justify-center w-[63.5px]': collapsed,
+            'px-3 justify-between w-full': !collapsed,
         }"
         id="top-header"
         class="flex items-center min-h-[48px] max-h-[48px] header-pattern py-2 border-b-[var(--md-border-width)] border-[color:var(--md-border-color)]"
